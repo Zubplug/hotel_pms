@@ -23,13 +23,15 @@ interface Room {
   maxChildren: number;
   roomType: {
     name: string;
-  };
+    code: string;
+  } | null;
+  building: {
+    name: string;
+  } | null;
   floor: {
     number: number;
-    building: {
-      name: string;
-    };
-  };
+    name?: string | null;
+  } | null;
 }
 
 export default function RoomsPage() {
@@ -124,7 +126,7 @@ export default function RoomsPage() {
                       {room.number}
                     </span>
                     <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
-                      {room.roomType.name}
+                      {room.roomType?.name ?? 'No Type'}
                     </span>
                   </div>
                   {view !== 'list' && <StatusBadge status={room.status} className="scale-90 origin-top-right" />}
@@ -135,12 +137,16 @@ export default function RoomsPage() {
                   
                   {view !== 'list' && (
                     <div className="flex flex-wrap gap-1 mt-2">
-                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-background text-muted-foreground">
-                        Floor {room.floor.number}
-                      </Badge>
-                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-background text-muted-foreground">
-                        {room.floor.building.name}
-                      </Badge>
+                      {room.floor && (
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-background text-muted-foreground">
+                          Floor {room.floor.number}
+                        </Badge>
+                      )}
+                      {room.building && (
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-background text-muted-foreground">
+                          {room.building.name}
+                        </Badge>
+                      )}
                     </div>
                   )}
                 </div>
@@ -156,7 +162,7 @@ export default function RoomsPage() {
                   )}
                   {view === 'list' && (
                     <div className="text-xs text-muted-foreground mt-1">
-                      Floor {room.floor.number} • {room.floor.building.name}
+                      {room.floor ? `Floor ${room.floor.number}` : ''}{room.floor && room.building ? ' • ' : ''}{room.building?.name ?? ''}
                     </div>
                   )}
                 </div>
