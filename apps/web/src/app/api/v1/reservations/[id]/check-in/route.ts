@@ -108,12 +108,12 @@ export async function POST(
         const yyyy = d.getUTCFullYear();
         const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
         const dd = String(d.getUTCDate()).padStart(2, '0');
-        if (forceTime) return `${yyyy}-${mm}-${dd} ${forceTime}`;
+        if (forceTime) return `${yyyy}-${mm}-${dd}T${forceTime}`;
         
         const hh = String(d.getUTCHours()).padStart(2, '0');
         const min = String(d.getUTCMinutes()).padStart(2, '0');
         const ss = String(d.getUTCSeconds()).padStart(2, '0');
-        return `${yyyy}-${mm}-${dd} ${hh}:${min}:${ss}`;
+        return `${yyyy}-${mm}-${dd}T${hh}:${min}:${ss}`;
       };
 
 
