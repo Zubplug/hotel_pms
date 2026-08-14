@@ -100,19 +100,31 @@ export async function POST(
         }
       });
 
-      const formatLocal = (d: Date, timeStr: string) => {
-        const yyyy = d.getFullYear();
-        const mm = String(d.getMonth() + 1).padStart(2, '0');
-        const dd = String(d.getDate()).padStart(2, '0');
-        return `${yyyy}-${mm}-${dd} ${timeStr}`;
+      // Calculate current time in Nigeria (UTC+1)
+      const now = new Date();
+      now.setUTCHours(now.getUTCHours() + 1);
+      
+      const formatNigeriaTime = (d: Date, forceTime?: string) => {
+        const yyyy = d.getUTCFullYear();
+        const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+        const dd = String(d.getUTCDate()).padStart(2, '0');
+        if (forceTime) return `${yyyy}-${mm}-${dd} ${forceTime}`;
+        
+        const hh = String(d.getUTCHours()).padStart(2, '0');
+        const min = String(d.getUTCMinutes()).padStart(2, '0');
+        const ss = String(d.getUTCSeconds()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd} ${hh}:${min}:${ss}`;
       };
+
+      // Shift checkout date to Nigeria timezone
+      const checkOutDate = new Date(resRoom.checkOut);
+      checkOutDate.setUTCHours(checkOutDate.getUTCHours() + 1);
 
       const payload = {
         roomNo: resRoom.room!.number,
-        // The C++ DLL requires exactly 19 chars "YYYY-MM-DD HH:mm:ss" otherwise it reads garbage memory (e.g. year 2106)
-        checkIn: formatLocal(resRoom.checkIn, '12:00:00'),
-        checkOut: formatLocal(resRoom.checkOut, '12:00:00'), 
-        flags: 8 // 8 = "Replace old card"
+        checkIn: formatNigeriaTime(now), // Exact time the card is encoded!
+        checkOut: formatNigeriaTime(checkOutDate, '12:00:00'), // 12:00 PM on checkout day
+        flags: 0 // 0 = "Replace old card" in Deluns lock system
       };
 
       const cmd = await tx.lockCommand.create({
