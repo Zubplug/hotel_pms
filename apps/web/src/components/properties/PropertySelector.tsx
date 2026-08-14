@@ -40,15 +40,15 @@ export function PropertySelector({ className }: { className?: string }) {
       if (!res.ok) throw new Error('Failed to fetch properties');
       const json = await res.json();
       const list = (Array.isArray(json.data) ? json.data : []) as Property[];
-      
-      // Auto-select first property if none selected
-      if (!propertyId && list.length > 0) {
-        setPropertyId(list[0].id);
-      }
-      
       return list;
     },
   });
+
+  React.useEffect(() => {
+    if (properties && properties.length > 0 && !propertyId) {
+      setPropertyId(properties[0].id);
+    }
+  }, [properties, propertyId, setPropertyId]);
 
   const selected = properties?.find((p) => p.id === propertyId);
 
