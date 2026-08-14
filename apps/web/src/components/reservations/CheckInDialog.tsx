@@ -46,7 +46,7 @@ export function CheckInDialog({ open, onOpenChange, reservation }: CheckInDialog
         
         setHardwareStatus(status);
 
-        if (status === 'SUCCESS') {
+        if (status === 'SUCCESS' || status === 'COMPLETED') {
           setPhase('SUCCESS');
           router.refresh(); // Refresh background data to show CHECKED_IN
         } else if (status === 'FAILED') {
