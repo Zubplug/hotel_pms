@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: lodgecore-gateway
+    env: node
+    buildCommand: "npm install && npx turbo run build --filter=@hotel-pms/workers"
+    startCommand: "cd workers && npm start"
+    envVars:
+      - key: PORT
+        value: 3001
+      - key: REDIS_URL
+        sync: false
