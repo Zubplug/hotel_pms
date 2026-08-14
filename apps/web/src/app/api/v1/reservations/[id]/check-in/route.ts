@@ -110,7 +110,7 @@ export async function POST(
         roomNo: resRoom.room!.number,
         checkIn: "", // Empty string = SDK uses current local time automatically
         checkOut: `${yyyy}-${mm}-${dd} 12:00:00`, // Force 12:00 PM local time
-        flags: 0 
+        flags: 8 // 8 = "Replace old card" (invalidates previous guests for this room)
       };
 
       const cmd = await tx.lockCommand.create({
