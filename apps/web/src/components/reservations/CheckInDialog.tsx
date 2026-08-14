@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Loader2, CheckCircle2, AlertCircle, KeySquare } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
 
 interface CheckInDialogProps {
   open: boolean;

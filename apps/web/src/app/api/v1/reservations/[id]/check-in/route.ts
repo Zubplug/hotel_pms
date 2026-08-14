@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { auth } from '@/lib/auth';
+import { assertPropertyAccess } from '@/lib/property-access';
 
 export async function POST(
   req: NextRequest,
@@ -11,10 +12,6 @@ export async function POST(
     const session = await auth();
     if (!session?.user?.id) {
       return errorResponse('UNAUTHORIZED', 'Not authenticated', 401);
-    }
-    const propertyId = session.user.propertyId;
-    if (!propertyId) {
-      return errorResponse('BAD_REQUEST', 'No active property', 400);
     }
 
     const { id: reservationId } = await params;
@@ -32,9 +29,11 @@ export async function POST(
     if (!reservation) {
       return errorResponse('NOT_FOUND', 'Reservation not found', 404);
     }
-    if (reservation.propertyId !== propertyId) {
-      return errorResponse('FORBIDDEN', 'Access denied', 403);
-    }
+
+    // Verify access
+    const propertyId = reservation.propertyId;
+    await assertPropertyAccess(session.user.id, propertyId);
+
     if (reservation.status !== 'CONFIRMED') {
       return errorResponse('BAD_REQUEST', 'Reservation must be in CONFIRMED status to check in.', 400);
     }
@@ -79,7 +78,7 @@ export async function POST(
         data: {
           idempotencyKey: idempotencyKey,
           propertyId,
-          lockId: resRoom.room!.doorLockId || resRoom.room!.id,
+          lockId: resRoom.room!.id,
           roomId: resRoom.room!.id,
           reservationId: reservation.id,
           operation: 'ENCODE_CARD',

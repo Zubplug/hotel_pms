@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { auth } from '@/lib/auth';
+import { assertPropertyAccess } from '@/lib/property-access';
 
 export async function GET(
   req: NextRequest,
@@ -30,7 +31,9 @@ export async function GET(
       return errorResponse('NOT_FOUND', 'Lock operation not found', 404);
     }
 
-    if (operation.propertyId !== session.user.propertyId) {
+    try {
+      await assertPropertyAccess(session.user.id, operation.propertyId);
+    } catch {
       return errorResponse('FORBIDDEN', 'Access denied', 403);
     }
 
