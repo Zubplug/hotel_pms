@@ -16,7 +16,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { useProperty } from '@/hooks/use-property';
+import { useProperty } from '@/components/PropertyProvider';
 
 export default function HardwareSettingsPage() {
   const { propertyId } = useProperty();
