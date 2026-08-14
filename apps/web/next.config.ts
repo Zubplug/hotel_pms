@@ -5,7 +5,6 @@ const nextConfig: NextConfig = {
   // These env vars are inlined at build time for the Edge runtime
   env: {
     AUTH_SECRET: process.env.AUTH_SECRET!,
-    AUTH_URL: process.env.AUTH_URL ?? 'http://localhost:3000',
   },
 };
 

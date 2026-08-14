@@ -6,6 +6,7 @@ import NextAuth from 'next-auth';
 const { auth } = NextAuth({
   providers: [],
   secret: process.env.AUTH_SECRET,
+  trustHost: true,
   pages: {
     signIn: '/login',
   },
