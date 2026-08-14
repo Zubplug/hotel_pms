@@ -28,19 +28,29 @@ interface PropertySelectorProps {
 }
 
 import { buttonVariants } from '@/components/ui/button';
+import { useProperty } from '@/components/PropertyProvider';
 
-export function PropertySelector({ selectedPropertyId, onPropertyChange, className }: PropertySelectorProps) {
+export function PropertySelector({ className }: { className?: string }) {
+  const { propertyId, setPropertyId } = useProperty();
+
   const { data: properties, isLoading } = useQuery({
     queryKey: ['properties', 'all'], // Changed to 'all' to avoid cache collision with paginated 'list'
     queryFn: async () => {
       const res = await fetch('/api/v1/properties');
       if (!res.ok) throw new Error('Failed to fetch properties');
       const json = await res.json();
-      return (Array.isArray(json.data) ? json.data : []) as Property[];
+      const list = (Array.isArray(json.data) ? json.data : []) as Property[];
+      
+      // Auto-select first property if none selected
+      if (!propertyId && list.length > 0) {
+        setPropertyId(list[0].id);
+      }
+      
+      return list;
     },
   });
 
-  const selected = properties?.find((p) => p.id === selectedPropertyId);
+  const selected = properties?.find((p) => p.id === propertyId);
 
   if (isLoading) {
     return (
@@ -70,13 +80,13 @@ export function PropertySelector({ selectedPropertyId, onPropertyChange, classNa
           <DropdownMenuItem
             key={property.id}
             className="gap-2"
-            onClick={() => onPropertyChange?.(property.id)}
+            onClick={() => setPropertyId(property.id)}
           >
             <div className="flex flex-col flex-1 min-w-0">
               <span className="font-medium text-sm truncate">{property.name}</span>
               <span className="text-xs text-muted-foreground">{property.city} · {property.code}</span>
             </div>
-            {property.id === selectedPropertyId && (
+            {property.id === propertyId && (
               <Check className="h-4 w-4 text-primary shrink-0" />
             )}
           </DropdownMenuItem>

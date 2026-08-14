@@ -3,8 +3,8 @@
 import React from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { ArrowLeft, CalendarPlus } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
+import { ReservationForm } from '@/components/reservations/ReservationForm';
 
 export default function NewReservationPage() {
   const router = useRouter();
@@ -24,22 +24,7 @@ export default function NewReservationPage() {
         </p>
       </div>
 
-      <Card className="max-w-2xl">
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <CalendarPlus className="h-5 w-5 text-primary" />
-            <CardTitle>Create Booking</CardTitle>
-          </div>
-          <CardDescription>
-            The booking creation form will be implemented here. For now, this is a placeholder page.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            This page prevents the UUID error when navigating to /reservations/new.
-          </p>
-        </CardContent>
-      </Card>
+      <ReservationForm />
     </div>
   );
 }

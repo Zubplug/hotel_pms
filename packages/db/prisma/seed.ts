@@ -168,7 +168,7 @@ async function main() {
       staffId: staff.id,
       email: 'admin@lodgecore.com',
       // 'password' hash (bcrypt)
-      passwordHash: '$2b$10$a..cpbyHrOBwH7n.6lH9bebnnRWlmnVnj.Zlh8aKgOw/A60GY8s/u',
+      passwordHash: '$2b$10$AmpFKjKSql.k2HpbeXE97.d0G27fSY9UfMJvdt9RoCQco1RIT9FlG',
       isSuperAdmin: true,
     }
   })

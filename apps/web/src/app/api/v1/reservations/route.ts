@@ -70,3 +70,120 @@ export async function GET(req: NextRequest) {
     return errorResponse('INTERNAL_ERROR', 'Unexpected error', 500);
   }
 }
+
+export async function POST(req: NextRequest) {
+  try {
+    const session = await auth();
+    if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
+
+    const body = await req.json();
+    const { propertyId, guestId, guestDetails, checkIn, checkOut, roomTypeId, roomId, adults, children } = body;
+
+    if (!propertyId || (!guestId && !guestDetails) || !checkIn || !checkOut || !roomTypeId || !roomId) {
+      return errorResponse('BAD_REQUEST', 'Missing required fields', 400);
+    }
+
+    const allowedPropertyIds = await getUserPropertyIds(session.user.id);
+    if (!allowedPropertyIds.includes(propertyId)) {
+      return errorResponse('FORBIDDEN', 'No access to this property', 403);
+    }
+
+    const checkInDate = new Date(checkIn);
+    const checkOutDate = new Date(checkOut);
+    const nights = Math.max(1, Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24)));
+
+    if (checkOutDate <= checkInDate) {
+      return errorResponse('BAD_REQUEST', 'Check-out must be after check-in', 400);
+    }
+
+    // 1. Authoritative Room and RoomType Check
+    const room = await prisma.room.findFirst({
+      where: { id: roomId, propertyId, roomTypeId },
+      include: { roomType: true },
+    });
+
+    if (!room) {
+      return errorResponse('NOT_FOUND', 'Room not found or does not belong to property/room type', 404);
+    }
+
+    const baseRate = room.roomType.baseRate;
+    const currency = room.roomType.currency || 'NGN';
+    const totalAmount = Number(baseRate) * nights;
+
+    // 2. Create the Reservation transactionally
+    const reservation = await prisma.$transaction(async (tx) => {
+      // Resolve Guest
+      let finalGuestId = guestId;
+      if (!finalGuestId) {
+        const newGuest = await tx.guest.create({
+          data: {
+            organizationId: (await tx.property.findUnique({ where: { id: propertyId } }))?.organizationId || '',
+            firstName: guestDetails.firstName,
+            lastName: guestDetails.lastName,
+            email: guestDetails.email,
+            phone: guestDetails.phone,
+          },
+        });
+        finalGuestId = newGuest.id;
+      }
+
+      const confirmationNumber = 'RES-' + Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
+
+      // Create Reservation
+      const newReservation = await tx.reservation.create({
+        data: {
+          propertyId,
+          primaryGuestId: finalGuestId as string,
+          confirmationNumber,
+          source: 'WALK_IN',
+          status: 'CONFIRMED',
+          checkIn: checkInDate,
+          checkOut: checkOutDate,
+          adults: parseInt(adults) || 1,
+          children: parseInt(children) || 0,
+          ratePlanId: (await tx.ratePlan.findFirst({ where: { propertyId } }))?.id || '',
+          ratePlanSnapshot: { baseRate, total: totalAmount, currency },
+          currency: currency,
+          createdBy: session.user.staffId as string,
+        },
+      });
+
+      // Create Reservation Guest
+      await tx.reservationGuest.create({
+        data: {
+          reservationId: newReservation.id,
+          guestId: finalGuestId,
+          isPrimary: true,
+        },
+      });
+
+      // Create Reservation Room with authoritative pricing and full dates
+      await tx.reservationRoom.create({
+        data: {
+          reservationId: newReservation.id,
+          roomId: room.id,
+          roomTypeId: roomTypeId,
+          status: 'ACTIVE',
+          checkIn: checkInDate,
+          checkOut: checkOutDate,
+          adults: parseInt(adults) || 1,
+          children: parseInt(children) || 0,
+          ratePlanId: newReservation.ratePlanId,
+          rateAmount: baseRate,
+          currency: currency,
+        },
+      });
+
+      return newReservation;
+    });
+
+    return successResponse(reservation, 201);
+  } catch (err: any) {
+    console.error('[Reservations POST]', err);
+    // Handle PostgreSQL exclusion constraint violation (P2004 or P2010 usually, or raw database error)
+    if (err.code === 'P2010' || err.code === 'P2002' || (err.message && err.message.includes('ReservationRoom_no_overlap'))) {
+      return errorResponse('CONFLICT', 'The selected room is no longer available for these dates', 409);
+    }
+    return errorResponse('INTERNAL_ERROR', 'Unexpected error', 500);
+  }
+}
