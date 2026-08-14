@@ -1,7 +1,7 @@
 {
   "name": "hotel-pms",
   "private": true,
-  "packageManager": "npm@11.9.0",
+  "packageManager": "pnpm@9.15.4",
   "workspaces": [
     "apps/*",
     "packages/*",
