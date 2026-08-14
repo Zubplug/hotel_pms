@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
+using LodgeCore.LockAgent.Auth;
 
 namespace LodgeCore.LockAgent.Commands;
 
