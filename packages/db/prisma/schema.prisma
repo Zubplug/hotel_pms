@@ -96,6 +96,7 @@ model Property {
   depositPolicies      DepositPolicy[]
   noShowPolicies       NoShowPolicy[]
   userRoles            UserRole[]
+  enrollmentTokens     AgentEnrollmentToken[]
 
   createdAt DateTime  @default(now()) @db.Timestamptz
   updatedAt DateTime  @updatedAt @db.Timestamptz
@@ -1100,19 +1101,24 @@ model HardwareAgent {
   property           Property  @relation(fields: [propertyId], references: [id])
   name               String
   deviceId           String    @unique
-  status             String // 'ONLINE' | 'OFFLINE'
+  status             String    // 'ONLINE' | 'OFFLINE'
+  hardwareStatus     String    @default("UNKNOWN") // 'READY' | 'DEGRADED' | 'OFFLINE' | 'UNKNOWN'
+  agentSecretHash    String    // bcrypt hash of the generated agent secret
   agentVersion       String?
   sdkVersion         String?
   hostname           String?
+  sdkLockType        Int?      // 4 = RF57, 5 = RF50
+  comPort            String?   // e.g. "COM3"
   lastHeartbeat      DateTime? @db.Timestamptz
   lastConnectedAt    DateTime? @db.Timestamptz
   lastDisconnectedAt DateTime? @db.Timestamptz
   enabled            Boolean   @default(true)
   createdAt          DateTime  @default(now()) @db.Timestamptz
 
-  operations LockOperation[]
-  commands   LockCommand[]
-  lockEvents LockEvent[]
+  operations     LockOperation[]
+  commands       LockCommand[]
+  lockEvents     LockEvent[]
+  enrollmentTokens AgentEnrollmentToken[]
 }
 
 model DoorLock {
@@ -1350,4 +1356,19 @@ model AuditLog {
   requestId String
 
   createdAt DateTime @default(now()) @db.Timestamptz
+}
+
+model AgentEnrollmentToken {
+  id         String    @id @default(uuid()) @db.Uuid
+  propertyId String    @db.Uuid
+  property   Property  @relation(fields: [propertyId], references: [id])
+  agentId    String?   @db.Uuid
+  agent      HardwareAgent? @relation(fields: [agentId], references: [id])
+  tokenHash  String    @unique   // bcrypt hash — never store plain
+  expiresAt  DateTime  @db.Timestamptz
+  usedAt     DateTime? @db.Timestamptz
+  createdBy  String    @db.Uuid
+  createdAt  DateTime  @default(now()) @db.Timestamptz
+
+  @@index([propertyId])
 }
