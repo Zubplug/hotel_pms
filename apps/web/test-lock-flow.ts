@@ -39,6 +39,7 @@ async function run() {
       name: 'Front Desk Encoder 1',
       deviceId: 'FD-' + Date.now(),
       status: 'ONLINE',
+      agentSecretHash: 'mock-hash',
       enabled: true
     }
   });
