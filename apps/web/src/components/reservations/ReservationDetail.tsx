@@ -8,12 +8,15 @@ import { Button } from '@/components/ui/button';
 import { EditReservationDialog } from './EditReservationDialog';
 import { RoomReassignmentDialog } from './RoomReassignmentDialog';
 import { CancelReservationDialog } from './CancelReservationDialog';
-import { Calendar, User, DoorClosed, CreditCard, Clock, Settings, FileText } from 'lucide-react';
+import { CheckInDialog } from './CheckInDialog';
+import { Calendar, User, DoorClosed, CreditCard, Clock, Settings, FileText, LogIn } from 'lucide-react';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function ReservationDetail({ reservation }: { reservation: any }) {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isReassignDialogOpen, setIsReassignDialogOpen] = useState(false);
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
+  const [isCheckInDialogOpen, setIsCheckInDialogOpen] = useState(false);
 
   const resRoom = reservation.reservationRooms?.[0];
   const room = resRoom?.room;
@@ -42,6 +45,11 @@ export function ReservationDetail({ reservation }: { reservation: any }) {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3 mt-4 sm:mt-0">
+          {reservation.status === 'CONFIRMED' && room && (
+            <Button onClick={() => setIsCheckInDialogOpen(true)} className="bg-blue-600 hover:bg-blue-700">
+              <LogIn className="w-4 h-4 mr-2" /> Check In Guest
+            </Button>
+          )}
           <Button variant="outline" onClick={() => setIsReassignDialogOpen(true)} disabled={!isEditable}>
             Reassign Room
           </Button>
@@ -137,6 +145,7 @@ export function ReservationDetail({ reservation }: { reservation: any }) {
             </div>
             <div>
               <p className="text-sm font-medium text-muted-foreground">Total Amount</p>
+              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
               <p className="text-2xl font-bold">{(reservation.ratePlanSnapshot as any)?.total ? formatCurrency((reservation.ratePlanSnapshot as any).total, 'NGN') : 'N/A'}</p>
             </div>
             <div className="pt-4 border-t">
@@ -161,6 +170,11 @@ export function ReservationDetail({ reservation }: { reservation: any }) {
         open={isCancelDialogOpen} 
         onOpenChange={setIsCancelDialogOpen} 
         reservation={reservation} 
+      />
+      <CheckInDialog
+        open={isCheckInDialogOpen}
+        onOpenChange={setIsCheckInDialogOpen}
+        reservation={reservation}
       />
     </div>
   );

@@ -28,7 +28,8 @@ export async function PATCH(
 
     const { id } = await params;
     const body = await req.json();
-    const { status, operationStatus, errorCode, errorMessage } = body;
+    const { status, operationStatus, errorCode, errorMessage, cardSnr, CardSnr } = body;
+    const actualCardSnr = cardSnr || CardSnr;
 
     const command = await prisma.lockCommand.findUnique({
       where: { id },
@@ -38,7 +39,6 @@ export async function PATCH(
     if (!command) return errorResponse('NOT_FOUND', 'Command not found', 404);
     if (command.agentId !== agent.id) return errorResponse('FORBIDDEN', 'Command belongs to another agent', 403);
 
-    // Update command
     const updateData: Record<string, unknown> = { status };
     if (status === 'COMPLETED' || status === 'FAILED') {
       updateData.completedAt = new Date();
@@ -46,32 +46,62 @@ export async function PATCH(
       updateData.errorMessage = errorMessage;
     }
 
-    const updatedCommand = await prisma.lockCommand.update({
-      where: { id },
-      data: updateData,
-    });
-
-    // Update the parent operation to reflect the real-time hardware status
-    if (command.operation && operationStatus) {
-      await prisma.lockOperation.update({
-        where: { id: command.operation.id },
-        data: { 
-          status: operationStatus,
-          errorCode: errorCode,
-          errorMessage: errorMessage,
-        },
+    // Use a transaction for the critical state transitions
+    await prisma.$transaction(async (tx) => {
+      // 1. Update Command
+      await tx.lockCommand.update({
+        where: { id },
+        data: updateData,
       });
 
-      // If this was the final state for an issue command, update the credential
-      if (status === 'COMPLETED' && command.commandType === 'ENCODE' && command.operation.credentialId) {
-        await prisma.lockCredential.update({
-          where: { id: command.operation.credentialId },
-          data: { status: 'ACTIVE', issuedAt: new Date() },
+      // 2. Update Operation
+      if (command.operation) {
+        await tx.lockOperation.update({
+          where: { id: command.operation.id },
+          data: { 
+            status: operationStatus || (status === 'COMPLETED' ? 'SUCCESS' : status),
+            errorCode: errorCode,
+            errorMessage: errorMessage,
+          },
         });
-      }
-    }
 
-    return successResponse({ command: updatedCommand });
+        // 3. Strict Check-In State Machine Transition
+        if (status === 'COMPLETED' && command.commandType === 'ENCODE') {
+          const res = await tx.reservation.findUnique({ where: { id: command.operation.reservationId } });
+          
+          if (res && res.status !== 'CHECKED_IN' && res.status !== 'CHECKED_OUT' && res.status !== 'CANCELLED') {
+            // A. Create Lock Credential with the physical Card SNR
+            await tx.lockCredential.create({
+              data: {
+                reservationId: command.operation.reservationId,
+                roomId: command.operation.roomId,
+                lockId: command.operation.lockId,
+                credentialType: 'rfid',
+                status: 'ACTIVE',
+                cardSerialNumber: actualCardSnr,
+                issueOperationId: command.operation.id,
+                validFrom: new Date(),
+                validUntil: res.checkOut,
+              }
+            });
+
+            // B. Mark Reservation as Checked In
+            await tx.reservation.update({
+              where: { id: command.operation.reservationId },
+              data: { status: 'CHECKED_IN' }
+            });
+
+            // C. Mark Room as Occupied
+            await tx.room.update({
+              where: { id: command.operation.roomId },
+              data: { status: 'OCCUPIED' }
+            });
+          }
+        }
+      }
+    });
+
+    return successResponse({ success: true });
   } catch (err) {
     console.error('[Hardware API PATCH]', err);
     return errorResponse('INTERNAL_ERROR', 'Unexpected error', 500);
