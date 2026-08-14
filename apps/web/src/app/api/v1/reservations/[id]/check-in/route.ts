@@ -74,10 +74,25 @@ export async function POST(
 
     // 5. Create the Operation and Command Atomically
     const newOperation = await prisma.$transaction(async (tx) => {
+      // Ensure a DoorLock entity exists for this room to satisfy the lockId constraint
+      let doorLock = await tx.doorLock.findFirst({ where: { roomId: resRoom.room!.id } });
+      if (!doorLock) {
+        doorLock = await tx.doorLock.create({
+          data: {
+            propertyId,
+            roomId: resRoom.room!.id,
+            lockCode: `ENCODER-${resRoom.room!.id}`,
+            provider: 'DELUNS_ENCODER',
+            status: 'ONLINE'
+          }
+        });
+      }
+
       const op = await tx.lockOperation.create({
         data: {
           idempotencyKey: idempotencyKey,
           propertyId,
+          lockId: doorLock.id,
           roomId: resRoom.room!.id,
           reservationId: reservation.id,
           operation: 'ENCODE_CARD',
