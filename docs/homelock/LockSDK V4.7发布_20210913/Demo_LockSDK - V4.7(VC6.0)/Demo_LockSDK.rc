@@ -1,0 +1,197 @@
+//Microsoft Developer Studio generated resource script.
+//
+#include "resource.h"
+
+#define APSTUDIO_READONLY_SYMBOLS
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 2 resource.
+//
+#include "afxres.h"
+
+/////////////////////////////////////////////////////////////////////////////
+#undef APSTUDIO_READONLY_SYMBOLS
+
+/////////////////////////////////////////////////////////////////////////////
+// Chinese (中国) resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_CHS)
+#ifdef _WIN32
+LANGUAGE LANG_CHINESE, SUBLANG_CHINESE_SIMPLIFIED
+#pragma code_page(936)
+#endif //_WIN32
+
+#ifdef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// TEXTINCLUDE
+//
+
+1 TEXTINCLUDE DISCARDABLE 
+BEGIN
+    "resource.h\0"
+END
+
+2 TEXTINCLUDE DISCARDABLE 
+BEGIN
+    "#include ""afxres.h""\r\n"
+    "\0"
+END
+
+3 TEXTINCLUDE DISCARDABLE 
+BEGIN
+    "#define _AFX_NO_SPLITTER_RESOURCES\r\n"
+    "#define _AFX_NO_OLE_RESOURCES\r\n"
+    "#define _AFX_NO_TRACKER_RESOURCES\r\n"
+    "#define _AFX_NO_PROPERTY_RESOURCES\r\n"
+    "\r\n"
+    "#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_CHS)\r\n"
+    "#ifdef _WIN32\r\n"
+    "LANGUAGE 4, 2\r\n"
+    "#pragma code_page(936)\r\n"
+    "#endif //_WIN32\r\n"
+    "#include ""res\\Demo_LockSDK.rc2""  // non-Microsoft Visual C++ edited resources\r\n"
+    "#include ""l.chs\\afxres.rc""          // Standard components\r\n"
+    "#endif\r\n"
+    "\0"
+END
+
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Icon
+//
+
+// Icon with lowest ID value placed first to ensure application icon
+// remains consistent on all systems.
+IDR_MAINFRAME           ICON    DISCARDABLE     "res\\Demo_LockSDK.ico"
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dialog
+//
+
+IDD_Demo_LockSDK_DIALOG DIALOGEX 0, 0, 304, 183
+STYLE DS_MODALFRAME | WS_POPUP | WS_VISIBLE | WS_CAPTION | WS_SYSMENU
+EXSTYLE WS_EX_APPWINDOW
+CAPTION "Demo_LockSDK"
+FONT 12, "宋体"
+BEGIN
+    CONTROL         "4 - RF57 门锁",IDC_RD_LOCK_TYPE,"Button",
+                    BS_AUTORADIOBUTTON | WS_GROUP,16,15,75,15
+    CONTROL         "5 - RF50 门锁",IDC_RD_LOCK_TYPE2,"Button",
+                    BS_AUTORADIOBUTTON,106,15,75,15
+    PUSHBUTTON      "配置SDK",IDC_BN_CONFIG,215,10,75,20
+    PUSHBUTTON      "入住",IDC_BN_CHECKIN,15,156,75,20,WS_DISABLED
+    PUSHBUTTON      "销卡",IDC_BN_CHECKOUT,115,155,75,20,WS_DISABLED
+    EDITTEXT        IDC_ED_ROOM_NO,65,80,225,15,ES_AUTOHSCROLL
+    LTEXT           "Lock Number",IDC_STATIC_2,16,82,45,10,SS_CENTERIMAGE
+    EDITTEXT        IDC_ED_CHECKIN_TIME,65,104,225,15,ES_AUTOHSCROLL
+    LTEXT           "预离时间",IDC_STATIC_3,16,130,40,15,SS_CENTERIMAGE
+    EDITTEXT        IDC_ED_CHECKOUT_TIME,65,130,225,15,ES_AUTOHSCROLL
+    PUSHBUTTON      "读卡",IDC_BN_READ_CARD,215,155,75,20,WS_DISABLED
+    LTEXT           "Please enter the Lock Number here, not the Room Number! (Please refer to the help documents)",
+                    IDC_STATIC_1,15,55,273,23
+    PUSHBUTTON      "入住时间",IDC_BN_CHECKINTIME,15,105,40,15
+    CONTROL         "新卡顶替旧卡",IDC_CHK_REPLACE,"Button",BS_AUTOCHECKBOX | 
+                    WS_TABSTOP,20,35,65,10
+    CONTROL         "检查入住时间(用于预订)",IDC_CHK_CHECKIN_TIME,"Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP,190,35,100,10
+    CONTROL         "允许开反锁",IDC_CHK_OPEN_BLOCK,"Button",BS_AUTOCHECKBOX | 
+                    WS_TABSTOP,105,35,65,10
+END
+
+
+#ifndef _MAC
+/////////////////////////////////////////////////////////////////////////////
+//
+// Version
+//
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION 3,1,0,1
+ PRODUCTVERSION 3,1,0,1
+ FILEFLAGSMASK 0x3fL
+#ifdef _DEBUG
+ FILEFLAGS 0x1L
+#else
+ FILEFLAGS 0x0L
+#endif
+ FILEOS 0x4L
+ FILETYPE 0x1L
+ FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "080404b0"
+        BEGIN
+            VALUE "Comments", "\0"
+            VALUE "CompanyName", "\0"
+            VALUE "FileDescription", "Demo_LockSDK Microsoft 基础类应用程序\0"
+            VALUE "FileVersion", "3, 1, 0, 1\0"
+            VALUE "InternalName", "Demo_LockSDK\0"
+            VALUE "LegalCopyright", "版权所有 (C) 2011\0"
+            VALUE "LegalTrademarks", "\0"
+            VALUE "OriginalFilename", "Demo_LockSDK.EXE\0"
+            VALUE "PrivateBuild", "\0"
+            VALUE "ProductName", "Demo_LockSDK 应用程序\0"
+            VALUE "ProductVersion", "3, 1, 0, 1\0"
+            VALUE "SpecialBuild", "\0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x804, 1200
+    END
+END
+
+#endif    // !_MAC
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// DESIGNINFO
+//
+
+#ifdef APSTUDIO_INVOKED
+GUIDELINES DESIGNINFO DISCARDABLE 
+BEGIN
+    IDD_Demo_LockSDK_DIALOG, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 297
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 176
+    END
+END
+#endif    // APSTUDIO_INVOKED
+
+#endif    // Chinese (中国) resources
+/////////////////////////////////////////////////////////////////////////////
+
+
+
+#ifndef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 3 resource.
+//
+#define _AFX_NO_SPLITTER_RESOURCES
+#define _AFX_NO_OLE_RESOURCES
+#define _AFX_NO_TRACKER_RESOURCES
+#define _AFX_NO_PROPERTY_RESOURCES
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_CHS)
+#ifdef _WIN32
+LANGUAGE 4, 2
+#pragma code_page(936)
+#endif //_WIN32
+#include "res\Demo_LockSDK.rc2"  // non-Microsoft Visual C++ edited resources
+#include "l.chs\afxres.rc"          // Standard components
+#endif
+
+/////////////////////////////////////////////////////////////////////////////
+#endif    // not APSTUDIO_INVOKED
+

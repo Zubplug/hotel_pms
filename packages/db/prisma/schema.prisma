@@ -1,0 +1,1352 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [btree_gist]
+}
+
+// -----------------------------------------------------------------------------
+// CORE ENTITIES
+// -----------------------------------------------------------------------------
+
+model Organization {
+  id              String  @id @default(uuid()) @db.Uuid
+  name            String
+  slug            String  @unique
+  logoUrl         String?
+  primaryColor    String?
+  secondaryColor  String?
+  defaultCurrency String  @default("NGN")
+  defaultTimezone String  @default("Africa/Lagos")
+  defaultLocale   String  @default("en-NG")
+  settings        Json?
+
+  properties    Property[]
+  guests        Guest[]
+  staff         Staff[]
+  roles         Role[]
+  notifications Notification[]
+  auditLogs     AuditLog[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+}
+
+model Property {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  name         String
+  code         String  @unique
+  address      String
+  city         String
+  state        String
+  country      String
+  phone        String
+  email        String
+  website      String?
+  starRating   Int?
+  checkInTime  String  @default("14:00")
+  checkOutTime String  @default("12:00")
+
+  baseCurrency        String   @default("NGN")
+  supportedCurrencies String[]
+
+  businessDate DateTime? @db.Date
+  lastAuditAt  DateTime? @db.Timestamptz
+  auditStatus  String? // 'OPEN' | 'IN_PROGRESS' | 'CLOSED'
+
+  timezone String @default("Africa/Lagos")
+  locale   String @default("en-NG")
+  settings Json?
+  lockConfiguration Json? // { provider: "DELUNS", dlsCoID: 12345, encoderPort: 1 }
+
+  buildings            Building[]
+  roomTypes            RoomType[]
+  rooms                Room[]
+  amenities            Amenity[]
+  ratePlans            RatePlan[]
+  exchangeRates        ExchangeRate[]
+  reservations         Reservation[]
+  folios               Folio[]
+  payments             Payment[]
+  refunds              Refund[]
+  taxes                Tax[]
+  discounts            Discount[]
+  housekeepingTasks    HousekeepingTask[]
+  housekeepingShifts   HousekeepingShift[]
+  maintenanceTickets   MaintenanceTicket[]
+  maintenanceCats      MaintenanceCategory[]
+  doorLocks            DoorLock[]
+  hardwareAgents       HardwareAgent[]
+  lockOperations       LockOperation[]
+  lockEvents           LockEvent[]
+  integrationConfigs   IntegrationConfig[]
+  govSubmissions       GovernmentSubmission[]
+  nightAudits          NightAudit[]
+  occupancySnapshots   OccupancySnapshot[]
+  guestServiceRequests GuestServiceRequest[]
+  cancellationPolicies CancellationPolicy[]
+  depositPolicies      DepositPolicy[]
+  noShowPolicies       NoShowPolicy[]
+  userRoles            UserRole[]
+
+  createdAt DateTime  @default(now()) @db.Timestamptz
+  updatedAt DateTime  @updatedAt @db.Timestamptz
+  deletedAt DateTime? @db.Timestamptz
+}
+
+model Building {
+  id          String   @id @default(uuid()) @db.Uuid
+  propertyId  String   @db.Uuid
+  property    Property @relation(fields: [propertyId], references: [id])
+  name        String
+  code        String
+  floorsCount Int      @map("floors")
+  description String?
+  isActive    Boolean  @default(true)
+
+  floors Floor[]
+  rooms  Room[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+}
+
+model Floor {
+  id          String   @id @default(uuid()) @db.Uuid
+  buildingId  String   @db.Uuid
+  building    Building @relation(fields: [buildingId], references: [id])
+  propertyId  String   @db.Uuid
+  number      Int
+  name        String
+  code        String?
+  description String?
+  isActive    Boolean  @default(true)
+
+  rooms Room[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@unique([buildingId, number])
+}
+
+model RoomType {
+  id               String   @id @default(uuid()) @db.Uuid
+  propertyId       String   @db.Uuid
+  property         Property @relation(fields: [propertyId], references: [id])
+  name             String
+  code             String
+  description      String?
+  maxOccupancy     Int
+  maxAdults        Int      @default(2)
+  maxChildren      Int      @default(0)
+  defaultBedConfig String
+  amenities        String[]
+  photos           String[]
+  baseRate         Decimal  @db.Decimal(18, 4)
+  currency         String
+  isActive         Boolean  @default(true)
+
+  rooms         Room[]
+  rates         Rate[]
+  seasonalRates SeasonalRate[]
+
+  createdAt DateTime  @default(now()) @db.Timestamptz
+  updatedAt DateTime  @updatedAt @db.Timestamptz
+  deletedAt DateTime? @db.Timestamptz
+}
+
+enum RoomStatus {
+  AVAILABLE
+  RESERVED
+  OCCUPIED
+  DIRTY
+  CLEANING
+  CLEAN
+  INSPECTED
+  OUT_OF_ORDER
+  OUT_OF_SERVICE
+  MAINTENANCE
+  BLOCKED
+}
+
+enum HousekeepingStatus {
+  DIRTY
+  CLEANING
+  CLEAN
+  INSPECTED
+  OUT_OF_ORDER
+}
+
+enum RoomMaintenanceStatus {
+  NONE
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum RoomStatusSource {
+  MANUAL
+  CHECK_IN
+  CHECK_OUT
+  HOUSEKEEPING
+  MAINTENANCE
+  RESERVATION
+  SYSTEM
+}
+
+model Room {
+  id         String   @id @default(uuid()) @db.Uuid
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id])
+  buildingId String   @db.Uuid
+  building   Building @relation(fields: [buildingId], references: [id])
+  floorId    String   @db.Uuid
+  floor      Floor    @relation(fields: [floorId], references: [id])
+  roomTypeId String   @db.Uuid
+  roomType   RoomType @relation(fields: [roomTypeId], references: [id])
+
+  number           String
+  code             String?  @unique // optional globally-unique identifier
+  displayName      String?
+  name             String?
+  maxOccupancy     Int
+  maxAdults        Int      @default(2)
+  maxChildren      Int      @default(0)
+  floorPosition    Int? // position on floor plan
+  bedConfiguration String
+  squareMeters     Decimal? @db.Decimal(8, 2)
+  view             String?
+  amenities        String[]
+  photos           String[]
+  description      String?
+
+  status             RoomStatus
+  housekeepingStatus HousekeepingStatus
+  maintenanceStatus  RoomMaintenanceStatus @default(NONE)
+  isAccessible       Boolean               @default(false)
+  isActive           Boolean               @default(true)
+  notes              String?
+
+  roomBlocks        RoomBlock[]
+  reservationRooms  ReservationRoom[]
+  housekeepingTasks HousekeepingTask[]
+  doorLocks         DoorLock[]
+  lockCredentials   LockCredential[]
+  lockOperations    LockOperation[]
+  statusHistory     RoomStatusHistory[]
+
+  createdAt DateTime  @default(now()) @db.Timestamptz
+  updatedAt DateTime  @updatedAt @db.Timestamptz
+  deletedAt DateTime? @db.Timestamptz
+
+  @@unique([propertyId, number])
+}
+
+model Amenity {
+  id         String   @id @default(uuid()) @db.Uuid
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id])
+  name       String
+  category   String
+  icon       String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+}
+
+enum BlockType {
+  MAINTENANCE
+  OUT_OF_ORDER
+  OUT_OF_SERVICE
+  HOUSE_USE
+  OWNER_USE
+  COMPLIMENTARY
+  INVENTORY_BLOCK
+  DEEP_CLEAN
+  OTHER
+}
+
+model RoomBlock {
+  id           String    @id @default(uuid()) @db.Uuid
+  roomId       String    @db.Uuid
+  room         Room      @relation(fields: [roomId], references: [id])
+  propertyId   String    @db.Uuid
+  type         BlockType
+  startDate    DateTime  @db.Date
+  endDate      DateTime  @db.Date
+  reason       String
+  notes        String?
+  authorizedBy String    @db.Uuid // Staff ID
+  status       String    @default("ACTIVE") // ACTIVE | CANCELLED
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+}
+
+model RoomStatusHistory {
+  id         String @id @default(uuid()) @db.Uuid
+  roomId     String @db.Uuid
+  room       Room   @relation(fields: [roomId], references: [id])
+  propertyId String @db.Uuid
+
+  previousStatus RoomStatus
+  newStatus      RoomStatus
+  source         RoomStatusSource
+  referenceId    String? // e.g. reservation ID, block ID
+  changedBy      String?          @db.Uuid // Staff ID; null if system
+  reason         String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+}
+
+// -----------------------------------------------------------------------------
+// AVAILABILITY & RATES
+// -----------------------------------------------------------------------------
+
+enum RatePlanType {
+  STANDARD
+  CORPORATE
+  GROUP
+  PROMOTIONAL
+  SEASONAL
+  GOVERNMENT
+  CUSTOM
+}
+
+model RatePlan {
+  id          String       @id @default(uuid()) @db.Uuid
+  propertyId  String       @db.Uuid
+  property    Property     @relation(fields: [propertyId], references: [id])
+  name        String
+  code        String
+  description String?
+  type        RatePlanType
+  isPublic    Boolean      @default(true)
+  isActive    Boolean      @default(true)
+
+  minStay            Int        @default(1)
+  maxStay            Int?
+  advanceBookingDays Int?
+  blackoutDates      DateTime[] @db.Date
+
+  cancellationPolicyId String?             @db.Uuid
+  cancellationPolicy   CancellationPolicy? @relation(fields: [cancellationPolicyId], references: [id])
+  depositPolicyId      String?             @db.Uuid
+  depositPolicy        DepositPolicy?      @relation(fields: [depositPolicyId], references: [id])
+  noShowPolicyId       String?             @db.Uuid
+  noShowPolicy         NoShowPolicy?       @relation(fields: [noShowPolicyId], references: [id])
+
+  rates         Rate[]
+  seasonalRates SeasonalRate[]
+  reservations  Reservation[]
+
+  createdAt DateTime  @default(now()) @db.Timestamptz
+  updatedAt DateTime  @updatedAt @db.Timestamptz
+  deletedAt DateTime? @db.Timestamptz
+}
+
+model Rate {
+  id         String   @id @default(uuid()) @db.Uuid
+  ratePlanId String   @db.Uuid
+  ratePlan   RatePlan @relation(fields: [ratePlanId], references: [id])
+  roomTypeId String   @db.Uuid
+  roomType   RoomType @relation(fields: [roomTypeId], references: [id])
+  propertyId String   @db.Uuid
+
+  amount   Decimal @db.Decimal(18, 4)
+  currency String
+
+  effectiveFrom DateTime  @db.Date
+  effectiveTo   DateTime? @db.Date
+  dayOfWeek     Int[] // 0=Sun, 6=Sat
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+}
+
+model SeasonalRate {
+  id         String   @id @default(uuid()) @db.Uuid
+  ratePlanId String   @db.Uuid
+  ratePlan   RatePlan @relation(fields: [ratePlanId], references: [id])
+  roomTypeId String   @db.Uuid
+  roomType   RoomType @relation(fields: [roomTypeId], references: [id])
+
+  name     String
+  amount   Decimal @db.Decimal(18, 4)
+  currency String
+
+  startDate DateTime @db.Date
+  endDate   DateTime @db.Date
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+}
+
+model CancellationPolicy {
+  id                 String   @id @default(uuid()) @db.Uuid
+  propertyId         String   @db.Uuid
+  property           Property @relation(fields: [propertyId], references: [id])
+  name               String
+  type               String // 'FLEXIBLE' | 'MODERATE' | 'STRICT' | 'NON_REFUNDABLE'
+  hoursBeforeCheckIn Int
+  penaltyType        String // 'NONE' | 'FIRST_NIGHT' | 'PERCENTAGE' | 'FLAT'
+  penaltyValue       Decimal  @db.Decimal(18, 4)
+
+  ratePlans    RatePlan[]
+  reservations Reservation[]
+}
+
+model DepositPolicy {
+  id           String   @id @default(uuid()) @db.Uuid
+  propertyId   String   @db.Uuid
+  property     Property @relation(fields: [propertyId], references: [id])
+  name         String
+  required     Boolean
+  type         String // 'PERCENTAGE' | 'FLAT' | 'FIRST_NIGHT'
+  value        Decimal  @db.Decimal(18, 4)
+  dueAtBooking Boolean
+
+  ratePlans    RatePlan[]
+  reservations Reservation[]
+}
+
+model NoShowPolicy {
+  id          String   @id @default(uuid()) @db.Uuid
+  propertyId  String   @db.Uuid
+  property    Property @relation(fields: [propertyId], references: [id])
+  name        String
+  chargeType  String // 'NONE' | 'FIRST_NIGHT' | 'FULL_STAY' | 'PERCENTAGE'
+  chargeValue Decimal  @db.Decimal(18, 4)
+
+  ratePlans    RatePlan[]
+  reservations Reservation[]
+}
+
+model ExchangeRate {
+  id            String   @id @default(uuid()) @db.Uuid
+  propertyId    String   @db.Uuid
+  property      Property @relation(fields: [propertyId], references: [id])
+  fromCurrency  String
+  toCurrency    String
+  rate          Decimal  @db.Decimal(18, 8)
+  source        String
+  effectiveDate DateTime @db.Date
+  createdBy     String   @db.Uuid // Staff ID
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+}
+
+// -----------------------------------------------------------------------------
+// GUEST & RESERVATION
+// -----------------------------------------------------------------------------
+
+model Guest {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  firstName String
+  lastName  String
+  email     String?
+  phone     String?
+
+  dateOfBirth DateTime? @db.Date
+  gender      String?
+  nationality String?
+
+  addressLine1 String?
+  addressLine2 String?
+  city         String?
+  state        String?
+  country      String?
+
+  idType            String?
+  idNumberEncrypted String?
+  idNumberHint      String?
+
+  companyName String?
+  companyId   String? @db.Uuid
+
+  isVip       Boolean @default(false)
+  vipLevel    String?
+  preferences Json?
+  notes       String?
+
+  documents         GuestDocument[]
+  reservations      Reservation[]
+  folios            Folio[]
+  guestServiceReqs  GuestServiceRequest[]
+  reservationGuests ReservationGuest[]
+  lockCredentials   LockCredential[]
+
+  createdAt DateTime  @default(now()) @db.Timestamptz
+  updatedAt DateTime  @updatedAt @db.Timestamptz
+  deletedAt DateTime? @db.Timestamptz
+}
+
+model GuestDocument {
+  id         String    @id @default(uuid()) @db.Uuid
+  guestId    String    @db.Uuid
+  guest      Guest     @relation(fields: [guestId], references: [id])
+  type       String
+  fileUrl    String
+  uploadedAt DateTime  @default(now()) @db.Timestamptz
+  expiresAt  DateTime? @db.Timestamptz
+}
+
+enum ReservationSource {
+  WALK_IN
+  PHONE
+  EMAIL
+  WEBSITE
+  OTA
+  CORPORATE
+  OTHER
+}
+
+enum ReservationStatus {
+  INQUIRY
+  PENDING
+  CONFIRMED
+  CHECKED_IN
+  CHECKED_OUT
+  CANCELLED
+  NO_SHOW
+  EXPIRED
+}
+
+model Reservation {
+  id                 String   @id @default(uuid()) @db.Uuid
+  propertyId         String   @db.Uuid
+  property           Property @relation(fields: [propertyId], references: [id])
+  confirmationNumber String   @unique
+
+  primaryGuestId String  @db.Uuid
+  primaryGuest   Guest   @relation(fields: [primaryGuestId], references: [id])
+  companyId      String? @db.Uuid
+
+  source     ReservationSource
+  channelRef String?
+  status     ReservationStatus
+
+  checkIn  DateTime @db.Date
+  checkOut DateTime @db.Date
+  adults   Int
+  children Int
+
+  ratePlanId       String   @db.Uuid
+  ratePlan         RatePlan @relation(fields: [ratePlanId], references: [id])
+  ratePlanSnapshot Json
+
+  cancellationPolicyId String?             @db.Uuid
+  cancellationPolicy   CancellationPolicy? @relation(fields: [cancellationPolicyId], references: [id])
+  depositPolicyId      String?             @db.Uuid
+  depositPolicy        DepositPolicy?      @relation(fields: [depositPolicyId], references: [id])
+  noShowPolicyId       String?             @db.Uuid
+  noShowPolicy         NoShowPolicy?       @relation(fields: [noShowPolicyId], references: [id])
+
+  depositRequired Decimal? @db.Decimal(18, 4)
+  depositPaid     Decimal? @db.Decimal(18, 4)
+  currency        String
+
+  specialRequests String?
+  internalNotes   String?
+
+  earlyCheckIn       Boolean  @default(false)
+  lateCheckOut       Boolean  @default(false)
+  earlyCheckInCharge Decimal? @db.Decimal(18, 4)
+  lateCheckOutCharge Decimal? @db.Decimal(18, 4)
+
+  cancelledAt        DateTime? @db.Timestamptz
+  cancelledBy        String?   @db.Uuid // Staff ID
+  cancellationReason String?
+
+  noShowAt DateTime? @db.Timestamptz
+  noShowBy String?   @db.Uuid // Staff ID
+
+  version   Int    @default(1) // Optimistic locking
+  createdBy String @db.Uuid // Staff ID
+
+  reservationGuests ReservationGuest[]
+  reservationRooms  ReservationRoom[]
+  folios            Folio[]
+  payments          Payment[]
+  guestServiceReqs  GuestServiceRequest[]
+  lockCredentials   LockCredential[]
+  lockOperations    LockOperation[]
+
+  createdAt DateTime  @default(now()) @db.Timestamptz
+  updatedAt DateTime  @updatedAt @db.Timestamptz
+  deletedAt DateTime? @db.Timestamptz
+}
+
+model ReservationGuest {
+  id            String      @id @default(uuid()) @db.Uuid
+  reservationId String      @db.Uuid
+  reservation   Reservation @relation(fields: [reservationId], references: [id])
+  guestId       String      @db.Uuid
+  guest         Guest       @relation(fields: [guestId], references: [id])
+  isPrimary     Boolean     @default(false)
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+}
+
+model ReservationRoom {
+  id            String      @id @default(uuid()) @db.Uuid
+  reservationId String      @db.Uuid
+  reservation   Reservation @relation(fields: [reservationId], references: [id])
+  roomTypeId    String      @db.Uuid
+  roomId        String?     @db.Uuid
+  room          Room?       @relation(fields: [roomId], references: [id])
+
+  checkIn  DateTime @db.Date
+  checkOut DateTime @db.Date
+  adults   Int
+  children Int
+
+  ratePlanId String  @db.Uuid
+  rateAmount Decimal @db.Decimal(18, 4)
+  currency   String
+
+  status String // 'ACTIVE', 'CANCELLED', 'NO_SHOW'
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  // Note: Exclusion constraint will be added via migration:
+  // EXCLUDE USING GIST (roomId WITH =, daterange(checkIn, checkOut, '[)') WITH &&)
+  // WHERE (status NOT IN ('CANCELLED', 'NO_SHOW'))
+}
+
+// -----------------------------------------------------------------------------
+// FINANCIAL
+// -----------------------------------------------------------------------------
+
+model Folio {
+  id            String       @id @default(uuid()) @db.Uuid
+  reservationId String?      @db.Uuid // null for master/city ledgers
+  reservation   Reservation? @relation(fields: [reservationId], references: [id])
+  propertyId    String       @db.Uuid
+  property      Property     @relation(fields: [propertyId], references: [id])
+  guestId       String?      @db.Uuid
+  guest         Guest?       @relation(fields: [guestId], references: [id])
+
+  folioNumber String @unique
+  type        String // 'ROOM' | 'MASTER' | 'CITY_LEDGER'
+  status      String // 'OPEN' | 'CLOSED' | 'VOID'
+  currency    String
+
+  totalCharges  Decimal @default(0) @db.Decimal(18, 4)
+  totalPayments Decimal @default(0) @db.Decimal(18, 4)
+  balance       Decimal @default(0) @db.Decimal(18, 4)
+
+  closedAt DateTime? @db.Timestamptz
+  closedBy String?   @db.Uuid
+
+  version Int @default(1)
+
+  items    FolioItem[]
+  payments Payment[]
+  refunds  Refund[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+}
+
+enum FolioItemSource {
+  ROOM_CHARGE
+  MANUAL
+  POS
+  RESTAURANT
+  BAR
+  SPA
+  LAUNDRY
+  TRANSPORT
+  TELEPHONE
+  INTERNET
+  MINIBAR
+  OTHER
+}
+
+model FolioItem {
+  id      String @id @default(uuid()) @db.Uuid
+  folioId String @db.Uuid
+  folio   Folio  @relation(fields: [folioId], references: [id])
+
+  businessDate DateTime        @db.Date
+  type         String // 'CHARGE' | 'PAYMENT' | 'REFUND' | 'DISCOUNT' | 'ADJUSTMENT' | 'TAX'
+  source       FolioItemSource
+  description  String
+
+  quantity   Decimal @default(1) @db.Decimal(10, 4)
+  unitAmount Decimal @db.Decimal(18, 4)
+  amount     Decimal @db.Decimal(18, 4)
+  currency   String
+
+  baseAmount   Decimal  @db.Decimal(18, 4)
+  exchangeRate Decimal? @db.Decimal(18, 8)
+
+  taxId            String? @db.Uuid
+  discountId       String? @db.Uuid
+  posTransactionId String?
+
+  voidedAt   DateTime? @db.Timestamptz
+  voidedBy   String?   @db.Uuid
+  voidReason String?
+
+  postedBy String @db.Uuid
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  POS
+  CARD
+  PAYMENT_GATEWAY
+  MOBILE_PAYMENT
+  CHEQUE
+  OTHER
+}
+
+model Payment {
+  id            String       @id @default(uuid()) @db.Uuid
+  folioId       String       @db.Uuid
+  folio         Folio        @relation(fields: [folioId], references: [id])
+  reservationId String?      @db.Uuid
+  reservation   Reservation? @relation(fields: [reservationId], references: [id])
+  propertyId    String       @db.Uuid
+  property      Property     @relation(fields: [propertyId], references: [id])
+
+  method                PaymentMethod
+  provider              String?
+  providerTransactionId String?
+  providerRef           String?
+
+  amount       Decimal  @db.Decimal(18, 4)
+  currency     String
+  baseAmount   Decimal  @db.Decimal(18, 4)
+  exchangeRate Decimal? @db.Decimal(18, 8)
+
+  status         String // 'PENDING' | 'COMPLETED' | 'FAILED' | 'REFUNDED'
+  idempotencyKey String? @unique
+
+  receivedBy String  @db.Uuid // Staff ID
+  notes      String?
+
+  refunds Refund[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+}
+
+model Refund {
+  id         String   @id @default(uuid()) @db.Uuid
+  paymentId  String   @db.Uuid
+  payment    Payment  @relation(fields: [paymentId], references: [id])
+  folioId    String   @db.Uuid
+  folio      Folio    @relation(fields: [folioId], references: [id])
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id])
+
+  amount           Decimal @db.Decimal(18, 4)
+  currency         String
+  reason           String
+  authorizedBy     String  @db.Uuid
+  providerRefundId String?
+
+  status String // 'PENDING' | 'COMPLETED' | 'FAILED'
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+}
+
+model Tax {
+  id          String   @id @default(uuid()) @db.Uuid
+  propertyId  String   @db.Uuid
+  property    Property @relation(fields: [propertyId], references: [id])
+  name        String
+  code        String
+  type        String // 'PERCENTAGE' | 'FLAT'
+  rate        Decimal  @db.Decimal(8, 4)
+  appliesTo   String[]
+  isInclusive Boolean  @default(false)
+  isActive    Boolean  @default(true)
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+}
+
+model Discount {
+  id         String   @id @default(uuid()) @db.Uuid
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id])
+  name       String
+  code       String
+  type       String // 'PERCENTAGE' | 'FLAT'
+  value      Decimal  @db.Decimal(18, 4)
+
+  maxUses   Int?
+  usedCount Int       @default(0)
+  validFrom DateTime  @db.Timestamptz
+  validTo   DateTime? @db.Timestamptz
+  isActive  Boolean   @default(true)
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+}
+
+model WebhookEvent {
+  id          String    @id @default(uuid()) @db.Uuid
+  provider    String
+  eventId     String    @unique
+  eventType   String
+  payload     Json
+  status      String // 'processed' | 'failed'
+  processedAt DateTime? @db.Timestamptz
+  error       String?
+  createdAt   DateTime  @default(now()) @db.Timestamptz
+}
+
+// -----------------------------------------------------------------------------
+// NIGHT AUDIT
+// -----------------------------------------------------------------------------
+
+model NightAudit {
+  id           String   @id @default(uuid()) @db.Uuid
+  propertyId   String   @db.Uuid
+  property     Property @relation(fields: [propertyId], references: [id])
+  businessDate DateTime @db.Date
+
+  status      String // 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED'
+  startedAt   DateTime? @db.Timestamptz
+  completedAt DateTime? @db.Timestamptz
+  runBy       String?   @db.Uuid // Staff ID, null if automated
+
+  roomChargesPosted Int     @default(0)
+  totalRoomRevenue  Decimal @default(0) @db.Decimal(18, 4)
+  totalRevenue      Decimal @default(0) @db.Decimal(18, 4)
+  occupancy         Decimal @default(0) @db.Decimal(5, 2) // Percentage
+  adr               Decimal @default(0) @db.Decimal(18, 4)
+  revpar            Decimal @default(0) @db.Decimal(18, 4)
+
+  exceptions Json?
+  notes      String?
+}
+
+model OccupancySnapshot {
+  id           String   @id @default(uuid()) @db.Uuid
+  propertyId   String   @db.Uuid
+  property     Property @relation(fields: [propertyId], references: [id])
+  businessDate DateTime @db.Date
+
+  totalRooms      Int
+  occupiedRooms   Int
+  availableRooms  Int
+  outOfOrderRooms Int
+  blockedRooms    Int
+
+  occupancyPct Decimal @db.Decimal(5, 2)
+  adr          Decimal @db.Decimal(18, 4)
+  revpar       Decimal @db.Decimal(18, 4)
+  currency     String
+}
+
+// -----------------------------------------------------------------------------
+// OPERATIONS
+// -----------------------------------------------------------------------------
+
+model HousekeepingTask {
+  id         String   @id @default(uuid()) @db.Uuid
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id])
+  roomId     String   @db.Uuid
+  room       Room     @relation(fields: [roomId], references: [id])
+
+  type     String // 'CHECKOUT' | 'STAYOVER' | 'DEEP_CLEAN' | 'INSPECTION' | 'TURNDOWN'
+  priority String // 'LOW' | 'NORMAL' | 'HIGH' | 'VIP' | 'EARLY_ARRIVAL'
+  status   HousekeepingStatus
+
+  assignedTo   String?  @db.Uuid // Staff ID
+  businessDate DateTime @db.Date
+
+  startedAt   DateTime? @db.Timestamptz
+  completedAt DateTime? @db.Timestamptz
+  inspectedAt DateTime? @db.Timestamptz
+  inspectedBy String?   @db.Uuid
+
+  notes     String?
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+}
+
+model HousekeepingShift {
+  id         String   @id @default(uuid()) @db.Uuid
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id])
+  staffId    String   @db.Uuid
+
+  date      DateTime @db.Date
+  startTime String // Time string HH:mm
+  endTime   String // Time string HH:mm
+
+  tasksAssigned  Int @default(0)
+  tasksCompleted Int @default(0)
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+}
+
+enum MaintenanceStatus {
+  OPEN
+  ASSIGNED
+  IN_PROGRESS
+  WAITING_PARTS
+  RESOLVED
+  CLOSED
+}
+
+model MaintenanceTicket {
+  id         String   @id @default(uuid()) @db.Uuid
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id])
+  roomId     String?  @db.Uuid
+  location   String?
+
+  categoryId String              @db.Uuid
+  category   MaintenanceCategory @relation(fields: [categoryId], references: [id])
+
+  priority String // 'LOW' | 'NORMAL' | 'HIGH' | 'CRITICAL'
+  status   MaintenanceStatus
+
+  title       String
+  description String
+
+  reportedBy String  @db.Uuid // Staff ID
+  assignedTo String? @db.Uuid // Staff ID
+
+  estimatedCost Decimal? @db.Decimal(18, 4)
+  actualCost    Decimal? @db.Decimal(18, 4)
+  photos        String[]
+
+  scheduledAt DateTime? @db.Timestamptz
+  startedAt   DateTime? @db.Timestamptz
+  resolvedAt  DateTime? @db.Timestamptz
+  closedAt    DateTime? @db.Timestamptz
+
+  notes     String?
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+}
+
+model MaintenanceCategory {
+  id          String              @id @default(uuid()) @db.Uuid
+  propertyId  String              @db.Uuid
+  property    Property            @relation(fields: [propertyId], references: [id])
+  name        String
+  description String?
+  tickets     MaintenanceTicket[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+}
+
+model GuestServiceRequest {
+  id            String      @id @default(uuid()) @db.Uuid
+  reservationId String      @db.Uuid
+  reservation   Reservation @relation(fields: [reservationId], references: [id])
+  guestId       String      @db.Uuid
+  guest         Guest       @relation(fields: [guestId], references: [id])
+  propertyId    String      @db.Uuid
+  property      Property    @relation(fields: [propertyId], references: [id])
+  roomId        String?     @db.Uuid
+
+  type   String // 'WAKE_UP_CALL' | 'EXTRA_BED' | 'AIRPORT_TRANSFER' | 'LAUNDRY' | 'ROOM_SERVICE' | 'SPECIAL_REQUEST' | 'OTHER'
+  status String // 'PENDING' | 'ACKNOWLEDGED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED'
+
+  requestedAt  DateTime  @default(now()) @db.Timestamptz
+  scheduledFor DateTime? @db.Timestamptz
+  completedAt  DateTime? @db.Timestamptz
+
+  details    Json?
+  assignedTo String?  @db.Uuid
+  charge     Decimal? @db.Decimal(18, 4)
+  currency   String?
+  notes      String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+}
+
+// -----------------------------------------------------------------------------
+// STAFF & RBAC
+// -----------------------------------------------------------------------------
+
+model Staff {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  userId         String?      @unique @db.Uuid // Linked User account
+
+  employeeId String?
+  firstName  String
+  lastName   String
+  email      String  @unique
+  phone      String?
+
+  department     String
+  position       String
+  propertyAccess String[] @db.Uuid
+
+  isActive Boolean   @default(true)
+  hiredAt  DateTime? @db.Date
+
+  createdAt DateTime  @default(now()) @db.Timestamptz
+  updatedAt DateTime  @updatedAt @db.Timestamptz
+  deletedAt DateTime? @db.Timestamptz
+}
+
+model User {
+  id           String  @id @default(uuid()) @db.Uuid
+  staffId      String? @db.Uuid
+  email        String  @unique
+  passwordHash String
+  isSuperAdmin Boolean @default(false)
+
+  lastLoginAt DateTime? @db.Timestamptz
+  lastLoginIp String?
+
+  mfaEnabled Boolean @default(false)
+  mfaSecret  String?
+
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime? @db.Timestamptz
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  roles UserRole[]
+}
+
+model Role {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  description    String?
+  isSystem       Boolean      @default(false)
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  permissions RolePermission[]
+  users       UserRole[]
+}
+
+model Permission {
+  id          String  @id @default(uuid()) @db.Uuid
+  name        String  @unique // e.g. "reservation:create"
+  resource    String
+  action      String
+  description String?
+
+  roles RolePermission[]
+}
+
+model RolePermission {
+  roleId       String @db.Uuid
+  permissionId String @db.Uuid
+
+  role       Role       @relation(fields: [roleId], references: [id])
+  permission Permission @relation(fields: [permissionId], references: [id])
+
+  @@id([roleId, permissionId])
+}
+
+model UserRole {
+  id         String  @id @default(uuid()) @db.Uuid
+  userId     String  @db.Uuid
+  roleId     String  @db.Uuid
+  propertyId String? @db.Uuid
+
+  user     User      @relation(fields: [userId], references: [id])
+  role     Role      @relation(fields: [roleId], references: [id])
+  property Property? @relation(fields: [propertyId], references: [id])
+
+  grantedBy String   @db.Uuid
+  grantedAt DateTime @default(now()) @db.Timestamptz
+
+  // Using a unique index because propertyId can be null, meaning org-wide role
+  @@unique([userId, roleId, propertyId])
+}
+
+// -----------------------------------------------------------------------------
+// INTEGRATIONS
+// -----------------------------------------------------------------------------
+
+model HardwareAgent {
+  id                 String    @id @default(uuid()) @db.Uuid
+  propertyId         String    @db.Uuid
+  property           Property  @relation(fields: [propertyId], references: [id])
+  name               String
+  deviceId           String    @unique
+  status             String // 'ONLINE' | 'OFFLINE'
+  agentVersion       String?
+  sdkVersion         String?
+  hostname           String?
+  lastHeartbeat      DateTime? @db.Timestamptz
+  lastConnectedAt    DateTime? @db.Timestamptz
+  lastDisconnectedAt DateTime? @db.Timestamptz
+  enabled            Boolean   @default(true)
+  createdAt          DateTime  @default(now()) @db.Timestamptz
+
+  operations LockOperation[]
+  commands   LockCommand[]
+  lockEvents LockEvent[]
+}
+
+model DoorLock {
+  id         String   @id @default(uuid()) @db.Uuid
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id])
+  roomId     String?  @db.Uuid
+  room       Room?    @relation(fields: [roomId], references: [id])
+
+  lockCode     String    @unique
+  provider     String
+  serialNumber String?
+  status       String // 'ONLINE' | 'OFFLINE' | 'ERROR'
+  batteryLevel Int?
+  lastSyncAt   DateTime? @db.Timestamptz
+  metadata     Json?
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  credentials LockCredential[]
+  operations  LockOperation[]
+}
+
+model LockCredential {
+  id            String      @id @default(uuid()) @db.Uuid
+  reservationId String      @db.Uuid
+  reservation   Reservation @relation(fields: [reservationId], references: [id])
+  guestId       String?     @db.Uuid
+  guest         Guest?      @relation(fields: [guestId], references: [id])
+  roomId        String      @db.Uuid
+  room          Room        @relation(fields: [roomId], references: [id])
+  lockId        String      @db.Uuid
+  lock          DoorLock    @relation(fields: [lockId], references: [id])
+
+  credentialType String // 'rfid' | 'pin' | 'mobile' | 'nfc'
+  status         String // 'PENDING' | 'ACTIVE' | 'REVOKED' | 'EXPIRED' | 'FAILED'
+  validFrom      DateTime @db.Timestamptz
+  validUntil     DateTime @db.Timestamptz
+
+  cardSerialNumber String?
+  issueOperationId String? @db.Uuid
+
+  issuedAt  DateTime? @db.Timestamptz
+  revokedAt DateTime? @db.Timestamptz
+  metadata  Json?
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+}
+
+model LockOperation {
+  id             String      @id @default(uuid()) @db.Uuid
+  idempotencyKey String?     @unique
+  propertyId     String      @db.Uuid
+  property       Property    @relation(fields: [propertyId], references: [id])
+  lockId         String      @db.Uuid
+  lock           DoorLock    @relation(fields: [lockId], references: [id])
+  roomId         String      @db.Uuid
+  room           Room        @relation(fields: [roomId], references: [id])
+  reservationId  String      @db.Uuid
+  reservation    Reservation @relation(fields: [reservationId], references: [id])
+  credentialId   String?     @db.Uuid
+
+  commandId String?      @unique @db.Uuid
+  command   LockCommand? @relation(fields: [commandId], references: [id])
+
+  operation String // 'CREATE_CREDENTIAL' | 'ENCODE_CARD' | 'VERIFY_CARD' | 'REVOKE_CREDENTIAL'
+  status    String // 'QUEUED' | 'DISPATCHING' | 'WAITING_FOR_CARD' | 'CARD_DETECTED' | 'ENCODING' | 'VERIFYING' | 'ACTIVE' | 'FAILED' | 'REVOKING' | 'REVOKED'
+
+  errorCode    String?
+  errorMessage String?
+  payloadHash  String?
+  attemptCount Int     @default(0)
+
+  requestedAt DateTime  @default(now()) @db.Timestamptz
+  startedAt   DateTime? @db.Timestamptz
+  completedAt DateTime? @db.Timestamptz
+
+  agentId String?        @db.Uuid
+  agent   HardwareAgent? @relation(fields: [agentId], references: [id])
+
+  deviceId String?
+  metadata Json?
+}
+
+model LockCommand {
+  id          String         @id @default(uuid()) @db.Uuid
+  operationId String         @db.Uuid
+  operation   LockOperation?
+
+  agentId String        @db.Uuid
+  agent   HardwareAgent @relation(fields: [agentId], references: [id])
+
+  commandType String
+  payload     Json
+  status      String // 'QUEUED' | 'CLAIMED' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'DEAD_LETTER' | 'CANCELLED'
+
+  attempts Int @default(0)
+
+  availableAt    DateTime  @default(now()) @db.Timestamptz
+  claimedAt      DateTime? @db.Timestamptz
+  leaseExpiresAt DateTime? @db.Timestamptz
+  completedAt    DateTime? @db.Timestamptz
+
+  errorCode    String?
+  errorMessage String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+}
+
+// Durable audit trail for every hardware step. Used for debugging guest key issues.
+model LockEvent {
+  id            String  @id @default(uuid()) @db.Uuid
+  propertyId    String  @db.Uuid
+  property      Property @relation(fields: [propertyId], references: [id])
+  agentId       String?  @db.Uuid
+  agent         HardwareAgent? @relation(fields: [agentId], references: [id])
+  roomId        String?  @db.Uuid
+  reservationId String?  @db.Uuid
+  credentialId  String?  @db.Uuid
+  operationId   String?  @db.Uuid
+  commandId     String?  @db.Uuid
+
+  eventType String // AGENT_CONNECTED | AGENT_DISCONNECTED | COMMAND_RECEIVED | CARD_WAITING |
+                   // CARD_DETECTED | ENCODING_STARTED | ENCODING_COMPLETED | VERIFICATION_STARTED |
+                   // VERIFICATION_COMPLETED | REVOCATION_STARTED | REVOCATION_COMPLETED |
+                   // HARDWARE_ERROR | SDK_ERROR
+  payload   Json?
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+
+  @@index([propertyId, createdAt])
+  @@index([operationId])
+  @@index([reservationId])
+}
+
+model IntegrationConfig {
+  id              String   @id @default(uuid()) @db.Uuid
+  propertyId      String   @db.Uuid
+  property        Property @relation(fields: [propertyId], references: [id])
+  type            String // 'payment' | 'lock' | 'email' | 'sms' | 'ota' | 'pos' | 'gov'
+  provider        String
+  isActive        Boolean  @default(false)
+  configEncrypted String
+  webhookUrl      String?
+
+  lastHealthCheck DateTime? @db.Timestamptz
+  healthStatus    String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+}
+
+model GovernmentSubmission {
+  id           String    @id @default(uuid()) @db.Uuid
+  propertyId   String    @db.Uuid
+  property     Property  @relation(fields: [propertyId], references: [id])
+  provider     String
+  reportType   String
+  businessDate DateTime  @db.Date
+  status       String // 'pending' | 'submitted' | 'accepted' | 'rejected'
+  payload      Json
+  response     Json?
+  submittedAt  DateTime? @db.Timestamptz
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+}
+
+// -----------------------------------------------------------------------------
+// NOTIFICATIONS & AUDIT
+// -----------------------------------------------------------------------------
+
+model Notification {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  propertyId     String?      @db.Uuid
+
+  recipientType  String // 'staff' | 'guest'
+  recipientId    String? @db.Uuid
+  recipientEmail String?
+  recipientPhone String?
+
+  channel    String // 'email' | 'sms' | 'push' | 'whatsapp' | 'in_app'
+  templateId String? @db.Uuid
+
+  subject String?
+  body    String
+
+  status   String // 'pending' | 'sent' | 'failed' | 'bounced'
+  sentAt   DateTime? @db.Timestamptz
+  error    String?
+  metadata Json?
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+}
+
+model NotificationTemplate {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  name           String
+  event          String
+  channels       String[]
+  subject        String?
+  bodyHtml       String?
+  bodySms        String?
+  variables      String[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+}
+
+model AuditLog {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  propertyId     String?      @db.Uuid
+
+  userId    String? @db.Uuid
+  userEmail String?
+  userRole  String?
+
+  action     String
+  resource   String
+  resourceId String
+
+  previousValue Json?
+  newValue      Json?
+
+  ipAddress String?
+  userAgent String?
+  requestId String
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+}

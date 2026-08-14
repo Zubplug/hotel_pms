@@ -1,0 +1,11 @@
+node_modules/
+.turbo/
+.env
+.env.local
+dist/
+build/
+.next/
+*.log
+.DS_Store
+hardware-agent/src/LodgeCore.HardwareAgent/bin/
+hardware-agent/src/LodgeCore.HardwareAgent/obj/
