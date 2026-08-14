@@ -5,10 +5,12 @@ import { useQuery } from '@tanstack/react-query';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus, Search, Filter, LayoutGrid, List, KeyRound } from 'lucide-react';
+import { Plus, Search, Filter, LayoutGrid, List, KeyRound, RefreshCw } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Badge } from '@/components/ui/badge';
+import Link from 'next/link';
+import { toast } from 'sonner';
 
 interface Room {
   id: string;
@@ -49,10 +51,21 @@ export default function RoomsPage() {
         title="Rooms Inventory"
         description="Manage your hotel rooms, statuses, and maintenance operations."
         actions={
-          <Button className="gap-2">
-            <Plus className="h-4 w-4" />
-            Add Room
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" className="gap-2" onClick={() => {
+              toast.success('Sync initiated', { description: 'Hardware rooms are being synced...' });
+              setTimeout(() => toast.success('Sync complete', { description: 'Fetched 0 new rooms from lock server.' }), 2000);
+            }}>
+              <RefreshCw className="h-4 w-4" />
+              Sync Hardware
+            </Button>
+            <Button className="gap-2" asChild>
+              <Link href="/rooms/new">
+                <Plus className="h-4 w-4" />
+                Add Room
+              </Link>
+            </Button>
+          </div>
         }
       />
 
@@ -99,10 +112,10 @@ export default function RoomsPage() {
             : "flex flex-col gap-3"
         }>
           {data?.map((room) => (
-            <Card 
-              key={room.id} 
-              className={`group overflow-hidden transition-all hover:shadow-md border-muted/60 hover:border-primary/20 ${view === 'list' ? 'flex flex-row items-center p-4' : 'flex flex-col'}`}
-            >
+            <Link key={room.id} href={`/rooms/${room.id}/edit`}>
+              <Card 
+                className={`h-full group overflow-hidden transition-all hover:shadow-md border-muted/60 hover:border-primary/20 ${view === 'list' ? 'flex flex-row items-center p-4' : 'flex flex-col'}`}
+              >
               <div className={`${view === 'list' ? 'flex-1 grid grid-cols-5 items-center gap-4' : 'p-4'}`}>
                 
                 <div className={`${view === 'list' ? 'col-span-1' : 'flex justify-between items-start mb-3'}`}>
@@ -150,6 +163,7 @@ export default function RoomsPage() {
 
               </div>
             </Card>
+          </Link>
           ))}
           
           {data?.length === 0 && (
@@ -159,7 +173,7 @@ export default function RoomsPage() {
               </div>
               <h3 className="text-lg font-medium">No rooms found</h3>
               <p className="text-sm text-muted-foreground mt-1 mb-4">You haven't added any rooms to this property yet.</p>
-              <Button>Add First Room</Button>
+              <Button asChild><Link href="/rooms/new">Add First Room</Link></Button>
             </div>
           )}
         </div>

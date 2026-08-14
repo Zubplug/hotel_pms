@@ -4,38 +4,37 @@ import React from 'react';
 import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { RoomForm } from '@/components/rooms/RoomForm';
+import { RoomTypeForm } from '@/components/room-types/RoomTypeForm';
 import { Card, CardContent } from '@/components/ui/card';
 import { LoadingState } from '@/components/ui/EmptyState';
 
-export default function EditRoomPage() {
-  const { roomId } = useParams() as { roomId: string };
+export default function EditRoomTypePage() {
+  const { id } = useParams() as { id: string };
 
   const { data, isLoading } = useQuery({
-    queryKey: ['room', roomId],
+    queryKey: ['roomType', id],
     queryFn: async () => {
-      const res = await fetch(`/api/v1/rooms/${roomId}`);
-      if (!res.ok) throw new Error('Failed to fetch room');
+      const res = await fetch(`/api/v1/room-types/${id}`);
+      if (!res.ok) throw new Error('Failed to fetch room type');
       return (await res.json()).data;
     },
-    enabled: !!roomId,
   });
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <PageHeader
-        title="Edit Room"
-        description="Update details for this room."
+        title="Edit Room Type"
+        description="Update settings for this room category."
       />
       
       <Card>
         <CardContent className="pt-6">
           {isLoading ? (
-            <LoadingState message="Loading room..." />
+            <LoadingState message="Loading room type..." />
           ) : data ? (
-            <RoomForm initialData={data} />
+            <RoomTypeForm initialData={data} />
           ) : (
-            <div>Room not found.</div>
+            <div>Room type not found.</div>
           )}
         </CardContent>
       </Card>

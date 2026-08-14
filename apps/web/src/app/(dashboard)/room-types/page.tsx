@@ -37,9 +37,11 @@ export default function RoomTypesPage() {
         title="Room Types"
         description="Configure room categories, capacities, and base rates."
         actions={
-          <Button className="gap-2">
-            <Plus className="h-4 w-4" />
-            New Room Type
+          <Button className="gap-2" asChild>
+            <Link href="/room-types/new">
+              <Plus className="h-4 w-4" />
+              New Room Type
+            </Link>
           </Button>
         }
       />
@@ -51,7 +53,7 @@ export default function RoomTypesPage() {
           icon={<Layers className="h-6 w-6" />}
           title="No room types"
           description="Create your first room type to categorize rooms."
-          action={<Button><Plus className="mr-2 h-4 w-4" />Create Room Type</Button>}
+          action={<Button asChild><Link href="/room-types/new"><Plus className="mr-2 h-4 w-4" />Create Room Type</Link></Button>}
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
