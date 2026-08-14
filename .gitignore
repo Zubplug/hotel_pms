@@ -9,3 +9,11 @@ build/
 .DS_Store
 hardware-agent/src/LodgeCore.HardwareAgent/bin/
 hardware-agent/src/LodgeCore.HardwareAgent/obj/
+
+# Dev scratch/test files
+apps/web/check-pwd.js
+packages/db/delete-dup-*.ts
+packages/db/seed-more.ts
+packages/db/test-*.ts
+test-*.ts
+test-*.mjs
