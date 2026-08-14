@@ -64,10 +64,8 @@ export default function PropertiesPage() {
               <div className="h-32 bg-gradient-to-br from-primary/10 via-primary/5 to-background border-b relative p-6 flex flex-col justify-end">
                 <div className="absolute top-4 right-4">
                   <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 bg-background/50 backdrop-blur-sm hover:bg-background/80">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
+                    <DropdownMenuTrigger className="h-8 w-8 inline-flex items-center justify-center rounded-md bg-background/50 backdrop-blur-sm hover:bg-background/80 focus:outline-none focus:bg-background/80">
+                      <MoreVertical className="h-4 w-4" />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem className="gap-2"><Eye className="h-4 w-4" /> View Details</DropdownMenuItem>

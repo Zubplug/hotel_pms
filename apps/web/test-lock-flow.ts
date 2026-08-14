@@ -1,4 +1,4 @@
-import { PrismaClient, RoomStatus, HousekeepingStatus } from '@prisma/client';
+import { PrismaClient, RoomStatus, HousekeepingStatus } from '@hotel-pms/db';
 import { lockOrchestrator } from './src/lib/locks/orchestrator';
 import * as crypto from 'crypto';
 

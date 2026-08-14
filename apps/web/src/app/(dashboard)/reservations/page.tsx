@@ -139,7 +139,7 @@ export default function ReservationsPage() {
         <LoadingState message="Loading reservations…" />
       ) : reservations.length === 0 ? (
         <EmptyState
-          icon={CalendarDays}
+          icon={<CalendarDays />}
           title="No reservations found"
           description={search || statusFilter ? 'Try adjusting your filters.' : 'Reservations will appear here once created.'}
         />
