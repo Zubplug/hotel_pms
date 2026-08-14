@@ -14,9 +14,9 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = req.nextUrl;
     const query = propertyQuerySchema.parse({
-      search: searchParams.get('search'),
-      page: searchParams.get('page'),
-      pageSize: searchParams.get('pageSize'),
+      search: searchParams.get('search') ?? undefined,
+      page: searchParams.get('page') ?? undefined,
+      pageSize: searchParams.get('pageSize') ?? undefined,
     });
 
     const allowed = await getUserPropertyIds(session.user.id);

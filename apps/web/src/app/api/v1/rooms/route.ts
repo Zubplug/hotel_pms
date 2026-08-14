@@ -14,18 +14,18 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = req.nextUrl;
     const query = roomQuerySchema.parse({
-      propertyId: searchParams.get('propertyId'),
-      buildingId: searchParams.get('buildingId'),
-      floorId: searchParams.get('floorId'),
-      roomTypeId: searchParams.get('roomTypeId'),
-      status: searchParams.get('status'),
-      housekeepingStatus: searchParams.get('housekeepingStatus'),
+      propertyId: searchParams.get('propertyId') ?? undefined,
+      buildingId: searchParams.get('buildingId') ?? undefined,
+      floorId: searchParams.get('floorId') ?? undefined,
+      roomTypeId: searchParams.get('roomTypeId') ?? undefined,
+      status: searchParams.get('status') ?? undefined,
+      housekeepingStatus: searchParams.get('housekeepingStatus') ?? undefined,
       isActive: searchParams.get('isActive') === 'true' ? true : searchParams.get('isActive') === 'false' ? false : undefined,
-      search: searchParams.get('search'),
-      page: searchParams.get('page'),
-      pageSize: searchParams.get('pageSize'),
-      sortBy: searchParams.get('sortBy'),
-      sortOrder: searchParams.get('sortOrder'),
+      search: searchParams.get('search') ?? undefined,
+      page: searchParams.get('page') ?? undefined,
+      pageSize: searchParams.get('pageSize') ?? undefined,
+      sortBy: searchParams.get('sortBy') ?? undefined,
+      sortOrder: searchParams.get('sortOrder') ?? undefined,
     });
 
     const allowed = await getUserPropertyIds(session.user.id);
