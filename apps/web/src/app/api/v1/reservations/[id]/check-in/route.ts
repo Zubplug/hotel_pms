@@ -116,13 +116,27 @@ export async function POST(
         return `${yyyy}-${mm}-${dd} ${hh}:${min}:${ss}`;
       };
 
+      // Calculate current time in Nigeria (UTC+1)
+      const now = new Date();
+      now.setUTCHours(now.getUTCHours() + 1);
+
+      // Shift checkIn date to Nigeria timezone (to match whatever they selected on the calendar)
+      const checkInDate = new Date(resRoom.checkIn);
+      checkInDate.setUTCHours(checkInDate.getUTCHours() + 1);
+
       // Shift checkout date to Nigeria timezone
       const checkOutDate = new Date(resRoom.checkOut);
       checkOutDate.setUTCHours(checkOutDate.getUTCHours() + 1);
 
+      // Extract exactly the time right now (HH:mm:ss)
+      const currentHH = String(now.getUTCHours()).padStart(2, '0');
+      const currentMin = String(now.getUTCMinutes()).padStart(2, '0');
+      const currentSec = String(now.getUTCSeconds()).padStart(2, '0');
+      const exactTimeStr = `${currentHH}:${currentMin}:${currentSec}`;
+
       const payload = {
         roomNo: resRoom.room!.number,
-        checkIn: formatNigeriaTime(now), // Exact time the card is encoded!
+        checkIn: formatNigeriaTime(checkInDate, exactTimeStr), // Date from calendar + Exact current time!
         checkOut: formatNigeriaTime(checkOutDate, '12:00:00'), // 12:00 PM on checkout day
         flags: 0 // 0 = "Replace old card" in Deluns lock system
       };
