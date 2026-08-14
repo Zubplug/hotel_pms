@@ -22,17 +22,18 @@ public sealed class PmsClient
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
-    public PmsClient(HttpClient http, ILogger<PmsClient> logger)
+    public PmsClient(HttpClient http, AgentAuthenticator auth, ILogger<PmsClient> logger)
     {
         _http   = http;
         _logger = logger;
-    }
-
-    public void SetCredentials(string agentId, string agentSecret)
-    {
-        var token = Convert.ToBase64String(
-            System.Text.Encoding.UTF8.GetBytes($"{agentId}:{agentSecret}"));
-        _authHeader = $"Basic {token}";
+        
+        var cred = auth.Load();
+        if (cred is not null)
+        {
+            var token = Convert.ToBase64String(
+                System.Text.Encoding.UTF8.GetBytes($"{cred.AgentId}:{cred.AgentSecret}"));
+            _authHeader = $"Basic {token}";
+        }
     }
 
     /// <summary>Poll for the next QUEUED command. Returns null if nothing pending.</summary>

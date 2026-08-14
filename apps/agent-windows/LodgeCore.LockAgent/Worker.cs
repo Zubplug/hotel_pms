@@ -62,7 +62,6 @@ public sealed class Worker : BackgroundService
             _logger.LogCritical("No credentials found. Run --enroll first.");
             return;
         }
-        _pms.SetCredentials(cred.AgentId, cred.AgentSecret);
         _logger.LogInformation("Agent ID: {AgentId}", cred.AgentId);
 
         // 2. Initialize LockSDK

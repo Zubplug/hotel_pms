@@ -25,7 +25,7 @@
 
   <!-- Copy LockSDK.dll to output dir -->
   <ItemGroup>
-    <None Update="LockSDK.dll" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="LockSDK.dll" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
