@@ -78,7 +78,6 @@ export async function POST(
         data: {
           idempotencyKey: idempotencyKey,
           propertyId,
-          lockId: resRoom.room!.id,
           roomId: resRoom.room!.id,
           reservationId: reservation.id,
           operation: 'ENCODE_CARD',
