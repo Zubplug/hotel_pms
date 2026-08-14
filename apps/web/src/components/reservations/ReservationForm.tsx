@@ -106,10 +106,17 @@ export function ReservationForm() {
 
   const createReservation = useMutation({
     mutationFn: async (values: z.infer<typeof formSchema>) => {
+      const payload = {
+        ...values,
+        checkIn: format(values.checkIn, 'yyyy-MM-dd'),
+        checkOut: format(values.checkOut, 'yyyy-MM-dd'),
+        propertyId
+      };
+
       const res = await fetch('/api/v1/reservations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...values, propertyId }),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) {
         const error = await res.json();

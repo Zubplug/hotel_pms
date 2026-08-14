@@ -33,8 +33,8 @@ export function EditReservationDialog({ open, onOpenChange, reservation }: { ope
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          checkIn: checkIn.toISOString(),
-          checkOut: checkOut.toISOString(),
+          checkIn: format(checkIn, 'yyyy-MM-dd'),
+          checkOut: format(checkOut, 'yyyy-MM-dd'),
           adults,
           children,
           specialRequests
