@@ -116,9 +116,6 @@ export async function POST(
         return `${yyyy}-${mm}-${dd} ${hh}:${min}:${ss}`;
       };
 
-      // Calculate current time in Nigeria (UTC+1)
-      const now = new Date();
-      now.setUTCHours(now.getUTCHours() + 1);
 
       // Shift checkIn date to Nigeria timezone (to match whatever they selected on the calendar)
       const checkInDate = new Date(resRoom.checkIn);
