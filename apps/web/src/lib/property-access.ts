@@ -67,7 +67,7 @@ export async function getUserPropertyIds(
       where: organizationId ? { organizationId } : undefined,
       select: { id: true },
     });
-    return properties.map((p) => p.id);
+    return properties.map((p: any) => p.id);
   }
 
   const staff = await prisma.staff.findFirst({

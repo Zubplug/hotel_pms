@@ -33,7 +33,7 @@ export const delunsLockProvider = {
     const lockCode = doorLock.lockCode; // This is the roomNo for Deluns
 
     // 3. Create all records in a single transaction
-    const operation = await prisma.$transaction(async (tx) => {
+    const operation = await prisma.$transaction(async (tx: any) => {
       const credential = await tx.lockCredential.create({
         data: {
           reservationId,

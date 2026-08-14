@@ -210,7 +210,7 @@ export const lockOrchestrator = {
       const existing = await prisma.lockOperation.findUnique({ where: { idempotencyKey } });
       if (existing) continue; // already queued
 
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(async (tx: any) => {
         const op = await tx.lockOperation.create({
           data: {
             idempotencyKey,
