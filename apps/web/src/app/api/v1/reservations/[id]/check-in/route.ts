@@ -100,17 +100,19 @@ export async function POST(
         }
       });
 
-      // Format as un-zoned local strings so C# DateTime.TryParse treats it as exactly this string.
-      // For checkIn, sending empty forces the encoder PC to use its exact current local time.
-      const yyyy = resRoom.checkOut.getFullYear();
-      const mm = String(resRoom.checkOut.getMonth() + 1).padStart(2, '0');
-      const dd = String(resRoom.checkOut.getDate()).padStart(2, '0');
-      
+      const formatLocal = (d: Date, timeStr: string) => {
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd} ${timeStr}`;
+      };
+
       const payload = {
         roomNo: resRoom.room!.number,
-        checkIn: "", // Empty string = SDK uses current local time automatically
-        checkOut: `${yyyy}-${mm}-${dd} 12:00:00`, // Force 12:00 PM local time
-        flags: 8 // 8 = "Replace old card" (invalidates previous guests for this room)
+        // The C++ DLL requires exactly 19 chars "YYYY-MM-DD HH:mm:ss" otherwise it reads garbage memory (e.g. year 2106)
+        checkIn: formatLocal(resRoom.checkIn, '12:00:00'),
+        checkOut: formatLocal(resRoom.checkOut, '12:00:00'), 
+        flags: 8 // 8 = "Replace old card"
       };
 
       const cmd = await tx.lockCommand.create({
