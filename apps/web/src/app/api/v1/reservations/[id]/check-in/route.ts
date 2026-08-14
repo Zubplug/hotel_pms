@@ -100,11 +100,16 @@ export async function POST(
         }
       });
 
-      // Construct Payload based on database truth, NOT frontend!
+      // Format as un-zoned local strings so C# DateTime.TryParse treats it as exactly this string.
+      // For checkIn, sending empty forces the encoder PC to use its exact current local time.
+      const yyyy = resRoom.checkOut.getFullYear();
+      const mm = String(resRoom.checkOut.getMonth() + 1).padStart(2, '0');
+      const dd = String(resRoom.checkOut.getDate()).padStart(2, '0');
+      
       const payload = {
         roomNo: resRoom.room!.number,
-        checkIn: resRoom.checkIn.toISOString(),
-        checkOut: resRoom.checkOut.toISOString(),
+        checkIn: "", // Empty string = SDK uses current local time automatically
+        checkOut: `${yyyy}-${mm}-${dd} 12:00:00`, // Force 12:00 PM local time
         flags: 0 
       };
 
