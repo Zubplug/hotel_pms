@@ -9,7 +9,6 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2 } from 'lucide-react';
-import crypto from 'crypto'; // We will use uuid or crypto for idempotency on client side... wait, crypto in browser? We can use `crypto.randomUUID()`.
 
 export function AddPaymentDialog({ open, onOpenChange, folio }: { open: boolean, onOpenChange: (open: boolean) => void, folio: any }) {
   const [method, setMethod] = useState<string>('CASH');
@@ -48,7 +47,7 @@ export function AddPaymentDialog({ open, onOpenChange, folio }: { open: boolean,
         currency: folio.currency,
         method,
         notes,
-        idempotencyKey: crypto.randomUUID()
+        idempotencyKey: globalThis.crypto.randomUUID()
       };
 
       const res = await fetch(endpoint, {
