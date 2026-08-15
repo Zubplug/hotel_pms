@@ -9,7 +9,7 @@ import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 
-export function PaymentReceipt({ id }: { id: string }) {
+export function PaymentReceipt({ id, onClose, hideBack = false }: { id: string, onClose?: () => void, hideBack?: boolean }) {
   const router = useRouter();
 
   const { data, isLoading, error } = useQuery({
@@ -42,7 +42,7 @@ export function PaymentReceipt({ id }: { id: string }) {
         </div>
         <h2 className="text-2xl font-bold">Receipt Not Found</h2>
         <p className="text-muted-foreground">{error.message}</p>
-        <Button onClick={() => router.back()} className="mt-4">
+        <Button onClick={onClose || (() => router.back())} className="mt-4">
           Go Back
         </Button>
       </div>
@@ -52,13 +52,15 @@ export function PaymentReceipt({ id }: { id: string }) {
   const { property, guest, reservation, folio, payment, receiptId } = data;
 
   return (
-    <div className="max-w-3xl mx-auto py-8 px-4 sm:px-6">
+    <div className="max-w-3xl mx-auto py-8 px-4 sm:px-6 w-full">
       {/* Non-printable action bar */}
       <div className="flex justify-between items-center mb-6 print:hidden">
-        <Button variant="ghost" onClick={() => router.back()} className="text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Back
-        </Button>
+        {!hideBack ? (
+          <Button variant="ghost" onClick={onClose || (() => router.back())} className="text-muted-foreground hover:text-foreground">
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back
+          </Button>
+        ) : <div />}
         <div className="flex gap-2">
           <Button onClick={handlePrint}>
             <Printer className="w-4 h-4 mr-2" />

@@ -11,6 +11,7 @@ import { FrontDeskReassignRoomDialog } from './FrontDeskReassignRoomDialog';
 import { FrontDeskCancelReservationDialog } from './FrontDeskCancelReservationDialog';
 import { FrontDeskAddPaymentDialog } from './FrontDeskAddPaymentDialog';
 import { FrontDeskExtendStayDialog } from './FrontDeskExtendStayDialog';
+import { FrontDeskReceiptDialog } from './FrontDeskReceiptDialog';
 import { FolioSection } from '../reservations/FolioSection';
 import { LogIn, User, MapPin, CalendarClock, CreditCard, Receipt, LogOut, ChevronDown, Edit3, XCircle } from 'lucide-react';
 import {
@@ -28,6 +29,7 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
   const [isAddPaymentOpen, setIsAddPaymentOpen] = useState(false);
   const [isExtendStayOpen, setIsExtendStayOpen] = useState(false);
+  const [isReceiptOpen, setIsReceiptOpen] = useState(false);
 
   const resRoom = reservation.reservationRooms?.[0];
   const room = resRoom?.room;
@@ -146,9 +148,7 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
                 className="col-span-2 h-12 rounded-xl font-semibold border-slate-200"
                 disabled={!latestPayment}
                 onClick={() => {
-                  if (latestPayment) {
-                    window.open(`/frontdesk/payments/${latestPayment.id}/receipt`, '_blank');
-                  }
+                  if (latestPayment) setIsReceiptOpen(true);
                 }}
               >
                 <Receipt className="w-4 h-4 mr-2" /> Print Receipt
@@ -238,19 +238,13 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
       )}
 
       {isAddPaymentOpen && folio && (
-        <FrontDeskAddPaymentDialog
-          open={isAddPaymentOpen}
-          onOpenChange={setIsAddPaymentOpen}
-          folio={folio}
-        />
+        <FrontDeskAddPaymentDialog folio={folio} open={isAddPaymentOpen} onOpenChange={setIsAddPaymentOpen} />
       )}
-
       {isExtendStayOpen && (
-        <FrontDeskExtendStayDialog
-          open={isExtendStayOpen}
-          onOpenChange={setIsExtendStayOpen}
-          reservation={reservation}
-        />
+        <FrontDeskExtendStayDialog reservation={reservation} open={isExtendStayOpen} onOpenChange={setIsExtendStayOpen} />
+      )}
+      {isReceiptOpen && latestPayment && (
+        <FrontDeskReceiptDialog paymentId={latestPayment.id} open={isReceiptOpen} onOpenChange={setIsReceiptOpen} />
       )}
     </div>
   );
