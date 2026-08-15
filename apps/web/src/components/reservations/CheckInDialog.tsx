@@ -16,10 +16,11 @@ interface CheckInDialogProps {
 export function CheckInDialog({ open, onOpenChange, reservation }: CheckInDialogProps) {
   const router = useRouter();
   
-  const [phase, setPhase] = useState<'CONFIRM' | 'ENCODING' | 'SUCCESS' | 'FAILED'>('CONFIRM');
+  const [phase, setPhase] = useState<'CONFIRM' | 'READING' | 'OVERWRITE_CONFIRM' | 'ENCODING' | 'SUCCESS' | 'FAILED'>('CONFIRM');
   const [operationId, setOperationId] = useState<string | null>(null);
   const [hardwareStatus, setHardwareStatus] = useState<string>('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [existingCardData, setExistingCardData] = useState<any>(null);
 
   // Reset state when opened
   useEffect(() => {
@@ -29,10 +30,49 @@ export function CheckInDialog({ open, onOpenChange, reservation }: CheckInDialog
       setOperationId(null);
       setErrorMsg(null);
       setHardwareStatus('');
+      setExistingCardData(null);
     }
   }, [open]);
 
-  // Polling Effect
+  // Polling Effect for Reading
+  useEffect(() => {
+    if (phase !== 'READING' || !operationId) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/v1/hardware/operations/${operationId}`);
+        if (!res.ok) throw new Error('Failed to poll operation status');
+        
+        const data = await res.json();
+        const op = data.data.operation;
+        const status = op.status;
+        
+        setHardwareStatus(status);
+
+        if (status === 'SUCCESS' || status === 'COMPLETED') {
+          const cardData = op.command?.responseData;
+          
+          if (cardData && cardData.validTo && new Date(cardData.validTo) > new Date()) {
+            // Card is currently active
+            setExistingCardData(cardData);
+            setPhase('OVERWRITE_CONFIRM');
+          } else {
+            // Blank or expired card, proceed to encode
+            executeCheckInEncoding();
+          }
+        } else if (status === 'FAILED') {
+          setPhase('FAILED');
+          setErrorMsg(op.errorMessage || 'Hardware agent failed to read the card.');
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }, 1500);
+
+    return () => clearInterval(interval);
+  }, [phase, operationId]);
+
+  // Polling Effect for Encoding
   useEffect(() => {
     if (phase !== 'ENCODING' || !operationId) return;
 
@@ -48,14 +88,13 @@ export function CheckInDialog({ open, onOpenChange, reservation }: CheckInDialog
 
         if (status === 'SUCCESS' || status === 'COMPLETED') {
           setPhase('SUCCESS');
-          router.refresh(); // Refresh background data to show CHECKED_IN
+          router.refresh();
         } else if (status === 'FAILED') {
           setPhase('FAILED');
           setErrorMsg(data.data.operation.errorMessage || 'Hardware agent failed to encode the card.');
         }
       } catch (err) {
         console.error(err);
-        // Do not fail immediately on network blip
       }
     }, 1500);
 
@@ -64,9 +103,38 @@ export function CheckInDialog({ open, onOpenChange, reservation }: CheckInDialog
 
   const handleStartCheckIn = async () => {
     try {
+      setPhase('READING');
+      setHardwareStatus('STARTING');
+      setErrorMsg(null);
+
+      const res = await fetch('/api/v1/hardware/locks/read-card', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ propertyId: reservation.propertyId }),
+      });
+      
+      const data = await res.json();
+
+      if (!res.ok) {
+        setPhase('FAILED');
+        setErrorMsg(data.error?.message || 'Failed to initiate read card');
+        return;
+      }
+
+      setOperationId(data.data.operation.id);
+      setHardwareStatus(data.data.operation.status);
+    } catch (err: unknown) {
+      setPhase('FAILED');
+      setErrorMsg(err instanceof Error ? err.message : 'Network error occurred');
+    }
+  };
+
+  const executeCheckInEncoding = async () => {
+    try {
       setPhase('ENCODING');
       setHardwareStatus('STARTING');
       setErrorMsg(null);
+      setOperationId(null); // Reset operation ID for the new encoding task
 
       const res = await fetch(`/api/v1/reservations/${reservation.id}/check-in`, {
         method: 'POST',
@@ -97,7 +165,7 @@ export function CheckInDialog({ open, onOpenChange, reservation }: CheckInDialog
       case 'WAITING_FOR_CARD':
         return 'Please place a blank card on the USB Encoder now.';
       case 'CARD_DETECTED':
-        return 'Card detected. Reading...';
+        return 'Card detected. Processing...';
       case 'ENCODING':
         return 'Writing security payload to card...';
       default:
@@ -110,11 +178,11 @@ export function CheckInDialog({ open, onOpenChange, reservation }: CheckInDialog
 
   return (
     <Dialog open={open} onOpenChange={(val) => {
-      // Prevent closing by clicking outside while encoding
-      if (phase === 'ENCODING' && !val) return;
+      // Prevent closing by clicking outside while encoding or reading
+      if ((phase === 'ENCODING' || phase === 'READING') && !val) return;
       onOpenChange(val);
     }}>
-      <DialogContent className="sm:max-w-md" showCloseButton={phase !== 'ENCODING'}>
+      <DialogContent className="sm:max-w-md" showCloseButton={phase !== 'ENCODING' && phase !== 'READING'}>
         <DialogHeader>
           <DialogTitle>Guest Check-In</DialogTitle>
           <DialogDescription>
@@ -135,8 +203,46 @@ export function CheckInDialog({ open, onOpenChange, reservation }: CheckInDialog
                 </div>
               </div>
               <p className="text-sm text-muted-foreground">
-                Ensure the USB Encoder is plugged into the front-desk PC.
+                Ensure the USB Encoder is plugged into the front-desk PC. The system will read the card first to ensure it is blank.
               </p>
+            </div>
+          )}
+
+          {phase === 'READING' && (
+            <div className="flex flex-col items-center space-y-4 animate-in fade-in zoom-in duration-300">
+              <div className="relative">
+                <div className="absolute inset-0 bg-primary/20 rounded-full animate-ping" />
+                <div className="bg-primary/10 p-4 rounded-full relative">
+                  <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <p className="font-medium text-lg">Reading Card Status</p>
+                <p className="text-sm text-muted-foreground max-w-[250px]">
+                  {getStatusText()}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {phase === 'OVERWRITE_CONFIRM' && (
+            <div className="flex flex-col items-center space-y-4 animate-in fade-in zoom-in duration-300">
+              <div className="bg-amber-500/10 p-4 rounded-full">
+                <AlertCircle className="w-10 h-10 text-amber-500" />
+              </div>
+              <div className="space-y-2 w-full">
+                <p className="font-semibold text-lg text-amber-600 dark:text-amber-500">Active Card Detected</p>
+                <div className="bg-amber-50 dark:bg-amber-950/30 p-3 rounded text-sm text-left border border-amber-200 dark:border-amber-800">
+                  <p className="font-medium text-amber-900 dark:text-amber-400">This card is currently active!</p>
+                  <ul className="mt-1 text-amber-800 dark:text-amber-500 space-y-1">
+                    <li>Room: <span className="font-semibold">{existingCardData?.roomNo || 'Unknown'}</span></li>
+                    <li>Valid Until: <span className="font-semibold">{existingCardData?.validTo ? new Date(existingCardData.validTo).toLocaleString() : 'Unknown'}</span></li>
+                  </ul>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Are you sure you want to overwrite this card with the new check-in data? The previous guest will be locked out.
+                </p>
+              </div>
             </div>
           )}
 
@@ -191,6 +297,12 @@ export function CheckInDialog({ open, onOpenChange, reservation }: CheckInDialog
             <>
               <DialogClose render={<Button variant="outline">Cancel</Button>} />
               <Button onClick={handleStartCheckIn}>Start Encoding</Button>
+            </>
+          )}
+          {phase === 'OVERWRITE_CONFIRM' && (
+            <>
+              <DialogClose render={<Button variant="outline">Cancel</Button>} />
+              <Button variant="destructive" onClick={executeCheckInEncoding}>Overwrite & Encode</Button>
             </>
           )}
           {phase === 'FAILED' && (
