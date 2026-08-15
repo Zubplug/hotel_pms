@@ -117,11 +117,9 @@ export default function HardwareSettingsPage() {
           </Button>
 
           <Dialog open={open} onOpenChange={resetModal}>
-            <DialogTrigger asChild>
-              <Button className="gap-2">
-                <Key className="w-4 h-4" />
-                Enroll New Agent
-              </Button>
+            <DialogTrigger render={<Button className="gap-2" />}>
+              <Key className="w-4 h-4" />
+              Enroll New Agent
             </DialogTrigger>
             <DialogContent className="sm:max-w-md">
             <DialogHeader>

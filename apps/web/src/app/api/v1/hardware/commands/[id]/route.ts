@@ -67,7 +67,7 @@ export async function PATCH(
         });
 
         // 3. Strict Check-In State Machine Transition
-        if (status === 'COMPLETED' && command.commandType === 'ENCODE') {
+        if (status === 'COMPLETED' && command.commandType === 'ENCODE' && command.operation.reservationId && command.operation.roomId && command.operation.lockId) {
           const res = await tx.reservation.findUnique({ 
             where: { id: command.operation.reservationId },
             include: { property: true }
