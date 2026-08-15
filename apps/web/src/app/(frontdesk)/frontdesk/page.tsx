@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { useProperty } from '@/components/PropertyProvider';
 import { CheckInDialog } from '@/components/reservations/CheckInDialog';
 import { CheckOutDialog } from '@/components/reservations/CheckOutDialog';
+import { ReadCardCheckoutDialog } from '@/components/reservations/ReadCardCheckoutDialog';
 import { LoadingState } from '@/components/ui/EmptyState';
 import { 
   UserPlus, 
@@ -34,6 +35,7 @@ export default function ReceptionistDashboardPage() {
 
   const [checkInReservation, setCheckInReservation] = useState<any | null>(null);
   const [checkOutReservation, setCheckOutReservation] = useState<any | null>(null);
+  const [quickCheckoutOpen, setQuickCheckoutOpen] = useState(false);
 
   const { data: res, isLoading } = useQuery({
     queryKey: ['frontdesk', 'dashboard', propertyId],
@@ -335,6 +337,25 @@ export default function ReceptionistDashboardPage() {
           folio={checkOutReservation.folios[0]}
         />
       )}
+
+      {/* Floating Action Button: Quick Checkout */}
+      <div className="fixed bottom-8 right-8 z-50">
+        <Button 
+          onClick={() => setQuickCheckoutOpen(true)}
+          className="h-16 px-6 rounded-full bg-slate-900 hover:bg-slate-800 text-white shadow-2xl hover:shadow-[0_10px_40px_-10px_rgba(0,0,0,0.5)] transition-all hover:-translate-y-1 flex items-center gap-3 border border-slate-700/50"
+        >
+          <div className="bg-white/10 p-2 rounded-full">
+            <Key className="w-5 h-5 text-white" />
+          </div>
+          <span className="font-bold text-lg">Quick Checkout</span>
+        </Button>
+      </div>
+
+      <ReadCardCheckoutDialog 
+        open={quickCheckoutOpen}
+        onOpenChange={setQuickCheckoutOpen}
+        propertyId={propertyId}
+      />
     </div>
   );
 }
