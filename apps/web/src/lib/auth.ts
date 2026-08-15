@@ -25,6 +25,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         const user = await prisma.user.findUnique({
           where: { email: credentials.email as string },
+          include: { roles: { include: { role: true } } }
         });
 
         if (!user || !user.passwordHash) {
@@ -40,12 +41,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null;
         }
 
+        const primaryRole = user.roles?.[0]?.role?.name || 'STAFF';
+
         // Return user object
         return {
           id: user.id,
           email: user.email,
           staffId: user.staffId,
           isSuperAdmin: user.isSuperAdmin,
+          role: primaryRole,
         };
       },
     }),
@@ -56,6 +60,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.id = user.id;
         token.staffId = user.staffId;
         token.isSuperAdmin = user.isSuperAdmin;
+        token.role = (user as any).role;
       }
       return token;
     },
@@ -64,6 +69,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.id = token.id as string;
         session.user.staffId = token.staffId as string;
         session.user.isSuperAdmin = token.isSuperAdmin as boolean;
+        (session.user as any).role = token.role;
       }
       return session;
     },

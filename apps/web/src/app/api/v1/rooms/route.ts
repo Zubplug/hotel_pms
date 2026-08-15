@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
       ...(query.floorId ? { floorId: query.floorId } : {}),
       ...(query.roomTypeId ? { roomTypeId: query.roomTypeId } : {}),
       ...(query.status ? { status: query.status } : {}),
-      ...(query.housekeepingStatus ? { housekeepingStatus: query.housekeepingStatus } : {}),
+      ...(query.housekeepingStatus ? { housekeepingStatus: query.housekeepingStatus as any } : {}),
       ...(query.isActive !== undefined ? { isActive: query.isActive } : {}),
       ...(query.search ? {
         OR: [
@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
     if (existing) return errorResponse('ROOM_NUMBER_DUPLICATE', `Room ${data.number} already exists in this property`, 409);
 
     const room = await prisma.room.create({
-      data: { ...data, squareMeters: data.squareMeters },
+      data: { ...data, squareMeters: data.squareMeters } as any,
       include: { roomType: true, building: true, floor: true },
     });
 

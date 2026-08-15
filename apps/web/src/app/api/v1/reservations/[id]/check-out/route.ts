@@ -59,13 +59,51 @@ export async function POST(
         data: { status: 'CHECKED_OUT' },
       });
 
-      // 3. Mark room(s) as DIRTY
+      // 3. Mark room(s) as DIRTY and Create Housekeeping Tasks
+      const businessDate = new Date();
+      businessDate.setUTCHours(0, 0, 0, 0); // Simplified business date
+      
+      let tasksCreated = 0;
       for (const rr of reservation.reservationRooms) {
         if (rr.room) {
+          // Check for back-to-back same day arrivals for HIGH priority
+          const nextReservation = await tx.reservationRoom.findFirst({
+            where: {
+              roomId: rr.room.id,
+              checkIn: {
+                gte: businessDate,
+                lt: new Date(businessDate.getTime() + 86400000)
+              },
+              reservation: { status: 'CONFIRMED' }
+            }
+          });
+          const priority = nextReservation ? 'HIGH' : 'NORMAL';
+
           await tx.room.update({
             where: { id: rr.room.id },
-            data: { status: 'DIRTY', housekeepingStatus: 'DIRTY' },
+            data: { status: 'DIRTY', housekeepingStatus: 'PENDING' },
           });
+
+          // Idempotency: upsert by unique idempotencyKey
+          const idempotencyKey = `CHECKOUT_${id}_${rr.room.id}`;
+          const hskTask = await tx.housekeepingTask.upsert({
+            where: { idempotencyKey },
+            update: {},
+            create: {
+              idempotencyKey,
+              propertyId: reservation.propertyId,
+              roomId: rr.room.id,
+              type: 'CHECKOUT',
+              priority,
+              status: 'PENDING',
+              businessDate,
+              notes: priority === 'HIGH' ? 'Back-to-back arrival expected today.' : null
+            }
+          });
+          
+          if (hskTask.createdAt >= businessDate) { // Rough check if just created
+            tasksCreated++;
+          }
         }
       }
 
@@ -95,7 +133,7 @@ export async function POST(
             action: 'RESERVATION_CHECKED_OUT',
             resource: 'Reservation',
             resourceId: id,
-            newValue: { status: 'CHECKED_OUT', foliosClosed: folios.length },
+            newValue: { status: 'CHECKED_OUT', foliosClosed: folios.length, housekeepingTasksQueued: tasksCreated },
             ipAddress: req.headers.get('x-forwarded-for') || '127.0.0.1',
             userAgent: req.headers.get('user-agent') || 'Unknown',
             requestId: req.headers.get('x-request-id') || crypto.randomUUID(),

@@ -15,11 +15,13 @@ export const RoomStatusEnum = z.enum([
 ]);
 
 export const HousekeepingStatusEnum = z.enum([
-  'DIRTY',
+  'PENDING',
+  'ASSIGNED',
   'CLEANING',
   'CLEAN',
   'INSPECTED',
-  'OUT_OF_ORDER',
+  'CANCELLED',
+  'MAINTENANCE_REQUIRED'
 ]);
 
 export const RoomMaintenanceStatusEnum = z.enum([

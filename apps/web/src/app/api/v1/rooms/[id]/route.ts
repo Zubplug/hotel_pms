@@ -45,7 +45,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (!canUpdate) return errorResponse('FORBIDDEN', 'Insufficient permissions', 403);
     const body = await req.json();
     const data = updateRoomSchema.parse(body);
-    const updated = await prisma.room.update({ where: { id }, data, include: { roomType: true } });
+    const updated = await prisma.room.update({ where: { id }, data: data as any, include: { roomType: true } });
     const property = await prisma.property.findUnique({ where: { id: room.propertyId }, select: { organizationId: true } });
     await createAuditLog({
       organizationId: property!.organizationId, propertyId: room.propertyId, userId: session.user.id,

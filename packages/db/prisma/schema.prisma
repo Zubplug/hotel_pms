@@ -180,11 +180,13 @@ enum RoomStatus {
 }
 
 enum HousekeepingStatus {
-  DIRTY
+  PENDING
+  ASSIGNED
   CLEANING
   CLEAN
   INSPECTED
-  OUT_OF_ORDER
+  CANCELLED
+  MAINTENANCE_REQUIRED
 }
 
 enum RoomMaintenanceStatus {
@@ -887,7 +889,9 @@ model HousekeepingTask {
   inspectedAt DateTime? @db.Timestamptz
   inspectedBy String?   @db.Uuid
 
-  notes     String?
+  notes          String?
+  idempotencyKey String?  @unique
+
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
 }
