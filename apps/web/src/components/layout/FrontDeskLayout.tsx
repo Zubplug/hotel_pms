@@ -30,6 +30,7 @@ import { Badge } from '@/components/ui/badge';
 import { useProperty } from '@/components/PropertyProvider';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
+import { SyncIndicator } from '@/components/frontdesk/SyncIndicator';
 
 export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession();
@@ -207,6 +208,9 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
           ) : (
             <div className="h-9 w-32 bg-muted rounded-full animate-pulse" />
           )}
+
+          {/* Offline Sync Indicator */}
+          <SyncIndicator />
 
           {/* User Profile */}
           <DropdownMenu>
