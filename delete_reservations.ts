@@ -7,13 +7,12 @@ async function main() {
 
   try {
     // Delete all reservation-related data
-    await prisma.folioItem.deleteMany();
-    await prisma.payment.deleteMany();
+    await prisma.folioTransaction.deleteMany();
     await prisma.folio.deleteMany();
+    await prisma.payment.deleteMany();
+    await prisma.invoice.deleteMany();
     await prisma.reservationRoom.deleteMany();
-    await prisma.reservationGuest.deleteMany();
     await prisma.lockCredential.deleteMany();
-    await prisma.lockOperation.deleteMany();
     await prisma.reservation.deleteMany();
 
     // Reset room statuses

@@ -6,17 +6,17 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-import { Cpu, Wifi, WifiOff, Key, Download, Copy, Check, Clock, RotateCw, CreditCard } from 'lucide-react';
+import { Cpu, Wifi, WifiOff, Key, Download, Copy, Check, Clock, RotateCw, CreditCard, Info } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useProperty } from '@/components/PropertyProvider';
 import { EraseCardDialog } from '@/components/hardware/EraseCardDialog';
+import { ReadCardInfoDialog } from '@/components/hardware/ReadCardInfoDialog';
 
 export default function HardwareSettingsPage() {
   const { propertyId } = useProperty();
@@ -26,6 +26,7 @@ export default function HardwareSettingsPage() {
   const [copied, setCopied] = useState(false);
   const [open, setOpen] = useState(false);
   const [wipeOpen, setWipeOpen] = useState(false);
+  const [readInfoOpen, setReadInfoOpen] = useState(false);
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['hardwareAgents', propertyId],
@@ -103,6 +104,11 @@ export default function HardwareSettingsPage() {
         </div>
         
         <div className="flex gap-2">
+          <Button variant="secondary" className="gap-2" onClick={() => setReadInfoOpen(true)}>
+            <Info className="w-4 h-4" />
+            Read Card Info
+          </Button>
+          
           <Button variant="outline" className="gap-2" onClick={() => setWipeOpen(true)}>
             <CreditCard className="w-4 h-4" />
             Wipe / Erase Card
@@ -165,6 +171,12 @@ export default function HardwareSettingsPage() {
       <EraseCardDialog 
         open={wipeOpen} 
         onOpenChange={setWipeOpen} 
+        propertyId={propertyId ?? ''} 
+      />
+
+      <ReadCardInfoDialog 
+        open={readInfoOpen} 
+        onOpenChange={setReadInfoOpen} 
         propertyId={propertyId ?? ''} 
       />
 
