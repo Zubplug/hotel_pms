@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
 
     const body = await req.json();
-    const { folioId, amount, currency, method, idempotencyKey, notes } = body;
+    const { folioId, amount, currency, method, idempotencyKey, notes, providerTransactionId } = body;
 
     if (!folioId || !amount || !currency || !method || !idempotencyKey) {
       return errorResponse('BAD_REQUEST', 'Missing required fields (folioId, amount, currency, method, idempotencyKey)', 400);
@@ -117,10 +117,11 @@ export async function POST(req: NextRequest) {
           baseAmount: numericAmount,
           status: 'COMPLETED',
           idempotencyKey,
-          receiptNumber,
+          receiptNumber: receiptNumber as any,
+          providerTransactionId,
           receivedBy: session.user.id,
           notes
-        }
+        } as any
       });
 
       // D. Write Atomic Audit Log
