@@ -1,0 +1,54 @@
+name: Build Desktop Installer (MSIX)
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    name: Build Windows MAUI App
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Install MAUI Workload
+        run: dotnet workload install maui --ignore-failed-sources
+
+      - name: Create Self-Signed Certificate
+        id: create_cert
+        shell: powershell
+        run: |
+          # The Subject must exactly match the Publisher in Package.appxmanifest
+          $cert = New-SelfSignedCertificate -Type Custom -Subject "CN=LodgeCore, O=LodgeCore, L=Lagos, S=Lagos, C=NG" -KeyUsage DigitalSignature -FriendlyName "LodgeCore Test Cert" -CertStoreLocation "Cert:\CurrentUser\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}")
+          
+          $pwd = ConvertTo-SecureString -String "password" -Force -AsPlainText
+          
+          # Export the .pfx to use during build
+          Export-PfxCertificate -cert $cert -FilePath "apps\desktop\LodgeCore.Desktop\LodgeCoreTest.pfx" -Password $pwd
+          
+          # Export the .cer to upload as an artifact (so users can install it to trust the MSIX)
+          Export-Certificate -Cert $cert -FilePath "LodgeCoreTest.cer"
+          
+          echo "THUMBPRINT=$($cert.Thumbprint)" >> $env:GITHUB_ENV
+
+      - name: Build and Publish MSIX
+        shell: powershell
+        run: |
+          cd apps\desktop\LodgeCore.Desktop
+          dotnet publish -f net8.0-windows10.0.19041.0 -c Release /p:RuntimeIdentifierOverride=win10-x64 /p:GenerateAppxPackageOnBuild=true /p:AppxPackageSigningEnabled=true /p:PackageCertificateKeyFile="LodgeCoreTest.pfx" /p:PackageCertificatePassword="password" /p:PackageCertificateThumbprint="${{ env.THUMBPRINT }}"
+
+      - name: Upload MSIX Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LodgeCore-Windows-Installer
+          path: |
+            apps/desktop/LodgeCore.Desktop/bin/Release/net8.0-windows10.0.19041.0/win10-x64/AppPackages/**/*.msix
+            LodgeCoreTest.cer
