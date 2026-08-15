@@ -33,6 +33,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { PropertySelector } from '@/components/properties/PropertySelector';
 
+const ALL_NAV = [
   { name: 'Overview', href: '/dashboard', icon: LayoutDashboard, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER'] },
   { name: 'Front Desk', href: '/frontdesk', icon: LayoutDashboard, restrictedTo: ['RECEPTIONIST', 'FRONT_DESK', 'SUPER_ADMIN', 'MANAGER'] },
   { name: 'Properties', href: '/properties', icon: Hotel, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER'] },
