@@ -110,9 +110,8 @@ public sealed class CommandWorker
                 ErrorCode = "INVALID_PAYLOAD", ErrorMessage = "roomNo and checkOut are required",
             };
         }
-
-        DateTime.TryParse(checkInStr, out var checkIn);
-        DateTime.TryParse(checkOutStr, out var checkOut);
+        DateTime.TryParse(checkInStr, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.RoundtripKind, out var checkIn);
+        DateTime.TryParse(checkOutStr, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.RoundtripKind, out var checkOut);
 
         var encodeResult = await _lock.EncodeGuestCardAsync(new EncodeRequest(
             roomNo, checkIn, checkOut, flags, _config.CardWaitMs));

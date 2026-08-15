@@ -73,8 +73,8 @@ public sealed class DelunsProvider : ILockProvider
             var cardSnr = new StringBuilder(20);
             string checkinStr  = request.CheckIn == DateTime.MinValue
                 ? string.Empty   // empty = SDK uses current time
-                : request.CheckIn.ToString(DateFormat);
-            string checkoutStr = request.CheckOut.ToString(DateFormat);
+                : request.CheckIn.ToString(DateFormat, System.Globalization.CultureInfo.InvariantCulture);
+            string checkoutStr = request.CheckOut.ToString(DateFormat, System.Globalization.CultureInfo.InvariantCulture);
 
             int result = LockSdkNative.TP_MakeGuestCardEx2(
                 cardSnr,
