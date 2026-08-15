@@ -9,8 +9,8 @@ import { FrontDeskCheckInDialog } from './FrontDeskCheckInDialog';
 import { FrontDeskEditReservationDialog } from './FrontDeskEditReservationDialog';
 import { FrontDeskReassignRoomDialog } from './FrontDeskReassignRoomDialog';
 import { FrontDeskCancelReservationDialog } from './FrontDeskCancelReservationDialog';
-import { AddPaymentDialog } from '../reservations/AddPaymentDialog';
-import { ExtendStayDialog } from '../reservations/ExtendStayDialog';
+import { FrontDeskAddPaymentDialog } from './FrontDeskAddPaymentDialog';
+import { FrontDeskExtendStayDialog } from './FrontDeskExtendStayDialog';
 import { FolioSection } from '../reservations/FolioSection';
 import { LogIn, User, MapPin, CalendarClock, CreditCard, Receipt, LogOut, ChevronDown, Edit3, XCircle } from 'lucide-react';
 import {
@@ -238,7 +238,7 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
       )}
 
       {isAddPaymentOpen && folio && (
-        <AddPaymentDialog
+        <FrontDeskAddPaymentDialog
           open={isAddPaymentOpen}
           onOpenChange={setIsAddPaymentOpen}
           folio={folio}
@@ -246,7 +246,7 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
       )}
 
       {isExtendStayOpen && (
-        <ExtendStayDialog
+        <FrontDeskExtendStayDialog
           open={isExtendStayOpen}
           onOpenChange={setIsExtendStayOpen}
           reservation={reservation}
