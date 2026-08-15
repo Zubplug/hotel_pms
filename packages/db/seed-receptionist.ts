@@ -55,8 +55,37 @@ async function main() {
     console.log(`Updated user password: ${email}`);
   }
 
-  // 4. Assign role to user
+  // 4. Ensure Staff record exists and is linked
   const property = await prisma.property.findFirst();
+  let staff = await prisma.staff.findFirst({
+    where: { userId: user.id }
+  });
+
+  if (!staff) {
+    staff = await prisma.staff.create({
+      data: {
+        organizationId: org.id,
+        userId: user.id,
+        firstName: 'Front',
+        lastName: 'Desk',
+        email: email,
+        department: 'Front Office',
+        position: 'Receptionist',
+        propertyAccess: property ? [property.id] : [],
+      }
+    });
+    console.log('Created Staff record for receptionist');
+  }
+
+  if (user.staffId !== staff.id) {
+    user = await prisma.user.update({
+      where: { id: user.id },
+      data: { staffId: staff.id }
+    });
+    console.log('Linked Staff record to User');
+  }
+
+  // 5. Assign role to user
 
   const existingRole = await prisma.userRole.findFirst({
     where: { userId: user.id, roleId: role.id }
