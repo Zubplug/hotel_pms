@@ -844,8 +844,17 @@ model NightAudit {
   adr               Decimal @default(0) @db.Decimal(18, 4)
   revpar            Decimal @default(0) @db.Decimal(18, 4)
 
+  tasksCreated Int @default(0)
+  tasksSkipped Int @default(0)
+  errors       Int @default(0)
+
   exceptions Json?
   notes      String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@unique([propertyId, businessDate])
 }
 
 model OccupancySnapshot {

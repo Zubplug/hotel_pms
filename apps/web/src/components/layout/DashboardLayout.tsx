@@ -19,6 +19,8 @@ import {
   Star,
   CalendarDays,
   FileText,
+  MoonStar,
+  Brush,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -37,6 +39,8 @@ const navigation = [
   { name: 'Room Types', href: '/room-types', icon: Layers },
   { name: 'Amenities', href: '/amenities', icon: Star },
   { name: 'Reservations', href: '/reservations', icon: CalendarDays },
+  { name: 'Housekeeping', href: '/housekeeping', icon: Brush },
+  { name: 'Night Audit', href: '/night-audit', icon: MoonStar },
   { name: 'Staff', href: '/staff', icon: Users },
   { 
     name: 'Reports', 
