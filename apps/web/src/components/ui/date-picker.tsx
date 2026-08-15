@@ -14,9 +14,11 @@ interface DatePickerProps {
   placeholder?: string;
   className?: string;
   disabled?: boolean;
+  disabledDays?: (date: Date) => boolean;
 }
 
-export function DatePicker({ value, onChange, placeholder = 'Pick a date', className, disabled }: DatePickerProps) {
+export function DatePicker({ value, onChange, placeholder = 'Pick a date', className, disabled, disabledDays }: DatePickerProps) {
+  const defaultDisabled = (date: Date) => date < new Date(new Date().setHours(0, 0, 0, 0));
   return (
     <Popover>
       <PopoverTrigger
@@ -40,7 +42,7 @@ export function DatePicker({ value, onChange, placeholder = 'Pick a date', class
           mode="single"
           selected={value}
           onSelect={onChange}
-          disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+          disabled={disabledDays ?? defaultDisabled}
         />
       </PopoverContent>
     </Popover>
