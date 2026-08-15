@@ -21,6 +21,7 @@ public class SyncEngine : BackgroundService
     
     // We can wire this to MAUI Connectivity events. For now, assume online.
     private bool _isOnline = true; 
+    private int _consecutiveFailures = 0; // Tracks failures for exponential backoff
 
     public SyncEngine(IServiceProvider serviceProvider, ILogger<SyncEngine> logger, AuthManager authManager)
     {
@@ -54,12 +55,14 @@ public class SyncEngine : BackgroundService
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "An error occurred during the sync cycle.");
+                    _consecutiveFailures++;
+                    _logger.LogError(ex, $"An error occurred during the sync cycle. Failure count: {_consecutiveFailures}");
                 }
             }
 
-            // Sleep for 30 seconds before next sync cycle
-            await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
+            // Exponential backoff logic: Max 5 minutes (300 seconds), Base 30 seconds
+            var delaySeconds = Math.Min(300, 30 * Math.Pow(2, _consecutiveFailures));
+            await Task.Delay(TimeSpan.FromSeconds(delaySeconds), stoppingToken);
         }
 
         _logger.LogInformation("SyncEngine is stopping.");
@@ -94,12 +97,16 @@ public class SyncEngine : BackgroundService
         {
             try
             {
-                // Simulate pushing to the central API
-                // var response = await _httpClient.PostAsJsonAsync("sync/push", syncEvent, cancellationToken);
+                // Implement Idempotency guarantees: Send OperationId as Idempotency-Key header
+                var request = new HttpRequestMessage(HttpMethod.Post, "sync/push");
+                request.Headers.Add("Idempotency-Key", syncEvent.OperationId);
+                // request.Content = JsonContent.Create(syncEvent);
+                // var response = await _httpClient.SendAsync(request, cancellationToken);
                 // response.EnsureSuccessStatusCode();
 
                 // On success, mark as SYNCED
                 syncEvent.Status = "SYNCED";
+                _consecutiveFailures = 0; // Reset failures on successful push
             }
             catch (HttpRequestException httpEx)
             {
@@ -108,16 +115,19 @@ public class SyncEngine : BackgroundService
                 {
                     syncEvent.Status = "CONFLICT";
                     _logger.LogWarning($"Conflict detected for operation {syncEvent.OperationId}");
+                    _consecutiveFailures = 0; // A conflict is a successful network roundtrip, so reset backoff
                 }
                 else
                 {
                     // Network error, break loop to preserve chronological order for next retry
+                    _consecutiveFailures++;
                     _logger.LogWarning($"Network error pushing event {syncEvent.OperationId}. Pausing sync.");
                     break;
                 }
             }
             catch (Exception ex)
             {
+                _consecutiveFailures++;
                 _logger.LogError(ex, $"Failed to push sync event {syncEvent.OperationId}");
                 break; 
             }

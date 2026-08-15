@@ -23,8 +23,23 @@ public static class MauiProgram
         builder.Services.AddSingleton<ILockProvider, DelunsLockProvider>(); // Assuming DelunsLockProvider is the implementation
         builder.Services.AddSingleton<HardwareInterop>();
 
-        // Register Offline SQLite DB Context
+        // Register Offline SQLite DB Context & Auto-Backup
         string dbPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LodgeCoreOffline.db");
+        string backupPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LodgeCoreOffline_Backup.db");
+        
+        try 
+        {
+            if (File.Exists(dbPath))
+            {
+                File.Copy(dbPath, backupPath, overwrite: true);
+            }
+        }
+        catch (Exception ex)
+        {
+            // Log backup failure but allow app to start
+            System.Diagnostics.Debug.WriteLine($"DB Backup failed: {ex.Message}");
+        }
+
         builder.Services.AddDbContext<LocalDbContext>(options => options.UseSqlite($"Data Source={dbPath}"));
         
         // Register Local Services & Sync Engine
