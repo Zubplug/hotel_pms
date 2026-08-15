@@ -76,7 +76,7 @@ export async function GET(req: NextRequest) {
       where: { propertyId, checkIn: businessDate, status: { notIn: ['CANCELLED', 'NO_SHOW'] } },
       include: {
         primaryGuest: true,
-        reservationRooms: { include: { room: true, roomType: true } },
+        reservationRooms: { include: { room: { include: { roomType: true } } } },
         folios: true
       }
     });
@@ -117,7 +117,7 @@ export async function GET(req: NextRequest) {
         guestName: res.primaryGuest ? `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}` : 'Unknown',
         confirmationNumber: res.confirmationNumber,
         roomName: res.reservationRooms?.[0]?.room?.number || 'Unassigned',
-        roomTypeName: res.reservationRooms?.[0]?.roomType?.name || '',
+        roomTypeName: res.reservationRooms?.[0]?.room?.roomType?.name || '',
         arrivalTime: '3:00 PM', // Hardcoded standard time for now, or use actual if tracked
         balance,
         status: res.status,

@@ -50,7 +50,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     // Assemble the definitive, server-calculated receipt
     const receiptData = {
-      receiptId: payment.receiptNumber || `RCPT-${payment.id.split('-')[0].toUpperCase()}`,
+      receiptId: (payment as any).receiptNumber || `RCPT-${payment.id.split('-')[0].toUpperCase()}`,
       property: {
         name: payment.property.name,
         address: payment.property.address || 'Address on file',
