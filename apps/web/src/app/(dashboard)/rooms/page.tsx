@@ -10,6 +10,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { StatusTransitionDialog } from '@/components/rooms/StatusTransitionDialog';
 import { Settings2 } from 'lucide-react';
@@ -37,6 +38,7 @@ interface Room {
 }
 
 export default function RoomsPage() {
+  const router = useRouter();
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [selectedRoomStatus, setSelectedRoomStatus] = useState<string>('');
@@ -119,9 +121,9 @@ export default function RoomsPage() {
         }>
           {data?.map((room) => (
             <div key={room.id} className="relative">
-              <Link href={`/rooms/${room.id}/edit`} className="block h-full">
               <Card 
-                className={`h-full group overflow-hidden transition-all hover:shadow-md border-muted/60 hover:border-primary/20 ${view === 'list' ? 'flex flex-row items-center p-4' : 'flex flex-col'}`}
+                onClick={() => router.push(`/rooms/${room.id}/edit`)}
+                className={`h-full group overflow-hidden transition-all hover:shadow-md border-muted/60 hover:border-primary/20 cursor-pointer ${view === 'list' ? 'flex flex-row items-center p-4' : 'flex flex-col'}`}
               >
               <div className={`${view === 'list' ? 'flex-1 grid grid-cols-5 items-center gap-4' : 'p-4'}`}>
                 
@@ -191,7 +193,6 @@ export default function RoomsPage() {
 
               </div>
             </Card>
-          </Link>
           </div>
           ))}
           
