@@ -231,7 +231,7 @@ export default function ReceptionistDashboardPage() {
                             {isPaid ? 'Check In' : 'View Folio'}
                           </Button>
                         ) : (
-                          <Button size="sm" variant="secondary" className="rounded-xl px-4 bg-slate-100 text-slate-600 hover:bg-slate-200" onClick={() => router.push(`/reservations/${arr.id}`)}>
+                          <Button size="sm" variant="secondary" className="rounded-xl px-4 bg-slate-100 text-slate-600 hover:bg-slate-200" onClick={() => router.push(`/frontdesk/reservations/${arr.id}`)}>
                             Manage
                           </Button>
                         )}
