@@ -137,12 +137,12 @@ export default function RoomsPage() {
                     </span>
                   </div>
                   {view !== 'list' && (
-                    <div className="flex items-center gap-1 origin-top-right">
-                      <StatusBadge status={room.status} className="scale-90" />
+                    <div className="flex items-center gap-2">
+                      <StatusBadge status={room.status} className="scale-90 origin-top-right mr-6" />
                       <Button
-                        variant="ghost"
+                        variant="default"
                         size="icon"
-                        className="h-7 w-7 text-muted-foreground hover:text-primary relative z-10"
+                        className="absolute top-2 right-2 h-7 w-7 rounded-full shadow-md z-20 hover:scale-105 transition-transform"
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
