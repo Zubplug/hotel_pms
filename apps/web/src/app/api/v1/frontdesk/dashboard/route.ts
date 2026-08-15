@@ -129,6 +129,9 @@ export async function GET(req: NextRequest) {
     });
 
     return successResponse({
+      property: {
+        name: property.name,
+      },
       businessDate: businessDate.toISOString(),
       kpis: {
         arrivals: arrivalsCount,

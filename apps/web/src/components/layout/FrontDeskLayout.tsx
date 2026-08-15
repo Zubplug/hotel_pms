@@ -81,43 +81,57 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
           
           <div className="h-6 w-px bg-border hidden sm:block" />
           
-          <PropertySelector className="w-[180px] lg:w-[240px]" />
+          {role !== 'RECEPTIONIST' ? (
+            <PropertySelector className="w-[180px] lg:w-[240px]" />
+          ) : (
+            <div className="flex items-center">
+              {res?.data?.property?.name ? (
+                <div className="px-3 py-1.5 bg-blue-50 text-blue-800 border border-blue-200 rounded-lg text-sm font-bold shadow-sm whitespace-nowrap">
+                  {res.data.property.name}
+                </div>
+              ) : (
+                <div className="h-8 w-32 bg-muted animate-pulse rounded-lg" />
+              )}
+            </div>
+          )}
         </div>
 
         {/* Center/Right: Hardware, Date/Time, User */}
         <div className="flex items-center gap-3 lg:gap-6 shrink-0 ml-auto">
           
           {/* Operations Menu */}
-          <DropdownMenu>
-            <DropdownMenuTrigger className="outline-none">
-              <Button variant="ghost" className="hidden lg:flex gap-2 h-9 px-3 text-muted-foreground hover:text-foreground">
-                Operations <ChevronDown className="h-4 w-4 opacity-50" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuLabel>Departments</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => router.push('/housekeeping')} className="w-full cursor-pointer">
-                <Brush className="mr-2 h-4 w-4" /> Housekeeping
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => router.push('/maintenance')} className="w-full cursor-pointer">
-                <Wrench className="mr-2 h-4 w-4" /> Maintenance
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => router.push('/reports')} className="w-full cursor-pointer">
-                <Activity className="mr-2 h-4 w-4" /> Room Status
-              </DropdownMenuItem>
-              {(isSuperAdmin || role === 'CEO' || role === 'MANAGER') && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => router.push('/dashboard')} className="w-full cursor-pointer">
-                    Admin Dashboard
-                  </DropdownMenuItem>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {role !== 'RECEPTIONIST' && (
+            <DropdownMenu>
+              <DropdownMenuTrigger className="outline-none">
+                <Button variant="ghost" className="hidden lg:flex gap-2 h-9 px-3 text-muted-foreground hover:text-foreground">
+                  Operations <ChevronDown className="h-4 w-4 opacity-50" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuLabel>Departments</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => router.push('/housekeeping')} className="w-full cursor-pointer">
+                  <Brush className="mr-2 h-4 w-4" /> Housekeeping
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => router.push('/maintenance')} className="w-full cursor-pointer">
+                  <Wrench className="mr-2 h-4 w-4" /> Maintenance
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => router.push('/reports')} className="w-full cursor-pointer">
+                  <Activity className="mr-2 h-4 w-4" /> Room Status
+                </DropdownMenuItem>
+                {(isSuperAdmin || role === 'CEO' || role === 'MANAGER') && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => router.push('/dashboard')} className="w-full cursor-pointer">
+                      Admin Dashboard
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
 
-          <div className="h-6 w-px bg-border hidden lg:block" />
+          {role !== 'RECEPTIONIST' && <div className="h-6 w-px bg-border hidden lg:block" />}
 
           {/* Business Date & Clock */}
           <div className="hidden xl:flex flex-col items-end justify-center min-w-[120px]">
