@@ -767,6 +767,7 @@ model Refund {
   providerRefundId String?
 
   status String // 'PENDING' | 'COMPLETED' | 'FAILED'
+  idempotencyKey String? @unique
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz

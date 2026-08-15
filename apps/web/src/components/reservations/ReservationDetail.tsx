@@ -9,7 +9,11 @@ import { EditReservationDialog } from './EditReservationDialog';
 import { RoomReassignmentDialog } from './RoomReassignmentDialog';
 import { CancelReservationDialog } from './CancelReservationDialog';
 import { CheckInDialog } from './CheckInDialog';
-import { Calendar, User, DoorClosed, CreditCard, Clock, Settings, FileText, LogIn } from 'lucide-react';
+import { FolioSection } from './FolioSection';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ReservationTimeline } from './ReservationTimeline';
+import { GuestHistory } from './GuestHistory';
+import { Calendar, User, DoorClosed, Clock, Settings, FileText, LogIn } from 'lucide-react';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function ReservationDetail({ reservation }: { reservation: any }) {
@@ -62,7 +66,15 @@ export function ReservationDetail({ reservation }: { reservation: any }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <Tabs defaultValue="overview" className="w-full">
+        <TabsList className="mb-4">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="history">Guest History</TabsTrigger>
+          <TabsTrigger value="timeline">Timeline</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Guest Info */}
         <Card>
           <CardHeader>
@@ -131,30 +143,18 @@ export function ReservationDetail({ reservation }: { reservation: any }) {
           </CardContent>
         </Card>
 
-        {/* Financial Details */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CreditCard className="w-5 h-5 text-primary" /> Billing Details
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">Nightly Rate</p>
-              <p className="text-lg">{resRoom?.rateAmount ? formatCurrency(resRoom.rateAmount, 'NGN') : 'N/A'}</p>
-            </div>
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">Total Amount</p>
-              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-              <p className="text-2xl font-bold">{(reservation.ratePlanSnapshot as any)?.total ? formatCurrency((reservation.ratePlanSnapshot as any).total, 'NGN') : 'N/A'}</p>
-            </div>
-            <div className="pt-4 border-t">
-              <p className="text-sm font-medium text-muted-foreground">Payment Status</p>
-              <Badge variant="outline" className="mt-1 uppercase">{reservation.paymentStatus}</Badge>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+          <FolioSection reservation={reservation} />
+        </TabsContent>
+
+        <TabsContent value="history">
+          <GuestHistory guest={guest} />
+        </TabsContent>
+
+        <TabsContent value="timeline">
+          <ReservationTimeline auditLogs={reservation.auditLogs || []} />
+        </TabsContent>
+      </Tabs>
 
       <EditReservationDialog 
         open={isEditDialogOpen} 

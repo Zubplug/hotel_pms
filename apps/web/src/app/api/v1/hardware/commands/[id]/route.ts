@@ -67,7 +67,10 @@ export async function PATCH(
 
         // 3. Strict Check-In State Machine Transition
         if (status === 'COMPLETED' && command.commandType === 'ENCODE') {
-          const res = await tx.reservation.findUnique({ where: { id: command.operation.reservationId } });
+          const res = await tx.reservation.findUnique({ 
+            where: { id: command.operation.reservationId },
+            include: { property: true }
+          });
           
           if (res && res.status !== 'CHECKED_IN' && res.status !== 'CHECKED_OUT' && res.status !== 'CANCELLED') {
             // A. Create Lock Credential with the physical Card SNR
@@ -95,6 +98,51 @@ export async function PATCH(
             await tx.room.update({
               where: { id: command.operation.roomId },
               data: { status: 'OCCUPIED' }
+            });
+
+            // D. Write Atomic Audit Logs
+            const meta = (command.operation.metadata as Record<string, any>) || {};
+            const userId = meta.initiatedBy || agent.id; // Fallback to agent if not set
+            const userEmail = meta.initiatedByEmail || 'hardware@system.local';
+            const userRole = meta.initiatedByRole || 'SYSTEM';
+
+            const commonAuditData = {
+              organizationId: res.property.organizationId,
+              propertyId: command.operation.propertyId,
+              userId: userId,
+              userEmail: userEmail,
+              userRole: userRole,
+              ipAddress: req.headers.get('x-forwarded-for') || '127.0.0.1',
+              userAgent: req.headers.get('user-agent') || 'Hardware Agent',
+              requestId: req.headers.get('x-request-id') || crypto.randomUUID(),
+            };
+
+            await tx.auditLog.createMany({
+              data: [
+                {
+                  ...commonAuditData,
+                  action: 'LOCK_CREDENTIAL_ISSUED',
+                  resource: 'Reservation',
+                  resourceId: res.id,
+                  newValue: { cardSerialNumber: actualCardSnr, roomId: command.operation.roomId }
+                },
+                {
+                  ...commonAuditData,
+                  action: 'ROOM_STATUS_CHANGED',
+                  resource: 'Room',
+                  resourceId: command.operation.roomId,
+                  previousValue: { status: 'AVAILABLE' }, // Assuming it was available/reserved
+                  newValue: { status: 'OCCUPIED' }
+                },
+                {
+                  ...commonAuditData,
+                  action: 'RESERVATION_CHECKED_IN',
+                  resource: 'Reservation',
+                  resourceId: res.id,
+                  previousValue: { status: res.status },
+                  newValue: { status: 'CHECKED_IN' }
+                }
+              ]
             });
           }
         }

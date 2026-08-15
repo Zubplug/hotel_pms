@@ -3,7 +3,6 @@ import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { assertPropertyAccess } from '@/lib/property-access';
-import { createAuditLog } from '@/lib/audit';
 
 export async function POST(
   req: NextRequest,
@@ -46,22 +45,28 @@ export async function POST(
         data: { status: 'CANCELLED' }
       });
 
+      const organizationId = existingReservation.property.organizationId;
+      const propertyId = existingReservation.propertyId;
+
+      await tx.auditLog.create({
+        data: {
+          organizationId,
+          propertyId,
+          userId: session.user.id,
+          userEmail: session.user.email,
+          userRole: (session.user as any).role || 'STAFF',
+          action: 'RESERVATION_CANCELLED',
+          resource: 'Reservation',
+          resourceId: id,
+          previousValue: { status: existingReservation.status },
+          newValue: { status: 'CANCELLED', reason },
+          ipAddress: req.headers.get('x-forwarded-for') || '127.0.0.1',
+          userAgent: req.headers.get('user-agent') || 'Unknown',
+          requestId: req.headers.get('x-request-id') || crypto.randomUUID(),
+        },
+      });
+
       return { updatedRes, updatedResRoom };
-    });
-
-    // 3. Create Audit Log
-    const organizationId = existingReservation.property.organizationId;
-    const propertyId = existingReservation.propertyId;
-
-    await createAuditLog({
-      organizationId, 
-      propertyId, 
-      userId: session.user.id,
-      action: 'RESERVATION_CANCELLED', 
-      resource: 'reservation', 
-      resourceId: id,
-      previousValue: { status: existingReservation.status },
-      newValue: { status: 'CANCELLED', reason },
     });
 
     return successResponse(cancelled.updatedRes);

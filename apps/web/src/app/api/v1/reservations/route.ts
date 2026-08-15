@@ -174,6 +174,79 @@ export async function POST(req: NextRequest) {
         },
       });
 
+      // 7D.1: Create Folio
+      const folioNumber = 'FOL-' + Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
+      const newFolio = await tx.folio.create({
+        data: {
+          reservationId: newReservation.id,
+          propertyId,
+          guestId: finalGuestId,
+          folioNumber,
+          type: 'ROOM',
+          status: 'OPEN',
+          currency: currency,
+          totalCharges: totalAmount,
+          totalPayments: 0,
+          balance: totalAmount,
+        }
+      });
+
+      // 7D.1: Create Per-Night Room Charges
+      const folioItems: any[] = [];
+      let currentDate = new Date(checkInDate);
+      for (let i = 0; i < nights; i++) {
+        folioItems.push({
+          folioId: newFolio.id,
+          businessDate: new Date(currentDate),
+          type: 'CHARGE',
+          source: 'ROOM_CHARGE',
+          description: `Room Charge - Night ${i + 1}`,
+          quantity: 1,
+          unitAmount: baseRate,
+          amount: baseRate,
+          currency: currency,
+          baseAmount: baseRate,
+          postedBy: session.user.id as string, // Using session user ID
+        });
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+      
+      await tx.folioItem.createMany({ data: folioItems });
+
+      // Audit Log
+      const property = await tx.property.findUnique({ where: { id: propertyId } });
+      if (property) {
+        await tx.auditLog.create({
+          data: {
+            organizationId: property.organizationId,
+            propertyId: property.id,
+            userId: session.user.id,
+            userEmail: session.user.email,
+            userRole: (session.user as any).role || 'STAFF',
+            action: 'RESERVATION_CREATED',
+            resource: 'Reservation',
+            resourceId: newReservation.id,
+            newValue: {
+              confirmationNumber,
+              propertyId,
+              guestId: finalGuestId,
+              roomId: room.id,
+              roomTypeId,
+              checkIn: checkInDate.toISOString(),
+              checkOut: checkOutDate.toISOString(),
+              adults: parseInt(adults) || 1,
+              children: parseInt(children) || 0,
+              status: 'CONFIRMED',
+              totalAmount,
+              currency
+            },
+            ipAddress: req.headers.get('x-forwarded-for') || '127.0.0.1',
+            userAgent: req.headers.get('user-agent') || 'Unknown',
+            requestId: req.headers.get('x-request-id') || crypto.randomUUID(),
+          },
+        });
+      }
+
       return newReservation;
     });
 

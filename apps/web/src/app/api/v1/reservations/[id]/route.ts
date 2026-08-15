@@ -3,7 +3,6 @@ import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { assertPropertyAccess } from '@/lib/property-access';
-import { createAuditLog } from '@/lib/audit';
 
 export async function GET(
   _req: NextRequest,
@@ -18,7 +17,19 @@ export async function GET(
     const reservation = await prisma.reservation.findUnique({
       where: { id },
       include: {
-        primaryGuest: true,
+        primaryGuest: {
+          include: {
+            reservations: {
+              where: { id: { not: id } }, // Exclude current reservation
+              orderBy: { checkIn: 'desc' },
+              take: 5,
+              include: {
+                property: { select: { name: true } },
+                reservationRooms: { include: { room: { select: { number: true } } } }
+              }
+            }
+          }
+        },
         property: { select: { id: true, name: true, city: true } },
         reservationRooms: {
           include: {
@@ -39,14 +50,33 @@ export async function GET(
           orderBy: { createdAt: 'desc' },
           select: { id: true, status: true, credentialType: true, validFrom: true, validUntil: true, metadata: true, issuedAt: true },
         },
+        folios: {
+          include: {
+            items: { orderBy: { createdAt: 'asc' } },
+            payments: { 
+              orderBy: { createdAt: 'desc' },
+              include: { refunds: { orderBy: { createdAt: 'desc' } } } 
+            }
+          }
+        },
       },
     });
 
     if (!reservation) return errorResponse('NOT_FOUND', 'Reservation not found', 404);
 
+    // Fetch the Audit Log explicitly because Prisma relations to a generic resourceId can be messy
+    const auditLogs = await prisma.auditLog.findMany({
+      where: {
+        resource: 'Reservation',
+        resourceId: id,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+
     await assertPropertyAccess(session.user.id, reservation.propertyId);
 
-    return successResponse(reservation);
+    return successResponse({ ...reservation, auditLogs });
   } catch (err: any) {
     if (err?.code === 'FORBIDDEN') return errorResponse('FORBIDDEN', err.message, 403);
     return errorResponse('INTERNAL_ERROR', err instanceof Error ? err.message : String(err), 500, err instanceof Error ? { stack: err.stack } : undefined);
@@ -181,55 +211,73 @@ export async function PATCH(
         }
       });
 
+      // Determine audit events inside transaction
+      const organizationId = existingReservation.property.organizationId;
+      const propertyId = existingReservation.propertyId;
+      
+      const auditEvents: any[] = [];
+      const commonAuditData = {
+        organizationId,
+        propertyId,
+        userId: session.user.id,
+        userEmail: session.user.email,
+        userRole: (session.user as any).role || 'STAFF',
+        resource: 'Reservation',
+        resourceId: id,
+        ipAddress: req.headers.get('x-forwarded-for') || '127.0.0.1',
+        userAgent: req.headers.get('user-agent') || 'Unknown',
+        requestId: req.headers.get('x-request-id') || crypto.randomUUID(),
+      };
+
+      if (newRoomId !== existingReservation.reservationRooms[0]?.roomId) {
+        auditEvents.push({
+          ...commonAuditData,
+          action: 'ROOM_CHANGED',
+          previousValue: { roomId: existingReservation.reservationRooms[0]?.roomId },
+          newValue: { roomId: newRoomId },
+        });
+      }
+
+      if (newCheckInDate.getTime() !== existingReservation.reservationRooms[0]?.checkIn.getTime() || 
+          newCheckOutDate.getTime() !== existingReservation.reservationRooms[0]?.checkOut.getTime()) {
+        auditEvents.push({
+          ...commonAuditData,
+          action: 'DATES_CHANGED',
+          previousValue: { checkIn: existingReservation.reservationRooms[0]?.checkIn, checkOut: existingReservation.reservationRooms[0]?.checkOut },
+          newValue: { checkIn: newCheckInDate, checkOut: newCheckOutDate },
+        });
+      }
+      
+      if (guestId && guestId !== existingReservation.primaryGuestId) {
+        auditEvents.push({
+          ...commonAuditData,
+          action: 'GUEST_CHANGED',
+          previousValue: { guestId: existingReservation.primaryGuestId },
+          newValue: { guestId },
+        });
+      }
+
+      if (newRoomTypeId !== existingReservation.reservationRooms[0]?.roomTypeId) {
+        auditEvents.push({
+          ...commonAuditData,
+          action: 'ROOM_TYPE_CHANGED',
+          previousValue: { roomTypeId: existingReservation.reservationRooms[0]?.roomTypeId },
+          newValue: { roomTypeId: newRoomTypeId },
+        });
+      }
+
+      auditEvents.push({
+        ...commonAuditData,
+        action: 'RESERVATION_UPDATED',
+        previousValue: { status: existingReservation.status },
+        newValue: { status: updatedRes.status },
+      });
+
+      await tx.auditLog.createMany({
+        data: auditEvents
+      });
+
       return { updatedRes, updatedResRoom };
-    });
-
-    // Determine audit events
-    const organizationId = existingReservation.property.organizationId;
-    const propertyId = existingReservation.propertyId;
-
-    if (newRoomId !== existingReservation.reservationRooms[0]?.roomId) {
-      await createAuditLog({
-        organizationId, propertyId, userId: session.user.id,
-        action: 'ROOM_CHANGED', resource: 'reservation', resourceId: id,
-        previousValue: { roomId: existingReservation.reservationRooms[0]?.roomId },
-        newValue: { roomId: newRoomId },
-      });
-    }
-
-    if (newCheckInDate.getTime() !== existingReservation.reservationRooms[0]?.checkIn.getTime() || 
-        newCheckOutDate.getTime() !== existingReservation.reservationRooms[0]?.checkOut.getTime()) {
-      await createAuditLog({
-        organizationId, propertyId, userId: session.user.id,
-        action: 'DATES_CHANGED', resource: 'reservation', resourceId: id,
-        previousValue: { checkIn: existingReservation.reservationRooms[0]?.checkIn, checkOut: existingReservation.reservationRooms[0]?.checkOut },
-        newValue: { checkIn: newCheckInDate, checkOut: newCheckOutDate },
-      });
-    }
-    
-    if (guestId && guestId !== existingReservation.primaryGuestId) {
-      await createAuditLog({
-        organizationId, propertyId, userId: session.user.id,
-        action: 'GUEST_CHANGED', resource: 'reservation', resourceId: id,
-        previousValue: { guestId: existingReservation.primaryGuestId },
-        newValue: { guestId },
-      });
-    }
-
-    if (newRoomTypeId !== existingReservation.reservationRooms[0]?.roomTypeId) {
-      await createAuditLog({
-        organizationId, propertyId, userId: session.user.id,
-        action: 'ROOM_TYPE_CHANGED', resource: 'reservation', resourceId: id,
-        previousValue: { roomTypeId: existingReservation.reservationRooms[0]?.roomTypeId },
-        newValue: { roomTypeId: newRoomTypeId },
-      });
-    }
-
-    await createAuditLog({
-      organizationId, propertyId, userId: session.user.id,
-      action: 'RESERVATION_UPDATED', resource: 'reservation', resourceId: id,
-      previousValue: { status: existingReservation.status },
-      newValue: { status: updated.updatedRes.status },
     });
 
     return successResponse(updated.updatedRes);

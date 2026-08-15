@@ -5,6 +5,7 @@ import { successResponse, errorResponse } from '@/lib/api-response';
 import { hasPermission } from '@/lib/rbac';
 import { assertPropertyAccess } from '@/lib/property-access';
 import { lockOrchestrator } from '@/lib/locks/orchestrator';
+import crypto from 'crypto';
 
 export async function POST(
   req: NextRequest,
@@ -30,23 +31,80 @@ export async function POST(
     const canCheckOut = await hasPermission(session.user.id, 'reservation', 'update', reservation.propertyId);
     if (!canCheckOut) return errorResponse('FORBIDDEN', 'Insufficient permissions', 403);
 
-    // 1. Transition reservation to CHECKED_OUT immediately (don't block on USB encoder)
-    await prisma.reservation.update({
-      where: { id },
-      data: { status: 'CHECKED_OUT' },
-    });
+    // Run the operational checkout transaction
+    await prisma.$transaction(async (tx) => {
+      // 1. Verify and Lock Financial State (Check Folios)
+      // Note: In Postgres, FOR UPDATE ensures that concurrent transactions modifying these folios are blocked.
+      const folios = await tx.$queryRaw<any[]>`
+        SELECT id, balance, version 
+        FROM "Folio" 
+        WHERE "reservationId" = ${id}::uuid 
+        FOR UPDATE
+      `;
 
-    // 2. Mark room as DIRTY
-    for (const rr of reservation.reservationRooms) {
-      if (rr.room) {
-        await prisma.room.update({
-          where: { id: rr.room.id },
-          data: { status: 'DIRTY', housekeepingStatus: 'DIRTY' },
+      let totalBalance = 0;
+      for (const folio of folios) {
+        totalBalance += Number(folio.balance);
+      }
+
+      if (totalBalance > 0) {
+        throw new Error('PAYMENT_REQUIRED');
+      } else if (totalBalance < 0) {
+        throw new Error('REFUND_REQUIRED');
+      }
+
+      // 2. Transition reservation to CHECKED_OUT
+      await tx.reservation.update({
+        where: { id },
+        data: { status: 'CHECKED_OUT' },
+      });
+
+      // 3. Mark room(s) as DIRTY
+      for (const rr of reservation.reservationRooms) {
+        if (rr.room) {
+          await tx.room.update({
+            where: { id: rr.room.id },
+            data: { status: 'DIRTY', housekeepingStatus: 'DIRTY' },
+          });
+        }
+      }
+
+      // 4. Close the Folios
+      for (const folio of folios) {
+        await tx.folio.update({
+          where: { id: folio.id, version: folio.version },
+          data: {
+            status: 'CLOSED',
+            closedAt: new Date(),
+            closedBy: session.user.id,
+            version: { increment: 1 }
+          }
         });
       }
-    }
 
-    // 3. Queue credential revocation (non-blocking — don't fail checkout if no agent online)
+      // 5. Audit Logging
+      const property = await tx.property.findUnique({ where: { id: reservation.propertyId } });
+      if (property) {
+        await tx.auditLog.create({
+          data: {
+            organizationId: property.organizationId,
+            propertyId: property.id,
+            userId: session.user.id,
+            userEmail: session.user.email,
+            userRole: (session.user as any).role || 'STAFF',
+            action: 'RESERVATION_CHECKED_OUT',
+            resource: 'Reservation',
+            resourceId: id,
+            newValue: { status: 'CHECKED_OUT', foliosClosed: folios.length },
+            ipAddress: req.headers.get('x-forwarded-for') || '127.0.0.1',
+            userAgent: req.headers.get('user-agent') || 'Unknown',
+            requestId: req.headers.get('x-request-id') || crypto.randomUUID(),
+          }
+        });
+      }
+    });
+
+    // 6. Queue credential revocation (non-blocking)
     let revokedCount = 0;
     try {
       revokedCount = await lockOrchestrator.revokeReservationCredentials(id, reservation.propertyId);
@@ -63,6 +121,14 @@ export async function POST(
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     console.error('[Check-Out POST]', err);
+
+    if (message === 'PAYMENT_REQUIRED') {
+      return errorResponse('PAYMENT_REQUIRED', 'Guest must settle outstanding balance before check-out.', 402);
+    }
+    if (message === 'REFUND_REQUIRED') {
+      return errorResponse('PAYMENT_REQUIRED', 'Guest has a credit balance. Please process a refund before check-out.', 402);
+    }
+
     return errorResponse('INTERNAL_ERROR', message, 500);
   }
 }

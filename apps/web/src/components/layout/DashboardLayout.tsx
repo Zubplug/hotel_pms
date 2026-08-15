@@ -18,6 +18,7 @@ import {
   Layers,
   Star,
   CalendarDays,
+  FileText,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -37,6 +38,16 @@ const navigation = [
   { name: 'Amenities', href: '/amenities', icon: Star },
   { name: 'Reservations', href: '/reservations', icon: CalendarDays },
   { name: 'Staff', href: '/staff', icon: Users },
+  { 
+    name: 'Reports', 
+    href: '/reports', 
+    icon: FileText,
+    children: [
+      { name: 'Shift / Cashier', href: '/reports/shift' },
+      { name: 'Receivables', href: '/reports/receivables' },
+      { name: 'Gateway Reconciliation', href: '/reports/gateway' },
+    ]
+  },
   { name: 'Settings', href: '/settings', icon: Settings },
 ];
 
@@ -71,26 +82,53 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           const isActive =
             pathname === item.href ||
             (item.href !== '/dashboard' && pathname?.startsWith(item.href));
+          
           return (
-            <Link
-              key={item.name}
-              href={item.href}
-              onClick={onNavigate}
-              className={cn(
-                'group flex items-center rounded-lg px-3 py-2.5 text-sm font-medium transition-all',
-                isActive
-                  ? 'bg-primary/10 text-primary shadow-sm'
-                  : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
-              )}
-            >
-              <item.icon
+            <div key={item.name}>
+              <Link
+                href={item.href}
+                onClick={onNavigate}
                 className={cn(
-                  'mr-3 h-4.5 w-4.5 shrink-0 transition-colors',
-                  isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground'
+                  'group flex items-center rounded-lg px-3 py-2.5 text-sm font-medium transition-all',
+                  isActive
+                    ? 'bg-primary/10 text-primary shadow-sm'
+                    : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
                 )}
-              />
-              {item.name}
-            </Link>
+              >
+                <item.icon
+                  className={cn(
+                    'mr-3 h-4.5 w-4.5 shrink-0 transition-colors',
+                    isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground'
+                  )}
+                />
+                {item.name}
+                {item.children && (
+                  <ChevronDown className={cn(
+                    "ml-auto h-4 w-4 transition-transform", 
+                    isActive ? "rotate-180" : ""
+                  )} />
+                )}
+              </Link>
+              {item.children && isActive && (
+                <div className="ml-9 mt-1 space-y-1">
+                  {item.children.map((child) => (
+                    <Link
+                      key={child.name}
+                      href={child.href}
+                      onClick={onNavigate}
+                      className={cn(
+                        'block rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                        pathname === child.href
+                          ? 'bg-primary/5 text-primary'
+                          : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                      )}
+                    >
+                      {child.name}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
           );
         })}
       </div>
