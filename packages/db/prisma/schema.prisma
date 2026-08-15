@@ -710,6 +710,14 @@ model FolioItem {
   voidReason String?
 
   postedBy String @db.Uuid
+  
+  // Late Posting & Audit Fields
+  deviceId             String?
+  operationId          String?
+  isLatePosting        Boolean   @default(false)
+  latePostingReason    String?
+  originalBusinessDate DateTime? @db.Date
+  syncedAt             DateTime? @db.Timestamptz
 
   createdAt DateTime @default(now()) @db.Timestamptz
 }
@@ -750,6 +758,14 @@ model Payment {
 
   receivedBy String  @db.Uuid // Staff ID
   notes      String?
+
+  // Late Posting & Audit Fields
+  deviceId             String?
+  operationId          String?
+  isLatePosting        Boolean   @default(false)
+  latePostingReason    String?
+  originalBusinessDate DateTime? @db.Date
+  syncedAt             DateTime? @db.Timestamptz
 
   refunds Refund[]
 
