@@ -20,8 +20,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           include: {
             reservation: {
               include: {
-                guest: true,
-                room: true
+                primaryGuest: true,
+                reservationRooms: {
+                  include: {
+                    room: true
+                  }
+                }
               }
             }
           }
@@ -55,13 +59,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         email: payment.property.email,
         phone: payment.property.phone
       },
-      guest: payment.folio.reservation?.guest ? {
-        name: `${payment.folio.reservation.guest.firstName} ${payment.folio.reservation.guest.lastName}`,
-        email: payment.folio.reservation.guest.email,
+      guest: payment.folio?.reservation?.primaryGuest ? {
+        name: `${payment.folio.reservation.primaryGuest.firstName} ${payment.folio.reservation.primaryGuest.lastName}`,
+        email: payment.folio.reservation.primaryGuest.email,
       } : null,
-      reservation: payment.folio.reservation ? {
-        confirmationNumber: payment.folio.reservation.id.split('-')[0].toUpperCase(), // assuming no explicit confirmationNumber field
-        roomNumber: payment.folio.reservation.room?.number || 'Unassigned',
+      reservation: payment.folio?.reservation ? {
+        confirmationNumber: payment.folio.reservation.confirmationNumber,
+        roomNumber: payment.folio.reservation.reservationRooms?.[0]?.room?.number || 'Unassigned',
         checkIn: payment.folio.reservation.checkIn,
         checkOut: payment.folio.reservation.checkOut,
       } : null,
