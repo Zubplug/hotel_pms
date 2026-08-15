@@ -9,6 +9,8 @@ import { FrontDeskCheckInDialog } from './FrontDeskCheckInDialog';
 import { FrontDeskEditReservationDialog } from './FrontDeskEditReservationDialog';
 import { FrontDeskReassignRoomDialog } from './FrontDeskReassignRoomDialog';
 import { FrontDeskCancelReservationDialog } from './FrontDeskCancelReservationDialog';
+import { AddPaymentDialog } from '../reservations/AddPaymentDialog';
+import { ExtendStayDialog } from '../reservations/ExtendStayDialog';
 import { FolioSection } from '../reservations/FolioSection';
 import { LogIn, User, MapPin, CalendarClock, CreditCard, Receipt, LogOut, ChevronDown, Edit3, XCircle } from 'lucide-react';
 import {
@@ -24,16 +26,20 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isReassignDialogOpen, setIsReassignDialogOpen] = useState(false);
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
+  const [isAddPaymentOpen, setIsAddPaymentOpen] = useState(false);
+  const [isExtendStayOpen, setIsExtendStayOpen] = useState(false);
 
   const resRoom = reservation.reservationRooms?.[0];
   const room = resRoom?.room;
   const guest = reservation.primaryGuest;
-  const folio = reservation.folio;
+  const folio = reservation.folio || reservation.folios?.[0];
 
   const balance = folio?.balance || 0;
   const isPaid = balance <= 0;
   const canCheckIn = reservation.status === 'CONFIRMED' && room;
   const canCheckOut = reservation.status === 'CHECKED_IN';
+  
+  const latestPayment = folio?.payments?.filter((p: any) => p.status === 'COMPLETED' || p.status === 'REFUNDED').sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
 
   const formatCurrency = (amount: number, currency: string = 'NGN') => {
     return new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 0 }).format(amount);
@@ -129,13 +135,22 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
               </Button>
             )}
             <div className="grid grid-cols-2 gap-3">
-              <Button variant="outline" className="h-12 rounded-xl font-semibold border-slate-200">
+              <Button variant="outline" className="h-12 rounded-xl font-semibold border-slate-200" onClick={() => setIsAddPaymentOpen(true)}>
                 <CreditCard className="w-4 h-4 mr-2" /> Add Payment
               </Button>
-              <Button variant="outline" className="h-12 rounded-xl font-semibold border-slate-200">
+              <Button variant="outline" className="h-12 rounded-xl font-semibold border-slate-200" onClick={() => setIsExtendStayOpen(true)}>
                 <CalendarClock className="w-4 h-4 mr-2" /> Extend Stay
               </Button>
-              <Button variant="outline" className="col-span-2 h-12 rounded-xl font-semibold border-slate-200">
+              <Button 
+                variant="outline" 
+                className="col-span-2 h-12 rounded-xl font-semibold border-slate-200"
+                disabled={!latestPayment}
+                onClick={() => {
+                  if (latestPayment) {
+                    window.open(`/frontdesk/payments/${latestPayment.id}/receipt`, '_blank');
+                  }
+                }}
+              >
                 <Receipt className="w-4 h-4 mr-2" /> Print Receipt
               </Button>
 
@@ -219,6 +234,22 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
           reservation={reservation}
           open={isCancelDialogOpen}
           onOpenChange={setIsCancelDialogOpen}
+        />
+      )}
+
+      {isAddPaymentOpen && folio && (
+        <AddPaymentDialog
+          open={isAddPaymentOpen}
+          onOpenChange={setIsAddPaymentOpen}
+          folio={folio}
+        />
+      )}
+
+      {isExtendStayOpen && (
+        <ExtendStayDialog
+          open={isExtendStayOpen}
+          onOpenChange={setIsExtendStayOpen}
+          reservation={reservation}
         />
       )}
     </div>
