@@ -1,0 +1,56 @@
+import { NextRequest } from 'next/server';
+import { auth } from '@/lib/auth';
+import prisma from '@hotel-pms/db';
+import { successResponse, errorResponse } from '@/lib/api-response';
+
+export async function GET(req: NextRequest) {
+  try {
+    const session = await auth();
+    if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
+
+    const { searchParams } = new URL(req.url);
+    const roomNo = searchParams.get('roomNo');
+    const propertyId = searchParams.get('propertyId');
+
+    if (!roomNo || !propertyId) return errorResponse('BAD_REQUEST', 'Missing roomNo or propertyId', 400);
+
+    const resRoom = await prisma.reservationRoom.findFirst({
+      where: {
+        room: {
+          number: roomNo,
+          propertyId,
+        },
+        reservation: {
+          status: 'CHECKED_IN'
+        }
+      },
+      include: {
+        reservation: {
+          include: {
+            primaryGuest: true,
+            folios: true,
+          }
+        },
+        room: true
+      }
+    });
+
+    if (!resRoom || !resRoom.reservation) {
+      return successResponse({ reservation: null });
+    }
+
+    // Calculate folio balance
+    const balance = resRoom.reservation.folios.reduce((sum: number, f: any) => sum + Number(f.balance), 0);
+
+    return successResponse({
+      reservation: {
+        ...resRoom.reservation,
+        room: resRoom.room,
+        balance
+      }
+    });
+  } catch (err) {
+    console.error('[Lookup API]', err);
+    return errorResponse('INTERNAL_ERROR', 'Unexpected error', 500);
+  }
+}

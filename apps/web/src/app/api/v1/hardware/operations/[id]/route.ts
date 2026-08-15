@@ -23,7 +23,13 @@ export async function GET(
         status: true,
         errorCode: true,
         errorMessage: true,
-        propertyId: true
+        propertyId: true,
+        command: {
+          select: {
+            payload: true,
+            responseData: true
+          }
+        }
       }
     });
 

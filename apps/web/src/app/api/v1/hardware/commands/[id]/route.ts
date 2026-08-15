@@ -28,7 +28,7 @@ export async function PATCH(
 
     const { id } = await params;
     const body = await req.json();
-    const { status, operationStatus, errorCode, errorMessage, cardSnr, CardSnr } = body;
+    const { status, operationStatus, errorCode, errorMessage, cardSnr, CardSnr, data } = body;
     const actualCardSnr = cardSnr || CardSnr;
 
     const command = await prisma.lockCommand.findUnique({
@@ -44,6 +44,7 @@ export async function PATCH(
       updateData.completedAt = new Date();
       updateData.errorCode = errorCode;
       updateData.errorMessage = errorMessage;
+      if (data) updateData.responseData = data;
     }
 
     // Use a transaction for the critical state transitions

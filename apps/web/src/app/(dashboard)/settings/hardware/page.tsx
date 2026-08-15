@@ -6,7 +6,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-import { Cpu, Wifi, WifiOff, Key, Download, Copy, Check, Clock, RotateCw } from 'lucide-react';
+import { Cpu, Wifi, WifiOff, Key, Download, Copy, Check, Clock, RotateCw, CreditCard } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import {
   Dialog,
@@ -14,9 +14,9 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import { useProperty } from '@/components/PropertyProvider';
+import { EraseCardDialog } from '@/components/hardware/EraseCardDialog';
 
 export default function HardwareSettingsPage() {
   const { propertyId } = useProperty();
@@ -25,6 +25,7 @@ export default function HardwareSettingsPage() {
   const [generating, setGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
   const [open, setOpen] = useState(false);
+  const [wipeOpen, setWipeOpen] = useState(false);
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['hardwareAgents', propertyId],
@@ -101,12 +102,20 @@ export default function HardwareSettingsPage() {
           </p>
         </div>
         
-        <Dialog open={open} onOpenChange={resetModal}>
-          <DialogTrigger render={<Button className="gap-2" />}>
-            <Key className="w-4 h-4" />
-            Enroll New Agent
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-md">
+        <div className="flex gap-2">
+          <Button variant="outline" className="gap-2" onClick={() => setWipeOpen(true)}>
+            <CreditCard className="w-4 h-4" />
+            Wipe / Erase Card
+          </Button>
+
+          <Dialog open={open} onOpenChange={resetModal}>
+            <DialogTrigger asChild>
+              <Button className="gap-2">
+                <Key className="w-4 h-4" />
+                Enroll New Agent
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>Enroll Windows Agent</DialogTitle>
               <DialogDescription>
@@ -148,9 +157,16 @@ export default function HardwareSettingsPage() {
                 </div>
               </div>
             )}
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
+
+      <EraseCardDialog 
+        open={wipeOpen} 
+        onOpenChange={setWipeOpen} 
+        propertyId={propertyId ?? ''} 
+      />
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {isLoading && (

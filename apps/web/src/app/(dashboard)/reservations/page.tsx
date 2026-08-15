@@ -11,6 +11,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { LoadingState, EmptyState } from '@/components/ui/EmptyState';
+import { ReadCardCheckoutDialog } from '@/components/reservations/ReadCardCheckoutDialog';
+import { useProperty } from '@/components/properties/PropertyContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -58,10 +60,12 @@ function nightCount(checkIn: string, checkOut: string) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ReservationsPage() {
+  const { currentProperty } = useProperty();
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [page, setPage] = useState(1);
+  const [quickCheckoutOpen, setQuickCheckoutOpen] = useState(false);
 
   // Debounce search input
   React.useEffect(() => {
@@ -98,13 +102,29 @@ export default function ReservationsPage() {
             Manage guest reservations and key card check-in
           </p>
         </div>
-        <Link href="/reservations/new">
-          <Button className="shrink-0 h-10 gap-1.5" id="btn-new-reservation">
-            <Plus className="h-4 w-4" />
-            New Reservation
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            className="shrink-0 h-10 gap-1.5" 
+            onClick={() => setQuickCheckoutOpen(true)}
+          >
+            <LogIn className="h-4 w-4" /> {/* Or a different icon */}
+            Quick Checkout
           </Button>
-        </Link>
+          <Link href="/reservations/new">
+            <Button className="shrink-0 h-10 gap-1.5" id="btn-new-reservation">
+              <Plus className="h-4 w-4" />
+              New Reservation
+            </Button>
+          </Link>
+        </div>
       </div>
+
+      <ReadCardCheckoutDialog 
+        open={quickCheckoutOpen}
+        onOpenChange={setQuickCheckoutOpen}
+        propertyId={currentProperty?.id ?? ''}
+      />
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">

@@ -255,4 +255,102 @@ export const lockOrchestrator = {
 
     return count;
   },
+
+  /**
+   * Dispatches a READ_CARD command to the hardware agent for a property.
+   */
+  async readCard(propertyId: string, userId: string) {
+    const agent = await prisma.hardwareAgent.findFirst({
+      where: { propertyId, enabled: true },
+      orderBy: { lastHeartbeat: 'desc' },
+    });
+
+    if (!agent) throw new Error(`No hardware agent configured for property ${propertyId}`);
+
+    const idempotencyKey = `READ_CARD:${propertyId}:${Date.now()}`;
+
+    return prisma.$transaction(async (tx) => {
+      const op = await tx.lockOperation.create({
+        data: {
+          idempotencyKey,
+          propertyId,
+          agentId: agent.id,
+          operation: 'READ_CARD',
+          status: 'QUEUED',
+        },
+      });
+
+      const command = await tx.lockCommand.create({
+        data: {
+          operationId: op.id,
+          agentId: agent.id,
+          commandType: 'READ_CARD',
+          status: 'QUEUED',
+          payload: { operationId: op.id },
+        },
+      });
+
+      await tx.lockOperation.update({
+        where: { id: op.id },
+        data: { commandId: command.id },
+      });
+
+      // Notify gateway
+      try {
+        const pubClient = getRedis();
+        await pubClient.publish(`gateway:commands:${propertyId}`, JSON.stringify({ type: 'COMMAND_DISPATCH', commandId: command.id, agentId: agent.id }));
+      } catch (e) {}
+
+      return op;
+    });
+  },
+
+  /**
+   * Dispatches a CANCEL_CARD command to the hardware agent to physically erase a card on the encoder.
+   */
+  async cancelCard(propertyId: string, userId: string) {
+    const agent = await prisma.hardwareAgent.findFirst({
+      where: { propertyId, enabled: true },
+      orderBy: { lastHeartbeat: 'desc' },
+    });
+
+    if (!agent) throw new Error(`No hardware agent configured for property ${propertyId}`);
+
+    const idempotencyKey = `CANCEL_CARD:${propertyId}:${Date.now()}`;
+
+    return prisma.$transaction(async (tx) => {
+      const op = await tx.lockOperation.create({
+        data: {
+          idempotencyKey,
+          propertyId,
+          agentId: agent.id,
+          operation: 'CANCEL_CARD',
+          status: 'QUEUED',
+        },
+      });
+
+      const command = await tx.lockCommand.create({
+        data: {
+          operationId: op.id,
+          agentId: agent.id,
+          commandType: 'CANCEL_CARD',
+          status: 'QUEUED',
+          payload: { operationId: op.id },
+        },
+      });
+
+      await tx.lockOperation.update({
+        where: { id: op.id },
+        data: { commandId: command.id },
+      });
+
+      // Notify gateway
+      try {
+        const pubClient = getRedis();
+        await pubClient.publish(`gateway:commands:${propertyId}`, JSON.stringify({ type: 'COMMAND_DISPATCH', commandId: command.id, agentId: agent.id }));
+      } catch (e) {}
+
+      return op;
+    });
+  },
 };
