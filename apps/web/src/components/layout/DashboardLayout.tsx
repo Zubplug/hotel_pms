@@ -145,19 +145,21 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       {/* User footer */}
       <div className="border-t px-4 py-4">
         <DropdownMenu>
-          <DropdownMenuTrigger className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-sm hover:bg-muted/60 transition-colors cursor-pointer outline-none">
-            <div className="h-8 w-8 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center text-white text-xs font-bold shrink-0">
-              {userInitials}
+          <DropdownMenuTrigger className="rounded-lg hover:bg-muted/60 transition-colors cursor-pointer outline-none">
+            <div className="flex w-full items-center gap-3 px-2 py-2 text-sm">
+              <div className="h-8 w-8 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center text-white text-xs font-bold shrink-0">
+                {userInitials}
+              </div>
+              <div className="flex-1 text-left min-w-0">
+                <p className="text-sm font-medium truncate">
+                  {session?.user?.email ?? 'User'}
+                </p>
+                <p className="text-xs text-muted-foreground truncate">
+                  {session?.user?.isSuperAdmin ? 'Super Admin' : 'Staff'}
+                </p>
+              </div>
+              <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
             </div>
-            <div className="flex-1 text-left min-w-0">
-              <p className="text-sm font-medium truncate">
-                {session?.user?.email ?? 'User'}
-              </p>
-              <p className="text-xs text-muted-foreground truncate">
-                {session?.user?.isSuperAdmin ? 'Super Admin' : 'Staff'}
-              </p>
-            </div>
-            <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" side="top" className="w-56">
             <DropdownMenuSeparator />

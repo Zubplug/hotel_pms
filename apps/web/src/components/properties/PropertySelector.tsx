@@ -63,13 +63,15 @@ export function PropertySelector({ className }: { className?: string }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        className={cn(buttonVariants({ variant: 'outline' }), 'h-9 gap-2 max-w-xs', className)}
+        className={cn(buttonVariants({ variant: 'outline' }), 'h-9 px-3', className)}
       >
-        <Building2 className="h-4 w-4 text-primary shrink-0" />
-        <span className="truncate text-sm font-medium">
-          {selected?.name ?? 'Select Property'}
-        </span>
-        <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 ml-auto" />
+        <div className="flex items-center gap-2 w-full max-w-xs">
+          <Building2 className="h-4 w-4 text-primary shrink-0" />
+          <span className="truncate text-sm font-medium">
+            {selected?.name ?? 'Select Property'}
+          </span>
+          <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 ml-auto" />
+        </div>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-64">
         <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">

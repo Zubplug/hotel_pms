@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyDescriptionAttribute("LodgeCore PMS hardware bridge for Deluns eLock (LockSDK V4.7)")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+7ec6201416bcc8e4fe7aef93674fd909686b4523")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+09957fd341778a543810a4d42071ee9e471a3f17")]
 [assembly: System.Reflection.AssemblyProductAttribute("LodgeCore.LockAgent")]
 [assembly: System.Reflection.AssemblyTitleAttribute("LodgeCore.LockAgent")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
