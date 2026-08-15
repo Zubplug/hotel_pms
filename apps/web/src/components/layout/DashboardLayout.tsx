@@ -33,8 +33,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { PropertySelector } from '@/components/properties/PropertySelector';
 
-const navigation = [
-  { name: 'Overview', href: '/dashboard', icon: LayoutDashboard },
+const ALL_NAV = [
+  { name: 'Overview', href: '/dashboard', icon: LayoutDashboard, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER'] },
+  { name: 'Front Desk', href: '/frontdesk', icon: LayoutDashboard, restrictedTo: ['RECEPTIONIST', 'FRONT_DESK', 'SUPER_ADMIN'] },
   { name: 'Properties', href: '/properties', icon: Hotel },
   { name: 'Rooms', href: '/rooms', icon: BedDouble },
   { name: 'Room Types', href: '/room-types', icon: Layers },
@@ -69,6 +70,17 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const userInitials = session?.user?.email
     ? session.user.email.slice(0, 2).toUpperCase()
     : '??';
+  
+  const role = (session?.user as any)?.role || 'STAFF';
+  const isSuperAdmin = session?.user?.isSuperAdmin;
+
+  const navigation = ALL_NAV.filter(item => {
+    if (item.restrictedTo) {
+      if (isSuperAdmin) return true;
+      return item.restrictedTo.includes(role);
+    }
+    return true;
+  });
 
   async function handleSignOut() {
     await signOut({ redirect: false });

@@ -34,8 +34,14 @@ export default auth((req) => {
 
   // Public routes — no auth needed
   if (isPublic(nextUrl.pathname)) {
-    // If already logged in and hitting /login → send to /properties
+    // If already logged in and hitting /login
     if (nextUrl.pathname === '/login' && isLoggedIn) {
+      const role = req.auth?.role as string | undefined;
+      if (role === 'RECEPTIONIST' || role === 'FRONT_DESK') {
+        return Response.redirect(new URL('/frontdesk', nextUrl));
+      } else if (role === 'CEO' || role === 'SUPER_ADMIN') {
+        return Response.redirect(new URL('/dashboard', nextUrl));
+      }
       return Response.redirect(new URL('/properties', nextUrl));
     }
     return;
@@ -46,6 +52,21 @@ export default auth((req) => {
     const loginUrl = new URL('/login', nextUrl);
     loginUrl.searchParams.set('callbackUrl', nextUrl.pathname);
     return Response.redirect(loginUrl);
+  }
+
+  // Authorization checks
+  const role = req.auth?.role as string | undefined;
+  
+  if (nextUrl.pathname.startsWith('/dashboard') && (role === 'RECEPTIONIST' || role === 'FRONT_DESK')) {
+    return Response.redirect(new URL('/frontdesk', nextUrl));
+  }
+  
+  if (nextUrl.pathname.startsWith('/frontdesk') && role !== 'RECEPTIONIST' && role !== 'FRONT_DESK' && !(req.auth as any)?.isSuperAdmin) {
+    // If CEO tries to hit frontdesk, send them to dashboard
+    if (role === 'CEO' || role === 'SUPER_ADMIN') {
+      return Response.redirect(new URL('/dashboard', nextUrl));
+    }
+    return Response.redirect(new URL('/properties', nextUrl));
   }
 });
 
