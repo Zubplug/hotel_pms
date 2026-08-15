@@ -240,6 +240,47 @@ public class LocalRepository
         return true;
     }
 
+    public async Task<LocalMaintenanceTicket> CreateMaintenanceTicketAsync(LocalMaintenanceTicket ticket, string userId, string deviceId)
+    {
+        _dbContext.MaintenanceTickets.Add(ticket);
+        
+        _dbContext.SyncEvents.Add(new LocalSyncEvent
+        {
+            EntityType = "MAINTENANCE_TICKET",
+            EntityId = ticket.Id,
+            OperationType = "CREATE",
+            PayloadJson = JsonSerializer.Serialize(ticket),
+            UserId = userId,
+            DeviceId = deviceId
+        });
+
+        await _dbContext.SaveChangesAsync();
+        return ticket;
+    }
+
+    public async Task<bool> ResolveMaintenanceTicketAsync(string ticketId, string userId, string deviceId)
+    {
+        var ticket = await _dbContext.MaintenanceTickets.FindAsync(ticketId);
+        if (ticket == null) return false;
+
+        ticket.Status = "RESOLVED";
+        ticket.RequiresRoomRestriction = false;
+        ticket.UpdatedAt = DateTime.UtcNow;
+
+        _dbContext.SyncEvents.Add(new LocalSyncEvent
+        {
+            EntityType = "MAINTENANCE_TICKET",
+            EntityId = ticketId,
+            OperationType = "RESOLVE",
+            PayloadJson = JsonSerializer.Serialize(new { status = "RESOLVED", requiresRoomRestriction = false }),
+            UserId = userId,
+            DeviceId = deviceId
+        });
+
+        await _dbContext.SaveChangesAsync();
+        return true;
+    }
+
     public async Task EnsureDatabaseCreatedAsync()
     {
         await _dbContext.Database.EnsureCreatedAsync();

@@ -10,6 +10,7 @@ public class LocalDbContext : DbContext
     public DbSet<LocalFolio> Folios { get; set; } = null!;
     public DbSet<LocalSyncEvent> SyncEvents { get; set; } = null!;
     public DbSet<LocalHousekeepingTask> HousekeepingTasks { get; set; } = null!;
+    public DbSet<LocalMaintenanceTicket> MaintenanceTickets { get; set; } = null!;
 
     public LocalDbContext(DbContextOptions<LocalDbContext> options) : base(options)
     {

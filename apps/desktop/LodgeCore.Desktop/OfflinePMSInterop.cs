@@ -138,4 +138,18 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message });
         }
     }
+
+    [JSInvokable]
+    public async Task<string> ResolveMaintenanceTicketAsync(string ticketId, string userId, string deviceId)
+    {
+        try
+        {
+            var success = await _repo.ResolveMaintenanceTicketAsync(ticketId, userId, deviceId);
+            return JsonSerializer.Serialize(new { success });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
 }
