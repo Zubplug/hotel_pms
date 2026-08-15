@@ -56,7 +56,7 @@ export function ReadCardCheckoutDialog({ open, onOpenChange, propertyId }: ReadC
         const pRes = await fetch(`/api/v1/hardware/operations/${opId}`);
         const pData = await pRes.json();
         const op = pData.data?.operation;
-        if (op?.status === 'SUCCESS') {
+        if (op?.status === 'SUCCESS' || op?.status === 'COMPLETED') {
           readData = op.command?.responseData;
           break;
         } else if (op?.status === 'FAILED' || op?.status === 'ERROR') {
@@ -113,7 +113,7 @@ export function ReadCardCheckoutDialog({ open, onOpenChange, propertyId }: ReadC
         const pRes = await fetch(`/api/v1/hardware/operations/${opId}`);
         const pData = await pRes.json();
         const op = pData.data?.operation;
-        if (op?.status === 'SUCCESS') {
+        if (op?.status === 'SUCCESS' || op?.status === 'COMPLETED') {
           erased = true;
           break;
         } else if (op?.status === 'FAILED' || op?.status === 'ERROR') {
