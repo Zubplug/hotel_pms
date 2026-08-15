@@ -68,4 +68,32 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message });
         }
     }
+
+    [JSInvokable]
+    public async Task<string> RecordChargeAsync(string folioId, decimal amount, string description, string userId, string deviceId)
+    {
+        try
+        {
+            var success = await _repo.RecordChargeAsync(folioId, amount, description, userId, deviceId);
+            return JsonSerializer.Serialize(new { success });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    [JSInvokable]
+    public async Task<string> RecordPaymentAsync(string folioId, decimal amount, string method, string userId, string deviceId)
+    {
+        try
+        {
+            var success = await _repo.RecordPaymentAsync(folioId, amount, method, userId, deviceId);
+            return JsonSerializer.Serialize(new { success });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
 }

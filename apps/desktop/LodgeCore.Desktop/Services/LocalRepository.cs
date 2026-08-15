@@ -105,6 +105,50 @@ public class LocalRepository
         return !overlapping;
     }
 
+    public async Task<bool> RecordChargeAsync(string folioId, decimal amount, string description, string userId, string deviceId)
+    {
+        var folio = await _dbContext.Folios.FindAsync(folioId);
+        if (folio == null) return false;
+
+        folio.TotalCharges += amount;
+        folio.UpdatedAt = DateTime.UtcNow;
+
+        _dbContext.SyncEvents.Add(new LocalSyncEvent
+        {
+            EntityType = "FOLIO",
+            EntityId = folioId,
+            OperationType = "ADD_CHARGE",
+            PayloadJson = JsonSerializer.Serialize(new { amount, description }),
+            UserId = userId,
+            DeviceId = deviceId
+        });
+
+        await _dbContext.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> RecordPaymentAsync(string folioId, decimal amount, string method, string userId, string deviceId)
+    {
+        var folio = await _dbContext.Folios.FindAsync(folioId);
+        if (folio == null) return false;
+
+        folio.TotalPayments += amount;
+        folio.UpdatedAt = DateTime.UtcNow;
+
+        _dbContext.SyncEvents.Add(new LocalSyncEvent
+        {
+            EntityType = "FOLIO",
+            EntityId = folioId,
+            OperationType = "ADD_PAYMENT",
+            PayloadJson = JsonSerializer.Serialize(new { amount, method }),
+            UserId = userId,
+            DeviceId = deviceId
+        });
+
+        await _dbContext.SaveChangesAsync();
+        return true;
+    }
+
     public async Task EnsureDatabaseCreatedAsync()
     {
         await _dbContext.Database.EnsureCreatedAsync();
