@@ -16,8 +16,8 @@ export default function MaintenanceReportPage() {
       try {
         const res = await fetch(`/api/v1/maintenance/tickets?propertyId=${propertyId}`);
         const data = await res.json();
-        if (data.success && data.tickets) {
-          const tickets = data.tickets;
+        if (data.success && data.data?.tickets) {
+          const tickets = data.data.tickets;
           setStats({
             total: tickets.length,
             resolved: tickets.filter((t: any) => t.status === 'RESOLVED' || t.status === 'CLOSED').length,
