@@ -17,14 +17,16 @@ public class SyncEngine : BackgroundService
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<SyncEngine> _logger;
     private readonly HttpClient _httpClient;
+    private readonly AuthManager _authManager;
     
     // We can wire this to MAUI Connectivity events. For now, assume online.
     private bool _isOnline = true; 
 
-    public SyncEngine(IServiceProvider serviceProvider, ILogger<SyncEngine> logger)
+    public SyncEngine(IServiceProvider serviceProvider, ILogger<SyncEngine> logger, AuthManager authManager)
     {
         _serviceProvider = serviceProvider;
         _logger = logger;
+        _authManager = authManager;
         // In reality, this would use IHttpClientFactory configured with BaseAddress & Auth
         _httpClient = new HttpClient { BaseAddress = new Uri("https://api.lodgecore.com/v1/") };
     }
@@ -80,6 +82,13 @@ public class SyncEngine : BackgroundService
         if (!pendingEvents.Any()) return;
 
         _logger.LogInformation($"Pushing {pendingEvents.Count} pending operations to cloud...");
+
+        var deviceId = await _authManager.GetOrCreateDeviceIdAsync();
+        var token = await _authManager.GetAuthTokenAsync();
+        if (!string.IsNullOrEmpty(token))
+        {
+            _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        }
 
         foreach (var syncEvent in pendingEvents)
         {
