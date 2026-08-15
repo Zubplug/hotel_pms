@@ -246,8 +246,10 @@ export async function PATCH(
           }
           await tx.folioItem.createMany({ data: folioItems });
 
-          const newTotalCharges = (Number(folio.totalCharges || 0) - Number(oldTotalAmount)) + Number(newTotalAmount);
-          const newBalance = (Number(folio.balance || 0) - Number(oldTotalAmount)) + Number(newTotalAmount);
+          const allFolioItems = await tx.folioItem.findMany({ where: { folioId: folio.id } });
+          const newTotalCharges = allFolioItems.filter(i => i.type === 'CHARGE').reduce((acc, item) => acc + Number(item.amount), 0);
+          const newTotalPayments = allFolioItems.filter(i => i.type === 'PAYMENT').reduce((acc, item) => acc + Number(item.amount), 0);
+          const newBalance = newTotalCharges - newTotalPayments;
           
           await tx.folio.update({
             where: { id: folio.id },
