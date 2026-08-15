@@ -16,7 +16,6 @@ export interface PropertyFormValues {
   country: string;
   phone: string;
   email: string;
-  organizationId: string;
 }
 
 interface PropertyFormProps {
@@ -24,7 +23,6 @@ interface PropertyFormProps {
   onSubmit: (data: PropertyFormValues) => Promise<void>;
   isSubmitting?: boolean;
   mode?: 'create' | 'edit';
-  organizationId: string;
 }
 
 export function PropertyForm({
@@ -32,17 +30,13 @@ export function PropertyForm({
   onSubmit,
   isSubmitting,
   mode = 'create',
-  organizationId,
 }: PropertyFormProps) {
   const {
     register,
     handleSubmit,
     formState: { errors },
   } = useForm<PropertyFormValues>({
-    defaultValues: {
-      organizationId,
-      ...defaultValues,
-    },
+    defaultValues,
   });
 
   return (
@@ -92,8 +86,6 @@ export function PropertyForm({
             <Label htmlFor="email">Email</Label>
             <Input id="email" type="email" placeholder="property@hotel.com" {...register('email')} />
           </div>
-
-          <input type="hidden" {...register('organizationId')} />
         </CardContent>
       </Card>
 

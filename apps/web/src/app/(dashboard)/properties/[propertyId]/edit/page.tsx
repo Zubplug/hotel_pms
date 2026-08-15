@@ -55,7 +55,6 @@ export default function EditPropertyPage() {
       />
       <PropertyForm
         mode="edit"
-        organizationId={property.organizationId}
         defaultValues={property}
         onSubmit={handleSubmit}
         isSubmitting={isSubmitting}

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const createPropertySchema = z.object({
-  organizationId: z.string().uuid(),
+  organizationId: z.string().uuid().optional(),
   name: z.string().min(2).max(100),
   code: z.string().min(2).max(20).toUpperCase(),
   address: z.string().min(5).max(200),

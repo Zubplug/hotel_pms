@@ -10,9 +10,6 @@ export default function NewPropertyPage() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // In a real app, organizationId would come from session context
-  const organizationId = 'default-org';
-
   async function handleSubmit(data: PropertyFormValues) {
     setIsSubmitting(true);
     try {
@@ -43,7 +40,6 @@ export default function NewPropertyPage() {
       />
       <PropertyForm
         mode="create"
-        organizationId={organizationId}
         onSubmit={handleSubmit}
         isSubmitting={isSubmitting}
       />

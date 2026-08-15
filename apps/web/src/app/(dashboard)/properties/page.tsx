@@ -4,7 +4,8 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
-import { Plus, Building2, MapPin, MoreVertical, Edit, Building, Eye } from 'lucide-react';
+import Link from 'next/link';
+import { Plus, Building2, MapPin, MoreVertical, Edit, Building, Eye, Home } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
@@ -38,9 +39,11 @@ export default function PropertiesPage() {
         title="Properties"
         description="Manage your hotel properties, locations, and settings."
         actions={
-          <Button className="gap-2">
-            <Plus className="h-4 w-4" />
-            Add Property
+          <Button asChild className="gap-2">
+            <Link href="/properties/new">
+              <Plus className="h-4 w-4" />
+              Add Property
+            </Link>
           </Button>
         }
       />
@@ -68,9 +71,15 @@ export default function PropertiesPage() {
                       <MoreVertical className="h-4 w-4" />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem className="gap-2"><Eye className="h-4 w-4" /> View Details</DropdownMenuItem>
-                      <DropdownMenuItem className="gap-2"><Edit className="h-4 w-4" /> Edit Property</DropdownMenuItem>
-                      <DropdownMenuItem className="gap-2"><Building className="h-4 w-4" /> Manage Buildings</DropdownMenuItem>
+                      <DropdownMenuItem className="p-0">
+                        <Link href={`/properties/${property.id}`} className="flex items-center gap-2 w-full px-2 py-1.5 cursor-pointer"><Eye className="h-4 w-4" /> View Details</Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem className="p-0">
+                        <Link href={`/properties/${property.id}/edit`} className="flex items-center gap-2 w-full px-2 py-1.5 cursor-pointer"><Edit className="h-4 w-4" /> Edit Property</Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem className="p-0">
+                        <Link href={`/properties/${property.id}/buildings`} className="flex items-center gap-2 w-full px-2 py-1.5 cursor-pointer"><Building className="h-4 w-4" /> Manage Buildings</Link>
+                      </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
@@ -96,8 +105,10 @@ export default function PropertiesPage() {
                 </div>
               </CardContent>
               <CardFooter className="px-6 py-4 bg-muted/20 border-t flex justify-between items-center">
-                <Button variant="outline" size="sm" className="w-full">
-                  Manage Property
+                <Button asChild variant="outline" size="sm" className="w-full">
+                  <Link href={`/properties/${property.id}`}>
+                    Manage Property
+                  </Link>
                 </Button>
               </CardFooter>
             </Card>
@@ -107,7 +118,9 @@ export default function PropertiesPage() {
               <Building2 className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
               <h3 className="text-lg font-medium">No properties found</h3>
               <p className="text-sm text-muted-foreground mt-1 mb-4">You don't have access to any properties yet.</p>
-              <Button>Create Property</Button>
+              <Button asChild>
+                <Link href="/properties/new">Create Property</Link>
+              </Button>
             </div>
           )}
         </div>

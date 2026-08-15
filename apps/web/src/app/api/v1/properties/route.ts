@@ -5,6 +5,7 @@ import { successResponse, errorResponse, paginatedResponse } from '@/lib/api-res
 import { createAuditLog } from '@/lib/audit';
 import { hasPermission } from '@/lib/rbac';
 import { getUserPropertyIds } from '@/lib/property-access';
+import { getUserOrganizationId } from '@/lib/organization-access';
 import { createPropertySchema, propertyQuerySchema } from '@hotel-pms/types';
 
 export async function GET(req: NextRequest) {
@@ -67,10 +68,13 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const data = createPropertySchema.parse(body);
 
-    const property = await prisma.property.create({ data: data as any });
+    const organizationId = await getUserOrganizationId(session.user.id);
+    const property = await prisma.property.create({ 
+      data: { ...data, organizationId } as any 
+    });
 
     await createAuditLog({
-      organizationId: data.organizationId,
+      organizationId,
       propertyId: property.id,
       userId: session.user.id,
       action: 'CREATE',

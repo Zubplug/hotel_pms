@@ -62,6 +62,8 @@ model Property {
   lastAuditAt  DateTime? @db.Timestamptz
   auditStatus  String? // 'OPEN' | 'IN_PROGRESS' | 'CLOSED'
 
+  isActive     Boolean   @default(true)
+
   timezone String @default("Africa/Lagos")
   locale   String @default("en-NG")
   settings Json?
