@@ -52,7 +52,7 @@ export function CheckInDialog({ open, onOpenChange, reservation }: CheckInDialog
         if (status === 'SUCCESS' || status === 'COMPLETED') {
           const cardData = op.command?.responseData;
           
-          if (cardData && cardData.validTo && new Date(cardData.validTo) > new Date()) {
+          if (cardData && cardData.checkOut && new Date(cardData.checkOut) > new Date()) {
             // Card is currently active
             setExistingCardData(cardData);
             setPhase('OVERWRITE_CONFIRM');
@@ -236,7 +236,7 @@ export function CheckInDialog({ open, onOpenChange, reservation }: CheckInDialog
                   <p className="font-medium text-amber-900 dark:text-amber-400">This card is currently active!</p>
                   <ul className="mt-1 text-amber-800 dark:text-amber-500 space-y-1">
                     <li>Room: <span className="font-semibold">{existingCardData?.roomNo || 'Unknown'}</span></li>
-                    <li>Valid Until: <span className="font-semibold">{existingCardData?.validTo ? new Date(existingCardData.validTo).toLocaleString() : 'Unknown'}</span></li>
+                    <li>Valid Until: <span className="font-semibold">{existingCardData?.checkOut ? new Date(existingCardData.checkOut).toLocaleString() : 'Unknown'}</span></li>
                   </ul>
                 </div>
                 <p className="text-sm text-muted-foreground">
