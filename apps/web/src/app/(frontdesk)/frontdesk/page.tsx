@@ -119,7 +119,7 @@ export default function ReceptionistDashboardPage() {
 
               <Button onClick={() => router.push('/frontdesk/reservations')} variant="outline" className="h-20 md:h-32 rounded-3xl bg-white/80 hover:bg-white text-slate-700 border-white/50 shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all flex flex-col gap-2 group">
                 <Search className="w-8 h-8 text-blue-600 group-hover:scale-110 transition-transform" />
-                <span className="font-bold text-lg md:text-xl">Search Guest</span>
+                <span className="font-bold text-lg md:text-xl">All Reservations</span>
               </Button>
             </div>
         </div>
