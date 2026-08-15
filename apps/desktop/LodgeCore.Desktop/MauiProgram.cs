@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Logging;
 using LodgeCore.HardwareAgent.Locks;
+using LodgeCore.Desktop.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace LodgeCore.Desktop;
 
@@ -20,6 +22,14 @@ public static class MauiProgram
         // Register Hardware Agent dependencies
         builder.Services.AddSingleton<ILockProvider, DelunsLockProvider>(); // Assuming DelunsLockProvider is the implementation
         builder.Services.AddSingleton<HardwareInterop>();
+
+        // Register Offline SQLite DB Context
+        string dbPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LodgeCoreOffline.db");
+        builder.Services.AddDbContext<LocalDbContext>(options => options.UseSqlite($"Data Source={dbPath}"));
+        
+        // Register Local Services & Sync Engine
+        builder.Services.AddTransient<LodgeCore.Desktop.Services.LocalRepository>();
+        builder.Services.AddSingleton<LodgeCore.Desktop.Services.SyncEngine>();
 
 #if DEBUG
         builder.Services.AddBlazorWebViewDeveloperTools();
