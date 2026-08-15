@@ -127,10 +127,10 @@ export function ReadCardInfoDialog({ open, onOpenChange, propertyId }: ReadCardI
                   <div className="font-medium text-right">{cardInfo.roomNo || 'None'}</div>
                   
                   <div className="text-muted-foreground">Valid From:</div>
-                  <div className="font-medium text-right">{cardInfo.validFrom ? format(new Date(cardInfo.validFrom), 'PPp') : 'N/A'}</div>
+                  <div className="font-medium text-right">{cardInfo.checkIn ? format(new Date(cardInfo.checkIn), 'PPp') : 'N/A'}</div>
                   
                   <div className="text-muted-foreground">Valid To:</div>
-                  <div className="font-medium text-right">{cardInfo.validTo ? format(new Date(cardInfo.validTo), 'PPp') : 'N/A'}</div>
+                  <div className="font-medium text-right">{cardInfo.checkOut ? format(new Date(cardInfo.checkOut), 'PPp') : 'N/A'}</div>
                 </div>
               </div>
 
