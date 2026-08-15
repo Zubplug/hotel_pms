@@ -44,11 +44,24 @@ export async function GET(
         lockOperations: {
           orderBy: { requestedAt: 'desc' },
           take: 20,
+          include: {
+            command: { select: { responseData: true, status: true, completedAt: true } }
+          }
         },
         lockCredentials: {
-          where: { status: { in: ['ACTIVE', 'PENDING'] } },
           orderBy: { createdAt: 'desc' },
-          select: { id: true, status: true, credentialType: true, validFrom: true, validUntil: true, metadata: true, issuedAt: true },
+          take: 10,
+          select: {
+            id: true,
+            status: true,
+            credentialType: true,
+            validFrom: true,
+            validUntil: true,
+            issuedAt: true,
+            revokedAt: true,
+            cardSerialNumber: true,
+            metadata: true,
+          },
         },
         folios: {
           include: {

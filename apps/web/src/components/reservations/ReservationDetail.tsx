@@ -11,11 +11,12 @@ import { CancelReservationDialog } from './CancelReservationDialog';
 import { CheckInDialog } from './CheckInDialog';
 import { ExtendStayDialog } from './ExtendStayDialog';
 import { ExtendKeyCardDialog } from './ExtendKeyCardDialog';
+import { CardInformationSection } from './CardInformationSection';
 import { FolioSection } from './FolioSection';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ReservationTimeline } from './ReservationTimeline';
 import { GuestHistory } from './GuestHistory';
-import { Calendar, User, DoorClosed, Clock, Settings, FileText, LogIn, CalendarClock, AlertCircle } from 'lucide-react';
+import { Calendar, User, DoorClosed, Clock, Settings, FileText, LogIn, CalendarClock, AlertCircle, KeySquare } from 'lucide-react';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function ReservationDetail({ reservation }: { reservation: any }) {
@@ -113,6 +114,12 @@ export function ReservationDetail({ reservation }: { reservation: any }) {
       <Tabs defaultValue="overview" className="w-full">
         <TabsList className="mb-4">
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="keycards" className="flex items-center gap-1.5">
+            <KeySquare className="w-3.5 h-3.5" /> Key Cards
+            {reservation.lockCredentials?.some((c: any) => c.status === 'ACTIVE') && (
+              <span className="w-2 h-2 rounded-full bg-green-500" />
+            )}
+          </TabsTrigger>
           <TabsTrigger value="history">Guest History</TabsTrigger>
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
         </TabsList>
@@ -189,6 +196,10 @@ export function ReservationDetail({ reservation }: { reservation: any }) {
 
           </div>
           <FolioSection reservation={reservation} />
+        </TabsContent>
+
+        <TabsContent value="keycards">
+          <CardInformationSection reservation={reservation} />
         </TabsContent>
 
         <TabsContent value="history">
