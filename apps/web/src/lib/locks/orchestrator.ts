@@ -269,8 +269,11 @@ export const lockOrchestrator = {
 
     const idempotencyKey = `READ_CARD:${propertyId}:${Date.now()}`;
 
-    return prisma.$transaction(async (tx) => {
-      const op = await tx.lockOperation.create({
+    // ✅ Commit DB records first, then notify Redis OUTSIDE the transaction.
+    // Putting Redis inside a Prisma interactive transaction holds the DB connection
+    // open while awaiting network I/O, easily blowing the 5s default timeout.
+    const op = await prisma.$transaction(async (tx) => {
+      const newOp = await tx.lockOperation.create({
         data: {
           idempotencyKey,
           propertyId,
@@ -282,27 +285,34 @@ export const lockOrchestrator = {
 
       const command = await tx.lockCommand.create({
         data: {
-          operationId: op.id,
+          operationId: newOp.id,
           agentId: agent.id,
           commandType: 'READ_CARD',
           status: 'QUEUED',
-          payload: { operationId: op.id },
+          payload: { operationId: newOp.id },
         },
       });
 
       await tx.lockOperation.update({
-        where: { id: op.id },
+        where: { id: newOp.id },
         data: { commandId: command.id },
       });
 
-      // Notify gateway
-      try {
-        const pubClient = getRedis();
-        await pubClient.publish(`gateway:commands:${propertyId}`, JSON.stringify({ type: 'COMMAND_DISPATCH', commandId: command.id, agentId: agent.id }));
-      } catch (e) {}
-
-      return op;
+      return { op: newOp, commandId: command.id };
     });
+
+    // Notify gateway AFTER transaction commits
+    try {
+      const pubClient = getRedis();
+      await pubClient.publish(
+        `gateway:commands:${propertyId}`,
+        JSON.stringify({ type: 'COMMAND_DISPATCH', commandId: op.commandId, agentId: agent.id })
+      );
+    } catch (e) {
+      console.warn('[Orchestrator] Redis publish failed for READ_CARD (agent will poll):', e);
+    }
+
+    return op.op;
   },
 
   /**
@@ -318,7 +328,8 @@ export const lockOrchestrator = {
 
     const idempotencyKey = `CANCEL_CARD:${propertyId}:${Date.now()}`;
 
-    return prisma.$transaction(async (tx) => {
+    // ✅ Commit DB records first, then notify Redis OUTSIDE the transaction.
+    const result = await prisma.$transaction(async (tx) => {
       const op = await tx.lockOperation.create({
         data: {
           idempotencyKey,
@@ -344,13 +355,20 @@ export const lockOrchestrator = {
         data: { commandId: command.id },
       });
 
-      // Notify gateway
-      try {
-        const pubClient = getRedis();
-        await pubClient.publish(`gateway:commands:${propertyId}`, JSON.stringify({ type: 'COMMAND_DISPATCH', commandId: command.id, agentId: agent.id }));
-      } catch (e) {}
-
-      return op;
+      return { op, commandId: command.id };
     });
+
+    // Notify gateway AFTER transaction commits
+    try {
+      const pubClient = getRedis();
+      await pubClient.publish(
+        `gateway:commands:${propertyId}`,
+        JSON.stringify({ type: 'COMMAND_DISPATCH', commandId: result.commandId, agentId: agent.id })
+      );
+    } catch (e) {
+      console.warn('[Orchestrator] Redis publish failed for CANCEL_CARD (agent will poll):', e);
+    }
+
+    return result.op;
   },
 };
