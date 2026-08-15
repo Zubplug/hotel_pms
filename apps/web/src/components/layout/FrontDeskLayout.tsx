@@ -221,7 +221,7 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
                 <p className="text-xs text-muted-foreground capitalize">{role.toLowerCase().replace('_', ' ')}</p>
               </div>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => { signOut({ redirect: false }); window.location.href='/login'; }} className="text-destructive cursor-pointer">
+              <DropdownMenuItem onClick={() => signOut({ callbackUrl: '/login' })} className="text-destructive cursor-pointer">
                 <LogOut className="mr-2 h-4 w-4" /> Sign Out
               </DropdownMenuItem>
             </DropdownMenuContent>

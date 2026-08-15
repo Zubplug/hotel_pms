@@ -83,8 +83,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   });
 
   async function handleSignOut() {
-    await signOut({ redirect: false });
-    router.push('/login');
+    signOut({ callbackUrl: '/login' });
   }
 
   const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => (
