@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { getUserPropertyIds } from '@/lib/property-access';
+import { hasPermission } from '@/lib/rbac';
 import { PaystackProvider } from '@/lib/payment-providers/paystack';
 import crypto from 'crypto';
 
@@ -26,10 +27,9 @@ export async function GET(req: NextRequest) {
       return errorResponse('FORBIDDEN', 'No access to this property', 403);
     }
 
-    const userRole = (session.user as any).role || 'STAFF';
-    
-    // Role restrictions: Receptionist cannot access this.
-    if (userRole === 'STAFF') {
+    const canReadReports = await hasPermission(session.user.id, 'reports', 'read', propertyId);
+    if (!canReadReports && !(session.user as any).isSuperAdmin) {
+      // Allow if they have report access or are super admin
       return errorResponse('FORBIDDEN', 'Insufficient permissions for gateway reconciliation', 403);
     }
 
@@ -136,7 +136,7 @@ export async function GET(req: NextRequest) {
         propertyId,
         userId: session.user.id,
         userEmail: session.user.email,
-        userRole: userRole,
+        userRole: 'STAFF',
         action: 'REPORT_ACCESSED',
         resource: 'GatewayReconciliationReport',
         resourceId: provider,
