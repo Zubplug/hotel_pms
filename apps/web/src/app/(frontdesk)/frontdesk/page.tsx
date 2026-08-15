@@ -104,17 +104,24 @@ export default function ReceptionistDashboardPage() {
           </div>
           
           {/* Command Center - Floating Action Bar */}
-          <div className="bg-white p-2 rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 flex items-center gap-2">
-            <Button onClick={() => router.push('/reservations/new')} className="h-14 px-6 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-sm border-0 gap-2 font-semibold text-base transition-all hover:-translate-y-0.5">
-              <UserPlus className="w-5 h-5" /> Walk-In
-            </Button>
-            <Button onClick={() => router.push('/reservations/new')} variant="outline" className="h-14 px-6 rounded-xl border-slate-200 text-slate-700 hover:bg-slate-50 gap-2 font-semibold text-base transition-all hover:-translate-y-0.5">
-              <CalendarPlus className="w-5 h-5" /> New Reservation
-            </Button>
-            <Button variant="outline" className="h-14 px-6 rounded-xl border-slate-200 text-slate-700 hover:bg-slate-50 gap-2 font-semibold text-base transition-all hover:-translate-y-0.5">
-              <Search className="w-5 h-5" /> Search Guest
-            </Button>
-          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <Button onClick={() => router.push('/frontdesk/reservations/walk-in')} className="h-20 md:h-32 rounded-3xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all flex flex-col gap-2 relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full -mr-10 -mt-10 transform group-hover:scale-110 transition-transform"></div>
+                <UserPlus className="w-8 h-8" />
+                <span className="font-bold text-lg md:text-xl">Walk-In</span>
+              </Button>
+
+              <Button onClick={() => router.push('/frontdesk/reservations/new')} className="h-20 md:h-32 rounded-3xl bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all flex flex-col gap-2 relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full -mr-10 -mt-10 transform group-hover:scale-110 transition-transform"></div>
+                <CalendarPlus className="w-8 h-8" />
+                <span className="font-bold text-lg md:text-xl">New Reservation</span>
+              </Button>
+
+              <Button onClick={() => router.push('/frontdesk/reservations')} variant="outline" className="h-20 md:h-32 rounded-3xl bg-white/80 hover:bg-white text-slate-700 border-white/50 shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all flex flex-col gap-2 group">
+                <Search className="w-8 h-8 text-blue-600 group-hover:scale-110 transition-transform" />
+                <span className="font-bold text-lg md:text-xl">Search Guest</span>
+              </Button>
+            </div>
         </div>
 
         {/* KPI Grid */}
@@ -215,7 +222,7 @@ export default function ReceptionistDashboardPage() {
                             className={cn("rounded-xl font-semibold px-4", canCheckIn ? "bg-blue-600 hover:bg-blue-700 text-white" : "")}
                             onClick={() => {
                               if (!isPaid) {
-                                router.push(`/reservations/${arr.id}`); // View folio to pay
+                                router.push(`/frontdesk/reservations/${arr.id}`); // View folio to pay
                               } else {
                                 setCheckInReservation({ id: arr.id, folios: [{ balance: arr.balance }] });
                               }
@@ -287,7 +294,7 @@ export default function ReceptionistDashboardPage() {
                             className={cn("rounded-xl font-semibold px-4", isPaid ? "bg-slate-900 hover:bg-slate-800 text-white" : "")}
                             onClick={() => {
                               if (!isPaid) {
-                                router.push(`/reservations/${dep.id}`); // View folio to pay
+                                router.push(`/frontdesk/reservations/${dep.id}`); // View folio to pay
                               } else {
                                 setCheckOutReservation({ id: dep.id, folios: [{ balance: dep.balance }] });
                               }
