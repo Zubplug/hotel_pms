@@ -112,6 +112,8 @@ export async function GET(req: NextRequest) {
         arrivalColor = 'red';
       }
 
+      const roomStatus = res.reservationRooms?.[0]?.room?.status || 'UNKNOWN';
+
       return {
         id: res.id,
         guestName: res.primaryGuest ? `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}` : 'Unknown',
@@ -121,7 +123,8 @@ export async function GET(req: NextRequest) {
         arrivalTime: '3:00 PM', // Hardcoded standard time for now, or use actual if tracked
         balance,
         status: res.status,
-        arrivalState: { label: arrivalStatus, color: arrivalColor }
+        arrivalState: { label: arrivalStatus, color: arrivalColor },
+        roomStatus
       };
     });
 
