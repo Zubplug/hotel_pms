@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using LodgeCore.HardwareAgent.Locks;
 
 namespace LodgeCore.Desktop;
 
@@ -15,6 +16,10 @@ public static class MauiProgram
             });
 
         builder.Services.AddMauiBlazorWebView();
+
+        // Register Hardware Agent dependencies
+        builder.Services.AddSingleton<ILockProvider, DelunsLockProvider>(); // Assuming DelunsLockProvider is the implementation
+        builder.Services.AddSingleton<HardwareInterop>();
 
 #if DEBUG
         builder.Services.AddBlazorWebViewDeveloperTools();

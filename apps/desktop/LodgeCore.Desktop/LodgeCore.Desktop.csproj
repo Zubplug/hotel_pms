@@ -40,8 +40,8 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <!-- Hardware SDK reference will go here -->
-	  <!-- <ProjectReference Include="..\..\hardware-agent\src\LodgeCore.HardwareAgent\LodgeCore.HardwareAgent.csproj" /> -->
+	  <!-- Hardware SDK reference -->
+	  <ProjectReference Include="..\..\..\hardware-agent\src\LodgeCore.HardwareAgent\LodgeCore.HardwareAgent.csproj" />
 	</ItemGroup>
 
 </Project>
