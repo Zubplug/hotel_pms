@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { useProperty } from '@/components/PropertyProvider';
 import { CheckInDialog } from '@/components/reservations/CheckInDialog';
 import { CheckOutDialog } from '@/components/reservations/CheckOutDialog';
-import { ReadCardCheckoutDialog } from '@/components/reservations/ReadCardCheckoutDialog';
+import { FrontDeskQuickCheckoutDialog } from '@/components/frontdesk/FrontDeskQuickCheckoutDialog';
 import { LoadingState } from '@/components/ui/EmptyState';
 import { 
   UserPlus, 
@@ -351,7 +351,7 @@ export default function ReceptionistDashboardPage() {
         </Button>
       </div>
 
-      <ReadCardCheckoutDialog 
+      <FrontDeskQuickCheckoutDialog 
         open={quickCheckoutOpen}
         onOpenChange={setQuickCheckoutOpen}
         propertyId={propertyId}
