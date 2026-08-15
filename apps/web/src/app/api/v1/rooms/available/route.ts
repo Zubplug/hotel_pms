@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
     const checkIn = searchParams.get('checkIn');
     const checkOut = searchParams.get('checkOut');
 
-    if (!propertyId || !roomTypeId || !checkIn || !checkOut) {
+    if (!propertyId || !checkIn || !checkOut) {
       return errorResponse('BAD_REQUEST', 'Missing required fields', 400);
     }
 
@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
     const availableRooms = await prisma.room.findMany({
       where: {
         propertyId,
-        roomTypeId,
+        ...(roomTypeId ? { roomTypeId } : {}),
         // Exclude rooms that are out of order or maintenance entirely (business logic decision)
         status: { notIn: ['MAINTENANCE', 'OUT_OF_ORDER'] },
         reservationRooms: {
@@ -56,6 +56,7 @@ export async function GET(req: NextRequest) {
           },
         },
       },
+      include: { roomType: { select: { id: true, name: true } } },
       orderBy: { number: 'asc' },
     });
 

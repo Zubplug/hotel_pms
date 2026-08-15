@@ -6,11 +6,24 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { FrontDeskCheckInDialog } from './FrontDeskCheckInDialog';
+import { FrontDeskEditReservationDialog } from './FrontDeskEditReservationDialog';
+import { FrontDeskReassignRoomDialog } from './FrontDeskReassignRoomDialog';
+import { FrontDeskCancelReservationDialog } from './FrontDeskCancelReservationDialog';
 import { FolioSection } from '../reservations/FolioSection';
-import { LogIn, User, MapPin, CalendarClock, CreditCard, Receipt, LogOut } from 'lucide-react';
+import { LogIn, User, MapPin, CalendarClock, CreditCard, Receipt, LogOut, ChevronDown, Edit3, XCircle } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
 
 export function FrontDeskReservationDetail({ reservation }: { reservation: any }) {
   const [isCheckInDialogOpen, setIsCheckInDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isReassignDialogOpen, setIsReassignDialogOpen] = useState(false);
+  const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
 
   const resRoom = reservation.reservationRooms?.[0];
   const room = resRoom?.room;
@@ -125,6 +138,26 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
               <Button variant="outline" className="col-span-2 h-12 rounded-xl font-semibold border-slate-200">
                 <Receipt className="w-4 h-4 mr-2" /> Print Receipt
               </Button>
+
+              {reservation.status === 'CONFIRMED' && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger className="col-span-2 h-12 rounded-xl font-semibold border border-slate-200 bg-white hover:bg-slate-50 flex items-center justify-center text-sm shadow-sm transition-colors w-full">
+                    Manage Reservation <ChevronDown className="w-4 h-4 ml-2" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56 p-2 rounded-xl border-slate-200 shadow-xl">
+                    <DropdownMenuItem className="rounded-lg p-3 cursor-pointer font-medium" onClick={() => setIsEditDialogOpen(true)}>
+                      <Edit3 className="w-4 h-4 mr-2 text-slate-500" /> Edit Details
+                    </DropdownMenuItem>
+                    <DropdownMenuItem className="rounded-lg p-3 cursor-pointer font-medium" onClick={() => setIsReassignDialogOpen(true)}>
+                      <MapPin className="w-4 h-4 mr-2 text-slate-500" /> Reassign Room
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator className="my-2" />
+                    <DropdownMenuItem className="rounded-lg p-3 cursor-pointer text-red-600 font-semibold focus:text-red-700 focus:bg-red-50" onClick={() => setIsCancelDialogOpen(true)}>
+                      <XCircle className="w-4 h-4 mr-2" /> Cancel Reservation
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
             </div>
           </div>
           
@@ -162,6 +195,30 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
           propertyId={reservation.propertyId}
           open={isCheckInDialogOpen}
           onOpenChange={setIsCheckInDialogOpen}
+        />
+      )}
+      
+      {isEditDialogOpen && (
+        <FrontDeskEditReservationDialog
+          reservation={reservation}
+          open={isEditDialogOpen}
+          onOpenChange={setIsEditDialogOpen}
+        />
+      )}
+
+      {isReassignDialogOpen && (
+        <FrontDeskReassignRoomDialog
+          reservation={reservation}
+          open={isReassignDialogOpen}
+          onOpenChange={setIsReassignDialogOpen}
+        />
+      )}
+
+      {isCancelDialogOpen && (
+        <FrontDeskCancelReservationDialog
+          reservation={reservation}
+          open={isCancelDialogOpen}
+          onOpenChange={setIsCancelDialogOpen}
         />
       )}
     </div>
