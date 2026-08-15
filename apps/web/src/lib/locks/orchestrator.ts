@@ -148,7 +148,7 @@ export const lockOrchestrator = {
     if (!property) throw new Error('Property not found');
     
     const lockConfig = property.lockConfiguration as { provider?: string } | null;
-    const providerType = lockConfig?.provider ?? 'UNKNOWN';
+    const providerType = lockConfig?.provider ?? 'DELUNS';
 
     let operation;
     
