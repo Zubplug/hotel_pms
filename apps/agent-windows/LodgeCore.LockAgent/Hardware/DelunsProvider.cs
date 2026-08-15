@@ -18,7 +18,7 @@ public sealed class DelunsProvider : ILockProvider
     private int _lockType = 5; // default RF50
 
     // DateTime format required by LockSDK
-    private const string DateFormat = "yyyy-MM-dd HH:mm:ss";
+    private const string DateFormat = "yyyy-MM-dd HH:mm";
 
     public DelunsProvider(ILogger<DelunsProvider> logger)
     {
