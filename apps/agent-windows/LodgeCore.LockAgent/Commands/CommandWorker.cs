@@ -83,6 +83,7 @@ public sealed class CommandWorker
         {
             "ENCODE"      => await HandleEncodeAsync(command, ct),
             "CANCEL_CARD" => await HandleCancelAsync(command, ct),
+            "READ_CARD"   => await HandleReadAsync(command, ct),
             "PING"        => await HandlePingAsync(ct),
             _ => new CommandResult
             {
@@ -91,6 +92,30 @@ public sealed class CommandWorker
                 ErrorCode = "UNKNOWN_COMMAND",
                 ErrorMessage = $"Unknown command type: {command.CommandType}",
             }
+        };
+    }
+
+    private async Task<CommandResult> HandleReadAsync(PmsCommand command, CancellationToken ct)
+    {
+        var readResult = await _lock.ReadGuestCardAsync(new ReadRequest(_config.CardWaitMs));
+
+        var data = new System.Text.Json.Nodes.JsonObject();
+        if (readResult.Success)
+        {
+            data["roomNo"] = readResult.RoomNo;
+            data["checkIn"] = readResult.CheckIn?.ToString("o");
+            data["checkOut"] = readResult.CheckOut?.ToString("o");
+            data["flags"] = readResult.Flags;
+        }
+
+        return new CommandResult
+        {
+            Status          = readResult.Success ? "COMPLETED" : "FAILED",
+            OperationStatus = readResult.Success ? "COMPLETED" : "FAILED",
+            CardSnr         = readResult.CardSnr,
+            Data            = data,
+            ErrorCode       = readResult.Success ? null : $"SDK_{Math.Abs(readResult.SdkCode)}",
+            ErrorMessage    = readResult.Error,
         };
     }
 

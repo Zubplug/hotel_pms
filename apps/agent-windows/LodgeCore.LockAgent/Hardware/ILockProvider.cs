@@ -14,6 +14,9 @@ public record EncodeResult(bool Success, string? CardSnr, int SdkCode, string? E
 public record CancelRequest(int WaitMs = 10000);
 public record CancelResult(bool Success, string? CardSnr, int SdkCode, string? Error);
 
+public record ReadRequest(int WaitMs = 10000);
+public record ReadResult(bool Success, string? CardSnr, string? RoomNo, DateTime? CheckIn, DateTime? CheckOut, int? Flags, int SdkCode, string? Error);
+
 public record InitResult(bool Success, int SdkCode, string? Error);
 public record PingResult(bool EncoderPresent, bool CardPresent, int SdkCode);
 
@@ -33,6 +36,9 @@ public interface ILockProvider
 
     /// <summary>Write a cancellation record to a card (physical revoke).</summary>
     Task<CancelResult> CancelCardAsync(CancelRequest request);
+
+    /// <summary>Read guest card data from a card on the encoder.</summary>
+    Task<ReadResult> ReadGuestCardAsync(ReadRequest request);
 
     /// <summary>Check encoder presence (uses TP_GetCardSnr as non-destructive probe).</summary>
     Task<PingResult> PingAsync();

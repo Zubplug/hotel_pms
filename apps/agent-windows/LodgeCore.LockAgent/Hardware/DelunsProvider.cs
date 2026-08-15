@@ -138,6 +138,51 @@ public sealed class DelunsProvider : ILockProvider
     }
 
     /// <inheritdoc/>
+    public Task<ReadResult> ReadGuestCardAsync(ReadRequest request)
+    {
+        if (!_initialized)
+            return Task.FromResult(new ReadResult(false, null, null, null, null, null, -999, "SDK not initialized"));
+
+        _logger.LogInformation("Reading guest card (waitMs={WaitMs})", request.WaitMs);
+
+        try
+        {
+            var cardSnr = new StringBuilder(20);
+            var roomNo = new StringBuilder(20);
+            var checkinTime = new StringBuilder(30);
+            var checkoutTime = new StringBuilder(30);
+            int iFlags = 0;
+
+            int result = LockSdkNative.TP_ReadGuestCardEx2(cardSnr, roomNo, checkinTime, checkoutTime, ref iFlags, request.WaitMs);
+
+            if (result == (int)LockSdkError.OPR_OK)
+            {
+                var snr = cardSnr.ToString().TrimEnd('\0');
+                var rn = roomNo.ToString().TrimEnd('\0');
+                var cinStr = checkinTime.ToString().TrimEnd('\0');
+                var coutStr = checkoutTime.ToString().TrimEnd('\0');
+
+                DateTime? cin = DateTime.TryParse(cinStr, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.RoundtripKind, out var c1) ? c1 : null;
+                DateTime? cout = DateTime.TryParse(coutStr, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.RoundtripKind, out var c2) ? c2 : null;
+
+                _logger.LogInformation("Card read successfully. SNR={Snr}, Room={Room}, CheckIn={Cin}, CheckOut={Cout}, Flags={Flags}", snr, rn, cin, cout, iFlags);
+                return Task.FromResult(new ReadResult(true, snr, rn, cin, cout, iFlags, result, null));
+            }
+            else
+            {
+                var error = DescribeError(result);
+                _logger.LogError("Read card failed: {Error} (code {Code})", error, result);
+                return Task.FromResult(new ReadResult(false, null, null, null, null, null, result, error));
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception reading card");
+            return Task.FromResult(new ReadResult(false, null, null, null, null, null, -999, ex.Message));
+        }
+    }
+
+    /// <inheritdoc/>
     /// Uses TP_GetCardSnr as a non-destructive encoder presence probe.
     public Task<PingResult> PingAsync()
     {

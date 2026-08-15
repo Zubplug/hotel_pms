@@ -111,6 +111,9 @@ public sealed class CommandResult
 
     [JsonPropertyName("cardSnr")]
     public string? CardSnr { get; set; }
+
+    [JsonPropertyName("data")]
+    public System.Text.Json.Nodes.JsonObject? Data { get; set; }
 }
 
 internal record CommandEnvelope(PmsCommand? Command);
