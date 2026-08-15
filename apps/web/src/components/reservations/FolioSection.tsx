@@ -9,8 +9,10 @@ import { PlusCircle, Wallet, ArrowRightLeft, CornerDownRight, Printer } from 'lu
 import { AddPaymentDialog } from './AddPaymentDialog';
 import { RefundDialog } from './RefundDialog';
 import { CheckOutDialog } from './CheckOutDialog';
+import { usePathname } from 'next/navigation';
 
 export function FolioSection({ reservation }: { reservation: any }) {
+  const pathname = usePathname();
   const [isAddPaymentOpen, setIsAddPaymentOpen] = useState(false);
   const [refundPaymentId, setRefundPaymentId] = useState<string | null>(null);
   const [isCheckOutOpen, setIsCheckOutOpen] = useState(false);
@@ -139,7 +141,10 @@ export function FolioSection({ reservation }: { reservation: any }) {
                               variant="ghost" 
                               size="sm" 
                               className="h-7 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                              onClick={() => window.open(`/payments/${linkedPayment.id}/receipt`, '_blank')}
+                              onClick={() => {
+                                const basePath = pathname.startsWith('/frontdesk') ? '/frontdesk' : '';
+                                window.open(`${basePath}/payments/${linkedPayment.id}/receipt`, '_blank');
+                              }}
                             >
                               <Printer className="w-3 h-3 mr-1" /> Receipt
                             </Button>
