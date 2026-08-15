@@ -80,8 +80,8 @@ export function FrontDeskReassignRoomDialog({ reservation, open, onOpenChange }:
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden border-0 shadow-2xl rounded-2xl">
-        <div className="bg-slate-50 p-6 border-b border-slate-100 flex items-center gap-4">
+      <DialogContent className="sm:max-w-[600px] p-0 overflow-hidden border-0 shadow-2xl rounded-2xl flex flex-col max-h-[90vh]">
+        <div className="bg-slate-50 p-6 border-b border-slate-100 flex items-center gap-4 shrink-0">
           <div className="bg-emerald-100 p-3 rounded-xl text-emerald-600 shadow-sm shrink-0">
             <RefreshCw className="w-5 h-5" />
           </div>
@@ -91,7 +91,7 @@ export function FrontDeskReassignRoomDialog({ reservation, open, onOpenChange }:
           </div>
         </div>
 
-        <div className="p-6 space-y-6">
+        <div className="p-6 space-y-6 overflow-y-auto flex-1">
           
           <div className="space-y-2">
             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Current Room</p>
@@ -163,7 +163,7 @@ export function FrontDeskReassignRoomDialog({ reservation, open, onOpenChange }:
           )}
         </div>
 
-        <DialogFooter className="bg-slate-50 p-4 border-t border-slate-100">
+        <DialogFooter className="bg-slate-50 p-4 border-t border-slate-100 shrink-0">
           <Button 
             variant="outline" 
             onClick={() => handleOpenChange(false)}

@@ -95,8 +95,8 @@ export function FrontDeskExtendStayDialog({ open, onOpenChange, reservation }: F
         onOpenChange(val);
       }}
     >
-      <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden bg-slate-50/50 rounded-2xl">
-        <div className="bg-white px-6 pt-6 pb-4 border-b border-slate-100">
+      <DialogContent className="sm:max-w-[600px] p-0 overflow-hidden bg-slate-50/50 rounded-2xl flex flex-col max-h-[90vh]">
+        <div className="bg-white px-6 pt-6 pb-4 border-b border-slate-100 shrink-0">
           <DialogHeader>
             <div className="flex items-center gap-3 mb-2">
               <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
@@ -112,7 +112,7 @@ export function FrontDeskExtendStayDialog({ open, onOpenChange, reservation }: F
           </DialogHeader>
         </div>
 
-        <div className="px-6 py-6 min-h-[140px] bg-slate-50/50">
+        <div className="px-6 py-6 bg-slate-50/50 overflow-y-auto flex-1">
           {phase === 'SELECT' && (
             <div className="space-y-6">
               <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
@@ -208,7 +208,7 @@ export function FrontDeskExtendStayDialog({ open, onOpenChange, reservation }: F
           )}
         </div>
 
-        <div className="bg-white px-6 py-4 border-t border-slate-100">
+        <div className="bg-white px-6 py-4 border-t border-slate-100 shrink-0">
           <DialogFooter className="flex w-full sm:justify-between gap-2">
             {phase === 'SELECT' && (
               <>

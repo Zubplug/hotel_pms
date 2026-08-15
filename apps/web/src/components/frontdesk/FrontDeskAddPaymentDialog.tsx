@@ -83,8 +83,8 @@ export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio }: { open:
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[550px] p-0 overflow-hidden bg-slate-50/50 rounded-2xl">
-        <div className="bg-white px-6 pt-6 pb-4 border-b border-slate-100 relative">
+      <DialogContent className="sm:max-w-[650px] p-0 overflow-hidden bg-slate-50/50 rounded-2xl flex flex-col max-h-[90vh]">
+        <div className="bg-white px-6 pt-6 pb-4 border-b border-slate-100 relative shrink-0">
           <DialogHeader>
             <div className="flex items-center gap-3 mb-2">
               <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
@@ -108,7 +108,7 @@ export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio }: { open:
           </div>
         </div>
 
-        <div className="px-6 py-6 min-h-[300px] bg-slate-50/50 relative">
+        <div className="px-6 py-6 bg-slate-50/50 relative overflow-y-auto flex-1">
           {error && (
             <div className="mb-6 p-4 bg-red-50 border border-red-100 text-red-700 rounded-xl flex items-start gap-3">
               <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-red-500" />

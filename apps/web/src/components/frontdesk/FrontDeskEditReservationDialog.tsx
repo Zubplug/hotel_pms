@@ -73,7 +73,7 @@ export function FrontDeskEditReservationDialog({ reservation, open, onOpenChange
         if (val) resetForm();
       }
     }}>
-      <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden border-0 shadow-2xl rounded-2xl">
+      <DialogContent className="sm:max-w-[600px] p-0 overflow-y-auto max-h-[90vh] border-0 shadow-2xl rounded-2xl">
         <div className="bg-slate-50 p-6 border-b border-slate-100 flex items-center gap-4">
           <div className="bg-blue-100 p-3 rounded-xl text-blue-600 shadow-sm shrink-0">
             <Edit3 className="w-5 h-5" />

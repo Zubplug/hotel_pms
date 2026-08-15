@@ -133,9 +133,9 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId }:
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[480px] p-0 overflow-hidden rounded-3xl border-0 shadow-2xl">
+      <DialogContent className="sm:max-w-[600px] p-0 overflow-hidden rounded-3xl border-0 shadow-2xl flex flex-col max-h-[90vh]">
         
-        <div className="bg-slate-900 px-8 py-6 text-white">
+        <div className="bg-slate-900 px-8 py-6 text-white shrink-0">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-white/10 rounded-xl">
               <Key className="w-6 h-6 text-blue-400" />
@@ -147,7 +147,7 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId }:
           </div>
         </div>
 
-        <div className="p-8 bg-slate-50 min-h-[300px] flex flex-col justify-center">
+        <div className="p-8 bg-slate-50 min-h-[300px] flex flex-col justify-center overflow-y-auto flex-1">
           
           {step === 'IDLE' && (
             <div className="text-center animate-in fade-in zoom-in-95 duration-500">

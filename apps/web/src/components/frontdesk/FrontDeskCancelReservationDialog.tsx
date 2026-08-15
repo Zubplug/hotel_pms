@@ -62,8 +62,8 @@ export function FrontDeskCancelReservationDialog({ reservation, open, onOpenChan
         }
       }
     }}>
-      <DialogContent className="sm:max-w-[450px] p-0 overflow-hidden border-0 shadow-2xl rounded-2xl">
-        <div className="bg-red-50 p-6 border-b border-red-100 flex items-start gap-4">
+      <DialogContent className="sm:max-w-[600px] p-0 overflow-hidden border-0 shadow-2xl rounded-2xl flex flex-col max-h-[90vh]">
+        <div className="bg-red-50 p-6 border-b border-red-100 flex items-start gap-4 shrink-0">
           <div className="bg-red-100 p-3 rounded-xl text-red-600 shadow-sm shrink-0 mt-1">
             <AlertCircle className="w-6 h-6" />
           </div>
@@ -75,7 +75,7 @@ export function FrontDeskCancelReservationDialog({ reservation, open, onOpenChan
           </div>
         </div>
 
-        <div className="p-6 space-y-4">
+        <div className="p-6 space-y-4 overflow-y-auto flex-1">
           <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 space-y-2">
             <p className="font-bold text-slate-900">{guest?.firstName} {guest?.lastName}</p>
             <p className="text-sm text-slate-500 font-medium">Confirmation #{reservation.confirmationNumber}</p>
@@ -103,7 +103,7 @@ export function FrontDeskCancelReservationDialog({ reservation, open, onOpenChan
           )}
         </div>
 
-        <DialogFooter className="bg-slate-50 p-4 border-t border-slate-100">
+        <DialogFooter className="bg-slate-50 p-4 border-t border-slate-100 shrink-0">
           <Button 
             variant="outline" 
             onClick={() => onOpenChange(false)}
