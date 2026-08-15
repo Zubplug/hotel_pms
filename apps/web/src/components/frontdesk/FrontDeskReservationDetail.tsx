@@ -13,6 +13,7 @@ import { FrontDeskAddPaymentDialog } from './FrontDeskAddPaymentDialog';
 import { FrontDeskExtendStayDialog } from './FrontDeskExtendStayDialog';
 import { FrontDeskReceiptDialog } from './FrontDeskReceiptDialog';
 import { FolioSection } from '../reservations/FolioSection';
+import { CardInformationSection } from '../reservations/CardInformationSection';
 import { LogIn, User, MapPin, CalendarClock, CreditCard, Receipt, LogOut, ChevronDown, Edit3, XCircle } from 'lucide-react';
 import {
   DropdownMenu,
@@ -195,8 +196,9 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
             </div>
 
             {/* Existing Folio Component embedded nicely */}
-            <div className="p-8 flex-1 bg-slate-50">
+            <div className="p-8 flex-1 bg-slate-50 space-y-8">
               <FolioSection reservation={reservation} />
+              <CardInformationSection reservation={reservation} />
             </div>
 
           </div>
