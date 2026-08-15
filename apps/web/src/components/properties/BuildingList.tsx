@@ -134,28 +134,29 @@ export function BuildingList({ propertyId, onSelectBuilding }: BuildingListProps
                 </Badge>
               </TableCell>
               <TableCell className="text-right">
-                <DropdownMenu>
-                  <DropdownMenuTrigger 
-                    className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100 inline-flex items-center justify-center rounded-md hover:bg-muted focus:outline-none focus:bg-muted"
-                    onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                  >
-                    <span className="sr-only">Open menu</span>
-                    <MoreHorizontal className="h-4 w-4" />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-[160px]">
-                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={(e: React.MouseEvent) => e.stopPropagation()}>
-                      <Pencil className="mr-2 h-4 w-4 text-muted-foreground" />
-                      Edit Details
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <div onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger 
+                      className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100 inline-flex items-center justify-center rounded-md hover:bg-muted focus:outline-none focus:bg-muted"
+                      aria-label="Open menu"
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-[160px]">
+                      <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem>
+                        <Pencil className="mr-2 h-4 w-4 text-muted-foreground" />
+                        Edit Details
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10">
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </TableCell>
             </TableRow>
           ))}

@@ -1,0 +1,4 @@
+/Users/mac/hotel_pms/publish/LodgeCore.LockAgent.pdb
+/Users/mac/hotel_pms/publish/LockSDK.dll
+/Users/mac/hotel_pms/publish/des.dll
+/Users/mac/hotel_pms/publish/LodgeCore.LockAgent.exe
