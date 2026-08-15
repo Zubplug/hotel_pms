@@ -33,32 +33,31 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { PropertySelector } from '@/components/properties/PropertySelector';
 
-const ALL_NAV = [
   { name: 'Overview', href: '/dashboard', icon: LayoutDashboard, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER'] },
-  { name: 'Front Desk', href: '/frontdesk', icon: LayoutDashboard, restrictedTo: ['RECEPTIONIST', 'FRONT_DESK', 'SUPER_ADMIN'] },
-  { name: 'Properties', href: '/properties', icon: Hotel },
-  { name: 'Rooms', href: '/rooms', icon: BedDouble },
-  { name: 'Room Types', href: '/room-types', icon: Layers },
-  { name: 'Amenities', href: '/amenities', icon: Star },
-  { name: 'Reservations', href: '/reservations', icon: CalendarDays },
-  { name: 'Housekeeping', href: '/housekeeping', icon: Brush },
-  { name: 'Maintenance', href: '/maintenance', icon: Wrench },
-  { name: 'Night Audit', href: '/night-audit', icon: MoonStar },
-  { name: 'Staff', href: '/staff', icon: Users },
+  { name: 'Front Desk', href: '/frontdesk', icon: LayoutDashboard, restrictedTo: ['RECEPTIONIST', 'FRONT_DESK', 'SUPER_ADMIN', 'MANAGER'] },
+  { name: 'Properties', href: '/properties', icon: Hotel, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER'] },
+  { name: 'Rooms', href: '/rooms', icon: BedDouble, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'RECEPTIONIST'] },
+  { name: 'Room Types', href: '/room-types', icon: Layers, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER'] },
+  { name: 'Amenities', href: '/amenities', icon: Star, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER'] },
+  { name: 'Reservations', href: '/reservations', icon: CalendarDays }, // Available to all staff
+  { name: 'Housekeeping', href: '/housekeeping', icon: Brush }, // Available to all staff
+  { name: 'Maintenance', href: '/maintenance', icon: Wrench }, // Available to all staff
+  { name: 'Night Audit', href: '/night-audit', icon: MoonStar, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'NIGHT_AUDITOR'] },
+  { name: 'Staff', href: '/staff', icon: Users, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER'] },
   { 
     name: 'Reports', 
     href: '/reports', 
     icon: FileText,
     children: [
       { name: 'Shift / Cashier', href: '/reports/shift' },
-      { name: 'Receivables', href: '/reports/receivables' },
-      { name: 'Gateway', href: '/reports/gateway' },
+      { name: 'Receivables', href: '/reports/receivables', restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'ACCOUNTANT'] },
+      { name: 'Gateway', href: '/reports/gateway', restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'ACCOUNTANT'] },
       { name: 'Housekeeping', href: '/reports/housekeeping' },
       { name: 'Maintenance', href: '/reports/maintenance' },
       { name: 'Room Status', href: '/reports/room-status' },
     ]
   },
-  { name: 'Settings', href: '/settings', icon: Settings },
+  { name: 'Settings', href: '/settings', icon: Settings, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER'] },
 ];
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
