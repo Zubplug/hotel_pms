@@ -80,6 +80,7 @@ export async function GET(req: NextRequest) {
     });
   } catch (err) {
     if (err instanceof ForbiddenError) return errorResponse('FORBIDDEN', err.message, 403);
+    if (err instanceof Error && err.name === 'ZodError') return errorResponse('VALIDATION_ERROR', 'Invalid request data', 422);
     return errorResponse('INTERNAL_ERROR', 'An unexpected error occurred', 500);
   }
 }

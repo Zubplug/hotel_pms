@@ -30,7 +30,7 @@ export default function FrontDeskRoomsPage() {
       const params = new URLSearchParams({
         propertyId,
         page: '1',
-        pageSize: '200', // Load all for the grid
+        pageSize: '100', // API limit is 100
         ...(activeFilter !== 'ALL' && activeFilter !== 'DIRTY' && activeFilter !== 'CLEAN' ? { status: activeFilter } : {}),
         ...(activeFilter === 'DIRTY' ? { housekeepingStatus: 'DIRTY' } : {}),
         ...(activeFilter === 'CLEAN' ? { housekeepingStatus: 'CLEAN' } : {}),
