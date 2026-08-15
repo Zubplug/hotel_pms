@@ -5,6 +5,11 @@ import { useSession } from 'next-auth/react';
 import { useProperty } from '@/components/PropertyProvider';
 import { Loader2, CheckCircle2, PlayCircle, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function MyTasksMobileView() {
   const { propertyId } = useProperty();
@@ -12,6 +17,10 @@ export default function MyTasksMobileView() {
   
   const [tasks, setTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const [issueTask, setIssueTask] = useState<any>(null);
+  const [issueForm, setIssueForm] = useState({ title: '', description: '', priority: 'NORMAL' });
+  const [submittingIssue, setSubmittingIssue] = useState(false);
 
   const fetchTasks = async () => {
     if (!propertyId) return;
@@ -42,6 +51,33 @@ export default function MyTasksMobileView() {
       fetchTasks();
     } catch (err) {
       console.error('Error updating task', err);
+    }
+  };
+
+  const submitIssue = async () => {
+    if (!issueTask || !propertyId) return;
+    setSubmittingIssue(true);
+    try {
+      const res = await fetch('/api/v1/maintenance/tickets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          propertyId,
+          roomId: issueTask.roomId || null,
+          title: issueForm.title,
+          description: issueForm.description,
+          priority: issueForm.priority
+        })
+      });
+      if (res.ok) {
+        await handleStatusUpdate(issueTask.id, 'MAINTENANCE_REQUIRED');
+        setIssueTask(null);
+        setIssueForm({ title: '', description: '', priority: 'NORMAL' });
+      }
+    } catch (err) {
+      console.error('Failed to submit issue', err);
+    } finally {
+      setSubmittingIssue(false);
     }
   };
 
@@ -106,7 +142,7 @@ export default function MyTasksMobileView() {
                     <Button 
                       variant="outline" 
                       className="h-14 border-red-200 text-red-600 hover:bg-red-50"
-                      onClick={() => handleStatusUpdate(task.id, 'MAINTENANCE_REQUIRED')}
+                      onClick={() => setIssueTask(task)}
                     >
                       <AlertTriangle className="w-5 h-5 mr-2" /> Issue
                     </Button>
@@ -129,6 +165,52 @@ export default function MyTasksMobileView() {
           ))}
         </div>
       )}
+
+      <Dialog open={!!issueTask} onOpenChange={(open) => !open && setIssueTask(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Report Maintenance Issue</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Issue Title</Label>
+              <Input 
+                placeholder="e.g. Broken AC, Leaking Tap" 
+                value={issueForm.title}
+                onChange={e => setIssueForm({...issueForm, title: e.target.value})}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Severity</Label>
+              <Select value={issueForm.priority} onValueChange={val => setIssueForm({...issueForm, priority: val || 'NORMAL'})}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="LOW">Low</SelectItem>
+                  <SelectItem value="NORMAL">Normal</SelectItem>
+                  <SelectItem value="HIGH">High</SelectItem>
+                  <SelectItem value="CRITICAL">Critical (Locks Room)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Description</Label>
+              <Textarea 
+                placeholder="Details about the issue..." 
+                value={issueForm.description}
+                onChange={e => setIssueForm({...issueForm, description: e.target.value})}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIssueTask(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={submitIssue} disabled={submittingIssue || !issueForm.title}>
+              {submittingIssue ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Submit Issue'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

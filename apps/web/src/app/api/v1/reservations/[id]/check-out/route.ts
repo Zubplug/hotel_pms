@@ -75,9 +75,17 @@ export async function POST(
                 lt: new Date(businessDate.getTime() + 86400000)
               },
               reservation: { status: 'CONFIRMED' }
-            }
+            },
+            include: { reservation: { include: { priorities: true } } }
           });
-          const priority = nextReservation ? 'HIGH' : 'NORMAL';
+          
+          let priority = 'NORMAL';
+          if (nextReservation) {
+            priority = 'HIGH';
+            if (nextReservation.reservation.priorities?.some(p => p.type === 'VIP' || p.type === 'MANAGEMENT')) {
+              priority = 'CRITICAL';
+            }
+          }
 
           await tx.room.update({
             where: { id: rr.room.id },

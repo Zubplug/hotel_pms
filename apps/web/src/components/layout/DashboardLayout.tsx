@@ -21,6 +21,7 @@ import {
   FileText,
   MoonStar,
   Brush,
+  Wrench,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -40,6 +41,7 @@ const navigation = [
   { name: 'Amenities', href: '/amenities', icon: Star },
   { name: 'Reservations', href: '/reservations', icon: CalendarDays },
   { name: 'Housekeeping', href: '/housekeeping', icon: Brush },
+  { name: 'Maintenance', href: '/maintenance', icon: Wrench },
   { name: 'Night Audit', href: '/night-audit', icon: MoonStar },
   { name: 'Staff', href: '/staff', icon: Users },
   { 
@@ -49,7 +51,10 @@ const navigation = [
     children: [
       { name: 'Shift / Cashier', href: '/reports/shift' },
       { name: 'Receivables', href: '/reports/receivables' },
-      { name: 'Gateway Reconciliation', href: '/reports/gateway' },
+      { name: 'Gateway', href: '/reports/gateway' },
+      { name: 'Housekeeping', href: '/reports/housekeeping' },
+      { name: 'Maintenance', href: '/reports/maintenance' },
+      { name: 'Room Status', href: '/reports/room-status' },
     ]
   },
   { name: 'Settings', href: '/settings', icon: Settings },

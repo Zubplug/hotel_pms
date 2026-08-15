@@ -83,6 +83,7 @@ export async function POST(req: NextRequest) {
         checkOut: { gt: nextBusinessDate }
       },
       include: {
+        priorities: true,
         reservationRooms: {
           include: { room: true }
         }
@@ -115,6 +116,18 @@ export async function POST(req: NextRequest) {
                 return; // Idempotent skip
               }
 
+              let taskPriority = 'NORMAL';
+              if (reservation.priorities && reservation.priorities.length > 0) {
+                for (const p of reservation.priorities) {
+                  if (p.type === 'VIP' || p.type === 'MANAGEMENT') {
+                    taskPriority = 'CRITICAL';
+                    break;
+                  } else if (p.type === 'BACK_TO_BACK') {
+                    if (taskPriority !== 'CRITICAL') taskPriority = 'HIGH';
+                  }
+                }
+              }
+
               // Create the task
               const task = await tx.housekeepingTask.create({
                 data: {
@@ -122,7 +135,7 @@ export async function POST(req: NextRequest) {
                   propertyId,
                   roomId: room.id,
                   type: 'STAYOVER',
-                  priority: 'NORMAL',
+                  priority: taskPriority,
                   status: 'PENDING',
                   businessDate: nextBusinessDate,
                   notes: 'Auto-generated via Night Audit'
