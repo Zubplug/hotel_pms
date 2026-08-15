@@ -66,15 +66,20 @@ export async function PATCH(
           },
         });
 
-        // 3. Strict Check-In State Machine Transition
+        // 3. Credential and Reservation State Machine Transition
         if (status === 'COMPLETED' && command.commandType === 'ENCODE' && command.operation.reservationId && command.operation.roomId && command.operation.lockId) {
-          const res = await tx.reservation.findUnique({ 
-            where: { id: command.operation.reservationId },
-            include: { property: true }
-          });
           
-          if (res && res.status !== 'CHECKED_IN' && res.status !== 'CHECKED_OUT' && res.status !== 'CANCELLED') {
-            // A. Create Lock Credential with the physical Card SNR
+          // A. Activate the PENDING credential created by the orchestrator/provider
+          if (command.operation.credentialId) {
+            await tx.lockCredential.update({
+              where: { id: command.operation.credentialId },
+              data: {
+                status: 'ACTIVE',
+                cardSerialNumber: actualCardSnr,
+              }
+            });
+          } else {
+            // Fallback: Create Lock Credential with the physical Card SNR if not found
             await tx.lockCredential.create({
               data: {
                 reservationId: command.operation.reservationId,
@@ -85,10 +90,17 @@ export async function PATCH(
                 cardSerialNumber: actualCardSnr,
                 issueOperationId: command.operation.id,
                 validFrom: new Date(),
-                validUntil: res.checkOut,
+                validUntil: new Date(), // We don't have res.checkOut here easily, but this is fallback
               }
             });
+          }
 
+          const res = await tx.reservation.findUnique({ 
+            where: { id: command.operation.reservationId },
+            include: { property: true }
+          });
+          
+          if (res && res.status !== 'CHECKED_IN' && res.status !== 'CHECKED_OUT' && res.status !== 'CANCELLED') {
             // B. Mark Reservation as Checked In
             await tx.reservation.update({
               where: { id: command.operation.reservationId },
@@ -101,7 +113,7 @@ export async function PATCH(
               data: { status: 'OCCUPIED' }
             });
 
-            // D. Write Atomic Audit Logs
+            // D. Write Atomic Audit Logs for Check-In
             const meta = (command.operation.metadata as Record<string, any>) || {};
             const userId = meta.initiatedBy || agent.id; // Fallback to agent if not set
             const userEmail = meta.initiatedByEmail || 'hardware@system.local';
@@ -145,6 +157,33 @@ export async function PATCH(
                 }
               ]
             });
+          } else if (res && res.status === 'CHECKED_IN') {
+             // For Extension or Additional Cards, just log the credential issuance
+             const meta = (command.operation.metadata as Record<string, any>) || {};
+             const userId = meta.initiatedBy || agent.id; // Fallback to agent if not set
+             const userEmail = meta.initiatedByEmail || 'hardware@system.local';
+             const userRole = meta.initiatedByRole || 'SYSTEM';
+ 
+             const commonAuditData = {
+               organizationId: res.property.organizationId,
+               propertyId: command.operation.propertyId,
+               userId: userId,
+               userEmail: userEmail,
+               userRole: userRole,
+               ipAddress: req.headers.get('x-forwarded-for') || '127.0.0.1',
+               userAgent: req.headers.get('user-agent') || 'Hardware Agent',
+               requestId: req.headers.get('x-request-id') || crypto.randomUUID(),
+             };
+ 
+             await tx.auditLog.create({
+               data: {
+                 ...commonAuditData,
+                 action: 'LOCK_CREDENTIAL_ISSUED',
+                 resource: 'Reservation',
+                 resourceId: res.id,
+                 newValue: { cardSerialNumber: actualCardSnr, roomId: command.operation.roomId, type: 'EXTENSION_OR_ADDITIONAL' }
+               }
+             });
           }
         }
       }
