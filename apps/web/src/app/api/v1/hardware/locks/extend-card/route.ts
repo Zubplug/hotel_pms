@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
       include: { command: true }
     });
 
-    if (!readOp || readOp.status !== 'SUCCESS' || !readOp.command?.responseData) {
+    if (!readOp || (readOp.status !== 'SUCCESS' && readOp.status !== 'COMPLETED') || !readOp.command?.responseData) {
       return errorResponse('BAD_REQUEST', 'Invalid or incomplete read operation provided', 400);
     }
 
