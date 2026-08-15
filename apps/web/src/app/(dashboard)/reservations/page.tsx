@@ -12,8 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { LoadingState, EmptyState } from '@/components/ui/EmptyState';
 import { ReadCardCheckoutDialog } from '@/components/reservations/ReadCardCheckoutDialog';
-import { useProperty } from '@/components/properties/PropertyContext';
-
+import { useProperty } from '@/components/PropertyProvider';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Reservation {
