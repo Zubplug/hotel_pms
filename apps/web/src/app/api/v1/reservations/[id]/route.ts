@@ -303,7 +303,6 @@ export async function PATCH(
         });
       }
 
-      const oldTotalAmount = (existingReservation.ratePlanSnapshot as any)?.total || 0;
       if (Number(newTotalAmount) !== Number(oldTotalAmount)) {
         auditEvents.push({
           ...commonAuditData,
