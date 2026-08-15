@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
-import { PlusCircle, Wallet, ArrowRightLeft, CornerDownRight } from 'lucide-react';
+import { PlusCircle, Wallet, ArrowRightLeft, CornerDownRight, Printer } from 'lucide-react';
 import { AddPaymentDialog } from './AddPaymentDialog';
 import { RefundDialog } from './RefundDialog';
 import { CheckOutDialog } from './CheckOutDialog';
@@ -133,7 +133,17 @@ export function FolioSection({ reservation }: { reservation: any }) {
                         <td className="px-6 py-3 text-right tabular-nums text-emerald-600 font-medium">
                           {isCredit ? formatCurrency(absAmount) : '-'}
                         </td>
-                        <td className="px-6 py-3 text-center">
+                        <td className="px-6 py-3 text-center flex justify-end gap-2">
+                          {linkedPayment && (linkedPayment.status === 'COMPLETED' || linkedPayment.status === 'REFUNDED') && (
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="h-7 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                              onClick={() => window.open(`/payments/${linkedPayment.id}/receipt`, '_blank')}
+                            >
+                              <Printer className="w-3 h-3 mr-1" /> Receipt
+                            </Button>
+                          )}
                           {linkedPayment && linkedPayment.status === 'COMPLETED' && !isClosed && (
                             <Button 
                               variant="ghost" 
