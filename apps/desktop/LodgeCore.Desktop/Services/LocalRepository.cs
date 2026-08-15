@@ -193,6 +193,48 @@ public class LocalRepository
             UserId = userId,
             DeviceId = deviceId
         });
+        
+        // Also auto-generate a cleaning task upon checkout
+        var cleaningTask = new LocalHousekeepingTask
+        {
+            RoomId = res.RoomId ?? "",
+            RoomNumber = res.RoomNumber ?? "",
+            TaskType = "CLEANING",
+            Status = "PENDING"
+        };
+        _dbContext.HousekeepingTasks.Add(cleaningTask);
+        
+        _dbContext.SyncEvents.Add(new LocalSyncEvent
+        {
+            EntityType = "HOUSEKEEPING_TASK",
+            EntityId = cleaningTask.Id,
+            OperationType = "CREATE",
+            PayloadJson = JsonSerializer.Serialize(cleaningTask),
+            UserId = userId,
+            DeviceId = deviceId
+        });
+
+        await _dbContext.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> UpdateHousekeepingTaskStatusAsync(string taskId, string status, string userId, string deviceId)
+    {
+        var task = await _dbContext.HousekeepingTasks.FindAsync(taskId);
+        if (task == null) return false;
+
+        task.Status = status;
+        task.UpdatedAt = DateTime.UtcNow;
+
+        _dbContext.SyncEvents.Add(new LocalSyncEvent
+        {
+            EntityType = "HOUSEKEEPING_TASK",
+            EntityId = taskId,
+            OperationType = "UPDATE_STATUS",
+            PayloadJson = JsonSerializer.Serialize(new { status }),
+            UserId = userId,
+            DeviceId = deviceId
+        });
 
         await _dbContext.SaveChangesAsync();
         return true;
