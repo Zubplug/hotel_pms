@@ -1,0 +1,71 @@
+using System.Text.Json;
+using LodgeCore.Desktop.Services;
+using Microsoft.JSInterop;
+
+namespace LodgeCore.Desktop;
+
+public class OfflinePMSInterop
+{
+    private readonly LocalRepository _repo;
+
+    public OfflinePMSInterop(LocalRepository repo)
+    {
+        _repo = repo;
+    }
+
+    [JSInvokable]
+    public async Task<string> GetActiveReservationsAsync()
+    {
+        try
+        {
+            var res = await _repo.GetActiveReservationsAsync();
+            return JsonSerializer.Serialize(new { success = true, data = res });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    [JSInvokable]
+    public async Task<string> AssignRoomAsync(string reservationId, string roomId, string roomNumber, string userId, string deviceId)
+    {
+        try
+        {
+            var success = await _repo.AssignRoomAsync(reservationId, roomId, roomNumber, userId, deviceId);
+            return JsonSerializer.Serialize(new { success });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    [JSInvokable]
+    public async Task<string> CancelReservationAsync(string reservationId, string userId, string deviceId)
+    {
+        try
+        {
+            var success = await _repo.CancelReservationAsync(reservationId, userId, deviceId);
+            return JsonSerializer.Serialize(new { success });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    [JSInvokable]
+    public async Task<string> CheckAvailabilityAsync(string roomNumber, DateTime checkIn, DateTime checkOut)
+    {
+        try
+        {
+            var isAvailable = await _repo.IsRoomAvailableAsync(roomNumber, checkIn, checkOut);
+            return JsonSerializer.Serialize(new { success = true, isAvailable });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+}

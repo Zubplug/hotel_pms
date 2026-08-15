@@ -49,6 +49,62 @@ public class LocalRepository
             .ToListAsync();
     }
     
+    public async Task<bool> AssignRoomAsync(string reservationId, string roomId, string roomNumber, string userId, string deviceId)
+    {
+        var res = await _dbContext.Reservations.FindAsync(reservationId);
+        if (res == null) return false;
+
+        res.RoomId = roomId;
+        res.RoomNumber = roomNumber;
+        res.UpdatedAt = DateTime.UtcNow;
+
+        _dbContext.SyncEvents.Add(new LocalSyncEvent
+        {
+            EntityType = "RESERVATION",
+            EntityId = reservationId,
+            OperationType = "ASSIGN_ROOM",
+            PayloadJson = JsonSerializer.Serialize(new { roomId, roomNumber }),
+            UserId = userId,
+            DeviceId = deviceId
+        });
+
+        await _dbContext.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> CancelReservationAsync(string reservationId, string userId, string deviceId)
+    {
+        var res = await _dbContext.Reservations.FindAsync(reservationId);
+        if (res == null) return false;
+
+        res.Status = "CANCELLED";
+        res.UpdatedAt = DateTime.UtcNow;
+
+        _dbContext.SyncEvents.Add(new LocalSyncEvent
+        {
+            EntityType = "RESERVATION",
+            EntityId = reservationId,
+            OperationType = "CANCEL",
+            PayloadJson = JsonSerializer.Serialize(new { status = "CANCELLED" }),
+            UserId = userId,
+            DeviceId = deviceId
+        });
+
+        await _dbContext.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> IsRoomAvailableAsync(string roomNumber, DateTime checkIn, DateTime checkOut)
+    {
+        // Simple overlap check
+        var overlapping = await _dbContext.Reservations
+            .Where(r => r.RoomNumber == roomNumber && r.Status != "CANCELLED")
+            .Where(r => r.CheckInDate < checkOut && r.CheckOutDate > checkIn)
+            .AnyAsync();
+
+        return !overlapping;
+    }
+
     public async Task EnsureDatabaseCreatedAsync()
     {
         await _dbContext.Database.EnsureCreatedAsync();
