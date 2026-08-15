@@ -217,7 +217,7 @@ export async function PATCH(
           newCheckInDate.getTime() !== existingReservation.reservationRooms[0]?.checkIn.getTime() || 
           newCheckOutDate.getTime() !== existingReservation.reservationRooms[0]?.checkOut.getTime()) {
         
-        const folio = await tx.folio.findFirst({ where: { reservationId: id, type: 'GUEST' } });
+        const folio = await tx.folio.findFirst({ where: { reservationId: id, type: 'ROOM' } });
         if (folio) {
           // Delete old expected room charges
           await tx.folioItem.deleteMany({
