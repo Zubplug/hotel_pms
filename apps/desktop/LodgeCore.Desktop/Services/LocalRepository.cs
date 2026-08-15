@@ -149,6 +149,55 @@ public class LocalRepository
         return true;
     }
 
+    public async Task<bool> ProcessCheckInAsync(string reservationId, string userId, string deviceId)
+    {
+        var res = await _dbContext.Reservations.FindAsync(reservationId);
+        if (res == null || res.Status != "PENDING") return false;
+
+        res.Status = "CHECKED_IN";
+        res.UpdatedAt = DateTime.UtcNow;
+
+        _dbContext.SyncEvents.Add(new LocalSyncEvent
+        {
+            EntityType = "RESERVATION",
+            EntityId = reservationId,
+            OperationType = "CHECK_IN",
+            PayloadJson = JsonSerializer.Serialize(new { status = "CHECKED_IN" }),
+            UserId = userId,
+            DeviceId = deviceId
+        });
+
+        await _dbContext.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> ProcessCheckOutAsync(string reservationId, string userId, string deviceId)
+    {
+        var res = await _dbContext.Reservations.Include(r => r.Folio).FirstOrDefaultAsync(r => r.Id == reservationId);
+        if (res == null || res.Status != "CHECKED_IN") return false;
+
+        if (res.Folio != null && res.Folio.OutstandingBalance > 0)
+        {
+            throw new InvalidOperationException("Cannot check out with an outstanding balance.");
+        }
+
+        res.Status = "CHECKED_OUT";
+        res.UpdatedAt = DateTime.UtcNow;
+
+        _dbContext.SyncEvents.Add(new LocalSyncEvent
+        {
+            EntityType = "RESERVATION",
+            EntityId = reservationId,
+            OperationType = "CHECK_OUT",
+            PayloadJson = JsonSerializer.Serialize(new { status = "CHECKED_OUT" }),
+            UserId = userId,
+            DeviceId = deviceId
+        });
+
+        await _dbContext.SaveChangesAsync();
+        return true;
+    }
+
     public async Task EnsureDatabaseCreatedAsync()
     {
         await _dbContext.Database.EnsureCreatedAsync();

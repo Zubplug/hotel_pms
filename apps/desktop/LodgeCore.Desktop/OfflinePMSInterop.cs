@@ -96,4 +96,32 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message });
         }
     }
+
+    [JSInvokable]
+    public async Task<string> ProcessCheckInAsync(string reservationId, string userId, string deviceId)
+    {
+        try
+        {
+            var success = await _repo.ProcessCheckInAsync(reservationId, userId, deviceId);
+            return JsonSerializer.Serialize(new { success });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    [JSInvokable]
+    public async Task<string> ProcessCheckOutAsync(string reservationId, string userId, string deviceId)
+    {
+        try
+        {
+            var success = await _repo.ProcessCheckOutAsync(reservationId, userId, deviceId);
+            return JsonSerializer.Serialize(new { success });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
 }
