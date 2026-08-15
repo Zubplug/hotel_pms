@@ -211,6 +211,43 @@ export async function PATCH(
         }
       });
 
+      // 3. Update Folio Ledger
+      const oldTotalAmount = (existingReservation.ratePlanSnapshot as any)?.total || 0;
+      if (Number(newTotalAmount) !== Number(oldTotalAmount) || 
+          newCheckInDate.getTime() !== existingReservation.reservationRooms[0]?.checkIn.getTime() || 
+          newCheckOutDate.getTime() !== existingReservation.reservationRooms[0]?.checkOut.getTime()) {
+        
+        const folio = await tx.folio.findFirst({ where: { reservationId: id, type: 'GUEST' } });
+        if (folio) {
+          // Delete old expected room charges
+          await tx.folioItem.deleteMany({
+            where: { folioId: folio.id, source: 'ROOM_CHARGE' }
+          });
+
+          // Recreate new room charges
+          const nights = Math.max(1, Math.ceil((newCheckOutDate.getTime() - newCheckInDate.getTime()) / (1000 * 60 * 60 * 24)));
+          const folioItems: any[] = [];
+          let currentDate = new Date(newCheckInDate);
+          for (let i = 0; i < nights; i++) {
+            folioItems.push({
+              folioId: folio.id,
+              businessDate: new Date(currentDate),
+              type: 'CHARGE',
+              source: 'ROOM_CHARGE',
+              description: `Room Charge - Night ${i + 1}`,
+              quantity: 1,
+              unitAmount: newRateAmount,
+              amount: newRateAmount,
+              currency: existingReservation.currency || 'NGN',
+              baseAmount: newRateAmount,
+              postedBy: session.user.id as string,
+            });
+            currentDate.setDate(currentDate.getDate() + 1);
+          }
+          await tx.folioItem.createMany({ data: folioItems });
+        }
+      }
+
       // Determine audit events inside transaction
       const organizationId = existingReservation.property.organizationId;
       const propertyId = existingReservation.propertyId;
