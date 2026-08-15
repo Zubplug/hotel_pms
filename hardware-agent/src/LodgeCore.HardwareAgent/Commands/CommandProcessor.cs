@@ -41,30 +41,40 @@ public class CommandProcessor
     {
         _logger.LogInformation("Processing command {CommandId} of type {Type}", cmd.Id, cmd.CommandType);
 
-        // Security check 1: Target property must match our registered property
+        // Security check: Target property must match our registered property
         if (cmd.PropertyId != _settings.PropertyId)
         {
-            _logger.LogWarning("Rejecting command {CommandId} because PropertyId {PropId} does not match our agent.", cmd.Id, cmd.PropertyId);
+            _logger.LogWarning("Rejecting command {CommandId}: PropertyId {PropId} does not match agent.", cmd.Id, cmd.PropertyId);
             await _apiClient.UpdateCommandStatusAsync(cmd.Id, "FAILED", "PROPERTY_MISMATCH", "Agent is not authorized for this property");
             return;
         }
 
         try
         {
-            // Update UI to show we claimed it
             await _apiClient.UpdateCommandStatusAsync(cmd.Id, "CLAIMED");
 
             switch (cmd.CommandType)
             {
                 case "ENCODE_CARD":
+                case "ENCODE":
                     await ProcessEncodeCardAsync(cmd, cancellationToken);
                     break;
+
+                case "READ_CARD":
+                    await ProcessReadCardAsync(cmd, cancellationToken);
+                    break;
+
+                case "CANCEL_CARD":
+                    await ProcessCancelCardAsync(cmd, cancellationToken);
+                    break;
+
                 case "READ_DIAGNOSTIC":
                     await ProcessReadDiagnosticAsync(cmd, cancellationToken);
                     break;
+
                 default:
                     _logger.LogWarning("Unknown command type: {Type}", cmd.CommandType);
-                    await _apiClient.UpdateCommandStatusAsync(cmd.Id, "FAILED", "UNKNOWN_COMMAND", "Command type not supported");
+                    await _apiClient.UpdateCommandStatusAsync(cmd.Id, "FAILED", "UNKNOWN_COMMAND", $"Unknown command type: {cmd.CommandType}");
                     break;
             }
         }
@@ -75,18 +85,21 @@ public class CommandProcessor
         }
     }
 
+    /// <summary>
+    /// ENCODE_CARD: Wait for card, then write room + date payload.
+    /// </summary>
     private async Task ProcessEncodeCardAsync(LockCommand cmd, CancellationToken cancellationToken)
     {
-        // Extract payload
-        var lockCode = cmd.Payload.GetProperty("lockCode").GetString() ?? "";
-        
+        var lockCode = cmd.Payload.GetProperty("roomNo").GetString() 
+            ?? cmd.Payload.GetProperty("lockCode").GetString() 
+            ?? "";
+
         await _apiClient.UpdateCommandStatusAsync(cmd.Id, "WAITING_FOR_CARD");
         
-        // Wait for physical card detection
         bool cardDetected = await _lockProvider.WaitForCardAsync(TimeSpan.FromSeconds(30), cancellationToken);
         if (!cardDetected)
         {
-            await _apiClient.UpdateCommandStatusAsync(cmd.Id, "FAILED", "TIMEOUT", "No card detected on the encoder");
+            await _apiClient.UpdateCommandStatusAsync(cmd.Id, "FAILED", "TIMEOUT", "No card detected on the encoder within 30 seconds");
             return;
         }
 
@@ -97,7 +110,7 @@ public class CommandProcessor
         if (result.Success)
         {
             await _apiClient.UpdateCommandStatusAsync(cmd.Id, "VERIFYING");
-            await Task.Delay(200, cancellationToken); // simulated verify
+            await Task.Delay(200, cancellationToken);
             await _apiClient.UpdateCommandStatusAsync(cmd.Id, "COMPLETED");
         }
         else
@@ -106,6 +119,78 @@ public class CommandProcessor
         }
     }
 
+    /// <summary>
+    /// READ_CARD: Wait for a card, read its data, and post the results back to the PMS.
+    /// The PMS uses this to confirm a card is blank before encoding (safety check).
+    /// </summary>
+    private async Task ProcessReadCardAsync(LockCommand cmd, CancellationToken cancellationToken)
+    {
+        await _apiClient.UpdateCommandStatusAsync(cmd.Id, "WAITING_FOR_CARD");
+
+        bool cardDetected = await _lockProvider.WaitForCardAsync(TimeSpan.FromSeconds(30), cancellationToken);
+        if (!cardDetected)
+        {
+            await _apiClient.UpdateCommandStatusAsync(cmd.Id, "FAILED", "TIMEOUT", "No card detected on the encoder within 30 seconds");
+            return;
+        }
+
+        await _apiClient.UpdateCommandStatusAsync(cmd.Id, "CARD_DETECTED");
+
+        var result = await _lockProvider.ReadCardAsync(cancellationToken);
+
+        if (!result.Success)
+        {
+            await _apiClient.UpdateCommandStatusAsync(cmd.Id, "FAILED", result.ErrorCode, result.ErrorMessage);
+            return;
+        }
+
+        // Post the structured card data back to the PMS as responseData
+        var responsePayload = new
+        {
+            isBlank  = result.IsBlank,
+            roomNo   = result.RoomNo,
+            cardSnr  = result.CardSnr,
+            validFrom = result.ValidFrom,
+            validTo  = result.ValidTo,
+        };
+
+        _logger.LogInformation(
+            "READ_CARD result: isBlank={IsBlank}, roomNo={Room}, snr={Snr}",
+            result.IsBlank, result.RoomNo, result.CardSnr);
+
+        await _apiClient.UpdateCommandWithResponseAsync(cmd.Id, responsePayload);
+    }
+
+    /// <summary>
+    /// CANCEL_CARD: Erases the card by writing an all-zero / past-date payload.
+    /// </summary>
+    private async Task ProcessCancelCardAsync(LockCommand cmd, CancellationToken cancellationToken)
+    {
+        await _apiClient.UpdateCommandStatusAsync(cmd.Id, "WAITING_FOR_CARD");
+
+        bool cardDetected = await _lockProvider.WaitForCardAsync(TimeSpan.FromSeconds(30), cancellationToken);
+        if (!cardDetected)
+        {
+            await _apiClient.UpdateCommandStatusAsync(cmd.Id, "FAILED", "TIMEOUT", "No card detected for cancel/erase");
+            return;
+        }
+
+        await _apiClient.UpdateCommandStatusAsync(cmd.Id, "CARD_DETECTED");
+
+        var result = await _lockProvider.CancelCardAsync(cancellationToken);
+        if (result.Success)
+        {
+            await _apiClient.UpdateCommandStatusAsync(cmd.Id, "COMPLETED");
+        }
+        else
+        {
+            await _apiClient.UpdateCommandStatusAsync(cmd.Id, "FAILED", result.ErrorCode, result.ErrorMessage);
+        }
+    }
+
+    /// <summary>
+    /// READ_DIAGNOSTIC: Raw card read for diagnostics/debugging.
+    /// </summary>
     private async Task ProcessReadDiagnosticAsync(LockCommand cmd, CancellationToken cancellationToken)
     {
         await _apiClient.UpdateCommandStatusAsync(cmd.Id, "WAITING_FOR_CARD");
@@ -122,9 +207,7 @@ public class CommandProcessor
         var result = await _lockProvider.ReadDiagnosticAsync(cancellationToken);
         if (result.Success)
         {
-            // Update the command with the diagnostic output in a generic metadata field if the API supported it
-            // For now, we put the diagnostic result in the error message for visibility, or if we had a dedicated field.
-            await _apiClient.UpdateCommandStatusAsync(cmd.Id, "COMPLETED", "DIAGNOSTIC_DATA", result.RawDataHex);
+            await _apiClient.UpdateCommandWithResponseAsync(cmd.Id, new { rawHex = result.RawDataHex, discoveredCoID = result.DiscoveredCoID });
         }
         else
         {
