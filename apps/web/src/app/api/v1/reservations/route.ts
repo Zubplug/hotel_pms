@@ -144,7 +144,7 @@ export async function POST(req: NextRequest) {
           ratePlanId: (await tx.ratePlan.findFirst({ where: { propertyId } }))?.id || '',
           ratePlanSnapshot: { baseRate, total: totalAmount, currency },
           currency: currency,
-          createdBy: session.user.staffId as string,
+          createdBy: (session.user.staffId || session.user.id) as string,
         },
       });
 
