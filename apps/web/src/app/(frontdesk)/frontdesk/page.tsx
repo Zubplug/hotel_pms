@@ -9,6 +9,7 @@ import { useProperty } from '@/components/PropertyProvider';
 import { FrontDeskCheckInDialog } from '@/components/frontdesk/FrontDeskCheckInDialog';
 import { CheckOutDialog } from '@/components/reservations/CheckOutDialog';
 import { FrontDeskQuickCheckoutDialog } from '@/components/frontdesk/FrontDeskQuickCheckoutDialog';
+import { ReadCardInfoDialog } from '@/components/hardware/ReadCardInfoDialog';
 import { LoadingState } from '@/components/ui/EmptyState';
 import { 
   UserPlus, 
@@ -37,6 +38,7 @@ export default function ReceptionistDashboardPage() {
   const [checkInReservationId, setCheckInReservationId] = useState<string | null>(null);
   const [checkOutReservation, setCheckOutReservation] = useState<any | null>(null);
   const [quickCheckoutOpen, setQuickCheckoutOpen] = useState(false);
+  const [readCardOpen, setReadCardOpen] = useState(false);
 
   const { data: res, isLoading } = useQuery({
     queryKey: ['frontdesk', 'dashboard', propertyId],
@@ -107,22 +109,27 @@ export default function ReceptionistDashboardPage() {
           </div>
           
           {/* Command Center - Floating Action Bar */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
               <Button onClick={() => router.push('/frontdesk/reservations/walk-in')} className="h-20 md:h-32 rounded-3xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all flex flex-col gap-2 relative overflow-hidden group">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full -mr-10 -mt-10 transform group-hover:scale-110 transition-transform"></div>
-                <UserPlus className="w-8 h-8" />
-                <span className="font-bold text-lg md:text-xl">Walk-In</span>
+                <UserPlus className="w-6 h-6 md:w-8 md:h-8" />
+                <span className="font-bold text-sm md:text-xl">Walk-In</span>
               </Button>
 
               <Button onClick={() => router.push('/frontdesk/reservations/new')} className="h-20 md:h-32 rounded-3xl bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all flex flex-col gap-2 relative overflow-hidden group">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full -mr-10 -mt-10 transform group-hover:scale-110 transition-transform"></div>
-                <CalendarPlus className="w-8 h-8" />
-                <span className="font-bold text-lg md:text-xl">New Reservation</span>
+                <CalendarPlus className="w-6 h-6 md:w-8 md:h-8" />
+                <span className="font-bold text-sm md:text-xl">New Res</span>
               </Button>
 
               <Button onClick={() => router.push('/frontdesk/reservations')} variant="outline" className="h-20 md:h-32 rounded-3xl bg-white/80 hover:bg-white text-slate-700 border-white/50 shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all flex flex-col gap-2 group">
-                <Search className="w-8 h-8 text-blue-600 group-hover:scale-110 transition-transform" />
-                <span className="font-bold text-lg md:text-xl">Search Guest</span>
+                <Search className="w-6 h-6 md:w-8 md:h-8 text-blue-600 group-hover:scale-110 transition-transform" />
+                <span className="font-bold text-sm md:text-xl">Search</span>
+              </Button>
+
+              <Button onClick={() => setReadCardOpen(true)} variant="outline" className="h-20 md:h-32 rounded-3xl bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border-indigo-100 shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all flex flex-col gap-2 group">
+                <CreditCard className="w-6 h-6 md:w-8 md:h-8 text-indigo-600 group-hover:scale-110 transition-transform" />
+                <span className="font-bold text-sm md:text-xl">Read Card</span>
               </Button>
             </div>
         </div>
@@ -360,6 +367,12 @@ export default function ReceptionistDashboardPage() {
       <FrontDeskQuickCheckoutDialog 
         open={quickCheckoutOpen}
         onOpenChange={setQuickCheckoutOpen}
+        propertyId={propertyId}
+      />
+
+      <ReadCardInfoDialog
+        open={readCardOpen}
+        onOpenChange={setReadCardOpen}
         propertyId={propertyId}
       />
     </div>
