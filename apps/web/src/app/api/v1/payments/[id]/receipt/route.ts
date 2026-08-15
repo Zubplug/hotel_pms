@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
@@ -10,15 +10,20 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
 
     const { id } = await params;
+    if (!id) return errorResponse('BAD_REQUEST', 'Payment ID required', 400);
 
     const payment = await prisma.payment.findUnique({
       where: { id },
       include: {
         property: true,
-        folio: true,
-        reservation: {
+        folio: {
           include: {
-            primaryGuest: true
+            reservation: {
+              include: {
+                guest: true,
+                room: true
+              }
+            }
           }
         }
       }
@@ -28,32 +33,43 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       return errorResponse('NOT_FOUND', 'Payment not found', 404);
     }
 
+    // Authorization: User must have access to this property
     const allowedPropertyIds = await getUserPropertyIds(session.user.id);
     if (!allowedPropertyIds.includes(payment.propertyId)) {
       return errorResponse('FORBIDDEN', 'No access to this property', 403);
     }
 
+    // Must be COMPLETED to get a valid receipt
+    if (payment.status !== 'COMPLETED' && payment.status !== 'REFUNDED') {
+      return errorResponse('BAD_REQUEST', 'Cannot generate a receipt for an incomplete payment', 400);
+    }
+
     // Assemble the definitive, server-calculated receipt
     const receiptData = {
-      receiptId: `RCPT-${payment.id.split('-')[0].toUpperCase()}`,
+      receiptId: payment.receiptNumber || `RCPT-${payment.id.split('-')[0].toUpperCase()}`,
       property: {
         name: payment.property.name,
         address: payment.property.address || 'Address on file',
         city: payment.property.city,
+        country: payment.property.country,
         email: payment.property.email,
         phone: payment.property.phone
       },
-      guest: payment.reservation?.primaryGuest ? {
-        name: `${payment.reservation.primaryGuest.firstName} ${payment.reservation.primaryGuest.lastName}`,
-        email: payment.reservation.primaryGuest.email,
+      guest: payment.folio.reservation?.guest ? {
+        name: `${payment.folio.reservation.guest.firstName} ${payment.folio.reservation.guest.lastName}`,
+        email: payment.folio.reservation.guest.email,
       } : null,
-      reservation: payment.reservation ? {
-        confirmationNumber: payment.reservation.confirmationNumber,
-        checkIn: payment.reservation.checkIn,
-        checkOut: payment.reservation.checkOut,
+      reservation: payment.folio.reservation ? {
+        confirmationNumber: payment.folio.reservation.id.split('-')[0].toUpperCase(), // assuming no explicit confirmationNumber field
+        roomNumber: payment.folio.reservation.room?.number || 'Unassigned',
+        checkIn: payment.folio.reservation.checkIn,
+        checkOut: payment.folio.reservation.checkOut,
       } : null,
       folio: {
-        folioNumber: payment.folio.folioNumber,
+        id: payment.folio.id,
+        totalCharges: Number(payment.folio.totalCharges),
+        totalPayments: Number(payment.folio.totalPayments),
+        balance: Number(payment.folio.balance),
       },
       payment: {
         id: payment.id,

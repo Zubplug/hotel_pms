@@ -100,6 +100,11 @@ export async function POST(req: NextRequest) {
         }
       });
 
+      // Generate Receipt Number: RCPT-YYYY-XXXXXX
+      const year = new Date().getFullYear();
+      const randomPart = globalThis.crypto.randomUUID().split('-')[0].toUpperCase().slice(0, 6);
+      const receiptNumber = `RCPT-${year}-${randomPart}`;
+
       // C. Create the actual Payment record
       const payment = await tx.payment.create({
         data: {
@@ -112,6 +117,7 @@ export async function POST(req: NextRequest) {
           baseAmount: numericAmount,
           status: 'COMPLETED',
           idempotencyKey,
+          receiptNumber,
           receivedBy: session.user.id,
           notes
         }

@@ -746,6 +746,7 @@ model Payment {
 
   status         String // 'PENDING' | 'COMPLETED' | 'FAILED' | 'REFUNDED'
   idempotencyKey String? @unique
+  receiptNumber  String? @unique
 
   receivedBy String  @db.Uuid // Staff ID
   notes      String?

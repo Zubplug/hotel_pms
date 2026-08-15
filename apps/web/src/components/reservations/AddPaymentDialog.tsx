@@ -16,6 +16,7 @@ export function AddPaymentDialog({ open, onOpenChange, folio }: { open: boolean,
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successPaymentId, setSuccessPaymentId] = useState<string | null>(null);
   
   const queryClient = useQueryClient();
 
@@ -67,9 +68,8 @@ export function AddPaymentDialog({ open, onOpenChange, folio }: { open: boolean,
 
       // Success for manual payment
       await queryClient.invalidateQueries({ queryKey: ['reservation', folio.reservationId] });
-      onOpenChange(false);
-      setMethod('CASH');
-      setNotes('');
+      setSuccessPaymentId(data.data.payment.id);
+      // We do not close the dialog automatically.
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -143,6 +143,26 @@ export function AddPaymentDialog({ open, onOpenChange, folio }: { open: boolean,
             </Button>
           </div>
         </form>
+
+        {successPaymentId && (
+          <div className="absolute inset-0 bg-background flex flex-col items-center justify-center p-6 text-center space-y-4 rounded-lg z-50">
+            <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+              <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+            </div>
+            <h3 className="text-xl font-semibold">Payment Successful</h3>
+            <p className="text-muted-foreground text-sm">
+              The payment of {folio?.currency} {amount} has been successfully recorded.
+            </p>
+            <div className="flex flex-col gap-2 w-full pt-4">
+              <Button onClick={() => window.open(`/payments/${successPaymentId}/receipt`, '_blank')} variant="default" className="w-full">
+                View / Print Receipt
+              </Button>
+              <Button onClick={() => { setSuccessPaymentId(null); onOpenChange(false); setMethod('CASH'); setAmount(''); setNotes(''); }} variant="outline" className="w-full">
+                Done
+              </Button>
+            </div>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
