@@ -29,7 +29,7 @@ public static class MauiProgram
         
         // Register Local Services & Sync Engine
         builder.Services.AddTransient<LodgeCore.Desktop.Services.LocalRepository>();
-        builder.Services.AddSingleton<LodgeCore.Desktop.Services.SyncEngine>();
+        builder.Services.AddHostedService<LodgeCore.Desktop.Services.SyncEngine>();
         builder.Services.AddSingleton<OfflinePMSInterop>();
 
 #if DEBUG
