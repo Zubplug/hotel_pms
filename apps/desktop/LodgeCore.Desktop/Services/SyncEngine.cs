@@ -40,6 +40,14 @@ public class SyncEngine : BackgroundService
                 try
                 {
                     await PushPendingEventsAsync(stoppingToken);
+                    
+                    // Resolve any conflicts that emerged from the push
+                    using (var scope = _serviceProvider.CreateScope())
+                    {
+                        var resolver = scope.ServiceProvider.GetRequiredService<ConflictResolver>();
+                        await resolver.ResolveConflictsAsync();
+                    }
+
                     await PullUpdatesAsync(stoppingToken);
                 }
                 catch (Exception ex)
