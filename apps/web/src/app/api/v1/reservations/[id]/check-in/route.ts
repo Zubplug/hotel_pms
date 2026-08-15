@@ -133,14 +133,15 @@ export async function POST(
       
       const formatNigeriaTime = (d: Date, forceTime?: string) => {
         const yyyy = d.getUTCFullYear();
-        const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const mmm = months[d.getUTCMonth()];
         const dd = String(d.getUTCDate()).padStart(2, '0');
-        if (forceTime) return `${yyyy}-${mm}-${dd}T${forceTime}`;
+        if (forceTime) return `${dd} ${mmm} ${yyyy} ${forceTime}`;
         
         const hh = String(d.getUTCHours()).padStart(2, '0');
         const min = String(d.getUTCMinutes()).padStart(2, '0');
         const ss = String(d.getUTCSeconds()).padStart(2, '0');
-        return `${yyyy}-${mm}-${dd}T${hh}:${min}:${ss}`;
+        return `${dd} ${mmm} ${yyyy} ${hh}:${min}:${ss}`;
       };
 
       // Shift checkIn date to Nigeria timezone (to match whatever they selected on the calendar)
