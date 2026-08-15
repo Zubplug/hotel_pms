@@ -11,8 +11,10 @@ import { formatDistanceToNow } from 'date-fns';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogTitle,
+  DialogTrigger,
+  DialogHeader,
+  DialogDescription,
 } from '@/components/ui/dialog';
 import { useProperty } from '@/components/PropertyProvider';
 import { EraseCardDialog } from '@/components/hardware/EraseCardDialog';

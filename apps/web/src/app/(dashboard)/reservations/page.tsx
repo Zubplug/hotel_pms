@@ -59,7 +59,7 @@ function nightCount(checkIn: string, checkOut: string) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ReservationsPage() {
-  const { currentProperty } = useProperty();
+  const { propertyId } = useProperty();
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -122,7 +122,7 @@ export default function ReservationsPage() {
       <ReadCardCheckoutDialog 
         open={quickCheckoutOpen}
         onOpenChange={setQuickCheckoutOpen}
-        propertyId={currentProperty?.id ?? ''}
+        propertyId={propertyId ?? ''}
       />
 
       {/* Filters */}

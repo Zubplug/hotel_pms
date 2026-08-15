@@ -1193,12 +1193,12 @@ model LockOperation {
   idempotencyKey String?     @unique
   propertyId     String      @db.Uuid
   property       Property    @relation(fields: [propertyId], references: [id])
-  lockId         String      @db.Uuid
-  lock           DoorLock    @relation(fields: [lockId], references: [id])
-  roomId         String      @db.Uuid
-  room           Room        @relation(fields: [roomId], references: [id])
-  reservationId  String      @db.Uuid
-  reservation    Reservation @relation(fields: [reservationId], references: [id])
+  lockId         String?     @db.Uuid
+  lock           DoorLock?   @relation(fields: [lockId], references: [id])
+  roomId         String?     @db.Uuid
+  room           Room?       @relation(fields: [roomId], references: [id])
+  reservationId  String?     @db.Uuid
+  reservation    Reservation? @relation(fields: [reservationId], references: [id])
   credentialId   String?     @db.Uuid
 
   commandId String?      @unique @db.Uuid
@@ -1244,6 +1244,7 @@ model LockCommand {
 
   errorCode    String?
   errorMessage String?
+  responseData Json?
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
