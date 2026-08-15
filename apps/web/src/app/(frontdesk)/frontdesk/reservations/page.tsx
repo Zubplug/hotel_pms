@@ -8,6 +8,7 @@ import { Search, User, LogIn, ArrowRight, Clock, ArrowLeft, CheckCircle2, UserPl
 import { Button } from '@/components/ui/button';
 import { useProperty } from '@/components/PropertyProvider';
 import { format } from 'date-fns';
+import { formatRoomNumber } from '@/lib/format-room';
 
 interface Reservation {
   id: string;
@@ -190,7 +191,7 @@ export default function FrontDeskReservationsPage() {
                     </div>
                     <div>
                       <p className="text-xs font-bold text-slate-400 uppercase">Room</p>
-                      <p className="font-bold text-slate-900">{room?.room?.number || 'TBA'} <span className="font-normal text-slate-500 text-sm ml-1">({room?.roomType?.name})</span></p>
+                      <p className="font-bold text-slate-900">{room?.room?.number ? formatRoomNumber(room.room.number) : 'TBA'} <span className="font-normal text-slate-500 text-sm ml-1">({room?.roomType?.name})</span></p>
                     </div>
                   </div>
 

@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Loader2, CheckCircle2, AlertCircle, Key, ArrowRight, Wallet, User, LogIn } from 'lucide-react';
 import { format } from 'date-fns';
+import { formatRoomNumber } from '@/lib/format-room';
 
 interface FrontDeskCheckInDialogProps {
   open: boolean;
@@ -222,8 +223,8 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
                     
                     <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100">
                       <div>
-                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Room</p>
-                        <p className="font-bold text-slate-800">{room?.number || 'Unassigned'}</p>
+                        <p className="text-sm font-bold text-slate-400 uppercase">Room</p>
+                        <p className="font-bold text-slate-800">{room?.number ? formatRoomNumber(room.number) : 'Unassigned'}</p>
                       </div>
                       <div>
                         <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Check-Out</p>

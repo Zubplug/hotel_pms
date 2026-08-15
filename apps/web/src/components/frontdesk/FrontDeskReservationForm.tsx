@@ -8,6 +8,7 @@ import * as z from 'zod';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, differenceInDays, addDays } from 'date-fns';
 import { toast } from 'sonner';
+import { formatRoomNumber } from '@/lib/format-room';
 
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -391,7 +392,7 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
                             )}
                             {availableRooms?.map((room: any) => (
                               <SelectItem key={room.id} value={room.id} className="focus:bg-slate-700 focus:text-white flex justify-between">
-                                Room {room.number}
+                                Room {formatRoomNumber(room.number)}
                                 {room.status === 'CLEAN' && <span className="ml-4 text-emerald-400 text-xs">READY</span>}
                               </SelectItem>
                             ))}

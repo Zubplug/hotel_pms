@@ -7,6 +7,7 @@ import { useProperty } from '@/components/PropertyProvider';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Search, Key, Sparkles, Wind, AlertTriangle, ShieldCheck, DoorOpen } from 'lucide-react';
 import { format } from 'date-fns';
+import { formatRoomNumber } from '@/lib/format-room';
 
 interface Room {
   id: string;
@@ -160,7 +161,7 @@ export default function FrontDeskRoomsPage() {
 
               <div className="mt-auto">
                 <h3 className="text-3xl font-black text-slate-900 tracking-tight group-hover:text-blue-600 transition-colors">
-                  {room.number}
+                  {formatRoomNumber(room.number)}
                 </h3>
                 <p className="text-sm font-medium text-slate-500 truncate mt-1">
                   {room.roomType.name}
