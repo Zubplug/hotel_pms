@@ -8,31 +8,37 @@ export const delunsLockProvider = {
       type, validFrom, validUntil, idempotencyKey
     } = params;
 
-    // 1. Validate Deluns Configuration on the Property
-    const property = await prisma.property.findUnique({
-      where: { id: propertyId }
-    });
-
-    if (!property) throw new Error('Property not found');
+    // We no longer strictly validate lockConfiguration for 'provider' or 'dlsCoID' 
+    // because the hardware agent uses TP_MakeGuestCardEx which only requires 
+    // roomNo, checkIn, checkOut, and flags.
     
-    // Validate lockConfiguration
-    const lockConfig = property.lockConfiguration as { provider?: string; dlsCoID?: number } | null;
-    if (!lockConfig || lockConfig.provider !== 'DELUNS') {
-      throw new Error('Property is not configured for DELUNS lock provider');
-    }
-    
-    const dlsCoID = lockConfig.dlsCoID;
-    if (dlsCoID === undefined) {
-      throw new Error('Deluns Hotel Code (dlsCoID) is missing from property configuration');
-    }
+    // 1. Fetch the room to get the room number
+    const room = await prisma.room.findUnique({ where: { id: roomId } });
+    if (!room) throw new Error('Room not found');
 
-    // 2. Fetch the door lock to get the specific lock code
-    const doorLock = await prisma.doorLock.findUnique({ where: { id: lockId } });
-    if (!doorLock) throw new Error('DoorLock not found');
+    const formatNigeriaTime = (d: Date, forceTime?: string) => {
+      const now = new Date(d);
+      now.setUTCHours(now.getUTCHours() + 1); // Shift to Nigeria Time (UTC+1)
+      const yyyy = now.getUTCFullYear();
+      const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
+      const dd = String(now.getUTCDate()).padStart(2, '0');
+      if (forceTime) return `${yyyy}-${mm}-${dd}T${forceTime}`;
+      
+      const hh = String(now.getUTCHours()).padStart(2, '0');
+      const min = String(now.getUTCMinutes()).padStart(2, '0');
+      const ss = String(now.getUTCSeconds()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}T${hh}:${min}:${ss}`;
+    };
 
-    const lockCode = doorLock.lockCode; // This is the roomNo for Deluns
+    // Calculate exact current time for check-in to allow immediate entry
+    const now = new Date();
+    now.setUTCHours(now.getUTCHours() + 1);
+    const currentHH = String(now.getUTCHours()).padStart(2, '0');
+    const currentMin = String(now.getUTCMinutes()).padStart(2, '0');
+    const currentSec = String(now.getUTCSeconds()).padStart(2, '0');
+    const exactTimeStr = `${currentHH}:${currentMin}:${currentSec}`;
 
-    // 3. Create all records in a single transaction
+    // 2. Create all records in a single transaction
     const operation = await prisma.$transaction(async (tx: any) => {
       const credential = await tx.lockCredential.create({
         data: {
@@ -62,21 +68,19 @@ export const delunsLockProvider = {
         },
       });
 
-      // Serialize the specific Deluns payload
+      // The Hardware Agent (CommandWorker.cs) expects "ENCODE" as commandType 
+      // and { roomNo, checkIn, checkOut, flags } as the payload
       const command = await tx.lockCommand.create({
         data: {
           operationId: op.id,
           agentId,
-          commandType: 'ENCODE_CARD',
+          commandType: 'ENCODE',
           status: 'QUEUED',
           payload: {
-            operationId: op.id,
-            credentialId: credential.id,
-            dlsCoID,
-            lockCode,
-            bDate: validFrom.toISOString(),
-            eDate: validUntil.toISOString(),
-            type,
+            roomNo: room.number,
+            checkIn: formatNigeriaTime(validFrom, exactTimeStr),
+            checkOut: formatNigeriaTime(validUntil, '12:00:00'),
+            flags: 0 // Replace old card
           },
         },
       });
