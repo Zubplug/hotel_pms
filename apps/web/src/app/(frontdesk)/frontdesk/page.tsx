@@ -24,7 +24,8 @@ import {
   CreditCard,
   Ban,
   Clock,
-  Briefcase
+  Briefcase,
+  ArrowRight
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -152,7 +153,7 @@ export default function ReceptionistDashboardPage() {
             <span className="text-4xl font-extrabold text-emerald-950">{kpis.inHouse}</span>
           </div>
 
-          <div className="bg-gradient-to-br from-slate-100 to-slate-200/50 p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col">
+          <div className="bg-gradient-to-br from-slate-100 to-slate-200/50 p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col group relative overflow-hidden cursor-pointer" onClick={() => router.push('/frontdesk/rooms')}>
             <div className="flex items-center justify-between mb-4">
               <span className="text-slate-700 font-semibold text-sm uppercase tracking-wider">Rooms</span>
               <div className="bg-slate-300/50 p-2 rounded-lg text-slate-700"><Key className="w-5 h-5" /></div>
@@ -160,6 +161,10 @@ export default function ReceptionistDashboardPage() {
             <div className="flex items-baseline gap-2">
               <span className="text-4xl font-extrabold text-slate-900">{kpis.roomsAvailable}</span>
               <span className="text-lg font-medium text-slate-500">/ {kpis.roomsTotal}</span>
+            </div>
+            <div className="absolute inset-x-0 bottom-0 h-1 bg-blue-500 transform translate-y-full group-hover:translate-y-0 transition-transform"></div>
+            <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity translate-x-2 group-hover:translate-x-0">
+              <ArrowRight className="w-5 h-5 text-blue-600" />
             </div>
           </div>
         </div>
