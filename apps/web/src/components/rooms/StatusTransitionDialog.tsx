@@ -43,7 +43,7 @@ export function StatusTransitionDialog({
       const res = await fetch(`/api/v1/rooms/${roomId}/status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: selectedStatus }),
+        body: JSON.stringify({ newStatus: selectedStatus, source: 'MANUAL' }),
       });
       if (!res.ok) {
         const err = await res.json();

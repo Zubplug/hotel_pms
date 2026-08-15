@@ -11,6 +11,8 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
 import { toast } from 'sonner';
+import { StatusTransitionDialog } from '@/components/rooms/StatusTransitionDialog';
+import { Settings2 } from 'lucide-react';
 
 interface Room {
   id: string;
@@ -36,8 +38,10 @@ interface Room {
 
 export default function RoomsPage() {
   const [view, setView] = useState<'grid' | 'list'>('grid');
+  const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
+  const [selectedRoomStatus, setSelectedRoomStatus] = useState<string>('');
   
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, refetch } = useQuery({
     queryKey: ['rooms'],
     queryFn: async () => {
       const res = await fetch('/api/v1/rooms');
@@ -114,7 +118,8 @@ export default function RoomsPage() {
             : "flex flex-col gap-3"
         }>
           {data?.map((room) => (
-            <Link key={room.id} href={`/rooms/${room.id}/edit`}>
+            <div key={room.id} className="relative">
+              <Link href={`/rooms/${room.id}/edit`} className="block h-full">
               <Card 
                 className={`h-full group overflow-hidden transition-all hover:shadow-md border-muted/60 hover:border-primary/20 ${view === 'list' ? 'flex flex-row items-center p-4' : 'flex flex-col'}`}
               >
@@ -129,7 +134,24 @@ export default function RoomsPage() {
                       {room.roomType?.name ?? 'No Type'}
                     </span>
                   </div>
-                  {view !== 'list' && <StatusBadge status={room.status} className="scale-90 origin-top-right" />}
+                  {view !== 'list' && (
+                    <div className="flex items-center gap-1 origin-top-right">
+                      <StatusBadge status={room.status} className="scale-90" />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-primary relative z-10"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setSelectedRoomId(room.id);
+                          setSelectedRoomStatus(room.status);
+                        }}
+                      >
+                        <Settings2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
                 
                 <div className={`${view === 'list' ? 'col-span-2 flex gap-2 items-center' : 'space-y-3'}`}>
@@ -170,6 +192,7 @@ export default function RoomsPage() {
               </div>
             </Card>
           </Link>
+          </div>
           ))}
           
           {data?.length === 0 && (
@@ -183,6 +206,16 @@ export default function RoomsPage() {
             </div>
           )}
         </div>
+      )}
+
+      {selectedRoomId && (
+        <StatusTransitionDialog
+          isOpen={!!selectedRoomId}
+          onClose={() => setSelectedRoomId(null)}
+          roomId={selectedRoomId}
+          currentStatus={selectedRoomStatus}
+          onSuccess={() => refetch()}
+        />
       )}
     </div>
   );
