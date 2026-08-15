@@ -1,13 +1,14 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useProperty } from '@/components/PropertyProvider';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Search, Key, Sparkles, Wind, AlertTriangle, ShieldCheck, DoorOpen } from 'lucide-react';
 import { format } from 'date-fns';
 import { formatRoomNumber } from '@/lib/format-room';
+import { FrontDeskRoomStatusDialog } from '@/components/frontdesk/FrontDeskRoomStatusDialog';
 
 interface Room {
   id: string;
@@ -22,8 +23,10 @@ interface Room {
 export default function FrontDeskRoomsPage() {
   const router = useRouter();
   const { propertyId } = useProperty();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState('ALL');
+  const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['frontdesk', 'rooms', propertyId, { filter: activeFilter }],
@@ -148,13 +151,14 @@ export default function FrontDeskRoomsPage() {
           {filteredRooms.map((room) => (
             <div 
               key={room.id}
-              className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-300 transition-all p-4 flex flex-col group cursor-pointer"
+              onClick={() => setSelectedRoom(room)}
+              className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-xl hover:border-blue-400 transition-all p-4 flex flex-col group cursor-pointer hover:-translate-y-1"
             >
               <div className="flex justify-between items-start mb-3">
                 <span className={`px-2 py-1 text-[10px] uppercase font-bold rounded-md border ${getStatusColor(room.status)}`}>
                   {room.status}
                 </span>
-                <div title={room.housekeepingStatus} className="bg-slate-50 p-1.5 rounded-full border border-slate-100">
+                <div title={room.housekeepingStatus} className="bg-slate-50 p-1.5 rounded-full border border-slate-100 group-hover:bg-blue-50 group-hover:border-blue-100 transition-colors">
                   {getHousekeepingIcon(room.housekeepingStatus)}
                 </div>
               </div>
@@ -174,6 +178,15 @@ export default function FrontDeskRoomsPage() {
           ))}
         </div>
       )}
+
+      <FrontDeskRoomStatusDialog
+        room={selectedRoom}
+        isOpen={!!selectedRoom}
+        onClose={() => setSelectedRoom(null)}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ['frontdesk', 'rooms'] });
+        }}
+      />
     </div>
   );
 }
