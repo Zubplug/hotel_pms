@@ -113,6 +113,11 @@ export function RoomReassignmentDialog({ open, onOpenChange, reservation }: { op
                 ))}
               </SelectContent>
             </Select>
+            {selectedRoomTypeId && selectedRoomTypeId !== currentRoomTypeId && roomTypes?.find((rt: any) => rt.id === selectedRoomTypeId) && (
+              <div className="bg-amber-50 text-amber-800 p-3 mt-2 rounded-md text-sm border border-amber-200">
+                <strong>Notice:</strong> Changing room types will automatically recalculate the nightly rate to the base rate of <strong>{roomTypes.find((rt: any) => rt.id === selectedRoomTypeId).name}</strong>.
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">

@@ -266,6 +266,22 @@ export async function PATCH(
         });
       }
 
+      const oldTotalAmount = (existingReservation.ratePlanSnapshot as any)?.total || 0;
+      if (Number(newTotalAmount) !== Number(oldTotalAmount)) {
+        auditEvents.push({
+          ...commonAuditData,
+          action: 'RATE_CHANGED',
+          previousValue: { 
+            rateAmount: existingReservation.reservationRooms[0]?.rateAmount,
+            totalAmount: oldTotalAmount
+          },
+          newValue: { 
+            rateAmount: newRateAmount,
+            totalAmount: newTotalAmount 
+          },
+        });
+      }
+
       auditEvents.push({
         ...commonAuditData,
         action: 'RESERVATION_UPDATED',
