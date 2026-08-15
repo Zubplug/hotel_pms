@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 import { useProperty } from '@/components/PropertyProvider';
-import { CheckInDialog } from '@/components/reservations/CheckInDialog';
+import { FrontDeskCheckInDialog } from '@/components/frontdesk/FrontDeskCheckInDialog';
 import { CheckOutDialog } from '@/components/reservations/CheckOutDialog';
 import { FrontDeskQuickCheckoutDialog } from '@/components/frontdesk/FrontDeskQuickCheckoutDialog';
 import { LoadingState } from '@/components/ui/EmptyState';
@@ -33,7 +33,7 @@ export default function ReceptionistDashboardPage() {
   const { data: session } = useSession();
   const { propertyId } = useProperty();
 
-  const [checkInReservation, setCheckInReservation] = useState<any | null>(null);
+  const [checkInReservationId, setCheckInReservationId] = useState<string | null>(null);
   const [checkOutReservation, setCheckOutReservation] = useState<any | null>(null);
   const [quickCheckoutOpen, setQuickCheckoutOpen] = useState(false);
 
@@ -226,7 +226,7 @@ export default function ReceptionistDashboardPage() {
                               if (!isPaid) {
                                 router.push(`/frontdesk/reservations/${arr.id}`); // View folio to pay
                               } else {
-                                setCheckInReservation({ id: arr.id, folios: [{ balance: arr.balance }] });
+                                setCheckInReservationId(arr.id);
                               }
                             }}
                           >
@@ -321,11 +321,12 @@ export default function ReceptionistDashboardPage() {
       </div>
 
       {/* Dialogs */}
-      {checkInReservation && (
-        <CheckInDialog
-          open={!!checkInReservation}
-          onOpenChange={(open) => !open && setCheckInReservation(null)}
-          reservation={checkInReservation}
+      {checkInReservationId && (
+        <FrontDeskCheckInDialog
+          open={!!checkInReservationId}
+          onOpenChange={(open) => !open && setCheckInReservationId(null)}
+          reservationId={checkInReservationId}
+          propertyId={propertyId}
         />
       )}
       

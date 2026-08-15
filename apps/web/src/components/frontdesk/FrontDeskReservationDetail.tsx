@@ -5,7 +5,7 @@ import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { CheckInDialog } from '../reservations/CheckInDialog';
+import { FrontDeskCheckInDialog } from './FrontDeskCheckInDialog';
 import { FolioSection } from '../reservations/FolioSection';
 import { LogIn, User, MapPin, CalendarClock, CreditCard, Receipt, LogOut } from 'lucide-react';
 
@@ -157,8 +157,9 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
       </div>
 
       {isCheckInDialogOpen && (
-        <CheckInDialog
-          reservation={reservation}
+        <FrontDeskCheckInDialog
+          reservationId={reservation.id}
+          propertyId={reservation.propertyId}
           open={isCheckInDialogOpen}
           onOpenChange={setIsCheckInDialogOpen}
         />
