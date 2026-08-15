@@ -245,6 +245,17 @@ export async function PATCH(
             currentDate.setDate(currentDate.getDate() + 1);
           }
           await tx.folioItem.createMany({ data: folioItems });
+
+          const newTotalCharges = (Number(folio.totalCharges || 0) - Number(oldTotalAmount)) + Number(newTotalAmount);
+          const newBalance = (Number(folio.balance || 0) - Number(oldTotalAmount)) + Number(newTotalAmount);
+          
+          await tx.folio.update({
+            where: { id: folio.id },
+            data: {
+              totalCharges: newTotalCharges,
+              balance: newBalance,
+            }
+          });
         }
       }
 
