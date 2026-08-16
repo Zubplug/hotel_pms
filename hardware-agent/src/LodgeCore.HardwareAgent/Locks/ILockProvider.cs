@@ -2,6 +2,8 @@ namespace LodgeCore.HardwareAgent.Locks;
 
 public interface ILockProvider
 {
+    string VendorName { get; }
+
     Task<bool> WaitForCardAsync(TimeSpan timeout, CancellationToken cancellationToken);
     Task<LockResult> EncodeCardAsync(string lockCode, CancellationToken cancellationToken);
     Task<DiagnosticResult> ReadDiagnosticAsync(CancellationToken cancellationToken);
@@ -23,9 +25,10 @@ public class LockResult
     public bool Success { get; set; }
     public string? ErrorCode { get; set; }
     public string? ErrorMessage { get; set; }
+    public string? Vendor { get; set; }
     
-    public static LockResult Ok() => new LockResult { Success = true };
-    public static LockResult Fail(string code, string msg) => new LockResult { Success = false, ErrorCode = code, ErrorMessage = msg };
+    public static LockResult Ok(string vendor) => new LockResult { Success = true, Vendor = vendor };
+    public static LockResult Fail(string code, string msg, string vendor) => new LockResult { Success = false, ErrorCode = code, ErrorMessage = msg, Vendor = vendor };
 }
 
 public class DiagnosticResult
@@ -34,6 +37,7 @@ public class DiagnosticResult
     public string? RawDataHex { get; set; }
     public int? DiscoveredCoID { get; set; }
     public string? ErrorMessage { get; set; }
+    public string? Vendor { get; set; }
 }
 
 public class ReadCardResult
@@ -55,10 +59,11 @@ public class ReadCardResult
 
     public string? ErrorCode { get; set; }
     public string? ErrorMessage { get; set; }
+    public string? Vendor { get; set; }
 
-    public static ReadCardResult Blank() => new ReadCardResult { Success = true, IsBlank = true };
-    public static ReadCardResult WithData(string roomNo, string cardSnr, string? validFrom, string? validTo) 
-        => new ReadCardResult { Success = true, IsBlank = false, RoomNo = roomNo, CardSnr = cardSnr, ValidFrom = validFrom, ValidTo = validTo };
-    public static ReadCardResult Fail(string code, string msg) 
-        => new ReadCardResult { Success = false, ErrorCode = code, ErrorMessage = msg };
+    public static ReadCardResult Blank(string vendor) => new ReadCardResult { Success = true, IsBlank = true, Vendor = vendor };
+    public static ReadCardResult WithData(string roomNo, string cardSnr, string? validFrom, string? validTo, string vendor) 
+        => new ReadCardResult { Success = true, IsBlank = false, RoomNo = roomNo, CardSnr = cardSnr, ValidFrom = validFrom, ValidTo = validTo, Vendor = vendor };
+    public static ReadCardResult Fail(string code, string msg, string vendor) 
+        => new ReadCardResult { Success = false, ErrorCode = code, ErrorMessage = msg, Vendor = vendor };
 }

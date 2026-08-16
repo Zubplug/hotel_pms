@@ -10,6 +10,10 @@
 		<Nullable>enable</Nullable>
 		<EnableDefaultCssItems>false</EnableDefaultCssItems>
 
+		<!-- Force x86 on Windows for Hardware SDK compatibility -->
+		<RuntimeIdentifier Condition="$(TargetFramework.Contains('-windows'))">win10-x86</RuntimeIdentifier>
+		<PlatformTarget Condition="$(TargetFramework.Contains('-windows'))">x86</PlatformTarget>
+
 		<!-- Display name -->
 		<ApplicationTitle>LodgeCore Front Desk</ApplicationTitle>
 		<!-- App Identifier -->

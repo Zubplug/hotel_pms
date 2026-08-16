@@ -12,6 +12,8 @@ public class DelunsLockProvider : ILockProvider
         _logger = logger;
     }
 
+    public string VendorName => "Deluns";
+
     public async Task<bool> WaitForCardAsync(TimeSpan timeout, CancellationToken cancellationToken)
     {
         _logger.LogInformation("Waiting for card on Deluns USB encoder...");
@@ -59,12 +61,12 @@ public class DelunsLockProvider : ILockProvider
         {
             _logger.LogInformation("Deluns Encoding successful. Buzzing encoder...");
             NativeSdkBridge.Buzzer(fUSB, 10);
-            return LockResult.Ok();
+            return LockResult.Ok(VendorName);
         }
         else
         {
             _logger.LogError("Failed to encode Deluns card. SDK returned: {Error}", res);
-            return LockResult.Fail(res.ToString(), $"Deluns SDK error code: {res}");
+            return LockResult.Fail(res.ToString(), $"Deluns SDK error code: {res}", VendorName);
         }
     }
 
@@ -86,14 +88,16 @@ public class DelunsLockProvider : ILockProvider
             return new DiagnosticResult 
             { 
                 Success = true, 
-                RawDataHex = hex 
+                RawDataHex = hex,
+                Vendor = VendorName
             };
         }
         
         return new DiagnosticResult 
         { 
             Success = false, 
-            ErrorMessage = $"Failed to read card. SDK error code: {res}" 
+            ErrorMessage = $"Failed to read card. SDK error code: {res}",
+            Vendor = VendorName
         };
     }
 
@@ -122,7 +126,7 @@ public class DelunsLockProvider : ILockProvider
         if (res != 0)
         {
             _logger.LogError("Deluns ReadCard returned error: {Error}", res);
-            return ReadCardResult.Fail(res.ToString(), $"SDK ReadCard error: {res}");
+            return ReadCardResult.Fail(res.ToString(), $"SDK ReadCard error: {res}", VendorName);
         }
 
         // Check if card is blank (all zeros in meaningful region)
@@ -135,7 +139,7 @@ public class DelunsLockProvider : ILockProvider
         if (isAllZero)
         {
             _logger.LogInformation("Card is blank (all zeros).");
-            return ReadCardResult.Blank();
+            return ReadCardResult.Blank(VendorName);
         }
 
         // Parse Card SNR (bytes 0-3, as hex string)
@@ -146,7 +150,7 @@ public class DelunsLockProvider : ILockProvider
         if (string.IsNullOrWhiteSpace(roomNo))
         {
             // Also try as blank if room is empty
-            return ReadCardResult.Blank();
+            return ReadCardResult.Blank(VendorName);
         }
 
         // Parse validity dates (bytes 12-17 = check-in YYMMDD, bytes 18-23 = check-out YYMMDD)
@@ -161,7 +165,7 @@ public class DelunsLockProvider : ILockProvider
             "Card read: Room={RoomNo}, SNR={Snr}, ValidFrom={VF}, ValidTo={VT}",
             roomNo, cardSnr, validFrom, validTo);
 
-        return ReadCardResult.WithData(roomNo, cardSnr, validFrom, validTo);
+        return ReadCardResult.WithData(roomNo, cardSnr, validFrom, validTo, VendorName);
     }
 
     /// <summary>
@@ -192,12 +196,12 @@ public class DelunsLockProvider : ILockProvider
         {
             _logger.LogInformation("Card cancelled successfully.");
             NativeSdkBridge.Buzzer(fUSB, 5);
-            return LockResult.Ok();
+            return LockResult.Ok(VendorName);
         }
         else
         {
             _logger.LogError("Failed to cancel card. SDK returned: {Error}", res);
-            return LockResult.Fail(res.ToString(), $"SDK cancel error: {res}");
+            return LockResult.Fail(res.ToString(), $"SDK cancel error: {res}", VendorName);
         }
     }
 

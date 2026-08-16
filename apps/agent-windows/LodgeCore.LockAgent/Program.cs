@@ -56,7 +56,17 @@ builder.Services.AddHttpClient<PmsClient>(client =>
 builder.Services.AddSingleton<AgentAuthenticator>();
 
 // Hardware
-builder.Services.AddSingleton<ILockProvider, DelunsProvider>();
+builder.Services.AddSingleton<ILockProvider>(sp =>
+{
+    var cfg = sp.GetRequiredService<AgentConfig>();
+    var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
+    
+    return cfg.LockProvider.Type.ToLowerInvariant() switch
+    {
+        "hslock" => new HsLockProvider(loggerFactory.CreateLogger<HsLockProvider>()),
+        _        => new DelunsProvider(loggerFactory.CreateLogger<DelunsProvider>())
+    };
+});
 builder.Services.AddSingleton<HardwareMonitor>();
 
 // Commands

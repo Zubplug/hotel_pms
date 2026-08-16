@@ -7,8 +7,15 @@ namespace LodgeCore.LockAgent;
 /// Non-sensitive configuration loaded from agent.config.json.
 /// Secrets (agentId + agentSecret) are stored separately in Windows Credential Manager.
 /// </summary>
+public class LockProviderConfig 
+{
+    public string Type { get; set; } = "Deluns"; // "Deluns", "HsLock"
+}
+
 public sealed class AgentConfig
 {
+    public LockProviderConfig LockProvider { get; set; } = new();
+    
     public string PmsUrl      { get; set; } = string.Empty;
     public string PropertyId  { get; set; } = string.Empty;
     public string DeviceId    { get; set; } = string.Empty;

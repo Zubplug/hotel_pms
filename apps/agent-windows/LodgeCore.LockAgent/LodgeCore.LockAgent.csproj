@@ -12,6 +12,7 @@
     <Version>1.0.0</Version>
     <!-- Windows Service -->
     <WindowsPackageType>None</WindowsPackageType>
+    <Prefer32Bit>true</Prefer32Bit>
   </PropertyGroup>
 
   <ItemGroup>
@@ -24,10 +25,16 @@
     <PackageReference Include="System.Management" Version="8.0.0" />
   </ItemGroup>
 
-  <!-- Copy LockSDK.dll to output dir -->
+  <!-- Copy Native DLLs to output dir -->
   <ItemGroup>
+    <!-- Deluns SDK -->
     <None Include="LockSDK.dll" CopyToOutputDirectory="PreserveNewest" />
     <None Include="des.dll" CopyToOutputDirectory="PreserveNewest" />
+    
+    <!-- HS Lock SDK -->
+    <Content Include="runtimes\**">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
 </Project>

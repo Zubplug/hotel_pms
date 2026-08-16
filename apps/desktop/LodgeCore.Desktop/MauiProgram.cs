@@ -20,7 +20,18 @@ public static class MauiProgram
         builder.Services.AddMauiBlazorWebView();
 
         // Register Hardware Agent dependencies
-        builder.Services.AddSingleton<ILockProvider, DelunsLockProvider>(); // Assuming DelunsLockProvider is the implementation
+        builder.Services.AddSingleton<ILockProvider>(sp =>
+        {
+            var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
+            // Retrieve configured provider, defaulting to HsLock for testing
+            var providerType = Microsoft.Maui.Storage.Preferences.Default.Get("LockProviderType", "HsLock");
+            
+            return providerType.ToLowerInvariant() switch
+            {
+                "hslock" => new HsLockProvider(loggerFactory.CreateLogger<HsLockProvider>()),
+                _        => new DelunsLockProvider(loggerFactory.CreateLogger<DelunsLockProvider>())
+            };
+        });
         builder.Services.AddSingleton<HardwareInterop>();
 
         // Register Offline SQLite DB Context & Auto-Backup
