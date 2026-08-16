@@ -1,8 +1,11 @@
 import { LodgeCoreDataProvider } from './DataProvider';
 
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
+
 // Helper for standard API requests
 async function apiFetch(url: string, options: RequestInit = {}) {
-  const res = await fetch(url, {
+  const fullUrl = url.startsWith('/') && BASE_URL ? `${BASE_URL}${url}` : url;
+  const res = await fetch(fullUrl, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
@@ -46,10 +49,12 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
       return apiFetch(`/api/v1/reservations/${id}`);
     },
     async lookupByRoom(roomNo: string, propertyId: string) {
-      const res = await fetch(`/api/v1/reservations/lookup?roomNo=${roomNo}&propertyId=${propertyId}`);
-      if (!res.ok) return null;
-      const data = await res.json();
-      return data.data?.reservation || null;
+      try {
+        const res = await apiFetch(`/api/v1/reservations/lookup?roomNo=${roomNo}&propertyId=${propertyId}`);
+        return res.data?.reservation || null;
+      } catch {
+        return null;
+      }
     },
     async create(data: any) {
       return apiFetch(`/api/v1/reservations`, {

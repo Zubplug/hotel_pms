@@ -28,6 +28,8 @@ jobs:
         run: pnpm install --no-frozen-lockfile
 
       - name: Build Next.js Static Export
+        env:
+          NEXT_PUBLIC_API_URL: https://hotel-pms-web-nine.vercel.app
         run: pnpm build:desktop
 
       - name: Setup .NET 10
