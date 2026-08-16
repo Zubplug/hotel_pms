@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { useProperty } from '@/components/PropertyProvider';
@@ -9,7 +9,7 @@ import { Loader2, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { FrontDeskReservationDetail } from '@/components/frontdesk/FrontDeskReservationDetail';
 
-export default function FrontDeskReservationPage() {
+function ReservationDetailContent() {
   const searchParams = useSearchParams();
   const id = searchParams.get('id');
   const { propertyId } = useProperty();
@@ -72,5 +72,17 @@ export default function FrontDeskReservationPage() {
         <FrontDeskReservationDetail reservation={reservation} />
       </div>
     </div>
+  );
+}
+
+export default function FrontDeskReservationPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+      </div>
+    }>
+      <ReservationDetailContent />
+    </Suspense>
   );
 }

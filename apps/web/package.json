@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "build:desktop": "cross-env NEXT_PUBLIC_IS_DESKTOP=true next build",
+    "build:desktop": "node hide-dashboard.mjs && cross-env NEXT_PUBLIC_IS_DESKTOP=true next build; node restore-dashboard.mjs",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run"

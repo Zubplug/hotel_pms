@@ -16,11 +16,8 @@ const nextConfig: NextConfig = {
     // your project has type errors.
     ignoreBuildErrors: true,
   },
-  eslint: {
-    // Warning: This allows production builds to successfully complete even if
-    // your project has ESLint errors.
-    ignoreDuringBuilds: true,
-  },
+  // Ignore API routes and middleware (.ts files) when building for Desktop static export
+  pageExtensions: isDesktop ? ['tsx', 'jsx'] : ['tsx', 'ts', 'jsx', 'js'],
 };
 
 export default nextConfig;
