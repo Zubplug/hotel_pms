@@ -1,6 +1,5 @@
 'use client';
 
-export function generateStaticParams() { return []; }
 
 import { useParams } from 'next/navigation';
 import { PaymentReceipt } from '@/components/payments/PaymentReceipt';
