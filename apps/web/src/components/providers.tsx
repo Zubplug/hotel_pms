@@ -6,6 +6,7 @@ import { SessionProvider } from 'next-auth/react';
 import { useState } from 'react';
 
 import { PropertyProvider } from './PropertyProvider';
+import { DataProviderWrapper } from '@/lib/desktop/DataProviderContext';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -21,12 +22,16 @@ export function Providers({ children }: { children: React.ReactNode }) {
       })
   );
 
+  const isDesktop = process.env.NEXT_PUBLIC_IS_DESKTOP === "true";
+
   return (
-    <SessionProvider>
+    <SessionProvider session={isDesktop ? null : undefined}>
       <QueryClientProvider client={queryClient}>
-        <PropertyProvider>
-          {children}
-        </PropertyProvider>
+        <DataProviderWrapper>
+          <PropertyProvider>
+            {children}
+          </PropertyProvider>
+        </DataProviderWrapper>
         <ReactQueryDevtools initialIsOpen={false} />
       </QueryClientProvider>
     </SessionProvider>

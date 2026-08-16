@@ -1,10 +1,10 @@
 import { FrontDeskLayout } from '@/components/layout/FrontDeskLayout';
-import { DataProviderWrapper } from '@/lib/desktop/DataProviderContext';
+import React from 'react';
 
-export default function Layout({ children }: { children: React.ReactNode }) {
+export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <DataProviderWrapper>
-      <FrontDeskLayout>{children}</FrontDeskLayout>
-    </DataProviderWrapper>
+    <FrontDeskLayout>
+      {children}
+    </FrontDeskLayout>
   );
 }

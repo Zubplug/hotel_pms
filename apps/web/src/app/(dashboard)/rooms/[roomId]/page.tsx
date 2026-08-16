@@ -1,5 +1,7 @@
 'use client';
 
+export function generateStaticParams() { return []; }
+
 import React, { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';

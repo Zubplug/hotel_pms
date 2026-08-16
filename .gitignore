@@ -17,3 +17,4 @@ packages/db/seed-more.ts
 packages/db/test-*.ts
 test-*.ts
 test-*.mjs
+apps/desktop/LodgeCore.Desktop/wwwroot/

@@ -20,7 +20,7 @@ const DataProviderContext = createContext<DataProviderContextValue>({
 });
 
 export function DataProviderWrapper({ children }: { children: React.ReactNode }) {
-  const [isDesktopMode, setIsDesktopMode] = useState(false);
+  const [isDesktopMode, setIsDesktopMode] = useState(process.env.NEXT_PUBLIC_IS_DESKTOP === "true");
   const [isOnline, setIsOnline] = useState(true);
   const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'offline' | 'error'>('synced');
 
