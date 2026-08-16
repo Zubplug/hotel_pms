@@ -77,5 +77,5 @@ jobs:
         with:
           name: LodgeCore-Windows-Installer
           path: |
-            apps/desktop/LodgeCore.Desktop/bin/Release/net10.0-windows10.0.19041.0/win10-x86/AppPackages/**/*.msix
+            apps/desktop/LodgeCore.Desktop/**/AppPackages/**/*.msix
             LodgeCorePilot.cer
