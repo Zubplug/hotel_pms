@@ -87,6 +87,9 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
             <PropertySelector className="w-[180px] lg:w-[240px]" />
           ) : (
             <div className="flex items-center">
+              <div className="hidden">
+                <PropertySelector />
+              </div>
               {res?.data?.property?.name ? (
                 <div className="px-3 py-1.5 bg-blue-50 text-blue-800 border border-blue-200 rounded-lg text-sm font-bold shadow-sm whitespace-nowrap">
                   {res.data.property.name}
