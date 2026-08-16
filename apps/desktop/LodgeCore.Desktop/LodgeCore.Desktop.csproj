@@ -2,7 +2,8 @@
 
 	<PropertyGroup>
 		<TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
-		<OutputType>Exe</OutputType>
+		<OutputType>WinExe</OutputType>
+		<WindowsPackageType>MSIX</WindowsPackageType>
 		<RootNamespace>LodgeCore.Desktop</RootNamespace>
 		<UseMaui>true</UseMaui>
 		<SingleProject>true</SingleProject>
