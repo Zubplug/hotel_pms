@@ -4,7 +4,7 @@ import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { getUserPropertyIds } from '@/lib/property-access';
 
-export const revalidate = 60; // 60-second cache
+export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   try {
