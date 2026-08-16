@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2, CheckCircle2, AlertCircle, Key, ArrowRight, Wallet, User, LogIn } from 'lucide-react';
 import { format } from 'date-fns';
 import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
-import { useLodgeCoreProvider } from '@/components/DataProviderContext';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { formatRoomNumber } from '@/lib/format-room';
 
 interface FrontDeskCheckInDialogProps {

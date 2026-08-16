@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useProperty } from '@/components/PropertyProvider';
-import { useLodgeCoreProvider } from '@/components/DataProviderContext';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Search, Key, Sparkles, Wind, AlertTriangle, ShieldCheck, DoorOpen } from 'lucide-react';
 import { format } from 'date-fns';

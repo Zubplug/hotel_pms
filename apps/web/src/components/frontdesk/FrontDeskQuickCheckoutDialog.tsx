@@ -8,7 +8,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { CreditCard, Loader2, AlertCircle, CheckCircle2, User, Key, ArrowRight, Wallet, Info } from 'lucide-react';
-import { useLodgeCoreProvider } from '@/components/DataProviderContext';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 

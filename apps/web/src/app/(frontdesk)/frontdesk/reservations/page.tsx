@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { Search, User, LogIn, ArrowRight, Clock, ArrowLeft, CheckCircle2, UserPlus, CreditCard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useProperty } from '@/components/PropertyProvider';
-import { useLodgeCoreProvider } from '@/components/DataProviderContext';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { format } from 'date-fns';
 import { formatRoomNumber } from '@/lib/format-room';
 
