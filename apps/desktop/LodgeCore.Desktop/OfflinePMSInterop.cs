@@ -1,6 +1,5 @@
 using System.Text.Json;
 using LodgeCore.Desktop.Services;
-using Microsoft.JSInterop;
 
 namespace LodgeCore.Desktop;
 
@@ -12,8 +11,6 @@ public class OfflinePMSInterop
     {
         _repo = repo;
     }
-
-    [JSInvokable]
     public async Task<string> GetActiveReservationsAsync()
     {
         try
@@ -26,8 +23,6 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message });
         }
     }
-
-    [JSInvokable]
     public async Task<string> AssignRoomAsync(string reservationId, string roomId, string roomNumber, string userId, string deviceId)
     {
         try
@@ -40,8 +35,6 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message });
         }
     }
-
-    [JSInvokable]
     public async Task<string> CancelReservationAsync(string reservationId, string userId, string deviceId)
     {
         try
@@ -54,8 +47,6 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message });
         }
     }
-
-    [JSInvokable]
     public async Task<string> CheckAvailabilityAsync(string roomNumber, DateTime checkIn, DateTime checkOut)
     {
         try
@@ -68,8 +59,6 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message });
         }
     }
-
-    [JSInvokable]
     public async Task<string> RecordChargeAsync(string folioId, decimal amount, string description, string userId, string deviceId)
     {
         try
@@ -82,8 +71,6 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message });
         }
     }
-
-    [JSInvokable]
     public async Task<string> RecordPaymentAsync(string folioId, decimal amount, string method, string userId, string deviceId)
     {
         try
@@ -96,8 +83,6 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message });
         }
     }
-
-    [JSInvokable]
     public async Task<string> ProcessCheckInAsync(string reservationId, string userId, string deviceId)
     {
         try
@@ -110,8 +95,6 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message });
         }
     }
-
-    [JSInvokable]
     public async Task<string> ProcessCheckOutAsync(string reservationId, string userId, string deviceId)
     {
         try
@@ -124,8 +107,6 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message });
         }
     }
-
-    [JSInvokable]
     public async Task<string> UpdateHousekeepingTaskStatusAsync(string taskId, string status, string userId, string deviceId)
     {
         try
@@ -138,8 +119,6 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message });
         }
     }
-
-    [JSInvokable]
     public async Task<string> ResolveMaintenanceTicketAsync(string ticketId, string userId, string deviceId)
     {
         try
@@ -152,8 +131,6 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message });
         }
     }
-
-    [JSInvokable]
     public async Task<string> GetDashboardAsync(string propertyId)
     {
         try
@@ -166,8 +143,6 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message });
         }
     }
-
-    [JSInvokable]
     public async Task<string> GetGuestsAsync()
     {
         try
@@ -180,8 +155,6 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message });
         }
     }
-
-    [JSInvokable]
     public async Task<string> GetRoomTypesAsync(string propertyId)
     {
         try
@@ -194,15 +167,11 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message });
         }
     }
-
-    [JSInvokable]
     public async Task<string> LookupReservationByRoomAsync(string roomNo, string propertyId)
     {
         // Simple placeholder for lookup for now
         return JsonSerializer.Serialize(new { success = true, data = (object)null });
     }
-
-    [JSInvokable]
     public async Task<string> CreateReservationAsync(string dataJson)
     {
         try
@@ -218,8 +187,6 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message });
         }
     }
-
-    [JSInvokable]
     public async Task<string> GetRoomsAsync(string propertyId)
     {
         try
@@ -232,8 +199,6 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message });
         }
     }
-
-    [JSInvokable]
     public async Task<string> GetAvailableRoomsAsync(string propertyId, string roomTypeId, string checkIn, string checkOut)
     {
         try
@@ -248,32 +213,22 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message });
         }
     }
-
-    [JSInvokable]
     public async Task<string> ExtendStayAsync(string reservationId, string newCheckOutDate)
     {
         return JsonSerializer.Serialize(new { success = true });
     }
-
-    [JSInvokable]
     public async Task<string> GetFolioAsync(string folioId)
     {
         return JsonSerializer.Serialize(new { success = true, data = new { } });
     }
-
-    [JSInvokable]
     public async Task<string> GetHousekeepingTasksAsync(string propertyId)
     {
         return JsonSerializer.Serialize(new { success = true, data = new object[] { } });
     }
-
-    [JSInvokable]
     public async Task<string> GetMaintenanceTicketsAsync(string propertyId)
     {
         return JsonSerializer.Serialize(new { success = true, data = new object[] { } });
     }
-
-    [JSInvokable]
     public async Task<string> GenerateReceiptAsync(string folioId)
     {
         return JsonSerializer.Serialize(new { success = true, data = new { } });

@@ -1,6 +1,5 @@
 using System.Text.Json;
 using LodgeCore.HardwareAgent.Locks;
-using Microsoft.JSInterop;
 
 namespace LodgeCore.Desktop;
 
@@ -13,7 +12,6 @@ public class HardwareInterop
         _lockProvider = lockProvider;
     }
 
-    [JSInvokable]
     public async Task<string> ReadCardAsync()
     {
         try
@@ -27,7 +25,6 @@ public class HardwareInterop
         }
     }
 
-    [JSInvokable]
     public async Task<string> EncodeCardAsync(string lockCode)
     {
         try
@@ -41,7 +38,6 @@ public class HardwareInterop
         }
     }
 
-    [JSInvokable]
     public async Task<string> CancelCardAsync()
     {
         try
