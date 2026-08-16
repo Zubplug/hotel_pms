@@ -190,7 +190,7 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
                     </Badge>
                   </div>
                   <div className="flex justify-between items-center text-sm">
-                    <span className="text-muted-foreground">Deluns SDK</span>
+                    <span className="text-muted-foreground">{hardware.name || 'Lock Agent SDK'}</span>
                     {hardware.status === 'ONLINE' ? (
                       <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">Ready</Badge>
                     ) : (

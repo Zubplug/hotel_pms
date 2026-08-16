@@ -61,11 +61,12 @@ export async function GET(req: NextRequest) {
 
     let encoderStatus = 'OFFLINE';
     let encoderMessage = 'Check the front-desk hardware connection.';
+    let agentName = hardwareAgent ? hardwareAgent.name : 'Windows Lock Agent';
     if (hardwareAgent && hardwareAgent.lastHeartbeat) {
       const diffSecs = (Date.now() - hardwareAgent.lastHeartbeat.getTime()) / 1000;
       if (diffSecs < 60) {
         encoderStatus = 'ONLINE';
-        encoderMessage = `Deluns Encoder · Last heartbeat: ${Math.floor(diffSecs)} seconds ago`;
+        encoderMessage = `${agentName} · Last heartbeat: ${Math.floor(diffSecs)} seconds ago`;
       } else {
         encoderMessage = `Last seen ${Math.floor(diffSecs / 60)} minutes ago`;
       }
@@ -142,7 +143,8 @@ export async function GET(req: NextRequest) {
       },
       hardware: {
         status: encoderStatus,
-        message: encoderMessage
+        message: encoderMessage,
+        name: agentName
       },
       arrivals: formatGuestList(arrivals),
       departures: formatGuestList(departures)
