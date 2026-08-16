@@ -29,7 +29,7 @@ public class DiagnosticsWorker : BackgroundService
         try
         {
             _logger.LogInformation("Testing LockSDK.dll load...");
-            var result = new HomeLockResult(NativeSdkBridge.TP_Configuration(4));
+            var result = new HomeLockResult(LodgeCore.HardwareAgent.Locks.HsLockSdkNative.TP_Configuration(4));
             
             if (result.Code == HomeLockError.NO_RW_MACHINE)
             {
