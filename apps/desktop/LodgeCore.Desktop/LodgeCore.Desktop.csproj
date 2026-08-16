@@ -23,12 +23,15 @@
 		<ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
 		<ApplicationVersion>1</ApplicationVersion>
 
-		<!-- MSIX Auto Update Configuration -->
+		<!-- MSIX Auto Update & Signing Configuration -->
 		<GenerateAppInstallerFile>True</GenerateAppInstallerFile>
 		<AppInstallerUri>https://downloads.getlodgecore.com/desktop</AppInstallerUri>
 		<AppxAutoUpdateEnabled>True</AppxAutoUpdateEnabled>
 		<AppxUpdateFrequency>OnLaunch</AppxUpdateFrequency>
 		<AppxShowProgress>True</AppxShowProgress>
+		<AppxPackageSigningEnabled>True</AppxPackageSigningEnabled>
+		<PackageCertificateKeyFile>Certificates\LodgeCore.pfx</PackageCertificateKeyFile>
+		<PackageCertificatePassword>lodgecore2026</PackageCertificatePassword>
 	</PropertyGroup>
 
 	<ItemGroup>
