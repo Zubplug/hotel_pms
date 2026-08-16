@@ -43,6 +43,13 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<!-- Next.js Static Export Files -->
+		<Content Include="wwwroot\**">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</Content>
+	</ItemGroup>
+
+	<ItemGroup>
 	  <!-- Hardware SDK reference -->
 	  <ProjectReference Include="..\..\..\hardware-agent\src\LodgeCore.HardwareAgent\LodgeCore.HardwareAgent.csproj" />
 	</ItemGroup>

@@ -9,9 +9,11 @@ public partial class MainPage : ContentPage
     {
         InitializeComponent();
 
+#if DEBUG
         // For now, load local dev server fallback
         // The build script will be updated to serve static assets locally
         MainWebView.Source = new UrlWebViewSource { Url = "http://localhost:3000/frontdesk" };
+#endif
     }
 
     protected override void OnHandlerChanged()
@@ -32,6 +34,48 @@ public partial class MainPage : ContentPage
         
         // Listen for postMessage JSON-RPC from the React frontend
         webView2.CoreWebView2.WebMessageReceived += CoreWebView2_WebMessageReceived;
+
+#if !DEBUG
+        webView2.CoreWebView2.AddWebResourceRequestedFilter("http://lodgecore.local/*", Microsoft.Web.WebView2.Core.CoreWebView2WebResourceContext.All);
+        webView2.CoreWebView2.WebResourceRequested += CoreWebView2_WebResourceRequested;
+        webView2.CoreWebView2.Navigate("http://lodgecore.local/frontdesk");
+#endif
+    }
+
+    private void CoreWebView2_WebResourceRequested(object sender, Microsoft.Web.WebView2.Core.CoreWebView2WebResourceRequestedEventArgs e)
+    {
+        var uri = new Uri(e.Request.Uri);
+        if (uri.Host == "lodgecore.local")
+        {
+            string localPath = uri.LocalPath.TrimStart('/');
+            if (string.IsNullOrEmpty(localPath)) localPath = "index.html";
+            else if (!System.IO.Path.HasExtension(localPath)) localPath += ".html";
+            
+            string fullPath = System.IO.Path.Combine(System.AppDomain.CurrentDomain.BaseDirectory, "wwwroot", localPath);
+            
+            if (!System.IO.File.Exists(fullPath))
+            {
+                string fallback = System.IO.Path.Combine(System.AppDomain.CurrentDomain.BaseDirectory, "wwwroot", "404.html");
+                if (System.IO.File.Exists(fallback)) fullPath = fallback;
+            }
+
+            if (System.IO.File.Exists(fullPath))
+            {
+                var stream = System.IO.File.OpenRead(fullPath);
+                string contentType = "application/octet-stream";
+                if (fullPath.EndsWith(".html")) contentType = "text/html";
+                else if (fullPath.EndsWith(".js")) contentType = "application/javascript";
+                else if (fullPath.EndsWith(".css")) contentType = "text/css";
+                else if (fullPath.EndsWith(".json")) contentType = "application/json";
+                else if (fullPath.EndsWith(".svg")) contentType = "image/svg+xml";
+                else if (fullPath.EndsWith(".png")) contentType = "image/png";
+                else if (fullPath.EndsWith(".jpg") || fullPath.EndsWith(".jpeg")) contentType = "image/jpeg";
+                else if (fullPath.EndsWith(".woff2")) contentType = "font/woff2";
+
+                e.Response = ((Microsoft.Web.WebView2.Core.CoreWebView2)sender).Environment.CreateWebResourceResponse(
+                    stream, 200, "OK", $"Content-Type: {contentType}\nAccess-Control-Allow-Origin: *");
+            }
+        }
     }
 
     private async void CoreWebView2_WebMessageReceived(Microsoft.Web.WebView2.Core.CoreWebView2 sender, Microsoft.Web.WebView2.Core.CoreWebView2WebMessageReceivedEventArgs args)
