@@ -26,8 +26,8 @@ jobs:
         id: decode_cert
         shell: powershell
         env:
-          CERTIFICATE_BASE64: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE }}
-          CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_PASSWORD }}
+          CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         run: |
           $pfx_cert_byte = [System.Convert]::FromBase64String($env:CERTIFICATE_BASE64)
           $certPath = "apps\desktop\LodgeCore.Desktop\LodgeCorePilot.pfx"
@@ -35,7 +35,7 @@ jobs:
           
           # Extract the thumbprint to pass to MSBuild
           $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2
-          $cert.Import("$PWD\$certPath", $env:CERTIFICATE_PASSWORD, [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::DefaultKeySet)
+          $cert.Import("$PWD\$certPath", $env:CERTIFICATE_PASSWORD, [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::MachineKeySet)
           echo "THUMBPRINT=$($cert.Thumbprint)" >> $env:GITHUB_ENV
           
           # Export public .cer for artifact (so pilot sites can trust it)
@@ -46,15 +46,15 @@ jobs:
       - name: Build and Publish MSIX
         shell: powershell
         env:
-          CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_PASSWORD }}
+          CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         run: |
           cd apps\desktop\LodgeCore.Desktop
-          dotnet publish -f net8.0-windows10.0.19041.0 -c Release /p:RuntimeIdentifierOverride=win10-x64 /p:GenerateAppxPackageOnBuild=true /p:AppxPackageSigningEnabled=true /p:PackageCertificateKeyFile="LodgeCorePilot.pfx" /p:PackageCertificatePassword="$env:CERTIFICATE_PASSWORD" /p:PackageCertificateThumbprint="${{ env.THUMBPRINT }}"
+          dotnet publish -f net8.0-windows10.0.19041.0 -c Release /p:RuntimeIdentifierOverride=win10-x86 /p:GenerateAppxPackageOnBuild=true /p:AppxPackageSigningEnabled=true /p:PackageCertificateKeyFile="LodgeCorePilot.pfx" /p:PackageCertificatePassword="$env:CERTIFICATE_PASSWORD" /p:PackageCertificateThumbprint="${{ env.THUMBPRINT }}"
 
       - name: Upload MSIX Artifact
         uses: actions/upload-artifact@v4
         with:
           name: LodgeCore-Windows-Installer
           path: |
-            apps/desktop/LodgeCore.Desktop/bin/Release/net8.0-windows10.0.19041.0/win10-x64/AppPackages/**/*.msix
+            apps/desktop/LodgeCore.Desktop/bin/Release/net8.0-windows10.0.19041.0/win10-x86/AppPackages/**/*.msix
             LodgeCorePilot.cer
