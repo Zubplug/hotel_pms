@@ -34,7 +34,7 @@ public partial class MainPage : ContentPage
         webView2.CoreWebView2.WebMessageReceived += CoreWebView2_WebMessageReceived;
     }
 
-    private async void CoreWebView2_WebMessageReceived(Microsoft.UI.Xaml.Controls.WebView2 sender, Microsoft.Web.WebView2.Core.CoreWebView2WebMessageReceivedEventArgs args)
+    private async void CoreWebView2_WebMessageReceived(Microsoft.Web.WebView2.Core.CoreWebView2 sender, Microsoft.Web.WebView2.Core.CoreWebView2WebMessageReceivedEventArgs args)
     {
         try
         {
@@ -51,8 +51,8 @@ public partial class MainPage : ContentPage
             if (string.IsNullOrEmpty(method) || string.IsNullOrEmpty(id)) return;
 
             // Lazy resolve interop services to ensure context is ready
-            var pmsInterop = Application.Current?.MainPage?.Handler?.MauiContext?.Services.GetService<OfflinePMSInterop>();
-            var hardwareInterop = Application.Current?.MainPage?.Handler?.MauiContext?.Services.GetService<HardwareInterop>();
+            var pmsInterop = Application.Current?.Windows[0]?.Page?.Handler?.MauiContext?.Services.GetService<OfflinePMSInterop>();
+            var hardwareInterop = Application.Current?.Windows[0]?.Page?.Handler?.MauiContext?.Services.GetService<HardwareInterop>();
 
             if (pmsInterop == null || hardwareInterop == null)
             {
@@ -183,7 +183,7 @@ public partial class MainPage : ContentPage
                 id, 
                 result = JsonNode.Parse(responseData) 
             });
-            sender.CoreWebView2.PostWebMessageAsString(responseJson);
+            sender.PostWebMessageAsString(responseJson);
         }
         catch (Exception ex)
         {
@@ -191,10 +191,10 @@ public partial class MainPage : ContentPage
         }
     }
 
-    private void SendError(Microsoft.UI.Xaml.Controls.WebView2 sender, string id, string errorMessage)
+    private void SendError(Microsoft.Web.WebView2.Core.CoreWebView2 sender, string id, string errorMessage)
     {
         var errorJson = JsonSerializer.Serialize(new { id, error = errorMessage });
-        sender.CoreWebView2.PostWebMessageAsString(errorJson);
+        sender.PostWebMessageAsString(errorJson);
     }
 #endif
 }
