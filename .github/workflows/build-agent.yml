@@ -27,4 +27,4 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: LodgeCore.LockAgent-win-x86
-        path: ./publish/LodgeCore.LockAgent.exe
+        path: ./publish/
