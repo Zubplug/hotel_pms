@@ -11,7 +11,7 @@
 		<EnableDefaultCssItems>false</EnableDefaultCssItems>
 
 		<!-- Force x86 on Windows for Hardware SDK compatibility -->
-		<RuntimeIdentifier>win-x86</RuntimeIdentifier>
+		<RuntimeIdentifier>win10-x86</RuntimeIdentifier>
 		<PlatformTarget>x86</PlatformTarget>
 
 		<!-- Display name -->
