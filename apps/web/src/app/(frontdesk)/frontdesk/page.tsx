@@ -46,8 +46,7 @@ export default function ReceptionistDashboardPage() {
     queryKey: ['frontdesk', 'dashboard', propertyId],
     queryFn: async () => {
       if (!propertyId) return null;
-      const data = await provider.dashboard.get(propertyId);
-      return { data }; // Wrap it to match the expected format used in the UI
+      return provider.dashboard.get(propertyId);
     },
     enabled: !!propertyId,
     refetchInterval: 10000,

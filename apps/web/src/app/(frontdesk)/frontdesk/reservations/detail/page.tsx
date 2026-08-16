@@ -16,7 +16,7 @@ function ReservationDetailContent() {
   const { provider } = useLodgeCoreProvider();
   const router = useRouter();
 
-  const { data: reservation, isLoading, error } = useQuery({
+  const { data: res, isLoading, error } = useQuery({
     queryKey: ['reservation', id],
     queryFn: async () => {
       if (!id) throw new Error("No ID");
@@ -24,6 +24,8 @@ function ReservationDetailContent() {
     },
     enabled: !!id,
   });
+
+  const reservation = res?.data;
 
   if (isLoading) {
     return (
