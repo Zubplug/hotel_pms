@@ -57,13 +57,8 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
   const { propertyId } = useProperty();
   const { provider } = useLodgeCoreProvider();
 
-  // Try to grab business date from cached dashboard data, otherwise fallback to Date.now()
-  const cachedDashboard: any = queryClient.getQueryData(['frontdesk', 'dashboard', propertyId]);
-  const businessDate = cachedDashboard?.data?.businessDate 
-    ? new Date(cachedDashboard.data.businessDate) 
-    : new Date();
-
-  const nextBusinessDate = addDays(businessDate, 1);
+  // Use state for dates to avoid SSR hydration mismatch with new Date()
+  const [datesInitialized, setDatesInitialized] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -75,40 +70,55 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
       roomId: '',
       adults: 1,
       children: 0,
-      checkIn: isWalkIn ? businessDate : undefined,
-      checkOut: isWalkIn ? nextBusinessDate : undefined,
     },
   });
+
+  // Hydrate dates safely on client
+  useEffect(() => {
+    if (!datesInitialized && isWalkIn) {
+      const cachedDashboard: any = queryClient.getQueryData(['frontdesk', 'dashboard', propertyId]);
+      const businessDate = cachedDashboard?.data?.businessDate 
+        ? new Date(cachedDashboard.data.businessDate) 
+        : new Date();
+      const nextBusinessDate = addDays(businessDate, 1);
+      
+      form.setValue('checkIn', businessDate);
+      form.setValue('checkOut', nextBusinessDate);
+      setDatesInitialized(true);
+    }
+  }, [datesInitialized, isWalkIn, queryClient, propertyId, form]);
 
   const isNewGuest = form.watch('isNewGuest');
   const checkIn = form.watch('checkIn');
   const checkOut = form.watch('checkOut');
   const roomTypeId = form.watch('roomTypeId');
 
-  const { data: guests, isLoading: loadingGuests } = useQuery({
+  const { data: guestsRes, isLoading: loadingGuests } = useQuery({
     queryKey: ['guests'],
     queryFn: async () => {
-      // In a real implementation this would map provider models to UI models if needed
       return provider.guests.list();
     },
   });
+  const guests = guestsRes?.data || [];
 
-  const { data: roomTypes, isLoading: loadingRoomTypes } = useQuery({
+  const { data: roomTypesRes, isLoading: loadingRoomTypes } = useQuery({
     queryKey: ['room-types', propertyId],
     queryFn: async () => {
       return provider.roomTypes.list(propertyId);
     },
     enabled: !!propertyId,
   });
+  const roomTypes = roomTypesRes?.data || [];
 
-  const { data: availableRooms, isLoading: loadingAvailableRooms } = useQuery({
+  const { data: availableRoomsRes, isLoading: loadingAvailableRooms } = useQuery({
     queryKey: ['available-rooms', propertyId, roomTypeId, checkIn?.toISOString(), checkOut?.toISOString()],
     queryFn: async () => {
-      if (!propertyId || !roomTypeId || !checkIn || !checkOut) return [];
+      if (!propertyId || !roomTypeId || !checkIn || !checkOut) return null;
       return provider.rooms.getAvailable(propertyId, roomTypeId, checkIn.toISOString(), checkOut.toISOString());
     },
     enabled: !!propertyId && !!roomTypeId && !!checkIn && !!checkOut && checkOut > checkIn,
   });
+  const availableRooms = availableRoomsRes?.data || [];
 
   // Reset roomId when dependencies change
   useEffect(() => {
