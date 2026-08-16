@@ -33,11 +33,16 @@ jobs:
           $certPath = "apps\desktop\LodgeCore.Desktop\LodgeCorePilot.pfx"
           [IO.File]::WriteAllBytes("$PWD\$certPath", $pfx_cert_byte)
           
-          # Extract the thumbprint to pass to MSBuild
+          # Extract the thumbprint and install it to the local store
           $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2
-          $cert.Import("$PWD\$certPath", $env:CERTIFICATE_PASSWORD, [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::MachineKeySet)
-          echo "THUMBPRINT=$($cert.Thumbprint)" >> $env:GITHUB_ENV
+          $cert.Import("$PWD\$certPath", $env:CERTIFICATE_PASSWORD, [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::Exportable)
           
+          $store = New-Object System.Security.Cryptography.X509Certificates.X509Store([System.Security.Cryptography.X509Certificates.StoreName]::My, [System.Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser)
+          $store.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
+          $store.Add($cert)
+          $store.Close()
+          
+          echo "THUMBPRINT=$($cert.Thumbprint)" >> $env:GITHUB_ENV
           # Export public .cer for artifact (so pilot sites can trust it)
           $publicCertPath = "LodgeCorePilot.cer"
           $certBytes = $cert.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Cert)
@@ -49,7 +54,7 @@ jobs:
           CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         run: |
           cd apps\desktop\LodgeCore.Desktop
-          dotnet publish -f net10.0-windows10.0.19041.0 -c Release /p:GenerateAppxPackageOnBuild=true /p:AppxPackageSigningEnabled=true /p:PackageCertificateKeyFile="LodgeCorePilot.pfx" /p:PackageCertificatePassword="$env:CERTIFICATE_PASSWORD" /p:PackageCertificateThumbprint="${{ env.THUMBPRINT }}"
+          dotnet publish -f net10.0-windows10.0.19041.0 -c Release /p:GenerateAppxPackageOnBuild=true /p:AppxPackageSigningEnabled=true /p:PackageCertificateThumbprint="${{ env.THUMBPRINT }}"
 
       - name: Upload MSIX Artifact
         uses: actions/upload-artifact@v4

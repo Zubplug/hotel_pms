@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AssetKore Hotel PMS",
+  title: "LodgeCore PMS",
   description: "Enterprise Property Management System",
 };
 
