@@ -29,18 +29,17 @@ interface PropertySelectorProps {
 
 import { buttonVariants } from '@/components/ui/button';
 import { useProperty } from '@/components/PropertyProvider';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
 export function PropertySelector({ className }: { className?: string }) {
   const { propertyId, setPropertyId } = useProperty();
+  const { provider } = useLodgeCoreProvider();
 
   const { data: properties, isLoading } = useQuery({
-    queryKey: ['properties', 'all'], // Changed to 'all' to avoid cache collision with paginated 'list'
+    queryKey: ['properties', 'all'],
     queryFn: async () => {
-      const res = await fetch('/api/v1/properties');
-      if (!res.ok) throw new Error('Failed to fetch properties');
-      const json = await res.json();
-      const list = (Array.isArray(json.data) ? json.data : []) as Property[];
-      return list;
+      const list = await provider.properties.list();
+      return (Array.isArray(list) ? list : []) as Property[];
     },
   });
 

@@ -284,6 +284,28 @@ public class LocalRepository
     public async Task EnsureDatabaseCreatedAsync()
     {
         await _dbContext.Database.EnsureCreatedAsync();
+        
+        // Seed Stanzel Grand Resort for the pilot if it doesn't exist
+        if (!await _dbContext.Properties.AnyAsync())
+        {
+            _dbContext.Properties.Add(new LocalProperty
+            {
+                Id = "prop_stanzel_001",
+                Name = "Stanzel Grand Resort",
+                Code = "SGR",
+                City = "Los Angeles",
+                Currency = "USD",
+                Timezone = "America/Los_Angeles",
+                BusinessDate = DateTime.UtcNow.Date,
+                IsActive = true
+            });
+            await _dbContext.SaveChangesAsync();
+        }
+    }
+
+    public async Task<List<LocalProperty>> GetPropertiesAsync()
+    {
+        return await _dbContext.Properties.Where(p => p.IsActive).ToListAsync();
     }
 
     public async Task<List<LocalGuest>> GetGuestsAsync()

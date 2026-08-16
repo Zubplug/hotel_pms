@@ -6,11 +6,66 @@ namespace LodgeCore.Desktop;
 public class OfflinePMSInterop
 {
     private readonly LocalRepository _repo;
+    private readonly AuthManager _authManager;
 
-    public OfflinePMSInterop(LocalRepository repo)
+    public OfflinePMSInterop(LocalRepository repo, AuthManager authManager)
     {
         _repo = repo;
+        _authManager = authManager;
     }
+
+    public async Task<string> GetSessionAsync()
+    {
+        try
+        {
+            var session = await _authManager.GetSessionAsync();
+            return JsonSerializer.Serialize(new { success = true, data = session });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    public async Task<string> ProvisionDeviceAsync(string userId, string propertyId, string role, string deviceToken, string[] permissions = null, int sessionVersion = 1)
+    {
+        try
+        {
+            await _authManager.ProvisionDeviceAsync(userId, propertyId, role, deviceToken, permissions, sessionVersion);
+            return JsonSerializer.Serialize(new { success = true });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    public async Task<string> ClearSessionAsync()
+    {
+        try
+        {
+            _authManager.ClearAuthData();
+            return JsonSerializer.Serialize(new { success = true });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    public async Task<string> GetPropertiesAsync()
+    {
+        try
+        {
+            var data = await _repo.GetPropertiesAsync();
+            return JsonSerializer.Serialize(new { success = true, data });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
     public async Task<string> GetActiveReservationsAsync()
     {
         try
@@ -23,11 +78,19 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message });
         }
     }
-    public async Task<string> AssignRoomAsync(string reservationId, string roomId, string roomNumber, string userId, string deviceId)
+    private async Task<(string UserId, string DeviceId)> GetSecureContextAsync()
+    {
+        var session = await _authManager.GetSessionAsync();
+        if (session == null) throw new UnauthorizedAccessException("No active desktop session.");
+        return (session.UserId, session.DeviceId);
+    }
+
+    public async Task<string> AssignRoomAsync(string reservationId, string roomId, string roomNumber)
     {
         try
         {
-            var success = await _repo.AssignRoomAsync(reservationId, roomId, roomNumber, userId, deviceId);
+            var ctx = await GetSecureContextAsync();
+            var success = await _repo.AssignRoomAsync(reservationId, roomId, roomNumber, ctx.UserId, ctx.DeviceId);
             return JsonSerializer.Serialize(new { success });
         }
         catch (Exception ex)
@@ -35,11 +98,12 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message });
         }
     }
-    public async Task<string> CancelReservationAsync(string reservationId, string userId, string deviceId)
+    public async Task<string> CancelReservationAsync(string reservationId)
     {
         try
         {
-            var success = await _repo.CancelReservationAsync(reservationId, userId, deviceId);
+            var ctx = await GetSecureContextAsync();
+            var success = await _repo.CancelReservationAsync(reservationId, ctx.UserId, ctx.DeviceId);
             return JsonSerializer.Serialize(new { success });
         }
         catch (Exception ex)
@@ -59,11 +123,12 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message });
         }
     }
-    public async Task<string> RecordChargeAsync(string folioId, decimal amount, string description, string userId, string deviceId)
+    public async Task<string> RecordChargeAsync(string folioId, decimal amount, string description)
     {
         try
         {
-            var success = await _repo.RecordChargeAsync(folioId, amount, description, userId, deviceId);
+            var ctx = await GetSecureContextAsync();
+            var success = await _repo.RecordChargeAsync(folioId, amount, description, ctx.UserId, ctx.DeviceId);
             return JsonSerializer.Serialize(new { success });
         }
         catch (Exception ex)
@@ -71,11 +136,12 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message });
         }
     }
-    public async Task<string> RecordPaymentAsync(string folioId, decimal amount, string method, string userId, string deviceId)
+    public async Task<string> RecordPaymentAsync(string folioId, decimal amount, string method)
     {
         try
         {
-            var success = await _repo.RecordPaymentAsync(folioId, amount, method, userId, deviceId);
+            var ctx = await GetSecureContextAsync();
+            var success = await _repo.RecordPaymentAsync(folioId, amount, method, ctx.UserId, ctx.DeviceId);
             return JsonSerializer.Serialize(new { success });
         }
         catch (Exception ex)
@@ -83,11 +149,12 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message });
         }
     }
-    public async Task<string> ProcessCheckInAsync(string reservationId, string userId, string deviceId)
+    public async Task<string> ProcessCheckInAsync(string reservationId)
     {
         try
         {
-            var success = await _repo.ProcessCheckInAsync(reservationId, userId, deviceId);
+            var ctx = await GetSecureContextAsync();
+            var success = await _repo.ProcessCheckInAsync(reservationId, ctx.UserId, ctx.DeviceId);
             return JsonSerializer.Serialize(new { success });
         }
         catch (Exception ex)
@@ -95,11 +162,12 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message });
         }
     }
-    public async Task<string> ProcessCheckOutAsync(string reservationId, string userId, string deviceId)
+    public async Task<string> ProcessCheckOutAsync(string reservationId)
     {
         try
         {
-            var success = await _repo.ProcessCheckOutAsync(reservationId, userId, deviceId);
+            var ctx = await GetSecureContextAsync();
+            var success = await _repo.ProcessCheckOutAsync(reservationId, ctx.UserId, ctx.DeviceId);
             return JsonSerializer.Serialize(new { success });
         }
         catch (Exception ex)
@@ -107,11 +175,12 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message });
         }
     }
-    public async Task<string> UpdateHousekeepingTaskStatusAsync(string taskId, string status, string userId, string deviceId)
+    public async Task<string> UpdateHousekeepingTaskStatusAsync(string taskId, string status)
     {
         try
         {
-            var success = await _repo.UpdateHousekeepingTaskStatusAsync(taskId, status, userId, deviceId);
+            var ctx = await GetSecureContextAsync();
+            var success = await _repo.UpdateHousekeepingTaskStatusAsync(taskId, status, ctx.UserId, ctx.DeviceId);
             return JsonSerializer.Serialize(new { success });
         }
         catch (Exception ex)
@@ -119,11 +188,12 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message });
         }
     }
-    public async Task<string> ResolveMaintenanceTicketAsync(string ticketId, string userId, string deviceId)
+    public async Task<string> ResolveMaintenanceTicketAsync(string ticketId)
     {
         try
         {
-            var success = await _repo.ResolveMaintenanceTicketAsync(ticketId, userId, deviceId);
+            var ctx = await GetSecureContextAsync();
+            var success = await _repo.ResolveMaintenanceTicketAsync(ticketId, ctx.UserId, ctx.DeviceId);
             return JsonSerializer.Serialize(new { success });
         }
         catch (Exception ex)

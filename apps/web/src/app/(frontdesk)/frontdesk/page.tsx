@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { useSession } from 'next-auth/react';
+import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { Button } from '@/components/ui/button';
 import { useProperty } from '@/components/PropertyProvider';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
@@ -34,8 +34,8 @@ import { cn } from '@/lib/utils';
 
 export default function ReceptionistDashboardPage() {
   const router = useRouter();
-  const { data: session } = useSession();
   const { propertyId } = useProperty();
+  const { data: session } = useLodgeCoreSession();
   const { provider } = useLodgeCoreProvider();
 
   const [checkInReservationId, setCheckInReservationId] = useState<string | null>(null);

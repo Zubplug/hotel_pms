@@ -111,6 +111,28 @@ public partial class MainPage : ContentPage
 
             switch (method)
             {
+                case "auth.getSession":
+                    responseData = await pmsInterop.GetSessionAsync();
+                    break;
+                case "auth.provisionDevice":
+                    var permissionsArray = parameters?["permissions"]?.AsArray()?.Select(x => x.ToString()).ToArray() ?? Array.Empty<string>();
+                    var sessionVersion = parameters?["sessionVersion"]?.GetValue<int>() ?? 1;
+                    
+                    responseData = await pmsInterop.ProvisionDeviceAsync(
+                        parameters?["userId"]?.ToString(),
+                        parameters?["propertyId"]?.ToString(),
+                        parameters?["role"]?.ToString(),
+                        parameters?["deviceToken"]?.ToString(),
+                        permissionsArray,
+                        sessionVersion
+                    );
+                    break;
+                case "auth.clearSession":
+                    responseData = await pmsInterop.ClearSessionAsync();
+                    break;
+                case "properties.list":
+                    responseData = await pmsInterop.GetPropertiesAsync();
+                    break;
                 case "hardware.readCard":
                     responseData = await hardwareInterop.ReadCardAsync();
                     break;
@@ -126,15 +148,11 @@ public partial class MainPage : ContentPage
                     break;
                 case "reservations.checkIn":
                     string resId = parameters?["reservationId"]?.ToString();
-                    string userId = parameters?["userId"]?.ToString();
-                    string deviceId = parameters?["deviceId"]?.ToString();
-                    responseData = await pmsInterop.ProcessCheckInAsync(resId, userId, deviceId);
+                    responseData = await pmsInterop.ProcessCheckInAsync(resId);
                     break;
                 case "reservations.checkOut":
                     string outResId = parameters?["reservationId"]?.ToString();
-                    string outUserId = parameters?["userId"]?.ToString();
-                    string outDeviceId = parameters?["deviceId"]?.ToString();
-                    responseData = await pmsInterop.ProcessCheckOutAsync(outResId, outUserId, outDeviceId);
+                    responseData = await pmsInterop.ProcessCheckOutAsync(outResId);
                     break;
                 case "dashboard.get":
                     responseData = await pmsInterop.GetDashboardAsync(parameters?["propertyId"]?.ToString());
@@ -176,15 +194,13 @@ public partial class MainPage : ContentPage
                     responseData = await pmsInterop.RecordPaymentAsync(
                         parameters?["folioId"]?.ToString(),
                         parameters?["payment"]?["amount"]?.GetValue<decimal>() ?? 0,
-                        parameters?["payment"]?["method"]?.ToString(),
-                        "System", "Device1");
+                        parameters?["payment"]?["method"]?.ToString());
                     break;
                 case "folios.addCharge":
                     responseData = await pmsInterop.RecordChargeAsync(
                         parameters?["folioId"]?.ToString(),
                         parameters?["charge"]?["amount"]?.GetValue<decimal>() ?? 0,
-                        parameters?["charge"]?["description"]?.ToString(),
-                        "System", "Device1");
+                        parameters?["charge"]?["description"]?.ToString());
                     break;
                 case "keycards.encode":
                     responseData = await hardwareInterop.EncodeCardAsync(parameters?["roomId"]?.ToString());
@@ -201,8 +217,7 @@ public partial class MainPage : ContentPage
                 case "housekeeping.updateTask":
                     responseData = await pmsInterop.UpdateHousekeepingTaskStatusAsync(
                         parameters?["taskId"]?.ToString(),
-                        parameters?["status"]?.ToString(),
-                        "System", "Device1");
+                        parameters?["status"]?.ToString());
                     break;
                 case "maintenance.list":
                     responseData = await pmsInterop.GetMaintenanceTicketsAsync(parameters?["propertyId"]?.ToString());
@@ -212,8 +227,7 @@ public partial class MainPage : ContentPage
                     break;
                 case "maintenance.resolveTicket":
                     responseData = await pmsInterop.ResolveMaintenanceTicketAsync(
-                        parameters?["ticketId"]?.ToString(),
-                        "System", "Device1");
+                        parameters?["ticketId"]?.ToString());
                     break;
                 case "receipts.generate":
                     responseData = await pmsInterop.GenerateReceiptAsync(parameters?["folioId"]?.ToString());

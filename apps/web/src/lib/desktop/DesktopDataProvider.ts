@@ -2,6 +2,20 @@ import { LodgeCoreDataProvider } from './DataProvider';
 import { invokeDesktop } from './IpcBridge';
 
 export const DesktopDataProvider: LodgeCoreDataProvider = {
+  auth: {
+    getSession: async () => {
+      return invokeDesktop('auth.getSession');
+    },
+    provisionDevice: async (userId: string, propertyId: string, role: string, deviceToken: string, permissions: string[] = [], sessionVersion: number = 1) => {
+      return invokeDesktop('auth.provisionDevice', { userId, propertyId, role, deviceToken, permissions, sessionVersion });
+    },
+    clearSession: async () => {
+      return invokeDesktop('auth.clearSession');
+    }
+  },
+  properties: {
+    list: () => invokeDesktop('properties.list')
+  },
   hardware: {
     poll: async (operationId) => {
       // In offline mode, hardware operations are usually synchronous or handled directly via IPC,

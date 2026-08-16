@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { format, startOfDay, endOfDay, subDays } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,14 +9,15 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { useSession } from 'next-auth/react';
+import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { Loader2, Download, Printer } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useProperty } from '@/components/PropertyProvider';
 
 export default function ShiftReportPage() {
+  const router = useRouter();
   const { propertyId } = useProperty();
-  const { data: session } = useSession();
+  const { data: session } = useLodgeCoreSession();
   
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [userId, setUserId] = useState<string>('ALL');

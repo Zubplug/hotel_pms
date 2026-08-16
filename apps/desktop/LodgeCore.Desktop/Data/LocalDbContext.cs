@@ -13,6 +13,7 @@ public class LocalDbContext : DbContext
     public DbSet<LocalMaintenanceTicket> MaintenanceTickets { get; set; } = null!;
     public DbSet<LocalRoom> Rooms { get; set; } = null!;
     public DbSet<LocalRoomType> RoomTypes { get; set; } = null!;
+    public DbSet<LocalProperty> Properties { get; set; } = null!;
 
     public LocalDbContext(DbContextOptions<LocalDbContext> options) : base(options)
     {

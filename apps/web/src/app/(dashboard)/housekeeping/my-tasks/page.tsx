@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
+import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { useProperty } from '@/components/PropertyProvider';
 import { Loader2, CheckCircle2, PlayCircle, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 export default function MyTasksMobileView() {
   const { propertyId } = useProperty();
-  const { data: session } = useSession();
+  const { data: session } = useLodgeCoreSession();
   
   const [tasks, setTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);

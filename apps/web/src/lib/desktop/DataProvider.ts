@@ -1,4 +1,12 @@
 export interface LodgeCoreDataProvider {
+  auth: {
+    getSession: () => Promise<any>;
+    provisionDevice: (userId: string, propertyId: string, role: string, deviceToken: string, permissions?: string[], sessionVersion?: number) => Promise<any>;
+    clearSession?: () => Promise<any>;
+  };
+  properties: {
+    list(): Promise<any[]>;
+  };
   hardware: {
     poll(operationId: string): Promise<any>;
   };

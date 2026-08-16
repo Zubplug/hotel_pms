@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
+import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,7 @@ import { Loader2, AlertCircle, Calendar, RefreshCcw } from 'lucide-react';
 
 export default function HousekeepingDashboard() {
   const { propertyId } = useProperty();
-  const { data: session } = useSession();
+  const { data: session } = useLodgeCoreSession();
   
   const [tasks, setTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);

@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useSession } from 'next-auth/react';
+import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
@@ -76,7 +76,7 @@ const formatCompactCurrency = (value: number) => {
 };
 
 export default function CEODashboardPage() {
-  const { data: session } = useSession();
+  const { data: session } = useLodgeCoreSession();
   const [selectedPropertyId, setSelectedPropertyId] = useState<string>('ALL');
 
   const { data: propertiesList, isLoading: loadingProps } = useQuery({

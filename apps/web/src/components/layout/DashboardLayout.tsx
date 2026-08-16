@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { signOut, useSession } from 'next-auth/react';
+import { signOut } from 'next-auth/react';
+import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { cn } from '@/lib/utils';
 import {
   LayoutDashboard,
@@ -64,8 +65,16 @@ const ALL_NAV = [
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const pathname = usePathname();
+  const { data: session, status } = useLodgeCoreSession();
   const router = useRouter();
-  const { data: session } = useSession();
+
+  const isDesktop = process.env.NEXT_PUBLIC_IS_DESKTOP === 'true';
+
+  useEffect(() => {
+    if (status === 'unauthenticated' && !isDesktop) {
+      router.push('/login');
+    }
+  }, [status, router, isDesktop]);
 
   const userInitials = session?.user?.email
     ? session.user.email.slice(0, 2).toUpperCase()
@@ -83,6 +92,14 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   });
 
   async function handleSignOut() {
+    if (isDesktop) {
+      try {
+        const { DesktopDataProvider } = await import('@/lib/desktop/DesktopDataProvider');
+        await DesktopDataProvider.auth.clearSession();
+      } catch (err) {
+        console.error('Failed to clear desktop session', err);
+      }
+    }
     signOut({ callbackUrl: '/login' });
   }
 

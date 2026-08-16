@@ -20,6 +20,20 @@ async function apiFetch(url: string, options: RequestInit = {}) {
 }
 
 export const OnlineDataProvider: LodgeCoreDataProvider = {
+  auth: {
+    async getSession() {
+      const res = await fetch('/api/auth/session');
+      return res.json();
+    },
+    async provisionDevice(userId, propertyId, role, deviceToken) {
+      throw new Error('Provisioning is only supported on Desktop');
+    }
+  },
+  properties: {
+    async list() {
+      return apiFetch(`/api/v1/properties`);
+    }
+  },
   hardware: {
     poll: async (operationId) => {
       return apiFetch(`/api/v1/hardware/operations/${operationId}`);

@@ -33,19 +33,44 @@ import { useRouter } from 'next/navigation';
 import { SyncIndicator } from '@/components/frontdesk/SyncIndicator';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { ClientOnlyDate } from '@/components/ClientOnlyDate';
+import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 
 export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
-  const { data: session } = useSession();
+  const { data: session, status } = useLodgeCoreSession();
   const { propertyId } = useProperty();
   const { provider } = useLodgeCoreProvider();
   const router = useRouter();
   const [time, setTime] = useState<Date | null>(null);
+
+  const isDesktop = process.env.NEXT_PUBLIC_IS_DESKTOP === 'true';
+
+  useEffect(() => {
+    if (status === 'unauthenticated' && !isDesktop) {
+      router.push('/login');
+    }
+  }, [status, router, isDesktop]);
 
   useEffect(() => {
     setTime(new Date());
     const interval = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(interval);
   }, []);
+
+  async function handleSignOut() {
+    if (isDesktop) {
+      try {
+        const { DesktopDataProvider } = await import('@/lib/desktop/DesktopDataProvider');
+        await DesktopDataProvider.auth.clearSession();
+      } catch (err) {
+        console.error('Failed to clear desktop session', err);
+      }
+    }
+    signOut({ callbackUrl: '/login' });
+  }
+
+  if (status === 'unauthenticated' || (!session?.user && status !== 'loading')) {
+    return null;
+  }
 
   const { data: res } = useQuery({
     queryKey: ['frontdesk', 'dashboard', propertyId],

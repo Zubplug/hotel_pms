@@ -28,7 +28,38 @@ export default function LoginPage() {
       setError('Invalid email or password. Please try again.');
       setIsLoading(false);
     } else {
-      router.push('/properties');
+      // If we are on Desktop, we must provision the device using the newly acquired NextAuth session.
+      const isDesktop = process.env.NEXT_PUBLIC_IS_DESKTOP === 'true';
+      if (isDesktop) {
+        try {
+          const { DesktopDataProvider } = await import('@/lib/desktop/DesktopDataProvider');
+          
+          // Fetch the active session from NextAuth
+          const sessionRes = await fetch('/api/auth/session');
+          const sessionData = await sessionRes.json();
+          
+          if (sessionData && sessionData.user) {
+            const role = (sessionData.user as any).role || 'RECEPTIONIST';
+            const propertyId = (sessionData as any).propertyId || 'prop_stanzel_001';
+            
+            await DesktopDataProvider.auth.provisionDevice(
+              sessionData.user.id || sessionData.user.email,
+              propertyId,
+              role,
+              'device-token-' + Date.now(),
+              [], // permissions
+              1   // sessionVersion
+            );
+          }
+        } catch (err) {
+          console.error('Failed to provision desktop device', err);
+          setError('Failed to provision device for offline access.');
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      router.push('/frontdesk');
       router.refresh();
     }
   }
