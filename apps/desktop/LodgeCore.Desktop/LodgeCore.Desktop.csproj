@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Razor">
 
 	<PropertyGroup>
-		<TargetFrameworks>net8.0-windows10.0.19041.0</TargetFrameworks>
+		<TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
 		<OutputType>Exe</OutputType>
 		<RootNamespace>LodgeCore.Desktop</RootNamespace>
 		<UseMaui>true</UseMaui>
@@ -11,8 +11,8 @@
 		<EnableDefaultCssItems>false</EnableDefaultCssItems>
 
 		<!-- Force x86 on Windows for Hardware SDK compatibility -->
-		<RuntimeIdentifier Condition="$(TargetFramework.Contains('-windows'))">win-x86</RuntimeIdentifier>
-		<PlatformTarget Condition="$(TargetFramework.Contains('-windows'))">x86</PlatformTarget>
+		<RuntimeIdentifier>win-x86</RuntimeIdentifier>
+		<PlatformTarget>x86</PlatformTarget>
 
 		<!-- Display name -->
 		<ApplicationTitle>LodgeCore Front Desk</ApplicationTitle>
