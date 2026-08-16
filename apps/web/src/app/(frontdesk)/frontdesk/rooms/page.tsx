@@ -148,32 +148,51 @@ export default function FrontDeskRoomsPage() {
           <p className="text-slate-500">Try adjusting your filters or search query.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 animate-in fade-in slide-in-from-bottom-8 duration-700">
-          {filteredRooms.map((room) => (
-            <div 
-              key={room.id}
-              onClick={() => setSelectedRoom(room)}
-              className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-xl hover:border-blue-400 transition-all p-4 flex flex-col group cursor-pointer hover:-translate-y-1"
-            >
-              <div className="flex justify-between items-start mb-3">
-                <span className={`px-2 py-1 text-[10px] uppercase font-bold rounded-md border ${getStatusColor(room.status)}`}>
-                  {room.status}
-                </span>
-                <div title={room.housekeepingStatus} className="bg-slate-50 p-1.5 rounded-full border border-slate-100 group-hover:bg-blue-50 group-hover:border-blue-100 transition-colors">
-                  {getHousekeepingIcon(room.housekeepingStatus)}
+        <div className="space-y-12 animate-in fade-in slide-in-from-bottom-8 duration-700">
+          {Object.entries(
+            filteredRooms.reduce((acc, room) => {
+              const key = `${room.building?.name || 'Main Building'} • Floor ${room.floor?.number || room.floor?.name || 'N/A'}`;
+              if (!acc[key]) acc[key] = { floorNumber: room.floor?.number || 0, rooms: [] };
+              acc[key].rooms.push(room);
+              return acc;
+            }, {} as Record<string, { floorNumber: number; rooms: Room[] }>)
+          )
+          .sort((a, b) => a[1].floorNumber - b[1].floorNumber)
+          .map(([groupName, group]) => (
+            <div key={groupName} className="space-y-5">
+              <div className="flex items-center gap-4">
+                <div className="bg-slate-100 text-slate-700 font-bold px-4 py-1.5 rounded-full text-sm border border-slate-200">
+                  {groupName}
                 </div>
+                <div className="h-px bg-slate-200 flex-1"></div>
               </div>
+              
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                {group.rooms.sort((a, b) => a.number.localeCompare(b.number, undefined, { numeric: true })).map((room) => (
+                  <div 
+                    key={room.id}
+                    onClick={() => setSelectedRoom(room)}
+                    className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-xl hover:border-blue-400 transition-all p-4 flex flex-col group cursor-pointer hover:-translate-y-1"
+                  >
+                    <div className="flex justify-between items-start mb-3">
+                      <span className={`px-2 py-1 text-[10px] uppercase font-bold rounded-md border ${getStatusColor(room.status)}`}>
+                        {room.status}
+                      </span>
+                      <div title={room.housekeepingStatus} className="bg-slate-50 p-1.5 rounded-full border border-slate-100 group-hover:bg-blue-50 group-hover:border-blue-100 transition-colors">
+                        {getHousekeepingIcon(room.housekeepingStatus)}
+                      </div>
+                    </div>
 
-              <div className="mt-auto">
-                <h3 className="text-3xl font-black text-slate-900 tracking-tight group-hover:text-blue-600 transition-colors">
-                  {formatRoomNumber(room.number)}
-                </h3>
-                <p className="text-sm font-medium text-slate-500 truncate mt-1">
-                  {room.roomType.name}
-                </p>
-                <p className="text-[10px] text-slate-400 mt-0.5 font-semibold uppercase">
-                  {room.building?.name} • Floor {room.floor?.number}
-                </p>
+                    <div className="mt-auto">
+                      <h3 className="text-3xl font-black text-slate-900 tracking-tight group-hover:text-blue-600 transition-colors">
+                        {formatRoomNumber(room.number)}
+                      </h3>
+                      <p className="text-sm font-medium text-slate-500 truncate mt-1">
+                        {room.roomType.name}
+                      </p>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           ))}
