@@ -40,10 +40,10 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
   reservations: {
     list: async (propertyId, params) => {
       const query = new URLSearchParams({ propertyId, ...params });
-      return apiFetch(`/api/v1/frontdesk/reservations?${query.toString()}`);
+      return apiFetch(`/api/v1/reservations?${query.toString()}`);
     },
     async get(id: string) {
-      return apiFetch(`/api/v1/frontdesk/reservations/${id}`);
+      return apiFetch(`/api/v1/reservations/${id}`);
     },
     async lookupByRoom(roomNo: string, propertyId: string) {
       const res = await fetch(`/api/v1/reservations/lookup?roomNo=${roomNo}&propertyId=${propertyId}`);
@@ -52,37 +52,37 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
       return data.data?.reservation || null;
     },
     async create(data: any) {
-      return apiFetch(`/api/v1/frontdesk/reservations`, {
+      return apiFetch(`/api/v1/reservations`, {
         method: 'POST',
         body: JSON.stringify(data)
       });
     },
     update: async (id, data) => {
-      return apiFetch(`/api/v1/frontdesk/reservations/${id}`, {
+      return apiFetch(`/api/v1/reservations/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(data)
       });
     },
     cancel: async (id, reason) => {
-      return apiFetch(`/api/v1/frontdesk/reservations/${id}/cancel`, {
+      return apiFetch(`/api/v1/reservations/${id}/cancel`, {
         method: 'POST',
         body: JSON.stringify({ reason })
       });
     },
     checkIn: async (id, userId, deviceId) => {
-      return apiFetch(`/api/v1/frontdesk/reservations/${id}/check-in`, {
+      return apiFetch(`/api/v1/reservations/${id}/check-in`, {
         method: 'POST',
         body: JSON.stringify({ userId, deviceId })
       });
     },
     checkOut: async (id, userId, deviceId) => {
-      return apiFetch(`/api/v1/frontdesk/reservations/${id}/check-out`, {
+      return apiFetch(`/api/v1/reservations/${id}/check-out`, {
         method: 'POST',
         body: JSON.stringify({ userId, deviceId })
       });
     },
     extendStay: async (id, newCheckOutDate) => {
-      return apiFetch(`/api/v1/frontdesk/reservations/${id}/extend`, {
+      return apiFetch(`/api/v1/reservations/${id}/extend`, {
         method: 'POST',
         body: JSON.stringify({ newCheckOutDate })
       });
@@ -91,27 +91,27 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
   rooms: {
     async list(propertyId: string, params?: any) {
       const qs = params ? new URLSearchParams(params).toString() : '';
-      return apiFetch(`/api/v1/frontdesk/rooms?propertyId=${propertyId}&${qs}`);
+      return apiFetch(`/api/v1/rooms?propertyId=${propertyId}&${qs}`);
     },
     async getAvailable(propertyId: string, roomTypeId: string, checkIn: string, checkOut: string) {
       return apiFetch(`/api/v1/rooms/available?propertyId=${propertyId}&roomTypeId=${roomTypeId}&checkIn=${checkIn}&checkOut=${checkOut}`);
     },
     async getActiveReservation(roomId: string) {
-      return apiFetch(`/api/v1/frontdesk/rooms/${roomId}/active-reservation`);
+      return apiFetch(`/api/v1/rooms/${roomId}/active-reservation`);
     }
   },
   folios: {
     get: async (id) => {
-      return apiFetch(`/api/v1/frontdesk/folios/${id}`);
+      return apiFetch(`/api/v1/folios/${id}`);
     },
     addCharge: async (folioId, charge) => {
-      return apiFetch(`/api/v1/frontdesk/folios/${folioId}/charges`, {
+      return apiFetch(`/api/v1/folios/${folioId}/charges`, {
         method: 'POST',
         body: JSON.stringify(charge)
       });
     },
     addPayment: async (folioId, payment) => {
-      return apiFetch(`/api/v1/frontdesk/folios/${folioId}/payments`, {
+      return apiFetch(`/api/v1/folios/${folioId}/payments`, {
         method: 'POST',
         body: JSON.stringify(payment)
       });
@@ -119,26 +119,26 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
   },
   keycards: {
     encode: async (roomId, guestName, checkIn, checkOut) => {
-      return apiFetch(`/api/v1/frontdesk/hardware/keycards/encode`, {
+      return apiFetch(`/api/v1/hardware/keycards/encode`, {
         method: 'POST',
         body: JSON.stringify({ roomId, guestName, checkIn, checkOut })
       });
     },
     read: async () => {
-      return apiFetch(`/api/v1/frontdesk/hardware/keycards/read`);
+      return apiFetch(`/api/v1/hardware/keycards/read`);
     },
     cancel: async () => {
-      return apiFetch(`/api/v1/hardware/locks/cancel-card`, {
+      return apiFetch(`/api/v1/hardware/keycards/cancel`, {
         method: 'POST'
       });
     }
   },
   housekeeping: {
     list: async (propertyId) => {
-      return apiFetch(`/api/v1/frontdesk/housekeeping?propertyId=${propertyId}`);
+      return apiFetch(`/api/v1/housekeeping?propertyId=${propertyId}`);
     },
     updateTask: async (taskId, status) => {
-      return apiFetch(`/api/v1/frontdesk/housekeeping/${taskId}`, {
+      return apiFetch(`/api/v1/housekeeping/${taskId}`, {
         method: 'PATCH',
         body: JSON.stringify({ status })
       });
@@ -146,24 +146,25 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
   },
   maintenance: {
     list: async (propertyId) => {
-      return apiFetch(`/api/v1/frontdesk/maintenance?propertyId=${propertyId}`);
+      return apiFetch(`/api/v1/maintenance?propertyId=${propertyId}`);
     },
-    createTicket: async (data) => {
-      return apiFetch(`/api/v1/frontdesk/maintenance`, {
+    createTicket: async (ticket) => {
+      return apiFetch(`/api/v1/maintenance`, {
         method: 'POST',
-        body: JSON.stringify(data)
+        body: JSON.stringify(ticket)
       });
     },
-    resolveTicket: async (ticketId) => {
-      return apiFetch(`/api/v1/frontdesk/maintenance/${ticketId}/resolve`, {
-        method: 'POST'
+    resolveTicket: async (ticketId, resolution) => {
+      return apiFetch(`/api/v1/maintenance/${ticketId}/resolve`, {
+        method: 'POST',
+        body: JSON.stringify({ resolution })
       });
     }
   },
   receipts: {
     generate: async (folioId) => {
-      return apiFetch(`/api/v1/frontdesk/folios/${folioId}/receipt`, {
-        method: 'POST'
+      return apiFetch(`/api/v1/payments/${folioId}/receipt`, {
+        method: 'GET'
       });
     }
   }
