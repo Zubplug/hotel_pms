@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { Search, User, LogIn, ArrowRight, Clock, ArrowLeft, CheckCircle2, UserPlus, CreditCard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useProperty } from '@/components/PropertyProvider';
+import { useLodgeCoreProvider } from '@/components/DataProviderContext';
 import { format } from 'date-fns';
 import { formatRoomNumber } from '@/lib/format-room';
 
@@ -48,19 +49,19 @@ export default function FrontDeskReservationsPage() {
     }
   };
 
+  const { provider } = useLodgeCoreProvider();
+
   const { data, isLoading } = useQuery({
     queryKey: ['frontdesk', 'reservations', { search: debouncedSearch, filter: activeFilter }],
     queryFn: async () => {
       const status = getStatusQuery();
-      const params = new URLSearchParams({
+      const params: any = {
         page: '1',
         pageSize: '50', // Fetch more for workstation
         ...(debouncedSearch ? { search: debouncedSearch } : {}),
         ...(status ? { status } : {}),
-      });
-      const res = await fetch(`/api/v1/reservations?${params}`);
-      if (!res.ok) throw new Error('Failed to load reservations');
-      return res.json();
+      };
+      return await provider.reservations.list(propertyId, params);
     },
   });
 
@@ -162,7 +163,7 @@ export default function FrontDeskReservationsPage() {
             const isUnpaid = balance > 0;
             
             return (
-              <Link href={`/frontdesk/reservations/${res.id}`} key={res.id}>
+              <Link href={`/frontdesk/reservations/detail?id=${res.id}`} key={res.id}>
                 <div className="group bg-white rounded-3xl p-6 border border-slate-200 shadow-sm hover:shadow-xl hover:border-blue-200 transition-all cursor-pointer relative overflow-hidden flex flex-col h-full">
                   
                   {/* Status Indicator Bar */}

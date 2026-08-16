@@ -3,15 +3,13 @@ set -e
 
 echo "Building LodgeCore Web Application..."
 cd ../../apps/web
-# In a real pipeline, we will build the Next.js standalone server
-# and copy it to the MAUI app's resources folder.
-npm run build
+# Build the static Front Desk bundle
+npm run build:desktop
 
-echo "Copying Standalone Server to Desktop App..."
-mkdir -p ../../apps/desktop/LodgeCore.Desktop/Resources/Raw/server
-cp -r .next/standalone/* ../../apps/desktop/LodgeCore.Desktop/Resources/Raw/server/
-cp -r public ../../apps/desktop/LodgeCore.Desktop/Resources/Raw/server/public
-cp -r .next/static ../../apps/desktop/LodgeCore.Desktop/Resources/Raw/server/.next/static
+echo "Copying Static Front Desk Bundle to Desktop App..."
+rm -rf ../../apps/desktop/LodgeCore.Desktop/wwwroot
+mkdir -p ../../apps/desktop/LodgeCore.Desktop/wwwroot
+cp -r out/* ../../apps/desktop/LodgeCore.Desktop/wwwroot/
 
 echo "Building MAUI Desktop App..."
 cd ../../apps/desktop/LodgeCore.Desktop

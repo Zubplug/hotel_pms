@@ -17,8 +17,6 @@ public static class MauiProgram
                 fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
             });
 
-        builder.Services.AddMauiBlazorWebView();
-
         // Register Hardware Agent dependencies
         builder.Services.AddSingleton<ILockProvider>(sp =>
         {
@@ -61,7 +59,6 @@ public static class MauiProgram
         builder.Services.AddSingleton<OfflinePMSInterop>();
 
 #if DEBUG
-        builder.Services.AddBlazorWebViewDeveloperTools();
         builder.Logging.AddDebug();
 #endif
 

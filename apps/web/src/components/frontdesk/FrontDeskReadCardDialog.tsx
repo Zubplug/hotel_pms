@@ -12,6 +12,8 @@ import { CreditCard, Loader2, AlertCircle, Info, User, CheckCircle2, Key, Clock,
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
+import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
 interface FrontDeskReadCardDialogProps {
   open: boolean;
@@ -21,6 +23,7 @@ interface FrontDeskReadCardDialogProps {
 
 export function FrontDeskReadCardDialog({ open, onOpenChange, propertyId }: FrontDeskReadCardDialogProps) {
   const router = useRouter();
+  const { provider } = useLodgeCoreProvider();
   const [step, setStep] = useState<'IDLE' | 'READING' | 'SUCCESS' | 'ERROR'>('IDLE');
   const [errorMsg, setErrorMsg] = useState('');
   const [cardInfo, setCardInfo] = useState<any>(null);
@@ -39,39 +42,44 @@ export function FrontDeskReadCardDialog({ open, onOpenChange, propertyId }: Fron
     setStep('READING');
     setErrorMsg('');
     try {
-      const res = await fetch('/api/v1/hardware/locks/read-card', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ propertyId }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error?.message || 'Failed to trigger read');
-
-      const opId = data.data.operation.id;
-
       let readData = null;
-      for (let i = 0; i < 20; i++) {
-        await new Promise(r => setTimeout(r, 1000));
-        const pRes = await fetch(`/api/v1/hardware/operations/${opId}`);
-        const pData = await pRes.json();
-        const op = pData.data?.operation;
-        if (op?.status === 'SUCCESS' || op?.status === 'COMPLETED') {
-          readData = op.command?.responseData;
-          break;
-        } else if (op?.status === 'FAILED' || op?.status === 'ERROR') {
-          throw new Error(op.errorMessage || 'Failed to read card');
+
+      if (HardwareBridge.isAvailable()) {
+        readData = await HardwareBridge.readCard();
+      } else {
+        // Fallback for Cloud/Browser
+        const res = await fetch('/api/v1/hardware/locks/read-card', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ propertyId }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error?.message || 'Failed to trigger read');
+
+        const opId = data.data.operation.id;
+
+        for (let i = 0; i < 20; i++) {
+          await new Promise(r => setTimeout(r, 1000));
+          const pRes = await fetch(`/api/v1/hardware/operations/${opId}`);
+          const pData = await pRes.json();
+          const op = pData.data?.operation;
+          if (op?.status === 'SUCCESS' || op?.status === 'COMPLETED') {
+            readData = op.command?.responseData;
+            break;
+          } else if (op?.status === 'FAILED' || op?.status === 'ERROR') {
+            throw new Error(op.errorMessage || 'Failed to read card');
+          }
         }
       }
 
-      if (!readData) throw new Error('Timed out waiting for card read');
+      if (!readData) throw new Error('Timed out waiting for card read or card is empty');
       setCardInfo(readData);
 
       if (readData.roomNo) {
         try {
-          const lRes = await fetch(`/api/v1/reservations/lookup?roomNo=${readData.roomNo}&propertyId=${propertyId}`);
-          const lData = await lRes.json();
-          if (lRes.ok && lData.data.reservation) {
-            setReservation(lData.data.reservation);
+          const lData = await provider.reservations.lookupByRoom(readData.roomNo, propertyId);
+          if (lData) {
+            setReservation(lData);
           }
         } catch (e) {
           console.error('Failed to lookup reservation', e);
@@ -197,7 +205,7 @@ export function FrontDeskReadCardDialog({ open, onOpenChange, propertyId }: Fron
                     <Button 
                       onClick={() => {
                         onOpenChange(false);
-                        router.push(`/frontdesk/reservations/${reservation.id}`);
+                        router.push(`/frontdesk/reservations/detail?id=${reservation.id}`);
                       }}
                       className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-sm"
                     >

@@ -10,6 +10,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Loader2, CheckCircle2, AlertCircle, Key, ArrowRight, Wallet, User, LogIn } from 'lucide-react';
 import { format } from 'date-fns';
+import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
+import { useLodgeCoreProvider } from '@/components/DataProviderContext';
 import { formatRoomNumber } from '@/lib/format-room';
 
 interface FrontDeskCheckInDialogProps {
@@ -33,9 +35,8 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
     queryKey: ['reservation', reservationId],
     queryFn: async () => {
       if (!reservationId) return null;
-      const response = await fetch(`/api/v1/reservations/${reservationId}`);
-      if (!response.ok) throw new Error('Failed to fetch reservation details');
-      return response.json();
+      const data = await provider.reservations.get(reservationId);
+      return data;
     },
     enabled: !!reservationId && open,
   });
@@ -58,10 +59,7 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
 
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`/api/v1/hardware/operations/${operationId}`);
-        if (!res.ok) throw new Error('Failed to poll operation status');
-        
-        const data = await res.json();
+        const data = await provider.hardware.poll(operationId);
         const op = data.data.operation;
         const status = op.status;
 
@@ -91,10 +89,7 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
 
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`/api/v1/hardware/operations/${operationId}`);
-        if (!res.ok) throw new Error('Failed to poll operation status');
-        
-        const data = await res.json();
+        const data = await provider.hardware.poll(operationId);
         const status = data.data.operation.status;
 
         if (status === 'SUCCESS' || status === 'COMPLETED') {
@@ -118,17 +113,11 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
       setPhase('READING');
       setErrorMsg(null);
 
-      const res = await fetch('/api/v1/hardware/locks/read-card', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ propertyId }),
-      });
-      
-      const data = await res.json();
+      const data = await provider.keycards.read();
 
-      if (!res.ok) {
+      if (!data || data.error) {
         setPhase('FAILED');
-        setErrorMsg(data.error?.message || 'Failed to initiate read card');
+        setErrorMsg(data?.error?.message || 'Failed to initiate read card');
         return;
       }
 
@@ -145,15 +134,11 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
       setErrorMsg(null);
       setOperationId(null); 
 
-      const res = await fetch(`/api/v1/reservations/${reservationId}/check-in`, {
-        method: 'POST',
-      });
-      
-      const data = await res.json();
+      const data = await provider.reservations.checkIn(reservationId!, "System", "Device1");
 
-      if (!res.ok) {
+      if (!data || data.error) {
         setPhase('FAILED');
-        setErrorMsg(data.error?.message || 'Failed to initiate check-in');
+        setErrorMsg(data?.error?.message || 'Failed to initiate check-in');
         return;
       }
 

@@ -13,39 +13,21 @@ import {
   DropdownMenuLabel
 } from '@/components/ui/dropdown-menu';
 import { useRouter } from 'next/navigation';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
 export function SyncIndicator() {
-  const [isOnline, setIsOnline] = useState(true);
+  const { isOnline, syncStatus, isDesktopMode } = useLodgeCoreProvider();
   const [pendingCount, setPendingCount] = useState(0);
   const [conflictCount, setConflictCount] = useState(0);
   const router = useRouter();
-
+  
+  // Pending counts could be polled or pushed via IPC
   useEffect(() => {
-    // Check initial status
-    setIsOnline(navigator.onLine);
-
-    // Setup listeners
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    // Mock polling for Sync Queue Status (this would be fulfilled by MAUI Interop in prod)
-    const pollInterval = setInterval(() => {
-      // If we are in the desktop wrapper, we would call window.OfflinePMSInterop.GetSyncStatus()
-      if (typeof window !== 'undefined' && (window as any).OfflinePMSInterop) {
-        // Mock data for now since we can't await inside setInterval easily without wrapper
-        // In real app, fetch from SQLite
-      }
-    }, 5000);
-
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-      clearInterval(pollInterval);
-    };
-  }, []);
+    if (!isDesktopMode) return;
+    
+    // Request initial sync counts from IPC
+    // (In a real implementation, you would poll or listen to IPC events)
+  }, [isDesktopMode]);
 
   return (
     <DropdownMenu>

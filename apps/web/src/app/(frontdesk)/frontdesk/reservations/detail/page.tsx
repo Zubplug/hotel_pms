@@ -1,25 +1,26 @@
 'use client';
 
 import React from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { useProperty } from '@/components/PropertyProvider';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { Loader2, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { FrontDeskReservationDetail } from '@/components/frontdesk/FrontDeskReservationDetail';
 
 export default function FrontDeskReservationPage() {
-  const { id } = useParams() as { id: string };
+  const searchParams = useSearchParams();
+  const id = searchParams.get('id');
   const { propertyId } = useProperty();
+  const { provider } = useLodgeCoreProvider();
   const router = useRouter();
 
   const { data: reservation, isLoading, error } = useQuery({
     queryKey: ['reservation', id],
     queryFn: async () => {
-      const res = await fetch(`/api/v1/reservations/${id}`);
-      if (!res.ok) throw new Error('Failed to fetch reservation');
-      const data = await res.json();
-      return data.data;
+      if (!id) throw new Error("No ID");
+      return provider.reservations.get(id);
     },
     enabled: !!id,
   });

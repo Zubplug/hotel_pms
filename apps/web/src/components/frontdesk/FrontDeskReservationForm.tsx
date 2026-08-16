@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Loader2, Plus, ArrowRight, UserPlus, Calendar } from 'lucide-react';
 import { useProperty } from '@/components/PropertyProvider';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
 const formSchema = z.object({
   isNewGuest: z.boolean(),
@@ -54,6 +55,7 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
   const router = useRouter();
   const queryClient = useQueryClient();
   const { propertyId } = useProperty();
+  const { provider } = useLodgeCoreProvider();
 
   // Try to grab business date from cached dashboard data, otherwise fallback to Date.now()
   const cachedDashboard: any = queryClient.getQueryData(['frontdesk', 'dashboard', propertyId]);
@@ -86,18 +88,15 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
   const { data: guests, isLoading: loadingGuests } = useQuery({
     queryKey: ['guests'],
     queryFn: async () => {
-      const res = await fetch('/api/v1/guests');
-      if (!res.ok) throw new Error('Failed to fetch guests');
-      return (await res.json()).data;
+      // In a real implementation this would map provider models to UI models if needed
+      return provider.guests.list();
     },
   });
 
   const { data: roomTypes, isLoading: loadingRoomTypes } = useQuery({
     queryKey: ['room-types', propertyId],
     queryFn: async () => {
-      const res = await fetch(`/api/v1/room-types?propertyId=${propertyId}`);
-      if (!res.ok) throw new Error('Failed to fetch room types');
-      return (await res.json()).data;
+      return provider.roomTypes.list(propertyId);
     },
     enabled: !!propertyId,
   });
@@ -106,9 +105,7 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
     queryKey: ['available-rooms', propertyId, roomTypeId, checkIn?.toISOString(), checkOut?.toISOString()],
     queryFn: async () => {
       if (!propertyId || !roomTypeId || !checkIn || !checkOut) return [];
-      const res = await fetch(`/api/v1/rooms/available?propertyId=${propertyId}&roomTypeId=${roomTypeId}&checkIn=${checkIn.toISOString()}&checkOut=${checkOut.toISOString()}`);
-      if (!res.ok) throw new Error('Failed to fetch available rooms');
-      return (await res.json()).data;
+      return provider.rooms.getAvailable(propertyId, roomTypeId, checkIn.toISOString(), checkOut.toISOString());
     },
     enabled: !!propertyId && !!roomTypeId && !!checkIn && !!checkOut && checkOut > checkIn,
   });
@@ -127,16 +124,8 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
         propertyId
       };
 
-      const res = await fetch('/api/v1/reservations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.message || 'Failed to create reservation');
-      }
-      return await res.json();
+      const res = await provider.reservations.create(payload);
+      return { data: res }; // Wrap to match expected return type in onSuccess
     },
     onSuccess: (data) => {
       toast.success(isWalkIn ? 'Walk-In Created!' : 'Reservation created successfully');
@@ -144,7 +133,7 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
       queryClient.invalidateQueries({ queryKey: ['frontdesk', 'dashboard'] });
       
       // Navigate to the newly created reservation in the Front Desk view
-      router.push(`/frontdesk/reservations/${data.data.id}`);
+      router.push(`/frontdesk/reservations/detail?id=${data.data.id}`);
     },
     onError: (error) => {
       toast.error(error.message);

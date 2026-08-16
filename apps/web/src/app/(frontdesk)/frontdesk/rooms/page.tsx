@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useProperty } from '@/components/PropertyProvider';
+import { useLodgeCoreProvider } from '@/components/DataProviderContext';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Search, Key, Sparkles, Wind, AlertTriangle, ShieldCheck, DoorOpen } from 'lucide-react';
 import { format } from 'date-fns';
@@ -29,20 +30,19 @@ export default function FrontDeskRoomsPage() {
   const [activeFilter, setActiveFilter] = useState('ALL');
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
 
+  const { provider } = useLodgeCoreProvider();
+
   const { data, isLoading } = useQuery({
     queryKey: ['frontdesk', 'rooms', propertyId, { filter: activeFilter }],
     queryFn: async () => {
-      const params = new URLSearchParams({
-        propertyId,
+      const params: any = {
         page: '1',
         pageSize: '100', // API limit is 100
         ...(activeFilter !== 'ALL' && activeFilter !== 'DIRTY' && activeFilter !== 'CLEAN' ? { status: activeFilter } : {}),
         ...(activeFilter === 'DIRTY' ? { housekeepingStatus: 'DIRTY' } : {}),
         ...(activeFilter === 'CLEAN' ? { housekeepingStatus: 'CLEAN' } : {}),
-      });
-      const res = await fetch(`/api/v1/rooms?${params}`);
-      if (!res.ok) throw new Error('Failed to fetch rooms');
-      return res.json();
+      };
+      return await provider.rooms.list(propertyId, params);
     },
     enabled: !!propertyId,
   });

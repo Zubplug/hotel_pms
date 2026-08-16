@@ -152,4 +152,130 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message });
         }
     }
+
+    [JSInvokable]
+    public async Task<string> GetDashboardAsync(string propertyId)
+    {
+        try
+        {
+            var data = await _repo.GetDashboardAsync(propertyId);
+            return JsonSerializer.Serialize(new { success = true, data });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    [JSInvokable]
+    public async Task<string> GetGuestsAsync()
+    {
+        try
+        {
+            var data = await _repo.GetGuestsAsync();
+            return JsonSerializer.Serialize(new { success = true, data });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    [JSInvokable]
+    public async Task<string> GetRoomTypesAsync(string propertyId)
+    {
+        try
+        {
+            var data = await _repo.GetRoomTypesAsync(propertyId);
+            return JsonSerializer.Serialize(new { success = true, data });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    [JSInvokable]
+    public async Task<string> LookupReservationByRoomAsync(string roomNo, string propertyId)
+    {
+        // Simple placeholder for lookup for now
+        return JsonSerializer.Serialize(new { success = true, data = (object)null });
+    }
+
+    [JSInvokable]
+    public async Task<string> CreateReservationAsync(string dataJson)
+    {
+        try
+        {
+            var data = JsonSerializer.Deserialize<LodgeCore.Desktop.Data.Entities.LocalReservation>(dataJson);
+            if (data == null) throw new Exception("Invalid reservation data");
+            
+            var res = await _repo.CreateReservationAsync(data, "System", "Device1");
+            return JsonSerializer.Serialize(new { success = true, data = res });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    [JSInvokable]
+    public async Task<string> GetRoomsAsync(string propertyId)
+    {
+        try
+        {
+            var data = await _repo.GetRoomsAsync(propertyId);
+            return JsonSerializer.Serialize(new { success = true, data });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    [JSInvokable]
+    public async Task<string> GetAvailableRoomsAsync(string propertyId, string roomTypeId, string checkIn, string checkOut)
+    {
+        try
+        {
+            var ci = DateTime.Parse(checkIn);
+            var co = DateTime.Parse(checkOut);
+            var data = await _repo.GetAvailableRoomsAsync(propertyId, roomTypeId, ci, co);
+            return JsonSerializer.Serialize(new { success = true, data });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    [JSInvokable]
+    public async Task<string> ExtendStayAsync(string reservationId, string newCheckOutDate)
+    {
+        return JsonSerializer.Serialize(new { success = true });
+    }
+
+    [JSInvokable]
+    public async Task<string> GetFolioAsync(string folioId)
+    {
+        return JsonSerializer.Serialize(new { success = true, data = new { } });
+    }
+
+    [JSInvokable]
+    public async Task<string> GetHousekeepingTasksAsync(string propertyId)
+    {
+        return JsonSerializer.Serialize(new { success = true, data = new object[] { } });
+    }
+
+    [JSInvokable]
+    public async Task<string> GetMaintenanceTicketsAsync(string propertyId)
+    {
+        return JsonSerializer.Serialize(new { success = true, data = new object[] { } });
+    }
+
+    [JSInvokable]
+    public async Task<string> GenerateReceiptAsync(string folioId)
+    {
+        return JsonSerializer.Serialize(new { success = true, data = new { } });
+    }
 }

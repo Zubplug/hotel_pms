@@ -285,4 +285,101 @@ public class LocalRepository
     {
         await _dbContext.Database.EnsureCreatedAsync();
     }
+
+    public async Task<List<LocalGuest>> GetGuestsAsync()
+    {
+        return await _dbContext.Guests.ToListAsync();
+    }
+
+    public async Task<List<LocalRoomType>> GetRoomTypesAsync(string propertyId)
+    {
+        return await _dbContext.RoomTypes.Where(rt => rt.PropertyId == propertyId).ToListAsync();
+    }
+
+    public async Task<List<LocalRoom>> GetRoomsAsync(string propertyId)
+    {
+        return await _dbContext.Rooms.Where(r => r.PropertyId == propertyId).ToListAsync();
+    }
+
+    public async Task<object> GetDashboardAsync(string propertyId)
+    {
+        var today = DateTime.UtcNow.Date;
+        
+        var arrivals = await _dbContext.Reservations
+            .Include(r => r.Guest)
+            .Include(r => r.Folio)
+            .Where(r => r.PropertyId == propertyId && r.Status == "CONFIRMED" && r.CheckInDate.Date == today)
+            .Select(r => new {
+                id = r.Id,
+                guestName = r.Guest != null ? r.Guest.FirstName + " " + r.Guest.LastName : "Unknown",
+                roomName = r.RoomNumber ?? "Unassigned",
+                balance = r.Folio != null ? r.Folio.TotalCharges - r.Folio.TotalPayments : 0,
+                status = r.Status,
+                roomStatus = "AVAILABLE"
+            })
+            .ToListAsync();
+
+        var departures = await _dbContext.Reservations
+            .Include(r => r.Guest)
+            .Include(r => r.Folio)
+            .Where(r => r.PropertyId == propertyId && r.Status == "CHECKED_IN" && r.CheckOutDate.Date == today)
+            .Select(r => new {
+                id = r.Id,
+                guestName = r.Guest != null ? r.Guest.FirstName + " " + r.Guest.LastName : "Unknown",
+                roomName = r.RoomNumber ?? "Unassigned",
+                balance = r.Folio != null ? r.Folio.TotalCharges - r.Folio.TotalPayments : 0,
+                status = r.Status
+            })
+            .ToListAsync();
+
+        var inHouse = await _dbContext.Reservations.CountAsync(r => r.PropertyId == propertyId && r.Status == "CHECKED_IN");
+        var totalRooms = await _dbContext.Rooms.CountAsync(r => r.PropertyId == propertyId);
+        
+        return new {
+            kpis = new {
+                arrivals = arrivals.Count,
+                departures = departures.Count,
+                inHouse = inHouse,
+                roomsAvailable = totalRooms - inHouse,
+                roomsTotal = totalRooms
+            },
+            arrivals,
+            departures,
+            hardware = new { status = "ONLINE" },
+            businessDate = today.ToString("yyyy-MM-dd")
+        };
+    }
+
+    public async Task<List<LocalRoom>> GetAvailableRoomsAsync(string propertyId, string roomTypeId, DateTime checkIn, DateTime checkOut)
+    {
+        var allRoomsQuery = _dbContext.Rooms
+            .Where(r => r.PropertyId == propertyId && r.Status != "OUT_OF_ORDER" && r.Status != "MAINTENANCE");
+
+        if (!string.IsNullOrEmpty(roomTypeId))
+        {
+            allRoomsQuery = allRoomsQuery.Where(r => r.RoomTypeId == roomTypeId);
+        }
+
+        var allRooms = await allRoomsQuery.ToListAsync();
+
+        var conflictingReservations = await _dbContext.Reservations
+            .Where(r => r.PropertyId == propertyId && (r.Status == "CONFIRMED" || r.Status == "CHECKED_IN"))
+            .Where(r => r.CheckInDate < checkOut && r.CheckOutDate > checkIn)
+            .Select(r => r.RoomId)
+            .Where(id => id != null)
+            .ToListAsync();
+
+        var outOfOrderRooms = await _dbContext.MaintenanceTickets
+            .Where(m => m.PropertyId == propertyId && m.Status != "RESOLVED" && m.RequiresRoomRestriction)
+            .Select(m => m.RoomId)
+            .Where(id => id != null)
+            .ToListAsync();
+
+        var availableRooms = allRooms
+            .Where(r => !conflictingReservations.Contains(r.Id))
+            .Where(r => !outOfOrderRooms.Contains(r.Id))
+            .ToList();
+
+        return availableRooms;
+    }
 }

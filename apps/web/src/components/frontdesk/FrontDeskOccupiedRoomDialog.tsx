@@ -48,7 +48,7 @@ export function FrontDeskOccupiedRoomDialog({ room, isOpen, onClose }: FrontDesk
 
   const handleViewReservation = (reservationId: string) => {
     onClose();
-    router.push(`/frontdesk/reservations/${reservationId}`);
+    router.push(`/frontdesk/reservations/detail?id=${reservationId}`);
   };
 
   return (

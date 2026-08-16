@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { CreditCard, Loader2, AlertCircle, CheckCircle2, User, Key, ArrowRight, Wallet, Info } from 'lucide-react';
+import { useLodgeCoreProvider } from '@/components/DataProviderContext';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 
@@ -21,6 +22,7 @@ interface FrontDeskQuickCheckoutDialogProps {
 
 export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, initialReservation }: FrontDeskQuickCheckoutDialogProps) {
   const queryClient = useQueryClient();
+  const { provider } = useLodgeCoreProvider();
   const [step, setStep] = useState<'IDLE' | 'READING' | 'CONFIRMING' | 'CHECKING_OUT' | 'ERASING' | 'SUCCESS' | 'ERROR'>('IDLE');
   const [errorMsg, setErrorMsg] = useState('');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -44,21 +46,15 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
     setStep('READING');
     setErrorMsg('');
     try {
-      const res = await fetch('/api/v1/hardware/locks/read-card', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ propertyId }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error?.message || 'Failed to trigger read');
+      const data = await provider.keycards.read();
+      if (!data || data.error) throw new Error(data?.error?.message || 'Failed to trigger read');
 
       const opId = data.data.operation.id;
 
       let readData = null;
       for (let i = 0; i < 20; i++) {
         await new Promise(r => setTimeout(r, 1000));
-        const pRes = await fetch(`/api/v1/hardware/operations/${opId}`);
-        const pData = await pRes.json();
+        const pData = await provider.hardware.poll(opId);
         const op = pData.data?.operation;
         if (op?.status === 'SUCCESS' || op?.status === 'COMPLETED') {
           readData = op.command?.responseData;
@@ -71,15 +67,14 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
       if (!readData) throw new Error('Timed out waiting for card read');
       if (!readData.roomNo) throw new Error('Card does not contain a room number');
 
-      const lRes = await fetch(`/api/v1/reservations/lookup?roomNo=${readData.roomNo}&propertyId=${propertyId}`);
-      const lData = await lRes.json();
-      if (!lRes.ok) throw new Error(lData.error?.message || 'Failed to lookup reservation');
+      const lData = await provider.reservations.lookupByRoom(readData.roomNo, propertyId);
+      if (!lData || lData.error) throw new Error(lData?.error?.message || 'Failed to lookup reservation');
 
-      if (!lData.data.reservation) {
+      if (!lData.data?.reservation && !lData.data?.data) { // fallback check for different API structures
         throw new Error(`No active reservation found for room ${readData.roomNo}`);
       }
 
-      setReservation(lData.data.reservation);
+      setReservation(lData.data.reservation || lData.data.data || lData.data);
       setStep('CONFIRMING');
 
     } catch (err: any) {
@@ -92,26 +87,19 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
     if (!reservation) return;
     setStep('CHECKING_OUT');
     try {
-      const res = await fetch(`/api/v1/reservations/${reservation.id}/check-out`, { method: 'POST' });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error?.message || 'Checkout failed');
+      const data = await provider.reservations.checkOut(reservation.id, "System", "Device1");
+      if (!data || data.error) throw new Error(data?.error?.message || 'Checkout failed');
 
       setStep('ERASING');
-      const cRes = await fetch('/api/v1/hardware/locks/cancel-card', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ propertyId }),
-      });
-      const cData = await cRes.json();
-      if (!cRes.ok) throw new Error(cData.error?.message || 'Failed to trigger cancel card');
+      const cData = await provider.keycards.cancel();
+      if (!cData || cData.error) throw new Error(cData?.error?.message || 'Failed to trigger cancel card');
       
       const opId = cData.data.operation.id;
 
       let erased = false;
       for (let i = 0; i < 20; i++) {
         await new Promise(r => setTimeout(r, 1000));
-        const pRes = await fetch(`/api/v1/hardware/operations/${opId}`);
-        const pData = await pRes.json();
+        const pData = await provider.hardware.poll(opId);
         const op = pData.data?.operation;
         if (op?.status === 'SUCCESS' || op?.status === 'COMPLETED') {
           erased = true;

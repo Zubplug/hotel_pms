@@ -3,6 +3,7 @@ namespace LodgeCore.Desktop.Data.Entities;
 public class LocalFolio
 {
     public string Id { get; set; } = Guid.NewGuid().ToString();
+    public string PropertyId { get; set; } = string.Empty;
     public string ReservationId { get; set; } = string.Empty;
     public LocalReservation? Reservation { get; set; }
     

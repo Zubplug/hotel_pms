@@ -31,10 +31,12 @@ import { useProperty } from '@/components/PropertyProvider';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import { SyncIndicator } from '@/components/frontdesk/SyncIndicator';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
 export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession();
   const { propertyId } = useProperty();
+  const { provider } = useLodgeCoreProvider();
   const router = useRouter();
   const [time, setTime] = useState<Date | null>(null);
 
@@ -48,9 +50,8 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
     queryKey: ['frontdesk', 'dashboard', propertyId],
     queryFn: async () => {
       if (!propertyId) return null;
-      const response = await fetch(`/api/v1/frontdesk/dashboard?propertyId=${propertyId}`);
-      if (!response.ok) throw new Error('Failed to fetch dashboard data');
-      return response.json();
+      const data = await provider.dashboard.get(propertyId);
+      return { data }; // Wrap it to match the expected format used in the UI
     },
     enabled: !!propertyId,
     refetchInterval: 10000,

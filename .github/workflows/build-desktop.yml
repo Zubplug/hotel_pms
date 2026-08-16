@@ -14,6 +14,22 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+
+      - name: Install Node Dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build Next.js Static Export
+        run: pnpm build:desktop
+
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v4
         with:
@@ -54,12 +70,12 @@ jobs:
           CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         run: |
           cd apps\desktop\LodgeCore.Desktop
-          dotnet publish -f net10.0-windows10.0.19041.0 -c Release /p:GenerateAppxPackageOnBuild=true /p:AppxPackageSigningEnabled=true /p:PackageCertificateThumbprint="${{ env.THUMBPRINT }}"
+          dotnet publish -f net8.0-windows10.0.19041.0 -c Release /p:RuntimeIdentifierOverride=win10-x64 /p:GenerateAppxPackageOnBuild=true /p:AppxPackageSigningEnabled=true /p:PackageCertificateThumbprint="${{ env.THUMBPRINT }}"
 
       - name: Upload MSIX Artifact
         uses: actions/upload-artifact@v4
         with:
           name: LodgeCore-Windows-Installer
           path: |
-            apps/desktop/LodgeCore.Desktop/bin/Release/net10.0-windows10.0.19041.0/win-x86/AppPackages/**/*.msix
+            apps/desktop/LodgeCore.Desktop/bin/Release/net8.0-windows10.0.19041.0/win10-x64/AppPackages/**/*.msix
             LodgeCorePilot.cer

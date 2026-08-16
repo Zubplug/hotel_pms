@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 import { useProperty } from '@/components/PropertyProvider';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { FrontDeskCheckInDialog } from '@/components/frontdesk/FrontDeskCheckInDialog';
 import { CheckOutDialog } from '@/components/reservations/CheckOutDialog';
 import { FrontDeskQuickCheckoutDialog } from '@/components/frontdesk/FrontDeskQuickCheckoutDialog';
@@ -34,6 +35,7 @@ export default function ReceptionistDashboardPage() {
   const router = useRouter();
   const { data: session } = useSession();
   const { propertyId } = useProperty();
+  const { provider } = useLodgeCoreProvider();
 
   const [checkInReservationId, setCheckInReservationId] = useState<string | null>(null);
   const [checkOutReservation, setCheckOutReservation] = useState<any | null>(null);
@@ -44,9 +46,8 @@ export default function ReceptionistDashboardPage() {
     queryKey: ['frontdesk', 'dashboard', propertyId],
     queryFn: async () => {
       if (!propertyId) return null;
-      const response = await fetch(`/api/v1/frontdesk/dashboard?propertyId=${propertyId}`);
-      if (!response.ok) throw new Error('Failed to fetch dashboard data');
-      return response.json();
+      const data = await provider.dashboard.get(propertyId);
+      return { data }; // Wrap it to match the expected format used in the UI
     },
     enabled: !!propertyId,
     refetchInterval: 10000,
@@ -236,7 +237,7 @@ export default function ReceptionistDashboardPage() {
                             className={cn("rounded-xl font-semibold px-4", canCheckIn ? "bg-blue-600 hover:bg-blue-700 text-white" : "")}
                             onClick={() => {
                               if (!isPaid) {
-                                router.push(`/frontdesk/reservations/${arr.id}`); // View folio to pay
+                                router.push(`/frontdesk/reservations/detail?id=${arr.id}`); // View folio to pay
                               } else {
                                 setCheckInReservationId(arr.id);
                               }
@@ -245,7 +246,7 @@ export default function ReceptionistDashboardPage() {
                             {isPaid ? 'Check In' : 'View Folio'}
                           </Button>
                         ) : (
-                          <Button size="sm" variant="secondary" className="rounded-xl px-4 bg-slate-100 text-slate-600 hover:bg-slate-200" onClick={() => router.push(`/frontdesk/reservations/${arr.id}`)}>
+                          <Button size="sm" variant="secondary" className="rounded-xl px-4 bg-slate-100 text-slate-600 hover:bg-slate-200" onClick={() => router.push(`/frontdesk/reservations/detail?id=${arr.id}`)}>
                             Manage
                           </Button>
                         )}
@@ -308,7 +309,7 @@ export default function ReceptionistDashboardPage() {
                             className={cn("rounded-xl font-semibold px-4", isPaid ? "bg-slate-900 hover:bg-slate-800 text-white" : "")}
                             onClick={() => {
                               if (!isPaid) {
-                                router.push(`/frontdesk/reservations/${dep.id}`); // View folio to pay
+                                router.push(`/frontdesk/reservations/detail?id=${dep.id}`); // View folio to pay
                               } else {
                                 setCheckOutReservation({ id: dep.id, folios: [{ balance: dep.balance }] });
                               }

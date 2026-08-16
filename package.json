@@ -9,6 +9,8 @@
   ],
   "scripts": {
     "build": "turbo build",
+    "build:desktop": "pnpm --filter web build:desktop && rm -rf apps/desktop/LodgeCore.Desktop/wwwroot && cp -r apps/web/out apps/desktop/LodgeCore.Desktop/wwwroot",
+    "build:desktop:maui": "dotnet publish apps/desktop/LodgeCore.Desktop/LodgeCore.Desktop.csproj -f net8.0-windows10.0.19041.0 -c Release -p:RuntimeIdentifierOverride=win10-x64",
     "dev": "turbo dev",
     "lint": "turbo lint",
     "type-check": "turbo type-check",
