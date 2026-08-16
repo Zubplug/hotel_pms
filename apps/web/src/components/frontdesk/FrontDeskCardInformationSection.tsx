@@ -5,12 +5,8 @@ import { format, isPast, isFuture, isWithinInterval, differenceInDays } from 'da
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  KeySquare, ShieldCheck, ShieldOff, Clock, CreditCard,
-  ChevronDown, ChevronUp, CheckCircle2,
-  CalendarDays, Fingerprint, Wifi, RefreshCw
-} from 'lucide-react';
-import { ExtendKeyCardDialog } from '../reservations/ExtendKeyCardDialog';
+import { Edit, RefreshCw, KeySquare, History, User, ShieldCheck, ShieldOff, Clock, CreditCard, ChevronDown, ChevronUp, CheckCircle2, CalendarDays, Fingerprint, Wifi } from 'lucide-react';
+import { FrontDeskExtendKeyDialog } from './FrontDeskExtendKeyDialog';
 import { cn } from '@/lib/utils';
 
 function getCredentialStatusConfig(cred: any) {
@@ -169,7 +165,7 @@ function CredentialCard({ cred, reservation }: { cred: any; reservation: any }) 
         )}
       </div>
 
-      <ExtendKeyCardDialog
+      <FrontDeskExtendKeyDialog
         open={showExtend}
         onOpenChange={setShowExtend}
         reservation={reservation}

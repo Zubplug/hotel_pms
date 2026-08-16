@@ -9,6 +9,7 @@ import { ArrowLeft, Search, Key, Sparkles, Wind, AlertTriangle, ShieldCheck, Doo
 import { format } from 'date-fns';
 import { formatRoomNumber } from '@/lib/format-room';
 import { FrontDeskRoomStatusDialog } from '@/components/frontdesk/FrontDeskRoomStatusDialog';
+import { FrontDeskOccupiedRoomDialog } from '@/components/frontdesk/FrontDeskOccupiedRoomDialog';
 
 interface Room {
   id: string;
@@ -181,11 +182,17 @@ export default function FrontDeskRoomsPage() {
 
       <FrontDeskRoomStatusDialog
         room={selectedRoom}
-        isOpen={!!selectedRoom}
+        isOpen={!!selectedRoom && selectedRoom.status !== 'OCCUPIED'}
         onClose={() => setSelectedRoom(null)}
         onSuccess={() => {
           queryClient.invalidateQueries({ queryKey: ['frontdesk', 'rooms'] });
         }}
+      />
+
+      <FrontDeskOccupiedRoomDialog
+        room={selectedRoom}
+        isOpen={!!selectedRoom && selectedRoom.status === 'OCCUPIED'}
+        onClose={() => setSelectedRoom(null)}
       />
     </div>
   );

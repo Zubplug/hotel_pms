@@ -15,22 +15,30 @@ interface FrontDeskQuickCheckoutDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   propertyId: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  initialReservation?: any;
 }
 
-export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId }: FrontDeskQuickCheckoutDialogProps) {
+export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, initialReservation }: FrontDeskQuickCheckoutDialogProps) {
   const queryClient = useQueryClient();
   const [step, setStep] = useState<'IDLE' | 'READING' | 'CONFIRMING' | 'CHECKING_OUT' | 'ERASING' | 'SUCCESS' | 'ERROR'>('IDLE');
   const [errorMsg, setErrorMsg] = useState('');
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [reservation, setReservation] = useState<any>(null);
 
   // Reset state when opened
   useEffect(() => {
     if (open) {
-      setStep('IDLE');
       setErrorMsg('');
-      setReservation(null);
+      if (initialReservation) {
+        setReservation(initialReservation);
+        setStep('CONFIRMING');
+      } else {
+        setReservation(null);
+        setStep('IDLE');
+      }
     }
-  }, [open]);
+  }, [open, initialReservation]);
 
   const handleReadCard = async () => {
     setStep('READING');
