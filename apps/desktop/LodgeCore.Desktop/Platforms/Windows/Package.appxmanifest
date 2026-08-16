@@ -13,7 +13,7 @@
   <Properties>
     <DisplayName>LodgeCore Front Desk</DisplayName>
     <PublisherDisplayName>LodgeCore</PublisherDisplayName>
-    <Logo>Assets\StoreLogo.png</Logo>
+    <Logo>Assets\appicon.png</Logo>
   </Properties>
 
   <Dependencies>
@@ -33,10 +33,10 @@
         DisplayName="LodgeCore Front Desk"
         Description="Offline Capable Hotel PMS and Card Encoder"
         BackgroundColor="transparent"
-        Square150x150Logo="Assets\Square150x150Logo.png"
-        Square44x44Logo="Assets\Square44x44Logo.png">
-        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
-        <uap:SplashScreen Image="Assets\SplashScreen.png" />
+        Square150x150Logo="Assets\appicon.png"
+        Square44x44Logo="Assets\appicon.png">
+        <uap:DefaultTile Wide310x150Logo="Assets\appicon.png" />
+        <uap:SplashScreen Image="Assets\splash.png" />
       </uap:VisualElements>
     </Application>
   </Applications>
