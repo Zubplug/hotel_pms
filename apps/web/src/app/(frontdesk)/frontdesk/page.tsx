@@ -12,6 +12,7 @@ import { CheckOutDialog } from '@/components/reservations/CheckOutDialog';
 import { FrontDeskQuickCheckoutDialog } from '@/components/frontdesk/FrontDeskQuickCheckoutDialog';
 import { FrontDeskReadCardDialog } from '@/components/frontdesk/FrontDeskReadCardDialog';
 import { LoadingState } from '@/components/ui/EmptyState';
+import { ClientOnlyDate } from '@/components/ClientOnlyDate';
 import { 
   UserPlus, 
   CalendarPlus, 
@@ -103,8 +104,8 @@ export default function ReceptionistDashboardPage() {
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900">
               {greeting}, <span className="capitalize">{firstName}</span>
             </h1>
-            <p className="text-slate-500 mt-2 font-medium text-lg">
-              {bDate.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+            <p className="text-slate-500 mt-2 font-medium text-lg min-h-[28px]">
+              <ClientOnlyDate date={bDate} format="date" locale="en-GB" options={{ weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }} />
             </p>
           </div>
           

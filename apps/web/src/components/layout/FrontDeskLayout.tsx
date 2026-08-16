@@ -32,6 +32,7 @@ import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import { SyncIndicator } from '@/components/frontdesk/SyncIndicator';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
+import { ClientOnlyDate } from '@/components/ClientOnlyDate';
 
 export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession();
