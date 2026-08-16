@@ -114,8 +114,8 @@ public sealed class CommandWorker
             OperationStatus = readResult.Success ? "COMPLETED" : "FAILED",
             CardSnr         = readResult.CardSnr,
             Data            = data,
-            ErrorCode       = readResult.Success ? null : $"SDK_{Math.Abs(readResult.SdkCode)}",
-            ErrorMessage    = readResult.Error,
+            ErrorCode       = readResult.Success ? null : $"SDK_{Math.Abs(readResult.ErrorCode)}",
+            ErrorMessage    = readResult.VendorMessage,
         };
     }
 
@@ -146,8 +146,8 @@ public sealed class CommandWorker
             Status          = encodeResult.Success ? "COMPLETED" : "FAILED",
             OperationStatus = encodeResult.Success ? "COMPLETED" : "FAILED",
             CardSnr         = encodeResult.CardSnr,
-            ErrorCode       = encodeResult.Success ? null : $"SDK_{Math.Abs(encodeResult.SdkCode)}",
-            ErrorMessage    = encodeResult.Error,
+            ErrorCode       = encodeResult.Success ? null : $"SDK_{Math.Abs(encodeResult.ErrorCode)}",
+            ErrorMessage    = encodeResult.VendorMessage,
         };
     }
 
@@ -160,8 +160,8 @@ public sealed class CommandWorker
             Status          = cancelResult.Success ? "COMPLETED" : "FAILED",
             OperationStatus = cancelResult.Success ? "COMPLETED" : "FAILED",
             CardSnr         = cancelResult.CardSnr,
-            ErrorCode       = cancelResult.Success ? null : $"SDK_{Math.Abs(cancelResult.SdkCode)}",
-            ErrorMessage    = cancelResult.Error,
+            ErrorCode       = cancelResult.Success ? null : $"SDK_{Math.Abs(cancelResult.ErrorCode)}",
+            ErrorMessage    = cancelResult.VendorMessage,
         };
     }
 

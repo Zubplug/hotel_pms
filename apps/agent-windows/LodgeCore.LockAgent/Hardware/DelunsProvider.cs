@@ -56,7 +56,7 @@ public sealed class DelunsProvider : ILockProvider
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception initializing LockSDK");
-            return Task.FromResult(new InitResult(false, -999, ex.Message));
+            return Task.FromResult(new InitResult(false, -999, VendorName, ex.Message));
         }
     }
 

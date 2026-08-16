@@ -77,7 +77,7 @@ public sealed class Worker : BackgroundService
         else
         {
             _heartbeat.SetDegraded();
-            _logger.LogWarning("LockSDK init failed: {Error} — hardware DEGRADED, polling continues", init.Error);
+            _logger.LogWarning("LockSDK init failed: {Error} — hardware DEGRADED, polling continues", init.VendorMessage);
         }
 
         // 3. Wire up USB monitor

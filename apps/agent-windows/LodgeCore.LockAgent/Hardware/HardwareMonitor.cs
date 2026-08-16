@@ -65,7 +65,7 @@ public sealed class HardwareMonitor : IDisposable
         }
         else
         {
-            _logger.LogWarning("SDK re-initialization failed after USB connect: {Error}", init.Error);
+            _logger.LogWarning("SDK re-initialization failed after USB connect: {Error}", init.VendorMessage);
         }
     }
 
