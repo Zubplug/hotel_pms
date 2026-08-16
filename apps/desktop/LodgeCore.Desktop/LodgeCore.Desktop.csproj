@@ -34,8 +34,6 @@
 		<MauiFont Include="Resources\Fonts\*" />
 		<!-- Raw Assets (background audio, etc.) -->
 		<MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
-		<!-- Physical Assets for MSIX -->
-		<Content Include="Assets\appicon.png" />
 	</ItemGroup>
 
 	<ItemGroup>
