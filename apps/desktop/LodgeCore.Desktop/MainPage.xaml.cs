@@ -1,3 +1,5 @@
+using System;
+using System.IO;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -73,7 +75,7 @@ public partial class MainPage : ContentPage
                 else if (fullPath.EndsWith(".woff2")) contentType = "font/woff2";
 
                 e.Response = ((Microsoft.Web.WebView2.Core.CoreWebView2)sender).Environment.CreateWebResourceResponse(
-                    stream, 200, "OK", $"Content-Type: {contentType}\nAccess-Control-Allow-Origin: *");
+                    stream.AsRandomAccessStream(), 200, "OK", $"Content-Type: {contentType}\nAccess-Control-Allow-Origin: *");
             }
         }
     }
