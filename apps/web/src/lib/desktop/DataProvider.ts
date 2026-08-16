@@ -12,18 +12,18 @@ export interface LodgeCoreDataProvider {
     list(propertyId: string): Promise<any[]>;
   };
   reservations: {
-    list(propertyId: string, params?: { search?: string, filter?: string }): Promise<any[]>;
+    list(propertyId: string, params?: any): Promise<any>;
     get(id: string): Promise<any>;
-    lookupByRoom(roomNo: string, propertyId: string): Promise<any | null>;
+    lookupByRoom(roomNo: string, propertyId: string): Promise<any>;
     create(data: any): Promise<any>;
     update(id: string, data: any): Promise<any>;
-    cancel(id: string, reason: string): Promise<void>;
-    checkIn(id: string, userId: string, deviceId: string): Promise<void>;
-    checkOut(id: string, userId: string, deviceId: string): Promise<void>;
-    extendStay(id: string, newCheckOutDate: string): Promise<void>;
+    cancel(id: string, reason: string): Promise<any>;
+    checkIn(id: string, userId: string, deviceId: string): Promise<any>;
+    checkOut(id: string, userId: string, deviceId: string): Promise<any>;
+    extendStay(id: string, newCheckOutDate: string): Promise<any>;
   };
   rooms: {
-    list(propertyId: string, params?: { filter?: string }): Promise<any[]>;
+    list(propertyId: string, params?: { filter?: string }): Promise<any>;
     getAvailable(propertyId: string, roomTypeId: string, checkIn: string, checkOut: string): Promise<any[]>;
     getActiveReservation(roomId: string): Promise<any | null>;
   };

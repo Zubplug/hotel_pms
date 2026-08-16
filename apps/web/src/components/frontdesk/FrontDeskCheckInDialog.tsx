@@ -24,6 +24,7 @@ interface FrontDeskCheckInDialogProps {
 export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, propertyId }: FrontDeskCheckInDialogProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { provider } = useLodgeCoreProvider();
   
   const [phase, setPhase] = useState<'IDLE' | 'READING' | 'OVERWRITE_CONFIRM' | 'ENCODING' | 'SUCCESS' | 'FAILED'>('IDLE');
   const [operationId, setOperationId] = useState<string | null>(null);

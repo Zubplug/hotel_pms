@@ -47,7 +47,7 @@ export default function FrontDeskRoomsPage() {
     enabled: !!propertyId,
   });
 
-  const rooms: Room[] = data?.data ?? [];
+  const rooms: Room[] = (data as any)?.data ?? [];
 
   const filteredRooms = rooms.filter(room => {
     if (search) {
