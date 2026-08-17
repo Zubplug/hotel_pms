@@ -14,8 +14,9 @@ export interface OperatorTokenPayload {
 }
 
 function getSecret() {
-  if (!process.env.NEXTAUTH_SECRET) throw new Error('NEXTAUTH_SECRET missing');
-  return new TextEncoder().encode(process.env.NEXTAUTH_SECRET);
+  const jwtSecret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
+  if (!jwtSecret) throw new Error('NEXTAUTH_SECRET missing');
+  return new TextEncoder().encode(jwtSecret);
 }
 
 /**
