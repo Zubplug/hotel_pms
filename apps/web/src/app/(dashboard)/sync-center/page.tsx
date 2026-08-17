@@ -1,5 +1,8 @@
 import React from 'react';
 import prisma from '@hotel-pms/db';
+import { Settings, RefreshCw, AlertTriangle, CheckCircle2, Shield, Wifi, HardDrive } from 'lucide-react';
+
+export const dynamic = 'force-dynamic';
 
 export const metadata = {
   title: 'Sync Center | LodgeCore',
