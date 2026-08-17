@@ -14,8 +14,8 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { staffId, pin, propertyId, sessionId, outletId, deviceId } = body;
 
-    if (!staffId || !pin || !sessionId || !outletId || !deviceId) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    if (!staffId || !pin || !sessionId) {
+      return NextResponse.json({ error: 'Missing required fields: staffId, pin, sessionId' }, { status: 400 });
     }
 
     const staff = await prisma.staff.findUnique({
