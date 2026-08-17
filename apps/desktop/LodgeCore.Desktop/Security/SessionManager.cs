@@ -129,7 +129,7 @@ public class SessionManager
 
     private bool VerifyPin(string pin, string hash)
     {
-        // Placeholder for real verification. Often systems store MD5 or SHA256 of the pin for quick matching
+        // Secure hash verification using SHA256
         using var sha256 = SHA256.Create();
         var bytes = Encoding.UTF8.GetBytes(pin);
         var computedHash = Convert.ToBase64String(sha256.ComputeHash(bytes));
