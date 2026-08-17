@@ -46,6 +46,10 @@ export default function StartShiftPage() {
           const propertyId = (session.user as any).propertyId;
           const res = await provider.pos.getAuthorizedOutlets(propertyId, storedDeviceId);
           
+          if (res.device) {
+            setDeviceInfo(res.device);
+          }
+
           if (res.error) {
             setError(res.error);
             setIsLoadingContext(false);
