@@ -664,7 +664,7 @@ public class OfflinePMSInterop
     {
         try
         {
-            var session = await _dbContext.PosSessions.FindAsync(sessionId);
+            var session = await _repo.GetSessionContextAsync(sessionId);
             return JsonSerializer.Serialize(new { success = true, data = session });
         }
         catch (Exception ex)
