@@ -138,11 +138,11 @@ export default async function HubPage() {
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-slate-300">Opening Float:</span>
-                    <span className="font-semibold text-white">${Number(activePosSession.openingCash).toFixed(2)}</span>
+                    <span className="font-semibold text-white">₦{Number(activePosSession.openingCash).toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-slate-300">Expected Cash:</span>
-                    <span className="font-semibold text-white">${Number(activePosSession.expectedCash).toFixed(2)}</span>
+                    <span className="font-semibold text-white">₦{Number(activePosSession.expectedCash).toFixed(2)}</span>
                   </div>
                 </div>
               ) : (

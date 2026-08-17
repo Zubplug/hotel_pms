@@ -65,7 +65,7 @@ export default function StartShiftPage() {
       <div className="w-full max-w-md bg-white/10 backdrop-blur-xl border border-white/20 p-8 rounded-3xl shadow-2xl">
         <div className="flex justify-center mb-6">
           <div className="h-16 w-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/30">
-            <DollarSign className="h-8 w-8 text-white" />
+            <span className="text-3xl font-bold text-white">₦</span>
           </div>
         </div>
         
@@ -76,7 +76,7 @@ export default function StartShiftPage() {
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-200 ml-1">Opening Cash (Float)</label>
             <div className="relative">
-              <span className="absolute left-4 top-3 text-slate-400 font-semibold">$</span>
+              <span className="absolute left-4 top-3 text-slate-400 font-semibold">₦</span>
               <Input 
                 type="number"
                 value={openingCash}
@@ -90,7 +90,7 @@ export default function StartShiftPage() {
 
           <Button 
             onClick={handleStartShift}
-            disabled={isStarting || openingCash === ''}
+            disabled={isStarting || openingCash === '' || isNaN(Number(openingCash))}
             className="w-full h-14 bg-indigo-600 hover:bg-indigo-700 text-white text-lg font-bold rounded-2xl shadow-lg transition-all active:scale-[0.98]"
           >
             {isStarting ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Open Drawer & Start Shift'}
