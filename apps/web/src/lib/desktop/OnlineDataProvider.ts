@@ -207,10 +207,10 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
     getCurrentOperator: async (sessionId: string) => {
       return apiFetch(`/api/v1/pos/operator?sessionId=${sessionId}`);
     },
-    authenticateOperator: async (staffId: string, pin: string, propertyId: string, sessionId: string) => {
+    authenticateOperator: async (staffId: string, pin: string, propertyId: string, sessionId: string, outletId?: string, deviceId?: string) => {
       return apiFetch(`/api/v1/pos/auth`, {
         method: 'POST',
-        body: JSON.stringify({ staffId, pin, propertyId, sessionId })
+        body: JSON.stringify({ staffId, pin, propertyId, sessionId, outletId, deviceId })
       });
     },
     getAuthorizedOutlets: async (propertyId: string, deviceId: string) => {
