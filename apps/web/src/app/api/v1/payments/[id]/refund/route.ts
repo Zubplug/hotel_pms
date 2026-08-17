@@ -187,7 +187,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           propertyId: payment.propertyId,
           userId: session.user.id,
           userEmail: session.user.email,
-          userRole: userRole,
+          userRole: (session.user as any).role || 'STAFF',
           action: 'PAYMENT_REFUNDED',
           resource: 'Payment',
           resourceId: payment.id,

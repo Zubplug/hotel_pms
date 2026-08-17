@@ -82,7 +82,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     : '??';
   
   const role = (session?.user as any)?.role || 'STAFF';
-  const isSuperAdmin = session?.user?.isSuperAdmin;
+  const isSuperAdmin = (session?.user as any)?.isSuperAdmin;
 
   const navigation = ALL_NAV.filter(item => {
     if (item.restrictedTo) {
@@ -96,7 +96,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     if (isDesktop) {
       try {
         const { DesktopDataProvider } = await import('@/lib/desktop/DesktopDataProvider');
-        await DesktopDataProvider.auth.clearSession();
+        await DesktopDataProvider.auth?.clearSession?.();
       } catch (err) {
         console.error('Failed to clear desktop session', err);
       }
@@ -184,7 +184,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                   {session?.user?.email ?? 'User'}
                 </p>
                 <p className="text-xs text-muted-foreground truncate">
-                  {session?.user?.isSuperAdmin ? 'Super Admin' : 'Staff'}
+                  {(session?.user as any)?.isSuperAdmin ? 'Super Admin' : 'Staff'}
                 </p>
               </div>
               <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />

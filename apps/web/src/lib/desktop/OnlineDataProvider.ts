@@ -173,7 +173,7 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
         body: JSON.stringify(ticket)
       });
     },
-    resolveTicket: async (ticketId, resolution) => {
+    resolveTicket: async (ticketId: string, resolution?: any) => {
       return apiFetch(`/api/v1/maintenance/${ticketId}/resolve`, {
         method: 'POST',
         body: JSON.stringify({ resolution })
@@ -193,6 +193,18 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
     },
     getCategories: async (propertyId: string) => {
       return apiFetch(`/api/v1/pos/categories?propertyId=${propertyId}`);
+    },
+    getActiveStaff: async (propertyId: string) => {
+      return apiFetch(`/api/v1/pos/staff?propertyId=${propertyId}`);
+    },
+    getCurrentOperator: async (sessionId: string) => {
+      return apiFetch(`/api/v1/pos/operator?sessionId=${sessionId}`);
+    },
+    authenticateOperator: async (staffId: string, pin: string, propertyId: string, sessionId: string) => {
+      return apiFetch(`/api/v1/pos/auth`, {
+        method: 'POST',
+        body: JSON.stringify({ staffId, pin, propertyId, sessionId })
+      });
     }
   }
 };

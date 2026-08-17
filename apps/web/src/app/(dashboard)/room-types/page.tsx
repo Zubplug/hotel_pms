@@ -8,7 +8,6 @@ import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { formatCurrency } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
-import RoomTypeForm from '@/components/admin/RoomTypeForm';
 import { Plus, Layers, BedDouble, Users } from 'lucide-react';
 import { LoadingState, EmptyState } from '@/components/ui/EmptyState';
 import Link from 'next/link';

@@ -29,7 +29,8 @@ import {
   Ban,
   Clock,
   Briefcase,
-  ArrowRight
+  ArrowRight,
+  Info
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 

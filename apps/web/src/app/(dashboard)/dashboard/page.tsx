@@ -19,7 +19,7 @@ import {
 import { LoadingState } from '@/components/ui/EmptyState';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, AreaChart, Area, Bar, ComposedChart
-} from 'recharts';
+, Tooltip} from 'recharts';
 import { formatCurrency } from '@/lib/utils';
 
 interface DashboardAnalytics {

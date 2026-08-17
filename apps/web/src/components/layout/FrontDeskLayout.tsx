@@ -61,7 +61,7 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
     if (isDesktop) {
       try {
         const { DesktopDataProvider } = await import('@/lib/desktop/DesktopDataProvider');
-        await DesktopDataProvider.auth.clearSession();
+        await DesktopDataProvider.auth?.clearSession?.();
       } catch (err) {
         console.error('Failed to clear desktop session', err);
       }

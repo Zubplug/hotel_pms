@@ -14,7 +14,7 @@ export async function GET(request: Request) {
     const conflicts = await prisma.syncConflict.findMany({
       where: {
         propertyId,
-        status
+        status: status as any
       },
       orderBy: { createdAt: 'desc' }
     });

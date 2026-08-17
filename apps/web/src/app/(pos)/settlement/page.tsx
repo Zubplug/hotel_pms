@@ -44,7 +44,7 @@ export default async function SettlementDashboardPage() {
                   {closedSessions.map(session => (
                     <tr key={session.id}>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{session.id.substring(0, 8)}...</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{session.userId.substring(0, 8)}...</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{session.openedBy.substring(0, 8)}...</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCurrency(Number(session.expectedCash))}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCurrency(Number(session.actualCash))}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-bold">

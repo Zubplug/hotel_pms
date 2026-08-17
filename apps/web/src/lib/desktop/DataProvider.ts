@@ -57,4 +57,11 @@ export interface LodgeCoreDataProvider {
   receipts: {
     generate(folioId: string): Promise<any>;
   };
+  pos: {
+    getProducts(propertyId: string): Promise<{ data: any[], error: string | null }>;
+    getCategories(propertyId: string): Promise<{ data: any[], error: string | null }>;
+    getActiveStaff(propertyId: string): Promise<{ data: any[], error: string | null }>;
+    getCurrentOperator(sessionId: string): Promise<{ data: any, error: string | null }>;
+    authenticateOperator(staffId: string, pin: string, propertyId: string, sessionId: string): Promise<{ data: any, error: string | null }>;
+  };
 }

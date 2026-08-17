@@ -116,7 +116,7 @@ export async function PATCH(
           propertyId: task.propertyId,
           userId: session.user.id,
           userEmail: session.user.email,
-          userRole: userRole || 'STAFF',
+          userRole: (session.user as any).role || 'STAFF',
           action: 'HOUSEKEEPING_TASK_UPDATED',
           resource: 'HousekeepingTask',
           resourceId: task.id,

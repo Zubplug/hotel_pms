@@ -13,6 +13,9 @@ interface DataProviderContextValue {
   pos: {
     getProducts: (propertyId: string) => Promise<{ data: any[], error: string | null }>;
     getCategories: (propertyId: string) => Promise<{ data: any[], error: string | null }>;
+    getActiveStaff: (propertyId: string) => Promise<{ data: any[], error: string | null }>;
+    getCurrentOperator: (sessionId: string) => Promise<{ data: any, error: string | null }>;
+    authenticateOperator: (staffId: string, pin: string, propertyId: string, sessionId: string) => Promise<{ data: any, error: string | null }>;
   };
 }
 
@@ -24,6 +27,9 @@ const DataProviderContext = createContext<DataProviderContextValue>({
   pos: {
     getProducts: async () => ({ data: [], error: 'Not initialized' }),
     getCategories: async () => ({ data: [], error: 'Not initialized' }),
+    getActiveStaff: async () => ({ data: [], error: 'Not initialized' }),
+    getCurrentOperator: async () => ({ data: null, error: 'Not initialized' }),
+    authenticateOperator: async () => ({ data: null, error: 'Not initialized' }),
   }
 });
 
@@ -78,7 +84,7 @@ export function DataProviderWrapper({ children }: { children: React.ReactNode })
   const provider = isDesktopMode ? DesktopDataProvider : OnlineDataProvider;
 
   return (
-    <DataProviderContext.Provider value={{ provider, isDesktopMode, isOnline, syncStatus }}>
+    <DataProviderContext.Provider value={{ provider, isDesktopMode, isOnline, syncStatus, pos: provider.pos }}>
       {children}
     </DataProviderContext.Provider>
   );

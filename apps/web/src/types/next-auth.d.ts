@@ -6,11 +6,19 @@ declare module 'next-auth' {
       id: string;
       staffId?: string | null;
       isSuperAdmin: boolean;
+      propertyId?: string | null;
+      capabilities?: string[];
+      role?: string;
+      sessionVersion?: number;
     } & DefaultSession['user'];
   }
 
   interface User extends DefaultUser {
     staffId?: string | null;
     isSuperAdmin: boolean;
+    propertyId?: string | null;
+    capabilities?: string[];
+    role?: string;
+    sessionVersion?: number;
   }
 }

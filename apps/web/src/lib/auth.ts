@@ -81,7 +81,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               'ACCESS_REFUNDS', 'LIMIT_REFUND_250K', 'ACCESS_VOID', 'ACCESS_DISCOUNTS', 'AUTHORIZE_VOID',
               'AUTHORIZE_DISCOUNT', 'APPROVE_DRAWER_VARIANCE', 'OVERRIDE_NIGHT_AUDIT', 'POST_CITY_LEDGER', 'ACCESS_REPORTS'
             ];
-          } else if (primaryRole === 'FRONT_DESK') {
+          } else if (primaryRole === 'FRONT_DESK' || primaryRole === 'RECEPTIONIST') {
             capabilities = ['ACCESS_FRONT_DESK', 'ACCESS_HOUSEKEEPING', 'ACCESS_REFUNDS', 'LIMIT_REFUND_50K', 'ACCESS_REPORTS'];
           } else if (primaryRole === 'CASHIER' || primaryRole === 'BARTENDER') {
             capabilities = ['ACCESS_POS', 'ACCESS_CASH_MANAGEMENT'];

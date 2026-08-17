@@ -56,7 +56,7 @@ export function LockProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== 'undefined' && (window as any).LodgeCore) {
       try {
         const { DesktopDataProvider } = await import('@/lib/desktop/DesktopDataProvider');
-        await DesktopDataProvider.auth.clearSession();
+        await DesktopDataProvider.auth?.clearSession?.();
       } catch (err) {}
     }
     signOut({ callbackUrl: '/login' });

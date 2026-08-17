@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ShoppingCart, Search, Trash2, Plus, Minus, User, Utensils, GlassWater, Coffee, Loader2 } from 'lucide-react';
+import { ShoppingCart, Search, Trash2, Plus, Minus, User, Utensils, GlassWater, Coffee, Loader2, CreditCard, Banknote, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AppSwitcher } from '@/components/layout/AppSwitcher';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { formatCurrency } from '@/lib/utils';
+import { StaffSwitchPad } from '@/components/pos/StaffSwitchPad';
 
 type OrderItem = {
   productId: string;
@@ -19,7 +20,7 @@ type OrderItem = {
 export default function PosTerminalPage() {
   const { provider } = useLodgeCoreProvider();
   const { data: session } = useLodgeCoreSession();
-  const propertyId = session?.user?.propertyId || '';
+  const propertyId = (session?.user as any)?.propertyId || '';
 
   const [activeCategory, setActiveCategory] = useState('all');
   const [search, setSearch] = useState('');
@@ -28,6 +29,10 @@ export default function PosTerminalPage() {
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Phase 1.7 Operator Switching
+  const [activeOperator, setActiveOperator] = useState<any | null>(null);
+  const [showSwitchPad, setShowSwitchPad] = useState(false);
 
   useEffect(() => {
     if (!propertyId) return;
@@ -39,6 +44,18 @@ export default function PosTerminalPage() {
         ]);
         if (prodRes.data) setProducts(prodRes.data);
         if (catRes.data) setCategories(catRes.data);
+
+        // Attempt to resume active operator session from SQLite
+        if ((session as any)?.sessionId) {
+          try {
+            const operatorRes = await provider.pos.getCurrentOperator((session as any).sessionId);
+            if (!operatorRes.error && operatorRes.data?.staff) {
+              setActiveOperator(operatorRes.data.staff);
+            }
+          } catch (e) {
+            console.error("No active operator session resumed");
+          }
+        }
       } catch (err) {
         console.error("Failed to fetch POS data", err);
       } finally {
@@ -97,7 +114,8 @@ export default function PosTerminalPage() {
           subtotal,
           tax,
           total,
-          method
+          method,
+          serverStaffId: activeOperator?.id
         };
         (window as any).chrome.webview.postMessage({
           command: 'CreatePosOrder',
@@ -154,15 +172,37 @@ export default function PosTerminalPage() {
             </span>
           </div>
 
-          <div className="relative w-72">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-            <input 
-              type="text"
-              placeholder="Search items..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="w-full h-10 pl-10 pr-4 rounded-full bg-slate-100 border-none focus:ring-2 focus:ring-indigo-500 text-sm"
-            />
+          <div className="flex items-center gap-4">
+            <div className="hidden md:flex flex-col items-end mr-2 border-r border-slate-200 pr-4">
+              <span className="text-xs text-slate-500 font-medium">Session: Cashier {session?.user?.name || 'Loading...'}</span>
+              {activeOperator && (
+                <span className="text-xs font-bold text-indigo-700">Operator: {activeOperator.firstName} (Waiter)</span>
+              )}
+            </div>
+
+            {activeOperator && (
+              <button 
+                onClick={() => setShowSwitchPad(true)}
+                className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition-colors"
+              >
+                <div className="w-6 h-6 rounded-full bg-indigo-200 flex items-center justify-center">
+                  <User className="w-3 h-3" />
+                </div>
+                <span className="text-sm font-semibold">{activeOperator.firstName}</span>
+                <RefreshCw className="w-3 h-3 ml-1 opacity-50" />
+              </button>
+            )}
+
+            <div className="relative w-72">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+              <input 
+                type="text"
+                placeholder="Search items..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="w-full h-10 pl-10 pr-4 rounded-full bg-slate-100 border-none focus:ring-2 focus:ring-indigo-500 text-sm"
+              />
+            </div>
           </div>
         </div>
 
@@ -323,6 +363,17 @@ export default function PosTerminalPage() {
           </div>
         </div>
       </div>
+
+      {/* Staff Switch Pad Overlay */}
+      <StaffSwitchPad 
+        isOpen={!activeOperator || showSwitchPad} 
+        cancellable={!!activeOperator}
+        onCancel={() => setShowSwitchPad(false)}
+        onAuthenticated={(operator) => {
+          setActiveOperator(operator);
+          setShowSwitchPad(false);
+        }}
+      />
     </div>
   );
 }

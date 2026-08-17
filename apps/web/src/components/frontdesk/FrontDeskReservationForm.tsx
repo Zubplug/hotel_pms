@@ -99,7 +99,7 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
       return provider.guests.list();
     },
   });
-  const guests = guestsRes?.data || [];
+  const guests = (guestsRes as any)?.data || [];
 
   const { data: roomTypesRes, isLoading: loadingRoomTypes } = useQuery({
     queryKey: ['room-types', propertyId],
@@ -108,7 +108,7 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
     },
     enabled: !!propertyId,
   });
-  const roomTypes = roomTypesRes?.data || [];
+  const roomTypes = (roomTypesRes as any)?.data || [];
 
   const { data: availableRoomsRes, isLoading: loadingAvailableRooms } = useQuery({
     queryKey: ['available-rooms', propertyId, roomTypeId, checkIn?.toISOString(), checkOut?.toISOString()],
@@ -118,7 +118,7 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
     },
     enabled: !!propertyId && !!roomTypeId && !!checkIn && !!checkOut && checkOut > checkIn,
   });
-  const availableRooms = availableRoomsRes?.data || [];
+  const availableRooms = (availableRoomsRes as any)?.data || [];
 
   // Reset roomId when dependencies change
   useEffect(() => {

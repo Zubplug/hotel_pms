@@ -276,10 +276,12 @@ export async function POST(request: Request) {
               id: entityId,
               propertyId: propertyId,
               deviceId: deviceId,
-              userId: payload.userId || userId,
+              openedBy: payload.userId || userId,
               status: payload.status,
               openedAt: new Date(payload.openedAt),
-              openingBalance: payload.openingBalance || 0
+              openingCash: payload.openingBalance || payload.openingCash || 0,
+              businessDate: desktopBusinessDate || new Date(),
+              outletId: payload.outletId || 'unknown-outlet'
             }
           });
         } else if (operationType === 'UPDATE' && payload.status === 'CLOSED') {
@@ -324,7 +326,7 @@ export async function POST(request: Request) {
           const totalRefunds = Number(cashRefunds._sum.amount || 0);
           
           // Formula: Opening + Sales - Refunds + TransferIn - PaidOut - TransferOut - Drops ± Float Adjustments
-          const expectedCash = Number(existingSession.openingBalance) 
+          const expectedCash = Number(existingSession.openingCash || 0) 
             + totalSales 
             - totalRefunds 
             + transferIn 

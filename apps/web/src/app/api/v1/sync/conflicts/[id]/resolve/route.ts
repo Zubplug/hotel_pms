@@ -3,10 +3,10 @@ import prisma from '@hotel-pms/db';
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const conflictId = params.id;
+    const conflictId = (await context.params).id;
     const body = await request.json();
     const { action, userId } = body; // action: 'CITY_LEDGER', 'REJECT', 'RESOLVE_MANUAL'
 
@@ -39,9 +39,9 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized: MANAGER role required for this property' }, { status: 403 });
     }
 
-    const payload = JSON.parse(conflict.payload);
+    const payload = JSON.parse(conflict.payload as string);
 
-    await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       let resolutionNote = '';
       
       if (action === 'CITY_LEDGER') {

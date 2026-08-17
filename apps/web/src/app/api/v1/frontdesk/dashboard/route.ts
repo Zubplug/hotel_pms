@@ -94,7 +94,7 @@ export async function GET(req: NextRequest) {
 
     const formatGuestList = (resList: any[]) => resList.map(res => {
       const folio = res.folios?.[0];
-      const balance = folio ? Number(folio.balance) : null;
+      const balance = folio ? Math.abs(Number(folio.balance || 0)) : null;
       
       let arrivalStatus = 'Ready';
       let arrivalColor = 'green';
@@ -102,7 +102,7 @@ export async function GET(req: NextRequest) {
       if (res.status === 'CHECKED_IN') {
         arrivalStatus = 'Checked In';
         arrivalColor = 'blue';
-      } else if (balance > 0) {
+      } else if (balance !== null && balance > 0) {
         arrivalStatus = 'Payment Due';
         arrivalColor = 'yellow';
       } else if (!res.reservationRooms?.[0]?.room) {
