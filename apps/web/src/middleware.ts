@@ -56,13 +56,8 @@ export default auth((req) => {
   if (isPublic(nextUrl.pathname)) {
     // If already logged in and hitting /login
     if (nextUrl.pathname === '/login' && isLoggedIn) {
-      const role = (req.auth as any)?.user?.role as string | undefined;
-      if (role === 'RECEPTIONIST' || role === 'FRONT_DESK') {
-        return Response.redirect(new URL('/frontdesk', nextUrl));
-      } else if (role === 'CEO' || role === 'SUPER_ADMIN') {
-        return Response.redirect(new URL('/dashboard', nextUrl));
-      }
-      return Response.redirect(new URL('/properties', nextUrl));
+      // Phase 1.5: Always redirect authenticated users to the Universal Hub
+      return Response.redirect(new URL('/hub', nextUrl));
     }
     return;
   }
@@ -74,20 +69,9 @@ export default auth((req) => {
     return Response.redirect(loginUrl);
   }
 
-  // Authorization checks
-  const role = (req.auth as any)?.user?.role as string | undefined;
-  
-  if ((nextUrl.pathname.startsWith('/dashboard') || nextUrl.pathname.startsWith('/properties')) && (role === 'RECEPTIONIST' || role === 'FRONT_DESK')) {
-    return Response.redirect(new URL('/frontdesk', nextUrl));
-  }
-  
-  if (nextUrl.pathname.startsWith('/frontdesk') && role !== 'RECEPTIONIST' && role !== 'FRONT_DESK' && !(req.auth as any)?.user?.isSuperAdmin) {
-    // If CEO tries to hit frontdesk, send them to dashboard
-    if (role === 'CEO' || role === 'SUPER_ADMIN') {
-      return Response.redirect(new URL('/dashboard', nextUrl));
-    }
-    return Response.redirect(new URL('/properties', nextUrl));
-  }
+  // Phase 1.6: Removed hardcoded role-based routing checks in middleware.
+  // The Universal Hub (/hub) dynamically renders tiles based on the user's `capabilities`.
+  // Individual modules (like /pos, /frontdesk) enforce capability checks in their layouts/pages.
 });
 
 export const config = {
