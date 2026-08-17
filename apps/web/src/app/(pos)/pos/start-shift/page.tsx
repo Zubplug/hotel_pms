@@ -26,7 +26,8 @@ export default function StartShiftPage() {
 
   // If already have a session, redirect to pos
   useEffect(() => {
-    if ((session as any)?.sessionId) {
+    const activeSessionId = (session as any)?.sessionId || localStorage.getItem('lodgecore_pos_session_id');
+    if (activeSessionId) {
       router.push('/pos');
     }
   }, [session, router]);
@@ -93,6 +94,7 @@ export default function StartShiftPage() {
       });
       
       if (res.data?.sessionId) {
+        localStorage.setItem('lodgecore_pos_session_id', res.data.sessionId);
         window.location.href = '/pos';
       } else {
         setError('Failed to start shift: ' + (res.error || 'Unknown error'));

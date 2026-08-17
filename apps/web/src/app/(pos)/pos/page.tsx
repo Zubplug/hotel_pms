@@ -48,12 +48,13 @@ export default function PosTerminalPage() {
         if (prodRes.data) setProducts(prodRes.data);
         if (catRes.data) setCategories(catRes.data);
 
-        // Attempt to resume active operator session from SQLite
-        if ((session as any)?.sessionId) {
+        const activeSessionId = (session as any)?.sessionId || localStorage.getItem('lodgecore_pos_session_id');
+        // Attempt to resume active operator session from SQLite/Web
+        if (activeSessionId) {
           try {
             const [operatorRes, contextRes] = await Promise.all([
-              provider.pos.getCurrentOperator((session as any).sessionId),
-              provider.pos.getSessionContext((session as any).sessionId)
+              provider.pos.getCurrentOperator(activeSessionId),
+              provider.pos.getSessionContext(activeSessionId)
             ]);
             
             if (!operatorRes.error && operatorRes.data?.staff) {
@@ -61,6 +62,10 @@ export default function PosTerminalPage() {
             }
             if (!contextRes.error && contextRes.data) {
               setSessionContext(contextRes.data);
+            } else if (contextRes.error) {
+              // Session might be closed or invalid, clear it
+              localStorage.removeItem('lodgecore_pos_session_id');
+              router.push('/pos/start-shift');
             }
           } catch (e) {
             console.error("Failed to load POS session context");
@@ -77,8 +82,11 @@ export default function PosTerminalPage() {
 
   // Redirect to Start Shift if no active drawer session is found
   useEffect(() => {
-    if (sessionStatus === 'authenticated' && !(session as any)?.sessionId) {
-      router.push('/pos/start-shift');
+    if (sessionStatus === 'authenticated') {
+      const activeSessionId = (session as any)?.sessionId || localStorage.getItem('lodgecore_pos_session_id');
+      if (!activeSessionId) {
+        router.push('/pos/start-shift');
+      }
     }
   }, [sessionStatus, session, router]);
 
