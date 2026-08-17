@@ -27,6 +27,7 @@ public class LocalDbContext : DbContext
     public DbSet<LocalStockTransaction> StockTransactions { get; set; } = null!;
     public DbSet<LocalStaff> Staff { get; set; } = null!;
     public DbSet<LocalPosOperatorSession> PosOperatorSessions { get; set; } = null!;
+    public DbSet<LocalOperatorContext> OperatorContexts { get; set; } = null!;
     public DbSet<LocalPosAuthorizationAudit> PosAuthorizationAudits { get; set; } = null!;
     public DbSet<LocalPosFloorPlan> PosFloorPlans { get; set; } = null!;
     public DbSet<LocalPosTable> PosTables { get; set; } = null!;
@@ -80,5 +81,29 @@ public class LocalDbContext : DbContext
             .HasMany(s => s.CashMovements)
             .WithOne()
             .HasForeignKey(c => c.PosSessionId);
+        modelBuilder.Entity<LocalPosOrder>()
+            .HasMany(o => o.Voids)
+            .WithOne()
+            .HasForeignKey(v => v.OrderId);
+
+        modelBuilder.Entity<LocalPosOrder>()
+            .HasMany(o => o.Kots)
+            .WithOne()
+            .HasForeignKey(k => k.OrderId);
+
+        modelBuilder.Entity<LocalPosOrder>()
+            .HasMany(o => o.Checks)
+            .WithOne()
+            .HasForeignKey(c => c.OrderId);
+
+        modelBuilder.Entity<LocalPosOrder>()
+            .HasMany(o => o.Discounts)
+            .WithOne()
+            .HasForeignKey(d => d.OrderId);
+
+        modelBuilder.Entity<LocalPosOrderItem>()
+            .HasMany(i => i.Modifiers)
+            .WithOne()
+            .HasForeignKey(m => m.OrderItemId);
     }
 }

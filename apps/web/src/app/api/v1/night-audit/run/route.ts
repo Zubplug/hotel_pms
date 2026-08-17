@@ -53,7 +53,8 @@ export async function POST(request: Request) {
             authorizedBy: userId, // Assuming the requester is authorized
             action: 'NIGHT_AUDIT_OVERRIDE',
             reason: overrideReason || 'Forced EOD via override',
-            operationId: `eod_override_${propertyId}_${Date.now()}`
+            operationId: `eod_override_${propertyId}_${Date.now()}`,
+            businessDate: businessDate
           }
         });
       }

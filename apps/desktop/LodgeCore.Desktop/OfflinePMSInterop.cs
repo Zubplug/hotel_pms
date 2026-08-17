@@ -1,5 +1,6 @@
 using System.Text.Json;
 using LodgeCore.Desktop.Services;
+using LodgeCore.Desktop.Security;
 
 namespace LodgeCore.Desktop;
 
@@ -7,11 +8,13 @@ public class OfflinePMSInterop
 {
     private readonly LocalRepository _repo;
     private readonly AuthManager _authManager;
+    private readonly SessionManager _sessionManager;
 
-    public OfflinePMSInterop(LocalRepository repo, AuthManager authManager)
+    public OfflinePMSInterop(LocalRepository repo, AuthManager authManager, SessionManager sessionManager)
     {
         _repo = repo;
         _authManager = authManager;
+        _sessionManager = sessionManager;
     }
 
     public async Task<string> GetSessionAsync()
@@ -239,8 +242,7 @@ public class OfflinePMSInterop
     }
     public async Task<string> LookupReservationByRoomAsync(string roomNo, string propertyId)
     {
-        // Simple placeholder for lookup for now
-        return JsonSerializer.Serialize(new { success = true, data = (object)null });
+        return JsonSerializer.Serialize(new { success = false, error = "Room lookup is not available in offline mode." });
     }
     public async Task<string> CreateReservationAsync(string dataJson)
     {
@@ -324,8 +326,16 @@ public class OfflinePMSInterop
             var order = JsonSerializer.Deserialize<LodgeCore.Desktop.Data.Entities.LocalPosOrder>(dataJson);
             if (order == null) throw new Exception("Invalid order data");
             
-            var ctx = await GetSecureContextAsync();
-            var res = await _repo.CreatePosOrderAsync(order, ctx.UserId, ctx.DeviceId);
+            var posCtx = await _sessionManager.GetActiveContextAsync();
+            
+            // Security: Enforce identity source of truth
+            order.PropertyId = posCtx.PropertyId;
+            order.OutletId = posCtx.OutletId;
+            order.SessionId = posCtx.SessionId;
+            order.ServerStaffId = posCtx.StaffId;
+            order.CreatedBy = posCtx.StaffId;
+
+            var res = await _repo.CreatePosOrderAsync(order, posCtx.StaffId, posCtx.DeviceId);
             return JsonSerializer.Serialize(new { success = true, data = res });
         }
         catch (Exception ex)
@@ -338,8 +348,8 @@ public class OfflinePMSInterop
     {
         try
         {
-            var ctx = await GetSecureContextAsync();
-            var res = await _repo.SplitCheckAsync(orderId, itemIds, ctx.UserId, ctx.DeviceId);
+            var posCtx = await _sessionManager.GetActiveContextAsync();
+            var res = await _repo.SplitCheckAsync(orderId, itemIds, posCtx.StaffId, posCtx.DeviceId);
             return JsonSerializer.Serialize(new { success = true, data = res });
         }
         catch (Exception ex)
@@ -352,8 +362,8 @@ public class OfflinePMSInterop
     {
         try
         {
-            var ctx = await GetSecureContextAsync();
-            var res = await _repo.FireKotAsync(orderId, itemIds, ctx.UserId, ctx.DeviceId);
+            var posCtx = await _sessionManager.GetActiveContextAsync();
+            var res = await _repo.FireKotAsync(orderId, itemIds, posCtx.StaffId, posCtx.DeviceId);
             return JsonSerializer.Serialize(new { success = true, data = res });
         }
         catch (Exception ex)
@@ -366,8 +376,8 @@ public class OfflinePMSInterop
     {
         try
         {
-            var ctx = await GetSecureContextAsync();
-            var res = await _repo.UpdateOrderStatusAsync(orderId, status, reason, ctx.UserId, ctx.DeviceId);
+            var posCtx = await _sessionManager.GetActiveContextAsync();
+            var res = await _repo.UpdateOrderStatusAsync(orderId, status, reason, posCtx.StaffId, posCtx.DeviceId);
             return JsonSerializer.Serialize(new { success = true, data = res });
         }
         catch (Exception ex)
@@ -388,8 +398,8 @@ public class OfflinePMSInterop
             string currency = paymentData.ContainsKey("currency") ? paymentData["currency"].ToString() : "NGN";
             string checkId = paymentData.ContainsKey("checkId") ? paymentData["checkId"]?.ToString() : null;
 
-            var ctx = await GetSecureContextAsync();
-            var res = await _repo.PayOrderAsync(orderId, method, amount, currency, checkId, ctx.UserId, ctx.DeviceId);
+            var posCtx = await _sessionManager.GetActiveContextAsync();
+            var res = await _repo.PayOrderAsync(orderId, method, amount, currency, checkId, posCtx.StaffId, posCtx.DeviceId);
             return JsonSerializer.Serialize(new { success = true, data = res });
         }
         catch (Exception ex)
@@ -403,6 +413,47 @@ public class OfflinePMSInterop
         try
         {
             var res = await _repo.GetOrderAsync(orderId);
+            return JsonSerializer.Serialize(new { success = true, data = res });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    public async Task<string> GetReceiptAsync(string orderId)
+    {
+        try
+        {
+            var res = await _repo.GetReceiptAsync(orderId);
+            return JsonSerializer.Serialize(new { success = true, data = res });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    public async Task<string> GetServerOrdersAsync(string range, string statusFilter, string? sessionId)
+    {
+        try
+        {
+            var ctx = await _sessionManager.GetActiveContextAsync();
+            var res = await _repo.GetServerOrdersAsync(ctx.StaffId, ctx.PropertyId, range, statusFilter, sessionId);
+            return JsonSerializer.Serialize(new { success = true, data = res });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    public async Task<string> GetServerSalesAsync(string range, string? sessionId)
+    {
+        try
+        {
+            var ctx = await _sessionManager.GetActiveContextAsync();
+            var res = await _repo.GetServerSalesAsync(ctx.StaffId, ctx.PropertyId, range, sessionId);
             return JsonSerializer.Serialize(new { success = true, data = res });
         }
         catch (Exception ex)
@@ -443,16 +494,16 @@ public class OfflinePMSInterop
     {
         try
         {
-            var ctx = await GetSecureContextAsync();
+            var posCtx = await _sessionManager.GetActiveContextAsync();
             
             // SECURITY: C# handles authorization, bypassing any UI-level tampering
-            var authorizer = await _repo.ValidateSupervisorPinAsync(supervisorPin, ctx.PropertyId);
+            var authorizer = await _repo.ValidateSupervisorPinAsync(supervisorPin, posCtx.PropertyId);
             if (authorizer == null)
             {
                 return JsonSerializer.Serialize(new { success = false, error = "Invalid supervisor PIN or unauthorized." });
             }
 
-            var res = await _repo.AuthorizeVoidAsync(orderId, orderItemId, reason, authorizer.Id, ctx.UserId, ctx.DeviceId);
+            var res = await _repo.AuthorizeVoidAsync(orderId, orderItemId, reason, authorizer.Id, posCtx.StaffId, posCtx.DeviceId);
             return JsonSerializer.Serialize(new { success = true, data = res });
         }
         catch (Exception ex)
@@ -465,16 +516,16 @@ public class OfflinePMSInterop
     {
         try
         {
-            var ctx = await GetSecureContextAsync();
+            var posCtx = await _sessionManager.GetActiveContextAsync();
             
             // SECURITY: Refund authorization
-            var authorizer = await _repo.ValidateSupervisorPinAsync(supervisorPin, ctx.PropertyId);
+            var authorizer = await _repo.ValidateSupervisorPinAsync(supervisorPin, posCtx.PropertyId);
             if (authorizer == null)
             {
                 return JsonSerializer.Serialize(new { success = false, error = "Invalid supervisor PIN or unauthorized." });
             }
 
-            var res = await _repo.RecordRefundAsync(orderId, amount, method, authorizer.Id, ctx.UserId, ctx.DeviceId);
+            var res = await _repo.RecordRefundAsync(orderId, amount, method, authorizer.Id, posCtx.StaffId, posCtx.DeviceId);
             return JsonSerializer.Serialize(new { success = true, data = res });
         }
         catch (Exception ex)
@@ -531,42 +582,12 @@ public class OfflinePMSInterop
     {
         try
         {
-            var ctx = await GetSecureContextAsync();
+            // We ignore propertyId and sessionId from React to ensure security
+            var ctx = await _sessionManager.AuthenticateOperatorAsync(staffId, pin);
+            var staff = await _repo.GetStaffByIdAsync(staffId);
             
-            // Check lockout
-            if (_pinFailures.TryGetValue(staffId, out var failureData))
-            {
-                if (failureData.Attempts >= 3 && DateTime.UtcNow < failureData.LockoutEnd)
-                {
-                    return JsonSerializer.Serialize(new { success = false, error = $"Account locked. Try again in {Math.Ceiling((failureData.LockoutEnd - DateTime.UtcNow).TotalSeconds)} seconds." });
-                }
-                else if (DateTime.UtcNow >= failureData.LockoutEnd)
-                {
-                    // Reset if lockout period expired
-                    _pinFailures.Remove(staffId);
-                }
-            }
-
-            // Validate the operator
-            var staff = await _repo.AuthenticateOperatorAsync(staffId, pin, propertyId);
-            
-            if (staff == null)
-            {
-                // Increment failures
-                int newAttempts = _pinFailures.ContainsKey(staffId) ? _pinFailures[staffId].Attempts + 1 : 1;
-                DateTime lockoutEnd = newAttempts >= 3 ? DateTime.UtcNow.AddSeconds(30) : DateTime.MinValue;
-                _pinFailures[staffId] = (newAttempts, lockoutEnd);
-
-                return JsonSerializer.Serialize(new { success = false, error = newAttempts >= 3 ? "Account locked for 30s." : "Invalid PIN or unauthorized." });
-            }
-
-            // Success, reset failures
-            _pinFailures.Remove(staffId);
-
-            var operationId = Guid.NewGuid().ToString();
-            var newSession = await _repo.SwitchOperatorAsync(ctx.DeviceId, sessionId, staffId, operationId);
-
-            return JsonSerializer.Serialize(new { success = true, data = new { operatorSession = newSession, staff } });
+            // Return the OperatorTokenVersion as the secure token to React
+            return JsonSerializer.Serialize(new { success = true, data = new { operatorToken = ctx.OperatorTokenVersion, staff } });
         }
         catch (Exception ex)
         {
@@ -605,7 +626,10 @@ public class OfflinePMSInterop
     {
         try
         {
-            var movements = await _repo.GetCashMovementsAsync(sessionId);
+            var posCtx = await _sessionManager.GetActiveContextAsync();
+            // If they pass null/empty or it's for their own session, we use the active one
+            string targetSession = string.IsNullOrEmpty(sessionId) ? posCtx.SessionId : sessionId;
+            var movements = await _repo.GetCashMovementsAsync(targetSession);
             return JsonSerializer.Serialize(new { success = true, data = movements });
         }
         catch (Exception ex)
@@ -618,7 +642,9 @@ public class OfflinePMSInterop
     {
         try
         {
-            var (expectedCash, variance) = await _repo.GetSessionSettlementDetailsAsync(sessionId);
+            var posCtx = await _sessionManager.GetActiveContextAsync();
+            string targetSession = string.IsNullOrEmpty(sessionId) ? posCtx.SessionId : sessionId;
+            var (expectedCash, variance) = await _repo.GetSessionSettlementDetailsAsync(targetSession);
             return JsonSerializer.Serialize(new { success = true, data = new { expectedCash, variance } });
         }
         catch (Exception ex)
@@ -631,8 +657,9 @@ public class OfflinePMSInterop
     {
         try
         {
-            var ctx = await GetSecureContextAsync();
-            var movement = await _repo.RecordCashMovementAsync(propertyId, sessionId, amount, type, reasonCode, notes, receiptReference, authorizerId, ctx.UserId, ctx.DeviceId);
+            var posCtx = await _sessionManager.GetActiveContextAsync();
+            // Enforce identity
+            var movement = await _repo.RecordCashMovementAsync(posCtx.PropertyId, posCtx.SessionId, amount, type, reasonCode, notes, receiptReference, authorizerId, posCtx.StaffId, posCtx.DeviceId);
             return JsonSerializer.Serialize(new { success = true, data = movement });
         }
         catch (Exception ex)
@@ -645,8 +672,13 @@ public class OfflinePMSInterop
     {
         try
         {
-            var ctx = await GetSecureContextAsync();
-            var settlement = await _repo.SettleSessionAsync(sessionId, actualCash, operatorId, authorizerId, ctx.DeviceId);
+            var posCtx = await _sessionManager.GetActiveContextAsync();
+            // Enforce identity
+            var settlement = await _repo.SettleSessionAsync(posCtx.SessionId, actualCash, posCtx.StaffId, authorizerId, posCtx.DeviceId);
+            
+            // Log out the operator securely after settling
+            await _sessionManager.ClearOperatorSessionAsync();
+            
             return JsonSerializer.Serialize(new { success = true, data = settlement });
         }
         catch (Exception ex)

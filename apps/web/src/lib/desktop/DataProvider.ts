@@ -76,5 +76,12 @@ export interface LodgeCoreDataProvider {
     updateOrderStatus(orderId: string, status: string, reason?: string): Promise<{ data: any, error: string | null }>;
     payOrder(orderId: string, paymentData: any, operatorToken: string): Promise<{ data: any, error: string | null }>;
     getOrder(orderId: string): Promise<{ data: any, error: string | null }>;
+    getReceipt(orderId: string): Promise<{ data: any, error: string | null }>;
+    getServerOrders(range: string, statusFilter: string, sessionId?: string): Promise<{ data: any[], error: string | null }>;
+    getServerSales(range: string, sessionId?: string): Promise<{ data: any, error: string | null }>;
+    getCashMovements(sessionId: string): Promise<{ data: any[], error: string | null }>;
+    createCashMovement(propertyId: string, sessionId: string, amount: number, type: string, reasonCode: string, notes?: string, receiptReference?: string, authorizerId?: string): Promise<{ data: any, error: string | null }>;
+    getSessionSettlementDetails(sessionId: string): Promise<{ data: any, error: string | null }>;
+    settleSession(sessionId: string, actualCash: number, operatorId: string, authorizerId?: string): Promise<{ data: any, error: string | null }>;
   };
 }

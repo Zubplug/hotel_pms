@@ -12,8 +12,8 @@ public partial class MainPage : ContentPage
         InitializeComponent();
 
 #if DEBUG
-        // For now, load local dev server fallback
-        // The build script will be updated to serve static assets locally
+        // In debug mode, connect to the local Next.js development server
+        // Production mode automatically serves static assets from wwwroot
         MainWebView.Source = new UrlWebViewSource { Url = "http://localhost:3000/frontdesk" };
 #endif
     }
@@ -262,6 +262,44 @@ public partial class MainPage : ContentPage
                 case "pos.getOrder":
                     responseData = await pmsInterop.GetOrderAsync(parameters?["orderId"]?.ToString());
                     break;
+                case "pos.getReceipt":
+                    responseData = await pmsInterop.GetReceiptAsync(parameters?["orderId"]?.ToString());
+                    break;
+                case "pos.getServerOrders":
+                    responseData = await pmsInterop.GetServerOrdersAsync(
+                        parameters?["range"]?.ToString() ?? "today",
+                        parameters?["statusFilter"]?.ToString() ?? "all",
+                        parameters?["sessionId"]?.ToString());
+                    break;
+                case "pos.getServerSales":
+                    responseData = await pmsInterop.GetServerSalesAsync(
+                        parameters?["range"]?.ToString() ?? "today",
+                        parameters?["sessionId"]?.ToString());
+                    break;
+                case "pos.getCashMovements":
+                    responseData = await pmsInterop.GetCashMovementsAsync(parameters?["sessionId"]?.ToString());
+                    break;
+                case "pos.createCashMovement":
+                    responseData = await pmsInterop.CreateCashMovementAsync(
+                        parameters?["propertyId"]?.ToString(),
+                        parameters?["sessionId"]?.ToString(),
+                        parameters?["amount"]?.GetValue<decimal>() ?? 0,
+                        parameters?["type"]?.ToString(),
+                        parameters?["reasonCode"]?.ToString(),
+                        parameters?["notes"]?.ToString(),
+                        parameters?["receiptReference"]?.ToString(),
+                        parameters?["authorizerId"]?.ToString());
+                    break;
+                case "pos.getSessionSettlementDetails":
+                    responseData = await pmsInterop.GetSessionSettlementDetailsAsync(parameters?["sessionId"]?.ToString());
+                    break;
+                case "pos.settleSession":
+                    responseData = await pmsInterop.SettleSessionAsync(
+                        parameters?["sessionId"]?.ToString(),
+                        parameters?["actualCash"]?.GetValue<decimal>() ?? 0,
+                        parameters?["operatorId"]?.ToString(),
+                        parameters?["authorizerId"]?.ToString());
+                    break;
                 case "pos.startSession":
                     responseData = await pmsInterop.OpenPosSessionAsync(
                         parameters?["propertyId"]?.ToString(),
@@ -318,6 +356,26 @@ public partial class MainPage : ContentPage
                     break;
                 case "pos.getActiveStaff":
                     responseData = await pmsInterop.GetActiveStaffAsync(parameters?["propertyId"]?.ToString());
+                    break;
+                case "pos.getCategories":
+                    responseData = await pmsInterop.GetPosProductsAsync(parameters?["propertyId"]?.ToString());
+                    break;
+                case "pos.getFloorPlans":
+                    responseData = await pmsInterop.GetFloorPlansAsync(parameters?["outletId"]?.ToString());
+                    break;
+                case "pos.getTables":
+                    responseData = await pmsInterop.GetTablesAsync(parameters?["floorPlanId"]?.ToString());
+                    break;
+                case "pos.getProductModifiers":
+                    responseData = await pmsInterop.GetProductModifiersAsync(parameters?["productId"]?.ToString());
+                    break;
+                case "pos.getSessionContext":
+                    responseData = await pmsInterop.GetSessionContextAsync(parameters?["sessionId"]?.ToString());
+                    break;
+                case "pos.getAuthorizedOutlets":
+                    responseData = await pmsInterop.GetAuthorizedOutletsAsync(
+                        parameters?["propertyId"]?.ToString(),
+                        parameters?["deviceId"]?.ToString());
                     break;
                 default:
                     SendError(sender, id, $"Method {method} not found in allowlist.");

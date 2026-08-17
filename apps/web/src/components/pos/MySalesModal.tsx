@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { Loader2, DollarSign, Receipt, TrendingUp, CreditCard, Banknote, User } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { Card, CardContent } from '@/components/ui/card';
 
 interface MySalesModalProps {
@@ -21,6 +22,7 @@ interface MySalesModalProps {
 }
 
 export function MySalesModal({ isOpen, onClose, operatorToken, staffName }: MySalesModalProps) {
+  const { provider } = useLodgeCoreProvider();
   const [salesData, setSalesData] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -33,14 +35,9 @@ export function MySalesModal({ isOpen, onClose, operatorToken, staffName }: MySa
   const fetchSales = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch('/api/v1/pos/reports/server-sales', {
-        headers: {
-          'Authorization': `Bearer ${operatorToken}`
-        }
-      });
-      if (!res.ok) throw new Error('Failed to fetch sales data');
-      const data = await res.json();
-      setSalesData(data.data);
+      const res = await provider.pos.getServerSales('today', undefined); // Cross-session
+      if (res.error) throw new Error(res.error);
+      setSalesData(res.data);
     } catch (error: any) {
       toast.error(error.message || 'Failed to load shift sales');
       onClose();

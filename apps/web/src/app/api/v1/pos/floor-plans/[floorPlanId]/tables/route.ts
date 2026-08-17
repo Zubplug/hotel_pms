@@ -12,15 +12,7 @@ export async function GET(
 
     const tables = await prisma.posTable.findMany({
       where: { floorPlanId, isActive: true },
-      include: {
-        currentOrder: {
-          select: {
-            id: true,
-            status: true,
-            orderNumber: true
-          }
-        }
-      },
+      // Removed currentOrder include as it does not exist on PosTable schema
       orderBy: { name: 'asc' },
     });
 

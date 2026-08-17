@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { ReceiptVerificationModal } from './ReceiptVerificationModal';
 
 interface MyOrdersModalProps {
@@ -28,24 +29,36 @@ interface MyOrdersModalProps {
 }
 
 export function MyOrdersModal({ isOpen, onClose, operatorToken, staffName }: MyOrdersModalProps) {
+  const { provider } = useLodgeCoreProvider();
   const [orders, setOrders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [dateRange, setDateRange] = useState('today');
   const [statusFilter, setStatusFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
+  const [isLoadingReceipt, setIsLoadingReceipt] = useState(false);
+
+  const loadReceipt = async (order: any) => {
+    setIsLoadingReceipt(true);
+    try {
+      // Always fetch the full receipt from the backend/SQLite for the richest audit chain
+      const res = await provider.pos.getReceipt(order.id);
+      if (res.error) throw new Error(res.error);
+      setSelectedOrder(res.data);
+    } catch {
+      // Fallback: show what we have from the list
+      setSelectedOrder(order);
+    } finally {
+      setIsLoadingReceipt(false);
+    }
+  };
 
   const fetchOrders = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch(`/api/v1/pos/reports/server-orders?range=${dateRange}&status=${statusFilter}`, {
-        headers: {
-          Authorization: `Bearer ${operatorToken}`
-        }
-      });
-      if (!res.ok) throw new Error('Failed to fetch orders');
-      const data = await res.json();
-      setOrders(data.data);
+      const res = await provider.pos.getServerOrders(dateRange, statusFilter, undefined); // Cross-session
+      if (res.error) throw new Error(res.error);
+      setOrders(res.data || []);
     } catch (error: any) {
       toast.error(error.message || 'Failed to load orders');
     } finally {
@@ -171,10 +184,11 @@ export function MyOrdersModal({ isOpen, onClose, operatorToken, staffName }: MyO
                           <Button 
                             variant="ghost" 
                             size="sm" 
-                            onClick={() => setSelectedOrder(order)}
+                            onClick={() => loadReceipt(order)}
+                            disabled={isLoadingReceipt}
                             className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
                           >
-                            <Receipt className="w-4 h-4 mr-1.5" />
+                            {isLoadingReceipt ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Receipt className="w-4 h-4 mr-1.5" />}
                             View Receipt
                           </Button>
                         </td>

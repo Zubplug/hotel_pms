@@ -313,6 +313,7 @@ export async function POST(request: Request) {
                 printerId: kot.printerId,
                 attemptCount: kot.attemptCount,
                 printedAt: kot.printedAt ? new Date(kot.printedAt) : null,
+                businessDate: kot.businessDate ? new Date(kot.businessDate) : (desktopBusinessDate || new Date()),
               }
             });
           }
@@ -340,6 +341,7 @@ export async function POST(request: Request) {
             printerId: payload.printerId,
             attemptCount: payload.attemptCount,
             printedAt: payload.printedAt ? new Date(payload.printedAt) : null,
+            businessDate: payload.businessDate ? new Date(payload.businessDate) : (desktopBusinessDate || new Date()),
           }
         });
       } else if (operationType === 'UPDATE') {
@@ -555,7 +557,8 @@ export async function POST(request: Request) {
             reason: payload.reason,
             authorizerId: payload.authorizerId,
             operationId: operationId,
-            deviceId: deviceId
+            deviceId: deviceId,
+            businessDate: payload.businessDate ? new Date(payload.businessDate) : (desktopBusinessDate || new Date()),
           }
         });
 
@@ -615,7 +618,8 @@ export async function POST(request: Request) {
           amount: payload.amount,
           authorizerId: payload.authorizerId,
           operationId: operationId,
-          deviceId: deviceId
+          deviceId: deviceId,
+          businessDate: payload.businessDate ? new Date(payload.businessDate) : (desktopBusinessDate || new Date()),
         }
       });
     } else if (entityType === 'POS_CASH_MOVEMENT') {
@@ -661,7 +665,8 @@ export async function POST(request: Request) {
           type: payload.type,
           reason: payload.reason,
           printCount: payload.printCount,
-          operationId: operationId
+          operationId: operationId,
+          businessDate: payload.businessDate ? new Date(payload.businessDate) : (desktopBusinessDate || new Date())
         }
       });
     } else if (entityType === 'POS_AUTH_AUDIT') {
@@ -682,7 +687,8 @@ export async function POST(request: Request) {
           authorizedBy: payload.authorizedBy,
           action: payload.action,
           reason: payload.reason,
-          operationId: operationId
+          operationId: operationId,
+          businessDate: payload.businessDate ? new Date(payload.businessDate) : (desktopBusinessDate || new Date())
         }
       });
     } else if (entityType === 'POS_SETTLEMENT') {

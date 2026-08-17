@@ -93,7 +93,7 @@ export default function CashManagementPage() {
         undefined,
         authorizerId
       );
-      if (res.success) {
+      if (!res.error) {
         setSuccessMsg('Cash movement recorded successfully.');
         setAmount('');
         setNotes('');
@@ -148,7 +148,7 @@ export default function CashManagementPage() {
 
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-slate-700">Movement Type</label>
-            <Select value={mvtType} onValueChange={(val) => { setMvtType(val); setReasonCode(''); }}>
+            <Select value={mvtType} onValueChange={(val) => { setMvtType(val ?? ''); setReasonCode(''); }}>
               <SelectTrigger className="h-12 bg-slate-50 border-slate-200">
                 <SelectValue placeholder="Select type" />
               </SelectTrigger>
@@ -163,7 +163,7 @@ export default function CashManagementPage() {
 
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-slate-700">Reason / Category</label>
-            <Select value={reasonCode} onValueChange={setReasonCode} required>
+            <Select value={reasonCode} onValueChange={(val) => setReasonCode(val ?? '')} required>
               <SelectTrigger className="h-12 bg-slate-50 border-slate-200">
                 <SelectValue placeholder="Select reason" />
               </SelectTrigger>

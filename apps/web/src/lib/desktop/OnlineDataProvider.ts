@@ -264,5 +264,36 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
     getOrder: async (orderId: string) => {
       return apiFetch(`/api/v1/pos/orders/${orderId}`);
     },
+    getReceipt: async (orderId: string) => {
+      return apiFetch(`/api/v1/pos/orders/${orderId}/receipt`);
+    },
+    getServerOrders: async (range: string, statusFilter: string, sessionId?: string) => {
+      let url = `/api/v1/pos/orders/server?range=${range}&status=${statusFilter}`;
+      if (sessionId) url += `&sessionId=${sessionId}`;
+      return apiFetch(url);
+    },
+    getServerSales: async (range: string, sessionId?: string) => {
+      let url = `/api/v1/pos/sales/server?range=${range}`;
+      if (sessionId) url += `&sessionId=${sessionId}`;
+      return apiFetch(url);
+    },
+    getCashMovements: async (sessionId: string) => {
+      return apiFetch(`/api/v1/pos/sessions/${sessionId}/movements`);
+    },
+    createCashMovement: async (propertyId: string, sessionId: string, amount: number, type: string, reasonCode: string, notes?: string, receiptReference?: string, authorizerId?: string) => {
+      return apiFetch(`/api/v1/pos/sessions/${sessionId}/movements`, {
+        method: 'POST',
+        body: JSON.stringify({ propertyId, amount, type, reasonCode, notes, receiptReference, authorizerId })
+      });
+    },
+    getSessionSettlementDetails: async (sessionId: string) => {
+      return apiFetch(`/api/v1/pos/sessions/${sessionId}/settlement-details`);
+    },
+    settleSession: async (sessionId: string, actualCash: number, operatorId: string, authorizerId?: string) => {
+      return apiFetch(`/api/v1/pos/sessions/${sessionId}/settle`, {
+        method: 'POST',
+        body: JSON.stringify({ actualCash, operatorId, authorizerId })
+      });
+    }
   }
 };

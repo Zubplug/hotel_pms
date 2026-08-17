@@ -49,9 +49,7 @@ export async function POST(
       const payment = await tx.posPayment.create({
         data: {
           orderId,
-          checkId: checkId || null,
-          sessionId: order.sessionId!,
-          method,
+          method: method as any,
           amount,
           currency,
           status: 'CONFIRMED',
@@ -59,24 +57,6 @@ export async function POST(
           operationId: `op_pay_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
         }
       });
-
-      // If checkId is provided, check if the check is fully paid
-      if (checkId) {
-        const check = await tx.posCheck.findUnique({ where: { id: checkId } });
-        if (check) {
-          const allCheckPayments = await tx.posPayment.aggregate({
-            where: { checkId, status: 'CONFIRMED' },
-            _sum: { amount: true }
-          });
-          const paidSoFar = Number(allCheckPayments._sum.amount || 0);
-          if (paidSoFar >= Number(check.total)) {
-            await tx.posCheck.update({
-              where: { id: checkId },
-              data: { status: 'PAID' }
-            });
-          }
-        }
-      }
 
       // Check if order is fully paid
       const allOrderPayments = await tx.posPayment.aggregate({

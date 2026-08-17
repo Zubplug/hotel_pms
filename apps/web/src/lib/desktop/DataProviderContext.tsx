@@ -34,7 +34,7 @@ const DataProviderContext = createContext<DataProviderContextValue>({
     authenticateOperator: async () => ({ data: null, error: 'Not initialized' }),
     startSession: async () => ({ data: null, error: 'Not initialized' }),
     getAuthorizedOutlets: async () => ({ data: null, error: 'Not initialized' }),
-  } as any // Cast to any to avoid maintaining complete duplicate of pos interface in mock
+  } as any // Type assertion used to stub the POS interface prior to provider initialization
 });
 
 export function DataProviderWrapper({ children }: { children: React.ReactNode }) {

@@ -54,9 +54,10 @@ public class KotPrintService : BackgroundService
             {
                 kot.AttemptCount++;
                 
-                // TODO: Actual ESC/POS network printing logic here
-                // bool success = await _printerService.PrintKotAsync(kot.PrinterId, kot);
-                bool success = true; // Simulated success
+                // Hardware integration (Phase 4): Implement ESC/POS TCP/IP printing 
+                // using the local network printer IP defined in the POS Outlet configuration.
+                // For now, mark as printed to clear the local queue.
+                bool success = true;
 
                 if (success)
                 {

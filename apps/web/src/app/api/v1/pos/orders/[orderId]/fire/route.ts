@@ -66,6 +66,7 @@ export async function POST(
           status: 'PENDING',
           printStatus: 'QUEUED',
           attemptCount: 0,
+          businessDate: order.businessDate,
         },
       });
 

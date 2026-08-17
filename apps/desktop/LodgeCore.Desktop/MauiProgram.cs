@@ -53,6 +53,7 @@ public static class MauiProgram
         
         // Register Local Services & Sync Engine
         builder.Services.AddSingleton<LodgeCore.Desktop.Services.AuthManager>();
+        builder.Services.AddTransient<LodgeCore.Desktop.Security.SessionManager>();
         builder.Services.AddTransient<LodgeCore.Desktop.Services.LocalRepository>();
         builder.Services.AddTransient<LodgeCore.Desktop.Services.ConflictResolver>();
         builder.Services.AddHostedService<LodgeCore.Desktop.Services.SyncEngine>();

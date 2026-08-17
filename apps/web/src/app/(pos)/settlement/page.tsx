@@ -29,7 +29,7 @@ export default function SettlementPage() {
     const fetchDetails = async () => {
       try {
         const res = await provider.pos.getSessionSettlementDetails(sessionId);
-        if (res.success && res.data) {
+        if (!res.error && res.data) {
           setExpectedCash(res.data.expectedCash);
         } else {
           setError(res.error || 'Failed to fetch settlement details.');
@@ -65,7 +65,7 @@ export default function SettlementPage() {
     
     try {
       const res = await provider.pos.settleSession(sessionId, actualCash, (session?.user as any)?.id, authorizerId);
-      if (res.success) {
+      if (!res.error) {
         setSuccess(true);
       } else {
         setError(res.error || 'Failed to settle session.');

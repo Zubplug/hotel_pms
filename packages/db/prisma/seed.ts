@@ -140,17 +140,21 @@ async function main() {
   })
 
   // 7. Guests
-  const guest = await prisma.guest.upsert({
-    where: { email: 'john.doe@example.com' },
-    update: {},
-    create: {
-      organizationId: org.id,
-      firstName: 'John',
-      lastName: 'Doe',
-      email: 'john.doe@example.com',
-      phone: '+2348000000002',
-    }
+  let guest = await prisma.guest.findFirst({
+    where: { email: 'john.doe@example.com' }
   })
+  
+  if (!guest) {
+    guest = await prisma.guest.create({
+      data: {
+        organizationId: org.id,
+        firstName: 'John',
+        lastName: 'Doe',
+        email: 'john.doe@example.com',
+        phone: '+2348000000002',
+      }
+    })
+  }
 
   // 8. Staff / Users
   const staff = await prisma.staff.upsert({

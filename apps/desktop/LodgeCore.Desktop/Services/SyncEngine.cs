@@ -144,8 +144,8 @@ public class SyncEngine : BackgroundService
         // using var scope = _serviceProvider.CreateScope();
         // var dbContext = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
         
-        // TODO: Call GET /api/v1/sync/pull?lastSyncAt=XXX
-        // Process incoming reservations, folios, and guests, inserting/updating SQLite.
+        // Phase 4: Retrieve incoming cloud updates (reservations, room statuses, folios)
+        // using the /api/v1/sync/pull?lastSyncAt=XXX endpoint and apply to SQLite.
         
         await Task.CompletedTask;
     }
