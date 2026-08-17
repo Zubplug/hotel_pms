@@ -182,16 +182,131 @@ public class SyncEngine : BackgroundService
     }
 
     /// <summary>
-    /// Pulls state changes from the cloud since the last successful sync point.
+    /// Pulls property config and staff records (with permissions) from the cloud.
+    /// This is the authoritative source for:
+    ///   - Property timezone and EarlyCheckinWindowHours
+    ///   - Staff POS PIN hashes and permission arrays
+    /// Applies changes to SQLite so the desktop can operate offline.
     /// </summary>
     private async Task PullUpdatesAsync(CancellationToken cancellationToken)
     {
-        // using var scope = _serviceProvider.CreateScope();
-        // var dbContext = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
-        
-        // Phase 4: Retrieve incoming cloud updates (reservations, room statuses, folios)
-        // using the /api/v1/sync/pull?lastSyncAt=XXX endpoint and apply to SQLite.
-        
-        await Task.CompletedTask;
+        using var scope = _serviceProvider.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
+
+        var session = await _authManager.GetSessionAsync();
+        if (session == null) return;
+
+        var token = await _authManager.GetAuthTokenAsync();
+        if (string.IsNullOrEmpty(token))
+        {
+            _logger.LogDebug("No auth token available; skipping pull.");
+            return;
+        }
+
+        _httpClient.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+        try
+        {
+            var response = await _httpClient.GetAsync(
+                $"sync/pull?propertyId={Uri.EscapeDataString(session.PropertyId)}",
+                cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning($"Sync pull returned {(int)response.StatusCode}");
+                return;
+            }
+
+            var json = await response.Content.ReadAsStringAsync(cancellationToken);
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            // ---- Apply property config ------------------------------------
+            if (root.TryGetProperty("property", out var propEl))
+            {
+                var localProp = await dbContext.Properties
+                    .FirstOrDefaultAsync(p => p.Id == session.PropertyId, cancellationToken);
+
+                if (localProp != null)
+                {
+                    if (propEl.TryGetProperty("timezone", out var tz))
+                        localProp.Timezone = tz.GetString() ?? localProp.Timezone;
+
+                    if (propEl.TryGetProperty("earlyCheckinWindowHours", out var eciw))
+                        localProp.EarlyCheckinWindowHours = eciw.GetInt32();
+
+                    if (propEl.TryGetProperty("businessDate", out var bd) &&
+                        DateTime.TryParse(bd.GetString(), out var parsedDate))
+                        localProp.BusinessDate = parsedDate;
+                }
+            }
+
+            // ---- Apply staff records --------------------------------------
+            if (root.TryGetProperty("staff", out var staffArray))
+            {
+                foreach (var staffEl in staffArray.EnumerateArray())
+                {
+                    var staffId = staffEl.GetProperty("id").GetString() ?? "";
+                    if (string.IsNullOrEmpty(staffId)) continue;
+
+                    var existing = await dbContext.Staff
+                        .FirstOrDefaultAsync(s => s.Id == staffId, cancellationToken);
+
+                    if (existing != null)
+                    {
+                        // Update mutable fields — never overwrite Id
+                        existing.FirstName = staffEl.TryGetProperty("firstName", out var fn)
+                            ? fn.GetString() ?? existing.FirstName : existing.FirstName;
+                        existing.LastName = staffEl.TryGetProperty("lastName", out var ln)
+                            ? ln.GetString() ?? existing.LastName : existing.LastName;
+                        existing.Role = staffEl.TryGetProperty("role", out var role)
+                            ? role.GetString() ?? existing.Role : existing.Role;
+                        existing.PosPinHash = staffEl.TryGetProperty("posPinHash", out var pin)
+                            ? pin.GetString() : existing.PosPinHash;
+                        existing.PosTokenVersion = staffEl.TryGetProperty("posTokenVersion", out var tv)
+                            ? tv.GetInt32() : existing.PosTokenVersion;
+                        existing.IsActive = staffEl.TryGetProperty("isActive", out var ia)
+                            ? ia.GetBoolean() : existing.IsActive;
+                        existing.HasPosAccess = staffEl.TryGetProperty("hasPosAccess", out var hpa)
+                            ? hpa.GetBoolean() : existing.HasPosAccess;
+                        existing.PermissionsJson = staffEl.TryGetProperty("permissionsJson", out var pj)
+                            ? pj.GetString() ?? existing.PermissionsJson : existing.PermissionsJson;
+                    }
+                    else
+                    {
+                        // New staff member — add to local DB
+                        dbContext.Staff.Add(new LodgeCore.Desktop.Data.Entities.LocalStaff
+                        {
+                            Id              = staffId,
+                            PropertyId      = session.PropertyId,
+                            FirstName       = staffEl.TryGetProperty("firstName", out var fn2) ? fn2.GetString() ?? "" : "",
+                            LastName        = staffEl.TryGetProperty("lastName",  out var ln2) ? ln2.GetString() ?? "" : "",
+                            Role            = staffEl.TryGetProperty("role",      out var role2) ? role2.GetString() ?? "" : "",
+                            PosPinHash      = staffEl.TryGetProperty("posPinHash", out var pin2) ? pin2.GetString() : null,
+                            PosTokenVersion = staffEl.TryGetProperty("posTokenVersion", out var tv2) ? tv2.GetInt32() : 1,
+                            IsActive        = staffEl.TryGetProperty("isActive",   out var ia2) && ia2.GetBoolean(),
+                            HasPosAccess    = staffEl.TryGetProperty("hasPosAccess", out var hpa2) && hpa2.GetBoolean(),
+                            PermissionsJson = staffEl.TryGetProperty("permissionsJson", out var pj2) ? pj2.GetString() ?? "[]" : "[]",
+                        });
+                    }
+                }
+            }
+
+            await dbContext.SaveChangesAsync(cancellationToken);
+            _consecutiveFailures = 0;
+            _logger.LogInformation("Sync pull completed successfully.");
+        }
+        catch (HttpRequestException ex)
+        {
+            _consecutiveFailures++;
+            _logger.LogWarning($"Sync pull network error: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            _consecutiveFailures++;
+            _logger.LogError(ex, "Sync pull failed unexpectedly.");
+        }
     }
 }
+

@@ -297,7 +297,8 @@ public class LocalRepository
                 Currency = "USD",
                 Timezone = "America/Los_Angeles",
                 BusinessDate = DateTime.UtcNow.Date,
-                IsActive = true
+                IsActive = true,
+                EarlyCheckinWindowHours = 2 // Configurable; synced from cloud settings
             });
             await _dbContext.SaveChangesAsync();
         }
