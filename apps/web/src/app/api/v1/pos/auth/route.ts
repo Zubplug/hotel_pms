@@ -67,8 +67,8 @@ export async function POST(req: NextRequest) {
         }
       } 
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('POS Auth Error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: error?.message || 'Internal Server Error', detail: error?.code }, { status: 500 });
   }
 }
