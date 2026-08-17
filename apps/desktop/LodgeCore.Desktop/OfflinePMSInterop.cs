@@ -481,7 +481,7 @@ public class OfflinePMSInterop
         try
         {
             var ctx = await GetSecureContextAsync();
-            var res = await _repo.ClosePosSessionAsync(sessionId, actualCash, cashPaidOut, ctx.UserId, ctx.DeviceId);
+            var res = await _repo.SettleSessionAsync(sessionId, actualCash, ctx.UserId, null, ctx.DeviceId);
             return JsonSerializer.Serialize(new { success = true, data = res });
         }
         catch (Exception ex)
@@ -540,7 +540,7 @@ public class OfflinePMSInterop
             var ctx = await GetSecureContextAsync();
             
             // SECURITY: Cash movement authorization
-            var authorizer = await _repo.ValidateSupervisorPinAsync(supervisorPin, ctx.PropertyId);
+            var authorizer = await _repo.ValidateSupervisorPinAsync(supervisorPin, propertyId);
             if (authorizer == null)
             {
                 // Log failed attempt if needed, but definitely block

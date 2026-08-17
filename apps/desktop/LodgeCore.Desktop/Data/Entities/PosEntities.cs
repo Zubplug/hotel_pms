@@ -72,6 +72,7 @@ public class LocalPosSession
 
     public string? ApprovedBy { get; set; }
     public DateTime? ApprovedAt { get; set; }
+    public string StaffId { get; set; } = string.Empty;
 
     public ICollection<LocalPosCashMovement> CashMovements { get; set; } = new List<LocalPosCashMovement>();
 }
@@ -100,6 +101,7 @@ public class LocalPosOrder
     public string? UpdatedBy { get; set; }
     public string? OperationId { get; set; }
     public string? DeviceId { get; set; }
+    public DateTime UpdatedAt { get; set; }
 
     public ICollection<LocalPosOrderItem> Items { get; set; } = new List<LocalPosOrderItem>();
     public List<LocalPosPayment> Payments { get; set; } = new();
@@ -107,7 +109,6 @@ public class LocalPosOrder
     public List<LocalPosDiscount> Discounts { get; set; } = new();
     public List<LocalPosCheck> Checks { get; set; } = new();
     public List<LocalPosKot> Kots { get; set; } = new();
-    public List<LocalPosCashMovement> CashMovements { get; set; } = new();
 }
 
 public class LocalPosOrderItem
@@ -145,6 +146,9 @@ public class LocalPosPayment
     public DateTime BusinessDate { get; set; }
     public string? DeviceId { get; set; }
     public DateTime? PaidAt { get; set; }
+    public string? CheckId { get; set; }
+    public string? SessionId { get; set; }
+    public DateTime CreatedAt { get; set; }
 }
 
 public class LocalStockTransaction
@@ -268,6 +272,7 @@ public class LocalPosFloorPlan
     public string OutletId { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public bool IsActive { get; set; }
+    public int SortOrder { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }
@@ -297,6 +302,9 @@ public class LocalPosCheck
     public DateTime BusinessDate { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public List<LocalPosOrderItem> Items { get; set; } = new();
 }
 
 public class LocalPosKot
