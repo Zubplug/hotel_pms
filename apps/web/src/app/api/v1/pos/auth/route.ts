@@ -36,8 +36,9 @@ export async function POST(req: NextRequest) {
     }
 
     // Generate operator JWT
-    if (!process.env.NEXTAUTH_SECRET) throw new Error('NEXTAUTH_SECRET missing');
-    const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET);
+    const jwtSecret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
+    if (!jwtSecret) throw new Error('NEXTAUTH_SECRET missing');
+    const secret = new TextEncoder().encode(jwtSecret);
     const operatorToken = await new SignJWT({ 
       staffId: staff.id, 
       propertyId, 
