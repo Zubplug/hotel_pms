@@ -316,7 +316,7 @@ export default function PosTerminalPage() {
       tableNumber: activeTableName,
       guestCount,
       serverStaffId: activeOperator?.id,
-      status: method === 'OPEN' ? 'OPEN' : 'PAID',
+      status: method === 'OPEN' ? 'OPEN' : 'COMPLETED',
       subtotal,
       taxAmount: tax,
       total,
