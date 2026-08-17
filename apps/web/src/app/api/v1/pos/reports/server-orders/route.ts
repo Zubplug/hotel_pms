@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
-import { jwtVerify } from 'jose';
+import { verifyOperatorToken } from '@/lib/pos/operatorAuth';
 
 export async function GET(req: NextRequest) {
   try {
@@ -10,14 +10,9 @@ export async function GET(req: NextRequest) {
     }
 
     const token = authHeader.split(' ')[1];
-    if (!process.env.NEXTAUTH_SECRET) throw new Error('NEXTAUTH_SECRET missing');
-    const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET);
+    const payload = await verifyOperatorToken(token);
     
-    let payload;
-    try {
-      const { payload: jwtPayload } = await jwtVerify(token, secret);
-      payload = jwtPayload;
-    } catch (e) {
+    if (!payload) {
       return NextResponse.json({ error: 'Invalid or expired operator token' }, { status: 401 });
     }
 
