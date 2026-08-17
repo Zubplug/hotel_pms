@@ -116,16 +116,17 @@ public partial class MainPage : ContentPage
                     responseData = await pmsInterop.GetSessionAsync();
                     break;
                 case "auth.provisionDevice":
-                    var permissionsArray = parameters?["permissions"]?.AsArray()?.Select(x => x.ToString()).ToArray() ?? Array.Empty<string>();
-                    var sessionVersion = parameters?["sessionVersion"]?.GetValue<int>() ?? 1;
-                    
                     responseData = await pmsInterop.ProvisionDeviceAsync(
-                        parameters?["userId"]?.ToString(),
-                        parameters?["propertyId"]?.ToString(),
-                        parameters?["role"]?.ToString(),
-                        parameters?["deviceToken"]?.ToString(),
-                        permissionsArray,
-                        sessionVersion
+                        parameters?["deviceToken"]?.ToString()
+                    );
+                    break;
+                case "auth.getActiveStaff":
+                    responseData = await pmsInterop.GetActiveStaffAsync();
+                    break;
+                case "auth.login":
+                    responseData = await pmsInterop.LoginAsync(
+                        parameters?["staffId"]?.ToString(),
+                        parameters?["pin"]?.ToString()
                     );
                     break;
                 case "auth.clearSession":

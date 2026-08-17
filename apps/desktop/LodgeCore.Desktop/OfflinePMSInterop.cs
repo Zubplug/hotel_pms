@@ -30,11 +30,59 @@ public class OfflinePMSInterop
         }
     }
 
-    public async Task<string> ProvisionDeviceAsync(string userId, string propertyId, string role, string deviceToken, string[] permissions = null, int sessionVersion = 1)
+    public async Task<string> ProvisionDeviceAsync(string deviceToken)
     {
         try
         {
-            await _authManager.ProvisionDeviceAsync(userId, propertyId, role, deviceToken, permissions, sessionVersion);
+            await _authManager.StoreDeviceTokenAsync(deviceToken);
+            return JsonSerializer.Serialize(new { success = true });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    public async Task<string> GetActiveStaffAsync()
+    {
+        try
+        {
+            // Desktop usually operates for the property it was provisioned to.
+            // If offline, returning all synced staff is usually fine.
+            var session = await _authManager.GetSessionAsync();
+            var propertyId = session?.PropertyId ?? "";
+            
+            var staff = await _repo.GetActiveStaffAsync(propertyId);
+            return JsonSerializer.Serialize(new { success = true, data = staff });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    public async Task<string> LoginAsync(string staffId, string pin)
+    {
+        try
+        {
+            var staff = await _repo.AuthenticateDesktopUserAsync(staffId, pin);
+            if (staff == null)
+            {
+                return JsonSerializer.Serialize(new { success = false, error = "Invalid PIN" });
+            }
+
+            var session = await _authManager.GetSessionAsync();
+            var propertyId = session?.PropertyId ?? staff.PropertyId;
+
+            // Generate trusted session from the database
+            await _authManager.CreateDesktopSessionAsync(
+                staff.Id, 
+                propertyId, 
+                staff.Role, 
+                new string[] {}, // Can add actual permissions later if needed
+                staff.PosTokenVersion
+            );
+
             return JsonSerializer.Serialize(new { success = true });
         }
         catch (Exception ex)

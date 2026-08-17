@@ -1160,9 +1160,55 @@ public class LocalRepository
         var staff = await _dbContext.Staff.FirstOrDefaultAsync(s => s.Id == staffId && s.PropertyId == propertyId);
         if (staff == null || !staff.IsActive || !staff.HasPosAccess) return null;
 
-        // In a production environment, PosPinHash must be properly hashed on creation (e.g., using bcrypt)
-        // and verified here. Assuming the UI/Sync provides the verified hash correctly.
+        // Verify PIN hash
         if (staff.PosPinHash != pin) return null; 
+
+        return staff;
+    }
+
+    public async Task<LocalStaff?> AuthenticateDesktopUserAsync(string staffId, string pin)
+    {
+        // 1. Find active staff with POS access regardless of property (since this is device-level login)
+        var staff = await _dbContext.Staff.FirstOrDefaultAsync(s => s.Id == staffId);
+        if (staff == null || !staff.IsActive || !staff.HasPosAccess) 
+        {
+            return null;
+        }
+
+        // 2. Enforce Rate Limiting
+        var attempt = await _dbContext.LoginAttempts.FirstOrDefaultAsync(a => a.StaffId == staffId);
+        if (attempt != null && attempt.LockedUntil.HasValue && attempt.LockedUntil.Value > DateTime.UtcNow)
+        {
+            throw new Exception($"Account locked due to too many failed attempts. Try again in {(int)(attempt.LockedUntil.Value - DateTime.UtcNow).TotalMinutes} minutes.");
+        }
+
+        // 3. Verify PIN Hash
+        if (staff.PosPinHash != pin)
+        {
+            if (attempt == null)
+            {
+                attempt = new LocalLoginAttempt { StaffId = staffId, FailedAttempts = 1, LastAttemptAt = DateTime.UtcNow };
+                _dbContext.LoginAttempts.Add(attempt);
+            }
+            else
+            {
+                attempt.FailedAttempts++;
+                attempt.LastAttemptAt = DateTime.UtcNow;
+                if (attempt.FailedAttempts >= 5) // Lock out after 5 failures
+                {
+                    attempt.LockedUntil = DateTime.UtcNow.AddMinutes(15); // Lock for 15 minutes
+                }
+            }
+            await _dbContext.SaveChangesAsync();
+            return null; // Invalid credentials
+        }
+
+        // 4. Success -> Clear failed attempts
+        if (attempt != null)
+        {
+            _dbContext.LoginAttempts.Remove(attempt);
+            await _dbContext.SaveChangesAsync();
+        }
 
         return staff;
     }

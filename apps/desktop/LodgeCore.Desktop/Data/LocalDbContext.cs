@@ -24,8 +24,9 @@ public class LocalDbContext : DbContext
     public DbSet<LocalPosOrder> PosOrders { get; set; } = null!;
     public DbSet<LocalPosOrderItem> PosOrderItems { get; set; } = null!;
     public DbSet<LocalPosPayment> PosPayments { get; set; } = null!;
-    public DbSet<LocalStockTransaction> StockTransactions { get; set; } = null!;
     public DbSet<LocalStaff> Staff { get; set; } = null!;
+    public DbSet<LocalLoginAttempt> LoginAttempts { get; set; } = null!;
+    public DbSet<LocalStockTransaction> StockTransactions { get; set; } = null!;
     public DbSet<LocalPosOperatorSession> PosOperatorSessions { get; set; } = null!;
     public DbSet<LocalOperatorContext> OperatorContexts { get; set; } = null!;
     public DbSet<LocalPosAuthorizationAudit> PosAuthorizationAudits { get; set; } = null!;

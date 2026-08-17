@@ -25,8 +25,14 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
       const res = await fetch('/api/auth/session');
       return res.json();
     },
-    async provisionDevice(userId, propertyId, role, deviceToken) {
+    async provisionDevice(deviceToken) {
       throw new Error('Provisioning is only supported on Desktop');
+    },
+    async getActiveStaff() {
+      throw new Error('getActiveStaff is only supported on Desktop offline auth');
+    },
+    async login(staffId, pin) {
+      throw new Error('login is only supported on Desktop offline auth');
     }
   },
   properties: {

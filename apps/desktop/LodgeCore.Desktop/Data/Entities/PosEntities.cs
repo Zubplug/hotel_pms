@@ -254,6 +254,14 @@ public class LocalStaff
     public int PosTokenVersion { get; set; } = 1;
 }
 
+public class LocalLoginAttempt
+{
+    [Key] public string StaffId { get; set; } = string.Empty;
+    public int FailedAttempts { get; set; }
+    public DateTime? LockedUntil { get; set; }
+    public DateTime LastAttemptAt { get; set; }
+}
+
 public class LocalPosOperatorSession
 {
     [Key] public string Id { get; set; } = string.Empty;

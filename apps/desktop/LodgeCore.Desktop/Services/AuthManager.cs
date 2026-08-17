@@ -28,13 +28,15 @@ public class AuthManager
         return deviceId;
     }
 
-    public async Task ProvisionDeviceAsync(string userId, string propertyId, string role, string deviceToken, string[] permissions, int sessionVersion)
+    public async Task StoreDeviceTokenAsync(string deviceToken)
+    {
+        await SecureStorage.Default.SetAsync(AuthTokenKey, deviceToken);
+    }
+
+    public async Task CreateDesktopSessionAsync(string userId, string propertyId, string role, string[] permissions, int sessionVersion)
     {
         var deviceId = await GetOrCreateDeviceIdAsync();
         
-        // Store the long-lived device token
-        await SecureStorage.Default.SetAsync(AuthTokenKey, deviceToken);
-
         // Derive and store the active offline session
         var session = new DesktopSession(
             SessionId: Guid.NewGuid().ToString(),
