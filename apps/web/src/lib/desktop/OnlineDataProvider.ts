@@ -308,6 +308,28 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
         method: 'POST',
         body: JSON.stringify({ actualCash, operatorId, authorizerId })
       });
-    }
+    },
+    // Service-first waiter flow
+    fireItems: async (orderId: string, items: any[], operatorToken: string) => {
+      return apiFetch(`/api/v1/pos/orders/${orderId}/fire`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${operatorToken}` },
+        body: JSON.stringify({ items }),
+      });
+    },
+    getOpenOrders: async (sessionId: string, operatorToken?: string) => {
+      const options: RequestInit = {};
+      if (operatorToken) options.headers = { Authorization: `Bearer ${operatorToken}` };
+      return apiFetch(`/api/v1/pos/sessions/${sessionId}/open-orders`, options);
+    },
+    getProductionBatches: async (outletId: string, station: string) => {
+      return apiFetch(`/api/v1/pos/outlets/${outletId}/production-batches?station=${station}`);
+    },
+    updateBatchStatus: async (batchId: string, status: string) => {
+      return apiFetch(`/api/v1/pos/production-batches/${batchId}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status }),
+      });
+    },
   }
 };

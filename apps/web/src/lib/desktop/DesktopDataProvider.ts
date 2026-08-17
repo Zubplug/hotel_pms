@@ -203,5 +203,18 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     settleSession: async (sessionId: string, actualCash: number, operatorId: string, authorizerId?: string) => {
       return invokeDesktop('pos.settleSession', { sessionId, actualCash, operatorId, authorizerId });
     },
+    // Service-first waiter flow
+    fireItems: async (orderId: string, items: any[], operatorToken: string) => {
+      return invokeDesktop('pos.fireItems', { orderId, items, operatorToken });
+    },
+    getOpenOrders: async (sessionId: string, operatorToken?: string) => {
+      return invokeDesktop('pos.getOpenOrders', { sessionId, operatorToken });
+    },
+    getProductionBatches: async (outletId: string, station: string) => {
+      return invokeDesktop('pos.getProductionBatches', { outletId, station });
+    },
+    updateBatchStatus: async (batchId: string, status: string) => {
+      return invokeDesktop('pos.updateBatchStatus', { batchId, status });
+    },
   }
 };

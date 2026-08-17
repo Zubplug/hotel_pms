@@ -65,11 +65,15 @@ export async function POST(
       });
       const orderPaidSoFar = Number(allOrderPayments._sum.amount || 0);
       
-      let updatedOrder = order;
+      let updatedOrder: typeof order = order;
       if (orderPaidSoFar >= Number(order.total)) {
         updatedOrder = await tx.posOrder.update({
           where: { id: orderId },
-          data: { status: 'COMPLETED' }
+          data: {
+            status: 'CLOSED',
+            paymentStatus: 'PAID',
+            closedAt: new Date(),
+          }
         });
 
         // Release the table if applicable
@@ -79,6 +83,12 @@ export async function POST(
             data: { currentOrderId: null }
           });
         }
+      } else if (orderPaidSoFar > 0) {
+        // Partially paid
+        await tx.posOrder.update({
+          where: { id: orderId },
+          data: { paymentStatus: 'PARTIALLY_PAID' }
+        });
       }
 
       return { payment, order: updatedOrder };

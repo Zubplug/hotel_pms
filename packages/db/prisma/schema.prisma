@@ -1134,8 +1134,9 @@ model Staff {
   updatedAt DateTime  @updatedAt @db.Timestamptz
   deletedAt DateTime? @db.Timestamptz
 
-  posOrders    PosOrder[]
-  outletAccess StaffPosOutletAccess[]
+  posOrders           PosOrder[]
+  outletAccess        StaffPosOutletAccess[]
+  posProductionBatches PosProductionBatch[]
 }
 
 model StaffPosOutletAccess {
@@ -1841,12 +1842,13 @@ model PosTable {
 }
 
 model ProductCategory {
-  id        String    @id @default(uuid()) @db.Uuid
-  outletId  String    @db.Uuid
-  outlet    PosOutlet @relation(fields: [outletId], references: [id])
-  name      String
-  isActive  Boolean   @default(true)
-  sortOrder Int       @default(0)
+  id                String            @id @default(uuid()) @db.Uuid
+  outletId          String            @db.Uuid
+  outlet            PosOutlet         @relation(fields: [outletId], references: [id])
+  name              String
+  isActive          Boolean           @default(true)
+  sortOrder         Int               @default(0)
+  productionStation ProductionStation @default(KITCHEN)
 
   products PosProduct[]
 
@@ -1855,18 +1857,19 @@ model ProductCategory {
 }
 
 model PosProduct {
-  id         String          @id @default(uuid()) @db.Uuid
-  propertyId String          @db.Uuid
-  property   Property        @relation(fields: [propertyId], references: [id])
-  categoryId String          @db.Uuid
-  category   ProductCategory @relation(fields: [categoryId], references: [id])
+  id                String             @id @default(uuid()) @db.Uuid
+  propertyId        String             @db.Uuid
+  property          Property           @relation(fields: [propertyId], references: [id])
+  categoryId        String             @db.Uuid
+  category          ProductCategory    @relation(fields: [categoryId], references: [id])
 
-  name        String
-  description String?
-  price       Decimal @db.Decimal(18, 4)
-  taxRate     Decimal @default(0) @db.Decimal(5, 2)
-  isActive    Boolean @default(true)
-  image       String?
+  name              String
+  description       String?
+  price             Decimal            @db.Decimal(18, 4)
+  taxRate           Decimal            @default(0) @db.Decimal(5, 2)
+  isActive          Boolean            @default(true)
+  image             String?
+  productionStation ProductionStation?
 
   ingredients RecipeIngredient[]
   modifiers   PosProductModifier[]
@@ -2047,15 +2050,31 @@ model PosAuthorizationAudit {
 }
 
 enum PosOrderStatus {
-  OPEN
   SUBMITTED
+  IN_SERVICE
+  CLOSED
+  VOIDED
+}
+
+enum ProductionStation {
+  KITCHEN
+  BAR
+  DIRECT
+  NONE
+}
+
+enum PosProductionBatchStatus {
+  PENDING
+  ACKNOWLEDGED
   PREPARING
   READY
-  SERVED
   COMPLETED
-  VOIDED
-  CANCELLED
-  HELD
+}
+
+enum PosOrderPaymentStatus {
+  UNPAID
+  PARTIALLY_PAID
+  PAID
 }
 
 model PosOrder {
@@ -2072,9 +2091,10 @@ model PosOrder {
   serverStaffId String? @db.Uuid
   serverStaff   Staff?  @relation(fields: [serverStaffId], references: [id])
 
-  orderNumber  String         @unique
-  status       PosOrderStatus @default(OPEN)
-  businessDate DateTime       @db.Date
+  orderNumber   String               @unique
+  status        PosOrderStatus       @default(SUBMITTED)
+  paymentStatus PosOrderPaymentStatus @default(UNPAID)
+  businessDate  DateTime             @db.Date
 
   subtotal  Decimal @default(0) @db.Decimal(18, 4)
   taxAmount Decimal @default(0) @db.Decimal(18, 4)
@@ -2090,15 +2110,17 @@ model PosOrder {
   serviceCharge Decimal @default(0) @db.Decimal(18, 4)
   tipAmount     Decimal @default(0) @db.Decimal(18, 4)
 
-  operationId String? @unique
+  operationId String?   @unique
   deviceId    String?
+  closedAt    DateTime? @db.Timestamptz
 
-  items     PosOrderItem[]
-  payments  PosPayment[]
-  voids     PosVoid[]
-  discounts PosDiscount[]
-  checks    PosCheck[]
-  kots      PosKot[]
+  items             PosOrderItem[]
+  payments          PosPayment[]
+  voids             PosVoid[]
+  discounts         PosDiscount[]
+  checks            PosCheck[]
+  kots              PosKot[]
+  productionBatches PosProductionBatch[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -2133,7 +2155,8 @@ model PosOrderItem {
   kotId   String?   @db.Uuid
   kot     PosKot?   @relation(fields: [kotId], references: [id])
 
-  modifiers PosOrderItemModifier[]
+  modifiers            PosOrderItemModifier[]
+  productionBatchItems PosProductionBatchItem[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
 }
@@ -2257,4 +2280,35 @@ model PosDiscount {
   deviceId     String?
 
   createdAt DateTime @default(now()) @db.Timestamptz
+}
+
+// -----------------------------------------------------------------------------
+// POS PRODUCTION BATCHES (Service-first waiter flow)
+// -----------------------------------------------------------------------------
+
+model PosProductionBatch {
+  id             String                   @id @default(uuid()) @db.Uuid
+  orderId        String                   @db.Uuid
+  order          PosOrder                 @relation(fields: [orderId], references: [id])
+  batchNumber    Int
+  station        ProductionStation
+  status         PosProductionBatchStatus @default(PENDING)
+  firedAt        DateTime                 @default(now()) @db.Timestamptz
+  firedByStaffId String?                  @db.Uuid
+  firedByStaff   Staff?                   @relation(fields: [firedByStaffId], references: [id])
+  items          PosProductionBatchItem[]
+  createdAt      DateTime                 @default(now()) @db.Timestamptz
+}
+
+model PosProductionBatchItem {
+  id          String             @id @default(uuid()) @db.Uuid
+  batchId     String             @db.Uuid
+  batch       PosProductionBatch @relation(fields: [batchId], references: [id])
+  orderItemId String             @db.Uuid
+  orderItem   PosOrderItem       @relation(fields: [orderItemId], references: [id])
+  productName String
+  quantity    Decimal            @db.Decimal(18, 4)
+  modifiers   Json?
+  course      Int?
+  createdAt   DateTime           @default(now()) @db.Timestamptz
 }

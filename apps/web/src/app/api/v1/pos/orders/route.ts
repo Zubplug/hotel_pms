@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { verifyOperatorToken } from '@/lib/pos/operatorAuth';
-import { PosOrderStatus } from '@hotel-pms/db';
+import { PosOrderStatus, ProductionStation } from '@hotel-pms/db';
 
 // POST /api/v1/pos/orders
 export async function POST(req: NextRequest) {
@@ -12,17 +12,18 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const {
       propertyId, outletId, sessionId, tableId, tableNumber,
-      guestCount, status, subtotal, taxAmount, total,
+      guestCount, subtotal, taxAmount, total,
       items = [], payments = [],
     } = body;
 
     let serverStaffId: string | null = null;
+    let firedByStaffId: string | null = null;
     if (token) {
       const payload = await verifyOperatorToken(token);
       if (!payload) {
         return NextResponse.json({ error: 'Invalid operator token' }, { status: 401 });
       }
-      
+
       // Context binding validation
       const isPropertyMismatch = payload.propertyId !== propertyId;
       const isSessionMismatch = payload.sessionId !== sessionId;
@@ -34,6 +35,34 @@ export async function POST(req: NextRequest) {
       }
 
       serverStaffId = payload.staffId;
+      firedByStaffId = payload.staffId;
+    }
+
+    // Fetch products with their categories to resolve productionStation
+    const productIds = items
+      .filter((i: any) => i.productId)
+      .map((i: any) => i.productId);
+
+    const products = productIds.length
+      ? await prisma.posProduct.findMany({
+          where: { id: { in: productIds } },
+          include: { category: { select: { productionStation: true } } },
+          select: {
+            id: true,
+            productionStation: true,
+            category: { select: { productionStation: true } },
+          },
+        })
+      : [];
+
+    const productMap = new Map(products.map((p: any) => [p.id, p]));
+
+    // Resolve station per item
+    function resolveStation(item: any): ProductionStation {
+      const product = productMap.get(item.productId);
+      if (product?.productionStation) return product.productionStation as ProductionStation;
+      if (product?.category?.productionStation) return product.category.productionStation as ProductionStation;
+      return 'KITCHEN';
     }
 
     const order = await prisma.$transaction(async (tx) => {
@@ -51,7 +80,8 @@ export async function POST(req: NextRequest) {
           guestCount:    guestCount ?? 1,
           serverStaffId: serverStaffId ?? body.serverStaffId ?? null,
           orderNumber,
-          status:       (status ?? 'OPEN') as PosOrderStatus,
+          status:        'SUBMITTED' as PosOrderStatus,
+          paymentStatus: 'UNPAID',
           businessDate:  new Date(),
           subtotal,
           taxAmount,
@@ -85,6 +115,7 @@ export async function POST(req: NextRequest) {
                   amount:   p.amount,
                   currency: p.currency ?? 'NGN',
                   status:   (p.status ?? 'CONFIRMED') as any,
+                  businessDate: new Date(),
                 })),
               }
             : undefined,
@@ -95,6 +126,43 @@ export async function POST(req: NextRequest) {
         },
       });
 
+      // Group items by station (excluding DIRECT and NONE)
+      const stationGroups = new Map<ProductionStation, Array<{ id: string; item: any }>>();
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        const station = resolveStation(item);
+        if (station === 'DIRECT' || station === 'NONE') continue;
+
+        if (!stationGroups.has(station)) stationGroups.set(station, []);
+        stationGroups.get(station)!.push({ id: newOrder.items[i].id, item });
+      }
+
+      // Create production batches (batch #1)
+      const batches = [];
+      for (const [station, stationItems] of stationGroups) {
+        const batch = await tx.posProductionBatch.create({
+          data: {
+            orderId: newOrder.id,
+            batchNumber: 1,
+            station,
+            status: 'PENDING',
+            firedAt: new Date(),
+            firedByStaffId: firedByStaffId ?? null,
+            items: {
+              create: stationItems.map(({ id: orderItemId, item }) => ({
+                orderItemId,
+                productName: item.productName,
+                quantity: item.quantity,
+                modifiers: item.modifiers ?? null,
+                course: item.course ?? null,
+              })),
+            },
+          },
+          include: { items: true },
+        });
+        batches.push(batch);
+      }
+
       // If a table was selected, mark it as occupied
       if (tableId) {
         await tx.posTable.update({
@@ -103,7 +171,7 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      return newOrder;
+      return { ...newOrder, productionBatches: batches };
     });
 
     return NextResponse.json({ data: order, error: null }, { status: 201 });

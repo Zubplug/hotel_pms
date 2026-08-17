@@ -69,7 +69,7 @@ export async function GET(req: NextRequest) {
     let roomCharges = 0;
 
     orders.forEach(order => {
-      if (order.status !== 'VOIDED' && order.status !== 'CANCELLED') {
+      if (order.status !== 'VOIDED') {
         const orderTotal = Number(order.total);
         const orderDiscount = Number(order.discount);
         
