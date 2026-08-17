@@ -23,21 +23,23 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: '20'
-        cache: 'npm'
-        cache-dependency-path: 'apps/web/package-lock.json'
 
     - name: Install .NET MAUI Workloads
       run: dotnet workload install maui-windows
 
+    - name: Install pnpm
+      uses: pnpm/action-setup@v3
+      with:
+        version: 8
+
     - name: Install Web Dependencies
-      working-directory: ./apps/web
-      run: npm ci
+      run: pnpm install --no-frozen-lockfile
 
     - name: Build Web (Next.js Static Export)
-      working-directory: ./apps/web
-      run: npm run build
+      run: pnpm build:desktop
       env:
         NEXT_PUBLIC_IS_DESKTOP: "true"
+
 
     - name: Move Web Export to MAUI wwwroot
       run: |
