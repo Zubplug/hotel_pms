@@ -144,10 +144,10 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
     }
   },
   keycards: {
-    encode: async (roomId, guestName, checkIn, checkOut) => {
+    encode: async (roomId, lockCode, reservationId) => {
       return apiFetch(`/api/v1/hardware/keycards/encode`, {
         method: 'POST',
-        body: JSON.stringify({ roomId, guestName, checkIn, checkOut })
+        body: JSON.stringify({ roomId, lockCode, reservationId })
       });
     },
     read: async () => {

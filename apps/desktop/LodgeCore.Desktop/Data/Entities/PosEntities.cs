@@ -251,6 +251,7 @@ public class LocalStaff
     public bool IsActive { get; set; }
     public bool HasPosAccess { get; set; }
     public string Role { get; set; } = string.Empty;
+    public string PermissionsJson { get; set; } = "[]"; // Added for granular hardware permissions
     public int PosTokenVersion { get; set; } = 1;
 }
 
@@ -369,4 +370,22 @@ public class LocalPosSettlement
     public DateTime SettledAt { get; set; }
     public string Status { get; set; } = "SETTLED";
     public string OperationId { get; set; } = string.Empty;
+}
+
+public class LocalKeycardAudit
+{
+    [Key] public string Id { get; set; } = string.Empty;
+    public string StaffId { get; set; } = string.Empty;
+    public string DeviceId { get; set; } = string.Empty;
+    public string PropertyId { get; set; } = string.Empty;
+    public string OperationType { get; set; } = string.Empty; // ENCODE, READ, CANCEL
+    public string? RoomId { get; set; }
+    public string? ReservationId { get; set; }
+    public DateTime BusinessDate { get; set; }
+    public DateTime Timestamp { get; set; }
+    public bool Success { get; set; }
+    public string StatusReason { get; set; } = string.Empty;
+    public string? CardSnr { get; set; }
+    public string OperationId { get; set; } = string.Empty; // Idempotency key
+    public string SyncStatus { get; set; } = "PENDING"; // PENDING, SYNCED
 }

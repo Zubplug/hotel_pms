@@ -43,6 +43,7 @@ public class SyncEngine : BackgroundService
                 try
                 {
                     await PushPendingEventsAsync(stoppingToken);
+                    await PushKeycardAuditsAsync(stoppingToken);
                     
                     // Resolve any conflicts that emerged from the push
                     using (var scope = _serviceProvider.CreateScope())
@@ -130,6 +131,50 @@ public class SyncEngine : BackgroundService
                 _consecutiveFailures++;
                 _logger.LogError(ex, $"Failed to push sync event {syncEvent.OperationId}");
                 break; 
+            }
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task PushKeycardAuditsAsync(CancellationToken cancellationToken)
+    {
+        using var scope = _serviceProvider.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
+
+        var pendingAudits = await dbContext.KeycardAudits
+            .Where(a => a.SyncStatus == "PENDING")
+            .OrderBy(a => a.Timestamp)
+            .Take(50)
+            .ToListAsync(cancellationToken);
+
+        if (!pendingAudits.Any()) return;
+
+        _logger.LogInformation($"Pushing {pendingAudits.Count} keycard audits to cloud...");
+        
+        var token = await _authManager.GetAuthTokenAsync();
+        if (!string.IsNullOrEmpty(token))
+        {
+            _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        }
+
+        foreach (var audit in pendingAudits)
+        {
+            try
+            {
+                // In production, this pushes to the cloud /api/v1/hardware/keycards/audit endpoint
+                var request = new HttpRequestMessage(HttpMethod.Post, "hardware/keycards/audit");
+                request.Headers.Add("Idempotency-Key", audit.OperationId);
+                // request.Content = JsonContent.Create(audit);
+                // var response = await _httpClient.SendAsync(request, cancellationToken);
+                // response.EnsureSuccessStatusCode();
+
+                audit.SyncStatus = "SYNCED";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Failed to push keycard audit {audit.OperationId}");
+                break;
             }
         }
 

@@ -43,7 +43,7 @@ export interface LodgeCoreDataProvider {
     addPayment(folioId: string, payment: any): Promise<void>;
   };
   keycards: {
-    encode(roomId: string, guestName: string, checkIn: string, checkOut: string): Promise<any>;
+    encode(roomId: string, lockCode: string, reservationId: string): Promise<any>;
     read(): Promise<any>;
     cancel(): Promise<any>;
   };

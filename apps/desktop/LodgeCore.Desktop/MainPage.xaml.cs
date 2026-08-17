@@ -205,7 +205,10 @@ public partial class MainPage : ContentPage
                         parameters?["charge"]?["description"]?.ToString());
                     break;
                 case "keycards.encode":
-                    responseData = await hardwareInterop.EncodeCardAsync(parameters?["roomId"]?.ToString());
+                    responseData = await hardwareInterop.EncodeCardAsync(
+                        parameters?["roomId"]?.ToString(),
+                        parameters?["lockCode"]?.ToString(),
+                        parameters?["reservationId"]?.ToString());
                     break;
                 case "keycards.read":
                     responseData = await hardwareInterop.ReadCardAsync();

@@ -96,8 +96,8 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     }
   },
   keycards: {
-    encode: async (roomId, guestName, checkIn, checkOut) => {
-      return invokeDesktop('keycards.encode', { roomId, guestName, checkIn, checkOut });
+    encode: async (roomId, lockCode, reservationId) => {
+      return invokeDesktop('keycards.encode', { roomId, lockCode, reservationId });
     },
     read: async () => {
       return invokeDesktop('keycards.read');

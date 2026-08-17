@@ -74,12 +74,22 @@ public class OfflinePMSInterop
             var session = await _authManager.GetSessionAsync();
             var propertyId = session?.PropertyId ?? staff.PropertyId;
 
+            string[] permissions = Array.Empty<string>();
+            try
+            {
+                if (!string.IsNullOrEmpty(staff.PermissionsJson))
+                {
+                    permissions = JsonSerializer.Deserialize<string[]>(staff.PermissionsJson) ?? Array.Empty<string>();
+                }
+            }
+            catch { }
+
             // Generate trusted session from the database
             await _authManager.CreateDesktopSessionAsync(
                 staff.Id, 
                 propertyId, 
                 staff.Role, 
-                new string[] {}, // Can add actual permissions later if needed
+                permissions,
                 staff.PosTokenVersion
             );
 
