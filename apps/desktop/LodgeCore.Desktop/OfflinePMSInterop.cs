@@ -599,8 +599,73 @@ public class OfflinePMSInterop
     {
         try
         {
-            var staff = await _repo.GetActiveStaffAsync(propertyId);
-            return JsonSerializer.Serialize(new { success = true, data = staff });
+            var res = await _repo.GetActiveStaffAsync(propertyId);
+            return JsonSerializer.Serialize(new { success = true, data = res });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    public async Task<string> GetFloorPlansAsync(string outletId)
+    {
+        try
+        {
+            var res = await _repo.GetFloorPlansAsync(outletId);
+            return JsonSerializer.Serialize(new { success = true, data = res });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    public async Task<string> GetTablesAsync(string floorPlanId)
+    {
+        try
+        {
+            var res = await _repo.GetTablesAsync(floorPlanId);
+            return JsonSerializer.Serialize(new { success = true, data = res });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    public async Task<string> GetProductModifiersAsync(string productId)
+    {
+        try
+        {
+            var res = await _repo.GetProductModifiersAsync(productId);
+            return JsonSerializer.Serialize(new { success = true, data = res });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    public async Task<string> GetAuthorizedOutletsAsync(string propertyId, string deviceId)
+    {
+        try
+        {
+            var res = await _repo.GetAuthorizedOutletsAsync(propertyId, deviceId);
+            return JsonSerializer.Serialize(new { success = true, data = res });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    public async Task<string> GetSessionContextAsync(string sessionId)
+    {
+        try
+        {
+            var session = await _dbContext.PosSessions.FindAsync(sessionId);
+            return JsonSerializer.Serialize(new { success = true, data = session });
         }
         catch (Exception ex)
         {

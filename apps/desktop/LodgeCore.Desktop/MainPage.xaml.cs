@@ -257,7 +257,11 @@ public partial class MainPage : ContentPage
                         parameters?["paymentData"]?.ToString());
                     break;
                 case "pos.fireKot":
-                    responseData = await pmsInterop.FireKotAsync(parameters?["data"]?.ToString());
+                    var kotItemIdsNode = parameters?["itemIds"] as System.Text.Json.Nodes.JsonArray;
+                    var kotItemIdsList = kotItemIdsNode?.Select(x => x?.ToString() ?? "").Where(x => !string.IsNullOrEmpty(x)).ToList() ?? new List<string>();
+                    responseData = await pmsInterop.FireKotAsync(
+                        parameters?["orderId"]?.ToString(),
+                        kotItemIdsList);
                     break;
                 case "pos.getOrder":
                     responseData = await pmsInterop.GetOrderAsync(parameters?["orderId"]?.ToString());

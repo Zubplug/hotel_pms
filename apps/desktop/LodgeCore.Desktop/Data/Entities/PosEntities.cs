@@ -72,6 +72,8 @@ public class LocalPosSession
 
     public string? ApprovedBy { get; set; }
     public DateTime? ApprovedAt { get; set; }
+
+    public ICollection<LocalPosCashMovement> CashMovements { get; set; } = new List<LocalPosCashMovement>();
 }
 
 public class LocalPosOrder
