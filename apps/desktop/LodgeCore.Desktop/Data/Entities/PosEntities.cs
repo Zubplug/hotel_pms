@@ -210,3 +210,27 @@ public class LocalPosAuthorizationAudit
     public string OperationId { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
 }
+
+public class LocalStaff
+{
+    [Key] public string Id { get; set; } = string.Empty;
+    public string PropertyId { get; set; } = string.Empty;
+    public string FirstName { get; set; } = string.Empty;
+    public string LastName { get; set; } = string.Empty;
+    public string PosPinHash { get; set; } = string.Empty;
+    public bool IsActive { get; set; }
+    public bool HasPosAccess { get; set; }
+    public string Role { get; set; } = string.Empty;
+}
+
+public class LocalPosOperatorSession
+{
+    [Key] public string Id { get; set; } = string.Empty;
+    public string DeviceId { get; set; } = string.Empty;
+    public string PosSessionId { get; set; } = string.Empty;
+    public string StaffId { get; set; } = string.Empty;
+    public DateTime StartedAt { get; set; }
+    public DateTime LastActivityAt { get; set; }
+    public DateTime? EndedAt { get; set; }
+    public string OperationId { get; set; } = string.Empty;
+}

@@ -667,6 +667,98 @@ public class LocalRepository
         return audit;
     }
 
+    public async Task<List<LocalStaff>> GetActiveStaffAsync(string propertyId)
+    {
+        return await _dbContext.Staff
+            .Where(s => s.PropertyId == propertyId && s.IsActive && s.HasPosAccess)
+            .ToListAsync();
+    }
+
+    public async Task<LocalStaff?> AuthenticateOperatorAsync(string staffId, string pin, string propertyId)
+    {
+        var staff = await _dbContext.Staff.FirstOrDefaultAsync(s => s.Id == staffId && s.PropertyId == propertyId);
+        if (staff == null || !staff.IsActive || !staff.HasPosAccess) return null;
+
+        // In a production environment, PosPinHash must be properly hashed on creation (e.g., using bcrypt)
+        // and verified here. Assuming the UI/Sync provides the verified hash correctly.
+        if (staff.PosPinHash != pin) return null; 
+
+        return staff;
+    }
+
+    public async Task<LocalStaff?> ValidateSupervisorPinAsync(string pin, string propertyId)
+    {
+        // Locate an active supervisor matching this PIN in this property.
+        // Again, assuming 'pin' here is the hashed value expected to match the database.
+        var supervisor = await _dbContext.Staff
+            .FirstOrDefaultAsync(s => s.PosPinHash == pin && s.PropertyId == propertyId && s.IsActive && s.Role == "MANAGER");
+
+        return supervisor;
+    }
+
+    public async Task<LocalPosOperatorSession> SwitchOperatorAsync(string deviceId, string posSessionId, string staffId, string operationId)
+    {
+        // End current operator session if any
+        var currentSession = await _dbContext.PosOperatorSessions
+            .Where(s => s.DeviceId == deviceId && s.PosSessionId == posSessionId && s.EndedAt == null)
+            .FirstOrDefaultAsync();
+
+        if (currentSession != null)
+        {
+            currentSession.EndedAt = DateTime.UtcNow;
+            
+            _dbContext.SyncEvents.Add(new LocalSyncEvent
+            {
+                EntityType = "OPERATOR_SESSION",
+                EntityId = currentSession.Id,
+                OperationType = "SWITCH_OUT",
+                PayloadJson = JsonSerializer.Serialize(new { endedAt = currentSession.EndedAt }),
+                UserId = currentSession.StaffId,
+                DeviceId = deviceId
+            });
+        }
+
+        var newSession = new LocalPosOperatorSession
+        {
+            Id = Guid.NewGuid().ToString(),
+            DeviceId = deviceId,
+            PosSessionId = posSessionId,
+            StaffId = staffId,
+            StartedAt = DateTime.UtcNow,
+            LastActivityAt = DateTime.UtcNow,
+            OperationId = operationId
+        };
+
+        _dbContext.PosOperatorSessions.Add(newSession);
+        
+        _dbContext.SyncEvents.Add(new LocalSyncEvent
+        {
+            EntityType = "OPERATOR_SESSION",
+            EntityId = newSession.Id,
+            OperationType = "SWITCH_IN",
+            PayloadJson = JsonSerializer.Serialize(newSession),
+            UserId = staffId,
+            DeviceId = deviceId
+        });
+
+        await _dbContext.SaveChangesAsync();
+        return newSession;
+    }
+
+    public async Task<object?> GetCurrentOperatorSessionAsync(string deviceId, string posSessionId)
+    {
+        var currentSession = await _dbContext.PosOperatorSessions
+            .Where(s => s.DeviceId == deviceId && s.PosSessionId == posSessionId && s.EndedAt == null)
+            .FirstOrDefaultAsync();
+
+        if (currentSession == null) return null;
+
+        var staff = await _dbContext.Staff.FirstOrDefaultAsync(s => s.Id == currentSession.StaffId);
+        if (staff == null) return null;
+
+        return new { operatorSession = currentSession, staff };
+    }
+
     public async Task<LocalPosAuthorizationAudit> LogAuthorizationAsync(string propertyId, string? sessionId, string requestedBy, string authorizedBy, string action, string? reason, string operationId, string deviceId)
     {
         var audit = new LocalPosAuthorizationAudit

@@ -369,13 +369,13 @@ public class OfflinePMSInterop
             var ctx = await GetSecureContextAsync();
             
             // SECURITY: C# handles authorization, bypassing any UI-level tampering
-            var authorizer = await _authManager.ValidatePinAsync(supervisorPin);
-            if (authorizer == null || authorizer.Role != "MANAGER")
+            var authorizer = await _repo.ValidateSupervisorPinAsync(supervisorPin, ctx.PropertyId);
+            if (authorizer == null)
             {
                 return JsonSerializer.Serialize(new { success = false, error = "Invalid supervisor PIN or unauthorized." });
             }
 
-            var res = await _repo.AuthorizeVoidAsync(orderId, orderItemId, reason, authorizer.UserId, ctx.UserId, ctx.DeviceId);
+            var res = await _repo.AuthorizeVoidAsync(orderId, orderItemId, reason, authorizer.Id, ctx.UserId, ctx.DeviceId);
             return JsonSerializer.Serialize(new { success = true, data = res });
         }
         catch (Exception ex)
@@ -391,13 +391,13 @@ public class OfflinePMSInterop
             var ctx = await GetSecureContextAsync();
             
             // SECURITY: Refund authorization
-            var authorizer = await _authManager.ValidatePinAsync(supervisorPin);
-            if (authorizer == null || authorizer.Role != "MANAGER")
+            var authorizer = await _repo.ValidateSupervisorPinAsync(supervisorPin, ctx.PropertyId);
+            if (authorizer == null)
             {
                 return JsonSerializer.Serialize(new { success = false, error = "Invalid supervisor PIN or unauthorized." });
             }
 
-            var res = await _repo.RecordRefundAsync(orderId, amount, method, authorizer.UserId, ctx.UserId, ctx.DeviceId);
+            var res = await _repo.RecordRefundAsync(orderId, amount, method, authorizer.Id, ctx.UserId, ctx.DeviceId);
             return JsonSerializer.Serialize(new { success = true, data = res });
         }
         catch (Exception ex)
@@ -411,18 +411,18 @@ public class OfflinePMSInterop
             var ctx = await GetSecureContextAsync();
             
             // SECURITY: Cash movement authorization
-            var authorizer = await _authManager.ValidatePinAsync(supervisorPin);
-            if (authorizer == null || authorizer.Role != "MANAGER")
+            var authorizer = await _repo.ValidateSupervisorPinAsync(supervisorPin, ctx.PropertyId);
+            if (authorizer == null)
             {
                 // Log failed attempt if needed, but definitely block
                 return JsonSerializer.Serialize(new { success = false, error = "Invalid supervisor PIN or unauthorized." });
             }
 
             // Create movement
-            var res = await _repo.RecordCashMovementAsync(propertyId, sessionId, amount, type, reasonCode, notes, null, authorizer.UserId, ctx.UserId, ctx.DeviceId);
+            var res = await _repo.RecordCashMovementAsync(propertyId, sessionId, amount, type, reasonCode, notes, null, authorizer.Id, ctx.UserId, ctx.DeviceId);
             
             // Log authorization explicitly
-            await _repo.LogAuthorizationAsync(propertyId, sessionId, ctx.UserId, authorizer.UserId, type, reasonCode, res.OperationId, ctx.DeviceId);
+            await _repo.LogAuthorizationAsync(propertyId, sessionId, ctx.UserId, authorizer.Id, type, reasonCode, res.OperationId, ctx.DeviceId);
 
             return JsonSerializer.Serialize(new { success = true, data = res });
         }
@@ -440,6 +440,82 @@ public class OfflinePMSInterop
             
             var res = await _repo.RecordReceiptPrintAsync(propertyId, orderId, sessionId, type, reason, printCount, ctx.UserId, ctx.DeviceId);
             return JsonSerializer.Serialize(new { success = true, data = res });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    private static readonly Dictionary<string, (int Attempts, DateTime LockoutEnd)> _pinFailures = new();
+
+    public async Task<string> AuthenticateOperatorAsync(string staffId, string pin, string propertyId, string sessionId)
+    {
+        try
+        {
+            var ctx = await GetSecureContextAsync();
+            
+            // Check lockout
+            if (_pinFailures.TryGetValue(staffId, out var failureData))
+            {
+                if (failureData.Attempts >= 3 && DateTime.UtcNow < failureData.LockoutEnd)
+                {
+                    return JsonSerializer.Serialize(new { success = false, error = $"Account locked. Try again in {Math.Ceiling((failureData.LockoutEnd - DateTime.UtcNow).TotalSeconds)} seconds." });
+                }
+                else if (DateTime.UtcNow >= failureData.LockoutEnd)
+                {
+                    // Reset if lockout period expired
+                    _pinFailures.Remove(staffId);
+                }
+            }
+
+            // Validate the operator
+            var staff = await _repo.AuthenticateOperatorAsync(staffId, pin, propertyId);
+            
+            if (staff == null)
+            {
+                // Increment failures
+                int newAttempts = _pinFailures.ContainsKey(staffId) ? _pinFailures[staffId].Attempts + 1 : 1;
+                DateTime lockoutEnd = newAttempts >= 3 ? DateTime.UtcNow.AddSeconds(30) : DateTime.MinValue;
+                _pinFailures[staffId] = (newAttempts, lockoutEnd);
+
+                return JsonSerializer.Serialize(new { success = false, error = newAttempts >= 3 ? "Account locked for 30s." : "Invalid PIN or unauthorized." });
+            }
+
+            // Success, reset failures
+            _pinFailures.Remove(staffId);
+
+            var operationId = Guid.NewGuid().ToString();
+            var newSession = await _repo.SwitchOperatorAsync(ctx.DeviceId, sessionId, staffId, operationId);
+
+            return JsonSerializer.Serialize(new { success = true, data = new { operatorSession = newSession, staff } });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    public async Task<string> GetActiveStaffAsync(string propertyId)
+    {
+        try
+        {
+            var staff = await _repo.GetActiveStaffAsync(propertyId);
+            return JsonSerializer.Serialize(new { success = true, data = staff });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    public async Task<string> GetCurrentOperatorAsync(string sessionId)
+    {
+        try
+        {
+            var ctx = await GetSecureContextAsync();
+            var session = await _repo.GetCurrentOperatorSessionAsync(ctx.DeviceId, sessionId);
+            return JsonSerializer.Serialize(new { success = true, data = session });
         }
         catch (Exception ex)
         {

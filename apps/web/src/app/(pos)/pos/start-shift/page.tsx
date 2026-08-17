@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, DollarSign, LogOut } from 'lucide-react';
+import { Loader2, DollarSign, LogOut, Store } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
@@ -14,8 +14,15 @@ export default function StartShiftPage() {
   const { provider } = useLodgeCoreProvider();
   const { data: session, status } = useLodgeCoreSession();
   
+  const [deviceId, setDeviceId] = useState<string | null>(null);
+  const [deviceInfo, setDeviceInfo] = useState<any>(null);
+  const [outlets, setOutlets] = useState<any[]>([]);
+  const [selectedOutlet, setSelectedOutlet] = useState<string>('');
   const [openingCash, setOpeningCash] = useState('');
+  
+  const [isLoadingContext, setIsLoadingContext] = useState(true);
   const [isStarting, setIsStarting] = useState(false);
+  const [error, setError] = useState('');
 
   // If already have a session, redirect to pos
   useEffect(() => {
@@ -24,30 +31,77 @@ export default function StartShiftPage() {
     }
   }, [session, router]);
 
+  useEffect(() => {
+    if (status === 'authenticated' && session) {
+      const storedDeviceId = localStorage.getItem('lodgecore_pos_device_id');
+      if (!storedDeviceId) {
+        // Redirect to device registration if not registered
+        router.push('/pos/device-registration');
+        return;
+      }
+      setDeviceId(storedDeviceId);
+
+      const fetchContext = async () => {
+        try {
+          const propertyId = (session.user as any).propertyId;
+          const res = await provider.pos.getAuthorizedOutlets(propertyId, storedDeviceId);
+          
+          if (res.error) {
+            setError(res.error);
+            setIsLoadingContext(false);
+            return;
+          }
+
+          setDeviceInfo(res.device);
+          setOutlets(res.outlets || []);
+          
+          if (res.outlets && res.outlets.length === 1) {
+            setSelectedOutlet(res.outlets[0].id);
+          } else if (res.outlets && res.outlets.length > 0) {
+            setSelectedOutlet(res.outlets[0].id); // default to first
+          }
+        } catch (e: any) {
+          setError('Failed to fetch POS context: ' + e.message);
+        } finally {
+          setIsLoadingContext(false);
+        }
+      };
+
+      fetchContext();
+    }
+  }, [status, session, provider, router]);
+
   const handleStartShift = async () => {
+    if (!selectedOutlet) {
+      setError('Please select an outlet.');
+      return;
+    }
+
     setIsStarting(true);
+    setError('');
+    
     try {
-      // IPC call to start shift (create PosSession locally)
       const res = await provider.pos.startSession({
-        userId: session?.user?.id || '',
         propertyId: (session?.user as any)?.propertyId || '',
+        deviceId: deviceId!,
+        outletId: selectedOutlet,
         openingCash: Number(openingCash) || 0
       });
+      
       if (res.data?.sessionId) {
-        // We must reload so useLodgeCoreSession picks up the new sessionId from desktop auth state
         window.location.href = '/pos';
       } else {
-        alert('Failed to start shift: ' + (res.error || 'Unknown error'));
+        setError('Failed to start shift: ' + (res.error || 'Unknown error'));
         setIsStarting(false);
       }
     } catch (e: any) {
-      alert('Error: ' + e.message);
+      setError('Error: ' + e.message);
       setIsStarting(false);
     }
   };
 
-  if (status === 'loading' || (session as any)?.sessionId) {
-    return <div className="flex h-screen items-center justify-center bg-slate-50"><Loader2 className="w-8 h-8 animate-spin" /></div>;
+  if (status === 'loading' || (session as any)?.sessionId || isLoadingContext) {
+    return <div className="flex h-screen items-center justify-center bg-slate-50 dark:bg-slate-900"><Loader2 className="w-8 h-8 animate-spin text-slate-500" /></div>;
   }
 
   return (
@@ -63,31 +117,66 @@ export default function StartShiftPage() {
       </button>
 
       <div className="w-full max-w-md bg-white/10 backdrop-blur-xl border border-white/20 p-8 rounded-3xl shadow-2xl">
-        <div className="flex justify-center mb-6">
-          <div className="h-16 w-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/30">
-            <span className="text-3xl font-bold text-white">₦</span>
-          </div>
-        </div>
         
-        <h1 className="text-3xl font-bold text-white text-center tracking-tight mb-2">Start Shift</h1>
-        <p className="text-slate-300 text-center mb-8">Enter the opening cash float for this drawer to begin your shift.</p>
+        <div className="text-center mb-8">
+          <h1 className="text-2xl font-bold text-white tracking-tight">START POS SHIFT</h1>
+        </div>
+
+        {error && (
+          <div className="mb-6 p-4 bg-rose-500/20 border border-rose-500/50 rounded-xl text-rose-200 text-sm">
+            {error}
+          </div>
+        )}
         
         <div className="space-y-6">
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-200 ml-1">Opening Cash (Float)</label>
-            <div className="relative">
+          
+          {/* Outlet Selection / Binding */}
+          <div className="space-y-2 pb-4 border-b border-white/10">
+            {outlets.length === 1 ? (
+              <div className="text-center">
+                <div className="text-xl font-bold text-indigo-300">{outlets[0].name}</div>
+                <div className="text-sm font-medium text-slate-400 mt-1">{deviceInfo?.name || 'Unknown Device'}</div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-300">Select Outlet</label>
+                <select 
+                  value={selectedOutlet}
+                  onChange={e => setSelectedOutlet(e.target.value)}
+                  className="w-full h-12 px-4 bg-white/5 border border-white/10 text-white text-lg rounded-xl focus:ring-indigo-500 focus:border-indigo-500 appearance-none outline-none"
+                >
+                  <option value="" disabled className="text-gray-800">Choose an outlet...</option>
+                  {outlets.map(o => (
+                    <option key={o.id} value={o.id} className="text-gray-800">{o.name}</option>
+                  ))}
+                </select>
+                <div className="text-xs text-slate-400 text-right mt-1">Terminal: {deviceInfo?.name || 'Unknown'}</div>
+              </div>
+            )}
+          </div>
+
+          {/* Cashier Info */}
+          <div className="space-y-1 text-center pb-4 border-b border-white/10">
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Cashier</label>
+            <div className="text-lg font-medium text-white">{session?.user?.name || session?.user?.email}</div>
+          </div>
+
+          {/* Opening Float */}
+          <div className="space-y-2 pt-2">
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block text-center">Opening Cash</label>
+            <div className="relative max-w-[200px] mx-auto">
               <span className="absolute left-4 top-3 text-slate-400 font-semibold">₦</span>
               <Input 
                 type="number"
                 value={openingCash}
                 onChange={e => setOpeningCash(e.target.value)}
                 placeholder="0.00"
-                className="h-14 pl-8 bg-white/5 border-white/10 text-white text-lg rounded-2xl focus:ring-indigo-500"
+                className="h-14 pl-8 bg-white/5 border-white/10 text-white text-center text-xl font-bold rounded-2xl focus:ring-indigo-500"
                 autoFocus
               />
             </div>
             
-            <div className="flex items-center gap-2 mt-4 ml-1">
+            <div className="flex justify-center items-center gap-2 mt-4">
               <input 
                 type="checkbox" 
                 id="no-float" 

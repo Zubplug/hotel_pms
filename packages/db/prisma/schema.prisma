@@ -105,6 +105,7 @@ model Property {
   purchaseOrders       PurchaseOrder[]
   goodsReceivedNotes   GoodsReceivedNote[]
   posOutlets           PosOutlet[]
+  posDevices           PosDevice[]
   posProducts          PosProduct[]
   posOrders            PosOrder[]
   uomConversions       UnitOfMeasureConversion[]
@@ -1074,6 +1075,37 @@ model SyncConflict {
 // -----------------------------------------------------------------------------
 
 // -----------------------------------------------------------------------------
+// POS HARDWARE & DEVICES (Phase 1.8)
+// -----------------------------------------------------------------------------
+
+enum DeviceStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  RETIRED
+}
+
+model PosDevice {
+  id         String       @id @default(uuid()) @db.Uuid
+  propertyId String       @db.Uuid
+  property   Property     @relation(fields: [propertyId], references: [id])
+  
+  name       String       // e.g. "Main Restaurant Till 1"
+  identifier String       @unique // e.g. hardware UUID or generated token
+  
+  outletId   String?      @db.Uuid
+  outlet     PosOutlet?   @relation(fields: [outletId], references: [id])
+  
+  status     DeviceStatus @default(PENDING)
+  lastSeenAt DateTime?    @db.Timestamptz
+  
+  createdAt  DateTime     @default(now()) @db.Timestamptz
+  updatedAt  DateTime     @updatedAt @db.Timestamptz
+  
+  sessions   PosSession[]
+}
+
+// -----------------------------------------------------------------------------
 // STAFF & RBAC
 // -----------------------------------------------------------------------------
 
@@ -1088,6 +1120,7 @@ model Staff {
   lastName   String
   email      String  @unique
   phone      String?
+  posPinHash String?
 
   department     String
   position       String
@@ -1099,6 +1132,22 @@ model Staff {
   createdAt DateTime  @default(now()) @db.Timestamptz
   updatedAt DateTime  @updatedAt @db.Timestamptz
   deletedAt DateTime? @db.Timestamptz
+
+  posOrders PosOrder[]
+  outletAccess StaffPosOutletAccess[]
+}
+
+model StaffPosOutletAccess {
+  id        String    @id @default(uuid()) @db.Uuid
+  staffId   String    @db.Uuid
+  staff     Staff     @relation(fields: [staffId], references: [id])
+  outletId  String    @db.Uuid
+  outlet    PosOutlet @relation(fields: [outletId], references: [id])
+  
+  assignedBy String?  @db.Uuid
+  createdAt  DateTime @default(now()) @db.Timestamptz
+
+  @@unique([staffId, outletId])
 }
 
 model User {
@@ -1751,6 +1800,9 @@ model PosOutlet {
   updatedAt DateTime @updatedAt @db.Timestamptz
   createdBy String?  @db.Uuid
   updatedBy String?  @db.Uuid
+
+  devices   PosDevice[]
+  staffAccess StaffPosOutletAccess[]
 }
 
 model ProductCategory {
@@ -1834,7 +1886,9 @@ model PosSession {
   closedAt   DateTime? @db.Timestamptz
   approvedAt DateTime? @db.Timestamptz
 
-  deviceId   String?
+  deviceId   String    @db.Uuid
+  device     PosDevice @relation(fields: [deviceId], references: [id])
+  
   propertyId String?   @db.Uuid
   property   Property? @relation(fields: [propertyId], references: [id])
 
@@ -1937,6 +1991,9 @@ model PosOrder {
   session    PosSession @relation(fields: [sessionId], references: [id])
   folioId    String?    @db.Uuid
   folio      Folio?     @relation(fields: [folioId], references: [id])
+
+  serverStaffId String? @db.Uuid
+  serverStaff   Staff?  @relation(fields: [serverStaffId], references: [id])
 
   orderNumber  String         @unique
   status       PosOrderStatus @default(OPEN)

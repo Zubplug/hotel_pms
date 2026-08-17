@@ -207,11 +207,17 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
         body: JSON.stringify({ staffId, pin, propertyId, sessionId })
       });
     },
-    startSession: async (data: { userId: string, propertyId: string, openingCash: number }) => {
+    getAuthorizedOutlets: async (propertyId: string, deviceId: string) => {
+      return apiFetch(`/api/v1/pos/outlets/authorized?propertyId=${propertyId}&deviceId=${deviceId}`);
+    },
+    startSession: async (data: { propertyId: string, deviceId: string, outletId: string, openingCash: number }) => {
       return apiFetch(`/api/v1/pos/sessions`, {
         method: 'POST',
         body: JSON.stringify(data)
       });
+    },
+    getSessionContext: async (sessionId: string) => {
+      return apiFetch(`/api/v1/pos/sessions/${sessionId}`);
     }
   }
 };

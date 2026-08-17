@@ -32,9 +32,10 @@ export default function PosTerminalPage() {
   const [categories, setCategories] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Phase 1.7 Operator Switching
+  // Phase 1.7 Operator Switching & Phase 1.8 Context
   const [activeOperator, setActiveOperator] = useState<any | null>(null);
   const [showSwitchPad, setShowSwitchPad] = useState(false);
+  const [sessionContext, setSessionContext] = useState<any | null>(null);
 
   useEffect(() => {
     if (!propertyId) return;
@@ -50,12 +51,19 @@ export default function PosTerminalPage() {
         // Attempt to resume active operator session from SQLite
         if ((session as any)?.sessionId) {
           try {
-            const operatorRes = await provider.pos.getCurrentOperator((session as any).sessionId);
+            const [operatorRes, contextRes] = await Promise.all([
+              provider.pos.getCurrentOperator((session as any).sessionId),
+              provider.pos.getSessionContext((session as any).sessionId)
+            ]);
+            
             if (!operatorRes.error && operatorRes.data?.staff) {
               setActiveOperator(operatorRes.data.staff);
             }
+            if (!contextRes.error && contextRes.data) {
+              setSessionContext(contextRes.data);
+            }
           } catch (e) {
-            console.error("No active operator session resumed");
+            console.error("Failed to load POS session context");
           }
         }
       } catch (err) {
@@ -176,9 +184,16 @@ export default function PosTerminalPage() {
               L
             </div>
             <h1 className="font-bold text-xl tracking-tight text-slate-800">LodgeCore POS</h1>
-            <span className="ml-2 px-2 py-0.5 bg-emerald-100 text-emerald-800 text-xs font-semibold rounded-full">
-              Main Restaurant
-            </span>
+            {sessionContext?.outlet && (
+              <span className="ml-2 px-2 py-0.5 bg-emerald-100 text-emerald-800 text-xs font-semibold rounded-full">
+                {sessionContext.outlet.name}
+              </span>
+            )}
+            {sessionContext?.device && (
+              <span className="ml-1 px-2 py-0.5 bg-indigo-100 text-indigo-800 text-xs font-semibold rounded-full">
+                {sessionContext.device.name}
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-4">
