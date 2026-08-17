@@ -6,7 +6,8 @@ import {
   CreditCard,
   Bell,
   MonitorSmartphone,
-  ShieldCheck
+  ShieldCheck,
+  Store
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -66,6 +67,14 @@ const settingsLinks = [
     icon: MonitorSmartphone,
     color: 'text-indigo-500',
     bgColor: 'bg-indigo-500/10'
+  },
+  {
+    title: 'POS Outlets',
+    description: 'Manage point of sale locations like Restaurants and Bars.',
+    href: '/settings/pos-outlets',
+    icon: Store,
+    color: 'text-orange-500',
+    bgColor: 'bg-orange-500/10'
   }
 ];
 

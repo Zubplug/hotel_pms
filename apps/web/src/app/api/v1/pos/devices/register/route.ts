@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
+import bcrypt from 'bcryptjs';
 
 export async function POST(req: NextRequest) {
   try {
@@ -9,12 +10,41 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Only Admins or Hotel Managers can register a device
-    if (session.user.role !== 'SUPER_ADMIN' && session.user.role !== 'HOTEL_MANAGER') {
-      return NextResponse.json({ error: 'Forbidden: Insufficient permissions to register POS devices' }, { status: 403 });
-    }
+    const { propertyId, name, identifier, outletId, adminEmail, adminPassword } = await req.json();
 
-    const { propertyId, name, identifier, outletId } = await req.json();
+    // Check permissions
+    let hasPermission = session.user.role === 'SUPER_ADMIN' || session.user.role === 'HOTEL_MANAGER';
+    
+    // Admin override check
+    if (!hasPermission) {
+      if (!adminEmail || !adminPassword) {
+        return NextResponse.json({ error: 'Forbidden: Admin credentials required to authorize this device.' }, { status: 403 });
+      }
+
+      const adminUser = await prisma.user.findUnique({
+        where: { email: adminEmail },
+        include: { roles: { include: { role: true } } }
+      });
+
+      if (!adminUser || !adminUser.passwordHash) {
+        return NextResponse.json({ error: 'Invalid admin credentials' }, { status: 401 });
+      }
+
+      const isPasswordValid = await bcrypt.compare(adminPassword, adminUser.passwordHash);
+      if (!isPasswordValid) {
+        return NextResponse.json({ error: 'Invalid admin credentials' }, { status: 401 });
+      }
+
+      const primaryRole = adminUser.isSuperAdmin 
+        ? 'SUPER_ADMIN' 
+        : adminUser.roles[0]?.role?.name;
+
+      if (primaryRole !== 'SUPER_ADMIN' && primaryRole !== 'HOTEL_MANAGER') {
+        return NextResponse.json({ error: 'The provided account does not have sufficient permissions.' }, { status: 403 });
+      }
+      
+      hasPermission = true;
+    }
 
     if (!propertyId || !name || !identifier) {
       return NextResponse.json(

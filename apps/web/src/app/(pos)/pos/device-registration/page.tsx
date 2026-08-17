@@ -11,9 +11,14 @@ export default function DeviceRegistrationPage() {
   const propertyId = (session?.user as any)?.propertyId || '';
   const [deviceName, setDeviceName] = useState('');
   const [outletId, setOutletId] = useState('');
+  const [adminEmail, setAdminEmail] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+
+  const role = (session?.user as any)?.role;
+  const needsAdminOverride = role !== 'SUPER_ADMIN' && role !== 'HOTEL_MANAGER';
 
   // Helper to generate a unique device identifier
   const generateDeviceIdentifier = () => {
@@ -40,7 +45,9 @@ export default function DeviceRegistrationPage() {
           propertyId,
           name: deviceName,
           identifier,
-          outletId: outletId || null
+          outletId: outletId || null,
+          adminEmail: needsAdminOverride ? adminEmail : undefined,
+          adminPassword: needsAdminOverride ? adminPassword : undefined
         })
       });
 
@@ -131,6 +138,45 @@ export default function DeviceRegistrationPage() {
                 Leaving this blank makes this a floating terminal.
               </p>
             </div>
+            
+            {needsAdminOverride && (
+              <div className="pt-4 mt-4 border-t border-gray-100 dark:border-[#2a2a2a] space-y-4">
+                <div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg border border-amber-100 dark:border-amber-800/30">
+                  <p className="text-sm text-amber-800 dark:text-amber-400 font-medium">
+                    Admin Authorization Required
+                  </p>
+                  <p className="text-xs text-amber-700/80 dark:text-amber-400/80 mt-1">
+                    Your account does not have permission to register a new device. Please have a Manager or Super Admin enter their credentials to authorize this action.
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Admin Email <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    value={adminEmail}
+                    onChange={e => setAdminEmail(e.target.value)}
+                    placeholder="manager@hotel.com"
+                    className="w-full px-4 py-2 bg-gray-50 dark:bg-[#141414] border border-gray-200 dark:border-[#2a2a2a] rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none transition-all text-gray-900 dark:text-white"
+                    required={needsAdminOverride}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Admin Password <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="password"
+                    value={adminPassword}
+                    onChange={e => setAdminPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full px-4 py-2 bg-gray-50 dark:bg-[#141414] border border-gray-200 dark:border-[#2a2a2a] rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none transition-all text-gray-900 dark:text-white"
+                    required={needsAdminOverride}
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="pt-2">
