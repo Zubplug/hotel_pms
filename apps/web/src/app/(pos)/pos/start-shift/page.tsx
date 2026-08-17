@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, DollarSign } from 'lucide-react';
+import { Loader2, DollarSign, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
+import { signOut } from 'next-auth/react';
 
 export default function StartShiftPage() {
   const router = useRouter();
@@ -50,8 +51,17 @@ export default function StartShiftPage() {
   }
 
   return (
-    <div className="flex h-screen w-full items-center justify-center bg-slate-900 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-slate-800 via-slate-900 to-black">
+    <div className="relative flex h-screen w-full items-center justify-center bg-slate-900 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-slate-800 via-slate-900 to-black">
       
+      {/* Logout Button */}
+      <button 
+        onClick={() => signOut({ callbackUrl: '/login' })}
+        className="absolute top-6 right-6 flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-rose-500/20 text-slate-300 hover:text-rose-400 border border-white/10 hover:border-rose-500/30 transition-colors shadow-lg"
+      >
+        <LogOut className="w-4 h-4" />
+        <span className="text-sm font-bold">Logout</span>
+      </button>
+
       <div className="w-full max-w-md bg-white/10 backdrop-blur-xl border border-white/20 p-8 rounded-3xl shadow-2xl">
         <div className="flex justify-center mb-6">
           <div className="h-16 w-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/30">
