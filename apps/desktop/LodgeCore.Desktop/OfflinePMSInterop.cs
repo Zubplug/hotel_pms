@@ -53,7 +53,20 @@ public class OfflinePMSInterop
             var propertyId = session?.PropertyId ?? "";
             
             var staff = await _repo.GetActiveStaffAsync(propertyId);
-            return JsonSerializer.Serialize(new { success = true, data = staff });
+            
+            // SECURITY: Never expose PosPinHash or sensitive sync fields to the React UI
+            var safeStaff = staff.Select(s => new
+            {
+                s.Id,
+                s.FirstName,
+                s.LastName,
+                s.Role,
+                s.IsActive,
+                s.HasPosAccess
+                // PermissionsJson is also intentionally omitted; React relies on DesktopSession role
+            });
+
+            return JsonSerializer.Serialize(new { success = true, data = safeStaff });
         }
         catch (Exception ex)
         {

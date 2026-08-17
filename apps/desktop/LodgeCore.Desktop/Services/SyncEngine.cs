@@ -245,6 +245,7 @@ public class SyncEngine : BackgroundService
             // ---- Apply staff records --------------------------------------
             if (root.TryGetProperty("staff", out var staffArray))
             {
+                var incomingStaffIds = new HashSet<string>();
                 foreach (var staffEl in staffArray.EnumerateArray())
                 {
                     var staffId = staffEl.GetProperty("id").GetString() ?? "";
@@ -290,6 +291,21 @@ public class SyncEngine : BackgroundService
                             PermissionsJson = staffEl.TryGetProperty("permissionsJson", out var pj2) ? pj2.GetString() ?? "[]" : "[]",
                         });
                     }
+                    
+                    incomingStaffIds.Add(staffId);
+                }
+
+                // SECURITY: Remove local staff that were excluded from the sync payload
+                // (e.g. fired, POS access revoked, or property access removed).
+                // Failing to delete these would allow indefinitely cached PIN logins.
+                var obsoleteStaff = await dbContext.Staff
+                    .Where(s => !incomingStaffIds.Contains(s.Id))
+                    .ToListAsync(cancellationToken);
+
+                if (obsoleteStaff.Any())
+                {
+                    dbContext.Staff.RemoveRange(obsoleteStaff);
+                    _logger.LogInformation($"Removed {obsoleteStaff.Count} revoked staff members.");
                 }
             }
 
