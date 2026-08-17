@@ -5,6 +5,9 @@ import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { Loader2, Hotel, Eye, EyeOff } from 'lucide-react';
 
+// Compile-time constant — no runtime mismatch
+const IS_DESKTOP = process.env.NEXT_PUBLIC_IS_DESKTOP === 'true';
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
@@ -13,54 +16,64 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  /**
+   * Desktop login: authenticates through the C# IPC bridge (OfflinePMSInterop).
+   * Never calls /api/auth/ — that route doesn't exist in the static MSIX bundle.
+   */
+  async function handleDesktopLogin() {
     setIsLoading(true);
     setError('');
+    try {
+      const { DesktopDataProvider } = await import('@/lib/desktop/DesktopDataProvider');
+      const result = await DesktopDataProvider.auth.provisionDevice(
+        email,          // userId / email
+        '',             // propertyId — C# resolves from device registration
+        'RECEPTIONIST', // default role; C# layer overrides from staff record
+        password,       // treated as credential by C# AuthManager
+        [],
+        1
+      );
 
+      if (!result || (result as any).error) {
+        setError((result as any)?.error || 'Login failed. Please check your credentials.');
+        setIsLoading(false);
+        return;
+      }
+
+      // Session stored in C# SecureStorage — navigate to hub
+      router.replace('/hub');
+    } catch (err: any) {
+      setError(err?.message || 'An unexpected error occurred.');
+      setIsLoading(false);
+    }
+  }
+
+  /**
+   * Web login: uses NextAuth credentials provider.
+   */
+  async function handleWebLogin() {
+    setIsLoading(true);
+    setError('');
     const result = await signIn('credentials', {
       email,
       password,
       redirect: false,
     });
-
     if (result?.error) {
       setError('Invalid email or password. Please try again.');
       setIsLoading(false);
     } else {
-      // If we are on Desktop, we must provision the device using the newly acquired NextAuth session.
-      const isDesktop = process.env.NEXT_PUBLIC_IS_DESKTOP === 'true';
-      if (isDesktop) {
-        try {
-          const { DesktopDataProvider } = await import('@/lib/desktop/DesktopDataProvider');
-          
-          // Fetch the active session from NextAuth
-          const sessionRes = await fetch('/api/auth/session');
-          const sessionData = await sessionRes.json();
-          
-          if (sessionData && sessionData.user) {
-            const role = (sessionData.user as any).role || 'RECEPTIONIST';
-            const capabilities = (sessionData.user as any).capabilities || [];
-            const sessionVersion = (sessionData.user as any).sessionVersion || 1;
-            const propertyId = (sessionData.user as any).propertyId || '';
-            
-            await DesktopDataProvider.auth.provisionDevice(
-              sessionData.user.id || sessionData.user.email,
-              propertyId,
-              role,
-              'device-token-' + Date.now(),
-              capabilities, // pass actual capabilities
-              sessionVersion
-            );
-          }
-        } catch (err) {
-          console.warn('Desktop provider error, ignoring for web:', err);
-        }
-      }
-
-      // Route everything to the new Unified Hub
       router.push('/hub');
       router.refresh();
+    }
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (IS_DESKTOP) {
+      await handleDesktopLogin();
+    } else {
+      await handleWebLogin();
     }
   }
 

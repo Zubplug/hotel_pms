@@ -46,10 +46,10 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
   const isDesktop = process.env.NEXT_PUBLIC_IS_DESKTOP === 'true';
 
   useEffect(() => {
-    if (status === 'unauthenticated' && !isDesktop) {
-      router.push('/login');
+    if (status === 'unauthenticated') {
+      router.replace('/login');
     }
-  }, [status, router, isDesktop]);
+  }, [status, router]);
 
   useEffect(() => {
     setTime(new Date());
@@ -69,7 +69,19 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
     signOut({ callbackUrl: '/login' });
   }
 
-  if (status === 'unauthenticated' || (!session?.user && status !== 'loading')) {
+  // Block render entirely while session status is unknown — prevents flash of protected content
+  if (status === 'loading') {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-slate-50">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 rounded-full border-4 border-blue-600 border-t-transparent animate-spin" />
+          <p className="text-sm text-muted-foreground">Loading&hellip;</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === 'unauthenticated' || !session?.user) {
     return null;
   }
 

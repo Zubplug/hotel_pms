@@ -13,8 +13,8 @@ public partial class MainPage : ContentPage
 
 #if DEBUG
         // In debug mode, connect to the local Next.js development server
-        // Production mode automatically serves static assets from wwwroot
-        MainWebView.Source = new UrlWebViewSource { Url = "http://localhost:3000/frontdesk" };
+        // Always navigate to root — Next.js middleware will handle auth redirect to /login
+        MainWebView.Source = new UrlWebViewSource { Url = "http://localhost:3000/" };
 #endif
     }
 
@@ -40,7 +40,8 @@ public partial class MainPage : ContentPage
 #if !DEBUG
         webView2.CoreWebView2.AddWebResourceRequestedFilter("http://lodgecore.local/*", Microsoft.Web.WebView2.Core.CoreWebView2WebResourceContext.All);
         webView2.CoreWebView2.WebResourceRequested += CoreWebView2_WebResourceRequested;
-        webView2.CoreWebView2.Navigate("http://lodgecore.local/frontdesk");
+        // Always navigate to root — Next.js middleware redirects unauthenticated users to /login
+        webView2.CoreWebView2.Navigate("http://lodgecore.local/");
 #endif
     }
 

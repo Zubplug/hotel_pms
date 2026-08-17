@@ -72,10 +72,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const isDesktop = process.env.NEXT_PUBLIC_IS_DESKTOP === 'true';
 
   useEffect(() => {
-    if (status === 'unauthenticated' && !isDesktop) {
-      router.push('/login');
+    if (status === 'unauthenticated') {
+      router.replace('/login');
     }
-  }, [status, router, isDesktop]);
+  }, [status, router]);
 
   const userInitials = session?.user?.email
     ? session.user.email.slice(0, 2).toUpperCase()
@@ -91,6 +91,20 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     }
     return true;
   });
+
+  // Block render while session is resolving — prevents flash of admin content
+  if (status === 'loading') {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-muted/30">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 rounded-full border-4 border-blue-600 border-t-transparent animate-spin" />
+          <p className="text-sm text-muted-foreground">Loading&hellip;</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === 'unauthenticated' || !session?.user) return null;
 
   async function handleSignOut() {
     if (isDesktop) {
