@@ -103,6 +103,8 @@ export default function PosTerminalPage() {
             ]);
             if (!operatorRes.error && operatorRes.data?.staff) {
               setActiveOperator(operatorRes.data.staff);
+              const savedToken = localStorage.getItem('lodgecore_pos_operator_token');
+              if (savedToken) setOperatorToken(savedToken);
             }
             if (!contextRes.error && contextRes.data) {
               setSessionContext(contextRes.data);
@@ -423,7 +425,12 @@ export default function PosTerminalPage() {
         onOpenMyOrders={() => setShowMyOrders(true)}
         onOpenMySales={() => setShowMySales(true)}
         onOpenKitchen={() => setShowKitchen(true)}
-        onLock={() => { setActiveOperator(null); setShowSwitchPad(true); }}
+        onLock={() => { 
+          setActiveOperator(null); 
+          setOperatorToken(null);
+          localStorage.removeItem('lodgecore_pos_operator_token');
+          setShowSwitchPad(true); 
+        }}
         isOnline={true}
         syncPending={0}
       />
@@ -734,7 +741,10 @@ export default function PosTerminalPage() {
         onCancel={() => setShowSwitchPad(false)}
         onAuthenticated={(operator, token) => {
           setActiveOperator(operator);
-          if (token) setOperatorToken(token);
+          if (token) {
+            setOperatorToken(token);
+            localStorage.setItem('lodgecore_pos_operator_token', token);
+          }
           setShowSwitchPad(false);
         }}
       />
