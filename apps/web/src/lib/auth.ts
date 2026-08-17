@@ -82,7 +82,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           );
         } else if (primaryRole === 'FRONT_DESK' || primaryRole === 'RECEPTIONIST') {
           defaultCapabilities.push('ACCESS_FRONT_DESK', 'ACCESS_HOUSEKEEPING', 'ACCESS_REFUNDS', 'LIMIT_REFUND_50K', 'ACCESS_REPORTS');
-        } else if (primaryRole === 'CASHIER' || primaryRole === 'BARTENDER') {
+        } else if (primaryRole === 'CASHIER' || primaryRole === 'BARTENDER' || primaryRole === 'WAITER') {
           defaultCapabilities.push('ACCESS_POS', 'ACCESS_CASH_MANAGEMENT');
         } else if (primaryRole === 'HOUSEKEEPER') {
           defaultCapabilities.push('ACCESS_HOUSEKEEPING');
