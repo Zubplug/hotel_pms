@@ -7,20 +7,28 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    const { id } = await params;
+
     const session = await auth();
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const posSession = await prisma.posSession.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         outlet: true,
         device: true,
-        openedByUser: {
-          select: { name: true, email: true }
-        }
       }
+    });
+
+    if (!posSession) {
+      return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+    }
+
+    const openedByUser = await prisma.user.findUnique({
+      where: { id: posSession.openedBy },
+      select: { email: true }
     });
 
     if (!posSession) {
@@ -33,7 +41,7 @@ export async function GET(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    return NextResponse.json({ data: posSession });
+    return NextResponse.json({ data: { ...posSession, openedByUser } });
   } catch (error: any) {
     console.error('Error fetching POS session:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
