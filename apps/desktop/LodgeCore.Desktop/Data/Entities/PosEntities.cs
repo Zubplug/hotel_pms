@@ -105,6 +105,7 @@ public class LocalPosOrder
     public List<LocalPosDiscount> Discounts { get; set; } = new();
     public List<LocalPosCheck> Checks { get; set; } = new();
     public List<LocalPosKot> Kots { get; set; } = new();
+    public List<LocalPosCashMovement> CashMovements { get; set; } = new();
 }
 
 public class LocalPosOrderItem
@@ -331,4 +332,23 @@ public class LocalPosOrderItemModifier
     public string Name { get; set; } = string.Empty;
     public decimal Price { get; set; }
     public DateTime CreatedAt { get; set; }
+}
+
+public class LocalPosSettlement
+{
+    [Key] public string Id { get; set; } = string.Empty;
+    public string SessionId { get; set; } = string.Empty;
+    public string PropertyId { get; set; } = string.Empty;
+    public string OutletId { get; set; } = string.Empty;
+    public string DeviceId { get; set; } = string.Empty;
+    public string SessionOwnerId { get; set; } = string.Empty;
+    public string OperatorId { get; set; } = string.Empty;
+    public DateTime BusinessDate { get; set; }
+    public decimal ExpectedCash { get; set; }
+    public decimal ActualCash { get; set; }
+    public decimal Variance { get; set; }
+    public string? AuthorizerId { get; set; }
+    public DateTime SettledAt { get; set; }
+    public string Status { get; set; } = "SETTLED";
+    public string OperationId { get; set; } = string.Empty;
 }

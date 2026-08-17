@@ -1940,11 +1940,12 @@ model PosSession {
   propertyId String?   @db.Uuid
   property   Property? @relation(fields: [propertyId], references: [id])
 
-  orders PosOrder[]
+    orders PosOrder[]
 
   cashMovements       PosCashMovement[]
   receiptAudits       PosReceiptAudit[]
   authorizationAudits PosAuthorizationAudit[]
+  settlements         PosSettlement[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -1956,6 +1957,8 @@ enum PosCashMovementType {
   CASH_TRANSFER_IN
   CASH_TRANSFER_OUT
   FLOAT_ADJUSTMENT
+  SETTLED_ACTUAL
+  VARIANCE
 }
 
 model PosCashMovement {
@@ -1970,10 +1973,32 @@ model PosCashMovement {
   notes            String?
   receiptReference String?
   operationId      String              @unique
-  businessDate     DateTime            @db.Date
+  businessDate     DateTime?           @db.Date
   authorizedBy     String?             @db.Uuid
 
   session PosSession @relation(fields: [posSessionId], references: [id])
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+}
+
+model PosSettlement {
+  id             String    @id @default(uuid()) @db.Uuid
+  sessionId      String    @db.Uuid
+  propertyId     String    @db.Uuid
+  outletId       String    @db.Uuid
+  deviceId       String
+  sessionOwnerId String    @db.Uuid
+  operatorId     String    @db.Uuid
+  businessDate   DateTime? @db.Date
+  expectedCash   Decimal   @db.Decimal(18, 4)
+  actualCash     Decimal   @db.Decimal(18, 4)
+  variance       Decimal   @db.Decimal(18, 4)
+  authorizerId   String?   @db.Uuid
+  settledAt      DateTime  @db.Timestamptz
+  status         String    @default("SETTLED")
+  operationId    String    @unique
+
+  session PosSession @relation(fields: [sessionId], references: [id])
 
   createdAt DateTime @default(now()) @db.Timestamptz
 }

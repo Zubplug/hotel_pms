@@ -685,6 +685,33 @@ export async function POST(request: Request) {
           operationId: operationId
         }
       });
+    } else if (entityType === 'POS_SETTLEMENT') {
+      const existingSettlement = await prisma.posSettlement.findUnique({
+        where: { operationId: operationId }
+      });
+      if (existingSettlement) {
+        return NextResponse.json({ status: 'ALREADY_APPLIED' }, { status: 200 });
+      }
+
+      await prisma.posSettlement.create({
+        data: {
+          id: entityId,
+          sessionId: payload.sessionId,
+          propertyId: propertyId,
+          outletId: payload.outletId || 'unknown-outlet',
+          deviceId: deviceId,
+          sessionOwnerId: payload.sessionOwnerId,
+          operatorId: payload.operatorId,
+          businessDate: desktopBusinessDate || new Date(),
+          expectedCash: payload.expectedCash,
+          actualCash: payload.actualCash,
+          variance: payload.variance,
+          authorizerId: payload.authorizerId,
+          settledAt: payload.settledAt ? new Date(payload.settledAt) : new Date(),
+          status: payload.status,
+          operationId: operationId
+        }
+      });
     }
 
     return NextResponse.json({ 

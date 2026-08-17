@@ -740,29 +740,141 @@ public class LocalRepository
         return payment;
     }
 
-    public async Task<LocalPosSession> ClosePosSessionAsync(string sessionId, decimal actualCash, decimal cashPaidOut, string userId, string deviceId)
+    public async Task<LocalPosSettlement> SettleSessionAsync(string sessionId, decimal actualCash, string operatorId, string? authorizerId, string deviceId)
     {
         var session = await _dbContext.PosSessions.FindAsync(sessionId);
         if (session == null) throw new Exception("Session not found");
+        if (session.Status == "CLOSED" || session.Status == "SETTLED") throw new Exception("Session is already closed or settled");
+
+        var details = await GetSessionSettlementDetailsAsync(sessionId);
+
+        // Validation for override variance
+        if (details.Variance != 0 && string.IsNullOrEmpty(authorizerId))
+        {
+            throw new UnauthorizedAccessException("Variance requires supervisor approval.");
+        }
+
+        string operationId = $"op_settle_{deviceId}_{DateTime.UtcNow.Ticks}";
+
+        var settlement = new LocalPosSettlement
+        {
+            Id = Guid.NewGuid().ToString(),
+            SessionId = sessionId,
+            PropertyId = session.PropertyId,
+            DeviceId = deviceId,
+            OperatorId = operatorId,
+            SessionOwnerId = session.UserId,
+            BusinessDate = session.OpenedAt.Date, // Should track actual business date, fallback to open date
+            ExpectedCash = details.ExpectedCash,
+            ActualCash = actualCash,
+            Variance = actualCash - details.ExpectedCash,
+            AuthorizerId = authorizerId,
+            SettledAt = DateTime.UtcNow,
+            Status = "SETTLED",
+            OperationId = operationId
+        };
+
+        _dbContext.PosSettlements.Add(settlement);
+
+        // Record the actual settlement as a movement for immutable ledger
+        var movement = new LocalPosCashMovement
+        {
+            Id = Guid.NewGuid().ToString(),
+            PropertyId = session.PropertyId,
+            PosSessionId = sessionId,
+            DeviceId = deviceId,
+            UserId = operatorId,
+            Amount = actualCash,
+            Type = "SETTLED_ACTUAL",
+            ReasonCode = "SETTLEMENT",
+            OperationId = $"op_cashmvt_settle_{deviceId}_{DateTime.UtcNow.Ticks}",
+            AuthorizedBy = authorizerId,
+            CreatedAt = DateTime.UtcNow
+        };
+        _dbContext.PosCashMovements.Add(movement);
+
+        if (settlement.Variance != 0)
+        {
+            var varMovement = new LocalPosCashMovement
+            {
+                Id = Guid.NewGuid().ToString(),
+                PropertyId = session.PropertyId,
+                PosSessionId = sessionId,
+                DeviceId = deviceId,
+                UserId = operatorId,
+                Amount = settlement.Variance,
+                Type = "VARIANCE",
+                ReasonCode = "SETTLEMENT_VARIANCE",
+                OperationId = $"op_cashmvt_var_{deviceId}_{DateTime.UtcNow.Ticks}",
+                AuthorizedBy = authorizerId,
+                CreatedAt = DateTime.UtcNow
+            };
+            _dbContext.PosCashMovements.Add(varMovement);
+        }
 
         session.Status = "CLOSED";
         session.ClosedAt = DateTime.UtcNow;
-        session.ActualCash = actualCash;
-        session.CashPaidOut = cashPaidOut;
 
         _dbContext.SyncEvents.Add(new LocalSyncEvent
         {
-            OperationId = $"op_session_close_{sessionId}",
+            OperationId = operationId,
+            EntityType = "POS_SETTLEMENT",
+            EntityId = settlement.Id,
+            OperationType = "CREATE",
+            PayloadJson = JsonSerializer.Serialize(settlement),
+            UserId = operatorId,
+            DeviceId = deviceId
+        });
+
+        // Also sync the session close
+        _dbContext.SyncEvents.Add(new LocalSyncEvent
+        {
+            OperationId = $"op_session_close_{sessionId}_{DateTime.UtcNow.Ticks}",
             EntityType = "POS_SESSION",
             EntityId = session.Id,
             OperationType = "UPDATE",
-            PayloadJson = JsonSerializer.Serialize(session),
-            UserId = userId,
+            PayloadJson = JsonSerializer.Serialize(new { Status = "CLOSED", ClosedAt = session.ClosedAt }),
+            UserId = operatorId,
             DeviceId = deviceId
         });
 
         await _dbContext.SaveChangesAsync();
-        return session;
+        return settlement;
+    }
+
+    public async Task<(decimal ExpectedCash, decimal Variance)> GetSessionSettlementDetailsAsync(string sessionId)
+    {
+        var session = await _dbContext.PosSessions.FindAsync(sessionId);
+        if (session == null) throw new Exception("Session not found");
+
+        var movements = await _dbContext.PosCashMovements
+            .Where(m => m.PosSessionId == sessionId)
+            .ToListAsync();
+
+        var payments = await _dbContext.PosPayments
+            .Include(p => p.OrderId)
+            .Where(p => p.Method == "CASH" && p.Status == "COMPLETED" && _dbContext.PosOrders.Any(o => o.Id == p.OrderId && o.SessionId == sessionId))
+            .ToListAsync();
+
+        decimal openingFloat = movements.Where(m => m.Type == "OPENING_FLOAT").Sum(m => m.Amount);
+        decimal cashSales = payments.Sum(p => p.Amount);
+        decimal cashIn = movements.Where(m => m.Type == "CASH_IN" || m.Type == "CASH_TRANSFER_IN").Sum(m => m.Amount);
+        decimal cashDrops = movements.Where(m => m.Type == "CASH_DROP").Sum(m => m.Amount);
+        decimal paidOuts = movements.Where(m => m.Type == "PAID_OUT").Sum(m => m.Amount);
+        decimal transfersOut = movements.Where(m => m.Type == "CASH_TRANSFER_OUT").Sum(m => m.Amount);
+        decimal refunds = movements.Where(m => m.Type == "REFUND_CASH").Sum(m => m.Amount);
+
+        decimal expectedCash = openingFloat + cashSales + cashIn - cashDrops - paidOuts - transfersOut - refunds;
+
+        return (expectedCash, 0); // Variance is 0 until actual is counted
+    }
+
+    public async Task<List<LocalPosCashMovement>> GetCashMovementsAsync(string sessionId)
+    {
+        return await _dbContext.PosCashMovements
+            .Where(m => m.PosSessionId == sessionId)
+            .OrderByDescending(m => m.CreatedAt)
+            .ToListAsync();
     }
 
     public async Task<LocalPosVoid> AuthorizeVoidAsync(string orderId, string orderItemId, string reason, string authorizerId, string userId, string deviceId)

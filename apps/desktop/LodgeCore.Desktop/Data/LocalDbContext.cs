@@ -34,6 +34,8 @@ public class LocalDbContext : DbContext
     public DbSet<LocalPosKot> PosKots { get; set; } = null!;
     public DbSet<LocalPosProductModifier> PosProductModifiers { get; set; } = null!;
     public DbSet<LocalPosOrderItemModifier> PosOrderItemModifiers { get; set; } = null!;
+    public DbSet<LocalPosCashMovement> PosCashMovements { get; set; } = null!;
+    public DbSet<LocalPosSettlement> PosSettlements { get; set; } = null!;
 
     public LocalDbContext(DbContextOptions<LocalDbContext> options) : base(options)
     {
@@ -73,5 +75,10 @@ public class LocalDbContext : DbContext
             .HasMany(o => o.Payments)
             .WithOne()
             .HasForeignKey(p => p.OrderId);
+
+        modelBuilder.Entity<LocalPosSession>()
+            .HasMany(s => s.CashMovements)
+            .WithOne()
+            .HasForeignKey(c => c.PosSessionId);
     }
 }

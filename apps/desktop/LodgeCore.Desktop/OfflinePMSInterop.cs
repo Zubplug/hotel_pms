@@ -481,6 +481,7 @@ public class OfflinePMSInterop
         {
             return JsonSerializer.Serialize(new { success = false, error = ex.Message });
         }
+    }
     public async Task<string> AuthorizeCashMovementAsync(string propertyId, string sessionId, decimal amount, string type, string reasonCode, string? notes, string supervisorPin)
     {
         try
@@ -593,6 +594,60 @@ public class OfflinePMSInterop
             var ctx = await GetSecureContextAsync();
             var session = await _repo.GetCurrentOperatorSessionAsync(ctx.DeviceId, sessionId);
             return JsonSerializer.Serialize(new { success = true, data = session });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    public async Task<string> GetCashMovementsAsync(string sessionId)
+    {
+        try
+        {
+            var movements = await _repo.GetCashMovementsAsync(sessionId);
+            return JsonSerializer.Serialize(new { success = true, data = movements });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    public async Task<string> GetSessionSettlementDetailsAsync(string sessionId)
+    {
+        try
+        {
+            var (expectedCash, variance) = await _repo.GetSessionSettlementDetailsAsync(sessionId);
+            return JsonSerializer.Serialize(new { success = true, data = new { expectedCash, variance } });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    public async Task<string> CreateCashMovementAsync(string propertyId, string sessionId, decimal amount, string type, string reasonCode, string? notes, string? receiptReference, string? authorizerId)
+    {
+        try
+        {
+            var ctx = await GetSecureContextAsync();
+            var movement = await _repo.RecordCashMovementAsync(propertyId, sessionId, amount, type, reasonCode, notes, receiptReference, authorizerId, ctx.UserId, ctx.DeviceId);
+            return JsonSerializer.Serialize(new { success = true, data = movement });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    public async Task<string> SettleSessionAsync(string sessionId, decimal actualCash, string operatorId, string? authorizerId)
+    {
+        try
+        {
+            var ctx = await GetSecureContextAsync();
+            var settlement = await _repo.SettleSessionAsync(sessionId, actualCash, operatorId, authorizerId, ctx.DeviceId);
+            return JsonSerializer.Serialize(new { success = true, data = settlement });
         }
         catch (Exception ex)
         {
