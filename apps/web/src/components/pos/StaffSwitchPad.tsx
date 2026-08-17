@@ -57,15 +57,16 @@ export function StaffSwitchPad({ isOpen, onAuthenticated, onCancel, cancellable 
     setError('');
 
     try {
+      const posSessionId = localStorage.getItem('lodgecore_pos_session_id') || (session as any)?.sessionId || '';
       const outletId = (session as any)?.outletId || localStorage.getItem('lodgecore_pos_outlet_id') || '';
       const deviceId = (session as any)?.deviceId || localStorage.getItem('lodgecore_pos_device_id') || '';
 
-      // Desktop IPC Call to check PIN against SQLite PosPinHash, Web API Call requires all 6
+      // Desktop IPC Call to check PIN against SQLite PosPinHash, Web API Call requires staffId, pin, sessionId
       const operatorRes = await provider.pos.authenticateOperator(
         selectedStaff.id, 
         pin, 
         propertyId, 
-        (session as any)?.sessionId || '',
+        posSessionId,
         outletId,
         deviceId
       );
