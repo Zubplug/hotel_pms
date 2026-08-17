@@ -138,9 +138,11 @@ public partial class MainPage : ContentPage
                 case "hardware.readCard":
                     responseData = await hardwareInterop.ReadCardAsync();
                     break;
-                case "hardware.encodeCard":
-                    string lockCode = parameters?["lockCode"]?.ToString();
-                    responseData = await hardwareInterop.EncodeCardAsync(lockCode);
+                case "hardware.encodeCard": // Legacy route — kept for backward compat but uses same security path
+                    responseData = await hardwareInterop.EncodeCardAsync(
+                        parameters?["roomId"]?.ToString(),
+                        parameters?["lockCode"]?.ToString(),
+                        parameters?["reservationId"]?.ToString());
                     break;
                 case "hardware.cancelCard":
                     responseData = await hardwareInterop.CancelCardAsync();

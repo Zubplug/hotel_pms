@@ -7,11 +7,19 @@ using LodgeCore.Desktop.Services;
 
 namespace LodgeCore.Desktop;
 
+/// <summary>
+/// The hardware security boundary. React/IPC is untrusted.
+/// All permission checks, reservation validation, and audit logging happen here.
+/// </summary>
 public class HardwareInterop
 {
     private readonly ILockProvider _lockProvider;
     private readonly AuthManager _authManager;
     private readonly IServiceScopeFactory _scopeFactory;
+
+    // Early check-in allowed this many hours before midnight of the check-in date.
+    // e.g. 2 hours: a check-in for 2026-08-18 can be encoded from 22:00 on 2026-08-17.
+    private const int EarlyCheckinWindowHours = 2;
 
     public HardwareInterop(ILockProvider lockProvider, AuthManager authManager, IServiceScopeFactory scopeFactory)
     {
@@ -20,167 +28,265 @@ public class HardwareInterop
         _scopeFactory = scopeFactory;
     }
 
-    private async Task<(bool authorized, DesktopSession? session)> EnsureAuthorizedAsync(string requiredPermission)
+    // -----------------------------------------------------------------------
+    // Authorization helper — checks a specific permission, not a role name
+    // -----------------------------------------------------------------------
+    private async Task<(bool Authorized, DesktopSession? Session)> RequirePermissionAsync(string permission)
     {
         var session = await _authManager.GetSessionAsync();
         if (session == null) return (false, null);
 
-        if (session.Permissions.Contains(requiredPermission) || session.Role == "ADMIN")
+        // ADMIN bypasses all permission checks
+        if (session.Role == "ADMIN" || session.Permissions.Contains(permission))
             return (true, session);
-            
+
         return (false, session);
     }
 
-    private async Task WriteAuditAsync(DesktopSession session, string operation, string? roomId, string? reservationId, bool success, string reason, string? cardSnr = null)
+    // -----------------------------------------------------------------------
+    // Immutable audit writer — MUST always succeed silently so the caller
+    // doesn't swallow the real result.
+    // -----------------------------------------------------------------------
+    private async Task WriteAuditAsync(
+        DesktopSession? session,
+        string operation,
+        bool success,
+        string statusReason,
+        string? roomId = null,
+        string? reservationId = null,
+        string? cardSnr = null)
     {
         try
         {
             using var scope = _scopeFactory.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
 
-            var audit = new LocalKeycardAudit
+            db.KeycardAudits.Add(new LocalKeycardAudit
             {
                 Id = Guid.NewGuid().ToString(),
+                OperationId = Guid.NewGuid().ToString(),
                 StaffId = session?.UserId ?? "UNKNOWN",
                 DeviceId = session?.DeviceId ?? "UNKNOWN",
                 PropertyId = session?.PropertyId ?? "UNKNOWN",
                 OperationType = operation,
                 RoomId = roomId,
                 ReservationId = reservationId,
-                BusinessDate = DateTime.UtcNow.Date, // Fallback, could grab from LocalRepository
+                BusinessDate = DateTime.UtcNow.Date,
                 Timestamp = DateTime.UtcNow,
                 Success = success,
-                StatusReason = reason,
+                StatusReason = statusReason,
                 CardSnr = cardSnr,
-                OperationId = Guid.NewGuid().ToString()
-            };
+                SyncStatus = "PENDING"
+            });
 
-            db.KeycardAudits.Add(audit);
             await db.SaveChangesAsync();
         }
         catch (Exception ex)
         {
-            // Failsafe: if audit fails, log it to debug but don't crash the app if possible,
-            // though in a strict environment we might want to fail the operation.
-            System.Diagnostics.Debug.WriteLine($"Failed to write audit log: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"[HardwareInterop] AUDIT WRITE FAILED: {ex.Message}");
         }
     }
 
+    // -----------------------------------------------------------------------
+    // READ CARD — requires ACCESS_KEYCARD_READ
+    // -----------------------------------------------------------------------
     public async Task<string> ReadCardAsync()
     {
-        DesktopSession? currentSession = null;
+        DesktopSession? session = null;
         try
         {
-            var (authorized, session) = await EnsureAuthorizedAsync("ACCESS_KEYCARD_READ");
-            currentSession = session;
-            
+            (bool authorized, session) = await RequirePermissionAsync("ACCESS_KEYCARD_READ");
+
             if (!authorized)
             {
-                if (currentSession != null) await WriteAuditAsync(currentSession, "READ", null, null, false, "DENIED - Missing ACCESS_KEYCARD_READ");
-                return JsonSerializer.Serialize(new { success = false, error = "Unauthorized: Insufficient permissions for reading keycards." });
+                await WriteAuditAsync(session, "READ", false, "DENIED - Missing ACCESS_KEYCARD_READ");
+                return Fail("Insufficient permissions to read keycards.");
             }
 
             var result = await _lockProvider.ReadCardAsync(CancellationToken.None);
-            
-            await WriteAuditAsync(currentSession, "READ", null, null, result.Success, result.Success ? "SUCCESS" : result.ErrorMessage, result.CardSnr);
-            
+
+            await WriteAuditAsync(session, "READ", result.Success,
+                result.Success ? "SUCCESS" : $"HARDWARE_ERROR - {result.ErrorMessage}",
+                cardSnr: result.CardSnr);
+
             return JsonSerializer.Serialize(new { success = result.Success, data = result });
         }
         catch (Exception ex)
         {
-            if (currentSession != null) await WriteAuditAsync(currentSession, "READ", null, null, false, $"ERROR - {ex.Message}");
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            await WriteAuditAsync(session, "READ", false, $"EXCEPTION - {ex.Message}");
+            return Fail(ex.Message);
         }
     }
 
+    // -----------------------------------------------------------------------
+    // ENCODE CARD — requires ACCESS_KEYCARD_ENCODING
+    //
+    // React sends:  roomId, lockCode (hint), reservationId
+    // C# validates: session → property → room → reservation eligibility
+    //               → business date within check-in window
+    // C# determines the authoritative lock code independently.
+    // -----------------------------------------------------------------------
     public async Task<string> EncodeCardAsync(string? roomId, string? providedLockCode, string? reservationId)
     {
-        DesktopSession? currentSession = null;
+        DesktopSession? session = null;
         try
         {
-            var (authorized, session) = await EnsureAuthorizedAsync("ACCESS_KEYCARD_ENCODING");
-            currentSession = session;
+            (bool authorized, session) = await RequirePermissionAsync("ACCESS_KEYCARD_ENCODING");
 
             if (!authorized)
             {
-                if (currentSession != null) await WriteAuditAsync(currentSession, "ENCODE", roomId, reservationId, false, "DENIED - Missing ACCESS_KEYCARD_ENCODING");
-                return JsonSerializer.Serialize(new { success = false, error = "Unauthorized: Insufficient permissions for encoding keycards." });
+                await WriteAuditAsync(session, "ENCODE", false,
+                    "DENIED - Missing ACCESS_KEYCARD_ENCODING", roomId, reservationId);
+                return Fail("Insufficient permissions to encode keycards.");
+            }
+
+            if (string.IsNullOrWhiteSpace(roomId))
+            {
+                await WriteAuditAsync(session, "ENCODE", false, "DENIED - roomId not provided", roomId, reservationId);
+                return Fail("Room context is required.");
+            }
+
+            if (string.IsNullOrWhiteSpace(reservationId))
+            {
+                await WriteAuditAsync(session, "ENCODE", false, "DENIED - reservationId not provided", roomId, reservationId);
+                return Fail("Reservation context is required.");
             }
 
             using var scope = _scopeFactory.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
 
-            // Validate Room
+            // ---- 1. Validate Room belongs to this session's property --------
             var room = await db.Rooms.FindAsync(roomId);
-            if (room == null || room.PropertyId != currentSession.PropertyId)
+            if (room == null || room.PropertyId != session!.PropertyId)
             {
-                await WriteAuditAsync(currentSession, "ENCODE", roomId, reservationId, false, "DENIED - Room not found or wrong property");
-                return JsonSerializer.Serialize(new { success = false, error = "Invalid room." });
+                await WriteAuditAsync(session, "ENCODE", false,
+                    "DENIED - Room not found or belongs to different property", roomId, reservationId);
+                return Fail("Invalid room.");
             }
 
-            // Determine authoritative lock code
-            string authoritativeLockCode = room.LockSystemCode ?? providedLockCode ?? string.Empty;
-            if (string.IsNullOrEmpty(authoritativeLockCode))
+            // ---- 2. Validate Reservation exists + belongs to this property --
+            var reservation = await db.Reservations.FindAsync(reservationId);
+            if (reservation == null || reservation.PropertyId != session.PropertyId)
             {
-                await WriteAuditAsync(currentSession, "ENCODE", roomId, reservationId, false, "DENIED - No lock code configured for room");
-                return JsonSerializer.Serialize(new { success = false, error = "No lock code configured for this room." });
+                await WriteAuditAsync(session, "ENCODE", false,
+                    "DENIED - Reservation not found or belongs to different property", roomId, reservationId);
+                return Fail("Reservation not found.");
             }
 
-            // Validate Reservation
-            if (!string.IsNullOrEmpty(reservationId))
+            // ---- 3. Validate Reservation is assigned to this room -----------
+            if (reservation.RoomId != roomId)
             {
-                var reservation = await db.Reservations.FindAsync(reservationId);
-                if (reservation == null || (reservation.Status != "IN_HOUSE" && reservation.Status != "CONFIRMED"))
+                await WriteAuditAsync(session, "ENCODE", false,
+                    $"DENIED - Reservation {reservationId} is not assigned to room {roomId}", roomId, reservationId);
+                return Fail("This reservation is not assigned to the requested room.");
+            }
+
+            // ---- 4. Validate Reservation status ----
+            // Only allow CHECKED_IN (already in-house) or PENDING (arriving today within window).
+            // CONFIRMED is intentionally NOT allowed — it covers future dates.
+            var validStatuses = new[] { "CHECKED_IN", "PENDING" };
+            if (!validStatuses.Contains(reservation.Status))
+            {
+                await WriteAuditAsync(session, "ENCODE", false,
+                    $"DENIED - Reservation status '{reservation.Status}' is not eligible for keycard encoding",
+                    roomId, reservationId);
+                return Fail($"Reservation is not eligible for a keycard (status: {reservation.Status}).");
+            }
+
+            // ---- 5. Validate check-in date window ---------------------------
+            // If the reservation is PENDING (not yet checked in), enforce that we are
+            // within the early-check-in window on the actual check-in date.
+            if (reservation.Status == "PENDING")
+            {
+                var now = DateTime.UtcNow;
+                var windowStart = reservation.CheckInDate.Date.AddHours(-EarlyCheckinWindowHours);
+                var windowEnd = reservation.CheckOutDate.Date; // midnight of checkout day = cannot encode on or after checkout
+
+                if (now < windowStart)
                 {
-                    await WriteAuditAsync(currentSession, "ENCODE", roomId, reservationId, false, "DENIED - Reservation invalid or not eligible");
-                    return JsonSerializer.Serialize(new { success = false, error = "Reservation is not eligible for a keycard." });
+                    await WriteAuditAsync(session, "ENCODE", false,
+                        $"DENIED - Too early for check-in window (CheckIn: {reservation.CheckInDate:yyyy-MM-dd}, Window opens: {windowStart:yyyy-MM-dd HH:mm} UTC)",
+                        roomId, reservationId);
+                    return Fail("It is too early to issue a room key for this reservation.");
+                }
+
+                if (now >= windowEnd)
+                {
+                    await WriteAuditAsync(session, "ENCODE", false,
+                        $"DENIED - Check-out date has passed (CheckOut: {reservation.CheckOutDate:yyyy-MM-dd})",
+                        roomId, reservationId);
+                    return Fail("The check-out date has passed for this reservation.");
                 }
             }
-            else 
+
+            // ---- 6. Determine authoritative lock code -----------------------
+            // Priority:  1. room.LockSystemCode (vendor code synced from the cloud)
+            //            2. providedLockCode     (UI hint — only trusted as a fallback)
+            //            3. room.Number          (room number as raw hardware address)
+            string authoritativeLockCode =
+                !string.IsNullOrWhiteSpace(room.LockSystemCode) ? room.LockSystemCode :
+                !string.IsNullOrWhiteSpace(providedLockCode)   ? providedLockCode :
+                room.Number;
+
+            if (string.IsNullOrWhiteSpace(authoritativeLockCode))
             {
-                await WriteAuditAsync(currentSession, "ENCODE", roomId, reservationId, false, "DENIED - Missing reservation context");
-                return JsonSerializer.Serialize(new { success = false, error = "Reservation context is required." });
+                await WriteAuditAsync(session, "ENCODE", false,
+                    "DENIED - Could not determine lock code for room", roomId, reservationId);
+                return Fail("No lock code is configured for this room.");
             }
 
-            // Encode
+            // ---- 7. Encode --------------------------------------------------
             var result = await _lockProvider.EncodeCardAsync(authoritativeLockCode, CancellationToken.None);
-            
-            await WriteAuditAsync(currentSession, "ENCODE", roomId, reservationId, result.Success, result.Success ? "SUCCESS" : result.ErrorMessage, result.CardSnr);
+
+            // LockResult does not carry a CardSnr — only ReadCardResult does.
+            // To capture the SNR we would need a read-after-encode step from the vendor SDK.
+            await WriteAuditAsync(session, "ENCODE", result.Success,
+                result.Success ? "SUCCESS" : $"HARDWARE_ERROR - {result.ErrorMessage}",
+                roomId, reservationId, cardSnr: null);
 
             return JsonSerializer.Serialize(new { success = result.Success, data = result });
         }
         catch (Exception ex)
         {
-            if (currentSession != null) await WriteAuditAsync(currentSession, "ENCODE", roomId, reservationId, false, $"ERROR - {ex.Message}");
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            await WriteAuditAsync(session, "ENCODE", false, $"EXCEPTION - {ex.Message}", roomId, reservationId);
+            return Fail(ex.Message);
         }
     }
 
+    // -----------------------------------------------------------------------
+    // CANCEL CARD — requires ACCESS_KEYCARD_CANCEL
+    // This is independently gated. Being able to encode does not imply cancel.
+    // -----------------------------------------------------------------------
     public async Task<string> CancelCardAsync()
     {
-        DesktopSession? currentSession = null;
+        DesktopSession? session = null;
         try
         {
-            var (authorized, session) = await EnsureAuthorizedAsync("ACCESS_KEYCARD_CANCEL");
-            currentSession = session;
+            (bool authorized, session) = await RequirePermissionAsync("ACCESS_KEYCARD_CANCEL");
 
             if (!authorized)
             {
-                if (currentSession != null) await WriteAuditAsync(currentSession, "CANCEL", null, null, false, "DENIED - Missing ACCESS_KEYCARD_CANCEL");
-                return JsonSerializer.Serialize(new { success = false, error = "Unauthorized: Insufficient permissions for cancelling keycards." });
+                await WriteAuditAsync(session, "CANCEL", false, "DENIED - Missing ACCESS_KEYCARD_CANCEL");
+                return Fail("Insufficient permissions to cancel keycards.");
             }
 
             var result = await _lockProvider.CancelCardAsync(CancellationToken.None);
-            
-            await WriteAuditAsync(currentSession, "CANCEL", null, null, result.Success, result.Success ? "SUCCESS" : result.ErrorMessage, result.CardSnr);
+
+            await WriteAuditAsync(session, "CANCEL", result.Success,
+                result.Success ? "SUCCESS" : $"HARDWARE_ERROR - {result.ErrorMessage}");
 
             return JsonSerializer.Serialize(new { success = result.Success, data = result });
         }
         catch (Exception ex)
         {
-            if (currentSession != null) await WriteAuditAsync(currentSession, "CANCEL", null, null, false, $"ERROR - {ex.Message}");
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            await WriteAuditAsync(session, "CANCEL", false, $"EXCEPTION - {ex.Message}");
+            return Fail(ex.Message);
         }
     }
-}
 
+    // -----------------------------------------------------------------------
+    // Helpers
+    // -----------------------------------------------------------------------
+    private static string Fail(string message)
+        => JsonSerializer.Serialize(new { success = false, error = message });
+}

@@ -17,6 +17,12 @@ public class LocalRoom
     // Derived states (updated during sync or local mutations)
     public bool IsOccupied { get; set; }
 
+    /// <summary>
+    /// Vendor-assigned lock code, synced from the cloud PMS.
+    /// If null, the room Number is used as the hardware address.
+    /// </summary>
+    public string? LockSystemCode { get; set; }
+
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }
