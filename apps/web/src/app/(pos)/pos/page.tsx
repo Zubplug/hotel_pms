@@ -738,6 +738,7 @@ export default function PosTerminalPage() {
       <StaffSwitchPad
         isOpen={!activeOperator || showSwitchPad}
         cancellable={!!activeOperator}
+        outletId={sessionContext?.outlet?.id}
         onCancel={() => setShowSwitchPad(false)}
         onAuthenticated={(operator, token) => {
           setActiveOperator(operator);

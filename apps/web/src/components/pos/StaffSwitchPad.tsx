@@ -11,9 +11,10 @@ type StaffSwitchPadProps = {
   onAuthenticated: (operator: any, token?: string) => void;
   onCancel?: () => void;
   cancellable?: boolean;
+  outletId?: string;
 };
 
-export function StaffSwitchPad({ isOpen, onAuthenticated, onCancel, cancellable = false }: StaffSwitchPadProps) {
+export function StaffSwitchPad({ isOpen, onAuthenticated, onCancel, cancellable = false, outletId }: StaffSwitchPadProps) {
   const { provider } = useLodgeCoreProvider();
   const { data: session } = useLodgeCoreSession();
   const propertyId = (session?.user as any)?.propertyId || '';
@@ -58,7 +59,7 @@ export function StaffSwitchPad({ isOpen, onAuthenticated, onCancel, cancellable 
 
     try {
       const posSessionId = localStorage.getItem('lodgecore_pos_session_id') || (session as any)?.sessionId || '';
-      const outletId = (session as any)?.outletId || localStorage.getItem('lodgecore_pos_outlet_id') || '';
+      const finalOutletId = outletId || (session as any)?.outletId || localStorage.getItem('lodgecore_pos_outlet_id') || '';
       const deviceId = (session as any)?.deviceId || localStorage.getItem('lodgecore_pos_device_id') || '';
 
       // Desktop IPC Call to check PIN against SQLite PosPinHash, Web API Call requires staffId, pin, sessionId
@@ -67,7 +68,7 @@ export function StaffSwitchPad({ isOpen, onAuthenticated, onCancel, cancellable 
         pin, 
         propertyId, 
         posSessionId,
-        outletId,
+        finalOutletId,
         deviceId
       );
 
