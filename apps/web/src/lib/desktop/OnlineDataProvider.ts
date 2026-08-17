@@ -274,12 +274,12 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
       return apiFetch(`/api/v1/pos/orders/${orderId}/receipt`);
     },
     getServerOrders: async (range: string, statusFilter: string, sessionId?: string) => {
-      let url = `/api/v1/pos/orders/server?range=${range}&status=${statusFilter}`;
+      let url = `/api/v1/pos/reports/server-orders?range=${range}&status=${statusFilter}`;
       if (sessionId) url += `&sessionId=${sessionId}`;
       return apiFetch(url);
     },
     getServerSales: async (range: string, sessionId?: string) => {
-      let url = `/api/v1/pos/sales/server?range=${range}`;
+      let url = `/api/v1/pos/reports/server-sales?range=${range}`;
       if (sessionId) url += `&sessionId=${sessionId}`;
       return apiFetch(url);
     },
