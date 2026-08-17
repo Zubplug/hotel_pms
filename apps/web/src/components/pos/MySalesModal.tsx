@@ -35,7 +35,7 @@ export function MySalesModal({ isOpen, onClose, operatorToken, staffName }: MySa
   const fetchSales = async () => {
     setIsLoading(true);
     try {
-      const res = await provider.pos.getServerSales('today', undefined); // Cross-session
+      const res = await provider.pos.getServerSales('today', undefined, operatorToken); // Cross-session
       if (res.error) throw new Error(res.error);
       setSalesData(res.data);
     } catch (error: any) {

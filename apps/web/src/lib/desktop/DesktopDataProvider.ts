@@ -185,11 +185,11 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     getReceipt: async (orderId: string) => {
       return invokeDesktop('pos.getReceipt', { orderId });
     },
-    getServerOrders: async (range: string, statusFilter: string, sessionId?: string) => {
-      return invokeDesktop('pos.getServerOrders', { range, statusFilter, sessionId });
+    getServerOrders: async (range: string, statusFilter: string, sessionId?: string, operatorToken?: string) => {
+      return invokeDesktop('pos.getServerOrders', { range, statusFilter, sessionId, operatorToken });
     },
-    getServerSales: async (range: string, sessionId?: string) => {
-      return invokeDesktop('pos.getServerSales', { range, sessionId });
+    getServerSales: async (range: string, sessionId?: string, operatorToken?: string) => {
+      return invokeDesktop('pos.getServerSales', { range, sessionId, operatorToken });
     },
     getCashMovements: async (sessionId: string) => {
       return invokeDesktop('pos.getCashMovements', { sessionId });

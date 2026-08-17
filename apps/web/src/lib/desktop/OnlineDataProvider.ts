@@ -273,15 +273,23 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
     getReceipt: async (orderId: string) => {
       return apiFetch(`/api/v1/pos/orders/${orderId}/receipt`);
     },
-    getServerOrders: async (range: string, statusFilter: string, sessionId?: string) => {
+    getServerOrders: async (range: string, statusFilter: string, sessionId?: string, operatorToken?: string) => {
       let url = `/api/v1/pos/reports/server-orders?range=${range}&status=${statusFilter}`;
       if (sessionId) url += `&sessionId=${sessionId}`;
-      return apiFetch(url);
+      const options: RequestInit = {};
+      if (operatorToken) {
+        options.headers = { 'Authorization': `Bearer ${operatorToken}` };
+      }
+      return apiFetch(url, options);
     },
-    getServerSales: async (range: string, sessionId?: string) => {
+    getServerSales: async (range: string, sessionId?: string, operatorToken?: string) => {
       let url = `/api/v1/pos/reports/server-sales?range=${range}`;
       if (sessionId) url += `&sessionId=${sessionId}`;
-      return apiFetch(url);
+      const options: RequestInit = {};
+      if (operatorToken) {
+        options.headers = { 'Authorization': `Bearer ${operatorToken}` };
+      }
+      return apiFetch(url, options);
     },
     getCashMovements: async (sessionId: string) => {
       return apiFetch(`/api/v1/pos/sessions/${sessionId}/movements`);

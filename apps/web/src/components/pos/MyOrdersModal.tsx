@@ -56,7 +56,7 @@ export function MyOrdersModal({ isOpen, onClose, operatorToken, staffName }: MyO
   const fetchOrders = async () => {
     setIsLoading(true);
     try {
-      const res = await provider.pos.getServerOrders(dateRange, statusFilter, undefined); // Cross-session
+      const res = await provider.pos.getServerOrders(dateRange, statusFilter, undefined, operatorToken); // Cross-session
       if (res.error) throw new Error(res.error);
       setOrders(res.data || []);
     } catch (error: any) {
