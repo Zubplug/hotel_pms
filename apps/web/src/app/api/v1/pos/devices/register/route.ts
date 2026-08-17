@@ -76,15 +76,25 @@ export async function POST(req: NextRequest) {
 
     // Verify outlet if provided
     if (outletId) {
-      const outlet = await prisma.posOutlet.findUnique({
-        where: { id: outletId, propertyId }
-      });
-      
-      if (!outlet) {
-        return NextResponse.json(
-          { error: 'Outlet not found or does not belong to the property' },
-          { status: 400 }
-        );
+      try {
+        const outlet = await prisma.posOutlet.findUnique({
+          where: { id: outletId, propertyId }
+        });
+        
+        if (!outlet) {
+          return NextResponse.json(
+            { error: 'Outlet not found or does not belong to the property' },
+            { status: 400 }
+          );
+        }
+      } catch (err: any) {
+        if (err.code === 'P2023') { // Prisma invalid UUID
+           return NextResponse.json(
+            { error: 'Invalid Outlet ID format' },
+            { status: 400 }
+          );
+        }
+        throw err;
       }
     }
 

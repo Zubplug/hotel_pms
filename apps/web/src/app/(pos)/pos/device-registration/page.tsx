@@ -16,6 +16,20 @@ export default function DeviceRegistrationPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [outlets, setOutlets] = useState<any[]>([]);
+
+  React.useEffect(() => {
+    if (propertyId) {
+      fetch(`/api/v1/pos/outlets?propertyId=${propertyId}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.data) {
+            setOutlets(data.data);
+          }
+        })
+        .catch(console.error);
+    }
+  }, [propertyId]);
 
   const role = (session?.user as any)?.role;
   const needsAdminOverride = role !== 'SUPER_ADMIN' && role !== 'HOTEL_MANAGER';
@@ -127,13 +141,16 @@ export default function DeviceRegistrationPage() {
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Default Outlet (Optional)
               </label>
-              <input
-                type="text"
+              <select
                 value={outletId}
                 onChange={e => setOutletId(e.target.value)}
-                placeholder="Enter Outlet ID to permanently bind"
                 className="w-full px-4 py-2 bg-gray-50 dark:bg-[#141414] border border-gray-200 dark:border-[#2a2a2a] rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-gray-900 dark:text-white"
-              />
+              >
+                <option value="">Floating Terminal (No fixed outlet)</option>
+                {outlets.map(o => (
+                  <option key={o.id} value={o.id}>{o.name}</option>
+                ))}
+              </select>
               <p className="mt-1 text-xs text-gray-500">
                 Leaving this blank makes this a floating terminal.
               </p>
