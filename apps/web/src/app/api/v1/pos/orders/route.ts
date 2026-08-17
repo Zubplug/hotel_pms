@@ -24,10 +24,13 @@ export async function POST(req: NextRequest) {
       }
       
       // Context binding validation
-      if (payload.propertyId !== propertyId || payload.outletId !== outletId || payload.sessionId !== sessionId) {
-        const debugInfo = `Payload(prop:${payload.propertyId}, out:${payload.outletId}, ses:${payload.sessionId}) vs Body(prop:${propertyId}, out:${outletId}, ses:${sessionId})`;
-        console.error('Context mismatch detailed debug:', debugInfo);
-        return NextResponse.json({ error: `Context mismatch: token does not match request context. ${debugInfo}` }, { status: 403 });
+      const isPropertyMismatch = payload.propertyId !== propertyId;
+      const isSessionMismatch = payload.sessionId !== sessionId;
+      const isOutletMismatch = payload.outletId && payload.outletId !== outletId;
+
+      if (isPropertyMismatch || isSessionMismatch || isOutletMismatch) {
+        console.error('Context mismatch:', { payload, body: { propertyId, outletId, sessionId } });
+        return NextResponse.json({ error: 'Context mismatch: token does not match request context' }, { status: 403 });
       }
 
       serverStaffId = payload.staffId;
