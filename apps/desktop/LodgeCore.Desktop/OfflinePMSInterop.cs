@@ -303,4 +303,147 @@ public class OfflinePMSInterop
     {
         return JsonSerializer.Serialize(new { success = true, data = new { } });
     }
+
+    public async Task<string> GetPosProductsAsync(string propertyId)
+    {
+        try
+        {
+            var data = await _repo.GetPosProductsAsync(propertyId);
+            return JsonSerializer.Serialize(new { success = true, data });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    public async Task<string> CreatePosOrderAsync(string dataJson)
+    {
+        try
+        {
+            var order = JsonSerializer.Deserialize<LodgeCore.Desktop.Data.Entities.LocalPosOrder>(dataJson);
+            if (order == null) throw new Exception("Invalid order data");
+            
+            var ctx = await GetSecureContextAsync();
+            var res = await _repo.CreatePosOrderAsync(order, ctx.UserId, ctx.DeviceId);
+            return JsonSerializer.Serialize(new { success = true, data = res });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    public async Task<string> OpenPosSessionAsync(string propertyId, decimal openingBalance)
+    {
+        try
+        {
+            var ctx = await GetSecureContextAsync();
+            var res = await _repo.OpenPosSessionAsync(propertyId, openingBalance, ctx.UserId, ctx.DeviceId);
+            return JsonSerializer.Serialize(new { success = true, data = res });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    public async Task<string> ClosePosSessionAsync(string sessionId, decimal actualCash, decimal cashPaidOut)
+    {
+        try
+        {
+            var ctx = await GetSecureContextAsync();
+            var res = await _repo.ClosePosSessionAsync(sessionId, actualCash, cashPaidOut, ctx.UserId, ctx.DeviceId);
+            return JsonSerializer.Serialize(new { success = true, data = res });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    public async Task<string> AuthorizeVoidAsync(string orderId, string orderItemId, string reason, string supervisorPin)
+    {
+        try
+        {
+            var ctx = await GetSecureContextAsync();
+            
+            // SECURITY: C# handles authorization, bypassing any UI-level tampering
+            var authorizer = await _authManager.ValidatePinAsync(supervisorPin);
+            if (authorizer == null || authorizer.Role != "MANAGER")
+            {
+                return JsonSerializer.Serialize(new { success = false, error = "Invalid supervisor PIN or unauthorized." });
+            }
+
+            var res = await _repo.AuthorizeVoidAsync(orderId, orderItemId, reason, authorizer.UserId, ctx.UserId, ctx.DeviceId);
+            return JsonSerializer.Serialize(new { success = true, data = res });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    public async Task<string> RecordRefundAsync(string orderId, decimal amount, string method, string supervisorPin)
+    {
+        try
+        {
+            var ctx = await GetSecureContextAsync();
+            
+            // SECURITY: Refund authorization
+            var authorizer = await _authManager.ValidatePinAsync(supervisorPin);
+            if (authorizer == null || authorizer.Role != "MANAGER")
+            {
+                return JsonSerializer.Serialize(new { success = false, error = "Invalid supervisor PIN or unauthorized." });
+            }
+
+            var res = await _repo.RecordRefundAsync(orderId, amount, method, authorizer.UserId, ctx.UserId, ctx.DeviceId);
+            return JsonSerializer.Serialize(new { success = true, data = res });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    public async Task<string> AuthorizeCashMovementAsync(string propertyId, string sessionId, decimal amount, string type, string reasonCode, string? notes, string supervisorPin)
+    {
+        try
+        {
+            var ctx = await GetSecureContextAsync();
+            
+            // SECURITY: Cash movement authorization
+            var authorizer = await _authManager.ValidatePinAsync(supervisorPin);
+            if (authorizer == null || authorizer.Role != "MANAGER")
+            {
+                // Log failed attempt if needed, but definitely block
+                return JsonSerializer.Serialize(new { success = false, error = "Invalid supervisor PIN or unauthorized." });
+            }
+
+            // Create movement
+            var res = await _repo.RecordCashMovementAsync(propertyId, sessionId, amount, type, reasonCode, notes, null, authorizer.UserId, ctx.UserId, ctx.DeviceId);
+            
+            // Log authorization explicitly
+            await _repo.LogAuthorizationAsync(propertyId, sessionId, ctx.UserId, authorizer.UserId, type, reasonCode, res.OperationId, ctx.DeviceId);
+
+            return JsonSerializer.Serialize(new { success = true, data = res });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    public async Task<string> LogReceiptPrintAsync(string propertyId, string? orderId, string? sessionId, string type, string? reason, int printCount)
+    {
+        try
+        {
+            var ctx = await GetSecureContextAsync();
+            
+            var res = await _repo.RecordReceiptPrintAsync(propertyId, orderId, sessionId, type, reason, printCount, ctx.UserId, ctx.DeviceId);
+            return JsonSerializer.Serialize(new { success = true, data = res });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
 }

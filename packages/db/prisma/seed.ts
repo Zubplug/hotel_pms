@@ -107,7 +107,7 @@ async function main() {
         maxOccupancy: 2,
         bedConfiguration: '1 Queen',
         status: 'OCCUPIED',
-        housekeepingStatus: 'DIRTY',
+        housekeepingStatus: 'PENDING',
       },
       {
         propertyId: propLagos.id,
@@ -140,8 +140,10 @@ async function main() {
   })
 
   // 7. Guests
-  const guest = await prisma.guest.create({
-    data: {
+  const guest = await prisma.guest.upsert({
+    where: { email: 'john.doe@example.com' },
+    update: {},
+    create: {
       organizationId: org.id,
       firstName: 'John',
       lastName: 'Doe',
@@ -151,8 +153,10 @@ async function main() {
   })
 
   // 8. Staff / Users
-  const staff = await prisma.staff.create({
-    data: {
+  const staff = await prisma.staff.upsert({
+    where: { email: 'admin@lodgecore.com' },
+    update: {},
+    create: {
       organizationId: org.id,
       firstName: 'Admin',
       lastName: 'User',
@@ -163,14 +167,90 @@ async function main() {
     }
   })
 
-  await prisma.user.create({
-    data: {
+  await prisma.user.upsert({
+    where: { email: 'admin@lodgecore.com' },
+    update: {},
+    create: {
       staffId: staff.id,
       email: 'admin@lodgecore.com',
       // 'password' hash (bcrypt)
       passwordHash: '$2b$10$AmpFKjKSql.k2HpbeXE97.d0G27fSY9UfMJvdt9RoCQco1RIT9FlG',
       isSuperAdmin: true,
     }
+  })
+
+  // 9. Inventory & POS Mock Data
+  const warehouse = await prisma.warehouse.create({
+    data: {
+      propertyId: propLagos.id,
+      name: 'Main Store',
+      location: 'Basement',
+    }
+  })
+
+  const stockChicken = await prisma.stockItem.create({
+    data: {
+      propertyId: propLagos.id,
+      warehouseId: warehouse.id,
+      name: 'Chicken Breast',
+      baseUnit: 'KG',
+      costPrice: 2000,
+      quantityOnHand: 50,
+    }
+  })
+
+  const stockBun = await prisma.stockItem.create({
+    data: {
+      propertyId: propLagos.id,
+      warehouseId: warehouse.id,
+      name: 'Burger Bun',
+      baseUnit: 'PIECE',
+      costPrice: 200,
+      quantityOnHand: 100,
+    }
+  })
+
+  const restaurant = await prisma.posOutlet.create({
+    data: {
+      propertyId: propLagos.id,
+      name: 'The Grand Restaurant',
+      type: 'RESTAURANT',
+    }
+  })
+
+  const catMains = await prisma.productCategory.create({
+    data: {
+      outletId: restaurant.id,
+      name: 'Mains',
+      sortOrder: 1,
+    }
+  })
+
+  const chickenBurger = await prisma.posProduct.create({
+    data: {
+      propertyId: propLagos.id,
+      categoryId: catMains.id,
+      name: 'Classic Chicken Burger',
+      price: 5500,
+      taxRate: 7.5,
+    }
+  })
+
+  await prisma.recipeIngredient.createMany({
+    data: [
+      {
+        productId: chickenBurger.id,
+        stockItemId: stockChicken.id,
+        quantity: 0.2,
+        unitOfMeasure: 'KG'
+      },
+      {
+        productId: chickenBurger.id,
+        stockItemId: stockBun.id,
+        quantity: 1,
+        unitOfMeasure: 'PIECE'
+      }
+    ]
   })
 
   console.log('Seeding complete!')

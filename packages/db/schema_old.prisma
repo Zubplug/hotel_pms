@@ -62,11 +62,11 @@ model Property {
   lastAuditAt  DateTime? @db.Timestamptz
   auditStatus  String? // 'OPEN' | 'IN_PROGRESS' | 'CLOSED'
 
-  isActive Boolean @default(true)
+  isActive     Boolean   @default(true)
 
-  timezone          String @default("Africa/Lagos")
-  locale            String @default("en-NG")
-  settings          Json?
+  timezone String @default("Africa/Lagos")
+  locale   String @default("en-NG")
+  settings Json?
   lockConfiguration Json? // { provider: "DELUNS", dlsCoID: 12345, encoderPort: 1 }
 
   buildings            Building[]
@@ -98,24 +98,11 @@ model Property {
   depositPolicies      DepositPolicy[]
   noShowPolicies       NoShowPolicy[]
   userRoles            UserRole[]
-  suppliers            Supplier[]
-  warehouses           Warehouse[]
-  stockItems           StockItem[]
-  stockTransactions    StockTransaction[]
-  purchaseOrders       PurchaseOrder[]
-  goodsReceivedNotes   GoodsReceivedNote[]
-  posOutlets           PosOutlet[]
-  posProducts          PosProduct[]
-  posOrders            PosOrder[]
-  uomConversions       UnitOfMeasureConversion[]
   enrollmentTokens     AgentEnrollmentToken[]
-  syncConflicts        SyncConflict[]
-  inventoryAlerts      InventoryAlert[]
 
-  createdAt  DateTime     @default(now()) @db.Timestamptz
-  updatedAt  DateTime     @updatedAt @db.Timestamptz
-  deletedAt  DateTime?    @db.Timestamptz
-  PosSession PosSession[]
+  createdAt DateTime  @default(now()) @db.Timestamptz
+  updatedAt DateTime  @updatedAt @db.Timestamptz
+  deletedAt DateTime? @db.Timestamptz
 }
 
 model Building {
@@ -673,10 +660,9 @@ model Folio {
 
   version Int @default(1)
 
-  items     FolioItem[]
-  payments  Payment[]
-  refunds   Refund[]
-  posOrders PosOrder[]
+  items    FolioItem[]
+  payments Payment[]
+  refunds  Refund[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -724,7 +710,7 @@ model FolioItem {
   voidReason String?
 
   postedBy String @db.Uuid
-
+  
   // Late Posting & Audit Fields
   deviceId             String?
   operationId          String?
@@ -741,11 +727,9 @@ enum PaymentMethod {
   BANK_TRANSFER
   POS
   CARD
-  CARD_OFFLINE
   PAYMENT_GATEWAY
   MOBILE_PAYMENT
   CHEQUE
-  ROOM_CHARGE
   OTHER
 }
 
@@ -804,7 +788,7 @@ model Refund {
   authorizedBy     String  @db.Uuid
   providerRefundId String?
 
-  status         String // 'PENDING' | 'COMPLETED' | 'FAILED'
+  status String // 'PENDING' | 'COMPLETED' | 'FAILED'
   idempotencyKey String? @unique
 
   createdAt DateTime @default(now()) @db.Timestamptz
@@ -887,9 +871,6 @@ model NightAudit {
   exceptions Json?
   notes      String?
 
-  posUnresolvedVariances Int @default(0)
-  posSessionsPending     Int @default(0)
-
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
 
@@ -938,7 +919,7 @@ model HousekeepingTask {
   inspectedBy String?   @db.Uuid
 
   notes          String?
-  idempotencyKey String? @unique
+  idempotencyKey String?  @unique
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -1033,45 +1014,15 @@ model GuestServiceRequest {
   scheduledFor DateTime? @db.Timestamptz
   completedAt  DateTime? @db.Timestamptz
 
-  details     Json?
-  assignedTo  String?  @db.Uuid
-  charge      Decimal? @db.Decimal(18, 4)
-  description String?
-  isActive    Boolean  @default(true)
+  details    Json?
+  assignedTo String?  @db.Uuid
+  charge     Decimal? @db.Decimal(18, 4)
+  currency   String?
+  notes      String?
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
 }
-
-enum SyncConflictStatus {
-  PENDING
-  RESOLVED
-  REJECTED
-}
-
-model SyncConflict {
-  id         String   @id @default(uuid()) @db.Uuid
-  propertyId String   @db.Uuid
-  property   Property @relation(fields: [propertyId], references: [id])
-
-  operationId String @unique
-  entityType  String
-  entityId    String
-  payload     Json
-
-  conflictReason String
-  status         SyncConflictStatus @default(PENDING)
-
-  resolvedBy String?   @db.Uuid
-  resolvedAt DateTime? @db.Timestamptz
-  resolution String?
-
-  createdAt DateTime @default(now()) @db.Timestamptz
-}
-
-// -----------------------------------------------------------------------------
-// INVENTORY & PROCUREMENT (Phase 1)
-// -----------------------------------------------------------------------------
 
 // -----------------------------------------------------------------------------
 // STAFF & RBAC
@@ -1185,23 +1136,23 @@ model HardwareAgent {
   property           Property  @relation(fields: [propertyId], references: [id])
   name               String
   deviceId           String    @unique
-  status             String // 'ONLINE' | 'OFFLINE'
+  status             String    // 'ONLINE' | 'OFFLINE'
   hardwareStatus     String    @default("UNKNOWN") // 'READY' | 'DEGRADED' | 'OFFLINE' | 'UNKNOWN'
-  agentSecretHash    String // bcrypt hash of the generated agent secret
+  agentSecretHash    String    // bcrypt hash of the generated agent secret
   agentVersion       String?
   sdkVersion         String?
   hostname           String?
-  sdkLockType        Int? // 4 = RF57, 5 = RF50
-  comPort            String? // e.g. "COM3"
+  sdkLockType        Int?      // 4 = RF57, 5 = RF50
+  comPort            String?   // e.g. "COM3"
   lastHeartbeat      DateTime? @db.Timestamptz
   lastConnectedAt    DateTime? @db.Timestamptz
   lastDisconnectedAt DateTime? @db.Timestamptz
   enabled            Boolean   @default(true)
   createdAt          DateTime  @default(now()) @db.Timestamptz
 
-  operations       LockOperation[]
-  commands         LockCommand[]
-  lockEvents       LockEvent[]
+  operations     LockOperation[]
+  commands       LockCommand[]
+  lockEvents     LockEvent[]
   enrollmentTokens AgentEnrollmentToken[]
 }
 
@@ -1255,17 +1206,17 @@ model LockCredential {
 }
 
 model LockOperation {
-  id             String       @id @default(uuid()) @db.Uuid
-  idempotencyKey String?      @unique
-  propertyId     String       @db.Uuid
-  property       Property     @relation(fields: [propertyId], references: [id])
-  lockId         String?      @db.Uuid
-  lock           DoorLock?    @relation(fields: [lockId], references: [id])
-  roomId         String?      @db.Uuid
-  room           Room?        @relation(fields: [roomId], references: [id])
-  reservationId  String?      @db.Uuid
+  id             String      @id @default(uuid()) @db.Uuid
+  idempotencyKey String?     @unique
+  propertyId     String      @db.Uuid
+  property       Property    @relation(fields: [propertyId], references: [id])
+  lockId         String?     @db.Uuid
+  lock           DoorLock?   @relation(fields: [lockId], references: [id])
+  roomId         String?     @db.Uuid
+  room           Room?       @relation(fields: [roomId], references: [id])
+  reservationId  String?     @db.Uuid
   reservation    Reservation? @relation(fields: [reservationId], references: [id])
-  credentialId   String?      @db.Uuid
+  credentialId   String?     @db.Uuid
 
   commandId String?      @unique @db.Uuid
   command   LockCommand? @relation(fields: [commandId], references: [id])
@@ -1318,21 +1269,21 @@ model LockCommand {
 
 // Durable audit trail for every hardware step. Used for debugging guest key issues.
 model LockEvent {
-  id            String         @id @default(uuid()) @db.Uuid
-  propertyId    String         @db.Uuid
-  property      Property       @relation(fields: [propertyId], references: [id])
-  agentId       String?        @db.Uuid
+  id            String  @id @default(uuid()) @db.Uuid
+  propertyId    String  @db.Uuid
+  property      Property @relation(fields: [propertyId], references: [id])
+  agentId       String?  @db.Uuid
   agent         HardwareAgent? @relation(fields: [agentId], references: [id])
-  roomId        String?        @db.Uuid
-  reservationId String?        @db.Uuid
-  credentialId  String?        @db.Uuid
-  operationId   String?        @db.Uuid
-  commandId     String?        @db.Uuid
+  roomId        String?  @db.Uuid
+  reservationId String?  @db.Uuid
+  credentialId  String?  @db.Uuid
+  operationId   String?  @db.Uuid
+  commandId     String?  @db.Uuid
 
   eventType String // AGENT_CONNECTED | AGENT_DISCONNECTED | COMMAND_RECEIVED | CARD_WAITING |
-  // CARD_DETECTED | ENCODING_STARTED | ENCODING_COMPLETED | VERIFICATION_STARTED |
-  // VERIFICATION_COMPLETED | REVOCATION_STARTED | REVOCATION_COMPLETED |
-  // HARDWARE_ERROR | SDK_ERROR
+                   // CARD_DETECTED | ENCODING_STARTED | ENCODING_COMPLETED | VERIFICATION_STARTED |
+                   // VERIFICATION_COMPLETED | REVOCATION_STARTED | REVOCATION_COMPLETED |
+                   // HARDWARE_ERROR | SDK_ERROR
   payload   Json?
 
   createdAt DateTime @default(now()) @db.Timestamptz
@@ -1444,16 +1395,16 @@ model AuditLog {
 }
 
 model AgentEnrollmentToken {
-  id         String         @id @default(uuid()) @db.Uuid
-  propertyId String         @db.Uuid
-  property   Property       @relation(fields: [propertyId], references: [id])
-  agentId    String?        @db.Uuid
+  id         String    @id @default(uuid()) @db.Uuid
+  propertyId String    @db.Uuid
+  property   Property  @relation(fields: [propertyId], references: [id])
+  agentId    String?   @db.Uuid
   agent      HardwareAgent? @relation(fields: [agentId], references: [id])
-  tokenHash  String         @unique // bcrypt hash — never store plain
-  expiresAt  DateTime       @db.Timestamptz
-  usedAt     DateTime?      @db.Timestamptz
-  createdBy  String         @db.Uuid
-  createdAt  DateTime       @default(now()) @db.Timestamptz
+  tokenHash  String    @unique   // bcrypt hash — never store plain
+  expiresAt  DateTime  @db.Timestamptz
+  usedAt     DateTime? @db.Timestamptz
+  createdBy  String    @db.Uuid
+  createdAt  DateTime  @default(now()) @db.Timestamptz
 
   @@index([propertyId])
 }
@@ -1477,577 +1428,8 @@ model ReservationPriority {
   createdBy     String?                 @db.Uuid
   expiresAt     DateTime?               @db.Timestamptz
 
-  createdAt DateTime @default(now()) @db.Timestamptz
-  updatedAt DateTime @updatedAt @db.Timestamptz
+  createdAt     DateTime                @default(now()) @db.Timestamptz
+  updatedAt     DateTime                @updatedAt @db.Timestamptz
 
   @@unique([reservationId, type])
-}
-
-// -----------------------------------------------------------------------------
-// INVENTORY & PROCUREMENT (Phase 1)
-// -----------------------------------------------------------------------------
-
-enum UnitOfMeasure {
-  KG
-  GRAM
-  LITRE
-  ML
-  PIECE
-  BOX
-  BOTTLE
-  PACK
-}
-
-model UnitOfMeasureConversion {
-  id         String        @id @default(uuid()) @db.Uuid
-  propertyId String        @db.Uuid
-  property   Property      @relation(fields: [propertyId], references: [id])
-  fromUnit   UnitOfMeasure
-  toUnit     UnitOfMeasure
-  ratio      Decimal       @db.Decimal(18, 6)
-
-  createdAt DateTime @default(now()) @db.Timestamptz
-  updatedAt DateTime @updatedAt @db.Timestamptz
-}
-
-model Supplier {
-  id            String   @id @default(uuid()) @db.Uuid
-  propertyId    String   @db.Uuid
-  property      Property @relation(fields: [propertyId], references: [id])
-  name          String
-  contactName   String?
-  email         String?
-  phone         String?
-  address       String?
-  taxIdentifier String?
-  isActive      Boolean  @default(true)
-
-  purchaseOrders PurchaseOrder[]
-
-  createdAt DateTime @default(now()) @db.Timestamptz
-  updatedAt DateTime @updatedAt @db.Timestamptz
-  createdBy String?  @db.Uuid
-  updatedBy String?  @db.Uuid
-}
-
-model Warehouse {
-  id         String   @id @default(uuid()) @db.Uuid
-  propertyId String   @db.Uuid
-  property   Property @relation(fields: [propertyId], references: [id])
-  name       String
-  location   String?
-  isActive   Boolean  @default(true)
-
-  stockItems StockItem[]
-
-  createdAt DateTime @default(now()) @db.Timestamptz
-  updatedAt DateTime @updatedAt @db.Timestamptz
-  createdBy String?  @db.Uuid
-  updatedBy String?  @db.Uuid
-}
-
-model StockItem {
-  id          String    @id @default(uuid()) @db.Uuid
-  propertyId  String    @db.Uuid
-  property    Property  @relation(fields: [propertyId], references: [id])
-  warehouseId String    @db.Uuid
-  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
-
-  name     String
-  sku      String?
-  barcode  String?
-  baseUnit UnitOfMeasure
-
-  costPrice      Decimal  @default(0) @db.Decimal(18, 4)
-  quantityOnHand Decimal  @default(0) @db.Decimal(18, 4)
-  reorderLevel   Decimal? @db.Decimal(18, 4)
-
-  isActive Boolean @default(true)
-
-  recipeIngredients RecipeIngredient[]
-  transactions      StockTransaction[]
-  alerts            InventoryAlert[]
-
-  createdAt DateTime @default(now()) @db.Timestamptz
-  updatedAt DateTime @updatedAt @db.Timestamptz
-  createdBy String?  @db.Uuid
-  updatedBy String?  @db.Uuid
-}
-
-enum AdjustmentReason {
-  SPOILAGE
-  THEFT
-  DAMAGE
-  MISCOUNT
-  WASTE
-  EXPIRY
-  OPENING_BALANCE
-  OTHER
-}
-
-enum StockTransactionSource {
-  RECEIPT
-  SALE
-  TRANSFER
-  ADJUSTMENT
-  WASTE
-  RETURN
-  POS_VOID
-  POS_REFUND
-}
-
-model StockTransaction {
-  id          String    @id @default(uuid()) @db.Uuid
-  propertyId  String    @db.Uuid
-  property    Property  @relation(fields: [propertyId], references: [id])
-  stockItemId String    @db.Uuid
-  stockItem   StockItem @relation(fields: [stockItemId], references: [id])
-
-  source   StockTransactionSource
-  quantity Decimal                @db.Decimal(18, 4)
-  unitCost Decimal                @db.Decimal(18, 4)
-
-  reference  String?
-  notes      String?
-  reason     AdjustmentReason?
-  approvalId String?
-
-  businessDate DateTime @db.Date
-
-  operationId String? @unique
-  deviceId    String?
-  userId      String? @db.Uuid
-
-  timestamp DateTime @default(now()) @db.Timestamptz
-}
-
-enum PurchaseOrderStatus {
-  DRAFT
-  SUBMITTED
-  APPROVED
-  PARTIALLY_RECEIVED
-  RECEIVED
-  CLOSED
-}
-
-model PurchaseOrder {
-  id         String   @id @default(uuid()) @db.Uuid
-  propertyId String   @db.Uuid
-  property   Property @relation(fields: [propertyId], references: [id])
-  supplierId String   @db.Uuid
-  supplier   Supplier @relation(fields: [supplierId], references: [id])
-
-  poNumber     String              @unique
-  status       PurchaseOrderStatus @default(DRAFT)
-  expectedDate DateTime?           @db.Date
-  totalAmount  Decimal             @default(0) @db.Decimal(18, 4)
-  notes        String?
-
-  items PurchaseOrderItem[]
-  grns  GoodsReceivedNote[]
-
-  createdAt DateTime @default(now()) @db.Timestamptz
-  updatedAt DateTime @updatedAt @db.Timestamptz
-  createdBy String?  @db.Uuid
-  updatedBy String?  @db.Uuid
-}
-
-model PurchaseOrderItem {
-  id              String        @id @default(uuid()) @db.Uuid
-  purchaseOrderId String        @db.Uuid
-  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
-  stockItemId     String?       @db.Uuid
-  description     String
-
-  quantity      Decimal       @db.Decimal(18, 4)
-  unitOfMeasure UnitOfMeasure
-  unitPrice     Decimal       @db.Decimal(18, 4)
-  totalPrice    Decimal       @db.Decimal(18, 4)
-
-  receivedQty Decimal @default(0) @db.Decimal(18, 4)
-}
-
-enum GoodsReceivedNoteStatus {
-  DRAFT
-  POSTED
-  CANCELLED
-}
-
-model GoodsReceivedNote {
-  id              String         @id @default(uuid()) @db.Uuid
-  propertyId      String         @db.Uuid
-  property        Property       @relation(fields: [propertyId], references: [id])
-  purchaseOrderId String?        @db.Uuid
-  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
-
-  grnNumber       String                  @unique
-  status          GoodsReceivedNoteStatus @default(DRAFT)
-  deliveryNoteRef String?
-  receivedDate    DateTime                @db.Date
-  notes           String?
-
-  items GoodsReceivedNoteItem[]
-
-  createdAt DateTime @default(now()) @db.Timestamptz
-  updatedAt DateTime @updatedAt @db.Timestamptz
-  createdBy String?  @db.Uuid
-  updatedBy String?  @db.Uuid
-}
-
-enum InventoryAlertStatus {
-  OPEN
-  RESOLVED
-}
-
-model InventoryAlert {
-  id          String    @id @default(uuid()) @db.Uuid
-  propertyId  String    @db.Uuid
-  property    Property  @relation(fields: [propertyId], references: [id])
-  stockItemId String    @db.Uuid
-  stockItem   StockItem @relation(fields: [stockItemId], references: [id])
-
-  type    String // 'NEGATIVE_STOCK', 'REORDER_LEVEL'
-  message String
-  status  InventoryAlertStatus @default(OPEN)
-
-  resolvedBy String?   @db.Uuid
-  resolvedAt DateTime? @db.Timestamptz
-
-  createdAt DateTime @default(now()) @db.Timestamptz
-  updatedAt DateTime @updatedAt @db.Timestamptz
-}
-
-model GoodsReceivedNoteItem {
-  id          String            @id @default(uuid()) @db.Uuid
-  grnId       String            @db.Uuid
-  grn         GoodsReceivedNote @relation(fields: [grnId], references: [id])
-  stockItemId String            @db.Uuid
-  description String?
-
-  receivedQty   Decimal       @db.Decimal(18, 4)
-  unitOfMeasure UnitOfMeasure
-  unitCost      Decimal       @db.Decimal(18, 4)
-  totalCost     Decimal       @db.Decimal(18, 4)
-}
-
-// -----------------------------------------------------------------------------
-// POINT OF SALE (POS) (Phase 1)
-// -----------------------------------------------------------------------------
-
-model PosOutlet {
-  id         String   @id @default(uuid()) @db.Uuid
-  propertyId String   @db.Uuid
-  property   Property @relation(fields: [propertyId], references: [id])
-  name       String
-  type       String
-  isActive   Boolean  @default(true)
-
-  categories ProductCategory[]
-  sessions   PosSession[]
-  orders     PosOrder[]
-
-  createdAt DateTime @default(now()) @db.Timestamptz
-  updatedAt DateTime @updatedAt @db.Timestamptz
-  createdBy String?  @db.Uuid
-  updatedBy String?  @db.Uuid
-}
-
-model ProductCategory {
-  id        String    @id @default(uuid()) @db.Uuid
-  outletId  String    @db.Uuid
-  outlet    PosOutlet @relation(fields: [outletId], references: [id])
-  name      String
-  isActive  Boolean   @default(true)
-  sortOrder Int       @default(0)
-
-  products PosProduct[]
-
-  createdAt DateTime @default(now()) @db.Timestamptz
-  updatedAt DateTime @updatedAt @db.Timestamptz
-}
-
-model PosProduct {
-  id         String          @id @default(uuid()) @db.Uuid
-  propertyId String          @db.Uuid
-  property   Property        @relation(fields: [propertyId], references: [id])
-  categoryId String          @db.Uuid
-  category   ProductCategory @relation(fields: [categoryId], references: [id])
-
-  name        String
-  description String?
-  price       Decimal @db.Decimal(18, 4)
-  taxRate     Decimal @default(0) @db.Decimal(5, 2)
-  isActive    Boolean @default(true)
-  image       String?
-
-  ingredients RecipeIngredient[]
-
-  createdAt DateTime @default(now()) @db.Timestamptz
-  updatedAt DateTime @updatedAt @db.Timestamptz
-  createdBy String?  @db.Uuid
-  updatedBy String?  @db.Uuid
-}
-
-model RecipeIngredient {
-  id          String     @id @default(uuid()) @db.Uuid
-  productId   String     @db.Uuid
-  product     PosProduct @relation(fields: [productId], references: [id])
-  stockItemId String     @db.Uuid
-  stockItem   StockItem  @relation(fields: [stockItemId], references: [id])
-
-  quantity      Decimal       @db.Decimal(18, 4)
-  unitOfMeasure UnitOfMeasure
-
-  createdAt DateTime @default(now()) @db.Timestamptz
-  updatedAt DateTime @updatedAt @db.Timestamptz
-}
-
-enum PosSessionStatus {
-  OPEN
-  CLOSED
-  RECONCILED
-  RECONCILIATION_REQUIRED
-}
-
-model PosSession {
-  id       String    @id @default(uuid()) @db.Uuid
-  outletId String    @db.Uuid
-  outlet   PosOutlet @relation(fields: [outletId], references: [id])
-
-  status       PosSessionStatus @default(OPEN)
-  businessDate DateTime         @db.Date
-
-  openingCash  Decimal  @default(0) @db.Decimal(18, 4)
-  cashSales    Decimal  @default(0) @db.Decimal(18, 4)
-  cashRefunds  Decimal  @default(0) @db.Decimal(18, 4)
-  cashIn       Decimal  @default(0) @db.Decimal(18, 4)
-  cashOut      Decimal  @default(0) @db.Decimal(18, 4)
-  expectedCash Decimal  @default(0) @db.Decimal(18, 4)
-  actualCash   Decimal? @db.Decimal(18, 4)
-  variance     Decimal? @db.Decimal(18, 4)
-
-  openedBy   String    @db.Uuid
-  closedBy   String?   @db.Uuid
-  approvedBy String?   @db.Uuid
-  openedAt   DateTime  @default(now()) @db.Timestamptz
-  closedAt   DateTime? @db.Timestamptz
-  approvedAt DateTime? @db.Timestamptz
-
-  deviceId   String?
-  propertyId String?   @db.Uuid
-  property   Property? @relation(fields: [propertyId], references: [id])
-
-  orders PosOrder[]
-
-  cashMovements       PosCashMovement[]
-  receiptAudits       PosReceiptAudit[]
-  authorizationAudits PosAuthorizationAudit[]
-
-  createdAt DateTime @default(now()) @db.Timestamptz
-  updatedAt DateTime @updatedAt @db.Timestamptz
-}
-
-enum PosCashMovementType {
-  PAID_OUT
-  CASH_DROP
-  CASH_TRANSFER_IN
-  CASH_TRANSFER_OUT
-  FLOAT_ADJUSTMENT
-}
-
-model PosCashMovement {
-  id               String              @id @default(uuid()) @db.Uuid
-  propertyId       String              @db.Uuid
-  deviceId         String
-  posSessionId     String              @db.Uuid
-  userId           String              @db.Uuid
-  amount           Decimal             @db.Decimal(18, 4)
-  type             PosCashMovementType
-  reasonCode       String
-  notes            String?
-  receiptReference String?
-  operationId      String              @unique
-  authorizedBy     String?             @db.Uuid
-
-  session PosSession @relation(fields: [posSessionId], references: [id])
-
-  createdAt DateTime @default(now()) @db.Timestamptz
-}
-
-enum PosReceiptType {
-  SALE_RECEIPT
-  REFUND_RECEIPT
-  VOID_RECEIPT
-  REPRINT
-  DUPLICATE_COPY
-}
-
-model PosReceiptAudit {
-  id           String         @id @default(uuid()) @db.Uuid
-  propertyId   String         @db.Uuid
-  orderId      String?        @db.Uuid
-  deviceId     String
-  posSessionId String?        @db.Uuid
-  userId       String         @db.Uuid
-  type         PosReceiptType
-  reason       String?
-  printCount   Int            @default(1)
-  operationId  String         @unique
-
-  session PosSession? @relation(fields: [posSessionId], references: [id])
-
-  createdAt DateTime @default(now()) @db.Timestamptz
-}
-
-model PosAuthorizationAudit {
-  id           String  @id @default(uuid()) @db.Uuid
-  propertyId   String  @db.Uuid
-  deviceId     String
-  sessionId    String? @db.Uuid
-  requestedBy  String  @db.Uuid
-  authorizedBy String  @db.Uuid
-  action       String
-  reason       String?
-  operationId  String  @unique
-
-  session PosSession? @relation(fields: [sessionId], references: [id])
-
-  createdAt DateTime @default(now()) @db.Timestamptz
-}
-
-enum PosOrderStatus {
-  OPEN
-  SUBMITTED
-  PREPARING
-  READY
-  SERVED
-  COMPLETED
-  VOIDED
-  CANCELLED
-}
-
-model PosOrder {
-  id         String     @id @default(uuid()) @db.Uuid
-  propertyId String     @db.Uuid
-  property   Property   @relation(fields: [propertyId], references: [id])
-  outletId   String     @db.Uuid
-  outlet     PosOutlet  @relation(fields: [outletId], references: [id])
-  sessionId  String     @db.Uuid
-  session    PosSession @relation(fields: [sessionId], references: [id])
-  folioId    String?    @db.Uuid
-  folio      Folio?     @relation(fields: [folioId], references: [id])
-
-  orderNumber  String         @unique
-  status       PosOrderStatus @default(OPEN)
-  businessDate DateTime       @db.Date
-
-  subtotal  Decimal @default(0) @db.Decimal(18, 4)
-  taxAmount Decimal @default(0) @db.Decimal(18, 4)
-  discount  Decimal @default(0) @db.Decimal(18, 4)
-  total     Decimal @default(0) @db.Decimal(18, 4)
-
-  notes       String?
-  tableNumber String?
-
-  operationId String? @unique
-  deviceId    String?
-
-  items     PosOrderItem[]
-  payments  PosPayment[]
-  voids     PosVoid[]
-  discounts PosDiscount[]
-
-  createdAt DateTime @default(now()) @db.Timestamptz
-  updatedAt DateTime @updatedAt @db.Timestamptz
-  createdBy String?  @db.Uuid
-  updatedBy String?  @db.Uuid
-}
-
-model PosOrderItem {
-  id          String   @id @default(uuid()) @db.Uuid
-  orderId     String   @db.Uuid
-  order       PosOrder @relation(fields: [orderId], references: [id])
-  productId   String?  @db.Uuid
-  productName String
-
-  quantity  Decimal @db.Decimal(18, 4)
-  unitPrice Decimal @db.Decimal(18, 4)
-
-  subtotal  Decimal @db.Decimal(18, 4)
-  discount  Decimal @default(0) @db.Decimal(18, 4)
-  taxRate   Decimal @default(0) @db.Decimal(5, 2)
-  taxAmount Decimal @default(0) @db.Decimal(18, 4)
-  total     Decimal @db.Decimal(18, 4)
-
-  notes String?
-
-  createdAt DateTime @default(now()) @db.Timestamptz
-}
-
-enum PosPaymentStatus {
-  PENDING
-  AUTHORIZED
-  CONFIRMED
-  PAID
-  FAILED
-  REFUNDED
-  VOIDED
-  REQUIRES_REVIEW
-  PENDING_GATEWAY
-  REFUND_PENDING
-  REFUND_COMPLETED
-}
-
-model PosPayment {
-  id      String   @id @default(uuid()) @db.Uuid
-  orderId String   @db.Uuid
-  order   PosOrder @relation(fields: [orderId], references: [id])
-
-  method   PaymentMethod
-  status   PosPaymentStatus @default(PENDING)
-  amount   Decimal          @db.Decimal(18, 4)
-  currency String           @default("NGN")
-
-  reference            String?
-  gateway              String?
-  gatewayTransactionId String?
-
-  operationId String? @unique
-  deviceId    String?
-
-  paidAt DateTime? @db.Timestamptz
-
-  createdAt DateTime @default(now()) @db.Timestamptz
-  updatedAt DateTime @updatedAt @db.Timestamptz
-}
-
-model PosVoid {
-  id          String   @id @default(uuid()) @db.Uuid
-  orderId     String   @db.Uuid
-  order       PosOrder @relation(fields: [orderId], references: [id])
-  orderItemId String?  @db.Uuid
-
-  reason       String
-  authorizerId String? @db.Uuid
-
-  operationId String? @unique
-  deviceId    String?
-
-  createdAt DateTime @default(now()) @db.Timestamptz
-}
-
-model PosDiscount {
-  id          String   @id @default(uuid()) @db.Uuid
-  orderId     String   @db.Uuid
-  order       PosOrder @relation(fields: [orderId], references: [id])
-  orderItemId String?  @db.Uuid
-
-  type         String // 'PERCENTAGE' | 'FLAT'
-  amount       Decimal @db.Decimal(18, 4)
-  authorizerId String? @db.Uuid
-
-  operationId String? @unique
-  deviceId    String?
-
-  createdAt DateTime @default(now()) @db.Timestamptz
 }

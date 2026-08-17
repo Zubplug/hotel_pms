@@ -60,7 +60,7 @@ public class ConflictResolver
     {
         // Any modification to a Folio or Payment is strictly a financial conflict
         return conflict.EntityType == "FOLIO" || 
-               conflict.OperationType == "ADD_CHARGE" || 
+               conflict.OperationType == "ADD_ROOM_CHARGE" || 
                conflict.OperationType == "ADD_PAYMENT" || 
                conflict.OperationType == "REFUND";
     }
@@ -79,20 +79,28 @@ public class ConflictResolver
     {
         _logger.LogWarning($"FINANCIAL CONFLICT on {conflict.OperationId}. Preserving ledger state and generating reconciliation task.");
         
-        // 1. Never silently resolve. 
-        // 2. Preserve both records (the cloud state is preserved there, local state is preserved here).
-        conflict.Status = "FINANCIAL_RECONCILIATION_REQUIRED";
-        
-        // 3. Create a reconciliation task for the Night Auditor
-        var task = new LocalHousekeepingTask // Re-using Task table, or ideally a new LocalReconciliationTask table
+        // Phase 1.1 explicitly dictates MANAGER_REVIEW for ADD_ROOM_CHARGE where the Folio is closed
+        if (conflict.OperationType == "ADD_ROOM_CHARGE")
         {
-            TaskType = "FINANCIAL_RECONCILIATION",
-            Status = "PENDING",
-            Notes = $"Financial discrepancy detected during sync of {conflict.EntityType} {conflict.EntityId}. Operation: {conflict.OperationType}. Amount/Details in Payload.",
-            RoomId = conflict.EntityId // Linking to Folio/Reservation ID for reference
-        };
-        
-        _dbContext.HousekeepingTasks.Add(task);
+            conflict.Status = "MANAGER_REVIEW";
+        }
+        else
+        {
+            // 1. Never silently resolve. 
+            // 2. Preserve both records (the cloud state is preserved there, local state is preserved here).
+            conflict.Status = "FINANCIAL_RECONCILIATION_REQUIRED";
+            
+            // 3. Create a reconciliation task for the Night Auditor
+            var task = new LocalHousekeepingTask // Re-using Task table, or ideally a new LocalReconciliationTask table
+            {
+                TaskType = "FINANCIAL_RECONCILIATION",
+                Status = "PENDING",
+                Notes = $"Financial discrepancy detected during sync of {conflict.EntityType} {conflict.EntityId}. Operation: {conflict.OperationType}. Amount/Details in Payload.",
+                RoomId = conflict.EntityId // Linking to Folio/Reservation ID for reference
+            };
+            
+            _dbContext.HousekeepingTasks.Add(task);
+        }
     }
 
     private async Task HandleSafeAutoResolveAsync(LocalSyncEvent conflict)

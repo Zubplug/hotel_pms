@@ -40,7 +40,7 @@ export default function LoginPage() {
           
           if (sessionData && sessionData.user) {
             const role = (sessionData.user as any).role || 'RECEPTIONIST';
-            const propertyId = (sessionData as any).propertyId || 'prop_stanzel_001';
+            const propertyId = (sessionData as any).propertyId || '';
             
             await DesktopDataProvider.auth.provisionDevice(
               sessionData.user.id || sessionData.user.email,
@@ -52,14 +52,21 @@ export default function LoginPage() {
             );
           }
         } catch (err) {
-          console.error('Failed to provision desktop device', err);
-          setError('Failed to provision device for offline access.');
-          setIsLoading(false);
-          return;
+          console.warn('Desktop provider error, ignoring for web:', err);
         }
       }
 
-      router.push('/frontdesk');
+      // If this user is tied to a specific property (e.g. Front Desk), route them there
+      const sessionRes = await fetch('/api/auth/session');
+      const sessionData = await sessionRes.json();
+      const role = (sessionData.user as any)?.role;
+      const propertyId = (sessionData.user as any)?.propertyId;
+        
+      if (role === 'FRONT_DESK' && propertyId) {
+        router.push(`/frontdesk?propertyId=${propertyId}`);
+      } else {
+        router.push('/dashboard');
+      }
       router.refresh();
     }
   }
@@ -150,31 +157,6 @@ export default function LoginPage() {
               {isLoading ? 'Signing in...' : 'Sign in'}
             </button>
           </form>
-
-          {/* Demo credentials hint */}
-          <div className="mt-6 pt-6 border-t border-white/10">
-            <p className="text-xs text-slate-500 text-center mb-3">Demo credentials</p>
-            <div className="bg-white/5 rounded-lg px-4 py-3 space-y-1">
-              <p className="text-xs text-slate-400">
-                <span className="text-slate-500">Email:</span>{' '}
-                <button
-                  onClick={() => setEmail('admin@lodgecore.com')}
-                  className="text-blue-400 hover:text-blue-300 font-mono transition-colors"
-                >
-                  admin@lodgecore.com
-                </button>
-              </p>
-              <p className="text-xs text-slate-400">
-                <span className="text-slate-500">Password:</span>{' '}
-                <button
-                  onClick={() => setPassword('password')}
-                  className="text-blue-400 hover:text-blue-300 font-mono transition-colors"
-                >
-                  password
-                </button>
-              </p>
-            </div>
-          </div>
         </div>
 
         <p className="text-center text-xs text-slate-600 mt-6">

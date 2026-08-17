@@ -15,6 +15,17 @@ public class LocalDbContext : DbContext
     public DbSet<LocalRoomType> RoomTypes { get; set; } = null!;
     public DbSet<LocalProperty> Properties { get; set; } = null!;
 
+    public DbSet<LocalPosOutlet> PosOutlets { get; set; } = null!;
+    public DbSet<LocalProductCategory> ProductCategories { get; set; } = null!;
+    public DbSet<LocalPosProduct> PosProducts { get; set; } = null!;
+    public DbSet<LocalStockItem> StockItems { get; set; } = null!;
+    public DbSet<LocalRecipeIngredient> RecipeIngredients { get; set; } = null!;
+    public DbSet<LocalPosSession> PosSessions { get; set; } = null!;
+    public DbSet<LocalPosOrder> PosOrders { get; set; } = null!;
+    public DbSet<LocalPosOrderItem> PosOrderItems { get; set; } = null!;
+    public DbSet<LocalPosPayment> PosPayments { get; set; } = null!;
+    public DbSet<LocalStockTransaction> StockTransactions { get; set; } = null!;
+
     public LocalDbContext(DbContextOptions<LocalDbContext> options) : base(options)
     {
     }
@@ -43,5 +54,15 @@ public class LocalDbContext : DbContext
             .HasOne(f => f.Reservation)
             .WithOne(r => r.Folio)
             .HasForeignKey<LocalFolio>(f => f.ReservationId);
+
+        modelBuilder.Entity<LocalPosOrder>()
+            .HasMany(o => o.Items)
+            .WithOne()
+            .HasForeignKey(i => i.OrderId);
+
+        modelBuilder.Entity<LocalPosOrder>()
+            .HasMany(o => o.Payments)
+            .WithOne()
+            .HasForeignKey(p => p.OrderId);
     }
 }

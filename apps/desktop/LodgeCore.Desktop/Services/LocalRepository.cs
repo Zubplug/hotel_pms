@@ -404,4 +404,299 @@ public class LocalRepository
 
         return availableRooms;
     }
+
+    public async Task<LocalPosOrder> CreatePosOrderAsync(LocalPosOrder order, string userId, string deviceId)
+    {
+        // 1. Generate Deterministic Operation ID
+        string operationId = $"op_{deviceId}_{DateTime.UtcNow.Ticks}_{Guid.NewGuid().ToString("N").Substring(0, 8)}";
+        order.Id = Guid.NewGuid().ToString();
+        
+        // Mark everything with the operation ID and device attribution
+        foreach (var item in order.Items)
+        {
+            item.Id = Guid.NewGuid().ToString();
+            item.OrderId = order.Id;
+        }
+
+        foreach (var payment in order.Payments)
+        {
+            payment.Id = Guid.NewGuid().ToString();
+            payment.OrderId = order.Id;
+            payment.Method = payment.Method == "CARD" ? "CARD_OFFLINE" : payment.Method;
+            payment.Status = payment.Method == "CASH" ? "CONFIRMED" : "PENDING";
+        }
+
+        _dbContext.PosOrders.Add(order);
+        
+        var syncEvent = new LocalSyncEvent
+        {
+            OperationId = operationId,
+            EntityType = "POS_ORDER",
+            EntityId = order.Id,
+            OperationType = "CREATE",
+            PayloadJson = JsonSerializer.Serialize(order),
+            UserId = userId,
+            DeviceId = deviceId
+        };
+        
+        _dbContext.SyncEvents.Add(syncEvent);
+        
+        if (!string.IsNullOrEmpty(order.FolioId))
+        {
+            var folioChargeEvent = new LocalSyncEvent
+            {
+                OperationId = $"op_folio_{operationId}",
+                EntityType = "FOLIO",
+                EntityId = order.FolioId,
+                OperationType = "ADD_ROOM_CHARGE",
+                PayloadJson = JsonSerializer.Serialize(new { amount = order.Total, description = $"POS Order #{order.OrderNumber}" }),
+                UserId = userId,
+                DeviceId = deviceId
+            };
+            _dbContext.SyncEvents.Add(folioChargeEvent);
+            
+            var folio = await _dbContext.Folios.FindAsync(order.FolioId);
+            if (folio != null)
+            {
+                folio.TotalCharges += order.Total;
+                folio.UpdatedAt = DateTime.UtcNow;
+            }
+        }
+        
+        await _dbContext.SaveChangesAsync();
+        return order;
+    }
+
+    public async Task<List<LocalPosProduct>> GetPosProductsAsync(string propertyId)
+    {
+        return await _dbContext.PosProducts.Where(p => p.PropertyId == propertyId && p.IsActive).ToListAsync();
+    }
+
+    public async Task<LocalPosSession> OpenPosSessionAsync(string propertyId, decimal openingBalance, string userId, string deviceId)
+    {
+        var session = new LocalPosSession
+        {
+            Id = Guid.NewGuid().ToString(),
+            PropertyId = propertyId,
+            DeviceId = deviceId,
+            UserId = userId,
+            Status = "OPEN",
+            OpenedAt = DateTime.UtcNow,
+            OpeningBalance = openingBalance
+        };
+
+        _dbContext.PosSessions.Add(session);
+
+        _dbContext.SyncEvents.Add(new LocalSyncEvent
+        {
+            OperationId = $"op_session_open_{session.Id}",
+            EntityType = "POS_SESSION",
+            EntityId = session.Id,
+            OperationType = "CREATE",
+            PayloadJson = JsonSerializer.Serialize(session),
+            UserId = userId,
+            DeviceId = deviceId
+        });
+
+        await _dbContext.SaveChangesAsync();
+        return session;
+    }
+
+    public async Task<LocalPosSession> ClosePosSessionAsync(string sessionId, decimal actualCash, decimal cashPaidOut, string userId, string deviceId)
+    {
+        var session = await _dbContext.PosSessions.FindAsync(sessionId);
+        if (session == null) throw new Exception("Session not found");
+
+        session.Status = "CLOSED";
+        session.ClosedAt = DateTime.UtcNow;
+        session.ActualCash = actualCash;
+        session.CashPaidOut = cashPaidOut;
+
+        _dbContext.SyncEvents.Add(new LocalSyncEvent
+        {
+            OperationId = $"op_session_close_{sessionId}",
+            EntityType = "POS_SESSION",
+            EntityId = session.Id,
+            OperationType = "UPDATE",
+            PayloadJson = JsonSerializer.Serialize(session),
+            UserId = userId,
+            DeviceId = deviceId
+        });
+
+        await _dbContext.SaveChangesAsync();
+        return session;
+    }
+
+    public async Task<LocalPosVoid> AuthorizeVoidAsync(string orderId, string orderItemId, string reason, string authorizerId, string userId, string deviceId)
+    {
+        string operationId = $"op_void_{deviceId}_{DateTime.UtcNow.Ticks}";
+        
+        var posVoid = new LocalPosVoid
+        {
+            Id = Guid.NewGuid().ToString(),
+            OrderId = orderId,
+            OrderItemId = orderItemId,
+            Reason = reason,
+            AuthorizerId = authorizerId,
+            OperationId = operationId,
+            DeviceId = deviceId,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _dbContext.PosVoids.Add(posVoid);
+
+        _dbContext.SyncEvents.Add(new LocalSyncEvent
+        {
+            OperationId = operationId,
+            EntityType = "POS_VOID",
+            EntityId = posVoid.Id,
+            OperationType = "CREATE",
+            PayloadJson = JsonSerializer.Serialize(posVoid),
+            UserId = userId,
+            DeviceId = deviceId
+        });
+
+        await _dbContext.SaveChangesAsync();
+        return posVoid;
+    }
+
+    public async Task<LocalPosPayment> RecordRefundAsync(string orderId, decimal amount, string method, string authorizerId, string userId, string deviceId)
+    {
+        string operationId = $"op_refund_{deviceId}_{DateTime.UtcNow.Ticks}";
+        
+        var payment = new LocalPosPayment
+        {
+            Id = Guid.NewGuid().ToString(),
+            OrderId = orderId,
+            Method = method,
+            Status = method == "CASH" ? "CONFIRMED" : "PENDING_GATEWAY",
+            Amount = -amount, // Negative for refund
+            OperationId = operationId,
+            DeviceId = deviceId,
+            PaidAt = DateTime.UtcNow
+        };
+
+        _dbContext.PosPayments.Add(payment);
+
+        _dbContext.SyncEvents.Add(new LocalSyncEvent
+        {
+            OperationId = operationId,
+            EntityType = "POS_PAYMENT",
+            EntityId = payment.Id,
+            OperationType = "CREATE", // Might map to a REFUND type eventually, but for now treating as negative payment
+            PayloadJson = JsonSerializer.Serialize(payment),
+            UserId = userId,
+            DeviceId = deviceId
+        });
+
+        await _dbContext.SaveChangesAsync();
+        return payment;
+    }
+
+    public async Task<LocalPosCashMovement> RecordCashMovementAsync(string propertyId, string sessionId, decimal amount, string type, string reasonCode, string? notes, string? receiptReference, string? authorizedBy, string userId, string deviceId)
+    {
+        string operationId = $"op_cashmvt_{deviceId}_{DateTime.UtcNow.Ticks}";
+        
+        var movement = new LocalPosCashMovement
+        {
+            Id = Guid.NewGuid().ToString(),
+            PropertyId = propertyId,
+            PosSessionId = sessionId,
+            DeviceId = deviceId,
+            UserId = userId,
+            Amount = amount,
+            Type = type,
+            ReasonCode = reasonCode,
+            Notes = notes,
+            ReceiptReference = receiptReference,
+            OperationId = operationId,
+            AuthorizedBy = authorizedBy,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _dbContext.PosCashMovements.Add(movement);
+
+        _dbContext.SyncEvents.Add(new LocalSyncEvent
+        {
+            OperationId = operationId,
+            EntityType = "POS_CASH_MOVEMENT",
+            EntityId = movement.Id,
+            OperationType = "CREATE",
+            PayloadJson = JsonSerializer.Serialize(movement),
+            UserId = userId,
+            DeviceId = deviceId
+        });
+
+        await _dbContext.SaveChangesAsync();
+        return movement;
+    }
+
+    public async Task<LocalPosReceiptAudit> RecordReceiptPrintAsync(string propertyId, string? orderId, string? sessionId, string type, string? reason, int printCount, string userId, string deviceId)
+    {
+        string operationId = $"op_receipt_{deviceId}_{DateTime.UtcNow.Ticks}_{Guid.NewGuid().ToString("N").Substring(0, 8)}";
+        
+        var audit = new LocalPosReceiptAudit
+        {
+            Id = Guid.NewGuid().ToString(),
+            PropertyId = propertyId,
+            OrderId = orderId,
+            DeviceId = deviceId,
+            PosSessionId = sessionId,
+            UserId = userId,
+            Type = type,
+            Reason = reason,
+            PrintCount = printCount,
+            OperationId = operationId,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _dbContext.PosReceiptAudits.Add(audit);
+
+        _dbContext.SyncEvents.Add(new LocalSyncEvent
+        {
+            OperationId = operationId,
+            EntityType = "POS_RECEIPT_AUDIT",
+            EntityId = audit.Id,
+            OperationType = "CREATE",
+            PayloadJson = JsonSerializer.Serialize(audit),
+            UserId = userId,
+            DeviceId = deviceId
+        });
+
+        await _dbContext.SaveChangesAsync();
+        return audit;
+    }
+
+    public async Task<LocalPosAuthorizationAudit> LogAuthorizationAsync(string propertyId, string? sessionId, string requestedBy, string authorizedBy, string action, string? reason, string operationId, string deviceId)
+    {
+        var audit = new LocalPosAuthorizationAudit
+        {
+            Id = Guid.NewGuid().ToString(),
+            PropertyId = propertyId,
+            DeviceId = deviceId,
+            SessionId = sessionId,
+            RequestedBy = requestedBy,
+            AuthorizedBy = authorizedBy,
+            Action = action,
+            Reason = reason,
+            OperationId = operationId,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _dbContext.PosAuthorizationAudits.Add(audit);
+
+        _dbContext.SyncEvents.Add(new LocalSyncEvent
+        {
+            OperationId = operationId,
+            EntityType = "POS_AUTH_AUDIT",
+            EntityId = audit.Id,
+            OperationType = "CREATE",
+            PayloadJson = JsonSerializer.Serialize(audit),
+            UserId = requestedBy,
+            DeviceId = deviceId
+        });
+
+        await _dbContext.SaveChangesAsync();
+        return audit;
+    }
 }
