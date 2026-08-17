@@ -33,6 +33,7 @@ export function useLodgeCoreSession() {
           email: desktopSession.userId + '@desktop.local',
           role: desktopSession.role,
         },
+        sessionId: desktopSession.sessionId,
         expires: desktopSession.expiresAt,
       },
       status: 'authenticated',

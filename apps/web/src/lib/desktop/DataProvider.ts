@@ -63,5 +63,6 @@ export interface LodgeCoreDataProvider {
     getActiveStaff(propertyId: string): Promise<{ data: any[], error: string | null }>;
     getCurrentOperator(sessionId: string): Promise<{ data: any, error: string | null }>;
     authenticateOperator(staffId: string, pin: string, propertyId: string, sessionId: string): Promise<{ data: any, error: string | null }>;
+    startSession(data: { userId: string, propertyId: string, openingCash: number }): Promise<{ data: any, error: string | null }>;
   };
 }

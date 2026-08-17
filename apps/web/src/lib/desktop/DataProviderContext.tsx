@@ -16,6 +16,7 @@ interface DataProviderContextValue {
     getActiveStaff: (propertyId: string) => Promise<{ data: any[], error: string | null }>;
     getCurrentOperator: (sessionId: string) => Promise<{ data: any, error: string | null }>;
     authenticateOperator: (staffId: string, pin: string, propertyId: string, sessionId: string) => Promise<{ data: any, error: string | null }>;
+    startSession: (data: { userId: string, propertyId: string, openingCash: number }) => Promise<{ data: any, error: string | null }>;
   };
 }
 
@@ -30,6 +31,7 @@ const DataProviderContext = createContext<DataProviderContextValue>({
     getActiveStaff: async () => ({ data: [], error: 'Not initialized' }),
     getCurrentOperator: async () => ({ data: null, error: 'Not initialized' }),
     authenticateOperator: async () => ({ data: null, error: 'Not initialized' }),
+    startSession: async () => ({ data: null, error: 'Not initialized' }),
   }
 });
 

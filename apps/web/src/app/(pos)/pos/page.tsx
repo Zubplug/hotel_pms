@@ -8,6 +8,7 @@ import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { formatCurrency } from '@/lib/utils';
 import { StaffSwitchPad } from '@/components/pos/StaffSwitchPad';
+import { useRouter } from 'next/navigation';
 
 type OrderItem = {
   productId: string;
@@ -19,8 +20,9 @@ type OrderItem = {
 
 export default function PosTerminalPage() {
   const { provider } = useLodgeCoreProvider();
-  const { data: session } = useLodgeCoreSession();
+  const { data: session, status: sessionStatus } = useLodgeCoreSession();
   const propertyId = (session?.user as any)?.propertyId || '';
+  const router = useRouter();
 
   const [activeCategory, setActiveCategory] = useState('all');
   const [search, setSearch] = useState('');
@@ -63,7 +65,14 @@ export default function PosTerminalPage() {
       }
     };
     fetchData();
-  }, [propertyId, provider]);
+  }, [propertyId, provider, session]);
+
+  // Redirect to Start Shift if no active drawer session is found
+  useEffect(() => {
+    if (sessionStatus === 'authenticated' && !(session as any)?.sessionId) {
+      router.push('/pos/start-shift');
+    }
+  }, [sessionStatus, session, router]);
 
   const filteredProducts = products.filter(p => 
     (activeCategory === 'all' || p.categoryId === activeCategory) &&

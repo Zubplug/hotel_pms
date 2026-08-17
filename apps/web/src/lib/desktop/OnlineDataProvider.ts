@@ -76,6 +76,7 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
         body: JSON.stringify(data)
       });
     },
+
     update: async (id, data) => {
       return apiFetch(`/api/v1/reservations/${id}`, {
         method: 'PATCH',
@@ -204,6 +205,12 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
       return apiFetch(`/api/v1/pos/auth`, {
         method: 'POST',
         body: JSON.stringify({ staffId, pin, propertyId, sessionId })
+      });
+    },
+    startSession: async (data: { userId: string, propertyId: string, openingCash: number }) => {
+      return apiFetch(`/api/v1/pos/sessions`, {
+        method: 'POST',
+        body: JSON.stringify(data)
       });
     }
   }
