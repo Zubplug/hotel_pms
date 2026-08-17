@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
-import { compare } from 'bcrypt';
+import { compare } from 'bcryptjs';
 import { auth } from '@/lib/auth';
 
 export async function POST(req: NextRequest) {
