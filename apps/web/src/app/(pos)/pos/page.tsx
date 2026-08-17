@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   ShoppingCart, Search, Trash2, Plus, Minus, User, Utensils,
   Loader2, CreditCard, Banknote, RefreshCw, LayoutGrid, MapPin,
-  ChefHat, Scissors, X, Pause,
+  ChefHat, Scissors, X, Pause, Building2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AppSwitcher } from '@/components/layout/AppSwitcher';
@@ -672,30 +672,37 @@ export default function PosTerminalPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3 mb-3">
             <Button
-              className="h-12 font-bold text-sm bg-indigo-50 hover:bg-indigo-100 text-indigo-700 shadow-none border-none"
+              className="h-12 font-bold text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 shadow-none border-none"
               onClick={() => handlePayment('ROOM_CHARGE')}
               disabled={cart.length === 0 || isProcessing}
             >
-              <User className="w-4 h-4 mr-2" />Room
+              <User className="w-4 h-4 mr-1" />Room
             </Button>
             <Button
-              className="h-12 font-bold text-sm bg-slate-100 hover:bg-slate-200 text-slate-700 shadow-none border-none"
+              className="h-12 font-bold text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 shadow-none border-none"
               onClick={() => handlePayment('CARD')}
               disabled={cart.length === 0 || isProcessing}
             >
-              <CreditCard className="w-4 h-4 mr-2" />Card
+              <CreditCard className="w-4 h-4 mr-1" />Card
             </Button>
             <Button
-              className="col-span-2 h-14 font-black text-lg tracking-wide bg-slate-900 hover:bg-slate-800 text-white rounded-xl shadow-lg hover:shadow-xl transition-all hover:-translate-y-0.5 active:translate-y-0 active:shadow-md"
-              onClick={() => handlePayment('CASH')}
+              className="h-12 font-bold text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 shadow-none border-none"
+              onClick={() => handlePayment('BANK_TRANSFER')}
               disabled={cart.length === 0 || isProcessing}
             >
-              <Banknote className="w-5 h-5 mr-2" />
-              {isProcessing ? 'PROCESSING...' : `PAY ${formatCurrency(total)}`}
+              <Building2 className="w-4 h-4 mr-1" />Transfer
             </Button>
           </div>
+          <Button
+            className="w-full h-14 font-black text-lg tracking-wide bg-slate-900 hover:bg-slate-800 text-white rounded-xl shadow-lg hover:shadow-xl transition-all hover:-translate-y-0.5 active:translate-y-0 active:shadow-md"
+            onClick={() => handlePayment('CASH')}
+            disabled={cart.length === 0 || isProcessing}
+          >
+            <Banknote className="w-5 h-5 mr-2" />
+            {isProcessing ? 'PROCESSING...' : `PAY ${formatCurrency(total)}`}
+          </Button>
         </div>
       </div>
 
