@@ -25,6 +25,11 @@ export async function POST(req: NextRequest) {
       
       // Context binding validation
       if (payload.propertyId !== propertyId || payload.outletId !== outletId || payload.sessionId !== sessionId) {
+        console.error('Context mismatch detailed debug:', {
+          payloadPropertyId: payload.propertyId, bodyPropertyId: propertyId,
+          payloadOutletId: payload.outletId, bodyOutletId: outletId,
+          payloadSessionId: payload.sessionId, bodySessionId: sessionId
+        });
         return NextResponse.json({ error: 'Context mismatch: token does not match request context' }, { status: 403 });
       }
 
