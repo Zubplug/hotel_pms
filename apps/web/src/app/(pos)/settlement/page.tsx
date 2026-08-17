@@ -1,5 +1,6 @@
 import React from 'react';
 import prisma from '@hotel-pms/db';
+import { formatCurrency } from '@/lib/utils';
 
 export const metadata = {
   title: 'POS Settlement Dashboard | LodgeCore',
@@ -44,11 +45,11 @@ export default async function SettlementDashboardPage() {
                     <tr key={session.id}>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{session.id.substring(0, 8)}...</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{session.userId.substring(0, 8)}...</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">₦{Number(session.expectedCash).toFixed(2)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">₦{Number(session.actualCash).toFixed(2)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCurrency(Number(session.expectedCash))}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCurrency(Number(session.actualCash))}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-bold">
                         <span className={Number(session.variance) < 0 ? 'text-red-600' : Number(session.variance) > 0 ? 'text-green-600' : 'text-gray-900'}>
-                          ₦{Number(session.variance).toFixed(2)}
+                          {formatCurrency(Number(session.variance))}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">

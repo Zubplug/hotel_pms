@@ -40,15 +40,17 @@ export default function LoginPage() {
           
           if (sessionData && sessionData.user) {
             const role = (sessionData.user as any).role || 'RECEPTIONIST';
-            const propertyId = (sessionData as any).propertyId || '';
+            const capabilities = (sessionData.user as any).capabilities || [];
+            const sessionVersion = (sessionData.user as any).sessionVersion || 1;
+            const propertyId = (sessionData.user as any).propertyId || '';
             
             await DesktopDataProvider.auth.provisionDevice(
               sessionData.user.id || sessionData.user.email,
               propertyId,
               role,
               'device-token-' + Date.now(),
-              [], // permissions
-              1   // sessionVersion
+              capabilities, // pass actual capabilities
+              sessionVersion
             );
           }
         } catch (err) {
@@ -56,17 +58,8 @@ export default function LoginPage() {
         }
       }
 
-      // If this user is tied to a specific property (e.g. Front Desk), route them there
-      const sessionRes = await fetch('/api/auth/session');
-      const sessionData = await sessionRes.json();
-      const role = (sessionData.user as any)?.role;
-      const propertyId = (sessionData.user as any)?.propertyId;
-        
-      if (role === 'FRONT_DESK' && propertyId) {
-        router.push(`/frontdesk?propertyId=${propertyId}`);
-      } else {
-        router.push('/dashboard');
-      }
+      // Route everything to the new Unified Hub
+      router.push('/hub');
       router.refresh();
     }
   }

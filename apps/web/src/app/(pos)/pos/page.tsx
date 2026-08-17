@@ -1,25 +1,12 @@
 'use client';
 
-import { useState } from 'react';
-import { ShoppingCart, Search, Printer, CreditCard, Banknote, Trash2, Plus, Minus, User, Coffee, Utensils, GlassWater } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ShoppingCart, Search, Trash2, Plus, Minus, User, Utensils, GlassWater, Coffee, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-
-// Mock Data for Offline POS
-const CATEGORIES = [
-  { id: 'c1', name: 'Mains', icon: Utensils },
-  { id: 'c2', name: 'Beverages', icon: GlassWater },
-  { id: 'c3', name: 'Coffee & Tea', icon: Coffee },
-];
-
-const PRODUCTS = [
-  { id: 'p1', categoryId: 'c1', name: 'Classic Burger', price: 5500, taxRate: 7.5, color: 'bg-orange-100 text-orange-900 border-orange-200' },
-  { id: 'p2', categoryId: 'c1', name: 'Beef Steak', price: 18500, taxRate: 7.5, color: 'bg-red-100 text-red-900 border-red-200' },
-  { id: 'p3', categoryId: 'c1', name: 'Pasta Carbonara', price: 6500, taxRate: 7.5, color: 'bg-amber-100 text-amber-900 border-amber-200' },
-  { id: 'p4', categoryId: 'c2', name: 'Coca Cola', price: 1200, taxRate: 7.5, color: 'bg-slate-100 text-slate-900 border-slate-200' },
-  { id: 'p5', categoryId: 'c2', name: 'Fresh Juice', price: 2500, taxRate: 7.5, color: 'bg-green-100 text-green-900 border-green-200' },
-  { id: 'p6', categoryId: 'c3', name: 'Espresso', price: 1500, taxRate: 7.5, color: 'bg-stone-100 text-stone-900 border-stone-200' },
-  { id: 'p7', categoryId: 'c3', name: 'Cappuccino', price: 2500, taxRate: 7.5, color: 'bg-stone-100 text-stone-900 border-stone-200' },
-];
+import { AppSwitcher } from '@/components/layout/AppSwitcher';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
+import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
+import { formatCurrency } from '@/lib/utils';
 
 type OrderItem = {
   productId: string;
@@ -30,12 +17,38 @@ type OrderItem = {
 };
 
 export default function PosTerminalPage() {
-  const [activeCategory, setActiveCategory] = useState('c1');
+  const { provider } = useLodgeCoreProvider();
+  const { data: session } = useLodgeCoreSession();
+  const propertyId = session?.user?.propertyId || '';
+
+  const [activeCategory, setActiveCategory] = useState('all');
   const [search, setSearch] = useState('');
   const [cart, setCart] = useState<OrderItem[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [products, setProducts] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const filteredProducts = PRODUCTS.filter(p => 
+  useEffect(() => {
+    if (!propertyId) return;
+    const fetchData = async () => {
+      try {
+        const [prodRes, catRes] = await Promise.all([
+          provider.pos.getProducts(propertyId),
+          provider.pos.getCategories(propertyId)
+        ]);
+        if (prodRes.data) setProducts(prodRes.data);
+        if (catRes.data) setCategories(catRes.data);
+      } catch (err) {
+        console.error("Failed to fetch POS data", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchData();
+  }, [propertyId, provider]);
+
+  const filteredProducts = products.filter(p => 
     (activeCategory === 'all' || p.categoryId === activeCategory) &&
     p.name.toLowerCase().includes(search.toLowerCase())
   );
@@ -52,9 +65,9 @@ export default function PosTerminalPage() {
       return [...prev, {
         productId: product.id,
         name: product.name,
-        price: product.price,
+        price: Number(product.price),
         quantity: 1,
-        taxRate: product.taxRate
+        taxRate: Number(product.taxRate || 0)
       }];
     });
   };
@@ -108,9 +121,20 @@ export default function PosTerminalPage() {
     setTimeout(() => {
       setCart([]);
       setIsProcessing(false);
-      alert(`Payment of ₦${total.toLocaleString()} processed via ${method}! Receipt printed.`);
+      alert(`Payment of ${formatCurrency(total)} processed via ${method}! Receipt printed.`);
     }, 1000);
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-slate-50">
+        <div className="flex flex-col items-center gap-4 text-slate-500">
+          <Loader2 className="w-8 h-8 animate-spin" />
+          <p>Loading POS Configuration...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full w-full">
@@ -120,7 +144,8 @@ export default function PosTerminalPage() {
         {/* Header */}
         <div className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6">
           <div className="flex items-center gap-2">
-            <div className="h-8 w-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold">
+            <AppSwitcher />
+            <div className="h-8 w-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold ml-2">
               L
             </div>
             <h1 className="font-bold text-xl tracking-tight text-slate-800">LodgeCore POS</h1>
@@ -151,37 +176,41 @@ export default function PosTerminalPage() {
           >
             All Items
           </button>
-          {CATEGORIES.map(c => {
-            const Icon = c.icon;
-            return (
-              <button 
-                key={c.id}
-                onClick={() => setActiveCategory(c.id)}
-                className={`px-5 py-2.5 rounded-full font-medium text-sm flex items-center gap-2 transition-colors whitespace-nowrap ${
-                  activeCategory === c.id ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-                }`}
-              >
-                <Icon className="w-4 h-4" />
-                {c.name}
-              </button>
-            )
-          })}
+          {categories.map(c => (
+            <button 
+              key={c.id}
+              onClick={() => setActiveCategory(c.id)}
+              className={`px-5 py-2.5 rounded-full font-medium text-sm flex items-center gap-2 transition-colors whitespace-nowrap ${
+                activeCategory === c.id ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              {c.name}
+            </button>
+          ))}
         </div>
 
         {/* Product Grid */}
         <div className="flex-1 overflow-y-auto p-6 pt-2">
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-            {filteredProducts.map(p => (
-              <button
-                key={p.id}
-                onClick={() => addToCart(p)}
-                className={`relative h-32 rounded-2xl border flex flex-col items-center justify-center p-4 transition-transform active:scale-95 shadow-sm ${p.color}`}
-              >
-                <span className="font-semibold text-center leading-tight mb-2">{p.name}</span>
-                <span className="font-bold opacity-80">₦{p.price.toLocaleString()}</span>
-              </button>
-            ))}
-          </div>
+          {products.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-64 text-slate-400">
+              <Utensils className="w-12 h-12 opacity-20 mb-4" />
+              <p className="font-medium">No products configured</p>
+              <p className="text-sm mt-1">Add items from the Admin console.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+              {filteredProducts.map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => addToCart(p)}
+                  className={`relative h-32 rounded-2xl border flex flex-col items-center justify-center p-4 transition-transform active:scale-95 shadow-sm bg-white hover:bg-slate-50 border-slate-200`}
+                >
+                  <span className="font-semibold text-center leading-tight mb-2">{p.name}</span>
+                  <span className="font-bold opacity-80 text-indigo-700">{formatCurrency(Number(p.price))}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
       </div>
@@ -223,10 +252,10 @@ export default function PosTerminalPage() {
               <div key={item.productId} className="flex flex-col gap-2 p-3 bg-slate-50 rounded-xl border border-slate-100">
                 <div className="flex justify-between items-start">
                   <span className="font-semibold text-slate-800">{item.name}</span>
-                  <span className="font-bold text-slate-900">₦{(item.price * item.quantity).toLocaleString()}</span>
+                  <span className="font-bold text-slate-900">{formatCurrency(item.price * item.quantity)}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-slate-500">₦{item.price.toLocaleString()} each</span>
+                  <span className="text-sm text-slate-500">{formatCurrency(item.price)} each</span>
                   <div className="flex items-center gap-3 bg-white border border-slate-200 rounded-lg p-1">
                     <button 
                       onClick={() => updateQuantity(item.productId, -1)}
@@ -249,45 +278,50 @@ export default function PosTerminalPage() {
         </div>
 
         {/* Totals & Payment */}
-        <div className="border-t border-slate-200 bg-slate-50 p-6 space-y-4">
-          <div className="space-y-2 text-sm text-slate-600">
-            <div className="flex justify-between">
+        <div className="bg-slate-50 p-6 border-t border-slate-200">
+          <div className="space-y-2 mb-6">
+            <div className="flex justify-between text-sm text-slate-500">
               <span>Subtotal</span>
-              <span>₦{subtotal.toLocaleString()}</span>
+              <span>{formatCurrency(subtotal)}</span>
             </div>
-            <div className="flex justify-between">
-              <span>Tax (7.5%)</span>
-              <span>₦{tax.toLocaleString()}</span>
+            <div className="flex justify-between text-sm text-slate-500">
+              <span>Tax</span>
+              <span>{formatCurrency(tax)}</span>
             </div>
-          </div>
-          
-          <div className="flex justify-between items-center pt-3 border-t border-slate-200 border-dashed">
-            <span className="font-bold text-lg text-slate-800">Total</span>
-            <span className="font-bold text-2xl text-indigo-700">₦{total.toLocaleString()}</span>
+            <div className="flex justify-between items-center pt-2 border-t border-slate-200 mt-2">
+              <span className="font-semibold text-slate-800">Total</span>
+              <span className="font-bold text-2xl text-indigo-700">{formatCurrency(total)}</span>
+            </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 pt-2">
+          <div className="grid grid-cols-2 gap-3">
             <Button 
-              size="lg" 
-              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white h-14 text-lg font-bold shadow-lg"
-              onClick={() => handlePayment('CASH')}
+              className="h-14 font-semibold text-base"
+              onClick={() => handlePayment('ROOM_CHARGE')}
               disabled={cart.length === 0 || isProcessing}
             >
-              <Banknote className="w-5 h-5 mr-2" />
-              Cash
+              <User className="w-5 h-5 mr-2" />
+              Room
             </Button>
             <Button 
-              size="lg" 
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white h-14 text-lg font-bold shadow-lg"
+              className="h-14 font-semibold text-base"
+              variant="outline"
               onClick={() => handlePayment('CARD')}
               disabled={cart.length === 0 || isProcessing}
             >
               <CreditCard className="w-5 h-5 mr-2" />
               Card
             </Button>
+            <Button 
+              className="col-span-2 h-14 font-semibold text-base bg-emerald-600 hover:bg-emerald-700"
+              onClick={() => handlePayment('CASH')}
+              disabled={cart.length === 0 || isProcessing}
+            >
+              <Banknote className="w-5 h-5 mr-2" />
+              Pay {formatCurrency(total)}
+            </Button>
           </div>
         </div>
-
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 import { Metadata } from 'next';
 import { Plus, Search, DollarSign, Utensils, PieChart, PenTool } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { formatCurrency } from '@/lib/utils';
 
 export const metadata: Metadata = {
   title: 'Menu Engineering | LodgeCore',
@@ -98,8 +99,8 @@ export default function MenuEngineeringPage() {
               <tr className="bg-white hover:bg-muted/30 transition-colors">
                 <td className="px-6 py-4 font-medium text-slate-900">Classic Chicken Burger</td>
                 <td className="px-6 py-4 text-muted-foreground">Mains</td>
-                <td className="px-6 py-4 font-medium">₦5,500</td>
-                <td className="px-6 py-4 text-slate-600">₦1,250</td>
+                <td className="px-6 py-4 font-medium">{formatCurrency(5500)}</td>
+                <td className="px-6 py-4 text-slate-600">{formatCurrency(1250)}</td>
                 <td className="px-6 py-4">
                   <span className="inline-flex py-1 px-2 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">22.7%</span>
                 </td>
@@ -115,8 +116,8 @@ export default function MenuEngineeringPage() {
               <tr className="bg-white hover:bg-muted/30 transition-colors">
                 <td className="px-6 py-4 font-medium text-slate-900">Beef Steak (Medium)</td>
                 <td className="px-6 py-4 text-muted-foreground">Grill</td>
-                <td className="px-6 py-4 font-medium">₦18,500</td>
-                <td className="px-6 py-4 text-slate-600">₦7,200</td>
+                <td className="px-6 py-4 font-medium">{formatCurrency(18500)}</td>
+                <td className="px-6 py-4 text-slate-600">{formatCurrency(7200)}</td>
                 <td className="px-6 py-4">
                   <span className="inline-flex py-1 px-2 rounded-full text-xs font-medium bg-amber-100 text-amber-700">38.9%</span>
                 </td>
@@ -135,7 +136,7 @@ export default function MenuEngineeringPage() {
                   <AlertTriangleIcon className="h-4 w-4 text-red-500" title="Missing Recipe" />
                 </td>
                 <td className="px-6 py-4 text-muted-foreground">Beverages</td>
-                <td className="px-6 py-4 font-medium">₦2,500</td>
+                <td className="px-6 py-4 font-medium">{formatCurrency(2500)}</td>
                 <td className="px-6 py-4 text-red-500">Unlinked</td>
                 <td className="px-6 py-4">
                   <span className="text-muted-foreground">--</span>

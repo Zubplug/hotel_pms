@@ -28,9 +28,12 @@ export async function GET(req: NextRequest) {
 
     // Enforce role visibility
     let filterAssignedTo = assignedTo;
-    const isHousekeeper = (session.user as any).role === 'HOUSEKEEPER';
-    if (isHousekeeper) {
-      // Housekeepers can only see their own tasks
+    const capabilities = (session.user as any).capabilities || [];
+    
+    // If they have ACCESS_HOUSEKEEPING but not ACCESS_MANAGEMENT or something higher, they only see their own tasks
+    const isBasicHousekeeper = capabilities.includes('ACCESS_HOUSEKEEPING') && !capabilities.includes('ACCESS_MANAGEMENT');
+    if (isBasicHousekeeper) {
+      // Basic housekeepers can only see their own tasks
       filterAssignedTo = session.user.id;
     }
 

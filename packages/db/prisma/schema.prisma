@@ -1116,6 +1116,7 @@ model User {
 
   failedLoginAttempts Int       @default(0)
   lockedUntil         DateTime? @db.Timestamptz
+  sessionVersion      Int       @default(1)
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz

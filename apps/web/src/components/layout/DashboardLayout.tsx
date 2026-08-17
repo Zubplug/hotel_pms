@@ -33,6 +33,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { PropertySelector } from '@/components/properties/PropertySelector';
+import { AppSwitcher } from '@/components/layout/AppSwitcher';
 
 const ALL_NAV = [
   { name: 'Overview', href: '/dashboard', icon: LayoutDashboard, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER'] },
@@ -238,6 +239,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           </Button>
 
           <div className="flex flex-1 items-center gap-4">
+            <AppSwitcher />
             <PropertySelector />
           </div>
         </header>

@@ -10,6 +10,10 @@ interface DataProviderContextValue {
   isDesktopMode: boolean;
   isOnline: boolean;
   syncStatus: 'synced' | 'syncing' | 'offline' | 'error';
+  pos: {
+    getProducts: (propertyId: string) => Promise<{ data: any[], error: string | null }>;
+    getCategories: (propertyId: string) => Promise<{ data: any[], error: string | null }>;
+  };
 }
 
 const DataProviderContext = createContext<DataProviderContextValue>({
@@ -17,6 +21,10 @@ const DataProviderContext = createContext<DataProviderContextValue>({
   isDesktopMode: false,
   isOnline: true,
   syncStatus: 'synced',
+  pos: {
+    getProducts: async () => ({ data: [], error: 'Not initialized' }),
+    getCategories: async () => ({ data: [], error: 'Not initialized' }),
+  }
 });
 
 export function DataProviderWrapper({ children }: { children: React.ReactNode }) {

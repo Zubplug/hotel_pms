@@ -94,7 +94,7 @@ export async function GET(req: NextRequest) {
 
     const formatGuestList = (resList: any[]) => resList.map(res => {
       const folio = res.folios?.[0];
-      const balance = folio ? Number(folio.balance) : 0;
+      const balance = folio ? Number(folio.balance) : null;
       
       let arrivalStatus = 'Ready';
       let arrivalColor = 'green';
@@ -121,7 +121,7 @@ export async function GET(req: NextRequest) {
         confirmationNumber: res.confirmationNumber,
         roomName: res.reservationRooms?.[0]?.room?.number || 'Unassigned',
         roomTypeName: res.reservationRooms?.[0]?.room?.roomType?.name || '',
-        arrivalTime: '3:00 PM', // Hardcoded standard time for now, or use actual if tracked
+        arrivalTime: property.checkInTime || '14:00', // Uses property config instead of hardcoded time
         balance,
         status: res.status,
         arrivalState: { label: arrivalStatus, color: arrivalColor },

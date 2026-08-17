@@ -25,14 +25,23 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     // 1. Role-based authorization limit
-    // For production: this should be configurable. Hardcoded here as per requirements.
-    const userRole = (session.user as any).role || 'STAFF';
-    let maxRefundLimit = 50000; 
-    if (userRole === 'MANAGER') maxRefundLimit = 250000;
-    if (userRole === 'FINANCE' || userRole === 'ADMIN') maxRefundLimit = Infinity;
+    const capabilities = (session.user as any).capabilities || [];
+    
+    if (!capabilities.includes('ACCESS_REFUNDS')) {
+      return errorResponse('FORBIDDEN', 'You do not have the capability to perform refunds.', 403);
+    }
+
+    let maxRefundLimit = 0;
+    if (capabilities.includes('LIMIT_REFUND_UNLIMITED')) {
+      maxRefundLimit = Infinity;
+    } else if (capabilities.includes('LIMIT_REFUND_250K')) {
+      maxRefundLimit = 250000;
+    } else if (capabilities.includes('LIMIT_REFUND_50K')) {
+      maxRefundLimit = 50000;
+    }
 
     if (numericAmount > maxRefundLimit) {
-      return errorResponse('FORBIDDEN', `Your role (${userRole}) is not authorized to refund amounts above ${maxRefundLimit}.`, 403);
+      return errorResponse('FORBIDDEN', `Your capability limit prevents refunding amounts above ${maxRefundLimit}.`, 403);
     }
 
     // 2. Idempotency Check

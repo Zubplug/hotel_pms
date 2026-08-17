@@ -1,6 +1,7 @@
 import { Metadata } from 'next';
 import { Plus, Search, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { formatCurrency } from '@/lib/utils';
 import Link from 'next/link';
 
 export const metadata: Metadata = {
@@ -59,7 +60,7 @@ export default function PurchaseOrdersPage() {
                 <td className="px-6 py-4">FoodCo Suppliers Ltd</td>
                 <td className="px-6 py-4 text-muted-foreground">Aug 12, 2026</td>
                 <td className="px-6 py-4 text-muted-foreground">Aug 18, 2026</td>
-                <td className="px-6 py-4 font-medium">₦450,000</td>
+                <td className="px-6 py-4 font-medium">{formatCurrency(450000)}</td>
                 <td className="px-6 py-4">
                   <span className="inline-flex py-1 px-2 rounded-full text-xs font-medium bg-blue-100 text-blue-700">ISSUED</span>
                 </td>
@@ -72,7 +73,7 @@ export default function PurchaseOrdersPage() {
                 <td className="px-6 py-4">Global Beverages Inc.</td>
                 <td className="px-6 py-4 text-muted-foreground">Aug 15, 2026</td>
                 <td className="px-6 py-4 text-muted-foreground">Aug 16, 2026</td>
-                <td className="px-6 py-4 font-medium">₦125,000</td>
+                <td className="px-6 py-4 font-medium">{formatCurrency(125000)}</td>
                 <td className="px-6 py-4">
                   <span className="inline-flex py-1 px-2 rounded-full text-xs font-medium bg-amber-100 text-amber-700">PARTIAL_DELIVERY</span>
                 </td>
@@ -85,7 +86,7 @@ export default function PurchaseOrdersPage() {
                 <td className="px-6 py-4">Lagos Fresh Produce</td>
                 <td className="px-6 py-4 text-muted-foreground">Aug 10, 2026</td>
                 <td className="px-6 py-4 text-muted-foreground">Aug 11, 2026</td>
-                <td className="px-6 py-4 font-medium">₦85,500</td>
+                <td className="px-6 py-4 font-medium">{formatCurrency(85500)}</td>
                 <td className="px-6 py-4">
                   <span className="inline-flex py-1 px-2 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">COMPLETED</span>
                 </td>

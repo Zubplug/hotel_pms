@@ -1,6 +1,7 @@
 import { Metadata } from 'next';
 import { CalendarClock, Server, CheckCircle2, AlertTriangle, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { formatCurrency } from '@/lib/utils';
 
 export const metadata: Metadata = {
   title: 'Night Audit Management | LodgeCore',
@@ -144,7 +145,7 @@ export default function NightAuditDashboard() {
                     </p>
                     <div className="mt-3 flex items-center gap-4 text-sm font-medium">
                       <span className="text-red-600">3 Late Postings Pending</span>
-                      <span className="text-slate-600">₦85,000 Total Activity</span>
+                      <span className="text-slate-600">{formatCurrency(85000)} Total Activity</span>
                     </div>
                   </div>
                 </div>

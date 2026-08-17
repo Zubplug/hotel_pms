@@ -123,5 +123,13 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     generate: async (folioId) => {
       return invokeDesktop('receipts.generate', { folioId });
     }
+  },
+  pos: {
+    getProducts: async (propertyId: string) => {
+      return invokeDesktop('pos.getProducts', { propertyId });
+    },
+    getCategories: async (propertyId: string) => {
+      return invokeDesktop('pos.getCategories', { propertyId });
+    }
   }
 };

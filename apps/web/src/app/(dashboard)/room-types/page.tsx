@@ -5,7 +5,10 @@ import { useQuery } from '@tanstack/react-query';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { formatCurrency } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import RoomTypeForm from '@/components/admin/RoomTypeForm';
 import { Plus, Layers, BedDouble, Users } from 'lucide-react';
 import { LoadingState, EmptyState } from '@/components/ui/EmptyState';
 import Link from 'next/link';
@@ -71,7 +74,7 @@ export default function RoomTypesPage() {
                     <Badge variant="secondary" className="text-xs">{rt.code}</Badge>
                   </div>
                   <div className="text-right">
-                    <p className="text-xl font-bold">₦{Number(rt.baseRate).toLocaleString()}</p>
+                    <p className="text-xl font-bold">{formatCurrency(Number(rt.baseRate))}</p>
                     <p className="text-xs text-muted-foreground">base rate / night</p>
                   </div>
                 </div>

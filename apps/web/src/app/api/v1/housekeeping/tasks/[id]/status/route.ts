@@ -39,8 +39,10 @@ export async function PATCH(
     await assertPropertyAccess(session.user.id, task.propertyId);
 
     // Ensure staff can only update their own tasks, unless they are a supervisor
-    const userRole = (session.user as any).role;
-    if (userRole === 'HOUSEKEEPER') {
+    const capabilities = (session.user as any).capabilities || [];
+    const isBasicHousekeeper = capabilities.includes('ACCESS_HOUSEKEEPING') && !capabilities.includes('ACCESS_MANAGEMENT');
+    
+    if (isBasicHousekeeper) {
       if (task.assignedTo !== session.user.id) {
         return errorResponse('FORBIDDEN', 'You can only update your own assigned tasks', 403);
       }
@@ -49,8 +51,9 @@ export async function PATCH(
         return errorResponse('FORBIDDEN', 'Only supervisors can inspect rooms', 403);
       }
     } else {
+      // Has management or specific update capability
       const canManage = await hasPermission(session.user.id, 'housekeeping', 'update', task.propertyId);
-      if (!canManage) return errorResponse('FORBIDDEN', 'Insufficient permissions', 403);
+      if (!canManage && !capabilities.includes('ACCESS_MANAGEMENT')) return errorResponse('FORBIDDEN', 'Insufficient permissions', 403);
     }
 
     // Determine target status

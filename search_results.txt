@@ -1,0 +1,106 @@
+apps/web/src/app/api/v1/payments/[id]/refund/route.ts:28:    // For production: this should be configurable. Hardcoded here as per requirements.
+apps/web/src/app/api/v1/frontdesk/dashboard/route.ts:124:        arrivalTime: '3:00 PM', // Hardcoded standard time for now, or use actual if tracked
+apps/web/src/app/(dashboard)/room-types/page.tsx:74:                    <p className="text-xl font-bold">₦{Number(rt.baseRate).toLocaleString()}</p>
+apps/web/src/app/(dashboard)/dashboard/page.tsx:265:                        tickFormatter={(val) => val > 1000 ? `₦${(val/1000000).toFixed(1)}M` : `₦${val}`}
+apps/web/src/app/(pos)/cash-management/page.tsx:81:                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">₦{Number(m.amount).toFixed(2)}</td>
+apps/web/src/app/(pos)/settlement/page.tsx:47:                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">₦{Number(session.expectedCash).toFixed(2)}</td>
+apps/web/src/app/(pos)/settlement/page.tsx:48:                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">₦{Number(session.actualCash).toFixed(2)}</td>
+apps/web/src/app/(pos)/settlement/page.tsx:51:                          ₦{Number(session.variance).toFixed(2)}
+apps/web/src/app/(pos)/pos/page.tsx:8:// Mock Data for Offline POS
+apps/web/src/app/(pos)/pos/page.tsx:16:  { id: 'p1', categoryId: 'c1', name: 'Classic Burger', price: 5500, taxRate: 7.5, color: 'bg-orange-100 text-orange-900 border-orange-200' },
+apps/web/src/app/(pos)/pos/page.tsx:21:  { id: 'p6', categoryId: 'c3', name: 'Espresso', price: 1500, taxRate: 7.5, color: 'bg-stone-100 text-stone-900 border-stone-200' },
+apps/web/src/app/(pos)/pos/page.tsx:112:      alert(`Payment of ₦${total.toLocaleString()} processed via ${method}! Receipt printed.`);
+apps/web/src/app/(pos)/pos/page.tsx:183:                <span className="font-bold opacity-80">₦{p.price.toLocaleString()}</span>
+apps/web/src/app/(pos)/pos/page.tsx:228:                  <span className="font-bold text-slate-900">₦{(item.price * item.quantity).toLocaleString()}</span>
+apps/web/src/app/(pos)/pos/page.tsx:231:                  <span className="text-sm text-slate-500">₦{item.price.toLocaleString()} each</span>
+apps/web/src/app/(pos)/pos/page.tsx:258:              <span>₦{subtotal.toLocaleString()}</span>
+apps/web/src/app/(pos)/pos/page.tsx:262:              <span>₦{tax.toLocaleString()}</span>
+apps/web/src/app/(pos)/pos/page.tsx:268:            <span className="font-bold text-2xl text-indigo-700">₦{total.toLocaleString()}</span>
+apps/web/src/app/(admin)/admin/pos/menu/page.tsx:101:                <td className="px-6 py-4 font-medium">₦5,500</td>
+apps/web/src/app/(admin)/admin/pos/menu/page.tsx:102:                <td className="px-6 py-4 text-slate-600">₦1,250</td>
+apps/web/src/app/(admin)/admin/pos/menu/page.tsx:118:                <td className="px-6 py-4 font-medium">₦18,500</td>
+apps/web/src/app/(admin)/admin/pos/menu/page.tsx:119:                <td className="px-6 py-4 text-slate-600">₦7,200</td>
+apps/web/src/app/(admin)/admin/pos/menu/page.tsx:138:                <td className="px-6 py-4 font-medium">₦2,500</td>
+apps/web/src/app/(admin)/admin/inventory/purchase-orders/page.tsx:62:                <td className="px-6 py-4 font-medium">₦450,000</td>
+apps/web/src/app/(admin)/admin/inventory/purchase-orders/page.tsx:75:                <td className="px-6 py-4 font-medium">₦125,000</td>
+apps/web/src/app/(admin)/admin/inventory/purchase-orders/page.tsx:88:                <td className="px-6 py-4 font-medium">₦85,500</td>
+apps/web/src/app/(admin)/admin/inventory/page.tsx:69:            <div className="text-2xl font-bold text-emerald-600">₦2.4M</div>
+apps/web/src/app/(admin)/admin/inventory/page.tsx:80:            <div className="text-2xl font-bold text-red-600">₦1.8M</div>
+apps/web/src/app/(admin)/admin/night-audit/page.tsx:147:                      <span className="text-slate-600">₦85,000 Total Activity</span>
+apps/web/src/app/(frontdesk)/frontdesk/page.tsx:296:                            <span className="text-xs font-medium text-emerald-600 flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5"/> ₦0 Due</span>
+apps/web/src/components/reservations/ReadCardCheckoutDialog.tsx:171:                    ₦{reservation.balance.toLocaleString()}
+apps/web/src/components/hub/HubStatusBanner.tsx:28:      // Mocking IPC sync status fetch for now
+apps/web/src/__tests__/sync-center.test.ts:4:// Mock Next.js Request
+apps/web/src/__tests__/sync-center.test.ts:5:class MockRequest {
+apps/web/src/__tests__/sync-center.test.ts:17:jest.mock('@hotel-pms/db', () => ({
+apps/web/src/__tests__/sync-center.test.ts:33:        findUnique: jest.fn().mockResolvedValue({ id: 'old-folio', currency: 'NGN' }),
+apps/web/src/__tests__/sync-center.test.ts:34:        create: jest.fn().mockResolvedValue({ id: 'new-city-ledger-folio', folioNumber: 'CL-123', currency: 'NGN' }),
+apps/web/src/__tests__/sync-center.test.ts:45:    jest.clearAllMocks();
+apps/web/src/__tests__/sync-center.test.ts:49:    const mockConflict = {
+apps/web/src/__tests__/sync-center.test.ts:58:    (prisma.syncConflict.findUnique as jest.Mock).mockResolvedValue(mockConflict);
+apps/web/src/__tests__/sync-center.test.ts:59:    (prisma.userRole.findFirst as jest.Mock).mockResolvedValue({ role: { name: 'MANAGER' } });
+apps/web/src/__tests__/sync-center.test.ts:61:    const req = new MockRequest({ action: 'CITY_LEDGER', userId: 'manager-1' });
+apps/web/src/__tests__/sync-center.test.ts:69:    (prisma.syncConflict.findUnique as jest.Mock).mockResolvedValue({ status: 'PENDING', propertyId: 'prop-1' });
+apps/web/src/__tests__/sync-center.test.ts:70:    (prisma.userRole.findFirst as jest.Mock).mockResolvedValue(null); // No manager role found
+apps/web/src/__tests__/sync-center.test.ts:72:    const req = new MockRequest({ action: 'CITY_LEDGER', userId: 'receptionist-1' });
+apps/web/src/__tests__/sync-center.test.ts:81:    const mockConflict = {
+apps/web/src/__tests__/sync-center.test.ts:90:    (prisma.syncConflict.findUnique as jest.Mock).mockResolvedValue(mockConflict);
+apps/web/src/__tests__/sync-center.test.ts:91:    (prisma.userRole.findFirst as jest.Mock).mockResolvedValue({ role: { name: 'MANAGER' } });
+apps/web/src/__tests__/sync-center.test.ts:93:    // Override the transaction mock to simulate an existing folioItem
+apps/web/src/__tests__/sync-center.test.ts:94:    (prisma.$transaction as jest.Mock).mockImplementationOnce(async (cb) => {
+apps/web/src/__tests__/sync-center.test.ts:96:        folioItem: { findFirst: jest.fn().mockResolvedValue({ id: 'existing-charge' }) } // simulate existing
+apps/web/src/__tests__/sync-center.test.ts:100:    const req = new MockRequest({ action: 'CITY_LEDGER', userId: 'manager-1' });
+apps/web/src/__tests__/sync-center.test.ts:109:    (prisma.syncConflict.findUnique as jest.Mock).mockResolvedValue({ status: 'RESOLVED' });
+apps/web/src/__tests__/sync-center.test.ts:111:    const req = new MockRequest({ action: 'REJECT', userId: 'manager-1' });
+apps/web/src/__tests__/pos-operational-controls.test.ts:5:class MockRequest {
+apps/web/src/__tests__/pos-operational-controls.test.ts:18:jest.mock('@hotel-pms/db', () => ({
+apps/web/src/__tests__/pos-operational-controls.test.ts:20:    findUnique: jest.fn().mockResolvedValue({ id: 'prop-1', businessDate: new Date() }),
+apps/web/src/__tests__/pos-operational-controls.test.ts:28:    findMany: jest.fn().mockResolvedValue([{ amount: 50, type: 'CASH_DROP' }])
+apps/web/src/__tests__/pos-operational-controls.test.ts:48:  beforeEach(() => { jest.clearAllMocks(); });
+apps/web/src/__tests__/pos-operational-controls.test.ts:51:    (prisma.posSession.count as jest.Mock).mockResolvedValue(1); // 1 open session
+apps/web/src/__tests__/pos-operational-controls.test.ts:52:    (prisma.syncConflict.count as jest.Mock).mockResolvedValue(0);
+apps/web/src/__tests__/pos-operational-controls.test.ts:54:    const req = new MockRequest({ propertyId: 'prop-1', userId: 'user-1' });
+apps/web/src/__tests__/pos-operational-controls.test.ts:63:    (prisma.posSession.count as jest.Mock).mockResolvedValue(1); 
+apps/web/src/__tests__/pos-operational-controls.test.ts:65:    const req = new MockRequest({ 
+apps/web/src/__tests__/pos-operational-controls.test.ts:79:    (prisma.posCashMovement.findUnique as jest.Mock).mockResolvedValue(null);
+apps/web/src/__tests__/pos-operational-controls.test.ts:81:    const req = new MockRequest({
+apps/web/src/__tests__/pos-financial-controls.test.ts:4:// Mock Next.js Request
+apps/web/src/__tests__/pos-financial-controls.test.ts:5:class MockRequest {
+apps/web/src/__tests__/pos-financial-controls.test.ts:25:jest.mock('@hotel-pms/db', () => ({
+apps/web/src/__tests__/pos-financial-controls.test.ts:27:    findUnique: jest.fn().mockResolvedValue({ id: 'prop-1', businessDate: new Date() }),
+apps/web/src/__tests__/pos-financial-controls.test.ts:47:    aggregate: jest.fn().mockResolvedValue({ _sum: { amount: 0 } }),
+apps/web/src/__tests__/pos-financial-controls.test.ts:56:        aggregate: jest.fn().mockResolvedValue({ _sum: { amount: 1000 } }),
+apps/web/src/__tests__/pos-financial-controls.test.ts:62:        findMany: jest.fn().mockResolvedValue([{
+apps/web/src/__tests__/pos-financial-controls.test.ts:69:        findFirst: jest.fn().mockResolvedValue(null),
+apps/web/src/__tests__/pos-financial-controls.test.ts:81:    jest.clearAllMocks();
+apps/web/src/__tests__/pos-financial-controls.test.ts:85:    (prisma.posSession.findUnique as jest.Mock).mockResolvedValue({
+apps/web/src/__tests__/pos-financial-controls.test.ts:96:    const req = new MockRequest({
+apps/web/src/__tests__/pos-financial-controls.test.ts:108:    // The transaction should have calculated 500 (opening) + 1000 (mock aggregate sales) - 0 (refunds) = 1500 expected
+apps/web/src/__tests__/pos-financial-controls.test.ts:114:    (prisma.posVoid.findUnique as jest.Mock).mockResolvedValue(null);
+apps/web/src/__tests__/pos-financial-controls.test.ts:122:    const req = new MockRequest({
+apps/web/src/__tests__/pos-sync.test.ts:4:// Mock the Next.js Request object
+apps/web/src/__tests__/pos-sync.test.ts:5:class MockRequest {
+apps/web/src/__tests__/pos-sync.test.ts:19:// Mock Prisma
+apps/web/src/__tests__/pos-sync.test.ts:20:jest.mock('@hotel-pms/db', () => ({
+apps/web/src/__tests__/pos-sync.test.ts:30:      posOrder: { create: jest.fn().mockResolvedValue({ orderNumber: 'POS-123' }) },
+apps/web/src/__tests__/pos-sync.test.ts:31:      recipeIngredient: { findMany: jest.fn().mockResolvedValue([{ id: 'ing1', stockItemId: 'stk1', quantity: 2, stockItem: { costPrice: 10 } }]) },
+apps/web/src/__tests__/pos-sync.test.ts:52:    jest.clearAllMocks();
+apps/web/src/__tests__/pos-sync.test.ts:70:    const req = new MockRequest({}, {});
+apps/web/src/__tests__/pos-sync.test.ts:76:    (prisma.property.findUnique as jest.Mock).mockResolvedValue({ id: 'prop1' });
+apps/web/src/__tests__/pos-sync.test.ts:77:    (prisma.posOrder.findUnique as jest.Mock).mockResolvedValue({ id: 'existing-order' }); // Simulate existing
+apps/web/src/__tests__/pos-sync.test.ts:79:    const req = new MockRequest({
+apps/web/src/__tests__/pos-sync.test.ts:97:    (prisma.property.findUnique as jest.Mock).mockResolvedValue({ id: 'prop1' });
+apps/web/src/__tests__/pos-sync.test.ts:98:    (prisma.posOrder.findUnique as jest.Mock).mockResolvedValue(null);
+apps/web/src/__tests__/pos-sync.test.ts:100:    const req = new MockRequest({
+apps/web/src/__tests__/pos-sync.test.ts:114:    // The transaction callback internals are mocked in the beforeEach, but we can verify it passed.
+apps/web/src/__tests__/pos-sync.test.ts:118:    (prisma.property.findUnique as jest.Mock).mockResolvedValue({ id: 'prop1' });
+apps/web/src/__tests__/pos-sync.test.ts:119:    (prisma.folioItem.findFirst as jest.Mock).mockResolvedValue(null);
+apps/web/src/__tests__/pos-sync.test.ts:120:    (prisma.folio.findUnique as jest.Mock).mockResolvedValue({ id: 'fol1', status: 'CLOSED' });
+apps/web/src/__tests__/pos-sync.test.ts:122:    const req = new MockRequest({
+apps/web/src/lib/rbac.test.ts:4:// Mock the prisma client
+apps/web/src/lib/rbac.test.ts:5:vi.mock('@hotel-pms/db', () => {
+apps/web/src/lib/rbac.test.ts:9:        findUnique: vi.fn().mockImplementation(({ where }) => {
+apps/web/src/lib/rbac.test.ts:20:        findMany: vi.fn().mockImplementation(({ where }) => {
+packages/db/seed_production.ts:65:  console.log('Existing demo layout cleared.');
+packages/db/prisma/seed.ts:182:  // 9. Inventory & POS Mock Data
+packages/db/test-api.ts:16:  // Fake the authentication session or just run the query logic directly

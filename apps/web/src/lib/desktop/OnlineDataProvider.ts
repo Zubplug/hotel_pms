@@ -186,5 +186,13 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
         method: 'GET'
       });
     }
+  },
+  pos: {
+    getProducts: async (propertyId: string) => {
+      return apiFetch(`/api/v1/pos/products?propertyId=${propertyId}`);
+    },
+    getCategories: async (propertyId: string) => {
+      return apiFetch(`/api/v1/pos/categories?propertyId=${propertyId}`);
+    }
   }
 };

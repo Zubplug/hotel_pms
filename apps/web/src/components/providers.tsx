@@ -7,6 +7,7 @@ import { useState } from 'react';
 
 import { PropertyProvider } from './PropertyProvider';
 import { DataProviderWrapper } from '@/lib/desktop/DataProviderContext';
+import { LockProvider } from '@/components/auth/LockProvider';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -28,9 +29,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <SessionProvider session={isDesktop ? null : undefined}>
       <QueryClientProvider client={queryClient}>
         <DataProviderWrapper>
-          <PropertyProvider>
-            {children}
-          </PropertyProvider>
+          <LockProvider>
+            <PropertyProvider>
+              {children}
+            </PropertyProvider>
+          </LockProvider>
         </DataProviderWrapper>
         <ReactQueryDevtools initialIsOpen={false} />
       </QueryClientProvider>

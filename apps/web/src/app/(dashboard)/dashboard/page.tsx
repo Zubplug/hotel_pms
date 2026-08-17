@@ -18,18 +18,9 @@ import {
 } from 'lucide-react';
 import { LoadingState } from '@/components/ui/EmptyState';
 import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-  ComposedChart,
-  Line
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, AreaChart, Area, Bar, ComposedChart
 } from 'recharts';
+import { formatCurrency } from '@/lib/utils';
 
 interface DashboardAnalytics {
   kpis: {
@@ -66,10 +57,6 @@ interface DashboardAnalytics {
     details: any;
   }>;
 }
-
-const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(value);
-};
 
 const formatCompactCurrency = (value: number) => {
   return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', notation: 'compact', maximumFractionDigits: 1 }).format(value);
@@ -262,7 +249,7 @@ export default function CEODashboardPage() {
                         axisLine={false}
                         tickLine={false}
                         tick={{ fontSize: 12 }}
-                        tickFormatter={(val) => val > 1000 ? `₦${(val/1000000).toFixed(1)}M` : `₦${val}`}
+                        tickFormatter={(val) => val > 1000 ? formatCurrency(val/1000000) + 'M' : formatCurrency(val)}
                         dx={-10}
                       />
                       <YAxis 

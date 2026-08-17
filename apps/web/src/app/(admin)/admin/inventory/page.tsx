@@ -2,6 +2,7 @@ import { Metadata } from 'next';
 import { Package, AlertTriangle, ArrowDownRight, ArrowUpRight, Plus, FileText, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
+import { formatCurrency } from '@/lib/utils';
 
 export const metadata: Metadata = {
   title: 'Inventory Dashboard | LodgeCore',
@@ -66,7 +67,7 @@ export default function InventoryDashboard() {
             <ArrowDownRight className="h-4 w-4 text-emerald-500" />
           </div>
           <div className="p-6 pt-0">
-            <div className="text-2xl font-bold text-emerald-600">₦2.4M</div>
+            <div className="text-2xl font-bold text-emerald-600">{formatCurrency(2400000)}</div>
             <p className="text-xs text-muted-foreground mt-1">Total value of goods received</p>
           </div>
         </div>
@@ -77,7 +78,7 @@ export default function InventoryDashboard() {
             <ArrowUpRight className="h-4 w-4 text-red-500" />
           </div>
           <div className="p-6 pt-0">
-            <div className="text-2xl font-bold text-red-600">₦1.8M</div>
+            <div className="text-2xl font-bold text-red-600">{formatCurrency(1800000)}</div>
             <p className="text-xs text-muted-foreground mt-1">Cost of goods sold / consumed</p>
           </div>
         </div>

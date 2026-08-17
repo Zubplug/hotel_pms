@@ -1,5 +1,7 @@
 import React from 'react';
 import prisma from '@hotel-pms/db';
+import { Button } from '@/components/ui/button';
+import { formatCurrency } from '@/lib/utils';
 
 export const metadata = {
   title: 'Cash Management | LodgeCore POS',
@@ -78,7 +80,7 @@ export default async function CashManagementPage() {
                       <tr key={m.id}>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{m.createdAt.toLocaleTimeString()}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{m.type}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">₦{Number(m.amount).toFixed(2)}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">{formatCurrency(Number(m.amount))}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{m.authorizedBy?.substring(0,8) || 'N/A'}</td>
                       </tr>
                     ))

@@ -34,6 +34,7 @@ import { SyncIndicator } from '@/components/frontdesk/SyncIndicator';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { ClientOnlyDate } from '@/components/ClientOnlyDate';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
+import { AppSwitcher } from '@/components/layout/AppSwitcher';
 
 export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useLodgeCoreSession();
@@ -99,6 +100,7 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
         
         {/* Left: Logo & Property */}
         <div className="flex items-center gap-4 lg:gap-6 flex-1 min-w-0">
+          <AppSwitcher />
           <Link href="/frontdesk" className="flex items-center gap-2 group shrink-0">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 shadow-sm transition-transform group-hover:scale-105">
               <Hotel className="h-4 w-4 text-white" />

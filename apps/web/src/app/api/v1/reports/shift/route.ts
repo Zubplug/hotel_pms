@@ -26,15 +26,18 @@ export async function GET(req: NextRequest) {
     }
 
     const userRole = (session.user as any).role || 'STAFF';
+    const capabilities = (session.user as any).capabilities || [];
 
     // Role-based restrictions
-    if (userRole === 'STAFF') {
-      // Receptionist can only see their own transactions, silently override bypass attempts
-      targetUserId = session.user.id;
-    } else if (userRole === 'MANAGER' || userRole === 'FINANCE' || userRole === 'ADMIN') {
-      // They can specify a targetUserId or leave it null to get all users
-    } else {
+    if (!capabilities.includes('ACCESS_REPORTS') && !capabilities.includes('ACCESS_MANAGEMENT')) {
       return errorResponse('FORBIDDEN', 'Insufficient permissions for shift reporting', 403);
+    }
+
+    if (!capabilities.includes('ACCESS_MANAGEMENT')) {
+      // Staff without management capability can only see their own transactions
+      targetUserId = session.user.id;
+    } else {
+      // They can specify a targetUserId or leave it null to get all users
     }
 
     const dateFilter = {

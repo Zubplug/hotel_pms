@@ -11,6 +11,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { formatCurrency } from '@/lib/utils';
 import { CreditCard, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 interface ReadCardCheckoutDialogProps {
@@ -168,7 +169,7 @@ export function ReadCardCheckoutDialog({ open, onOpenChange, propertyId }: ReadC
                 <div className="mt-3 pt-3 border-t flex justify-between">
                   <span className="text-sm font-medium">Folio Balance:</span>
                   <span className={`text-sm font-bold ${reservation.balance !== 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                    ₦{reservation.balance.toLocaleString()}
+                    {formatCurrency(reservation.balance)}
                   </span>
                 </div>
               </div>

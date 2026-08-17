@@ -13,6 +13,7 @@ import { FrontDeskQuickCheckoutDialog } from '@/components/frontdesk/FrontDeskQu
 import { FrontDeskReadCardDialog } from '@/components/frontdesk/FrontDeskReadCardDialog';
 import { LoadingState } from '@/components/ui/EmptyState';
 import { ClientOnlyDate } from '@/components/ClientOnlyDate';
+import { formatCurrency } from '@/lib/utils';
 import { 
   UserPlus, 
   CalendarPlus, 
@@ -72,10 +73,6 @@ export default function ReceptionistDashboardPage() {
   const firstName = session?.user?.email?.split('@')[0] || 'Staff';
   
   const greeting = new Date().getHours() < 12 ? 'Good Morning' : new Date().getHours() < 17 ? 'Good Afternoon' : 'Good Evening';
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(amount);
-  };
 
   const renderRoomStatus = (status: string) => {
     switch (status) {
@@ -292,8 +289,10 @@ export default function ReceptionistDashboardPage() {
                         </div>
                         
                         <div className="flex items-center gap-3 mt-2">
-                          {isPaid ? (
-                            <span className="text-xs font-medium text-emerald-600 flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5"/> ₦0 Due</span>
+                          {dep.balance === null ? (
+                            <span className="text-xs font-semibold text-slate-500 flex items-center gap-1"><Info className="w-3.5 h-3.5"/> Unknown Balance</span>
+                          ) : dep.balance <= 0 ? (
+                            <span className="text-xs font-medium text-emerald-600 flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5"/> {formatCurrency(0)} Due</span>
                           ) : (
                             <span className="text-xs font-semibold text-red-600 flex items-center gap-1"><CreditCard className="w-3.5 h-3.5"/> {formatCurrency(dep.balance)} Due</span>
                           )}
