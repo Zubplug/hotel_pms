@@ -106,13 +106,15 @@ export function HubStatusBanner({ user, businessDate }: HubStatusBannerProps) {
           Business Date: <span className="text-white">{businessDate}</span>
         </div>
 
-        <button 
-          onClick={() => signOut({ callbackUrl: '/login' })}
-          className="ml-2 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-rose-500/20 text-slate-300 hover:text-rose-400 transition-colors"
-        >
-          <LogOut className="w-4 h-4" />
-          <span className="text-sm font-medium">Logout</span>
-        </button>
+        {user.role !== 'RECEPTIONIST' && user.role !== 'CASHIER' && (
+          <button 
+            onClick={() => signOut({ callbackUrl: '/login' })}
+            className="ml-2 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-rose-500/20 text-slate-300 hover:text-rose-400 transition-colors"
+          >
+            <LogOut className="w-4 h-4" />
+            <span className="text-sm font-medium">Logout</span>
+          </button>
+        )}
       </div>
     </div>
   );
