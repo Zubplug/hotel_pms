@@ -210,7 +210,7 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
     getAuthorizedOutlets: async (propertyId: string, deviceId: string) => {
       return apiFetch(`/api/v1/pos/outlets/authorized?propertyId=${propertyId}&deviceId=${deviceId}`);
     },
-    startSession: async (data: { propertyId: string, deviceId: string, outletId: string, openingCash: number }) => {
+    startSession: async (data: { userId: string; propertyId: string; deviceId: string; outletId: string; openingCash: number }) => {
       return apiFetch(`/api/v1/pos/sessions`, {
         method: 'POST',
         body: JSON.stringify(data)
@@ -218,6 +218,51 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
     },
     getSessionContext: async (sessionId: string) => {
       return apiFetch(`/api/v1/pos/sessions/${sessionId}`);
-    }
+    },
+    getFloorPlans: async (outletId: string) => {
+      return apiFetch(`/api/v1/pos/outlets/${outletId}/floor-plans`);
+    },
+    getTables: async (floorPlanId: string) => {
+      return apiFetch(`/api/v1/pos/floor-plans/${floorPlanId}/tables`);
+    },
+    getProductModifiers: async (productId: string) => {
+      return apiFetch(`/api/v1/pos/products/${productId}/modifiers`);
+    },
+    splitCheck: async (orderId: string, itemIds: string[], userId: string) => {
+      return apiFetch(`/api/v1/pos/orders/${orderId}/split`, {
+        method: 'POST',
+        body: JSON.stringify({ itemIds, userId }),
+      });
+    },
+    fireKot: async (orderId: string, itemIds: string[], operatorToken: string) => {
+      return apiFetch(`/api/v1/pos/orders/${orderId}/fire`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${operatorToken}` },
+        body: JSON.stringify({ itemIds }),
+      });
+    },
+    createOrder: async (data: any, operatorToken: string) => {
+      return apiFetch(`/api/v1/pos/orders`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${operatorToken}` },
+        body: JSON.stringify(data),
+      });
+    },
+    updateOrderStatus: async (orderId: string, status: string, reason?: string) => {
+      return apiFetch(`/api/v1/pos/orders/${orderId}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status, reason }),
+      });
+    },
+    payOrder: async (orderId: string, paymentData: any, operatorToken: string) => {
+      return apiFetch(`/api/v1/pos/orders/${orderId}/pay`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${operatorToken}` },
+        body: JSON.stringify(paymentData),
+      });
+    },
+    getOrder: async (orderId: string) => {
+      return apiFetch(`/api/v1/pos/orders/${orderId}`);
+    },
   }
 };

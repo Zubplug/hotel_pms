@@ -426,6 +426,14 @@ public class LocalRepository
             payment.Status = payment.Method == "CASH" ? "CONFIRMED" : "PENDING";
         }
 
+        foreach (var kot in order.Kots)
+        {
+            kot.Id = Guid.NewGuid().ToString();
+            kot.OrderId = order.Id;
+            kot.OperationId = operationId;
+            kot.BusinessDate = order.BusinessDate;
+        }
+
         _dbContext.PosOrders.Add(order);
         
         var syncEvent = new LocalSyncEvent
@@ -466,6 +474,136 @@ public class LocalRepository
         await _dbContext.SaveChangesAsync();
         return order;
     }
+    public async Task<LocalPosOrder> UpdateOrderStatusAsync(string orderId, string status, string reason, string userId, string deviceId)
+    {
+        var order = await _dbContext.PosOrders.FirstOrDefaultAsync(o => o.Id == orderId);
+        if (order == null) throw new Exception("Order not found");
+
+        order.Status = status;
+        if (!string.IsNullOrEmpty(reason))
+        {
+            order.Notes = string.IsNullOrEmpty(order.Notes) ? $"Status Reason: {reason}" : $"{order.Notes}\nStatus Reason: {reason}";
+        }
+        order.UpdatedAt = DateTime.UtcNow;
+
+        string operationId = $"op_order_status_{deviceId}_{DateTime.UtcNow.Ticks}";
+        
+        var syncEvent = new LocalSyncEvent
+        {
+            OperationId = operationId,
+            EntityType = "POS_ORDER",
+            EntityId = order.Id,
+            OperationType = "UPDATE",
+            PayloadJson = JsonSerializer.Serialize(new { status = order.Status, notes = order.Notes, updatedAt = order.UpdatedAt }),
+            UserId = userId,
+            DeviceId = deviceId
+        };
+        
+        _dbContext.SyncEvents.Add(syncEvent);
+        await _dbContext.SaveChangesAsync();
+
+        return order;
+    }
+
+
+    public async Task<LocalPosKot> FireKotAsync(string orderId, List<string> itemIds, string userId, string deviceId)
+    {
+        var order = await _dbContext.PosOrders
+            .Include(o => o.Items)
+            .FirstOrDefaultAsync(o => o.Id == orderId);
+
+        if (order == null) throw new Exception("Order not found");
+
+        var itemsToFire = order.Items.Where(i => itemIds.Contains(i.Id)).ToList();
+        if (!itemsToFire.Any()) throw new Exception("No valid items selected for KOT");
+
+        string operationId = $"op_kot_{deviceId}_{DateTime.UtcNow.Ticks}_{Guid.NewGuid().ToString("N").Substring(0, 8)}";
+        
+        var kot = new LocalPosKot
+        {
+            Id = Guid.NewGuid().ToString(),
+            OrderId = orderId,
+            OutletId = order.OutletId,
+            DeviceId = deviceId,
+            CreatedBy = userId,
+            KotNumber = $"{order.OrderNumber}-{Guid.NewGuid().ToString("N").Substring(0, 4)}",
+            Status = "PENDING",
+            PrintStatus = "QUEUED",
+            OperationId = operationId,
+            BusinessDate = order.BusinessDate,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _dbContext.PosKots.Add(kot);
+
+        foreach (var item in itemsToFire)
+        {
+            item.KotId = kot.Id;
+            item.KitchenStatus = "PENDING";
+            item.SentToKitchenAt = DateTime.UtcNow;
+        }
+
+        var syncEvent = new LocalSyncEvent
+        {
+            OperationId = operationId,
+            EntityType = "POS_KOT",
+            EntityId = kot.Id,
+            OperationType = "CREATE",
+            PayloadJson = JsonSerializer.Serialize(new { kot, itemIds }),
+            UserId = userId,
+            DeviceId = deviceId
+        };
+        _dbContext.SyncEvents.Add(syncEvent);
+        await _dbContext.SaveChangesAsync();
+
+        return kot;
+    }
+
+    public async Task<LocalPosCheck> SplitCheckAsync(string orderId, List<string> orderItemIds, string userId, string deviceId)
+    {
+        var order = await _dbContext.PosOrders
+            .Include(o => o.Items)
+            .FirstOrDefaultAsync(o => o.Id == orderId);
+
+        if (order == null) throw new Exception("Order not found");
+
+        var itemsToSplit = order.Items.Where(i => orderItemIds.Contains(i.Id)).ToList();
+        if (!itemsToSplit.Any()) throw new Exception("No valid items selected for split");
+
+        string operationId = $"op_split_{deviceId}_{DateTime.UtcNow.Ticks}";
+
+        var newCheck = new LocalPosCheck
+        {
+            Id = Guid.NewGuid().ToString(),
+            OrderId = orderId,
+            CheckNumber = $"{order.OrderNumber}-{order.Checks.Count + 1}",
+            Status = "OPEN",
+            Total = itemsToSplit.Sum(i => i.Total),
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        _dbContext.PosChecks.Add(newCheck);
+
+        foreach (var item in itemsToSplit)
+        {
+            item.CheckId = newCheck.Id;
+        }
+
+        _dbContext.SyncEvents.Add(new LocalSyncEvent
+        {
+            OperationId = operationId,
+            EntityType = "POS_ORDER",
+            EntityId = order.Id,
+            OperationType = "UPDATE", // Re-sync the order to update checks and item checkIds
+            PayloadJson = JsonSerializer.Serialize(order),
+            UserId = userId,
+            DeviceId = deviceId
+        });
+
+        await _dbContext.SaveChangesAsync();
+        return newCheck;
+    }
 
     public async Task<List<LocalPosProduct>> GetPosProductsAsync(string propertyId)
     {
@@ -500,6 +638,106 @@ public class LocalRepository
 
         await _dbContext.SaveChangesAsync();
         return session;
+    }
+
+    public async Task<LocalPosOrder> GetOrderAsync(string orderId)
+    {
+        var order = await _dbContext.PosOrders
+            .Include(o => o.Items)
+            .Include(o => o.Checks)
+            .Include(o => o.Payments)
+            .FirstOrDefaultAsync(o => o.Id == orderId);
+            
+        if (order != null && order.Checks != null)
+        {
+            foreach (var check in order.Checks)
+            {
+                check.Items = order.Items.Where(i => i.CheckId == check.Id).ToList();
+            }
+        }
+        
+        return order;
+    }
+
+    public async Task<LocalPosPayment> PayOrderAsync(string orderId, string method, decimal amount, string currency, string checkId, string userId, string deviceId)
+    {
+        var order = await _dbContext.PosOrders.FirstOrDefaultAsync(o => o.Id == orderId);
+        if (order == null) throw new Exception("Order not found");
+
+        string operationId = $"op_pay_{deviceId}_{DateTime.UtcNow.Ticks}";
+
+        var payment = new LocalPosPayment
+        {
+            Id = Guid.NewGuid().ToString(),
+            OrderId = orderId,
+            CheckId = checkId,
+            SessionId = order.SessionId,
+            Method = method,
+            Amount = amount,
+            Currency = currency,
+            Status = "CONFIRMED",
+            OperationId = operationId,
+            BusinessDate = order.BusinessDate,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _dbContext.PosPayments.Add(payment);
+
+        var syncEvent = new LocalSyncEvent
+        {
+            OperationId = operationId,
+            EntityType = "POS_PAYMENT",
+            EntityId = payment.Id,
+            OperationType = "CREATE",
+            PayloadJson = JsonSerializer.Serialize(payment),
+            UserId = userId,
+            DeviceId = deviceId
+        };
+        _dbContext.SyncEvents.Add(syncEvent);
+
+        if (!string.IsNullOrEmpty(checkId))
+        {
+            var check = await _dbContext.PosChecks.FirstOrDefaultAsync(c => c.Id == checkId);
+            if (check != null)
+            {
+                var checkPayments = await _dbContext.PosPayments.Where(p => p.CheckId == checkId).SumAsync(p => p.Amount);
+                if (checkPayments + amount >= check.Total)
+                {
+                    check.Status = "PAID";
+                    
+                    _dbContext.SyncEvents.Add(new LocalSyncEvent
+                    {
+                        OperationId = $"op_chk_status_{deviceId}_{DateTime.UtcNow.Ticks}",
+                        EntityType = "POS_CHECK",
+                        EntityId = check.Id,
+                        OperationType = "UPDATE",
+                        PayloadJson = JsonSerializer.Serialize(new { status = "PAID" }),
+                        UserId = userId,
+                        DeviceId = deviceId
+                    });
+                }
+            }
+        }
+
+        var orderPayments = await _dbContext.PosPayments.Where(p => p.OrderId == orderId).SumAsync(p => p.Amount);
+        if (orderPayments + amount >= order.Total)
+        {
+            order.Status = "COMPLETED";
+            
+            _dbContext.SyncEvents.Add(new LocalSyncEvent
+            {
+                OperationId = $"op_ord_status_{deviceId}_{DateTime.UtcNow.Ticks}",
+                EntityType = "POS_ORDER",
+                EntityId = order.Id,
+                OperationType = "UPDATE",
+                PayloadJson = JsonSerializer.Serialize(new { status = "COMPLETED" }),
+                UserId = userId,
+                DeviceId = deviceId
+            });
+        }
+
+        await _dbContext.SaveChangesAsync();
+        return payment;
     }
 
     public async Task<LocalPosSession> ClosePosSessionAsync(string sessionId, decimal actualCash, decimal cashPaidOut, string userId, string deviceId)

@@ -334,6 +334,83 @@ public class OfflinePMSInterop
         }
     }
 
+    public async Task<string> SplitCheckAsync(string orderId, List<string> itemIds)
+    {
+        try
+        {
+            var ctx = await GetSecureContextAsync();
+            var res = await _repo.SplitCheckAsync(orderId, itemIds, ctx.UserId, ctx.DeviceId);
+            return JsonSerializer.Serialize(new { success = true, data = res });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    public async Task<string> FireKotAsync(string orderId, List<string> itemIds)
+    {
+        try
+        {
+            var ctx = await GetSecureContextAsync();
+            var res = await _repo.FireKotAsync(orderId, itemIds, ctx.UserId, ctx.DeviceId);
+            return JsonSerializer.Serialize(new { success = true, data = res });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    public async Task<string> UpdateOrderStatusAsync(string orderId, string status, string reason)
+    {
+        try
+        {
+            var ctx = await GetSecureContextAsync();
+            var res = await _repo.UpdateOrderStatusAsync(orderId, status, reason, ctx.UserId, ctx.DeviceId);
+            return JsonSerializer.Serialize(new { success = true, data = res });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    public async Task<string> PayOrderAsync(string orderId, string paymentDataJson)
+    {
+        try
+        {
+            var paymentData = JsonSerializer.Deserialize<Dictionary<string, object>>(paymentDataJson);
+            if (paymentData == null) throw new Exception("Invalid payment data");
+
+            string method = paymentData.ContainsKey("method") ? paymentData["method"].ToString() : "CASH";
+            decimal amount = paymentData.ContainsKey("amount") ? decimal.Parse(paymentData["amount"].ToString()) : 0;
+            string currency = paymentData.ContainsKey("currency") ? paymentData["currency"].ToString() : "NGN";
+            string checkId = paymentData.ContainsKey("checkId") ? paymentData["checkId"]?.ToString() : null;
+
+            var ctx = await GetSecureContextAsync();
+            var res = await _repo.PayOrderAsync(orderId, method, amount, currency, checkId, ctx.UserId, ctx.DeviceId);
+            return JsonSerializer.Serialize(new { success = true, data = res });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    public async Task<string> GetOrderAsync(string orderId)
+    {
+        try
+        {
+            var res = await _repo.GetOrderAsync(orderId);
+            return JsonSerializer.Serialize(new { success = true, data = res });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
     public async Task<string> OpenPosSessionAsync(string propertyId, decimal openingBalance)
     {
         try

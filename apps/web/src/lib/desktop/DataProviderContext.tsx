@@ -17,6 +17,7 @@ interface DataProviderContextValue {
     getCurrentOperator: (sessionId: string) => Promise<{ data: any, error: string | null }>;
     authenticateOperator: (staffId: string, pin: string, propertyId: string, sessionId: string) => Promise<{ data: any, error: string | null }>;
     startSession: (data: { userId: string, propertyId: string, openingCash: number }) => Promise<{ data: any, error: string | null }>;
+    getAuthorizedOutlets: (propertyId: string, deviceId: string) => Promise<{ data: { outlets: any[], device: any } | null, error: string | null }>;
   };
 }
 
@@ -32,7 +33,8 @@ const DataProviderContext = createContext<DataProviderContextValue>({
     getCurrentOperator: async () => ({ data: null, error: 'Not initialized' }),
     authenticateOperator: async () => ({ data: null, error: 'Not initialized' }),
     startSession: async () => ({ data: null, error: 'Not initialized' }),
-  }
+    getAuthorizedOutlets: async () => ({ data: null, error: 'Not initialized' }),
+  } as any // Cast to any to avoid maintaining complete duplicate of pos interface in mock
 });
 
 export function DataProviderWrapper({ children }: { children: React.ReactNode }) {
@@ -83,10 +85,10 @@ export function DataProviderWrapper({ children }: { children: React.ReactNode })
     }
   }, []);
 
-  const provider = isDesktopMode ? DesktopDataProvider : OnlineDataProvider;
+  const provider = (isDesktopMode ? DesktopDataProvider : OnlineDataProvider) as unknown as LodgeCoreDataProvider;
 
   return (
-    <DataProviderContext.Provider value={{ provider, isDesktopMode, isOnline, syncStatus, pos: provider.pos }}>
+    <DataProviderContext.Provider value={{ provider, isDesktopMode, isOnline, syncStatus, pos: provider.pos as any }}>
       {children}
     </DataProviderContext.Provider>
   );

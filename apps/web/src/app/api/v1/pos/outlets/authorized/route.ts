@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
       });
     } else {
       const staffAccess = await prisma.staffPosOutletAccess.findMany({
-        where: { staffId },
+        where: { staffId: staffId as string },
         include: { outlet: true }
       });
       authorizedOutlets = staffAccess
@@ -71,14 +71,18 @@ export async function GET(req: NextRequest) {
       
       if (boundOutlet) {
         return NextResponse.json({
-          outlets: [boundOutlet],
-          device: { id: device.id, name: device.name, identifier: device.identifier }
+          data: {
+            outlets: [boundOutlet],
+            device: { id: device.id, name: device.name, identifier: device.identifier }
+          }
         });
       } else {
         // Staff is not authorized for the bound outlet
         return NextResponse.json({
-          outlets: [],
-          device: { id: device.id, name: device.name, identifier: device.identifier },
+          data: {
+            outlets: [],
+            device: { id: device.id, name: device.name, identifier: device.identifier }
+          },
           error: 'You are not authorized to use the outlet bound to this device.'
         });
       }
@@ -86,8 +90,10 @@ export async function GET(req: NextRequest) {
 
     // Device is unbound, return all authorized outlets
     return NextResponse.json({
-      outlets: authorizedOutlets,
-      device: { id: device.id, name: device.name, identifier: device.identifier }
+      data: {
+        outlets: authorizedOutlets,
+        device: { id: device.id, name: device.name, identifier: device.identifier }
+      }
     });
 
   } catch (error: any) {

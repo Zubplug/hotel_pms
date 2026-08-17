@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
       const access = await prisma.staffPosOutletAccess.findUnique({
         where: {
           staffId_outletId: {
-            staffId: staffId,
+            staffId: staffId as string,
             outletId: outlet.id
           }
         }

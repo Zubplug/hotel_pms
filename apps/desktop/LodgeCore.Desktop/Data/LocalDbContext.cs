@@ -28,6 +28,12 @@ public class LocalDbContext : DbContext
     public DbSet<LocalStaff> Staff { get; set; } = null!;
     public DbSet<LocalPosOperatorSession> PosOperatorSessions { get; set; } = null!;
     public DbSet<LocalPosAuthorizationAudit> PosAuthorizationAudits { get; set; } = null!;
+    public DbSet<LocalPosFloorPlan> PosFloorPlans { get; set; } = null!;
+    public DbSet<LocalPosTable> PosTables { get; set; } = null!;
+    public DbSet<LocalPosCheck> PosChecks { get; set; } = null!;
+    public DbSet<LocalPosKot> PosKots { get; set; } = null!;
+    public DbSet<LocalPosProductModifier> PosProductModifiers { get; set; } = null!;
+    public DbSet<LocalPosOrderItemModifier> PosOrderItemModifiers { get; set; } = null!;
 
     public LocalDbContext(DbContextOptions<LocalDbContext> options) : base(options)
     {

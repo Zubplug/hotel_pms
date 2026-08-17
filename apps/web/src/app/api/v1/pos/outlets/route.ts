@@ -45,9 +45,10 @@ export async function POST(req: NextRequest) {
 
     const outlet = await prisma.posOutlet.create({
       data: {
-        propertyId,
-        name,
-        isActive: isActive !== undefined ? isActive : true
+        propertyId: String(propertyId),
+        name: String(name),
+        type: data.type ? String(data.type) : 'RESTAURANT',
+        isActive: isActive !== undefined ? Boolean(isActive) : true
       }
     });
 

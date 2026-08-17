@@ -140,8 +140,41 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     authenticateOperator: async (staffId: string, pin: string, propertyId: string, sessionId: string) => {
       return invokeDesktop('pos.authenticateOperator', { staffId, pin, propertyId, sessionId });
     },
-    startSession: async (data: { userId: string, propertyId: string, openingCash: number }) => {
+    startSession: async (data: { userId: string; propertyId: string; deviceId: string; outletId: string; openingCash: number }) => {
       return invokeDesktop('pos.startSession', data);
-    }
+    },
+    getSessionContext: async (sessionId: string) => {
+      return invokeDesktop('pos.getSessionContext', { sessionId });
+    },
+    getAuthorizedOutlets: async (propertyId: string, deviceId: string) => {
+      return invokeDesktop('pos.getAuthorizedOutlets', { propertyId, deviceId });
+    },
+    getFloorPlans: async (outletId: string) => {
+      return invokeDesktop('pos.getFloorPlans', { outletId });
+    },
+    getTables: async (floorPlanId: string) => {
+      return invokeDesktop('pos.getTables', { floorPlanId });
+    },
+    getProductModifiers: async (productId: string) => {
+      return invokeDesktop('pos.getProductModifiers', { productId });
+    },
+    splitCheck: async (orderId: string, itemIds: string[], userId: string) => {
+      return invokeDesktop('pos.splitCheck', { orderId, itemIds, userId });
+    },
+    fireKot: async (orderId: string, itemIds: string[], operatorToken: string) => {
+      return invokeDesktop('pos.fireKot', { orderId, itemIds, operatorToken });
+    },
+    createOrder: async (data: any, operatorToken: string) => {
+      return invokeDesktop('pos.createOrder', { data, operatorToken });
+    },
+    updateOrderStatus: async (orderId: string, status: string, reason?: string) => {
+      return invokeDesktop('pos.updateOrderStatus', { orderId, status, reason });
+    },
+    payOrder: async (orderId: string, paymentData: any, operatorToken: string) => {
+      return invokeDesktop('pos.payOrder', { orderId, paymentData, operatorToken });
+    },
+    getOrder: async (orderId: string) => {
+      return invokeDesktop('pos.getOrder', { orderId });
+    },
   }
 };

@@ -78,6 +78,13 @@ export async function POST(request: Request) {
             total: payload.total,
             notes: payload.notes,
             tableNumber: payload.tableNumber,
+            tableId: payload.tableId,
+            guestCount: payload.guestCount || 1,
+            serviceCharge: payload.serviceCharge || 0,
+            tipAmount: payload.tipAmount || 0,
+            serverStaffId: payload.serverStaffId,
+            createdBy: payload.createdBy,
+            updatedBy: payload.updatedBy,
             operationId: operationId,
             deviceId: deviceId,
             
@@ -92,8 +99,47 @@ export async function POST(request: Request) {
                 taxRate: item.taxRate || 0,
                 taxAmount: item.taxAmount || 0,
                 total: item.total,
-                subtotal: item.quantity * item.unitPrice
+                subtotal: item.quantity * item.unitPrice,
+                course: item.course,
+                kitchenStatus: item.kitchenStatus,
+                sentToKitchenAt: item.sentToKitchenAt ? new Date(item.sentToKitchenAt) : null,
+                voidReason: item.voidReason,
+                kotId: item.kotId,
+                checkId: item.checkId,
+                modifiers: {
+                  create: item.modifiers?.map((mod: any) => ({
+                    id: mod.id,
+                    name: mod.name,
+                    price: mod.price
+                  })) || []
+                }
               }))
+            },
+            
+            // Map checks (if any)
+            checks: {
+              create: payload.checks?.map((check: any) => ({
+                id: check.id,
+                checkNumber: check.checkNumber,
+                total: check.total,
+                status: check.status
+              })) || []
+            },
+
+            // Map KOTs (if any)
+            kots: {
+              create: payload.kots?.map((kot: any) => ({
+                id: kot.id,
+                outletId: kot.outletId,
+                deviceId: kot.deviceId,
+                createdBy: kot.createdBy,
+                kotNumber: kot.kotNumber,
+                status: kot.status,
+                printStatus: kot.printStatus,
+                printerId: kot.printerId,
+                attemptCount: kot.attemptCount,
+                printedAt: kot.printedAt ? new Date(kot.printedAt) : null,
+              })) || []
             },
             
             // Map payments
@@ -169,6 +215,144 @@ export async function POST(request: Request) {
           }
         }
       });
+    } else if (entityType === 'POS_ORDER' && operationType === 'UPDATE') {
+      // Idempotency
+      const idempotencyRecord = await prisma.posOrder.findUnique({
+        where: { operationId: operationId }
+      });
+      // If the operationId already matches, we've already applied this exact update.
+      // But typically for updates, operationId should be unique per update.
+      // Assuming C# generates a new operationId for every push of the order.
+      if (idempotencyRecord) {
+        return NextResponse.json({ status: 'ALREADY_APPLIED', message: 'Idempotent replay' }, { status: 200 });
+      }
+
+      await prisma.$transaction(async (tx) => {
+        // Update Order core fields
+        await tx.posOrder.update({
+          where: { id: entityId },
+          data: {
+            status: payload.status,
+            subtotal: payload.subtotal,
+            taxAmount: payload.taxAmount || 0,
+            total: payload.total,
+            notes: payload.notes,
+            tableNumber: payload.tableNumber,
+            tableId: payload.tableId,
+            guestCount: payload.guestCount || 1,
+            serviceCharge: payload.serviceCharge || 0,
+            tipAmount: payload.tipAmount || 0,
+            updatedBy: payload.updatedBy,
+            operationId: operationId,
+          }
+        });
+
+        // Upsert items (only adding new items or updating statuses)
+        for (const item of payload.items) {
+          await tx.posOrderItem.upsert({
+            where: { id: item.id },
+            update: {
+              quantity: item.quantity,
+              total: item.total,
+              subtotal: item.quantity * item.unitPrice,
+              course: item.course,
+              kitchenStatus: item.kitchenStatus,
+              sentToKitchenAt: item.sentToKitchenAt ? new Date(item.sentToKitchenAt) : null,
+              voidReason: item.voidReason,
+              kotId: item.kotId,
+              checkId: item.checkId,
+            },
+            create: {
+              id: item.id,
+              orderId: entityId,
+              productId: item.productId,
+              productName: item.productName,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              taxRate: item.taxRate || 0,
+              taxAmount: item.taxAmount || 0,
+              total: item.total,
+              subtotal: item.quantity * item.unitPrice,
+              course: item.course,
+              kitchenStatus: item.kitchenStatus,
+              sentToKitchenAt: item.sentToKitchenAt ? new Date(item.sentToKitchenAt) : null,
+              voidReason: item.voidReason,
+              kotId: item.kotId,
+              checkId: item.checkId,
+              modifiers: {
+                create: item.modifiers?.map((mod: any) => ({
+                  id: mod.id,
+                  name: mod.name,
+                  price: mod.price
+                })) || []
+              }
+            }
+          });
+        }
+
+        // Upsert KOTs
+        if (payload.kots) {
+          for (const kot of payload.kots) {
+            await tx.posKot.upsert({
+              where: { id: kot.id },
+              update: {
+                status: kot.status,
+                printStatus: kot.printStatus,
+                attemptCount: kot.attemptCount,
+                printedAt: kot.printedAt ? new Date(kot.printedAt) : null,
+              },
+              create: {
+                id: kot.id,
+                orderId: entityId,
+                outletId: kot.outletId,
+                deviceId: kot.deviceId,
+                createdBy: kot.createdBy,
+                kotNumber: kot.kotNumber,
+                status: kot.status,
+                printStatus: kot.printStatus,
+                printerId: kot.printerId,
+                attemptCount: kot.attemptCount,
+                printedAt: kot.printedAt ? new Date(kot.printedAt) : null,
+              }
+            });
+          }
+        }
+      });
+    } else if (entityType === 'POS_KOT') {
+      // Direct KOT sync
+      if (operationType === 'CREATE') {
+        const existingKot = await prisma.posKot.findUnique({
+          where: { id: entityId }
+        });
+        if (existingKot) {
+          return NextResponse.json({ status: 'ALREADY_APPLIED', message: 'Idempotent replay' }, { status: 200 });
+        }
+        await prisma.posKot.create({
+          data: {
+            id: entityId,
+            orderId: payload.orderId,
+            outletId: payload.outletId,
+            deviceId: payload.deviceId,
+            createdBy: payload.createdBy,
+            kotNumber: payload.kotNumber,
+            status: payload.status,
+            printStatus: payload.printStatus,
+            printerId: payload.printerId,
+            attemptCount: payload.attemptCount,
+            printedAt: payload.printedAt ? new Date(payload.printedAt) : null,
+          }
+        });
+      } else if (operationType === 'UPDATE') {
+        await prisma.posKot.update({
+          where: { id: entityId },
+          data: {
+            status: payload.status,
+            printStatus: payload.printStatus,
+            attemptCount: payload.attemptCount,
+            printedAt: payload.printedAt ? new Date(payload.printedAt) : null,
+          }
+        });
+      }
     } else if (entityType === 'FOLIO' && operationType === 'ADD_PAYMENT') {
       const existingPayment = await prisma.payment.findUnique({
         where: { idempotencyKey: operationId }

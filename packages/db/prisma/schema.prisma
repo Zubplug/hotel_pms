@@ -1086,23 +1086,23 @@ enum DeviceStatus {
 }
 
 model PosDevice {
-  id         String       @id @default(uuid()) @db.Uuid
-  propertyId String       @db.Uuid
-  property   Property     @relation(fields: [propertyId], references: [id])
-  
-  name       String       // e.g. "Main Restaurant Till 1"
-  identifier String       @unique // e.g. hardware UUID or generated token
-  
-  outletId   String?      @db.Uuid
-  outlet     PosOutlet?   @relation(fields: [outletId], references: [id])
-  
+  id         String   @id @default(uuid()) @db.Uuid
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id])
+
+  name       String // e.g. "Main Restaurant Till 1"
+  identifier String @unique // e.g. hardware UUID or generated token
+
+  outletId String?    @db.Uuid
+  outlet   PosOutlet? @relation(fields: [outletId], references: [id])
+
   status     DeviceStatus @default(PENDING)
   lastSeenAt DateTime?    @db.Timestamptz
-  
-  createdAt  DateTime     @default(now()) @db.Timestamptz
-  updatedAt  DateTime     @updatedAt @db.Timestamptz
-  
-  sessions   PosSession[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  sessions PosSession[]
 }
 
 // -----------------------------------------------------------------------------
@@ -1115,12 +1115,13 @@ model Staff {
   organization   Organization @relation(fields: [organizationId], references: [id])
   userId         String?      @unique @db.Uuid // Linked User account
 
-  employeeId String?
-  firstName  String
-  lastName   String
-  email      String  @unique
-  phone      String?
-  posPinHash String?
+  employeeId      String?
+  firstName       String
+  lastName        String
+  email           String  @unique
+  phone           String?
+  posPinHash      String?
+  posTokenVersion Int     @default(1)
 
   department     String
   position       String
@@ -1133,17 +1134,17 @@ model Staff {
   updatedAt DateTime  @updatedAt @db.Timestamptz
   deletedAt DateTime? @db.Timestamptz
 
-  posOrders PosOrder[]
+  posOrders    PosOrder[]
   outletAccess StaffPosOutletAccess[]
 }
 
 model StaffPosOutletAccess {
-  id        String    @id @default(uuid()) @db.Uuid
-  staffId   String    @db.Uuid
-  staff     Staff     @relation(fields: [staffId], references: [id])
-  outletId  String    @db.Uuid
-  outlet    PosOutlet @relation(fields: [outletId], references: [id])
-  
+  id       String    @id @default(uuid()) @db.Uuid
+  staffId  String    @db.Uuid
+  staff    Staff     @relation(fields: [staffId], references: [id])
+  outletId String    @db.Uuid
+  outlet   PosOutlet @relation(fields: [outletId], references: [id])
+
   assignedBy String?  @db.Uuid
   createdAt  DateTime @default(now()) @db.Timestamptz
 
@@ -1801,8 +1802,42 @@ model PosOutlet {
   createdBy String?  @db.Uuid
   updatedBy String?  @db.Uuid
 
-  devices   PosDevice[]
+  devices     PosDevice[]
   staffAccess StaffPosOutletAccess[]
+  floorPlans  PosFloorPlan[]
+}
+
+model PosFloorPlan {
+  id       String    @id @default(uuid()) @db.Uuid
+  outletId String    @db.Uuid
+  outlet   PosOutlet @relation(fields: [outletId], references: [id])
+  name     String
+  isActive Boolean   @default(true)
+
+  tables PosTable[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+}
+
+model PosTable {
+  id          String       @id @default(uuid()) @db.Uuid
+  floorPlanId String       @db.Uuid
+  floorPlan   PosFloorPlan @relation(fields: [floorPlanId], references: [id])
+
+  name      String
+  capacity  Int
+  positionX Int    @default(0)
+  positionY Int    @default(0)
+
+  currentOrderId String? @db.Uuid
+
+  isActive Boolean @default(true)
+
+  orders PosOrder[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
 }
 
 model ProductCategory {
@@ -1834,11 +1869,24 @@ model PosProduct {
   image       String?
 
   ingredients RecipeIngredient[]
+  modifiers   PosProductModifier[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
   createdBy String?  @db.Uuid
   updatedBy String?  @db.Uuid
+}
+
+model PosProductModifier {
+  id        String     @id @default(uuid()) @db.Uuid
+  productId String     @db.Uuid
+  product   PosProduct @relation(fields: [productId], references: [id])
+
+  name     String
+  price    Decimal @default(0) @db.Decimal(18, 4)
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now()) @db.Timestamptz
 }
 
 model RecipeIngredient {
@@ -1886,9 +1934,9 @@ model PosSession {
   closedAt   DateTime? @db.Timestamptz
   approvedAt DateTime? @db.Timestamptz
 
-  deviceId   String    @db.Uuid
-  device     PosDevice @relation(fields: [deviceId], references: [id])
-  
+  deviceId String    @db.Uuid
+  device   PosDevice @relation(fields: [deviceId], references: [id])
+
   propertyId String?   @db.Uuid
   property   Property? @relation(fields: [propertyId], references: [id])
 
@@ -1922,6 +1970,7 @@ model PosCashMovement {
   notes            String?
   receiptReference String?
   operationId      String              @unique
+  businessDate     DateTime            @db.Date
   authorizedBy     String?             @db.Uuid
 
   session PosSession @relation(fields: [posSessionId], references: [id])
@@ -1948,6 +1997,7 @@ model PosReceiptAudit {
   reason       String?
   printCount   Int            @default(1)
   operationId  String         @unique
+  businessDate DateTime       @db.Date
 
   session PosSession? @relation(fields: [posSessionId], references: [id])
 
@@ -1955,15 +2005,16 @@ model PosReceiptAudit {
 }
 
 model PosAuthorizationAudit {
-  id           String  @id @default(uuid()) @db.Uuid
-  propertyId   String  @db.Uuid
+  id           String   @id @default(uuid()) @db.Uuid
+  propertyId   String   @db.Uuid
   deviceId     String
-  sessionId    String? @db.Uuid
-  requestedBy  String  @db.Uuid
-  authorizedBy String  @db.Uuid
+  sessionId    String?  @db.Uuid
+  requestedBy  String   @db.Uuid
+  authorizedBy String   @db.Uuid
   action       String
   reason       String?
-  operationId  String  @unique
+  operationId  String   @unique
+  businessDate DateTime @db.Date
 
   session PosSession? @relation(fields: [sessionId], references: [id])
 
@@ -1979,6 +2030,7 @@ enum PosOrderStatus {
   COMPLETED
   VOIDED
   CANCELLED
+  HELD
 }
 
 model PosOrder {
@@ -2006,6 +2058,12 @@ model PosOrder {
 
   notes       String?
   tableNumber String?
+  tableId     String?   @db.Uuid
+  table       PosTable? @relation(fields: [tableId], references: [id])
+
+  guestCount    Int     @default(1)
+  serviceCharge Decimal @default(0) @db.Decimal(18, 4)
+  tipAmount     Decimal @default(0) @db.Decimal(18, 4)
 
   operationId String? @unique
   deviceId    String?
@@ -2014,6 +2072,8 @@ model PosOrder {
   payments  PosPayment[]
   voids     PosVoid[]
   discounts PosDiscount[]
+  checks    PosCheck[]
+  kots      PosKot[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -2037,9 +2097,70 @@ model PosOrderItem {
   taxAmount Decimal @default(0) @db.Decimal(18, 4)
   total     Decimal @db.Decimal(18, 4)
 
-  notes String?
+  notes           String?
+  course          Int?
+  kitchenStatus   String?
+  sentToKitchenAt DateTime? @db.Timestamptz
+  voidReason      String?
+
+  checkId String?   @db.Uuid
+  check   PosCheck? @relation(fields: [checkId], references: [id])
+  kotId   String?   @db.Uuid
+  kot     PosKot?   @relation(fields: [kotId], references: [id])
+
+  modifiers PosOrderItemModifier[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
+}
+
+model PosOrderItemModifier {
+  id          String       @id @default(uuid()) @db.Uuid
+  orderItemId String       @db.Uuid
+  orderItem   PosOrderItem @relation(fields: [orderItemId], references: [id])
+
+  name  String
+  price Decimal @default(0) @db.Decimal(18, 4)
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+}
+
+model PosCheck {
+  id      String   @id @default(uuid()) @db.Uuid
+  orderId String   @db.Uuid
+  order   PosOrder @relation(fields: [orderId], references: [id])
+
+  checkNumber  String
+  total        Decimal  @default(0) @db.Decimal(18, 4)
+  status       String   @default("OPEN")
+  operationId  String?  @unique
+  businessDate DateTime @db.Date
+
+  items PosOrderItem[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+}
+
+model PosKot {
+  id        String   @id @default(uuid()) @db.Uuid
+  orderId   String   @db.Uuid
+  order     PosOrder @relation(fields: [orderId], references: [id])
+  outletId  String   @db.Uuid
+  deviceId  String
+  createdBy String   @db.Uuid
+
+  kotNumber    String
+  status       String   @default("PENDING")
+  printStatus  String   @default("QUEUED")
+  operationId  String?  @unique
+  businessDate DateTime @db.Date
+  printerId    String?
+  attemptCount Int      @default(0)
+
+  printedAt DateTime? @db.Timestamptz
+  createdAt DateTime  @default(now()) @db.Timestamptz
+
+  items PosOrderItem[]
 }
 
 enum PosPaymentStatus {
@@ -2070,8 +2191,9 @@ model PosPayment {
   gateway              String?
   gatewayTransactionId String?
 
-  operationId String? @unique
-  deviceId    String?
+  operationId  String?  @unique
+  businessDate DateTime @db.Date
+  deviceId     String?
 
   paidAt DateTime? @db.Timestamptz
 
@@ -2088,8 +2210,9 @@ model PosVoid {
   reason       String
   authorizerId String? @db.Uuid
 
-  operationId String? @unique
-  deviceId    String?
+  operationId  String?  @unique
+  businessDate DateTime @db.Date
+  deviceId     String?
 
   createdAt DateTime @default(now()) @db.Timestamptz
 }
@@ -2104,8 +2227,9 @@ model PosDiscount {
   amount       Decimal @db.Decimal(18, 4)
   authorizerId String? @db.Uuid
 
-  operationId String? @unique
-  deviceId    String?
+  operationId  String?  @unique
+  businessDate DateTime @db.Date
+  deviceId     String?
 
   createdAt DateTime @default(now()) @db.Timestamptz
 }

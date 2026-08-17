@@ -56,6 +56,7 @@ public static class MauiProgram
         builder.Services.AddTransient<LodgeCore.Desktop.Services.LocalRepository>();
         builder.Services.AddTransient<LodgeCore.Desktop.Services.ConflictResolver>();
         builder.Services.AddHostedService<LodgeCore.Desktop.Services.SyncEngine>();
+        builder.Services.AddHostedService<LodgeCore.Desktop.Services.KotPrintService>();
         builder.Services.AddSingleton<OfflinePMSInterop>();
 
 #if DEBUG

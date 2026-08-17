@@ -8,7 +8,7 @@ import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 
 type StaffSwitchPadProps = {
   isOpen: boolean;
-  onAuthenticated: (operator: any) => void;
+  onAuthenticated: (operator: any, token?: string) => void;
   onCancel?: () => void;
   cancellable?: boolean;
 };
@@ -66,7 +66,7 @@ export function StaffSwitchPad({ isOpen, onAuthenticated, onCancel, cancellable 
       );
 
       if (!operatorRes.error && operatorRes.data) {
-        onAuthenticated(operatorRes.data.staff);
+        onAuthenticated(operatorRes.data.staff, operatorRes.data.operatorToken);
       } else {
         setError(operatorRes.error || 'Authentication failed');
         setPin('');

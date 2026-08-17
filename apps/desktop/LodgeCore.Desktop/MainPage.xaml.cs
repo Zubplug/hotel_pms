@@ -232,6 +232,93 @@ public partial class MainPage : ContentPage
                 case "receipts.generate":
                     responseData = await pmsInterop.GenerateReceiptAsync(parameters?["folioId"]?.ToString());
                     break;
+                case "pos.getProducts":
+                    responseData = await pmsInterop.GetPosProductsAsync(parameters?["propertyId"]?.ToString());
+                    break;
+                case "pos.createOrder":
+                    responseData = await pmsInterop.CreatePosOrderAsync(parameters?["data"]?.ToString());
+                    break;
+                case "pos.splitCheck":
+                    var itemIdsNode = parameters?["itemIds"] as JsonArray;
+                    var itemIdsList = itemIdsNode?.Select(x => x?.ToString() ?? "").Where(x => !string.IsNullOrEmpty(x)).ToList() ?? new List<string>();
+                    responseData = await pmsInterop.SplitCheckAsync(
+                        parameters?["orderId"]?.ToString(),
+                        itemIdsList);
+                    break;
+                case "pos.updateOrderStatus":
+                    responseData = await pmsInterop.UpdateOrderStatusAsync(
+                        parameters?["orderId"]?.ToString(),
+                        parameters?["status"]?.ToString(),
+                        parameters?["reason"]?.ToString());
+                    break;
+                case "pos.payOrder":
+                    responseData = await pmsInterop.PayOrderAsync(
+                        parameters?["orderId"]?.ToString(),
+                        parameters?["paymentData"]?.ToString());
+                    break;
+                case "pos.fireKot":
+                    responseData = await pmsInterop.FireKotAsync(parameters?["data"]?.ToString());
+                    break;
+                case "pos.getOrder":
+                    responseData = await pmsInterop.GetOrderAsync(parameters?["orderId"]?.ToString());
+                    break;
+                case "pos.startSession":
+                    responseData = await pmsInterop.OpenPosSessionAsync(
+                        parameters?["propertyId"]?.ToString(),
+                        parameters?["openingBalance"]?.GetValue<decimal>() ?? 0);
+                    break;
+                case "pos.closeSession":
+                    responseData = await pmsInterop.ClosePosSessionAsync(
+                        parameters?["sessionId"]?.ToString(),
+                        parameters?["actualCash"]?.GetValue<decimal>() ?? 0,
+                        parameters?["cashPaidOut"]?.GetValue<decimal>() ?? 0);
+                    break;
+                case "pos.authorizeVoid":
+                    responseData = await pmsInterop.AuthorizeVoidAsync(
+                        parameters?["orderId"]?.ToString(),
+                        parameters?["orderItemId"]?.ToString(),
+                        parameters?["reason"]?.ToString(),
+                        parameters?["supervisorPin"]?.ToString());
+                    break;
+                case "pos.recordRefund":
+                    responseData = await pmsInterop.RecordRefundAsync(
+                        parameters?["orderId"]?.ToString(),
+                        parameters?["amount"]?.GetValue<decimal>() ?? 0,
+                        parameters?["method"]?.ToString(),
+                        parameters?["supervisorPin"]?.ToString());
+                    break;
+                case "pos.authorizeCashMovement":
+                    responseData = await pmsInterop.AuthorizeCashMovementAsync(
+                        parameters?["propertyId"]?.ToString(),
+                        parameters?["sessionId"]?.ToString(),
+                        parameters?["amount"]?.GetValue<decimal>() ?? 0,
+                        parameters?["type"]?.ToString(),
+                        parameters?["reasonCode"]?.ToString(),
+                        parameters?["notes"]?.ToString(),
+                        parameters?["supervisorPin"]?.ToString());
+                    break;
+                case "pos.logReceipt":
+                    responseData = await pmsInterop.LogReceiptPrintAsync(
+                        parameters?["propertyId"]?.ToString(),
+                        parameters?["orderId"]?.ToString(),
+                        parameters?["sessionId"]?.ToString(),
+                        parameters?["type"]?.ToString(),
+                        parameters?["reason"]?.ToString(),
+                        parameters?["printCount"]?.GetValue<int>() ?? 1);
+                    break;
+                case "pos.authenticateOperator":
+                    responseData = await pmsInterop.AuthenticateOperatorAsync(
+                        parameters?["staffId"]?.ToString(),
+                        parameters?["pin"]?.ToString(),
+                        parameters?["propertyId"]?.ToString(),
+                        parameters?["sessionId"]?.ToString());
+                    break;
+                case "pos.getCurrentOperator":
+                    responseData = await pmsInterop.GetCurrentOperatorAsync(parameters?["sessionId"]?.ToString());
+                    break;
+                case "pos.getActiveStaff":
+                    responseData = await pmsInterop.GetActiveStaffAsync(parameters?["propertyId"]?.ToString());
+                    break;
                 default:
                     SendError(sender, id, $"Method {method} not found in allowlist.");
                     return;

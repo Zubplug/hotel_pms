@@ -47,8 +47,8 @@ export default function StartShiftPage() {
           const propertyId = (session.user as any).propertyId;
           const res = await provider.pos.getAuthorizedOutlets(propertyId, storedDeviceId);
           
-          if (res.device) {
-            setDeviceInfo(res.device);
+          if (res.data?.device) {
+            setDeviceInfo(res.data.device);
           }
 
           if (res.error) {
@@ -57,13 +57,13 @@ export default function StartShiftPage() {
             return;
           }
 
-          setDeviceInfo(res.device);
-          setOutlets(res.outlets || []);
+          setDeviceInfo(res.data?.device);
+          setOutlets(res.data?.outlets || []);
           
-          if (res.outlets && res.outlets.length === 1) {
-            setSelectedOutlet(res.outlets[0].id);
-          } else if (res.outlets && res.outlets.length > 0) {
-            setSelectedOutlet(res.outlets[0].id); // default to first
+          if (res.data?.outlets && res.data.outlets.length === 1) {
+            setSelectedOutlet(res.data.outlets[0].id);
+          } else if (res.data?.outlets && res.data.outlets.length > 0) {
+            setSelectedOutlet(res.data.outlets[0].id); // default to first
           }
         } catch (e: any) {
           setError('Failed to fetch POS context: ' + e.message);
@@ -87,6 +87,7 @@ export default function StartShiftPage() {
     
     try {
       const res = await provider.pos.startSession({
+        userId: (session?.user as any)?.id || '',
         propertyId: (session?.user as any)?.propertyId || '',
         deviceId: deviceId!,
         outletId: selectedOutlet,
