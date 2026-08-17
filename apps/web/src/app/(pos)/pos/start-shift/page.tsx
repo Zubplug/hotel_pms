@@ -86,6 +86,25 @@ export default function StartShiftPage() {
                 autoFocus
               />
             </div>
+            
+            <div className="flex items-center gap-2 mt-4 ml-1">
+              <input 
+                type="checkbox" 
+                id="no-float" 
+                className="w-4 h-4 rounded border-white/20 bg-white/5 text-indigo-600 focus:ring-indigo-500"
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    setOpeningCash('0');
+                  } else {
+                    if (openingCash === '0') setOpeningCash('');
+                  }
+                }}
+                checked={openingCash === '0'}
+              />
+              <label htmlFor="no-float" className="text-sm text-slate-300 select-none cursor-pointer">
+                Start with ₦0 Float
+              </label>
+            </div>
           </div>
 
           <Button 
