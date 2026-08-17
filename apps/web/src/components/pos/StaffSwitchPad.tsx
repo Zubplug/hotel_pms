@@ -88,8 +88,8 @@ export function StaffSwitchPad({ isOpen, onAuthenticated, onCancel, cancellable 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm">
-      <div className="w-full max-w-3xl bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col md:flex-row">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="w-full max-w-3xl bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl overflow-hidden flex flex-col md:flex-row animate-in zoom-in-95 duration-200">
         
         {/* Left Side - Staff Selection */}
         <div className="flex-1 bg-slate-50 p-8 border-r border-slate-200 h-[600px] overflow-y-auto">

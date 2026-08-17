@@ -99,38 +99,48 @@ export function TableMap({ outletId, onTableSelect, activeTableId, refreshTrigge
             let statusBadge = null;
 
             if (isSelected) {
-              bgColor = 'ring-4 ring-indigo-500 bg-indigo-50 text-indigo-900 border-indigo-200';
+              bgColor = 'ring-4 ring-purple-500 bg-purple-50 text-purple-900 border-purple-200';
             } else if (isOccupied) {
               if (orderStatus === 'HELD') {
-                bgColor = 'bg-purple-100 text-purple-900 border-purple-200';
+                bgColor = 'bg-slate-100 text-slate-900 border-slate-300';
                 statusBadge = (
-                  <span className="mt-1 text-[10px] uppercase font-bold bg-purple-200 text-purple-800 px-1.5 py-0.5 rounded-sm">
+                  <span className="mt-1 text-[10px] uppercase font-bold bg-slate-200 text-slate-800 px-1.5 py-0.5 rounded-sm">
                     Held
                   </span>
                 );
               } else if (orderStatus === 'COMPLETED') {
-                bgColor = 'bg-emerald-100 text-emerald-900 border-emerald-200';
+                bgColor = 'bg-emerald-100 text-emerald-900 border-emerald-300';
                 statusBadge = (
                   <span className="mt-1 text-[10px] uppercase font-bold bg-emerald-200 text-emerald-800 px-1.5 py-0.5 rounded-sm">
                     Completed
                   </span>
                 );
-              } else if (orderStatus === 'SERVED') {
-                bgColor = 'bg-blue-100 text-blue-900 border-blue-200';
+              } else if (orderStatus === 'SERVED' || orderStatus === 'READY') {
+                bgColor = 'bg-blue-100 text-blue-900 border-blue-300';
                 statusBadge = (
                   <span className="mt-1 text-[10px] uppercase font-bold bg-blue-200 text-blue-800 px-1.5 py-0.5 rounded-sm">
-                    Served
+                    {orderStatus}
+                  </span>
+                );
+              } else if (orderStatus === 'PREPARING') {
+                bgColor = 'bg-orange-100 text-orange-900 border-orange-300';
+                statusBadge = (
+                  <span className="mt-1 text-[10px] uppercase font-bold bg-orange-200 text-orange-800 px-1.5 py-0.5 rounded-sm">
+                    Preparing
                   </span>
                 );
               } else {
-                // OPEN, SUBMITTED, PREPARING, READY
-                bgColor = 'bg-amber-100 text-amber-900 border-amber-200';
+                // OPEN, SUBMITTED
+                bgColor = 'bg-rose-100 text-rose-900 border-rose-300';
                 statusBadge = (
-                  <span className="mt-1 text-[10px] uppercase font-bold bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded-sm">
-                    {orderStatus === 'OPEN' ? 'Occupied' : orderStatus}
+                  <span className="mt-1 text-[10px] uppercase font-bold bg-rose-200 text-rose-800 px-1.5 py-0.5 rounded-sm">
+                    Occupied
                   </span>
                 );
               }
+            } else {
+              // Available
+              bgColor = 'bg-emerald-50 text-emerald-900 border-emerald-200';
             }
 
             return (

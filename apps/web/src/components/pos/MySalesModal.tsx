@@ -53,7 +53,7 @@ export function MySalesModal({ isOpen, onClose, operatorToken, staffName }: MySa
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[600px] bg-slate-50">
+      <DialogContent className="sm:max-w-[600px] bg-white/95 backdrop-blur-xl border-slate-200 shadow-2xl animate-in zoom-in-95 duration-200">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <User className="w-5 h-5 text-indigo-600" />

@@ -18,6 +18,8 @@ import { TableMap } from '@/components/pos/TableMap';
 import { ModifierSelectionModal } from '@/components/pos/ModifierSelectionModal';
 import { CheckSplitModal } from '@/components/pos/CheckSplitModal';
 import { KotPanel } from '@/components/pos/KotPanel';
+import { PosSidebar } from '@/components/pos/PosSidebar';
+import { PosContextBar } from '@/components/pos/PosContextBar';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
@@ -69,6 +71,7 @@ export default function PosTerminalPage() {
   const [showSwitchPad, setShowSwitchPad] = useState(false);
   const [showMySales, setShowMySales] = useState(false);
   const [showMyOrders, setShowMyOrders] = useState(false);
+  const [showKitchen, setShowKitchen] = useState(false);
 
   // ── Modals ────────────────────────────────────────────────────────
   const [modifierTarget, setModifierTarget] = useState<any | null>(null);
@@ -408,122 +411,43 @@ export default function PosTerminalPage() {
   }
 
   // ─────────────────────────────────────────────────────────────────
-  // Main layout
+  // Main layout (Premium Redesign)
   // ─────────────────────────────────────────────────────────────────
   return (
-    <div className="flex h-full w-full overflow-hidden">
+    <div className="flex h-screen w-full bg-slate-50 overflow-hidden font-sans">
+      
+      {/* 1. Global Sidebar */}
+      <PosSidebar
+        viewMode={viewMode}
+        setViewMode={setViewMode}
+        onOpenMyOrders={() => setShowMyOrders(true)}
+        onOpenMySales={() => setShowMySales(true)}
+        onOpenKitchen={() => setShowKitchen(true)}
+        onLock={() => { setActiveOperator(null); setShowSwitchPad(true); }}
+        isOnline={true}
+        syncPending={0}
+      />
 
-      {/* ══ LEFT: Products / Table Map ══════════════════════════════ */}
-      <div className="flex flex-col flex-[7] bg-slate-50 border-r border-slate-200 min-w-0">
+      {/* 2. Main Workspace */}
+      <div className="flex flex-col flex-1 min-w-0 bg-slate-50">
+        <PosContextBar
+          outletName={sessionContext?.outlet?.name}
+          drawerName={session?.user?.name || 'Main Drawer'}
+          operatorName={activeOperator ? `${activeOperator.firstName} ${activeOperator.lastName}` : undefined}
+          isOnline={true}
+          syncPending={0}
+        />
 
-        {/* Header */}
-        <div className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 gap-2 shrink-0">
-          <div className="flex items-center gap-2">
-            <AppSwitcher />
-            <div className="h-8 w-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold ml-1">
-              L
-            </div>
-            <h1 className="font-bold text-xl tracking-tight text-slate-800 hidden md:block">LodgeCore POS</h1>
-            {sessionContext?.outlet && (
-              <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-xs font-semibold rounded-full">
-                {sessionContext.outlet.name}
-              </span>
-            )}
-            {activeTableName && (
-              <span className="flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-800 text-xs font-semibold rounded-full">
-                <MapPin className="w-3 h-3" />
-                {activeTableName}
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2">
-            {/* View toggle */}
-            <div className="flex bg-slate-100 rounded-lg p-1 gap-1">
-              <button
-                onClick={() => setViewMode('menu')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                  viewMode === 'menu' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                <LayoutGrid className="w-4 h-4" />
-                Menu
-              </button>
-              <button
-                onClick={() => setViewMode('tables')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                  viewMode === 'tables' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                <MapPin className="w-4 h-4" />
-                Tables
-              </button>
-            </div>
-
-            {/* Operator info */}
-            <div className="hidden md:flex flex-col items-end border-l border-slate-200 pl-3">
-              <span className="text-xs text-slate-500">Session: {session?.user?.name || '...'}</span>
-              {activeOperator && (
-                <span className="text-xs font-bold text-indigo-700">
-                  Operator: {activeOperator.firstName} {activeOperator.lastName}
-                </span>
-              )}
-            </div>
-
-            {activeOperator && (
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setShowMyOrders(true)}
-                  className="px-2 py-1.5 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 text-xs font-semibold"
-                >
-                  My Orders
-                </button>
-                <button
-                  onClick={() => setShowMySales(true)}
-                  className="px-2 py-1.5 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 text-xs font-semibold"
-                >
-                  My Sales
-                </button>
-                <button
-                  onClick={() => setShowSwitchPad(true)}
-                  className="flex items-center gap-1.5 px-2 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100"
-                >
-                  <div className="w-5 h-5 rounded-full bg-indigo-200 flex items-center justify-center">
-                    <User className="w-3 h-3" />
-                  </div>
-                  <span className="text-xs font-semibold">{activeOperator.firstName}</span>
-                  <RefreshCw className="w-3 h-3 opacity-50" />
-                </button>
-              </div>
-            )}
-
-            {/* Search */}
-            {viewMode === 'menu' && (
-              <div className="relative w-48 md:w-64">
-                <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Search items..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="w-full h-9 pl-9 pr-3 rounded-full bg-slate-100 border-none focus:ring-2 focus:ring-indigo-500 text-sm"
-                />
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* ── Menu View ── */}
+        {/* Dynamic Context Header (Search, Categories) */}
         {viewMode === 'menu' && (
-          <>
-            {/* Categories */}
-            <div className="px-4 py-3 flex gap-2 overflow-x-auto border-b border-slate-200 shrink-0" style={{ scrollbarWidth: 'none' }}>
+          <div className="h-14 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-6 shrink-0 z-0 shadow-sm">
+            <div className="flex gap-2 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
               <button
                 onClick={() => setActiveCategory('all')}
-                className={`px-4 py-2 rounded-full font-medium text-sm whitespace-nowrap transition-colors ${
+                className={`px-4 py-1.5 rounded-lg font-semibold text-xs whitespace-nowrap transition-colors ${
                   activeCategory === 'all'
-                    ? 'bg-slate-800 text-white shadow-md'
-                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                    ? 'bg-slate-800 text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
               >
                 All Items
@@ -532,10 +456,10 @@ export default function PosTerminalPage() {
                 <button
                   key={c.id}
                   onClick={() => setActiveCategory(c.id)}
-                  className={`px-4 py-2 rounded-full font-medium text-sm whitespace-nowrap transition-colors ${
+                  className={`px-4 py-1.5 rounded-lg font-semibold text-xs whitespace-nowrap transition-colors ${
                     activeCategory === c.id
-                      ? 'bg-slate-800 text-white shadow-md'
-                      : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                      ? 'bg-slate-800 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
                 >
                   {c.name}
@@ -543,200 +467,188 @@ export default function PosTerminalPage() {
               ))}
             </div>
 
-            {/* Product grid */}
-            <div className="flex-1 overflow-y-auto p-4">
-              {products.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-64 text-slate-400">
-                  <Utensils className="w-12 h-12 opacity-20 mb-4" />
-                  <p className="font-medium">No products configured</p>
-                  <p className="text-sm mt-1">Add items from the Admin console.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
-                  {filteredProducts.map((p) => (
-                    <button
-                      key={p.id}
-                      onClick={() => handleProductTap(p)}
-                      className="relative h-28 rounded-2xl border border-slate-200 flex flex-col items-center justify-center p-3 transition-transform active:scale-95 shadow-sm bg-white hover:bg-slate-50 hover:border-indigo-200 hover:shadow-md"
-                    >
-                      <span className="font-semibold text-center leading-tight text-sm mb-1.5 text-slate-800">{p.name}</span>
-                      <span className="font-bold text-indigo-700 text-sm">{formatCurrency(Number(p.price))}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </>
-        )}
-
-        {/* ── Table Map View ── */}
-        {viewMode === 'tables' && (
-          <div className="flex-1 overflow-hidden">
-            <TableMap
-              outletId={sessionContext?.outlet?.id || ''}
-              onTableSelect={handleTableSelect}
-              activeTableId={activeTableId}
-              refreshTrigger={tableRefreshTrigger}
-            />
-          </div>
-        )}
-      </div>
-
-      {/* ══ MIDDLE: Cart ════════════════════════════════════════════ */}
-      <div className="flex flex-col w-72 xl:w-80 bg-white border-r border-slate-200 shrink-0">
-
-        {/* Cart header */}
-        <div className="flex flex-col border-b border-slate-200 bg-slate-50 shrink-0">
-          <div className="h-14 flex items-center justify-between px-4">
-            <div className="flex items-center gap-2 text-slate-800 font-semibold text-sm">
-              <ShoppingCart className="w-4 h-4" />
-              {activeTableName ? `Table ${activeTableName}` : 'Current Order'}
-            </div>
-            <div className="flex items-center gap-1">
-              {cart.length > 0 && (
-                <button
-                  onClick={() => setShowSplitModal(true)}
-                  title="Split check"
-                  className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                >
-                  <Scissors className="w-4 h-4" />
-                </button>
-              )}
-              {currentOrderId && (
-                <button
-                  onClick={handleHoldOrder}
-                  title="Hold order"
-                  className="p-1.5 text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-                >
-                  <Pause className="w-4 h-4" />
-                </button>
-              )}
-              <button
-                onClick={() => setCart([])}
-                title="Clear order"
-                className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
+            <div className="relative w-64 shrink-0 hidden md:block ml-4">
+              <Search className="absolute left-3 top-2 h-4 w-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search menu..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full h-8 pl-9 pr-3 rounded-lg bg-slate-100 border-none focus:ring-2 focus:ring-indigo-500 text-xs font-medium"
+              />
             </div>
           </div>
-          {orderChecks.length > 0 && (
-            <div className="px-2 pb-2 flex gap-1 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-              {orderChecks.map(check => (
-                <button
-                  key={check.id}
-                  onClick={() => {
-                    setActiveCheckId(check.id);
-                    setCart(check.items.map((i: any) => ({
-                      id: i.id,
-                      productId: i.productId,
-                      name: i.productName,
-                      price: Number(i.unitPrice),
-                      quantity: i.quantity,
-                      taxRate: Number(i.taxRate),
-                      kitchenStatus: i.kitchenStatus,
-                      modifiers: i.modifiers || [],
-                    })));
-                  }}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-md border whitespace-nowrap ${
-                    activeCheckId === check.id
-                      ? 'bg-indigo-600 text-white border-indigo-600'
-                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
-                  }`}
-                >
-                  {check.checkNumber.split('-').pop()} {check.status === 'PAID' ? '✓' : ''}
-                </button>
-              ))}
+        )}
+
+        {/* Content Area */}
+        <div className="flex-1 overflow-auto relative p-6">
+          {viewMode === 'menu' ? (
+            products.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-slate-400">
+                <Utensils className="w-12 h-12 opacity-20 mb-4" />
+                <p className="font-semibold text-slate-600">No products configured</p>
+                <p className="text-sm mt-1">Add items from the Admin console.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                {filteredProducts.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => handleProductTap(p)}
+                    className="relative h-28 rounded-2xl border border-slate-200 bg-white flex flex-col items-center justify-center p-3 transition-all duration-200 hover:-translate-y-1 hover:shadow-lg hover:border-indigo-200 active:scale-95 group"
+                  >
+                    <span className="font-semibold text-center leading-snug text-sm mb-1.5 text-slate-800 group-hover:text-indigo-700 transition-colors">{p.name}</span>
+                    <span className="font-bold text-slate-500 text-xs group-hover:text-indigo-500">{formatCurrency(Number(p.price))}</span>
+                  </button>
+                ))}
+              </div>
+            )
+          ) : (
+            <div className="h-full rounded-2xl overflow-hidden shadow-sm border border-slate-200 bg-white relative">
+              <TableMap
+                outletId={sessionContext?.outlet?.id || ''}
+                onTableSelect={handleTableSelect}
+                activeTableId={activeTableId}
+                refreshTrigger={tableRefreshTrigger}
+              />
             </div>
           )}
         </div>
+      </div>
 
-        {/* Guest count */}
-        <div className="px-4 py-2 border-b border-slate-100 flex items-center justify-between">
-          <span className="text-xs text-slate-500 font-medium">Guests</span>
-          <div className="flex items-center gap-2">
+      {/* 3. The Cart Anchor */}
+      <div className="flex flex-col w-[360px] bg-white border-l border-slate-200 shadow-2xl shrink-0 z-20">
+        
+        {/* Cart Context Header */}
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+          <div className="flex flex-col">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Current Order</span>
+            <span className="text-lg font-black text-slate-800 tracking-tight">
+              {activeTableName ? `Table ${activeTableName}` : 'Walk-in'}
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            {cart.length > 0 && (
+              <button
+                onClick={() => setShowSplitModal(true)}
+                title="Split Check"
+                className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all"
+              >
+                <Scissors className="w-4 h-4" />
+              </button>
+            )}
+            {currentOrderId && (
+              <button
+                onClick={handleHoldOrder}
+                title="Hold Order"
+                className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-all"
+              >
+                <Pause className="w-4 h-4" />
+              </button>
+            )}
             <button
-              onClick={() => setGuestCount((g) => Math.max(1, g - 1))}
-              className="w-6 h-6 rounded bg-slate-100 flex items-center justify-center hover:bg-slate-200"
+              onClick={() => setCart([])}
+              title="Clear Order"
+              className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
             >
-              <Minus className="w-3 h-3" />
-            </button>
-            <span className="text-sm font-bold w-4 text-center">{guestCount}</span>
-            <button
-              onClick={() => setGuestCount((g) => g + 1)}
-              className="w-6 h-6 rounded bg-slate-100 flex items-center justify-center hover:bg-slate-200"
-            >
-              <Plus className="w-3 h-3" />
+              <Trash2 className="w-4 h-4" />
             </button>
           </div>
         </div>
 
-        {/* Attach to room */}
-        <div className="px-4 py-2 border-b border-slate-100 shrink-0">
-          <button className="w-full flex items-center justify-between p-2.5 rounded-xl border border-dashed border-indigo-200 bg-indigo-50/50 text-indigo-700 hover:bg-indigo-50 transition-colors">
-            <div className="flex items-center gap-2 text-xs font-medium">
-              <User className="w-3.5 h-3.5" />
-              Attach to Room / Guest
+        {/* Check Tabs */}
+        {orderChecks.length > 0 && (
+          <div className="px-5 py-3 border-b border-slate-100 bg-white flex gap-2 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+            {orderChecks.map(check => (
+              <button
+                key={check.id}
+                onClick={() => {
+                  setActiveCheckId(check.id);
+                  setCart(check.items.map((i: any) => ({
+                    id: i.id,
+                    productId: i.productId,
+                    name: i.productName,
+                    price: Number(i.unitPrice),
+                    quantity: i.quantity,
+                    taxRate: Number(i.taxRate),
+                    kitchenStatus: i.kitchenStatus,
+                    modifiers: i.modifiers || [],
+                  })));
+                }}
+                className={`px-4 py-1.5 text-xs font-bold rounded-lg border transition-all whitespace-nowrap ${
+                  activeCheckId === check.id
+                    ? 'bg-purple-600 text-white border-purple-600 shadow-md scale-105'
+                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                Check {check.checkNumber.split('-').pop()} {check.status === 'PAID' ? '✓' : ''}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Quick Actions / Guest Count */}
+        <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between shrink-0 bg-slate-50/50">
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Guests</span>
+            <div className="flex items-center bg-white border border-slate-200 rounded-lg p-0.5">
+              <button onClick={() => setGuestCount((g) => Math.max(1, g - 1))} className="w-7 h-7 rounded hover:bg-slate-100 flex items-center justify-center text-slate-500">
+                <Minus className="w-3 h-3" />
+              </button>
+              <span className="w-6 text-center text-xs font-bold text-slate-700">{guestCount}</span>
+              <button onClick={() => setGuestCount((g) => g + 1)} className="w-7 h-7 rounded hover:bg-slate-100 flex items-center justify-center text-slate-500">
+                <Plus className="w-3 h-3" />
+              </button>
             </div>
-            <Plus className="w-3.5 h-3.5" />
-          </button>
+          </div>
         </div>
 
-        {/* Cart items */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-2">
+        {/* Cart Items List */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {cart.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-2">
-              <ShoppingCart className="w-10 h-10 opacity-20" />
-              <p className="text-sm">Order is empty</p>
+            <div className="h-full flex flex-col items-center justify-center text-slate-300">
+              <ShoppingCart className="w-12 h-12 mb-3 opacity-20" />
+              <p className="text-sm font-medium">Cart is empty</p>
             </div>
           ) : (
             cart.map((item) => (
-              <div
-                key={item.id}
-                className="flex flex-col gap-1.5 p-3 bg-slate-50 rounded-xl border border-slate-100"
-              >
+              <div key={item.id} className="group flex flex-col gap-2 p-4 bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
                 <div className="flex justify-between items-start">
-                  <div className="flex-1 min-w-0">
-                    <span className="font-semibold text-slate-800 text-sm block truncate">{item.name}</span>
+                  <div className="flex-1 pr-2">
+                    <span className="font-bold text-slate-800 text-sm leading-tight block">{item.name}</span>
                     {item.modifiers && item.modifiers.length > 0 && (
-                      <span className="text-xs text-slate-400">
+                      <span className="text-xs font-medium text-slate-400 mt-1 block">
                         + {item.modifiers.map((m) => m.name).join(', ')}
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-1 ml-2 shrink-0">
+                  <div className="flex items-start gap-2 shrink-0">
                     <span className="font-bold text-slate-900 text-sm">
                       {formatCurrency(item.price * item.quantity)}
                     </span>
                     <button
                       onClick={() => removeItem(item.id)}
-                      className="p-0.5 text-slate-300 hover:text-red-400 transition-colors"
+                      className="text-slate-300 hover:text-rose-500 transition-colors mt-0.5"
                     >
-                      <X className="w-3 h-3" />
+                      <X className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-slate-400">{formatCurrency(item.price)} each</span>
-                  <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg p-0.5">
-                    <button
-                      onClick={() => updateQuantity(item.id, -1)}
-                      className="w-6 h-6 flex items-center justify-center rounded bg-slate-100 hover:bg-slate-200 text-slate-600"
-                    >
+                
+                <div className="flex items-center justify-between mt-1">
+                  <span className="text-xs font-medium text-slate-400">{formatCurrency(item.price)} each</span>
+                  <div className="flex items-center gap-1 bg-slate-50 rounded-lg p-1 border border-slate-100">
+                    <button onClick={() => updateQuantity(item.id, -1)} className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-white hover:shadow-sm text-slate-500 transition-all">
                       <Minus className="w-3 h-3" />
                     </button>
-                    <span className="w-4 text-center font-semibold text-xs">{item.quantity}</span>
-                    <button
-                      onClick={() => updateQuantity(item.id, 1)}
-                      className="w-6 h-6 flex items-center justify-center rounded bg-indigo-100 hover:bg-indigo-200 text-indigo-700"
-                    >
+                    <span className="w-6 text-center font-bold text-xs text-slate-700">{item.quantity}</span>
+                    <button onClick={() => updateQuantity(item.id, 1)} className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-white hover:shadow-sm text-indigo-600 transition-all">
                       <Plus className="w-3 h-3" />
                     </button>
                   </div>
                 </div>
-                {/* Kitchen status badge */}
                 {item.kitchenStatus && item.kitchenStatus !== 'PENDING' && (
-                  <span className="self-start text-[10px] font-bold uppercase bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">
+                  <span className="self-start text-[9px] font-black uppercase tracking-wider bg-slate-100 text-slate-500 px-2 py-1 rounded-md mt-1">
                     {item.kitchenStatus}
                   </span>
                 )}
@@ -745,57 +657,66 @@ export default function PosTerminalPage() {
           )}
         </div>
 
-        {/* Totals & Payment */}
-        <div className="bg-slate-50 px-4 py-4 border-t border-slate-200 shrink-0">
-          <div className="space-y-1 mb-4">
-            <div className="flex justify-between text-xs text-slate-500">
+        {/* Totals & Actions */}
+        <div className="p-5 border-t border-slate-200 bg-white shrink-0 shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.05)]">
+          <div className="space-y-2 mb-4">
+            <div className="flex justify-between text-sm font-medium text-slate-500">
               <span>Subtotal</span><span>{formatCurrency(subtotal)}</span>
             </div>
-            <div className="flex justify-between text-xs text-slate-500">
+            <div className="flex justify-between text-sm font-medium text-slate-500">
               <span>Tax</span><span>{formatCurrency(tax)}</span>
             </div>
-            <div className="flex justify-between items-center pt-2 border-t border-slate-200 mt-1">
-              <span className="font-semibold text-slate-800 text-sm">Total</span>
-              <span className="font-bold text-xl text-indigo-700">{formatCurrency(total)}</span>
+            <div className="flex justify-between items-center pt-3 border-t border-slate-100 mt-2">
+              <span className="font-bold text-slate-400 uppercase tracking-widest text-xs">Total</span>
+              <span className="font-black text-2xl text-slate-900 tracking-tight">{formatCurrency(total)}</span>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-3">
             <Button
-              className="h-11 font-semibold text-sm"
+              className="h-12 font-bold text-sm bg-indigo-50 hover:bg-indigo-100 text-indigo-700 shadow-none border-none"
               onClick={() => handlePayment('ROOM_CHARGE')}
               disabled={cart.length === 0 || isProcessing}
             >
-              <User className="w-4 h-4 mr-1.5" />Room
+              <User className="w-4 h-4 mr-2" />Room
             </Button>
             <Button
-              className="h-11 font-semibold text-sm"
-              variant="outline"
+              className="h-12 font-bold text-sm bg-slate-100 hover:bg-slate-200 text-slate-700 shadow-none border-none"
               onClick={() => handlePayment('CARD')}
               disabled={cart.length === 0 || isProcessing}
             >
-              <CreditCard className="w-4 h-4 mr-1.5" />Card
+              <CreditCard className="w-4 h-4 mr-2" />Card
             </Button>
             <Button
-              className="col-span-2 h-12 font-bold text-base bg-emerald-600 hover:bg-emerald-700"
+              className="col-span-2 h-14 font-black text-lg tracking-wide bg-slate-900 hover:bg-slate-800 text-white rounded-xl shadow-lg hover:shadow-xl transition-all hover:-translate-y-0.5 active:translate-y-0 active:shadow-md"
               onClick={() => handlePayment('CASH')}
               disabled={cart.length === 0 || isProcessing}
             >
               <Banknote className="w-5 h-5 mr-2" />
-              {isProcessing ? 'Processing…' : `Pay ${formatCurrency(total)}`}
+              {isProcessing ? 'PROCESSING...' : `PAY ${formatCurrency(total)}`}
             </Button>
           </div>
         </div>
       </div>
 
-      {/* ══ RIGHT: KOT Panel ════════════════════════════════════════ */}
-      <div className="flex flex-col w-56 xl:w-64 shrink-0">
-        <KotPanel
-          items={cart}
-          onFire={handleFireKot}
-          isDisabled={!activeOperator}
-        />
-      </div>
+      {/* Floating Kitchen Panel (KOT) Drawer */}
+      {showKitchen && (
+        <div className="absolute inset-0 z-50 flex justify-end bg-slate-900/20 backdrop-blur-sm transition-all">
+          <div className="w-[400px] h-full bg-white shadow-2xl flex flex-col animate-in slide-in-from-right-8 duration-200">
+            <div className="h-14 border-b border-slate-200 flex items-center justify-between px-6 bg-slate-50">
+              <span className="font-bold text-slate-800 flex items-center gap-2">
+                <ChefHat className="w-5 h-5 text-indigo-600" /> Kitchen Tickets
+              </span>
+              <button onClick={() => setShowKitchen(false)} className="p-2 hover:bg-slate-200 rounded-lg text-slate-500">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-hidden relative">
+              <KotPanel items={cart} onFire={handleFireKot} isDisabled={!activeOperator} />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ══ Modals & Overlays ════════════════════════════════════════ */}
 

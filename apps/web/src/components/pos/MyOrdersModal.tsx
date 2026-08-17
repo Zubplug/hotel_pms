@@ -71,7 +71,7 @@ export function MyOrdersModal({ isOpen, onClose, operatorToken, staffName }: MyO
   return (
     <>
       <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-        <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col gap-0 p-0">
+        <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col gap-0 p-0 bg-white/95 backdrop-blur-xl border-slate-200 shadow-2xl animate-in zoom-in-95 duration-200">
           <DialogHeader className="p-6 border-b border-slate-100 pb-4">
             <div className="flex items-center justify-between">
               <div>
