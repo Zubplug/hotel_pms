@@ -465,14 +465,14 @@ export default function PosTerminalPage() {
   // ─────────────────────────────────────────────────────────────────
   if (isLoading) {
     return (
-      <div className="flex h-full w-full items-center justify-center" style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%)' }}>
+      <div className="flex h-full w-full items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center gap-5">
-          <div className="w-20 h-20 rounded-3xl flex items-center justify-center shadow-2xl shadow-amber-500/30 animate-pulse" style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}>
-            <Utensils className="w-10 h-10 text-white" />
+          <div className="w-20 h-20 rounded-3xl flex items-center justify-center shadow-lg bg-white border border-slate-200 animate-pulse">
+            <Utensils className="w-10 h-10 text-indigo-500" />
           </div>
           <div className="flex flex-col items-center gap-2">
-            <Loader2 className="w-6 h-6 animate-spin text-amber-400" />
-            <p className="text-white/60 font-medium text-sm">Loading POS...</p>
+            <Loader2 className="w-6 h-6 animate-spin text-indigo-500" />
+            <p className="text-slate-500 font-medium text-sm">Loading POS...</p>
           </div>
         </div>
       </div>
@@ -593,11 +593,11 @@ export default function PosTerminalPage() {
                       </div>
 
                       {/* Info area */}
-                      <div className="p-3 pb-3.5">
+                      <div className="p-3 pb-3.5 flex flex-col items-center text-center">
                         <p className="font-bold text-slate-800 text-xs leading-snug line-clamp-2 group-hover:text-indigo-700 transition-colors">{p.name}</p>
-                        <div className="flex items-center justify-between mt-2">
-                          <p className="font-black text-sm text-slate-900">{formatCurrency(Number(p.price))}</p>
-                          <div className="w-6 h-6 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 shadow-md" style={{ background: grad }}>
+                        <div className="flex items-center justify-center mt-2 relative w-full h-6">
+                          <p className="font-black text-sm text-slate-900 absolute">{formatCurrency(Number(p.price))}</p>
+                          <div className="absolute right-0 w-6 h-6 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 shadow-md" style={{ background: grad }}>
                             <Plus className="w-3 h-3 text-white" />
                           </div>
                         </div>
@@ -621,16 +621,17 @@ export default function PosTerminalPage() {
       </div>
 
       {/* 3. The Cart Anchor */}
-      <div className="flex flex-col w-[400px] shrink-0 z-20" style={{ background: '#0f172a' }}>
+      {/* 3. The Cart Anchor */}
+      <div className="flex flex-col w-[400px] shrink-0 z-20 bg-white border-l border-slate-200 shadow-2xl">
 
         {/* Cart Header */}
-        <div className="px-5 pt-5 pb-4 border-b border-white/10 flex flex-col gap-3">
+        <div className="px-5 pt-5 pb-4 border-b border-slate-100 flex flex-col gap-3 bg-slate-50/50">
           <div className="flex items-center justify-between">
             <div className="flex flex-col">
-              <span className="text-[10px] font-black text-white/40 uppercase tracking-[0.15em]">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">
                 {currentOrderId ? 'Active Order' : 'New Order'}
               </span>
-              <span className="text-xl font-black text-white tracking-tight mt-0.5">
+              <span className="text-xl font-black text-slate-800 tracking-tight mt-0.5">
                 {activeOrderType === 'TABLE'
                   ? (activeTableName ? `Table ${activeTableName}` : 'Select Table')
                   : (activeDisplayName || activeOrderType.replace('_', ' '))}
@@ -640,7 +641,7 @@ export default function PosTerminalPage() {
               <button
                 onClick={() => setShowActiveOrders(true)}
                 title="Active Orders"
-                className="flex items-center gap-1.5 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-amber-300 bg-amber-400/10 hover:bg-amber-400/20 border border-amber-400/20 rounded-xl transition-all"
+                className="flex items-center gap-1.5 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 rounded-xl transition-all"
               >
                 <ShoppingCart className="w-3.5 h-3.5" />
                 Orders
@@ -651,13 +652,13 @@ export default function PosTerminalPage() {
           <div className="flex items-center gap-2">
             {/* Guest counter */}
             <div className="flex items-center gap-2 flex-1">
-              <span className="text-[10px] font-black text-white/30 uppercase tracking-wider">Guests</span>
-              <div className="flex items-center bg-white/10 rounded-lg p-0.5">
-                <button onClick={() => setGuestCount((g) => Math.max(1, g - 1))} className="w-6 h-6 rounded flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 transition-all">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Guests</span>
+              <div className="flex items-center bg-white border border-slate-200 rounded-lg p-0.5">
+                <button onClick={() => setGuestCount((g) => Math.max(1, g - 1))} className="w-6 h-6 rounded flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all">
                   <Minus className="w-3 h-3" />
                 </button>
-                <span className="w-6 text-center text-xs font-black text-white">{guestCount}</span>
-                <button onClick={() => setGuestCount((g) => g + 1)} className="w-6 h-6 rounded flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 transition-all">
+                <span className="w-6 text-center text-xs font-black text-slate-700">{guestCount}</span>
+                <button onClick={() => setGuestCount((g) => g + 1)} className="w-6 h-6 rounded flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all">
                   <Plus className="w-3 h-3" />
                 </button>
               </div>
@@ -665,16 +666,16 @@ export default function PosTerminalPage() {
             {/* Action icons */}
             <div className="flex items-center gap-1">
               {cart.length > 0 && (
-                <button onClick={() => setShowSplitModal(true)} title="Split Check" className="p-2 text-white/30 hover:text-amber-300 hover:bg-amber-400/10 rounded-xl transition-all">
+                <button onClick={() => setShowSplitModal(true)} title="Split Check" className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all">
                   <Scissors className="w-4 h-4" />
                 </button>
               )}
               {currentOrderId && (
-                <button onClick={() => { setCurrentOrderId(null); setCart([]); setActiveTableId(null); setActiveTableName(null); setActiveOrderType('TABLE'); setActiveDisplayName(''); setTableRefreshTrigger(Date.now()); }} title="Clear Context" className="p-2 text-white/30 hover:text-amber-300 hover:bg-amber-400/10 rounded-xl transition-all">
+                <button onClick={() => { setCurrentOrderId(null); setCart([]); setActiveTableId(null); setActiveTableName(null); setActiveOrderType('TABLE'); setActiveDisplayName(''); setTableRefreshTrigger(Date.now()); }} title="Clear Context" className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-all">
                   <Lock className="w-4 h-4" />
                 </button>
               )}
-              <button onClick={() => setCart([])} title="Clear Order" className="p-2 text-white/30 hover:text-rose-400 hover:bg-rose-500/10 rounded-xl transition-all">
+              <button onClick={() => setCart([])} title="Clear Order" className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all">
                 <Trash2 className="w-4 h-4" />
               </button>
             </div>
@@ -683,7 +684,7 @@ export default function PosTerminalPage() {
 
         {/* Check Tabs */}
         {orderChecks.length > 0 && (
-          <div className="px-5 py-3 border-b border-white/10 flex gap-2 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+          <div className="px-5 py-3 border-b border-slate-100 flex gap-2 overflow-x-auto bg-white" style={{ scrollbarWidth: 'none' }}>
             {orderChecks.map(check => (
               <button
                 key={check.id}
@@ -702,8 +703,8 @@ export default function PosTerminalPage() {
                 }}
                 className={`px-4 py-1.5 text-xs font-bold rounded-xl border transition-all whitespace-nowrap ${
                   activeCheckId === check.id
-                    ? 'bg-amber-400 text-slate-900 border-amber-400 shadow-md shadow-amber-400/30'
-                    : 'bg-white/10 text-white/60 border-white/10 hover:bg-white/20'
+                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-600/20'
+                    : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
                 }`}
               >
                 Check {check.checkNumber.split('-').pop()} {check.status === 'PAID' ? '✓' : ''}
@@ -712,18 +713,16 @@ export default function PosTerminalPage() {
           </div>
         )}
 
-
-
         {/* Cart Items List */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4" style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.1) transparent' }}>
+        <div className="flex-1 overflow-y-auto p-4 space-y-4" style={{ scrollbarWidth: 'thin' }}>
           {cart.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-white/20 gap-4 py-16">
-              <div className="w-16 h-16 rounded-2xl border border-white/10 flex items-center justify-center">
-                <ShoppingCart className="w-8 h-8" />
+            <div className="h-full flex flex-col items-center justify-center text-slate-300 gap-4 py-16">
+              <div className="w-16 h-16 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center">
+                <ShoppingCart className="w-8 h-8 text-slate-300" />
               </div>
               <div className="text-center">
-                <p className="text-sm font-bold text-white/30">No items yet</p>
-                <p className="text-xs text-white/20 mt-1">Tap menu items to add them</p>
+                <p className="text-sm font-bold text-slate-400">No items yet</p>
+                <p className="text-xs text-slate-300 mt-1">Tap menu items to add them</p>
               </div>
             </div>
           ) : (
@@ -733,22 +732,22 @@ export default function PosTerminalPage() {
               {cart.filter(item => item.fired).length > 0 && (
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center gap-2 mb-1">
-                    <div className="h-px flex-1 bg-white/10" />
-                    <span className="text-[9px] font-black text-white/30 uppercase tracking-[0.2em]">Already Sent</span>
-                    <div className="h-px flex-1 bg-white/10" />
+                    <div className="h-px flex-1 bg-slate-100" />
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Already Sent</span>
+                    <div className="h-px flex-1 bg-slate-100" />
                   </div>
                   {cart.filter(item => item.fired).map((item) => (
-                    <div key={item.id} className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/10">
+                    <div key={item.id} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
                       <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-white/40 text-sm truncate">{item.name}</p>
+                        <p className="font-semibold text-slate-500 text-sm truncate">{item.name}</p>
                         {item.modifiers?.length > 0 && (
-                          <p className="text-[10px] text-white/25 mt-0.5 truncate">+ {item.modifiers.map((m: any) => m.name).join(', ')}</p>
+                          <p className="text-[10px] text-slate-400 mt-0.5 truncate">+ {item.modifiers.map((m: any) => m.name).join(', ')}</p>
                         )}
                       </div>
                       <div className="flex items-center gap-3 shrink-0">
-                        <span className="text-xs text-white/30 font-bold">×{item.quantity}</span>
-                        <span className="text-xs font-bold text-white/30">{formatCurrency(item.price * item.quantity)}</span>
-                        <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400 border border-emerald-500/20">SENT</span>
+                        <span className="text-xs text-slate-400 font-bold">×{item.quantity}</span>
+                        <span className="text-xs font-bold text-slate-500">{formatCurrency(item.price * item.quantity)}</span>
+                        <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-600 border border-emerald-100">SENT</span>
                       </div>
                     </div>
                   ))}
@@ -760,54 +759,52 @@ export default function PosTerminalPage() {
                 <div className="flex flex-col gap-2">
                   {cart.some(item => item.fired) && (
                     <div className="flex items-center gap-2 mb-1 mt-2">
-                      <div className="h-px flex-1 bg-white/10" />
-                      <span className="text-[9px] font-black text-amber-400/70 uppercase tracking-[0.2em]">New Items</span>
-                      <div className="h-px flex-1 bg-white/10" />
+                      <div className="h-px flex-1 bg-slate-100" />
+                      <span className="text-[9px] font-black text-indigo-400 uppercase tracking-[0.2em]">New Items</span>
+                      <div className="h-px flex-1 bg-slate-100" />
                     </div>
                   )}
                   {cart.filter(item => !item.fired).map((item) => (
-                    <div key={item.id} className="group p-3.5 rounded-2xl bg-white/8 border border-white/15 hover:border-white/25 transition-all"
-                      style={{ background: 'rgba(255,255,255,0.06)' }}
-                    >
+                    <div key={item.id} className="group p-3.5 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all">
                       <div className="flex items-start gap-3">
                         {/* Emoji avatar */}
-                        <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 text-lg" style={{ background: 'rgba(255,255,255,0.1)' }}>
+                        <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 text-lg bg-slate-50 border border-slate-100">
                           {getProductEmoji(item.name)}
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2">
-                            <p className="font-bold text-white text-sm leading-snug">{item.name}</p>
-                            <button onClick={() => removeItem(item.id)} className="text-white/20 hover:text-rose-400 transition-colors shrink-0 mt-0.5">
+                            <p className="font-bold text-slate-800 text-sm leading-snug">{item.name}</p>
+                            <button onClick={() => removeItem(item.id)} className="text-slate-300 hover:text-rose-500 transition-colors shrink-0 mt-0.5">
                               <X className="w-3.5 h-3.5" />
                             </button>
                           </div>
                           {item.modifiers?.length > 0 && (
-                            <p className="text-[10px] text-white/40 mt-0.5">+ {item.modifiers.map((m: any) => m.name).join(', ')}</p>
+                            <p className="text-[10px] text-slate-500 mt-0.5">+ {item.modifiers.map((m: any) => m.name).join(', ')}</p>
                           )}
                           <div className="flex items-center justify-between mt-2.5">
-                            <span className="text-xs font-bold text-white/40">{formatCurrency(item.price)} each</span>
+                            <span className="text-xs font-bold text-slate-400">{formatCurrency(item.price)} each</span>
                             <div className="flex items-center gap-2">
                               {/* Station badge */}
                               {item.station && (
                                 <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md ${
-                                  item.station === 'KITCHEN' ? 'bg-red-500/20 text-red-400' :
-                                  item.station === 'BAR'     ? 'bg-blue-500/20 text-blue-400' :
-                                  'bg-white/10 text-white/40'
+                                  item.station === 'KITCHEN' ? 'bg-rose-50 text-rose-600' :
+                                  item.station === 'BAR'     ? 'bg-blue-50 text-blue-600' :
+                                  'bg-slate-100 text-slate-500'
                                 }`}>
                                   {item.station === 'KITCHEN' ? '🔥' : item.station === 'BAR' ? '🍺' : '⚡'}
                                 </span>
                               )}
                               {/* Qty stepper */}
-                              <div className="flex items-center gap-1 bg-white/10 rounded-lg p-0.5">
-                                <button onClick={() => updateQuantity(item.id, -1)} className="w-6 h-6 flex items-center justify-center rounded text-white/50 hover:text-white hover:bg-white/10 transition-all">
+                              <div className="flex items-center gap-1 bg-slate-50 border border-slate-100 rounded-lg p-0.5">
+                                <button onClick={() => updateQuantity(item.id, -1)} className="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-slate-600 hover:bg-white hover:shadow-sm transition-all">
                                   <Minus className="w-3 h-3" />
                                 </button>
-                                <span className="w-6 text-center text-xs font-black text-white">{item.quantity}</span>
-                                <button onClick={() => updateQuantity(item.id, 1)} className="w-6 h-6 flex items-center justify-center rounded text-amber-400 hover:bg-amber-400/20 transition-all">
+                                <span className="w-6 text-center text-xs font-black text-slate-700">{item.quantity}</span>
+                                <button onClick={() => updateQuantity(item.id, 1)} className="w-6 h-6 flex items-center justify-center rounded text-indigo-600 hover:bg-white hover:shadow-sm transition-all">
                                   <Plus className="w-3 h-3" />
                                 </button>
                               </div>
-                              <span className="text-sm font-black text-white">{formatCurrency(item.price * item.quantity)}</span>
+                              <span className="text-sm font-black text-slate-900">{formatCurrency(item.price * item.quantity)}</span>
                             </div>
                           </div>
                         </div>
@@ -821,26 +818,26 @@ export default function PosTerminalPage() {
         </div>
 
         {/* Totals + Actions */}
-        <div className="p-5 border-t border-white/10 shrink-0">
+        <div className="p-5 border-t border-slate-100 bg-white shrink-0 shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.05)]">
           {/* Totals */}
           <div className="space-y-2 mb-4">
-            <div className="flex justify-between text-xs font-medium text-white/40">
+            <div className="flex justify-between text-xs font-medium text-slate-500">
               <span>Subtotal</span><span>{formatCurrency(subtotal)}</span>
             </div>
-            <div className="flex justify-between text-xs font-medium text-white/40">
+            <div className="flex justify-between text-xs font-medium text-slate-500">
               <span>Tax</span><span>{formatCurrency(tax)}</span>
             </div>
-            <div className="flex justify-between items-center pt-3 border-t border-white/10 mt-2">
-              <span className="text-xs font-black text-white/40 uppercase tracking-[0.15em]">Total</span>
-              <span className="font-black text-3xl text-white tracking-tight">{formatCurrency(total)}</span>
+            <div className="flex justify-between items-center pt-3 border-t border-slate-100 mt-2">
+              <span className="text-xs font-black text-slate-400 uppercase tracking-[0.15em]">Total</span>
+              <span className="font-black text-3xl text-slate-900 tracking-tight">{formatCurrency(total)}</span>
             </div>
           </div>
 
           {/* STATE A: Cart has items, no active order → SEND ORDER */}
           {!currentOrderId && cart.length > 0 && (
             <button
-              className="w-full h-14 font-black text-base tracking-wide text-white rounded-2xl shadow-xl transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 flex items-center justify-center gap-2"
-              style={{ background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)', boxShadow: '0 8px 24px rgba(79,70,229,0.4)' }}
+              className="w-full h-14 font-black text-base tracking-wide text-white rounded-2xl shadow-xl transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700"
+              style={{ boxShadow: '0 8px 24px rgba(79,70,229,0.25)' }}
               onClick={handleSendOrder}
               disabled={isProcessing}
             >
@@ -854,8 +851,7 @@ export default function PosTerminalPage() {
             <div className="flex flex-col gap-2">
               {cart.some((i) => !i.fired) && (
                 <button
-                  className="w-full h-12 font-black text-sm tracking-wide text-white rounded-xl transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 flex items-center justify-center gap-2"
-                  style={{ background: 'linear-gradient(135deg, #f97316, #ea580c)', boxShadow: '0 4px 16px rgba(249,115,22,0.4)' }}
+                  className="w-full h-12 font-black text-sm tracking-wide text-white rounded-xl transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 shadow-md"
                   onClick={handleFireMore}
                   disabled={isProcessing}
                 >
@@ -864,8 +860,7 @@ export default function PosTerminalPage() {
                 </button>
               )}
               <button
-                className="w-full h-14 font-black text-lg tracking-wide text-slate-900 rounded-2xl shadow-xl transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 flex items-center justify-center gap-2"
-                style={{ background: 'linear-gradient(135deg, #fbbf24, #f59e0b)', boxShadow: '0 8px 24px rgba(251,191,36,0.35)' }}
+                className="w-full h-14 font-black text-lg tracking-wide text-white rounded-2xl shadow-xl transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800"
                 onClick={() => setShowChargeModal(true)}
                 disabled={isProcessing}
               >
@@ -877,7 +872,7 @@ export default function PosTerminalPage() {
 
           {/* STATE C: Empty, no order → hint */}
           {!currentOrderId && cart.length === 0 && (
-            <div className="text-center text-xs text-white/20 py-3 font-medium">Select items to start an order</div>
+            <div className="text-center text-xs text-slate-400 py-3 font-medium">Select items to start an order</div>
           )}
         </div>
       </div>
