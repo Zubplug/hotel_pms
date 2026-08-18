@@ -14,6 +14,7 @@ import { formatCurrency } from '@/lib/utils';
 import { StaffSwitchPad } from '@/components/pos/StaffSwitchPad';
 import { MySalesModal } from '@/components/pos/MySalesModal';
 import { MyOrdersModal } from '@/components/pos/MyOrdersModal';
+import { ActiveOrdersModal } from '@/components/pos/ActiveOrdersModal';
 import { TableMap } from '@/components/pos/TableMap';
 import { ModifierSelectionModal } from '@/components/pos/ModifierSelectionModal';
 import { CheckSplitModal } from '@/components/pos/CheckSplitModal';
@@ -73,7 +74,10 @@ export default function PosTerminalPage() {
   const [showSwitchPad, setShowSwitchPad] = useState(false);
   const [showMySales, setShowMySales] = useState(false);
   const [showMyOrders, setShowMyOrders] = useState(false);
+  const [showActiveOrders, setShowActiveOrders] = useState(false);
   const [showChargeModal, setShowChargeModal] = useState(false);
+  const [activeOrderType, setActiveOrderType] = useState<string>('TABLE');
+  const [activeDisplayName, setActiveDisplayName] = useState<string>('');
 
   // ── Modals ────────────────────────────────────────────────────────
   const [modifierTarget, setModifierTarget] = useState<any | null>(null);
@@ -207,40 +211,58 @@ export default function PosTerminalPage() {
   // ─────────────────────────────────────────────────────────────────
   // Table selection
   // ─────────────────────────────────────────────────────────────────
+  const loadOrderContext = (order: any, isTableFlow = false) => {
+    setCurrentOrderId(order.id);
+    setActiveOrderType(order.orderType || (isTableFlow ? 'TABLE' : 'WALK_IN'));
+    setActiveDisplayName(order.displayName || '');
+    if (order.tableId) {
+      setActiveTableId(order.tableId);
+      setActiveTableName(order.tableNumber || '');
+    } else if (!isTableFlow) {
+      setActiveTableId(null);
+      setActiveTableName(null);
+    }
+    
+    const checks = order.checks || [];
+    setOrderChecks(checks);
+    
+    let itemsToLoad = order.items;
+    if (checks.length > 0) {
+      const openCheck = checks.find((c: any) => c.status === 'OPEN') || checks[0];
+      setActiveCheckId(openCheck.id);
+      itemsToLoad = openCheck.items;
+      if (isTableFlow) toast.info(`Table ${order.tableNumber} — loaded check ${openCheck.checkNumber}`);
+    } else {
+      setActiveCheckId(null);
+      if (isTableFlow) toast.info(`Table ${order.tableNumber} — existing order loaded`);
+    }
+
+    setCart(itemsToLoad.map((i: any) => ({
+      id: i.id,
+      productId: i.productId,
+      name: i.productName,
+      price: Number(i.unitPrice),
+      quantity: i.quantity,
+      taxRate: Number(i.taxRate),
+      kitchenStatus: i.kitchenStatus,
+      modifiers: i.modifiers || [],
+      fired: true, // Mark existing items as fired so they cannot be edited/sent again
+    })));
+  };
+
+  const handleOrderResume = (order: any) => {
+    setViewMode('menu');
+    loadOrderContext(order, false);
+    toast.success(`Resumed Order ${order.orderNumber}`);
+  };
+
   const handleTableSelect = async (table: any) => {
-    setActiveTableId(table.id);
-    setActiveTableName(table.name);
     setViewMode('menu');
     if (table.currentOrderId) {
-      setCurrentOrderId(table.currentOrderId);
       try {
         const res = await provider.pos.getOrder(table.currentOrderId);
         if (res.data) {
-          const order = res.data;
-          const checks = order.checks || [];
-          setOrderChecks(checks);
-          
-          let itemsToLoad = order.items;
-          if (checks.length > 0) {
-            const openCheck = checks.find((c: any) => c.status === 'OPEN') || checks[0];
-            setActiveCheckId(openCheck.id);
-            itemsToLoad = openCheck.items;
-            toast.info(`Table ${table.name} — loaded check ${openCheck.checkNumber}`);
-          } else {
-            setActiveCheckId(null);
-            toast.info(`Table ${table.name} — existing order loaded`);
-          }
-
-          setCart(itemsToLoad.map((i: any) => ({
-            id: i.id,
-            productId: i.productId,
-            name: i.productName,
-            price: Number(i.unitPrice),
-            quantity: i.quantity,
-            taxRate: Number(i.taxRate),
-            kitchenStatus: i.kitchenStatus,
-            modifiers: i.modifiers || [],
-          })));
+          loadOrderContext(res.data, true);
         } else {
           toast.error("Failed to load order data");
         }
@@ -252,6 +274,10 @@ export default function PosTerminalPage() {
       setActiveCheckId(null);
       setOrderChecks([]);
       setCart([]);
+      setActiveTableId(table.id);
+      setActiveTableName(table.name);
+      setActiveOrderType('TABLE');
+      setActiveDisplayName('');
       toast.success(`Table ${table.name} selected`);
     }
   };
@@ -269,6 +295,8 @@ export default function PosTerminalPage() {
         propertyId,
         outletId: sessionContext?.outlet?.id,
         sessionId,
+        orderType: activeOrderType,
+        displayName: activeDisplayName,
         tableId: activeTableId,
         tableNumber: activeTableName,
         guestCount,
@@ -507,17 +535,33 @@ export default function PosTerminalPage() {
       </div>
 
       {/* 3. The Cart Anchor */}
-      <div className="flex flex-col w-[360px] bg-white border-l border-slate-200 shadow-2xl shrink-0 z-20">
+      <div className="flex flex-col w-[400px] bg-white border-l border-slate-200 shadow-2xl shrink-0 z-20">
         
         {/* Cart Context Header */}
-        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-          <div className="flex flex-col">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Current Order</span>
-            <span className="text-lg font-black text-slate-800 tracking-tight">
-              {activeTableName ? `Table ${activeTableName}` : 'Walk-in'}
-            </span>
+        <div className="px-5 py-4 border-b border-slate-100 flex flex-col gap-3 bg-slate-50">
+          <div className="flex items-center justify-between">
+            <div className="flex flex-col">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                {currentOrderId ? 'Active Order' : 'New Order'}
+              </span>
+              <span className="text-lg font-black text-slate-800 tracking-tight">
+                {activeOrderType === 'TABLE' 
+                  ? (activeTableName ? `Table ${activeTableName}` : 'Select Table') 
+                  : (activeDisplayName || activeOrderType.replace('_', ' '))}
+              </span>
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setShowActiveOrders(true)}
+                title="Active Orders"
+                className="px-3 py-2 text-xs font-bold text-white bg-slate-800 hover:bg-slate-700 rounded-lg shadow-sm transition-all"
+              >
+                OPEN ORDERS
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-1">
+          
+          <div className="flex items-center gap-1 justify-end">
             {cart.length > 0 && (
               <button
                 onClick={() => setShowSplitModal(true)}
@@ -529,8 +573,8 @@ export default function PosTerminalPage() {
             )}
             {currentOrderId && (
               <button
-                onClick={() => { setCurrentOrderId(null); setCart([]); setActiveTableId(null); setActiveTableName(null); setTableRefreshTrigger(Date.now()); }}
-                title="Clear Table"
+                onClick={() => { setCurrentOrderId(null); setCart([]); setActiveTableId(null); setActiveTableName(null); setActiveOrderType('TABLE'); setActiveDisplayName(''); setTableRefreshTrigger(Date.now()); }}
+                title="Clear Context"
                 className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-all"
               >
                 <Lock className="w-4 h-4" />
@@ -594,72 +638,113 @@ export default function PosTerminalPage() {
         </div>
 
         {/* Cart Items List */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {cart.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-slate-300">
               <ShoppingCart className="w-12 h-12 mb-3 opacity-20" />
               <p className="text-sm font-medium">Cart is empty</p>
             </div>
           ) : (
-            cart.map((item) => (
-              <div key={item.id} className="group flex flex-col gap-2 p-4 bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
-                <div className="flex justify-between items-start">
-                  <div className="flex-1 pr-2">
-                    <span className="font-bold text-slate-800 text-sm leading-tight block">{item.name}</span>
-                    {item.modifiers && item.modifiers.length > 0 && (
-                      <span className="text-xs font-medium text-slate-400 mt-1 block">
-                        + {item.modifiers.map((m) => m.name).join(', ')}
-                      </span>
-                    )}
+            <div className="flex flex-col gap-4">
+              {/* ALREADY SENT SECTION */}
+              {cart.filter(item => item.fired).length > 0 && (
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2 border-b border-slate-200 pb-1 mb-1">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Already Sent</span>
                   </div>
-                  <div className="flex items-start gap-2 shrink-0">
-                    <span className="font-bold text-slate-900 text-sm">
-                      {formatCurrency(item.price * item.quantity)}
-                    </span>
-                    <button
-                      onClick={() => removeItem(item.id)}
-                      className="text-slate-300 hover:text-rose-500 transition-colors mt-0.5"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
+                  {cart.filter(item => item.fired).map((item) => (
+                    <div key={item.id} className="group flex flex-col gap-2 p-3 bg-slate-50/50 rounded-xl border border-slate-100">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1 pr-2">
+                          <span className="font-semibold text-slate-500 text-sm leading-tight block">{item.name}</span>
+                          {item.modifiers && item.modifiers.length > 0 && (
+                            <span className="text-xs font-medium text-slate-400 mt-0.5 block">
+                              + {item.modifiers.map((m) => m.name).join(', ')}
+                            </span>
+                          )}
+                        </div>
+                        <span className="font-semibold text-slate-500 text-sm">
+                          {formatCurrency(item.price * item.quantity)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between mt-1 opacity-70">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase">Qty: {item.quantity}</span>
+                          {item.kitchenStatus && item.kitchenStatus !== 'PENDING' && (
+                            <span className="text-[9px] font-black uppercase tracking-wider bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded">
+                              {item.kitchenStatus}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[9px] font-black uppercase tracking-wider bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded">SENT</span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                
-              <div className="flex items-center justify-between mt-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-slate-400">{formatCurrency(item.price)} each</span>
-                    {/* Station badge */}
-                    {item.station && (
-                      <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${
-                        item.station === 'KITCHEN' ? 'bg-red-50 text-red-500' :
-                        item.station === 'BAR'     ? 'bg-blue-50 text-blue-500' :
-                        item.station === 'DIRECT'  ? 'bg-green-50 text-green-600' :
-                        'bg-slate-100 text-slate-400'
-                      }`}>
-                        {item.station === 'KITCHEN' ? '🔥' : item.station === 'BAR' ? '🍺' : item.station === 'DIRECT' ? '⚡' : '📦'} {item.station}
-                      </span>
-                    )}
-                    {item.fired && (
-                      <span className="text-[9px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded">SENT</span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1 bg-slate-50 rounded-lg p-1 border border-slate-100">
-                    <button onClick={() => updateQuantity(item.id, -1)} disabled={item.fired} className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-white hover:shadow-sm text-slate-500 transition-all disabled:opacity-30">
-                      <Minus className="w-3 h-3" />
-                    </button>
-                    <span className="w-6 text-center font-bold text-xs text-slate-700">{item.quantity}</span>
-                    <button onClick={() => updateQuantity(item.id, 1)} disabled={item.fired} className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-white hover:shadow-sm text-indigo-600 transition-all disabled:opacity-30">
-                      <Plus className="w-3 h-3" />
-                    </button>
-                  </div>
+              )}
+
+              {/* NEW ITEMS SECTION */}
+              {cart.filter(item => !item.fired).length > 0 && (
+                <div className="flex flex-col gap-2">
+                  {cart.some(item => item.fired) && (
+                    <div className="flex items-center gap-2 border-b border-indigo-100 pb-1 mt-2 mb-1">
+                      <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">New Items</span>
+                    </div>
+                  )}
+                  {cart.filter(item => !item.fired).map((item) => (
+                    <div key={item.id} className="group flex flex-col gap-2 p-4 bg-white rounded-2xl border border-indigo-100 shadow-sm hover:shadow-md transition-shadow">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1 pr-2">
+                          <span className="font-bold text-slate-800 text-sm leading-tight block">{item.name}</span>
+                          {item.modifiers && item.modifiers.length > 0 && (
+                            <span className="text-xs font-medium text-slate-400 mt-1 block">
+                              + {item.modifiers.map((m) => m.name).join(', ')}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-start gap-2 shrink-0">
+                          <span className="font-bold text-slate-900 text-sm">
+                            {formatCurrency(item.price * item.quantity)}
+                          </span>
+                          <button
+                            onClick={() => removeItem(item.id)}
+                            className="text-slate-300 hover:text-rose-500 transition-colors mt-0.5"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center justify-between mt-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-medium text-slate-400">{formatCurrency(item.price)} each</span>
+                          {/* Station badge */}
+                          {item.station && (
+                            <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${
+                              item.station === 'KITCHEN' ? 'bg-red-50 text-red-500' :
+                              item.station === 'BAR'     ? 'bg-blue-50 text-blue-500' :
+                              item.station === 'DIRECT'  ? 'bg-green-50 text-green-600' :
+                              'bg-slate-100 text-slate-400'
+                            }`}>
+                              {item.station === 'KITCHEN' ? '🔥' : item.station === 'BAR' ? '🍺' : item.station === 'DIRECT' ? '⚡' : '📦'} {item.station}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 bg-slate-50 rounded-lg p-1 border border-slate-100">
+                          <button onClick={() => updateQuantity(item.id, -1)} className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-white hover:shadow-sm text-slate-500 transition-all">
+                            <Minus className="w-3 h-3" />
+                          </button>
+                          <span className="w-6 text-center font-bold text-xs text-slate-700">{item.quantity}</span>
+                          <button onClick={() => updateQuantity(item.id, 1)} className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-white hover:shadow-sm text-indigo-600 transition-all">
+                            <Plus className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                {item.kitchenStatus && item.kitchenStatus !== 'PENDING' && (
-                  <span className="self-start text-[9px] font-black uppercase tracking-wider bg-slate-100 text-slate-500 px-2 py-1 rounded-md mt-1">
-                    {item.kitchenStatus}
-                  </span>
-                )}
-              </div>
-            ))
+              )}
+            </div>
           )}
         </div>
 
@@ -828,6 +913,14 @@ export default function PosTerminalPage() {
           staffName={`${activeOperator.firstName} ${activeOperator.lastName}`}
         />
       )}
+      <ActiveOrdersModal
+        isOpen={showActiveOrders}
+        onClose={() => setShowActiveOrders(false)}
+        operatorToken={operatorToken || ''}
+        sessionId={(session as any)?.sessionId || ''}
+        staffName={activeOperator?.name || ''}
+        onOrderSelect={handleOrderResume}
+      />
     </div>
   );
 }

@@ -317,10 +317,11 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
         body: JSON.stringify({ items }),
       });
     },
-    getOpenOrders: async (sessionId: string, operatorToken?: string) => {
-      const options: RequestInit = {};
-      if (operatorToken) options.headers = { Authorization: `Bearer ${operatorToken}` };
-      return apiFetch(`/api/v1/pos/sessions/${sessionId}/open-orders`, options);
+    getActiveOrders: async (sessionId: string, operatorToken: string, filter?: string) => {
+      const res = await fetch(`/api/v1/pos/sessions/${sessionId}/active-orders${filter ? `?filter=${filter}` : ''}`, {
+        headers: { 'Authorization': `Bearer ${operatorToken}` }
+      });
+      return res.json();
     },
     getProductionBatches: async (outletId: string, station: string) => {
       return apiFetch(`/api/v1/pos/outlets/${outletId}/production-batches?station=${station}`);

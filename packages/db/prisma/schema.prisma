@@ -2077,6 +2077,14 @@ enum PosOrderPaymentStatus {
   PAID
 }
 
+enum PosOrderType {
+  TABLE
+  WALK_IN
+  ROOM_SERVICE
+  TAKEAWAY
+  BAR
+}
+
 model PosOrder {
   id         String     @id @default(uuid()) @db.Uuid
   propertyId String     @db.Uuid
@@ -2092,6 +2100,7 @@ model PosOrder {
   serverStaff   Staff?  @relation(fields: [serverStaffId], references: [id])
 
   orderNumber   String               @unique
+  orderType     PosOrderType         @default(TABLE)
   status        PosOrderStatus       @default(SUBMITTED)
   paymentStatus PosOrderPaymentStatus @default(UNPAID)
   businessDate  DateTime             @db.Date
@@ -2101,10 +2110,13 @@ model PosOrder {
   discount  Decimal @default(0) @db.Decimal(18, 4)
   total     Decimal @default(0) @db.Decimal(18, 4)
 
-  notes       String?
-  tableNumber String?
-  tableId     String?   @db.Uuid
-  table       PosTable? @relation(fields: [tableId], references: [id])
+  notes         String?
+  displayName   String?
+  tableNumber   String?
+  tableId       String?   @db.Uuid
+  table         PosTable? @relation(fields: [tableId], references: [id])
+  roomId        String?   @db.Uuid
+  reservationId String?   @db.Uuid
 
   guestCount    Int     @default(1)
   serviceCharge Decimal @default(0) @db.Decimal(18, 4)

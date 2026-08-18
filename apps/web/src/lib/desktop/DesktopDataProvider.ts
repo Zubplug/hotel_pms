@@ -207,8 +207,8 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     fireItems: async (orderId: string, items: any[], operatorToken: string) => {
       return invokeDesktop('pos.fireItems', { orderId, items, operatorToken });
     },
-    getOpenOrders: async (sessionId: string, operatorToken?: string) => {
-      return invokeDesktop('pos.getOpenOrders', { sessionId, operatorToken });
+    getActiveOrders: async (sessionId: string, operatorToken: string, filter?: string) => {
+      return invokeDesktop('pos.getActiveOrders', { sessionId, operatorToken, filter });
     },
     getProductionBatches: async (outletId: string, station: string) => {
       return invokeDesktop('pos.getProductionBatches', { outletId, station });

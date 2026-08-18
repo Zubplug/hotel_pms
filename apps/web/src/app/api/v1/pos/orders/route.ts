@@ -12,6 +12,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const {
       propertyId, outletId, sessionId, tableId, tableNumber,
+      orderType = 'TABLE', displayName, roomId, reservationId,
       guestCount, subtotal, taxAmount, total,
       items = [], payments = [],
     } = body;
@@ -76,6 +77,10 @@ export async function POST(req: NextRequest) {
           sessionId,
           tableId:       tableId ?? null,
           tableNumber:   tableNumber ?? null,
+          orderType:     orderType,
+          displayName:   displayName ?? null,
+          roomId:        roomId ?? null,
+          reservationId: reservationId ?? null,
           guestCount:    guestCount ?? 1,
           serverStaffId: serverStaffId ?? body.serverStaffId ?? null,
           orderNumber,

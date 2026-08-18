@@ -87,7 +87,7 @@ export interface LodgeCoreDataProvider {
     settleSession(sessionId: string, actualCash: number, operatorId: string, authorizerId?: string): Promise<{ data: any, error: string | null }>;
     // Service-first waiter flow
     fireItems(orderId: string, items: any[], operatorToken: string): Promise<{ data: any, error: string | null }>;
-    getOpenOrders(sessionId: string, operatorToken?: string): Promise<{ data: any[], error: string | null }>;
+    getActiveOrders(sessionId: string, operatorToken: string, filter?: string): Promise<{ data: any[], error: string | null }>;
     getProductionBatches(outletId: string, station: string): Promise<{ data: any[], error: string | null }>;
     updateBatchStatus(batchId: string, status: string): Promise<{ data: any, error: string | null }>;
   };
