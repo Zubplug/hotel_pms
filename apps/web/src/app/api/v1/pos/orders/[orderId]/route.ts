@@ -3,10 +3,10 @@ import prisma from '@hotel-pms/db';
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { orderId: string } }
+  { params }: { params: Promise<{ orderId: string }> }
 ) {
   try {
-    const { orderId } = params;
+    const { orderId } = await params;
 
     const order = await prisma.posOrder.findUnique({
       where: { id: orderId },
