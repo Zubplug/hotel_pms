@@ -46,7 +46,6 @@ export async function POST(req: NextRequest) {
     const products = productIds.length
       ? await prisma.posProduct.findMany({
           where: { id: { in: productIds } },
-          include: { category: { select: { productionStation: true } } },
           select: {
             id: true,
             productionStation: true,

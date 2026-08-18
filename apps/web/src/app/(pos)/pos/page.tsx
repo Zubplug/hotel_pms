@@ -144,8 +144,8 @@ export default function PosTerminalPage() {
     const modifierTotal = modifiers.reduce((s, m) => s + m.price, 0);
     const effectivePrice = Number(product.price) + modifierTotal;
     const itemId = `${product.id}_${Date.now()}`;
-    // Resolve production station from product or category
-    const station: string = product.productionStation || product.category?.productionStation || 'KITCHEN';
+    // Use the pre-resolved station from the enriched products API
+    const station: string = product.resolvedStation || product.productionStation || 'KITCHEN';
 
     setCart((prev) => {
       // Only merge if no modifiers and not yet fired (unfired items can be merged)
@@ -178,8 +178,12 @@ export default function PosTerminalPage() {
   }, []);
 
   const handleProductTap = (product: any) => {
-    // If product has modifiers we open the selector; otherwise add directly
-    setModifierTarget(product);
+    // Only show modifier dialog if the product actually has modifiers
+    if (product.hasModifiers) {
+      setModifierTarget(product);
+    } else {
+      addToCart(product, []);
+    }
   };
 
   const handleModifierConfirm = (product: any, selectedModifiers: any[]) => {
