@@ -56,7 +56,6 @@ export async function GET(
         id: true,
         orderNumber: true,
         orderType: true,
-        tableName: true, // Wait, there's no tableName in Prisma. We use tableNumber or table { name }
         tableNumber: true,
         displayName: true,
         status: true,
