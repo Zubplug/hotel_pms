@@ -64,6 +64,7 @@ export default function PosTerminalPage() {
   const [tableRefreshTrigger, setTableRefreshTrigger] = useState<number>(0);
   const [guestCount, setGuestCount] = useState(2);
   const [sessionContext, setSessionContext] = useState<any | null>(null);
+  const [posSessionId, setPosSessionId] = useState<string>('');
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
   const [activeCheckId, setActiveCheckId] = useState<string | null>(null);
   const [orderChecks, setOrderChecks] = useState<any[]>([]);
@@ -100,6 +101,7 @@ export default function PosTerminalPage() {
         const activeSessionId =
           (session as any)?.sessionId ||
           localStorage.getItem('lodgecore_pos_session_id');
+        if (activeSessionId) setPosSessionId(activeSessionId);
 
         if (activeSessionId) {
           try {
@@ -433,7 +435,7 @@ export default function PosTerminalPage() {
       <PosSidebar
         viewMode={viewMode}
         setViewMode={setViewMode}
-        onOpenMyOrders={() => setShowMyOrders(true)}
+        onOpenMyOrders={() => setShowActiveOrders(true)}
         onOpenMySales={() => setShowMySales(true)}
         onOpenKitchen={() => {}}
         onLock={() => { 
@@ -917,9 +919,10 @@ export default function PosTerminalPage() {
         isOpen={showActiveOrders}
         onClose={() => setShowActiveOrders(false)}
         operatorToken={operatorToken || ''}
-        sessionId={(session as any)?.sessionId || ''}
-        staffName={activeOperator?.name || ''}
+        sessionId={posSessionId}
+        staffName={activeOperator ? `${activeOperator.firstName || ''} ${activeOperator.lastName || ''}`.trim() : ''}
         onOrderSelect={handleOrderResume}
+        onViewHistory={() => setShowMyOrders(true)}
       />
     </div>
   );

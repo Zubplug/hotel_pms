@@ -19,9 +19,10 @@ interface ActiveOrdersModalProps {
   sessionId: string;
   staffName: string;
   onOrderSelect: (order: any) => void;
+  onViewHistory?: () => void;
 }
 
-export function ActiveOrdersModal({ isOpen, onClose, operatorToken, sessionId, staffName, onOrderSelect }: ActiveOrdersModalProps) {
+export function ActiveOrdersModal({ isOpen, onClose, operatorToken, sessionId, staffName, onOrderSelect, onViewHistory }: ActiveOrdersModalProps) {
   const { provider } = useLodgeCoreProvider();
   const [orders, setOrders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -83,28 +84,46 @@ export function ActiveOrdersModal({ isOpen, onClose, operatorToken, sessionId, s
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-[90vw] lg:max-w-6xl max-h-[85vh] flex flex-col gap-0 p-0 bg-slate-50 border-slate-200 shadow-2xl animate-in zoom-in-95 duration-200">
-        <DialogHeader className="p-6 pb-4 bg-white border-b border-slate-200">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+        <DialogHeader className="p-6 pb-5 bg-white border-b border-slate-200">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div className="flex flex-col">
               <DialogTitle className="text-2xl font-black tracking-tight text-slate-900">
                 Active Orders
               </DialogTitle>
               <p className="text-sm text-slate-500 mt-1">Select an open order to resume or modify</p>
             </div>
-            
-            <div className="flex items-center p-1 bg-slate-100 rounded-lg">
+
+            <div className="flex items-center gap-3">
+              <div className="flex items-center p-1 bg-slate-100 rounded-lg">
+                <button
+                  onClick={() => setFilter('my_orders')}
+                  className={`px-5 py-2 text-sm font-bold rounded-md transition-all ${filter === 'my_orders' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  My Orders
+                </button>
+                <button
+                  onClick={() => setFilter('all_open')}
+                  className={`px-5 py-2 text-sm font-bold rounded-md transition-all ${filter === 'all_open' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  All Open
+                </button>
+              </div>
               <button
-                onClick={() => setFilter('my_orders')}
-                className={`px-5 py-2 text-sm font-bold rounded-md transition-all ${filter === 'my_orders' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                onClick={fetchOrders}
+                disabled={isLoading}
+                title="Refresh"
+                className="p-2 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all border border-slate-200"
               >
-                My Orders
+                <Loader2 className={`w-4 h-4 ${isLoading ? 'animate-spin text-indigo-500' : ''}`} />
               </button>
-              <button
-                onClick={() => setFilter('all_open')}
-                className={`px-5 py-2 text-sm font-bold rounded-md transition-all ${filter === 'all_open' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-              >
-                All Open
-              </button>
+              {onViewHistory && (
+                <button
+                  onClick={() => { onClose(); onViewHistory(); }}
+                  className="text-xs font-bold text-slate-400 hover:text-indigo-600 underline underline-offset-2 transition-colors whitespace-nowrap"
+                >
+                  Order History
+                </button>
+              )}
             </div>
           </div>
         </DialogHeader>
