@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutGrid, MapPin, Search, Receipt, TrendingUp, ChefHat, Lock, Wifi, WifiOff } from 'lucide-react';
+import { LayoutGrid, MapPin, Search, Receipt, TrendingUp, ChefHat, Lock, Wifi, WifiOff, Monitor } from 'lucide-react';
 
 interface PosSidebarProps {
   viewMode: 'menu' | 'tables';
@@ -72,6 +72,11 @@ export function PosSidebar({
           icon={ChefHat}
           label="Kitchen"
           onClick={onOpenKitchen}
+        />
+        <NavItem
+          icon={Monitor}
+          label="KDS Display"
+          onClick={() => window.open('/pos/kds', '_blank')}
         />
       </div>
 
