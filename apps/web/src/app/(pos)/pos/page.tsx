@@ -141,7 +141,7 @@ export default function PosTerminalPage() {
   // Cart helpers
   // ─────────────────────────────────────────────────────────────────
   const addToCart = useCallback((product: any, modifiers: OrderItemModifier[] = []) => {
-    const modifierTotal = modifiers.reduce((s, m) => s + m.price, 0);
+    const modifierTotal = modifiers.reduce((s, m) => s + Number(m.price || 0), 0);
     const effectivePrice = Number(product.price) + modifierTotal;
     const itemId = `${product.id}_${Date.now()}`;
     // Use the pre-resolved station from the enriched products API

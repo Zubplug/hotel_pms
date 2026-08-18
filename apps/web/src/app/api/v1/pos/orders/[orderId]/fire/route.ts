@@ -51,7 +51,7 @@ export async function POST(
     if (!order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
-    if (order.outletId !== payload.outletId || order.propertyId !== payload.propertyId) {
+    if (order.propertyId !== payload.propertyId || (payload.outletId && order.outletId !== payload.outletId)) {
       return NextResponse.json({ error: 'Context mismatch: token does not match order context' }, { status: 403 });
     }
     if (order.status === 'CLOSED' || order.status === 'VOIDED') {

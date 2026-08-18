@@ -7,16 +7,16 @@ const PaymentSchema = z.object({
   method: z.string(),
   amount: z.number().positive(),
   currency: z.string().default('NGN'),
-  checkId: z.string().optional(),
+  checkId: z.string().nullish(),
 });
 
 // POST /api/v1/pos/orders/[orderId]/pay
 export async function POST(
   req: NextRequest,
-  { params }: { params: { orderId: string } }
+  { params }: { params: Promise<{ orderId: string }> }
 ) {
   try {
-    const { orderId } = params;
+    const { orderId } = await params;
     const body = await req.json();
     
     const parsed = PaymentSchema.safeParse(body);

@@ -47,6 +47,7 @@ async function main() {
     {
       name: 'Dessert / Snacks',
       sortOrder: 1,
+      productionStation: 'DIRECT',  // cold items, served immediately
       items: [
         { name: 'Fresh fruit Juice', price: 3000 },
         { name: 'Fruit Salad', price: 3000 },
@@ -64,6 +65,7 @@ async function main() {
     {
       name: 'Nigerian',
       sortOrder: 2,
+      productionStation: 'KITCHEN',
       items: [
         { name: 'Akara with pap', price: 4000 },
         { name: 'Yam/plantain/potato: boiled/fried', price: 3000 },
@@ -77,6 +79,7 @@ async function main() {
     {
       name: 'Salad',
       sortOrder: 3,
+      productionStation: 'KITCHEN',
       items: [
         { name: 'Vegetables Salad', price: 5000 },
         { name: 'Chefs Salad', price: 6000 },
@@ -92,6 +95,7 @@ async function main() {
     {
       name: 'Pasta & Rice Options',
       sortOrder: 4,
+      productionStation: 'KITCHEN',
       items: [
         { name: 'Spaghetti Carbonara', price: 8000 },
         { name: 'Spaghetti Bolognaise', price: 8000 },
@@ -102,6 +106,7 @@ async function main() {
     {
       name: 'Nigerian Hot Starter',
       sortOrder: 5,
+      productionStation: 'KITCHEN',
       items: [
         { name: 'Goat meat pepper soup', price: 4000 },
         { name: 'Chicken pepper soup', price: 4000 },
@@ -116,6 +121,7 @@ async function main() {
     {
       name: 'Nigerian Main Course',
       sortOrder: 6,
+      productionStation: 'KITCHEN',
       items: [
         { name: 'Egusi+Semo/Garri with Goat Meat/Chicken/Beef', price: 8500 },
         { name: 'Ogbono+Semo/Garri with Goat Meat/Chicken/Beef', price: 8500 },
@@ -136,6 +142,7 @@ async function main() {
     {
       name: 'Nigerian Extra',
       sortOrder: 7,
+      productionStation: 'KITCHEN',
       items: [
         { name: 'Soup', price: 3000 },
         { name: 'Stew', price: 3000 },
@@ -151,6 +158,7 @@ async function main() {
     {
       name: 'Wines',
       sortOrder: 8,
+      productionStation: 'BAR',
       items: [
         { name: 'Rosso Nobile', price: 12000 },
         { name: 'Escudo Rojo', price: 12000 },
@@ -179,6 +187,7 @@ async function main() {
     {
       name: 'Sparkling Wines & Champagnes',
       sortOrder: 9,
+      productionStation: 'BAR',
       items: [
         { name: 'Veleta', price: 6000 },
         { name: 'Toma Classic', price: 5500 },
@@ -198,6 +207,7 @@ async function main() {
     {
       name: 'Spirit',
       sortOrder: 10,
+      productionStation: 'BAR',
       items: [
         { name: 'Origin Bitters (Pet)', price: 2500 },
         { name: 'Origin Bitters (large)', price: 12000 },
@@ -211,6 +221,7 @@ async function main() {
     {
       name: 'Rum',
       sortOrder: 11,
+      productionStation: 'BAR',
       items: [
         { name: 'Barcardi Superior', price: 35000 },
         { name: 'Barcardi Gold', price: 35000 },
@@ -220,6 +231,7 @@ async function main() {
     {
       name: 'Soft Drinks',
       sortOrder: 12,
+      productionStation: 'BAR',
       items: [
         { name: 'Soda (Pet)', price: 800 },
         { name: 'Guinness malt', price: 1000 },
@@ -235,6 +247,7 @@ async function main() {
     {
       name: 'Energy Drinks',
       sortOrder: 13,
+      productionStation: 'BAR',
       items: [
         { name: 'Red Bull', price: 2500 },
         { name: 'Power Horse', price: 2500 },
@@ -248,6 +261,7 @@ async function main() {
     {
       name: 'Lager',
       sortOrder: 14,
+      productionStation: 'BAR',
       items: [
         { name: 'Star', price: 1800 },
         { name: 'Harp', price: 1800 },
@@ -277,6 +291,7 @@ async function main() {
     {
       name: 'Whiskey & Brandy',
       sortOrder: 15,
+      productionStation: 'BAR',
       items: [
         { name: 'Red label', price: 42000 },
         { name: 'Black label', price: 60000 },
@@ -296,6 +311,7 @@ async function main() {
     {
       name: 'Gin / Vodka',
       sortOrder: 16,
+      productionStation: 'BAR',
       items: [
         { name: 'Gordon Gin (small)', price: 4000 },
         { name: 'Gordon Gin', price: 11000 },
@@ -310,6 +326,7 @@ async function main() {
     {
       name: 'Liquors',
       sortOrder: 17,
+      productionStation: 'BAR',
       items: [
         { name: 'Baileys (Large)', price: 25000 },
         { name: 'Baileys (Medium)', price: 15000 },
@@ -338,6 +355,7 @@ async function main() {
         outletId: outlet.id,
         name: catData.name,
         sortOrder: catData.sortOrder,
+        productionStation: (catData as any).productionStation ?? 'KITCHEN',
         isActive: true
       }
     });
