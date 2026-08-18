@@ -3,8 +3,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   ShoppingCart, Search, Trash2, Plus, Minus, User, Utensils,
-  Loader2, CreditCard, Banknote, RefreshCw, LayoutGrid, MapPin,
-  ChefHat, Scissors, X, Pause, Building2
+  Loader2, CreditCard, Banknote, LayoutGrid,
+  ChefHat, Scissors, X, Building2, Send, Flame, Lock
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AppSwitcher } from '@/components/layout/AppSwitcher';
@@ -34,6 +34,8 @@ type OrderItem = {
   taxRate: number;
   course?: number;
   kitchenStatus?: string;
+  station?: string; // KITCHEN | BAR | DIRECT | NONE
+  fired?: boolean;  // true once sent to production
   modifiers?: OrderItemModifier[];
 };
 
@@ -71,7 +73,7 @@ export default function PosTerminalPage() {
   const [showSwitchPad, setShowSwitchPad] = useState(false);
   const [showMySales, setShowMySales] = useState(false);
   const [showMyOrders, setShowMyOrders] = useState(false);
-  const [showKitchen, setShowKitchen] = useState(false);
+  const [showChargeModal, setShowChargeModal] = useState(false);
 
   // ── Modals ────────────────────────────────────────────────────────
   const [modifierTarget, setModifierTarget] = useState<any | null>(null);
@@ -142,12 +144,14 @@ export default function PosTerminalPage() {
     const modifierTotal = modifiers.reduce((s, m) => s + m.price, 0);
     const effectivePrice = Number(product.price) + modifierTotal;
     const itemId = `${product.id}_${Date.now()}`;
+    // Resolve production station from product or category
+    const station: string = product.productionStation || product.category?.productionStation || 'KITCHEN';
 
     setCart((prev) => {
-      // Only merge if no modifiers selected (to allow duplicate rows with different mods)
+      // Only merge if no modifiers and not yet fired (unfired items can be merged)
       if (modifiers.length === 0) {
         const existing = prev.find(
-          (i) => i.productId === product.id && (!i.modifiers || i.modifiers.length === 0)
+          (i) => i.productId === product.id && !i.fired && (!i.modifiers || i.modifiers.length === 0)
         );
         if (existing) {
           return prev.map((item) =>
@@ -165,6 +169,8 @@ export default function PosTerminalPage() {
           quantity: 1,
           taxRate: Number(product.taxRate || 0),
           kitchenStatus: 'PENDING',
+          station,
+          fired: false,
           modifiers,
         },
       ];
@@ -247,47 +253,110 @@ export default function PosTerminalPage() {
   };
 
   // ─────────────────────────────────────────────────────────────────
-  // KOT — Fire to Kitchen
+  // SEND ORDER — creates new order, fires production batches
   // ─────────────────────────────────────────────────────────────────
-  const handleFireKot = async (itemIds: string[]) => {
+  const handleSendOrder = async () => {
     if (!operatorToken) { toast.error('No operator authenticated'); return; }
-    if (!currentOrderId) {
-      // Auto-save order first then fire
-      toast.info('Order must be saved before firing to kitchen. Processing…');
-      await handlePayment('OPEN'); // save as open order
-    }
+    if (cart.length === 0) { toast.error('Cart is empty'); return; }
+    setIsProcessing(true);
     try {
-      const res = await provider.pos.fireKot(currentOrderId!, itemIds, operatorToken);
+      const sessionId = (session as any)?.sessionId || localStorage.getItem('lodgecore_pos_session_id');
+      const orderData = {
+        propertyId,
+        outletId: sessionContext?.outlet?.id,
+        sessionId,
+        tableId: activeTableId,
+        tableNumber: activeTableName,
+        guestCount,
+        serverStaffId: activeOperator?.id,
+        subtotal,
+        taxAmount: tax,
+        total,
+        items: cart.map((item) => ({
+          productId: item.productId,
+          productName: item.name,
+          quantity: item.quantity,
+          unitPrice: item.price,
+          taxRate: item.taxRate,
+          taxAmount: item.price * item.quantity * (item.taxRate / 100),
+          total: item.price * item.quantity,
+          kitchenStatus: item.kitchenStatus,
+          modifiers: item.modifiers ?? [],
+        })),
+        payments: [],
+      };
+      const res = await provider.pos.createOrder(orderData, operatorToken);
       if (res.error) throw new Error(res.error);
-      // Mark items as SENT in local cart
-      setCart((prev) =>
-        prev.map((item) =>
-          itemIds.includes(item.id) ? { ...item, kitchenStatus: 'SENT' } : item
-        )
-      );
-      toast.success(`${itemIds.length} item(s) fired to kitchen 🔥`);
+      const orderId = res.data?.id;
+      if (orderId) setCurrentOrderId(orderId);
+      // Mark all items as fired
+      setCart((prev) => prev.map((i) => ({ ...i, fired: true })));
+      setTableRefreshTrigger(Date.now());
+      const batchCount = res.data?.productionBatches?.length ?? 0;
+      toast.success(`Order sent! ${batchCount > 0 ? `${batchCount} production ticket(s) created 🔥` : 'Items queued for service ⚡'}`);
     } catch (err: any) {
-      toast.error(err.message || 'Failed to fire KOT');
+      toast.error(err.message || 'Failed to send order');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
-  const handleHoldOrder = async () => {
-    if (!currentOrderId) {
-      toast.error('Please save the order first (e.g., fire a KOT)');
-      return;
-    }
+  // ─────────────────────────────────────────────────────────────────
+  // FIRE MORE ITEMS — adds new items to existing order
+  // ─────────────────────────────────────────────────────────────────
+  const handleFireMore = async () => {
+    if (!operatorToken) { toast.error('No operator authenticated'); return; }
+    if (!currentOrderId) { toast.error('No active order on this table'); return; }
+    const newItems = cart.filter((i) => !i.fired);
+    if (newItems.length === 0) { toast.error('No new items to fire'); return; }
+    setIsProcessing(true);
     try {
-      const res = await provider.pos.updateOrderStatus(currentOrderId, 'HELD', 'User put order on hold');
+      const res = await provider.pos.fireItems(currentOrderId, newItems.map((item) => ({
+        productId: item.productId,
+        productName: item.name,
+        quantity: item.quantity,
+        unitPrice: item.price,
+        taxRate: item.taxRate,
+        taxAmount: item.price * item.quantity * (item.taxRate / 100),
+        total: item.price * item.quantity,
+        modifiers: item.modifiers ?? [],
+      })), operatorToken);
       if (res.error) throw new Error(res.error);
-      toast.success('Order held successfully');
-      setCart([]);
-      setCurrentOrderId(null);
-      setActiveTableId(null);
-      setActiveTableName('');
-      setViewMode('tables');
-      setTableRefreshTrigger((prev) => prev + 1);
+      setCart((prev) => prev.map((i) => ({ ...i, fired: true })));
+      setTableRefreshTrigger(Date.now());
+      const batchCount = res.data?.newBatches?.length ?? 0;
+      toast.success(`${newItems.length} item(s) fired! ${batchCount > 0 ? `${batchCount} ticket(s) sent 🔥` : ''}`);
     } catch (err: any) {
-      toast.error(err.message || 'Failed to hold order');
+      toast.error(err.message || 'Failed to fire items');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────────
+  // CHARGE — process payment on existing order
+  // ─────────────────────────────────────────────────────────────────
+  const handleCharge = async (method: string) => {
+    if (!operatorToken) { toast.error('No operator authenticated'); return; }
+    if (!currentOrderId) { toast.error('No active order to charge'); return; }
+    setIsProcessing(true);
+    try {
+      const paymentData = { method, amount: total, currency: 'NGN', checkId: activeCheckId };
+      const res = await provider.pos.payOrder(currentOrderId, paymentData, operatorToken);
+      if (res.error) throw new Error(res.error);
+      toast.success(`Payment of ${formatCurrency(total)} via ${method} processed ✓`);
+      setCart([]);
+      setActiveTableId(null);
+      setActiveTableName(null);
+      setCurrentOrderId(null);
+      setActiveCheckId(null);
+      setOrderChecks([]);
+      setShowChargeModal(false);
+      setTableRefreshTrigger(Date.now());
+    } catch (err: any) {
+      toast.error(err.message || 'Payment failed');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -301,96 +370,6 @@ export default function PosTerminalPage() {
   );
   const total = subtotal + tax;
 
-  // ─────────────────────────────────────────────────────────────────
-  // Payment / order creation
-  // ─────────────────────────────────────────────────────────────────
-  const handlePayment = async (method: string) => {
-    if (cart.length === 0 && method !== 'OPEN') return;
-    setIsProcessing(true);
-
-    const orderData = {
-      propertyId,
-      outletId: sessionContext?.outlet?.id,
-      sessionId: (session as any)?.sessionId || localStorage.getItem('lodgecore_pos_session_id'),
-      tableId: activeTableId,
-      tableNumber: activeTableName,
-      guestCount,
-      serverStaffId: activeOperator?.id,
-      status: method === 'OPEN' ? 'OPEN' : 'COMPLETED',
-      subtotal,
-      taxAmount: tax,
-      total,
-      items: cart.map((item) => ({
-        productId: item.productId,
-        productName: item.name,
-        quantity: item.quantity,
-        unitPrice: item.price,
-        taxRate: item.taxRate,
-        taxAmount: item.price * item.quantity * (item.taxRate / 100),
-        total: item.price * item.quantity,
-        kitchenStatus: item.kitchenStatus,
-        modifiers: item.modifiers ?? [],
-      })),
-      payments:
-        method !== 'OPEN'
-          ? [{ method, amount: total, currency: 'NGN', status: 'CONFIRMED' }]
-          : [],
-    };
-
-    try {
-      if (currentOrderId && method !== 'OPEN') {
-        const paymentData = { method, amount: total, currency: 'NGN', checkId: activeCheckId };
-        if (typeof window !== 'undefined' && (window as any).chrome?.webview) {
-          (window as any).chrome.webview.postMessage({
-            command: 'pos.payOrder',
-            payload: JSON.stringify({ orderId: currentOrderId, paymentData: JSON.stringify(paymentData) }),
-          });
-          (window as any).chrome.webview.postMessage({
-            command: 'PrintReceipt',
-            payload: JSON.stringify({ items: cart, total }),
-          });
-        } else if (operatorToken) {
-          const res = await provider.pos.payOrder(currentOrderId, paymentData, operatorToken);
-          if (res.error) throw new Error(res.error);
-        }
-      } else {
-        // Desktop IPC path
-        if (typeof window !== 'undefined' && (window as any).chrome?.webview) {
-          (window as any).chrome.webview.postMessage({
-            command: 'CreatePosOrder',
-            payload: JSON.stringify(orderData),
-          });
-          if (method !== 'OPEN') {
-            (window as any).chrome.webview.postMessage({
-              command: 'PrintReceipt',
-              payload: JSON.stringify({ items: cart, total }),
-            });
-          }
-        } else if (operatorToken) {
-          // Web / online path
-          const res = await provider.pos.createOrder(orderData, operatorToken);
-          if (res.error) throw new Error(res.error);
-          if (res.data?.id) setCurrentOrderId(res.data.id);
-        }
-      }
-
-      if (method !== 'OPEN') {
-        setCart([]);
-        setActiveTableId(null);
-        setActiveTableName(null);
-        setCurrentOrderId(null);
-        setActiveCheckId(null);
-        setOrderChecks([]);
-      }
-      
-      setTableRefreshTrigger(Date.now());
-      toast.success(method === 'OPEN' ? 'Order saved!' : `Payment of ${formatCurrency(total)} processed via ${method}`);
-    } catch (err: any) {
-      toast.error(err.message || 'Order failed');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
 
   const filteredProducts = products.filter(
     (p) =>
@@ -424,7 +403,7 @@ export default function PosTerminalPage() {
         setViewMode={setViewMode}
         onOpenMyOrders={() => setShowMyOrders(true)}
         onOpenMySales={() => setShowMySales(true)}
-        onOpenKitchen={() => setShowKitchen(true)}
+        onOpenKitchen={() => {}}
         onLock={() => { 
           setActiveOperator(null); 
           setOperatorToken(null);
@@ -546,11 +525,11 @@ export default function PosTerminalPage() {
             )}
             {currentOrderId && (
               <button
-                onClick={handleHoldOrder}
-                title="Hold Order"
+                onClick={() => { setCurrentOrderId(null); setCart([]); setActiveTableId(null); setActiveTableName(null); setTableRefreshTrigger(Date.now()); }}
+                title="Clear Table"
                 className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-all"
               >
-                <Pause className="w-4 h-4" />
+                <Lock className="w-4 h-4" />
               </button>
             )}
             <button
@@ -642,14 +621,30 @@ export default function PosTerminalPage() {
                   </div>
                 </div>
                 
-                <div className="flex items-center justify-between mt-1">
-                  <span className="text-xs font-medium text-slate-400">{formatCurrency(item.price)} each</span>
+              <div className="flex items-center justify-between mt-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-slate-400">{formatCurrency(item.price)} each</span>
+                    {/* Station badge */}
+                    {item.station && (
+                      <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${
+                        item.station === 'KITCHEN' ? 'bg-red-50 text-red-500' :
+                        item.station === 'BAR'     ? 'bg-blue-50 text-blue-500' :
+                        item.station === 'DIRECT'  ? 'bg-green-50 text-green-600' :
+                        'bg-slate-100 text-slate-400'
+                      }`}>
+                        {item.station === 'KITCHEN' ? '🔥' : item.station === 'BAR' ? '🍺' : item.station === 'DIRECT' ? '⚡' : '📦'} {item.station}
+                      </span>
+                    )}
+                    {item.fired && (
+                      <span className="text-[9px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded">SENT</span>
+                    )}
+                  </div>
                   <div className="flex items-center gap-1 bg-slate-50 rounded-lg p-1 border border-slate-100">
-                    <button onClick={() => updateQuantity(item.id, -1)} className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-white hover:shadow-sm text-slate-500 transition-all">
+                    <button onClick={() => updateQuantity(item.id, -1)} disabled={item.fired} className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-white hover:shadow-sm text-slate-500 transition-all disabled:opacity-30">
                       <Minus className="w-3 h-3" />
                     </button>
                     <span className="w-6 text-center font-bold text-xs text-slate-700">{item.quantity}</span>
-                    <button onClick={() => updateQuantity(item.id, 1)} className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-white hover:shadow-sm text-indigo-600 transition-all">
+                    <button onClick={() => updateQuantity(item.id, 1)} disabled={item.fired} className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-white hover:shadow-sm text-indigo-600 transition-all disabled:opacity-30">
                       <Plus className="w-3 h-3" />
                     </button>
                   </div>
@@ -664,7 +659,7 @@ export default function PosTerminalPage() {
           )}
         </div>
 
-        {/* Totals & Actions */}
+        {/* Action Buttons — state-machine driven */}
         <div className="p-5 border-t border-slate-200 bg-white shrink-0 shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.05)]">
           <div className="space-y-2 mb-4">
             <div className="flex justify-between text-sm font-medium text-slate-500">
@@ -679,54 +674,89 @@ export default function PosTerminalPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3 mb-3">
+          {/* STATE A: Cart has items, no active order → show SEND ORDER */}
+          {!currentOrderId && cart.length > 0 && (
             <Button
-              className="h-12 font-bold text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 shadow-none border-none"
-              onClick={() => handlePayment('ROOM_CHARGE')}
-              disabled={cart.length === 0 || isProcessing}
+              className="w-full h-14 font-black text-base tracking-wide bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-lg hover:shadow-xl transition-all hover:-translate-y-0.5 active:translate-y-0"
+              onClick={handleSendOrder}
+              disabled={isProcessing}
             >
-              <User className="w-4 h-4 mr-1" />Room
+              <Send className="w-5 h-5 mr-2" />
+              {isProcessing ? 'SENDING...' : 'SEND ORDER'}
             </Button>
-            <Button
-              className="h-12 font-bold text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 shadow-none border-none"
-              onClick={() => handlePayment('CARD')}
-              disabled={cart.length === 0 || isProcessing}
-            >
-              <CreditCard className="w-4 h-4 mr-1" />Card
-            </Button>
-            <Button
-              className="h-12 font-bold text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 shadow-none border-none"
-              onClick={() => handlePayment('BANK_TRANSFER')}
-              disabled={cart.length === 0 || isProcessing}
-            >
-              <Building2 className="w-4 h-4 mr-1" />Transfer
-            </Button>
-          </div>
-          <Button
-            className="w-full h-14 font-black text-lg tracking-wide bg-slate-900 hover:bg-slate-800 text-white rounded-xl shadow-lg hover:shadow-xl transition-all hover:-translate-y-0.5 active:translate-y-0 active:shadow-md"
-            onClick={() => handlePayment('CASH')}
-            disabled={cart.length === 0 || isProcessing}
-          >
-            <Banknote className="w-5 h-5 mr-2" />
-            {isProcessing ? 'PROCESSING...' : `PAY ${formatCurrency(total)}`}
-          </Button>
+          )}
+
+          {/* STATE B: Active order exists → show FIRE MORE + CHARGE */}
+          {currentOrderId && (
+            <div className="flex flex-col gap-2">
+              {/* Fire More — only if new unfired items in cart */}
+              {cart.some((i) => !i.fired) && (
+                <Button
+                  className="w-full h-12 font-black text-sm tracking-wide bg-orange-500 hover:bg-orange-600 text-white rounded-xl shadow-md"
+                  onClick={handleFireMore}
+                  disabled={isProcessing}
+                >
+                  <Flame className="w-4 h-4 mr-2" />
+                  {isProcessing ? 'FIRING...' : `FIRE ${cart.filter(i => !i.fired).length} MORE ITEM(S)`}
+                </Button>
+              )}
+              {/* Charge — always available when order exists */}
+              <Button
+                className="w-full h-14 font-black text-lg tracking-wide bg-slate-900 hover:bg-slate-800 text-white rounded-xl shadow-lg hover:shadow-xl transition-all hover:-translate-y-0.5"
+                onClick={() => setShowChargeModal(true)}
+                disabled={isProcessing}
+              >
+                <CreditCard className="w-5 h-5 mr-2" />
+                CHARGE {formatCurrency(total)}
+              </Button>
+            </div>
+          )}
+
+          {/* STATE C: Empty cart, no order → hint */}
+          {!currentOrderId && cart.length === 0 && (
+            <div className="text-center text-xs text-slate-400 py-2">Select a table and add items to begin</div>
+          )}
         </div>
       </div>
 
-      {/* Floating Kitchen Panel (KOT) Drawer */}
-      {showKitchen && (
-        <div className="absolute inset-0 z-50 flex justify-end bg-slate-900/20 backdrop-blur-sm transition-all">
-          <div className="w-[400px] h-full bg-white shadow-2xl flex flex-col animate-in slide-in-from-right-8 duration-200">
-            <div className="h-14 border-b border-slate-200 flex items-center justify-between px-6 bg-slate-50">
-              <span className="font-bold text-slate-800 flex items-center gap-2">
-                <ChefHat className="w-5 h-5 text-indigo-600" /> Kitchen Tickets
-              </span>
-              <button onClick={() => setShowKitchen(false)} className="p-2 hover:bg-slate-200 rounded-lg text-slate-500">
-                <X className="w-5 h-5" />
-              </button>
+      {/* Charge Modal */}
+      {showChargeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm">
+          <div className="w-[380px] bg-white rounded-2xl shadow-2xl overflow-hidden">
+            <div className="px-6 py-5 bg-slate-900 text-white">
+              <div className="flex justify-between items-center">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Charge</p>
+                  <p className="text-lg font-black">{activeTableName ? `Table ${activeTableName}` : 'Walk-in'}</p>
+                </div>
+                <button onClick={() => setShowChargeModal(false)} className="p-2 hover:bg-white/10 rounded-lg transition">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
-            <div className="flex-1 overflow-hidden relative">
-              <KotPanel items={cart} onFire={handleFireKot} isDisabled={!activeOperator} />
+            <div className="p-6">
+              <div className="space-y-2 mb-5">
+                <div className="flex justify-between text-sm text-slate-500"><span>Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
+                <div className="flex justify-between text-sm text-slate-500"><span>Tax</span><span>{formatCurrency(tax)}</span></div>
+                <div className="flex justify-between items-center pt-3 border-t border-slate-100">
+                  <span className="font-bold text-slate-800">TOTAL</span>
+                  <span className="font-black text-2xl text-slate-900">{formatCurrency(total)}</span>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Button className="h-12 font-bold text-sm bg-emerald-50 hover:bg-emerald-100 text-emerald-700 shadow-none" onClick={() => handleCharge('CASH')} disabled={isProcessing}>
+                  <Banknote className="w-4 h-4 mr-2" />Cash
+                </Button>
+                <Button className="h-12 font-bold text-sm bg-blue-50 hover:bg-blue-100 text-blue-700 shadow-none" onClick={() => handleCharge('CARD')} disabled={isProcessing}>
+                  <CreditCard className="w-4 h-4 mr-2" />Card
+                </Button>
+                <Button className="h-12 font-bold text-sm bg-purple-50 hover:bg-purple-100 text-purple-700 shadow-none" onClick={() => handleCharge('BANK_TRANSFER')} disabled={isProcessing}>
+                  <Building2 className="w-4 h-4 mr-2" />Transfer
+                </Button>
+                <Button className="h-12 font-bold text-sm bg-indigo-50 hover:bg-indigo-100 text-indigo-700 shadow-none" onClick={() => handleCharge('ROOM_CHARGE')} disabled={isProcessing}>
+                  <User className="w-4 h-4 mr-2" />Room
+                </Button>
+              </div>
             </div>
           </div>
         </div>
