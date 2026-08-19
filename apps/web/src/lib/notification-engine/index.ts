@@ -352,14 +352,28 @@ async function evaluateEvent(event: NotificationEvent, policy: NotificationPolic
       if (!policy.notifyOnReservationCreated) return null;
       const res = await prisma.reservation.findUnique({
         where: { id: event.entityId },
-        include: { primaryGuest: true }
+        include: {
+          primaryGuest: true,
+          reservationRooms: { include: { room: { include: { roomType: true } } } },
+        }
       });
       if (!res) return null;
       const guestName = res.primaryGuest?.firstName ? `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}` : 'A guest';
+      const checkIn = res.checkIn.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+      const checkOut = res.checkOut.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+      const nights = Math.ceil((res.checkOut.getTime() - res.checkIn.getTime()) / (1000 * 60 * 60 * 24));
+      const roomDetails = res.reservationRooms.map(rr => {
+        const roomNum = rr.room.number.split('.').pop();
+        const type = rr.room.roomType?.name || 'Room';
+        return `Room ${roomNum} (${type})`;
+      }).join(', ');
+      const totalAmount = res.totalAmount ? `₦${Number(res.totalAmount).toLocaleString()}` : 'N/A';
+      const adults = res.adults || 1;
+      const phone = res.primaryGuest?.phone || 'N/A';
       
       return {
-        subject: 'New Reservation',
-        body: `${guestName} booked a room (Conf: ${res.confirmationNumber || event.entityId}) for ${res.checkIn.toLocaleDateString()}.`,
+        subject: `New Reservation — ${guestName}`,
+        body: `📋 Conf: ${res.confirmationNumber || event.entityId}\n👤 Guest: ${guestName} | 📞 ${phone}\n🏠 ${roomDetails}\n📅 Check-in: ${checkIn} → Check-out: ${checkOut} (${nights} night${nights !== 1 ? 's' : ''})\n👥 Adults: ${adults}\n💰 Total: ${totalAmount}`,
         category: 'Operations',
         priority: 'Normal',
       };
@@ -369,14 +383,28 @@ async function evaluateEvent(event: NotificationEvent, policy: NotificationPolic
       if (!policy.notifyOnReservationCancelled) return null;
       const res = await prisma.reservation.findUnique({
         where: { id: event.entityId },
-        include: { primaryGuest: true }
+        include: {
+          primaryGuest: true,
+          reservationRooms: { include: { room: { include: { roomType: true } } } },
+        }
       });
       if (!res) return null;
       const guestName = res.primaryGuest?.firstName ? `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}` : 'A guest';
+      const checkIn = res.checkIn.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+      const checkOut = res.checkOut.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+      const nights = Math.ceil((res.checkOut.getTime() - res.checkIn.getTime()) / (1000 * 60 * 60 * 24));
+      const roomDetails = res.reservationRooms.map(rr => {
+        const roomNum = rr.room.number.split('.').pop();
+        const type = rr.room.roomType?.name || 'Room';
+        return `Room ${roomNum} (${type})`;
+      }).join(', ');
+      const totalAmount = res.totalAmount ? `₦${Number(res.totalAmount).toLocaleString()}` : 'N/A';
+      const phone = res.primaryGuest?.phone || 'N/A';
+      const cancelReason = (event.metadata?.reason as string) || (res as any).cancellationReason || 'No reason provided';
       
       return {
-        subject: 'Reservation Cancelled',
-        body: `Reservation for ${guestName} (Conf: ${res.confirmationNumber || event.entityId}) was cancelled.`,
+        subject: `Reservation Cancelled — ${guestName}`,
+        body: `❌ Conf: ${res.confirmationNumber || event.entityId}\n👤 Guest: ${guestName} | 📞 ${phone}\n🏠 ${roomDetails || 'N/A'}\n📅 Was: ${checkIn} → ${checkOut} (${nights} night${nights !== 1 ? 's' : ''})\n💰 Value: ${totalAmount}\n📝 Reason: ${cancelReason}`,
         category: 'Operations',
         priority: 'High',
       };
