@@ -37,7 +37,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'FINANCE',
+                  data.property.name.toUpperCase(),
                   style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.2, color: textSecondary),
                 ),
                 const SizedBox(height: 2),
@@ -75,7 +75,14 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                 Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
-                    color: surfaceNavy,
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Color(0xFF1E293B),
+                        Color(0xFF233045),
+                      ],
+                    ),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: goldAccent.withValues(alpha: 0.3)),
                   ),
@@ -174,7 +181,9 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Column(
-                    children: data.payments.byMethod.map((m) {
+                    children: data.payments.byMethod.isEmpty
+                        ? [const Padding(padding: EdgeInsets.all(8.0), child: Text('No payments recorded today', style: TextStyle(color: textSecondary)))]
+                        : data.payments.byMethod.map((m) {
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 12.0),
                         child: Row(
@@ -219,13 +228,26 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                             return Column(
                               mainAxisAlignment: MainAxisAlignment.end,
                               children: [
-                                Container(
-                                  width: 24,
-                                  height: 80 * heightRatio,
-                                  decoration: BoxDecoration(
-                                    color: goldAccent,
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
+                                Stack(
+                                  alignment: Alignment.bottomCenter,
+                                  children: [
+                                    Container(
+                                      width: 24,
+                                      height: 80,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withValues(alpha: 0.05),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                    ),
+                                    Container(
+                                      width: 24,
+                                      height: 80 * heightRatio,
+                                      decoration: BoxDecoration(
+                                        color: goldAccent,
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
