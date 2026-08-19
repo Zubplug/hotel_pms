@@ -391,6 +391,8 @@ export async function getRoomIntelligenceView(
       roomType: { id: room.roomType.id, name: room.roomType.name },
       displayStatus,
       availabilityStatus,
+      housekeepingStatus: room.housekeepingStatus,
+      maintenanceStatus: activeBlock ? activeBlock.type : 'NONE',
       sellability
     },
     currentGuest,
