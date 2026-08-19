@@ -28,6 +28,7 @@ public class LocalDbContext : DbContext
     public DbSet<LocalLoginAttempt> LoginAttempts { get; set; } = null!;
     public DbSet<LocalStockTransaction> StockTransactions { get; set; } = null!;
     public DbSet<LocalPosOperatorSession> PosOperatorSessions { get; set; } = null!;
+    public DbSet<LocalPosTerminal> PosTerminals { get; set; } = null!;
     public DbSet<LocalOperatorContext> OperatorContexts { get; set; } = null!;
     public DbSet<LocalPosAuthorizationAudit> PosAuthorizationAudits { get; set; } = null!;
     public DbSet<LocalPosFloorPlan> PosFloorPlans { get; set; } = null!;
@@ -112,5 +113,9 @@ public class LocalDbContext : DbContext
             .HasMany(i => i.Modifiers)
             .WithOne()
             .HasForeignKey(m => m.OrderItemId);
+            
+        modelBuilder.Entity<LocalSyncEvent>()
+            .HasIndex(e => new { e.TerminalId, e.SequenceNumber })
+            .IsUnique();
     }
 }

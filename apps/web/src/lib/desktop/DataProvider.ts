@@ -6,6 +6,10 @@ export interface LodgeCoreDataProvider {
     login: (staffId: string, pin: string) => Promise<any>;
     clearSession?: () => Promise<any>;
   };
+  system?: {
+    getTerminalStatus?: () => Promise<any>;
+    provisionTerminal?: (data: any) => Promise<any>;
+  };
   properties: {
     list(): Promise<any[]>;
   };

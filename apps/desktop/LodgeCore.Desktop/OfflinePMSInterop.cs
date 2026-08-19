@@ -9,15 +9,43 @@ public class OfflinePMSInterop
     private readonly LocalRepository _repo;
     private readonly AuthManager _authManager;
     private readonly SessionManager _sessionManager;
+    private readonly TerminalBootstrapService _terminalBootstrap;
 
-    public OfflinePMSInterop(LocalRepository repo, AuthManager authManager, SessionManager sessionManager)
+    public OfflinePMSInterop(LocalRepository repo, AuthManager authManager, SessionManager sessionManager, TerminalBootstrapService terminalBootstrap)
     {
         _repo = repo;
         _authManager = authManager;
         _sessionManager = sessionManager;
+        _terminalBootstrap = terminalBootstrap;
     }
 
     private readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+
+    public async Task<string> GetTerminalStatusAsync()
+    {
+        try
+        {
+            var status = await _terminalBootstrap.GetTerminalStatusAsync();
+            return JsonSerializer.Serialize(status, _jsonOptions); // We just return it directly since the wrapper expects this shape
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { registrationState = "UNKNOWN", error = ex.Message }, _jsonOptions);
+        }
+    }
+
+    public async Task<string> ProvisionTerminalAsync(string email, string password, string propertyId, string outletId, string terminalName)
+    {
+        try
+        {
+            var result = await _terminalBootstrap.ProvisionTerminalAsync(email, password, propertyId, outletId, terminalName);
+            return JsonSerializer.Serialize(result, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
 
     public async Task<string> GetSessionAsync()
     {
@@ -127,6 +155,13 @@ public class OfflinePMSInterop
         {
             return JsonSerializer.Serialize(new { success = false, error = ex.Message });
         }
+    }
+
+    public async Task<string> LockSessionAsync()
+    {
+        // For the desktop POS, locking is identical to clearing the operator session
+        // without unprovisioning the terminal.
+        return await ClearSessionAsync();
     }
 
     public async Task<string> GetPropertiesAsync()
@@ -384,11 +419,50 @@ public class OfflinePMSInterop
         try
         {
             var data = await _repo.GetPosProductsAsync(propertyId);
-            return JsonSerializer.Serialize(new { success = true, data });
+            return JsonSerializer.Serialize(new { success = true, data }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
+    public async Task<string> GetCategoriesAsync(string propertyId)
+    {
+        try
+        {
+            var data = await _repo.GetCategoriesAsync(propertyId);
+            return JsonSerializer.Serialize(new { success = true, data }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
+    public async Task<string> GetFloorPlansAsync(string outletId)
+    {
+        try
+        {
+            var data = await _repo.GetFloorPlansAsync(outletId);
+            return JsonSerializer.Serialize(new { success = true, data }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
+    public async Task<string> GetTablesAsync(string floorPlanId)
+    {
+        try
+        {
+            var data = await _repo.GetTablesAsync(floorPlanId);
+            return JsonSerializer.Serialize(new { success = true, data }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 
@@ -437,11 +511,42 @@ public class OfflinePMSInterop
         {
             var posCtx = await _sessionManager.GetActiveContextAsync();
             var res = await _repo.FireKotAsync(orderId, itemIds, posCtx.StaffId, posCtx.DeviceId);
-            return JsonSerializer.Serialize(new { success = true, data = res });
+            return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
+    public async Task<string> FireItemsAsync(string orderId, string itemsJson)
+    {
+        try
+        {
+            var items = JsonSerializer.Deserialize<List<LodgeCore.Desktop.Data.Entities.LocalPosOrderItem>>(itemsJson);
+            if (items == null || !items.Any()) throw new Exception("No items to fire");
+
+            var posCtx = await _sessionManager.GetActiveContextAsync();
+            var res = await _repo.FireItemsAsync(orderId, items, posCtx.StaffId, posCtx.DeviceId);
+            return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
+    public async Task<string> GetActiveOrdersAsync(string filter)
+    {
+        try
+        {
+            var posCtx = await _sessionManager.GetActiveContextAsync();
+            var res = await _repo.GetActiveOrdersAsync(posCtx.SessionId, filter, posCtx.StaffId);
+            return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 
@@ -770,12 +875,45 @@ public class OfflinePMSInterop
     {
         try
         {
-            var session = await _repo.GetSessionContextAsync(sessionId);
-            return JsonSerializer.Serialize(new { success = true, data = session });
+            var desktopSession = await _authManager.GetSessionAsync();
+            if (desktopSession == null) throw new UnauthorizedAccessException("No active desktop session.");
+
+            var property = await _repo.GetPropertyAsync(desktopSession.PropertyId);
+            var staff = await _repo.GetStaffByIdAsync(desktopSession.UserId);
+            var terminal = await _repo.GetTerminalAsync(desktopSession.DeviceId);
+            var outlet = terminal != null ? await _repo.GetOutletAsync(terminal.OutletId) : null;
+            var posSession = await _repo.GetSessionContextAsync(sessionId);
+
+            var context = new
+            {
+                terminal = terminal,
+                outlet = outlet,
+                operatorInfo = staff, // Avoid reserved word 'operator' in C# if needed, but in JSON it maps to operator
+                permissions = desktopSession.Permissions,
+                businessDate = property?.BusinessDate.ToString("yyyy-MM-dd") ?? DateTime.UtcNow.ToString("yyyy-MM-dd"),
+                taxConfiguration = new { }, // Placeholder for now
+                currency = property?.Currency ?? "USD",
+                posSession = posSession
+            };
+
+            // Let's use a dictionary to ensure the exact JSON key 'operator' is used
+            var jsonDict = new Dictionary<string, object>
+            {
+                ["terminal"] = terminal,
+                ["outlet"] = outlet,
+                ["operator"] = staff,
+                ["permissions"] = desktopSession.Permissions,
+                ["businessDate"] = property?.BusinessDate.ToString("yyyy-MM-dd") ?? DateTime.UtcNow.ToString("yyyy-MM-dd"),
+                ["taxConfiguration"] = new { },
+                ["currency"] = property?.Currency ?? "USD",
+                ["posSession"] = posSession
+            };
+
+            return JsonSerializer.Serialize(new { success = true, data = jsonDict }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 

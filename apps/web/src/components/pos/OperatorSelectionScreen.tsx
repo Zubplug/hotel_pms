@@ -28,7 +28,7 @@ export function OperatorSelectionScreen({ isOpen, onAuthenticated, onCancel, can
 
   useEffect(() => {
     if (isOpen && propertyId) {
-      provider.pos.getActiveStaff(propertyId).then(res => {
+      provider.auth.getActiveStaff().then(res => {
         if (res.data) setStaff(res.data);
       }).catch(console.error);
     }
@@ -59,23 +59,20 @@ export function OperatorSelectionScreen({ isOpen, onAuthenticated, onCancel, can
     setError('');
 
     try {
-      const posSessionId = localStorage.getItem('lodgecore_pos_session_id') || (session as any)?.sessionId || '';
-      const finalOutletId = outletId || (session as any)?.outletId || localStorage.getItem('lodgecore_pos_outlet_id') || '';
-      const deviceId = (session as any)?.deviceId || localStorage.getItem('lodgecore_pos_device_id') || '';
+      const authRes = await provider.auth.login(selectedStaff.id, pin);
 
-      const operatorRes = await provider.pos.authenticateOperator(
-        selectedStaff.id, 
-        pin, 
-        propertyId, 
-        posSessionId,
-        finalOutletId,
-        deviceId
-      );
-
-      if (!operatorRes.error && operatorRes.data) {
-        onAuthenticated(operatorRes.data.staff, operatorRes.data.operatorToken);
+      if (!authRes.error && authRes.success) {
+        // auth.login sets the session in the backend. 
+        // We fetch the updated session immediately to pass to onAuthenticated.
+        const sessionResStr = await provider.auth.getSession();
+        const sessionRes = typeof sessionResStr === 'string' ? JSON.parse(sessionResStr) : sessionResStr;
+        if (sessionRes.success && sessionRes.data?.user) {
+           onAuthenticated(sessionRes.data.user, sessionRes.data.sessionId);
+        } else {
+           onAuthenticated(selectedStaff, "desktop_token");
+        }
       } else {
-        setError(operatorRes.error || 'Authentication failed');
+        setError(authRes.error || 'Authentication failed');
         setPin('');
       }
     } catch (e: any) {

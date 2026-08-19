@@ -112,6 +112,7 @@ model Property {
   enrollmentTokens     AgentEnrollmentToken[]
   syncConflicts        SyncConflict[]
   inventoryAlerts      InventoryAlert[]
+  approvalRequests     ApprovalRequest[]
 
   createdAt  DateTime     @default(now()) @db.Timestamptz
   updatedAt  DateTime     @updatedAt @db.Timestamptz
@@ -1174,8 +1175,38 @@ model User {
   updatedAt DateTime @updatedAt @db.Timestamptz
 
   roles UserRole[]
+  deviceTokens DeviceToken[]
+  notificationPreferences UserNotificationPreference[]
 }
 
+// FCM device tokens for push notifications
+model DeviceToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  platform  String   // 'ios' | 'android'
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([userId])
+}
+
+model UserNotificationPreference {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  category  String   // 'CRITICAL' | 'APPROVALS' | 'OPERATIONS' | 'REPORTS'
+  
+  push      Boolean  @default(true)
+  inApp     Boolean  @default(true)
+  email     Boolean  @default(false)
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@unique([userId, category])
+}
 model Role {
   id             String       @id @default(uuid()) @db.Uuid
   organizationId String       @db.Uuid
@@ -1453,6 +1484,12 @@ model Notification {
   sentAt   DateTime? @db.Timestamptz
   error    String?
   metadata Json?
+
+  priority String? // 'P0' | 'P1' | 'P2' | 'P3'
+  category String? // 'CRITICAL' | 'APPROVALS' | 'OPERATIONS' | 'GUESTS' | 'FINANCE'
+  groupKey String? // For grouping related notifications
+  readAt   DateTime? @db.Timestamptz
+  action   String? // Deep link or action ID
 
   createdAt DateTime @default(now()) @db.Timestamptz
 }
@@ -2340,35 +2377,41 @@ enum PosTerminalType {
   BACK_OFFICE
 }
 
-enum PosTerminalStatus {
-  ACTIVE
-  INACTIVE
+enum PosRegistrationState {
+  UNREGISTERED
+  PROVISIONING
+  REGISTERED
   REVOKED
 }
 
-enum PosLicenseStatus {
-  ACTIVE
+enum PosLicenseState {
+  VALID
   EXPIRED
   RESTRICTED
 }
 
 model PosTerminal {
-  id              String            @id @default(uuid()) @db.Uuid
-  terminalCode    String            @unique
-  name            String
-  terminalType    PosTerminalType
-  organisationId  String            @db.Uuid
-  propertyId      String            @db.Uuid
-  outletId        String            @db.Uuid
-  outlet          PosOutlet         @relation(fields: [outletId], references: [id])
-  deviceTokenHash String
-  status          PosTerminalStatus @default(ACTIVE)
-  licenseStatus   PosLicenseStatus  @default(ACTIVE)
-  autoLockSeconds Int?
-  lastSyncAt      DateTime?
-  lastSeenAt      DateTime?
-  registeredAt    DateTime          @default(now())
-  revokedAt       DateTime?
+  id                   String               @id @default(uuid()) @db.Uuid
+  terminalCode         String               @unique
+  name                 String
+  terminalType         PosTerminalType
+  organisationId       String               @db.Uuid
+  propertyId           String               @db.Uuid
+  outletId             String               @db.Uuid
+  outlet               PosOutlet            @relation(fields: [outletId], references: [id])
+  deviceCredentialHash String
+  registrationState    PosRegistrationState @default(REGISTERED)
+  licenseState         PosLicenseState      @default(VALID)
+  licenseExpiresAt     DateTime?
+  autoLockSeconds      Int?
+  lastSyncAt           DateTime?
+  lastSeenAt           DateTime?
+  registeredAt         DateTime             @default(now())
+  revokedAt            DateTime?
+
+  configurationVersion Int @default(0)
+  staffVersion         Int @default(0)
+  menuVersion          Int @default(0)
 
   operatorSessions PosOperatorSession[]
 
@@ -2397,4 +2440,58 @@ model PosOperatorSession {
   deviceSessionId      String?
 
   @@map("pos_operator_sessions")
+}
+
+model PosProcessedEvent {
+  eventId    String   @id // The OperationId from local SQLite
+  terminalId String   @db.Uuid
+  outletId   String   @db.Uuid
+  sessionId  String?  @db.Uuid
+  operatorId String?  @db.Uuid
+  entityType String
+  entityId   String
+  operation  String
+  payload    Json
+  createdAt  DateTime @default(now())
+
+  @@index([terminalId])
+  @@map("pos_processed_events")
+}
+
+// -----------------------------------------------------------------------------
+// APPROVALS
+// -----------------------------------------------------------------------------
+
+enum ApprovalRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+model ApprovalRequest {
+  id          String   @id @default(uuid()) @db.Uuid
+  propertyId  String   @db.Uuid
+  property    Property @relation(fields: [propertyId], references: [id])
+  outletId    String?  @db.Uuid
+  
+  type        String // 'REFUND', 'VOID', 'DISCOUNT', 'INVENTORY_ADJUSTMENT'
+  status      ApprovalRequestStatus @default(PENDING)
+  
+  requestedBy String   @db.Uuid // Staff ID
+  requestedAt DateTime @default(now()) @db.Timestamptz
+  
+  reviewedBy  String?  @db.Uuid // Staff ID
+  reviewedAt  DateTime? @db.Timestamptz
+  
+  amount      Decimal? @db.Decimal(18, 4)
+  currency    String?
+  
+  reason      String
+  details     Json? // Detailed payload/snapshot of the request
+  
+  expiresAt   DateTime? @db.Timestamptz
+  
+  createdAt   DateTime @default(now()) @db.Timestamptz
+  updatedAt   DateTime @updatedAt @db.Timestamptz
 }

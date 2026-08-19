@@ -23,6 +23,20 @@ public class SyncEngine : BackgroundService
     private bool _isOnline = true; 
     private int _consecutiveFailures = 0; // Tracks failures for exponential backoff
 
+    public enum SyncState { Syncing, Pending, Error, Offline, UpToDate }
+    
+    public class SyncHealthInfo
+    {
+        public SyncState State { get; set; }
+        public DateTime LastSuccessfulSync { get; set; }
+        public int PendingOperations { get; set; }
+        public string ErrorMessage { get; set; }
+    }
+
+    public static event Action<SyncHealthInfo> OnSyncHealthChanged;
+    
+    private DateTime _lastSuccess = DateTime.MinValue;
+
     public SyncEngine(IServiceProvider serviceProvider, ILogger<SyncEngine> logger, AuthManager authManager)
     {
         _serviceProvider = serviceProvider;
@@ -42,6 +56,7 @@ public class SyncEngine : BackgroundService
             {
                 try
                 {
+                    BroadcastHealth(SyncState.Syncing, "Syncing...");
                     await PushPendingEventsAsync(stoppingToken);
                     await PushKeycardAuditsAsync(stoppingToken);
                     
@@ -58,7 +73,12 @@ public class SyncEngine : BackgroundService
                 {
                     _consecutiveFailures++;
                     _logger.LogError(ex, $"An error occurred during the sync cycle. Failure count: {_consecutiveFailures}");
+                    BroadcastHealth(SyncState.Error, ex.Message);
                 }
+            }
+            else
+            {
+                BroadcastHealth(SyncState.Offline, "Device is offline");
             }
 
             // Exponential backoff logic: Max 5 minutes (300 seconds), Base 30 seconds
@@ -67,6 +87,32 @@ public class SyncEngine : BackgroundService
         }
 
         _logger.LogInformation("SyncEngine is stopping.");
+    }
+
+    private void BroadcastHealth(SyncState state, string message = null)
+    {
+        using var scope = _serviceProvider.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
+        
+        var pendingCount = 0;
+        try 
+        {
+            pendingCount = dbContext.SyncEvents.Count(e => e.Status == "PENDING" || e.Status == "FAILED");
+        } 
+        catch { }
+
+        if (state == SyncState.Syncing && pendingCount == 0)
+        {
+            state = SyncState.UpToDate;
+        }
+
+        OnSyncHealthChanged?.Invoke(new SyncHealthInfo
+        {
+            State = state,
+            LastSuccessfulSync = _lastSuccess,
+            PendingOperations = pendingCount,
+            ErrorMessage = message
+        });
     }
 
     /// <summary>
@@ -78,63 +124,104 @@ public class SyncEngine : BackgroundService
         var dbContext = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
 
         var pendingEvents = await dbContext.SyncEvents
-            .Where(e => e.Status == "PENDING")
-            .OrderBy(e => e.CreatedAt)
-            .Take(50) // Batch push
+            .Where(e => e.Status == "PENDING" || e.Status == "FAILED")
+            .OrderBy(e => e.SequenceNumber)
+            .Take(100) // Batch push limit
             .ToListAsync(cancellationToken);
 
         if (!pendingEvents.Any()) return;
 
-        _logger.LogInformation($"Pushing {pendingEvents.Count} pending operations to cloud...");
-
         var deviceId = await _authManager.GetOrCreateDeviceIdAsync();
+        
+        // Ensure we only push events for THIS terminal (or group by terminal if mixed)
+        var eventsToPush = pendingEvents.Where(e => e.TerminalId == deviceId).ToList();
+        if (!eventsToPush.Any()) return;
+
+        _logger.LogInformation($"Pushing {eventsToPush.Count} pending operations to cloud...");
+
         var token = await _authManager.GetAuthTokenAsync();
         if (!string.IsNullOrEmpty(token))
         {
             _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
         }
 
-        foreach (var syncEvent in pendingEvents)
+        // Mark as PROCESSING in-memory so they don't get double-pushed if loop overlaps
+        foreach (var evt in eventsToPush)
         {
-            try
-            {
-                // Implement Idempotency guarantees: Send OperationId as Idempotency-Key header
-                var request = new HttpRequestMessage(HttpMethod.Post, "sync/push");
-                request.Headers.Add("Idempotency-Key", syncEvent.OperationId);
-                // request.Content = JsonContent.Create(syncEvent);
-                // var response = await _httpClient.SendAsync(request, cancellationToken);
-                // response.EnsureSuccessStatusCode();
+            evt.Status = "PROCESSING";
+            evt.AttemptCount++;
+            evt.LastAttemptAt = DateTime.UtcNow;
+        }
+        await dbContext.SaveChangesAsync(cancellationToken);
 
-                // On success, mark as SYNCED
-                syncEvent.Status = "SYNCED";
-                _consecutiveFailures = 0; // Reset failures on successful push
-            }
-            catch (HttpRequestException httpEx)
+        try
+        {
+            var request = new HttpRequestMessage(HttpMethod.Post, "pos/sync/push");
+            request.Content = JsonContent.Create(new { events = eventsToPush });
+            
+            var response = await _httpClient.SendAsync(request, cancellationToken);
+            
+            if (response.IsSuccessStatusCode)
             {
-                // If it's a 409 Conflict, we mark it as CONFLICT for the Sync Center UI
-                if (httpEx.StatusCode == System.Net.HttpStatusCode.Conflict)
+                var result = await response.Content.ReadFromJsonAsync<SyncPushResponse>(cancellationToken: cancellationToken);
+                if (result != null)
                 {
-                    syncEvent.Status = "CONFLICT";
-                    _logger.LogWarning($"Conflict detected for operation {syncEvent.OperationId}");
-                    _consecutiveFailures = 0; // A conflict is a successful network roundtrip, so reset backoff
-                }
-                else
-                {
-                    // Network error, break loop to preserve chronological order for next retry
-                    _consecutiveFailures++;
-                    _logger.LogWarning($"Network error pushing event {syncEvent.OperationId}. Pausing sync.");
-                    break;
+                    foreach (var evt in eventsToPush)
+                    {
+                        if (result.Accepted?.Contains(evt.OperationId) == true || result.AlreadyProcessed?.Contains(evt.OperationId) == true)
+                        {
+                            evt.Status = "SYNCED";
+                            evt.ErrorCode = null;
+                            evt.ErrorMessage = null;
+                        }
+                        else if (result.Rejected?.Contains(evt.OperationId) == true)
+                        {
+                            evt.Status = "FAILED";
+                            evt.ErrorMessage = "Rejected by cloud validation";
+                        }
+                        else if (result.Conflicts?.Contains(evt.OperationId) == true)
+                        {
+                            evt.Status = "CONFLICT";
+                            evt.ErrorMessage = "Conflict detected by cloud";
+                        }
+                        else
+                        {
+                            // If it wasn't in any array, assume failed
+                            evt.Status = "FAILED";
+                            evt.ErrorMessage = "Cloud response omitted this event";
+                        }
+                    }
+                    _consecutiveFailures = 0;
                 }
             }
-            catch (Exception ex)
+            else
             {
                 _consecutiveFailures++;
-                _logger.LogError(ex, $"Failed to push sync event {syncEvent.OperationId}");
-                break; 
+                _logger.LogWarning($"Network error pushing events. Status: {response.StatusCode}");
+                foreach (var evt in eventsToPush) evt.Status = "FAILED";
+            }
+        }
+        catch (Exception ex)
+        {
+            _consecutiveFailures++;
+            _logger.LogError(ex, "Failed to push sync events");
+            foreach (var evt in eventsToPush)
+            {
+                evt.Status = "FAILED";
+                evt.ErrorMessage = ex.Message;
             }
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private class SyncPushResponse
+    {
+        public List<string>? Accepted { get; set; }
+        public List<string>? AlreadyProcessed { get; set; }
+        public List<string>? Rejected { get; set; }
+        public List<string>? Conflicts { get; set; }
+        public string? ServerCursor { get; set; }
     }
 
     private async Task PushKeycardAuditsAsync(CancellationToken cancellationToken)
@@ -311,6 +398,8 @@ public class SyncEngine : BackgroundService
 
             await dbContext.SaveChangesAsync(cancellationToken);
             _consecutiveFailures = 0;
+            _lastSuccess = DateTime.UtcNow;
+            BroadcastHealth(SyncState.UpToDate);
             _logger.LogInformation("Sync pull completed successfully.");
         }
         catch (HttpRequestException ex)

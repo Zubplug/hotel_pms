@@ -13,8 +13,7 @@ public partial class MainPage : ContentPage
 
 #if DEBUG
         // In debug mode, connect to the local Next.js development server
-        // Always navigate to root — Next.js middleware will handle auth redirect to /login
-        MainWebView.Source = new UrlWebViewSource { Url = "http://localhost:3000/" };
+        MainWebView.Source = new UrlWebViewSource { Url = "http://localhost:3000/desktop" };
 #endif
     }
 
@@ -40,8 +39,9 @@ public partial class MainPage : ContentPage
 #if !DEBUG
         webView2.CoreWebView2.AddWebResourceRequestedFilter("http://lodgecore.local/*", Microsoft.Web.WebView2.Core.CoreWebView2WebResourceContext.All);
         webView2.CoreWebView2.WebResourceRequested += CoreWebView2_WebResourceRequested;
-        // Always navigate to root — Next.js middleware redirects unauthenticated users to /login
-        webView2.CoreWebView2.Navigate("http://lodgecore.local/");
+        
+        // Navigate to the isolated Desktop route
+        webView2.CoreWebView2.Navigate("http://lodgecore.local/desktop");
 #endif
     }
 
@@ -112,6 +112,18 @@ public partial class MainPage : ContentPage
 
             switch (method)
             {
+                case "system.getTerminalStatus":
+                    responseData = await pmsInterop.GetTerminalStatusAsync();
+                    break;
+                case "system.provisionTerminal":
+                    responseData = await pmsInterop.ProvisionTerminalAsync(
+                        parameters?["email"]?.ToString(),
+                        parameters?["password"]?.ToString(),
+                        parameters?["propertyId"]?.ToString(),
+                        parameters?["outletId"]?.ToString(),
+                        parameters?["terminalName"]?.ToString()
+                    );
+                    break;
                 case "auth.getSession":
                     responseData = await pmsInterop.GetSessionAsync();
                     break;
@@ -130,7 +142,11 @@ public partial class MainPage : ContentPage
                     );
                     break;
                 case "auth.clearSession":
+                case "auth.logout":
                     responseData = await pmsInterop.ClearSessionAsync();
+                    break;
+                case "auth.lock":
+                    responseData = await pmsInterop.LockSessionAsync();
                     break;
                 case "properties.list":
                     responseData = await pmsInterop.GetPropertiesAsync();
@@ -291,6 +307,15 @@ public partial class MainPage : ContentPage
                         parameters?["orderId"]?.ToString(),
                         kotItemIdsList);
                     break;
+                case "pos.fireItems":
+                    responseData = await pmsInterop.FireItemsAsync(
+                        parameters?["orderId"]?.ToString(),
+                        parameters?["items"]?.ToString());
+                    break;
+                case "pos.getActiveOrders":
+                    responseData = await pmsInterop.GetActiveOrdersAsync(
+                        parameters?["filter"]?.ToString());
+                    break;
                 case "pos.getOrder":
                     responseData = await pmsInterop.GetOrderAsync(parameters?["orderId"]?.ToString());
                     break;
@@ -397,7 +422,7 @@ public partial class MainPage : ContentPage
                     responseData = await pmsInterop.GetActiveStaffAsync(parameters?["propertyId"]?.ToString());
                     break;
                 case "pos.getCategories":
-                    responseData = await pmsInterop.GetPosProductsAsync(parameters?["propertyId"]?.ToString());
+                    responseData = await pmsInterop.GetCategoriesAsync(parameters?["propertyId"]?.ToString());
                     break;
                 case "pos.getFloorPlans":
                     responseData = await pmsInterop.GetFloorPlansAsync(parameters?["outletId"]?.ToString());

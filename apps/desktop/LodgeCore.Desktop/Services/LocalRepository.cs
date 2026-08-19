@@ -437,32 +437,12 @@ public class LocalRepository
 
         _dbContext.PosOrders.Add(order);
         
-        var syncEvent = new LocalSyncEvent
-        {
-            OperationId = operationId,
-            EntityType = "POS_ORDER",
-            EntityId = order.Id,
-            OperationType = "CREATE",
-            PayloadJson = JsonSerializer.Serialize(order),
-            UserId = userId,
-            DeviceId = deviceId
-        };
-        
-        _dbContext.SyncEvents.Add(syncEvent);
+        AppendSyncEvent("POS_ORDER", order.Id, "ORDER_CREATED", order, deviceId, order.OutletId, order.SessionId, userId);
         
         if (!string.IsNullOrEmpty(order.FolioId))
         {
-            var folioChargeEvent = new LocalSyncEvent
-            {
-                OperationId = $"op_folio_{operationId}",
-                EntityType = "FOLIO",
-                EntityId = order.FolioId,
-                OperationType = "ADD_ROOM_CHARGE",
-                PayloadJson = JsonSerializer.Serialize(new { amount = order.Total, description = $"POS Order #{order.OrderNumber}" }),
-                UserId = userId,
-                DeviceId = deviceId
-            };
-            _dbContext.SyncEvents.Add(folioChargeEvent);
+            var folioEventData = new { amount = order.Total, description = $"POS Order #{order.OrderNumber}" };
+            AppendSyncEvent("FOLIO", order.FolioId, "ADD_ROOM_CHARGE", folioEventData, deviceId, order.OutletId, order.SessionId, userId);
             
             var folio = await _dbContext.Folios.FindAsync(order.FolioId);
             if (folio != null)
@@ -487,20 +467,7 @@ public class LocalRepository
         }
         order.UpdatedAt = DateTime.UtcNow;
 
-        string operationId = $"op_order_status_{deviceId}_{DateTime.UtcNow.Ticks}";
-        
-        var syncEvent = new LocalSyncEvent
-        {
-            OperationId = operationId,
-            EntityType = "POS_ORDER",
-            EntityId = order.Id,
-            OperationType = "UPDATE",
-            PayloadJson = JsonSerializer.Serialize(new { status = order.Status, notes = order.Notes, updatedAt = order.UpdatedAt }),
-            UserId = userId,
-            DeviceId = deviceId
-        };
-        
-        _dbContext.SyncEvents.Add(syncEvent);
+        AppendSyncEvent("POS_ORDER", order.Id, status == "CLOSED" ? "ORDER_CLOSED" : "ORDER_UPDATED", new { status = order.Status, notes = order.Notes, updatedAt = order.UpdatedAt }, deviceId, order.OutletId, order.SessionId, userId);
         await _dbContext.SaveChangesAsync();
 
         return order;
@@ -544,17 +511,7 @@ public class LocalRepository
             item.SentToKitchenAt = DateTime.UtcNow;
         }
 
-        var syncEvent = new LocalSyncEvent
-        {
-            OperationId = operationId,
-            EntityType = "POS_KOT",
-            EntityId = kot.Id,
-            OperationType = "CREATE",
-            PayloadJson = JsonSerializer.Serialize(new { kot, itemIds }),
-            UserId = userId,
-            DeviceId = deviceId
-        };
-        _dbContext.SyncEvents.Add(syncEvent);
+        AppendSyncEvent("POS_KOT", kot.Id, "KOT_CREATED", new { kot, itemIds }, deviceId, order.OutletId, order.SessionId, userId);
         await _dbContext.SaveChangesAsync();
 
         return kot;
@@ -591,16 +548,7 @@ public class LocalRepository
             item.CheckId = newCheck.Id;
         }
 
-        _dbContext.SyncEvents.Add(new LocalSyncEvent
-        {
-            OperationId = operationId,
-            EntityType = "POS_ORDER",
-            EntityId = order.Id,
-            OperationType = "UPDATE", // Re-sync the order to update checks and item checkIds
-            PayloadJson = JsonSerializer.Serialize(order),
-            UserId = userId,
-            DeviceId = deviceId
-        });
+        AppendSyncEvent("POS_ORDER", order.Id, "ORDER_CHECK_SPLIT", order, deviceId, order.OutletId, order.SessionId, userId);
 
         await _dbContext.SaveChangesAsync();
         return newCheck;
@@ -626,16 +574,7 @@ public class LocalRepository
 
         _dbContext.PosSessions.Add(session);
 
-        _dbContext.SyncEvents.Add(new LocalSyncEvent
-        {
-            OperationId = $"op_session_open_{session.Id}",
-            EntityType = "POS_SESSION",
-            EntityId = session.Id,
-            OperationType = "CREATE",
-            PayloadJson = JsonSerializer.Serialize(session),
-            UserId = userId,
-            DeviceId = deviceId
-        });
+        AppendSyncEvent("POS_SESSION", session.Id, "POS_SESSION_STARTED", session, deviceId, "", session.Id, userId);
 
         await _dbContext.SaveChangesAsync();
         return session;
@@ -660,6 +599,78 @@ public class LocalRepository
             }
         }
         
+        return order;
+    }
+
+    public async Task<List<LocalPosOrder>> GetActiveOrdersAsync(string sessionId, string filter = "my_orders", string staffId = null)
+    {
+        var query = _dbContext.PosOrders
+            .Include(o => o.Items)
+            .Include(o => o.Checks)
+            .Where(o => o.SessionId == sessionId && o.Status != "CLOSED" && o.Status != "VOIDED");
+
+        if (filter == "my_orders" && !string.IsNullOrEmpty(staffId))
+        {
+            query = query.Where(o => o.ServerStaffId == staffId);
+        }
+
+        return await query.OrderByDescending(o => o.CreatedAt).ToListAsync();
+    }
+
+    public async Task<LocalPosOrder> FireItemsAsync(string orderId, List<LocalPosOrderItem> itemsToFire, string userId, string deviceId)
+    {
+        var order = await _dbContext.PosOrders
+            .Include(o => o.Items)
+            .FirstOrDefaultAsync(o => o.Id == orderId);
+
+        if (order == null) throw new Exception("Order not found");
+
+        var newItems = new List<LocalPosOrderItem>();
+
+        foreach (var item in itemsToFire)
+        {
+            item.Id = Guid.NewGuid().ToString();
+            item.OrderId = order.Id;
+            item.CheckId = order.Checks?.FirstOrDefault(c => c.Status == "OPEN")?.Id;
+            item.KitchenStatus = "PENDING";
+            item.CreatedAt = DateTime.UtcNow;
+            
+            _dbContext.PosOrderItems.Add(item);
+            newItems.Add(item);
+
+            if (item.Modifiers != null)
+            {
+                foreach (var mod in item.Modifiers)
+                {
+                    mod.Id = Guid.NewGuid().ToString();
+                    mod.OrderItemId = item.Id;
+                    _dbContext.PosOrderItemModifiers.Add(mod);
+                }
+            }
+        }
+
+        order.Subtotal += newItems.Sum(i => i.UnitPrice * i.Quantity);
+        order.TaxAmount += newItems.Sum(i => i.TaxAmount);
+        order.Total += newItems.Sum(i => i.Total);
+        order.UpdatedAt = DateTime.UtcNow;
+
+        var kot = new LocalPosKot
+        {
+            Id = Guid.NewGuid().ToString(),
+            OrderId = order.Id,
+            OrderNumber = order.OrderNumber,
+            KotNumber = $"{order.OrderNumber}-{order.Kots?.Count + 1 ?? 1}",
+            TableNumber = order.TableNumber,
+            ServerName = "Server", // Ideally fetch server name
+            Status = "PENDING",
+            FiredAt = DateTime.UtcNow,
+            ItemIdsJson = JsonSerializer.Serialize(newItems.Select(i => i.Id))
+        };
+        _dbContext.PosKots.Add(kot);
+
+        AppendSyncEvent("POS_ORDER", order.Id, "ORDER_ITEMS_ADDED", new { order, kot }, deviceId, order.OutletId, order.SessionId, userId);
+
+        await _dbContext.SaveChangesAsync();
         return order;
     }
 
@@ -796,8 +807,6 @@ public class LocalRepository
         var order = await _dbContext.PosOrders.FirstOrDefaultAsync(o => o.Id == orderId);
         if (order == null) throw new Exception("Order not found");
 
-        string operationId = $"op_pay_{deviceId}_{DateTime.UtcNow.Ticks}";
-
         var payment = new LocalPosPayment
         {
             Id = Guid.NewGuid().ToString(),
@@ -808,24 +817,14 @@ public class LocalRepository
             Amount = amount,
             Currency = currency,
             Status = "CONFIRMED",
-            OperationId = operationId,
+            OperationId = $"op_pay_{deviceId}_{DateTime.UtcNow.Ticks}",
             BusinessDate = order.BusinessDate,
             CreatedAt = DateTime.UtcNow
         };
 
         _dbContext.PosPayments.Add(payment);
 
-        var syncEvent = new LocalSyncEvent
-        {
-            OperationId = operationId,
-            EntityType = "POS_PAYMENT",
-            EntityId = payment.Id,
-            OperationType = "CREATE",
-            PayloadJson = JsonSerializer.Serialize(payment),
-            UserId = userId,
-            DeviceId = deviceId
-        };
-        _dbContext.SyncEvents.Add(syncEvent);
+        AppendSyncEvent("POS_PAYMENT", payment.Id, "PAYMENT_RECORDED", payment, deviceId, order.OutletId, order.SessionId, userId);
 
         if (!string.IsNullOrEmpty(checkId))
         {
@@ -836,17 +835,7 @@ public class LocalRepository
                 if (checkPayments + amount >= check.Total)
                 {
                     check.Status = "PAID";
-                    
-                    _dbContext.SyncEvents.Add(new LocalSyncEvent
-                    {
-                        OperationId = $"op_chk_status_{deviceId}_{DateTime.UtcNow.Ticks}",
-                        EntityType = "POS_CHECK",
-                        EntityId = check.Id,
-                        OperationType = "UPDATE",
-                        PayloadJson = JsonSerializer.Serialize(new { status = "PAID" }),
-                        UserId = userId,
-                        DeviceId = deviceId
-                    });
+                    AppendSyncEvent("POS_CHECK", check.Id, "CHECK_PAID", new { status = "PAID" }, deviceId, order.OutletId, order.SessionId, userId);
                 }
             }
         }
@@ -855,17 +844,7 @@ public class LocalRepository
         if (orderPayments + amount >= order.Total)
         {
             order.Status = "COMPLETED";
-            
-            _dbContext.SyncEvents.Add(new LocalSyncEvent
-            {
-                OperationId = $"op_ord_status_{deviceId}_{DateTime.UtcNow.Ticks}",
-                EntityType = "POS_ORDER",
-                EntityId = order.Id,
-                OperationType = "UPDATE",
-                PayloadJson = JsonSerializer.Serialize(new { status = "COMPLETED" }),
-                UserId = userId,
-                DeviceId = deviceId
-            });
+            AppendSyncEvent("POS_ORDER", order.Id, "ORDER_COMPLETED", new { status = "COMPLETED" }, deviceId, order.OutletId, order.SessionId, userId);
         }
 
         await _dbContext.SaveChangesAsync();
@@ -1345,6 +1324,21 @@ public class LocalRepository
             .ToListAsync();
     }
 
+    public async Task<LocalProperty?> GetPropertyAsync(string propertyId)
+    {
+        return await _dbContext.Properties.FirstOrDefaultAsync(p => p.Id == propertyId);
+    }
+
+    public async Task<LocalPosTerminal?> GetTerminalAsync(string deviceId)
+    {
+        return await _dbContext.PosTerminals.FirstOrDefaultAsync(t => t.Id == deviceId);
+    }
+
+    public async Task<LocalPosOutlet?> GetOutletAsync(string outletId)
+    {
+        return await _dbContext.PosOutlets.FirstOrDefaultAsync(o => o.Id == outletId);
+    }
+
     public async Task<LocalPosSession> GetSessionContextAsync(string sessionId)
     {
         return await _dbContext.PosSessions.FirstOrDefaultAsync(s => s.Id == sessionId);
@@ -1459,5 +1453,34 @@ public class LocalRepository
             CreatedAt = DateTime.UtcNow
         });
         await _dbContext.SaveChangesAsync();
+    }
+    public void AppendSyncEvent(string entityType, string entityId, string operationType, object payload, string terminalId, string outletId, string sessionId, string operatorId)
+    {
+        var payloadJson = System.Text.Json.JsonSerializer.Serialize(payload);
+        var hashBytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(payloadJson));
+        var payloadHash = BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
+
+        long maxDbSeq = _dbContext.SyncEvents.Where(e => e.TerminalId == terminalId).Max(e => (long?)e.SequenceNumber) ?? 0;
+        long maxLocalSeq = _dbContext.SyncEvents.Local.Where(e => e.TerminalId == terminalId).Max(e => (long?)e.SequenceNumber) ?? 0;
+        long seq = Math.Max(maxDbSeq, maxLocalSeq) + 1;
+
+        var syncEvent = new LodgeCore.Desktop.Data.Entities.LocalSyncEvent
+        {
+            OperationId = $"op_{terminalId}_{DateTime.UtcNow.Ticks}_{Guid.NewGuid().ToString("N").Substring(0, 8)}",
+            SequenceNumber = seq,
+            TerminalId = terminalId,
+            OutletId = outletId,
+            SessionId = sessionId,
+            OperatorId = operatorId,
+            EntityType = entityType,
+            EntityId = entityId,
+            OperationType = operationType,
+            PayloadJson = payloadJson,
+            PayloadHash = payloadHash,
+            Status = "PENDING",
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _dbContext.SyncEvents.Add(syncEvent);
     }
 }

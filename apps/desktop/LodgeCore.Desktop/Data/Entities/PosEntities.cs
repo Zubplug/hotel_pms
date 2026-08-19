@@ -404,3 +404,48 @@ public class LocalHardwareAuditLog
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
+public class LocalPosTerminal
+{
+    [Key] public string Id { get; set; } = string.Empty;
+    public string TerminalCode { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string TerminalType { get; set; } = string.Empty;
+    public string OrganisationId { get; set; } = string.Empty;
+    public string PropertyId { get; set; } = string.Empty;
+    public string OutletId { get; set; } = string.Empty;
+    
+    // Remote states mapped to string
+    public string RegistrationState { get; set; } = "UNREGISTERED";
+    
+    // Local offline states
+    public string LicenseState { get; set; } = "EXPIRED";
+    public string ConnectivityState { get; set; } = "UNKNOWN";
+
+    public DateTime? LicenseExpiresAt { get; set; }
+    public int? AutoLockSeconds { get; set; }
+    
+    public DateTime? LastSyncAt { get; set; }
+    public DateTime? LastSeenAt { get; set; }
+    public DateTime RegisteredAt { get; set; } = DateTime.UtcNow;
+    public DateTime? RevokedAt { get; set; }
+
+    public int ConfigurationVersion { get; set; } = 0;
+    public int StaffVersion { get; set; } = 0;
+    public int MenuVersion { get; set; } = 0;
+}
+
+public class LocalPosOperatorSession
+{
+    [Key] public string Id { get; set; } = string.Empty;
+    public string TerminalId { get; set; } = string.Empty;
+    public string OutletId { get; set; } = string.Empty;
+    public string OperatorId { get; set; } = string.Empty;
+    
+    public DateTime StartedAt { get; set; } = DateTime.UtcNow;
+    public DateTime LastActivityAt { get; set; } = DateTime.UtcNow;
+    public DateTime? LockedAt { get; set; }
+    public DateTime? EndedAt { get; set; }
+    
+    public string Status { get; set; } = "ACTIVE";
+    public string SessionToken { get; set; } = string.Empty;
+}
