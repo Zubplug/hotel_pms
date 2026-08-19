@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.lodgecore.mobile_management"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

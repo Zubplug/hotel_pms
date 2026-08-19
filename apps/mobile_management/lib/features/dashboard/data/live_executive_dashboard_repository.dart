@@ -57,10 +57,16 @@ class LiveExecutiveDashboardRepository implements ExecutiveDashboardRepository {
         revpar: 0, revparTrendPercent: 0,
       );
     }
+    
+    // The BFF returns revenue as an object { totalRevenue, roomRevenue, ... }
+    final totalRevenue = data['revenue'] != null && data['revenue'] is Map 
+        ? data['revenue']['totalRevenue'] 
+        : (data['revenue'] ?? 0);
+
     return PerformanceData(
-      todayRevenue: (data['revenue'] ?? 0).toDouble(),
+      todayRevenue: (totalRevenue ?? 0).toDouble(),
       revenueTrendPercent: (data['revenueTrend'] ?? 0).toDouble(),
-      occupancyPercent: (data['occupancy'] ?? 0).toDouble(),
+      occupancyPercent: (data['occupancyPercent'] ?? data['occupancy'] ?? 0).toDouble(),
       occupancyTrendPercent: (data['occupancyTrend'] ?? 0).toDouble(),
       adr: (data['adr'] ?? 0).toDouble(),
       adrTrendPercent: (data['adrTrend'] ?? 0).toDouble(),
