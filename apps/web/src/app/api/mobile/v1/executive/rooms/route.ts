@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@hotel-pms/db';
-import { calculateRoomStatuses } from '../../../../../lib/executive/room-status';
-import { getPropertyBusinessDate } from '../../../../../lib/kpi';
+import { calculateRoomStatuses } from '@/lib/executive/room-status';
+import { getPropertyBusinessDate } from '@/lib/kpi';
 
 // NOTE: In a real production app, use proper authentication (e.g., getServerSession).
 // For now, we simulate the authenticated director context.
