@@ -25,7 +25,7 @@ class LiveNotificationsRepository implements NotificationsRepository {
       queryParameters: queryParams,
     );
     
-    return NotificationsResponse.fromJson(response.data);
+    return NotificationsResponse.fromJson(response.data['data']);
   }
 
   @override
