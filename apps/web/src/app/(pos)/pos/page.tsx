@@ -669,69 +669,66 @@ export default function PosTerminalPage() {
         </div>
 
         {/* 3. The Cart Anchor */}
-        <div className="flex flex-col w-[400px] shrink-0 z-20 bg-white border-l border-slate-200 shadow-2xl">
-
-          {/* Cart Header */}
-          <div className="px-5 pt-5 pb-4 border-b border-slate-100 flex flex-col gap-3 bg-slate-50/50">
+        <div className="flex flex-col w-[360px] shrink-0 z-20 bg-white shadow-2xl border-l border-slate-200">
+          {/* Professional Sleek Header */}
+          <div className="px-5 pt-6 pb-5 border-b border-slate-100 flex flex-col gap-4 bg-white">
             <div className="flex items-center justify-between">
               <div className="flex flex-col">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">
-                  {currentOrderId ? 'Active Order' : 'New Order'}
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
+                  {currentOrderId ? 'Order In Progress' : 'New Order'}
                 </span>
-                <span className="text-xl font-black text-slate-800 tracking-tight mt-0.5">
+                <span className="text-xl font-black text-slate-800 tracking-tight leading-none">
                   {activeOrderType === 'TABLE'
                     ? (activeTableName ? `Table ${activeTableName}` : 'Select Table')
                     : (activeDisplayName || activeOrderType.replace('_', ' '))}
                 </span>
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowActiveOrders(true)}
-                  title="Active Orders"
-                  className="flex items-center gap-1.5 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 rounded-xl transition-all"
-                >
-                  <ShoppingCart className="w-3.5 h-3.5" />
-                  Orders
-                </button>
-              </div>
+              <button
+                onClick={() => setShowActiveOrders(true)}
+                className="flex items-center justify-center w-10 h-10 rounded-full bg-slate-50 text-slate-600 hover:bg-slate-100 transition-colors"
+                title="Active Orders"
+              >
+                <ShoppingCart className="w-5 h-5" />
+              </button>
             </div>
 
-            <div className="flex items-center gap-2">
-              {/* Guest counter */}
-              <div className="flex items-center gap-2 flex-1">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Guests</span>
-                <div className="flex items-center bg-white border border-slate-200 rounded-lg p-0.5">
-                  <button onClick={() => setGuestCount((g) => Math.max(1, g - 1))} className="w-6 h-6 rounded flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all">
-                    <Minus className="w-3 h-3" />
-                  </button>
-                  <span className="w-6 text-center text-xs font-black text-slate-700">{guestCount}</span>
-                  <button onClick={() => setGuestCount((g) => g + 1)} className="w-6 h-6 rounded flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all">
-                    <Plus className="w-3 h-3" />
-                  </button>
+            <div className="flex items-center justify-between">
+              {/* Guest Counter Pill */}
+              <div className="flex items-center bg-slate-50 rounded-full px-1 py-1 border border-slate-200">
+                <button onClick={() => setGuestCount((g) => Math.max(1, g - 1))} className="w-6 h-6 rounded-full flex items-center justify-center text-slate-500 hover:bg-white hover:shadow-sm transition-all">
+                  <Minus className="w-3 h-3" />
+                </button>
+                <div className="flex flex-col items-center justify-center px-2">
+                  <span className="text-[9px] font-bold text-slate-400 uppercase leading-none mb-0.5">Guests</span>
+                  <span className="text-xs font-black text-slate-700 leading-none">{guestCount}</span>
                 </div>
+                <button onClick={() => setGuestCount((g) => g + 1)} className="w-6 h-6 rounded-full flex items-center justify-center text-slate-500 hover:bg-white hover:shadow-sm transition-all">
+                  <Plus className="w-3 h-3" />
+                </button>
               </div>
-              {/* Action icons */}
+
+              {/* Action Tools */}
               <div className="flex items-center gap-1">
                 {cart.length > 0 && (
-                  <button onClick={() => setShowSplitModal(true)} title="Split Check" className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all">
+                  <button onClick={() => setShowSplitModal(true)} title="Split Check" className="p-2.5 text-slate-400 hover:text-indigo-600 rounded-full transition-colors">
                     <Scissors className="w-4 h-4" />
                   </button>
                 )}
                 {currentOrderId && (
-                  <button onClick={() => { setCurrentOrderId(null); setCart([]); setActiveTableId(null); setActiveTableName(null); setActiveOrderType('TABLE'); setActiveDisplayName(''); setTableRefreshTrigger(Date.now()); }} title="Clear Context" className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-all">
+                  <button onClick={() => { setCurrentOrderId(null); setCart([]); setActiveTableId(null); setActiveTableName(null); setActiveOrderType('TABLE'); setActiveDisplayName(''); setTableRefreshTrigger(Date.now()); }} title="Clear Context" className="p-2.5 text-slate-400 hover:text-amber-600 rounded-full transition-colors">
                     <Lock className="w-4 h-4" />
                   </button>
                 )}
-                <button onClick={() => setCart([])} title="Clear Order" className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all">
+                <button onClick={() => setCart([])} title="Clear Order" className="p-2.5 text-slate-400 hover:text-rose-600 rounded-full transition-colors">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
             </div>
           </div>
 
-          {/* Check Tabs */}
+          {/* Check Tabs (if multiple) */}
           {orderChecks.length > 0 && (
-            <div className="px-5 py-3 border-b border-slate-100 flex gap-2 overflow-x-auto bg-white" style={{ scrollbarWidth: 'none' }}>
+            <div className="px-5 py-3 border-b border-slate-100 flex gap-2 overflow-x-auto bg-slate-50/50" style={{ scrollbarWidth: 'none' }}>
               {orderChecks.map(check => (
                 <button
                   key={check.id}
@@ -753,10 +750,10 @@ export default function PosTerminalPage() {
                       };
                     }));
                   }}
-                  className={`px-4 py-1.5 text-xs font-bold rounded-xl border transition-all whitespace-nowrap ${
+                  className={`px-4 py-2 text-xs font-bold rounded-full transition-all whitespace-nowrap ${
                     activeCheckId === check.id
-                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-600/20'
-                      : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                      ? 'bg-slate-800 text-white shadow-md'
+                      : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
                   }`}
                 >
                   Check {check.checkNumber.split('-').pop()} {check.status === 'PAID' ? '✓' : ''}
@@ -766,138 +763,116 @@ export default function PosTerminalPage() {
           )}
 
           {/* Cart Items List */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4" style={{ scrollbarWidth: 'thin' }}>
+          <div className="flex-1 overflow-y-auto px-4 py-2" style={{ scrollbarWidth: 'none' }}>
             {cart.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-slate-300 gap-4 py-16">
-                <div className="w-16 h-16 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center">
-                  <ShoppingCart className="w-8 h-8 text-slate-300" />
-                </div>
-                <div className="text-center">
-                  <p className="text-sm font-bold text-slate-400">No items yet</p>
-                  <p className="text-xs text-slate-300 mt-1">Tap menu items to add them</p>
-                </div>
+              <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-3">
+                <ShoppingCart className="w-10 h-10 text-slate-200 mb-2" />
+                <p className="text-sm font-semibold">Order is empty</p>
+                <p className="text-xs text-slate-400">Select items from the menu to begin</p>
               </div>
             ) : (
-              <div className="flex flex-col gap-3">
-
+              <div className="flex flex-col py-2">
+                
                 {/* ALREADY SENT SECTION */}
                 {cart.filter(item => item.fired).length > 0 && (
-                  <div className="flex flex-col gap-2">
-                    <div className="flex items-center gap-2 mb-1">
-                      <div className="h-px flex-1 bg-slate-100" />
-                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Already Sent</span>
-                      <div className="h-px flex-1 bg-slate-100" />
+                  <div className="flex flex-col mb-4">
+                    <div className="sticky top-0 bg-white/95 backdrop-blur py-2 z-10 border-b border-slate-100 mb-2">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Sent Items</span>
                     </div>
-                    {cart.filter(item => item.fired).map((item) => (
-                      <div key={item.id} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
-                        <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-slate-500 text-sm truncate">{item.name}</p>
-                          {(item.modifiers ?? []).length > 0 && (
-                            <p className="text-[10px] text-slate-400 mt-0.5 truncate">+ {item.modifiers!.map((m: any) => m.name).join(', ')}</p>
-                          )}
+                    <div className="flex flex-col gap-1">
+                      {cart.filter(item => item.fired).map((item) => (
+                        <div key={item.id} className="flex flex-col p-3 rounded-lg bg-slate-50">
+                          <div className="flex justify-between items-start">
+                            <div className="flex items-start gap-2 max-w-[70%]">
+                              <span className="text-sm font-black text-slate-500 mt-0.5">{item.quantity}</span>
+                              <div className="flex flex-col">
+                                <span className="font-semibold text-slate-700 text-sm leading-tight">{item.name}</span>
+                                {(item.modifiers ?? []).length > 0 && (
+                                  <span className="text-[11px] text-slate-500 mt-0.5 leading-tight">+ {item.modifiers!.map((m: any) => m.name).join(', ')}</span>
+                                )}
+                              </div>
+                            </div>
+                            <span className="text-sm font-bold text-slate-600">{formatCurrency(item.price * item.quantity)}</span>
+                          </div>
+                          <div className="flex items-center gap-2 mt-2 ml-4">
+                            {item.station && (
+                              <span className="text-[9px] font-bold uppercase text-slate-400 tracking-wider">
+                                {item.station}
+                              </span>
+                            )}
+                            <span className="w-1 h-1 rounded-full bg-slate-300" />
+                            <span className="text-[9px] font-bold uppercase text-emerald-500 tracking-wider">Sent</span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-3 shrink-0">
-                          <span className="text-xs text-slate-400 font-bold">×{item.quantity}</span>
-                          <span className="text-xs font-bold text-slate-500">{formatCurrency(item.price * item.quantity)}</span>
-                          {item.station && (
-                            <span className={`flex items-center gap-1 text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md ${
-                              item.station === 'KITCHEN' ? 'bg-rose-50 text-rose-600' :
-                              item.station === 'BAR'     ? 'bg-blue-50 text-blue-600' :
-                              'bg-slate-100 text-slate-500'
-                            }`}>
-                              <span>{item.station === 'KITCHEN' ? '🔥' : item.station === 'BAR' ? '🍺' : '⚡'}</span>
-                              <span>{item.station}</span>
-                            </span>
-                          )}
-                          <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-600 border border-emerald-100">SENT</span>
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 )}
 
                 {/* NEW ITEMS SECTION */}
                 {cart.filter(item => !item.fired).length > 0 && (
-                  <div className="flex flex-col gap-2">
-                    {cart.some(item => item.fired) && (
-                      <div className="flex items-center gap-2 mb-1 mt-2">
-                        <div className="h-px flex-1 bg-slate-100" />
-                        <span className="text-[9px] font-black text-indigo-400 uppercase tracking-[0.2em]">New Items</span>
-                        <div className="h-px flex-1 bg-slate-100" />
-                      </div>
-                    )}
-                    {cart.filter(item => !item.fired).map((item) => (
-                      <div key={item.id} className="group p-3.5 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all">
-                        <div className="flex items-start gap-3">
-                          {/* Emoji avatar */}
-                          <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 text-lg bg-slate-50 border border-slate-100">
-                            {getProductEmoji(item.name)}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-start justify-between gap-2">
-                              <p className="font-bold text-slate-800 text-sm leading-snug">{item.name}</p>
-                              <button onClick={() => removeItem(item.id)} className="text-slate-300 hover:text-rose-500 transition-colors shrink-0 mt-0.5">
-                                <X className="w-3.5 h-3.5" />
-                              </button>
+                  <div className="flex flex-col mb-4">
+                    <div className="sticky top-0 bg-white/95 backdrop-blur py-2 z-10 border-b border-slate-100 mb-2">
+                      <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">Unsent Items</span>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      {cart.filter(item => !item.fired).map((item) => (
+                        <div key={item.id} className="flex flex-col p-3 rounded-xl bg-white border border-slate-200 shadow-sm relative group">
+                          <button onClick={() => removeItem(item.id)} className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-white border border-slate-200 text-slate-400 hover:text-rose-500 hover:border-rose-200 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm z-10">
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                          <div className="flex justify-between items-start">
+                            <div className="flex flex-col max-w-[70%]">
+                              <span className="font-bold text-slate-800 text-sm leading-tight">{item.name}</span>
+                              {(item.modifiers ?? []).length > 0 && (
+                                <span className="text-[11px] text-slate-500 mt-1 leading-tight">+ {item.modifiers!.map((m: any) => m.name).join(', ')}</span>
+                              )}
+                              {item.station && (
+                                <span className="text-[9px] font-bold uppercase text-slate-400 tracking-wider mt-1.5">
+                                  {item.station}
+                                </span>
+                              )}
                             </div>
-                            {(item.modifiers ?? []).length > 0 && (
-                              <p className="text-[10px] text-slate-500 mt-0.5">+ {item.modifiers!.map((m: any) => m.name).join(', ')}</p>
-                            )}
-                            <div className="flex items-center justify-between mt-2.5">
-                              <span className="text-xs font-bold text-slate-400">{formatCurrency(item.price)} each</span>
-                              <div className="flex items-center gap-2">
-                                {/* Station badge */}
-                                {item.station && (
-                                  <span className={`flex items-center gap-1 text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md ${
-                                    item.station === 'KITCHEN' ? 'bg-rose-50 text-rose-600' :
-                                    item.station === 'BAR'     ? 'bg-blue-50 text-blue-600' :
-                                    'bg-slate-100 text-slate-500'
-                                  }`}>
-                                    <span>{item.station === 'KITCHEN' ? '🔥' : item.station === 'BAR' ? '🍺' : '⚡'}</span>
-                                    <span>{item.station}</span>
-                                  </span>
-                                )}
-                                {/* Qty stepper */}
-                                <div className="flex items-center gap-1 bg-slate-50 border border-slate-100 rounded-lg p-0.5">
-                                  <button onClick={() => updateQuantity(item.id, -1)} className="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-slate-600 hover:bg-white hover:shadow-sm transition-all">
-                                    <Minus className="w-3 h-3" />
-                                  </button>
-                                  <span className="w-6 text-center text-xs font-black text-slate-700">{item.quantity}</span>
-                                  <button onClick={() => updateQuantity(item.id, 1)} className="w-6 h-6 flex items-center justify-center rounded text-indigo-600 hover:bg-white hover:shadow-sm transition-all">
-                                    <Plus className="w-3 h-3" />
-                                  </button>
-                                </div>
-                                <span className="text-sm font-black text-slate-900">{formatCurrency(item.price * item.quantity)}</span>
-                              </div>
+                            <span className="text-sm font-black text-slate-800">{formatCurrency(item.price * item.quantity)}</span>
+                          </div>
+                          
+                          <div className="flex justify-between items-center mt-3 pt-3 border-t border-slate-100">
+                            <span className="text-xs font-semibold text-slate-400">{formatCurrency(item.price)} each</span>
+                            <div className="flex items-center gap-3 bg-slate-50 rounded-full px-1 py-1 border border-slate-200">
+                              <button onClick={() => updateQuantity(item.id, -1)} className="w-6 h-6 flex items-center justify-center rounded-full text-slate-500 hover:bg-white hover:shadow-sm transition-all">
+                                <Minus className="w-3 h-3" />
+                              </button>
+                              <span className="w-4 text-center text-xs font-black text-slate-800">{item.quantity}</span>
+                              <button onClick={() => updateQuantity(item.id, 1)} className="w-6 h-6 flex items-center justify-center rounded-full text-indigo-600 hover:bg-white hover:shadow-sm transition-all">
+                                <Plus className="w-3 h-3" />
+                              </button>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
             )}
           </div>
 
-          {/* Totals + Actions */}
-          <div className="p-5 border-t border-slate-100 bg-white shrink-0 shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.05)]">
-            {/* Totals */}
-            <div className="space-y-2 mb-4">
-              <div className="flex justify-between text-xs font-medium text-slate-500">
+          {/* Totals & Sleek Actions */}
+          <div className="p-5 border-t border-slate-200 bg-slate-50 mt-auto shrink-0">
+            <div className="flex flex-col gap-1.5 mb-5">
+              <div className="flex justify-between text-sm font-medium text-slate-500">
                 <span>Subtotal</span><span>{formatCurrency(subtotal)}</span>
               </div>
-              <div className="flex justify-between text-xs font-medium text-slate-500">
+              <div className="flex justify-between text-sm font-medium text-slate-500">
                 <span>Tax</span><span>{formatCurrency(tax)}</span>
               </div>
-              <div className="flex justify-between items-center pt-3 border-t border-slate-100 mt-2">
-                <span className="text-xs font-black text-slate-400 uppercase tracking-[0.15em]">Total</span>
-                <span className="font-black text-3xl text-slate-900 tracking-tight">{formatCurrency(total)}</span>
+              <div className="flex justify-between items-end pt-3 border-t border-slate-200 mt-1">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Total</span>
+                <span className="font-black text-3xl text-slate-900 tracking-tighter leading-none">{formatCurrency(total)}</span>
               </div>
             </div>
 
-            {/* Action Buttons */}
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-2.5">
               {/* Send Order (if new items exist) */}
               {cart.some(item => !item.fired) && (
                 <button

@@ -30,36 +30,35 @@ const pastelColors = [
 
 export function CategoryTileGrid({ categories, activeCategory, onSelectCategory }: CategoryTileGridProps) {
   return (
-    <div className="grid grid-rows-2 grid-flow-col gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+    <div className="flex gap-3 overflow-x-auto pb-3 pt-1 scroll-smooth" style={{ scrollbarWidth: 'none' }}>
       {/* "All Items" tile always first */}
       <button
         onClick={() => onSelectCategory('all')}
-        className={`flex flex-col items-center justify-center p-3 rounded-2xl border-2 font-bold transition-all duration-200 whitespace-nowrap min-w-[100px] h-20 ${
+        className={`flex items-center justify-center px-6 py-3 rounded-full font-bold transition-all duration-200 whitespace-nowrap border-2 ${
           activeCategory === 'all'
             ? 'border-indigo-600 bg-indigo-600 text-white shadow-md'
-            : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:bg-indigo-50'
+            : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 shadow-sm'
         }`}
       >
-        <Sparkles className={`w-6 h-6 mb-1 ${activeCategory === 'all' ? 'text-indigo-200' : 'text-indigo-500'}`} />
-        <span className="text-xs">All Items</span>
+        <Sparkles className={`w-4 h-4 mr-2 ${activeCategory === 'all' ? 'text-indigo-200' : 'text-indigo-500'}`} />
+        <span className="text-sm">All Items</span>
       </button>
 
-      {/* Map through categories with pastel styles */}
-      {categories.map((c, idx) => {
-        const colorStyle = pastelColors[idx % pastelColors.length];
+      {/* Map through categories with professional styling */}
+      {categories.map((c) => {
         const isActive = activeCategory === c.id;
         
         return (
           <button
             key={c.id}
             onClick={() => onSelectCategory(c.id)}
-            className={`flex flex-col items-center justify-center p-3 rounded-2xl border-2 font-bold transition-all duration-200 whitespace-nowrap min-w-[100px] h-20 ${
+            className={`flex items-center justify-center px-6 py-3 rounded-full font-bold transition-all duration-200 whitespace-nowrap border-2 ${
               isActive 
-                ? 'border-indigo-600 shadow-md ring-2 ring-indigo-200/50 scale-95' 
-                : colorStyle
-            } ${isActive ? colorStyle.split(' ')[0] + ' ' + colorStyle.split(' ')[1] : ''}`}
+                ? 'border-indigo-600 bg-indigo-600 text-white shadow-md' 
+                : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 shadow-sm'
+            }`}
           >
-            <span className="text-xs line-clamp-2 leading-tight text-center px-1">
+            <span className="text-sm line-clamp-1">
               {c.name}
             </span>
           </button>
