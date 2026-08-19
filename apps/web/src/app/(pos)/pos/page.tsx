@@ -349,12 +349,24 @@ export default function PosTerminalPage() {
     }));
   };
 
-  const handleOrderResume = (order: any) => {
+  const handleOrderResume = async (order: any) => {
     // If already active, do nothing
     if (order.id === currentOrderId) return;
-    setViewMode('menu');
-    loadOrderContext(order, false);
-    toast.success(`Resumed ${order.tableNumber ? `Table ${order.tableNumber}` : order.orderNumber}`);
+
+    try {
+      // Fetch the full order (includes items, checks, modifiers)
+      const res = await provider.pos.getOrder(order.id);
+      if (res.error || !res.data) {
+        toast.error('Could not load order details');
+        return;
+      }
+      const fullOrder = res.data;
+      setViewMode('menu');
+      loadOrderContext(fullOrder, false);
+      toast.success(`Resumed ${fullOrder.tableNumber ? `Table ${fullOrder.tableNumber}` : fullOrder.orderNumber}`);
+    } catch (err: any) {
+      toast.error('Failed to resume order');
+    }
   };
 
   const handleTableSelect = async (table: any) => {
