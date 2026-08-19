@@ -223,7 +223,7 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen> {
       case 'OUT_OF_ORDER':
       case 'OUT_OF_SERVICE':
         statusColor = Colors.red;
-        displayStatusText = room.displayStatus.replaceAll('_', ' ');
+        displayStatusText = _capitalizeStatus(room.displayStatus);
         break;
       default:
         statusColor = Colors.grey;
@@ -317,4 +317,9 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen> {
     );
   }
 
+  String _capitalizeStatus(String s) {
+    if (s.isEmpty) return s;
+    final parts = s.split('_');
+    return parts.map((p) => p[0].toUpperCase() + p.substring(1).toLowerCase()).join(' ');
+  }
 }

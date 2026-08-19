@@ -251,7 +251,7 @@ class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen> {
                 Icon(statusIcon, color: statusColor, size: 13),
                 const SizedBox(width: 6),
                 Text(
-                  data.room.displayStatus.replaceAll('_', ' '),
+                  _capitalize(data.room.displayStatus),
                   style: TextStyle(color: statusColor, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 0.5),
                 ),
               ],
