@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
     
     if (!user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
     
-    if (!['MANAGER', 'ADMIN', 'SUPER_ADMIN'].includes(user.role) && !user.isSuperAdmin) {
+    if (!['MANAGER', 'ADMIN', 'SUPER_ADMIN', 'DIRECTOR', 'EXECUTIVE'].includes(user.role) && !user.isSuperAdmin) {
       return errorResponse('FORBIDDEN', 'Executive access required', 403);
     }
 

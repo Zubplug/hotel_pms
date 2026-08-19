@@ -33,7 +33,7 @@ const { auth } = NextAuth({
 });
 
 // Routes that do NOT require authentication via NextAuth cookies
-const PUBLIC_PATHS = ['/login', '/api/auth', '/api/v1/hardware'];
+const PUBLIC_PATHS = ['/login', '/api/auth', '/api/v1/hardware', '/api/manager', '/api/mobile'];
 
 function isPublic(pathname: string): boolean {
   return PUBLIC_PATHS.some((p) => pathname.startsWith(p));

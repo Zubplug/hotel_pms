@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
     }
     
     // Note: Eventually this will use capability-based auth (e.g., hasPermission('dashboard.view:executive'))
-    if (!['MANAGER', 'ADMIN', 'SUPER_ADMIN'].includes(user.role) && !user.isSuperAdmin) {
+    if (!['MANAGER', 'ADMIN', 'SUPER_ADMIN', 'DIRECTOR', 'EXECUTIVE'].includes(user.role) && !user.isSuperAdmin) {
       return errorResponse('FORBIDDEN', 'Executive access required', 403);
     }
 
