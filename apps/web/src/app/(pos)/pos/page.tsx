@@ -150,13 +150,13 @@ export default function PosTerminalPage() {
 
         if (activeSessionId) {
           try {
+            const savedToken = localStorage.getItem('lodgecore_pos_operator_token');
             const [operatorRes, contextRes] = await Promise.all([
-              provider.pos.getCurrentOperator(activeSessionId),
+              provider.pos.getCurrentOperator(activeSessionId, savedToken),
               provider.pos.getSessionContext(activeSessionId),
             ]);
             if (!operatorRes.error && operatorRes.data?.staff) {
               setActiveOperator(operatorRes.data.staff);
-              const savedToken = localStorage.getItem('lodgecore_pos_operator_token');
               if (savedToken) setOperatorToken(savedToken);
             }
             if (!contextRes.error && contextRes.data) {

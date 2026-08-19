@@ -204,8 +204,9 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
     getActiveStaff: async (propertyId: string) => {
       return apiFetch(`/api/v1/pos/staff?propertyId=${propertyId}`);
     },
-    getCurrentOperator: async (sessionId: string) => {
-      return apiFetch(`/api/v1/pos/operator?sessionId=${sessionId}`);
+    getCurrentOperator: async (sessionId: string, operatorToken?: string | null) => {
+      const headers: Record<string, string> = operatorToken ? { Authorization: `Bearer ${operatorToken}` } : {};
+      return apiFetch(`/api/v1/pos/operator?sessionId=${sessionId}`, { headers });
     },
     authenticateOperator: async (staffId: string, pin: string, propertyId: string, sessionId: string, outletId?: string, deviceId?: string) => {
       return apiFetch(`/api/v1/pos/auth`, {

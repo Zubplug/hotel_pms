@@ -18,22 +18,44 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Session not found' }, { status: 404 });
     }
 
-    // In this MVP, the operator is the staff member who opened it
-    // Find the staff linked to this user
-    let staff = null;
-    const user = await prisma.user.findUnique({
-      where: { id: session.openedBy }
-    });
+    // If an operator token was provided, that is the active operator
+    const authHeader = req.headers.get('Authorization');
+    const token = authHeader?.replace('Bearer ', '');
     
-    if (user && user.staffId) {
+    let staffIdToFetch = null;
+
+    if (token) {
+      try {
+        const { verifyOperatorToken } = await import('@/lib/pos/operatorAuth');
+        const payload = await verifyOperatorToken(token);
+        if (payload && payload.staffId) {
+          staffIdToFetch = payload.staffId;
+        }
+      } catch (err) {
+        console.warn('Invalid operator token provided, falling back to session opener');
+      }
+    }
+
+    // Fallback: the operator is the staff member who opened the session
+    if (!staffIdToFetch) {
+      const user = await prisma.user.findUnique({
+        where: { id: session.openedBy }
+      });
+      if (user && user.staffId) {
+        staffIdToFetch = user.staffId;
+      }
+    }
+
+    let staff = null;
+    if (staffIdToFetch) {
       staff = await prisma.staff.findUnique({
-        where: { id: user.staffId }
+        where: { id: staffIdToFetch }
       });
     }
 
     return NextResponse.json({ 
       data: {
-        staff: staff || { id: user?.id, firstName: 'System', lastName: 'User', email: user?.email }
+        staff: staff || { id: session.openedBy, firstName: 'System', lastName: 'User' }
       } 
     });
   } catch (error) {

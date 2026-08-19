@@ -142,7 +142,7 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     },
     validateSupervisorPin: async (pin: string, propertyId?: string) => { return invokeDesktop("pos.validateSupervisorPin", { pin, propertyId }); },
 
-    getCurrentOperator: async (sessionId: string) => {
+    getCurrentOperator: async (sessionId: string, operatorToken?: string | null) => {
       return invokeDesktop('pos.getCurrentOperator', { sessionId });
     },
     authenticateOperator: async (staffId: string, pin: string, propertyId: string, sessionId: string, outletId?: string, deviceId?: string) => {
