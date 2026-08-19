@@ -9,17 +9,32 @@ function initializeFirebaseAdmin() {
   }
 
   try {
-    const serviceAccountPath = path.resolve(process.cwd(), 'firebase-adminsdk.json');
-    if (fs.existsSync(serviceAccountPath)) {
-      const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
-      return initializeApp({
-        credential: cert(serviceAccount),
-      });
-    } else {
-      console.warn('[Firebase Admin] Service account key not found at:', serviceAccountPath);
-      console.warn('[Firebase Admin] Push notifications will be disabled.');
-      return null;
+    let serviceAccount;
+
+    if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+      // 1. Try loading from Vercel Environment Variable
+      try {
+        serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+      } catch (err) {
+        console.error('[Firebase Admin] Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY environment variable', err);
+      }
     }
+
+    if (!serviceAccount) {
+      // 2. Fall back to local file
+      const serviceAccountPath = path.resolve(process.cwd(), 'firebase-adminsdk.json');
+      if (fs.existsSync(serviceAccountPath)) {
+        serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
+      } else {
+        console.warn('[Firebase Admin] Service account key not found at:', serviceAccountPath);
+        console.warn('[Firebase Admin] Push notifications will be disabled.');
+        return null;
+      }
+    }
+
+    return initializeApp({
+      credential: cert(serviceAccount),
+    });
   } catch (error) {
     console.error('[Firebase Admin] Failed to initialize:', error);
     return null;
