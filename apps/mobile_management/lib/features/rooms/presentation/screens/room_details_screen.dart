@@ -215,22 +215,39 @@ class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Room number + type
-          Text(
-            'ROOM',
-            style: TextStyle(color: _textSecondary, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 2.5),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (locationSubText != null) ...[
+                      Text(locationSubText, style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 14)),
+                      const SizedBox(height: 4),
+                    ],
+                    Text(data.room.roomType.name.toUpperCase(), style: const TextStyle(color: _textSecondary, fontSize: 13, fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    'ROOM',
+                    style: TextStyle(color: _textSecondary, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 2.5),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    displayRoomNumber,
+                    style: const TextStyle(color: _textPrimary, fontSize: 48, fontWeight: FontWeight.w800, height: 1.1),
+                  ),
+                ],
+              ),
+            ],
           ),
-          const SizedBox(height: 2),
-          Text(
-            displayRoomNumber,
-            style: const TextStyle(color: _textPrimary, fontSize: 48, fontWeight: FontWeight.w800, height: 1.1),
-          ),
-          const SizedBox(height: 8),
-          if (locationSubText != null) ...[
-            Text(locationSubText, style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 14)),
-            const SizedBox(height: 4),
-          ],
-          Text(data.room.roomType.name.toUpperCase(), style: const TextStyle(color: _textSecondary, fontSize: 13, fontWeight: FontWeight.w600, letterSpacing: 1.2)),
           const SizedBox(height: 16),
           // Status badge
           Container(
