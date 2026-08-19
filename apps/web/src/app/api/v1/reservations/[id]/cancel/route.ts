@@ -86,6 +86,15 @@ export async function POST(
       }
     });
 
+    await NotificationEngine.emit({
+      type: 'RESERVATION_CANCELLED',
+      organizationId: cancelled.organizationId,
+      propertyId: existingReservation.propertyId,
+      entityType: 'reservation',
+      entityId: id,
+      idempotencyKey: `res_cancelled_${id}`,
+    });
+
     return successResponse(cancelled.updatedRes);
   } catch (err: any) {
     console.error('[Reservation Cancel POST]', err);

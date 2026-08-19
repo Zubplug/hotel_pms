@@ -7,6 +7,7 @@ import { hasPermission } from '@/lib/rbac';
 import { assertPropertyAccess, ForbiddenError } from '@/lib/property-access';
 import { isValidTransition } from '@/lib/room-state-machine';
 import { roomStatusTransitionSchema } from '@hotel-pms/types';
+import { NotificationEngine } from '@/lib/notification-engine';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -60,6 +61,17 @@ export async function POST(req: NextRequest, { params }: Params) {
       action: 'ROOM_STATUS_CHANGE', resource: 'room', resourceId: id,
       previousValue: { status: room.status }, newValue: { status: newStatus, reason },
     });
+
+    if (newStatus === 'OUT_OF_ORDER') {
+      await NotificationEngine.emit({
+        type: 'ROOM_OOO_CRITICAL',
+        organizationId: property!.organizationId,
+        propertyId: room.propertyId,
+        entityType: 'room',
+        entityId: id,
+        idempotencyKey: `room_ooo_${id}_${Date.now()}`
+      });
+    }
 
     return successResponse(updatedRoom);
   } catch (err) {

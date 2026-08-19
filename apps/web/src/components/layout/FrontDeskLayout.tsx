@@ -69,6 +69,16 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
     signOut({ callbackUrl: '/login' });
   }
 
+  const { data: res } = useQuery({
+    queryKey: ['frontdesk', 'dashboard', propertyId],
+    queryFn: async () => {
+      if (!propertyId) return null;
+      return provider.dashboard.get(propertyId);
+    },
+    enabled: !!propertyId && status === 'authenticated',
+    refetchInterval: 10000,
+  });
+
   // Block render entirely while session status is unknown — prevents flash of protected content
   if (status === 'loading') {
     return (
@@ -84,16 +94,6 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
   if (status === 'unauthenticated' || !session?.user) {
     return null;
   }
-
-  const { data: res } = useQuery({
-    queryKey: ['frontdesk', 'dashboard', propertyId],
-    queryFn: async () => {
-      if (!propertyId) return null;
-      return provider.dashboard.get(propertyId);
-    },
-    enabled: !!propertyId,
-    refetchInterval: 10000,
-  });
 
   const hardware = res?.data?.hardware;
   const businessDate = res?.data?.businessDate ? new Date(res.data.businessDate) : null;

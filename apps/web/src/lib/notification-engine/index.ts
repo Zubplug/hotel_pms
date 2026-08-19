@@ -22,6 +22,9 @@ export interface NotificationPolicy {
   creditLimitThreshold?: number;
   notifyOnCheckIn?: boolean;
   notifyOnCheckOut?: boolean;
+  notifyOnReservationCreated?: boolean;
+  notifyOnReservationCancelled?: boolean;
+  notifyOnStayExtended?: boolean;
 }
 
 export const NotificationEngine = {
@@ -168,8 +171,11 @@ async function fetchPolicy(propertyId: string): Promise<NotificationPolicy | nul
     significantCancellationThreshold: settings.notificationPolicy.significantCancellationThreshold,
     significantBookingThreshold: settings.notificationPolicy.significantBookingThreshold,
     creditLimitThreshold: settings.notificationPolicy.creditLimitThreshold,
-    notifyOnCheckIn: settings.notificationPolicy.notifyOnCheckIn,
-    notifyOnCheckOut: settings.notificationPolicy.notifyOnCheckOut,
+    notifyOnCheckIn: settings.notificationPolicy.notifyOnCheckIn ?? true,
+    notifyOnCheckOut: settings.notificationPolicy.notifyOnCheckOut ?? true,
+    notifyOnReservationCreated: settings.notificationPolicy.notifyOnReservationCreated ?? true,
+    notifyOnReservationCancelled: settings.notificationPolicy.notifyOnReservationCancelled ?? true,
+    notifyOnStayExtended: settings.notificationPolicy.notifyOnStayExtended ?? true,
   };
 }
 
@@ -313,7 +319,8 @@ async function evaluateEvent(event: NotificationEvent, policy: NotificationPolic
         include: { guest: true, reservationRooms: { include: { room: true } } }
       });
       const guestNameIn = resIn?.guest?.firstName ? `${resIn.guest.firstName} ${resIn.guest.lastName}` : 'A guest';
-      const roomNumIn = resIn?.reservationRooms?.[0]?.room?.number || 'their room';
+      const rawRoomIn = resIn?.reservationRooms?.[0]?.room?.number;
+      const roomNumIn = rawRoomIn ? rawRoomIn.split('.').pop() : 'their room';
 
       return {
         subject: event.metadata?.isVip ? 'VIP Checked In' : 'Guest Checked In',
@@ -331,13 +338,67 @@ async function evaluateEvent(event: NotificationEvent, policy: NotificationPolic
         include: { guest: true, reservationRooms: { include: { room: true } } }
       });
       const guestNameOut = resOut?.guest?.firstName ? `${resOut.guest.firstName} ${resOut.guest.lastName}` : 'A guest';
-      const roomNumOut = resOut?.reservationRooms?.[0]?.room?.number || 'their room';
+      const rawRoomOut = resOut?.reservationRooms?.[0]?.room?.number;
+      const roomNumOut = rawRoomOut ? rawRoomOut.split('.').pop() : 'their room';
 
       return {
         subject: event.metadata?.isVip ? 'VIP Checked Out' : 'Guest Checked Out',
         body: `${guestNameOut} (Conf: ${resOut?.confirmationNumber || event.entityId}) has checked out of Room ${roomNumOut}.`,
         category: 'Operations',
         priority: event.metadata?.isVip ? 'High' : 'Normal',
+      };
+    }
+
+    case 'RESERVATION_CREATED': {
+      if (!policy.notifyOnReservationCreated) return null;
+      const res = await prisma.reservation.findUnique({
+        where: { id: event.entityId },
+        include: { guest: true, roomType: true }
+      });
+      if (!res) return null;
+      const guestName = res.guest?.firstName ? `${res.guest.firstName} ${res.guest.lastName}` : 'A guest';
+      
+      return {
+        subject: 'New Reservation',
+        body: `${guestName} booked a ${res.roomType?.name || 'room'} (Conf: ${res.confirmationNumber || event.entityId}) for ${res.checkIn.toLocaleDateString()}.`,
+        category: 'Operations',
+        priority: 'Normal',
+      };
+    }
+
+    case 'RESERVATION_CANCELLED': {
+      if (!policy.notifyOnReservationCancelled) return null;
+      const res = await prisma.reservation.findUnique({
+        where: { id: event.entityId },
+        include: { guest: true }
+      });
+      if (!res) return null;
+      const guestName = res.guest?.firstName ? `${res.guest.firstName} ${res.guest.lastName}` : 'A guest';
+      
+      return {
+        subject: 'Reservation Cancelled',
+        body: `Reservation for ${guestName} (Conf: ${res.confirmationNumber || event.entityId}) was cancelled.`,
+        category: 'Operations',
+        priority: 'High',
+      };
+    }
+
+    case 'STAY_EXTENDED': {
+      if (!policy.notifyOnStayExtended) return null;
+      const res = await prisma.reservation.findUnique({
+        where: { id: event.entityId },
+        include: { guest: true, reservationRooms: { include: { room: true } } }
+      });
+      if (!res) return null;
+      const guestName = res.guest?.firstName ? `${res.guest.firstName} ${res.guest.lastName}` : 'A guest';
+      const rawRoom = res.reservationRooms?.[0]?.room?.number;
+      const roomNum = rawRoom ? rawRoom.split('.').pop() : 'their room';
+      
+      return {
+        subject: 'Stay Extended',
+        body: `${guestName} (Conf: ${res.confirmationNumber || event.entityId}) extended their stay in Room ${roomNum} until ${res.checkOut.toLocaleDateString()}.`,
+        category: 'Operations',
+        priority: 'Normal',
       };
     }
 

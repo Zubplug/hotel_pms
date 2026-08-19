@@ -264,6 +264,15 @@ export async function POST(req: NextRequest) {
            isVip: false // We can check guest VIP status here later
         }
       });
+
+      await NotificationEngine.emit({
+        type: 'RESERVATION_CREATED',
+        organizationId: reservation.organizationId,
+        propertyId: propertyId,
+        entityType: 'reservation',
+        entityId: reservation.newReservation.id,
+        idempotencyKey: `res_created_${reservation.newReservation.id}`,
+      });
     }
 
     return successResponse(reservation.newReservation, 201);

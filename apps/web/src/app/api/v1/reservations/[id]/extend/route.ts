@@ -3,6 +3,7 @@ import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { auth } from '@/lib/auth';
 import { assertPropertyAccess } from '@/lib/property-access';
+import { NotificationEngine } from '@/lib/notification-engine';
 
 export async function POST(
   req: NextRequest,
@@ -188,6 +189,15 @@ export async function POST(
           }
         });
       }
+    });
+
+    await NotificationEngine.emit({
+      type: 'STAY_EXTENDED',
+      organizationId,
+      propertyId,
+      entityType: 'reservation',
+      entityId: id,
+      idempotencyKey: `stay_extended_${id}_${requestedCheckOut.getTime()}`,
     });
 
     return successResponse({ success: true });
