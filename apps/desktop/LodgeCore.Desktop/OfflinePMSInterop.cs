@@ -17,16 +17,18 @@ public class OfflinePMSInterop
         _sessionManager = sessionManager;
     }
 
+    private readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+
     public async Task<string> GetSessionAsync()
     {
         try
         {
             var session = await _authManager.GetSessionAsync();
-            return JsonSerializer.Serialize(new { success = true, data = session });
+            return JsonSerializer.Serialize(new { success = true, data = session }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 
@@ -717,11 +719,11 @@ public class OfflinePMSInterop
         try
         {
             var res = await _repo.GetFloorPlansAsync(outletId);
-            return JsonSerializer.Serialize(new { success = true, data = res });
+            return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 
@@ -730,11 +732,11 @@ public class OfflinePMSInterop
         try
         {
             var res = await _repo.GetTablesAsync(floorPlanId);
-            return JsonSerializer.Serialize(new { success = true, data = res });
+            return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 

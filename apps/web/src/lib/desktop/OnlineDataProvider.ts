@@ -240,7 +240,7 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
     },
     getTables: async (floorPlanId: string, operatorToken?: string | null) => {
       const headers: Record<string, string> = operatorToken ? { Authorization: `Bearer ${operatorToken}` } : {};
-      return apiFetch(`/api/v1/pos/floor-plans/${floorPlanId}/tables?_t=${Date.now()}`, { headers });
+      return apiFetch(`/api/v1/pos/floor-plans/${floorPlanId}/tables`, { headers });
     },
     getProductModifiers: async (productId: string) => {
       return apiFetch(`/api/v1/pos/products/${productId}/modifiers`);
