@@ -2,17 +2,27 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@hotel-pms/db';
 import { calculateRoomStatuses } from '@/lib/executive/room-status';
 import { getPropertyBusinessDate } from '@/lib/kpi';
-
-// NOTE: In a real production app, use proper authentication (e.g., getServerSession).
-// For now, we simulate the authenticated director context.
-const MOCK_DIRECTOR_PROPERTY_ID = '00000000-0000-0000-0000-000000000001';
+import { resolveUser } from '@/lib/resolve-user';
 
 export async function GET(req: NextRequest) {
   try {
-    // 1. Authenticate and authorize property access
-    // Extract propertyId from request headers or auth session
-    // const propertyId = req.headers.get('x-property-id') || MOCK_DIRECTOR_PROPERTY_ID;
-    const propertyId = MOCK_DIRECTOR_PROPERTY_ID; // Forced for this scope
+    const user = await resolveUser(req);
+    
+    if (!user) {
+      return NextResponse.json({ success: false, error: 'Authentication required' }, { status: 401 });
+    }
+    
+    if (!['MANAGER', 'ADMIN', 'SUPER_ADMIN', 'DIRECTOR', 'EXECUTIVE'].includes(user.role) && !user.isSuperAdmin) {
+      return NextResponse.json({ success: false, error: 'Executive access required' }, { status: 403 });
+    }
+
+    const allowedPropertyIds = user.allowedProperties;
+
+    if (allowedPropertyIds.length === 0) {
+      return NextResponse.json({ success: false, error: 'No property access' }, { status: 403 });
+    }
+
+    const propertyId = allowedPropertyIds[0];
 
     const property = await prisma.property.findUnique({
       where: { id: propertyId },
