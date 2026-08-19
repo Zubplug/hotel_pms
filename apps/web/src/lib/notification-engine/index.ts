@@ -96,15 +96,12 @@ export const NotificationEngine = {
  * Resolves which users should receive this notification based on RBAC.
  */
 async function resolveRecipients(organizationId: string, propertyId?: string): Promise<string[]> {
-  const targetRoles = ['Executive', 'Manager', 'General Manager'];
+  const targetRoles = ['Executive', 'Manager', 'General Manager', 'DIRECTOR'];
 
   const whereClause: any = {
     role: {
-      name: { in: targetRoles }
-    },
-    user: {
+      name: { in: targetRoles },
       organizationId,
-      isActive: true,
     }
   };
 
