@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dashboard_screen.dart';
+import 'package:mobile_management/features/rooms/presentation/screens/rooms_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -13,7 +14,7 @@ class _MainScreenState extends State<MainScreen> {
 
   final List<Widget> _screens = [
     const DashboardScreen(),
-    const _ComingSoonScreen(title: 'Rooms', icon: Icons.king_bed_rounded),
+    const RoomsScreen(),
     const _ComingSoonScreen(title: 'Finance', icon: Icons.account_balance_wallet_rounded),
     const _ComingSoonScreen(title: 'Hub', icon: Icons.apps_rounded),
     const _ComingSoonScreen(title: 'You', icon: Icons.person_rounded),
