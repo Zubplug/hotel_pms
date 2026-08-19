@@ -30,7 +30,7 @@ class DashboardScreen extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'EXECUTIVE BRIEFING',
+              'LODGECORE HOTELS',
               style: TextStyle(
                 fontSize: 10,
                 letterSpacing: 2.0,
@@ -39,14 +39,21 @@ class DashboardScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 2),
-            Text(
-              propertyName,
-              style: const TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                color: textPrimary,
-                letterSpacing: -0.5,
-              ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  propertyName,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: textPrimary,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                const Icon(Icons.arrow_drop_down, color: textSecondary, size: 24),
+              ],
             ),
           ],
         ),

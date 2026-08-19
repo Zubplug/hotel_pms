@@ -14,9 +14,10 @@ class _MainScreenState extends State<MainScreen> {
 
   final List<Widget> _screens = [
     const DashboardScreen(),
-    const _ComingSoonScreen(title: 'Approvals', icon: Icons.fact_check_rounded),
-    const _ComingSoonScreen(title: 'Alerts', icon: Icons.notifications_rounded),
-    const _ComingSoonScreen(title: 'Profile', icon: Icons.person_rounded),
+    const _ComingSoonScreen(title: 'Rooms', icon: Icons.king_bed_rounded),
+    const _ComingSoonScreen(title: 'Finance', icon: Icons.account_balance_wallet_rounded),
+    const _ComingSoonScreen(title: 'Hub', icon: Icons.apps_rounded),
+    const _ComingSoonScreen(title: 'You', icon: Icons.person_rounded),
   ];
 
   @override
@@ -27,43 +28,53 @@ class _MainScreenState extends State<MainScreen> {
     const textSecondary = Color(0xFF94A3B8);
 
     return Scaffold(
-      backgroundColor: primaryNavy,
       body: _screens[_currentIndex],
-      bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          border: Border(top: BorderSide(color: surfaceNavy, width: 1)),
+      bottomNavigationBar: Theme(
+        data: Theme.of(context).copyWith(
+          splashColor: Colors.transparent,
+          highlightColor: Colors.transparent,
         ),
         child: BottomNavigationBar(
-          backgroundColor: primaryNavy,
-          type: BottomNavigationBarType.fixed,
           currentIndex: _currentIndex,
-          selectedItemColor: goldAccent,
-          unselectedItemColor: textSecondary,
           onTap: (index) {
             setState(() {
               _currentIndex = index;
             });
           },
+          backgroundColor: primaryNavy,
+          type: BottomNavigationBarType.fixed,
+          selectedItemColor: goldAccent,
+          unselectedItemColor: textSecondary,
+          showSelectedLabels: true,
+          showUnselectedLabels: true,
+          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 11),
+          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 11),
+          elevation: 16,
           items: const [
             BottomNavigationBarItem(
-              icon: Icon(Icons.dashboard_outlined),
-              activeIcon: Icon(Icons.dashboard_rounded),
-              label: 'Dashboard',
+              icon: Padding(padding: EdgeInsets.only(bottom: 4), child: Icon(Icons.home_outlined)),
+              activeIcon: Padding(padding: EdgeInsets.only(bottom: 4), child: Icon(Icons.home_rounded)),
+              label: 'Home',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.fact_check_outlined),
-              activeIcon: Icon(Icons.fact_check_rounded),
-              label: 'Approvals',
+              icon: Padding(padding: EdgeInsets.only(bottom: 4), child: Icon(Icons.king_bed_outlined)),
+              activeIcon: Padding(padding: EdgeInsets.only(bottom: 4), child: Icon(Icons.king_bed_rounded)),
+              label: 'Rooms',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.notifications_none_rounded),
-              activeIcon: Icon(Icons.notifications_rounded),
-              label: 'Alerts',
+              icon: Padding(padding: EdgeInsets.only(bottom: 4), child: Icon(Icons.account_balance_wallet_outlined)),
+              activeIcon: Padding(padding: EdgeInsets.only(bottom: 4), child: Icon(Icons.account_balance_wallet_rounded)),
+              label: 'Finance',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.person_outline_rounded),
-              activeIcon: Icon(Icons.person_rounded),
-              label: 'Profile',
+              icon: Padding(padding: EdgeInsets.only(bottom: 4), child: Icon(Icons.apps_outlined)),
+              activeIcon: Padding(padding: EdgeInsets.only(bottom: 4), child: Icon(Icons.apps_rounded)),
+              label: 'Hub',
+            ),
+            BottomNavigationBarItem(
+              icon: Padding(padding: EdgeInsets.only(bottom: 4), child: Icon(Icons.person_outline)),
+              activeIcon: Padding(padding: EdgeInsets.only(bottom: 4), child: Icon(Icons.person_rounded)),
+              label: 'You',
             ),
           ],
         ),
