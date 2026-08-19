@@ -1,21 +1,19 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { OperatorSelectionScreen } from './OperatorSelectionScreen';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 
-export function AutoLockScreen({ children }: { children: React.ReactNode }) {
+interface AutoLockScreenProps {
+  children: React.ReactNode;
+  onLock: () => void;
+  isLocked: boolean;
+}
+
+export function AutoLockScreen({ children, onLock, isLocked }: AutoLockScreenProps) {
   const { data: session } = useLodgeCoreSession();
-  const [isLocked, setIsLocked] = useState(false);
   
   // Default to 60 seconds for restaurant, can be read from session/outlet config
   const autoLockSeconds = (session as any)?.autoLockSeconds || 60;
-
-  const resetTimer = useCallback(() => {
-    if (!isLocked) {
-      // Logic to reset timer. We'll use a simple timeout here.
-    }
-  }, [isLocked]);
 
   useEffect(() => {
     if (isLocked) return;
@@ -23,7 +21,7 @@ export function AutoLockScreen({ children }: { children: React.ReactNode }) {
     let timeout: NodeJS.Timeout;
     
     const lock = () => {
-      setIsLocked(true);
+      onLock();
     };
 
     const reset = () => {
@@ -47,24 +45,7 @@ export function AutoLockScreen({ children }: { children: React.ReactNode }) {
       window.removeEventListener('keypress', reset);
       window.removeEventListener('touchstart', reset);
     };
-  }, [isLocked, autoLockSeconds]);
+  }, [isLocked, autoLockSeconds, onLock]);
 
-  const handleAuthenticated = () => {
-    setIsLocked(false);
-  };
-
-  return (
-    <>
-      {children}
-      {isLocked && (
-        <div className="fixed inset-0 z-[100] bg-slate-900/80 backdrop-blur-xl">
-          <OperatorSelectionScreen 
-            isOpen={true} 
-            cancellable={false} 
-            onAuthenticated={handleAuthenticated} 
-          />
-        </div>
-      )}
-    </>
-  );
+  return <>{children}</>;
 }

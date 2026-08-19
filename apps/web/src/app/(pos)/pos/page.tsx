@@ -551,7 +551,15 @@ export default function PosTerminalPage() {
   // Main layout (Premium Redesign)
   // ─────────────────────────────────────────────────────────────────
   return (
-    <AutoLockScreen>
+    <AutoLockScreen
+      isLocked={!activeOperator || showSwitchPad}
+      onLock={() => {
+        setActiveOperator(null);
+        setOperatorToken(null);
+        localStorage.removeItem('lodgecore_pos_operator_token');
+        setShowSwitchPad(true);
+      }}
+    >
       <div className="flex h-screen bg-slate-100 overflow-hidden text-slate-800 font-sans">
         
         {/* 1. Global Sidebar */}
@@ -910,10 +918,20 @@ export default function PosTerminalPage() {
       {/* Staff Switch */}
       <StaffSwitchPad
         isOpen={!activeOperator || showSwitchPad}
-        cancellable={!!activeOperator}
+        cancellable={!!activeOperator && showSwitchPad}
         outletId={sessionContext?.outlet?.id}
         onCancel={() => setShowSwitchPad(false)}
         onAuthenticated={(operator: any, token?: string) => {
+          if (!activeOperator || activeOperator.id !== operator.id) {
+            // A different (or new) operator is logging in — clear the entire cart context
+            setCart([]);
+            setCurrentOrderId(null);
+            setActiveTableId(null);
+            setActiveTableName(null);
+            setActiveOrderType('TABLE');
+            setActiveDisplayName('');
+            setTableRefreshTrigger(Date.now());
+          }
           setActiveOperator(operator);
           if (token) {
             setOperatorToken(token);
