@@ -315,7 +315,11 @@ async function evaluateEvent(event: NotificationEvent, policy: NotificationPolic
       
       const resIn = await prisma.reservation.findUnique({
         where: { id: event.entityId },
-        include: { primaryGuest: true, reservationRooms: { include: { room: { include: { roomType: true } } } } }
+        include: {
+          primaryGuest: true,
+          reservationRooms: { include: { room: { include: { roomType: true } } } },
+          folios: { where: { type: 'ROOM' }, orderBy: { createdAt: 'asc' }, take: 1 },
+        }
       });
       if (!resIn) return null;
       const guestNameIn = resIn.primaryGuest?.firstName ? `${resIn.primaryGuest.firstName} ${resIn.primaryGuest.lastName}` : 'A guest';
@@ -326,11 +330,12 @@ async function evaluateEvent(event: NotificationEvent, policy: NotificationPolic
       const checkOutIn = resIn.checkOut.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
       const nightsIn = Math.ceil((resIn.checkOut.getTime() - resIn.checkIn.getTime()) / (1000 * 60 * 60 * 24));
       const adultsIn = resIn.adults || 1;
-      const balanceIn = resIn.totalAmount ? `₦${Number(resIn.totalAmount).toLocaleString()}` : 'N/A';
+      const folioIn = resIn.folios?.[0];
+      const bookingValueIn = folioIn ? `${resIn.currency} ${Number(folioIn.totalCharges).toLocaleString()}` : 'N/A';
 
       return {
         subject: event.metadata?.isVip ? `⭐ VIP Checked In — ${guestNameIn}` : `✅ Guest Checked In — ${guestNameIn}`,
-        body: `${event.metadata?.isVip ? '⭐ VIP ' : ''}📋 Conf: ${resIn.confirmationNumber || event.entityId}\n👤 Guest: ${guestNameIn} | 📞 ${phoneIn}\n🏠 Room ${roomNumIn} (${roomTypeIn})\n📅 Check-out: ${checkOutIn} (${nightsIn} night${nightsIn !== 1 ? 's' : ''})\n👥 Adults: ${adultsIn}\n💰 Booking Value: ${balanceIn}`,
+        body: `${event.metadata?.isVip ? '⭐ VIP ' : ''}📋 Conf: ${resIn.confirmationNumber || event.entityId}\n👤 Guest: ${guestNameIn} | 📞 ${phoneIn}\n🏠 Room ${roomNumIn} (${roomTypeIn})\n📅 Check-out: ${checkOutIn} (${nightsIn} night${nightsIn !== 1 ? 's' : ''})\n👥 Adults: ${adultsIn}\n💰 Booking Value: ${bookingValueIn}`,
         category: 'Operations',
         priority: event.metadata?.isVip ? 'High' : 'Normal',
       };
@@ -341,7 +346,11 @@ async function evaluateEvent(event: NotificationEvent, policy: NotificationPolic
       
       const resOut = await prisma.reservation.findUnique({
         where: { id: event.entityId },
-        include: { primaryGuest: true, reservationRooms: { include: { room: { include: { roomType: true } } } } }
+        include: {
+          primaryGuest: true,
+          reservationRooms: { include: { room: { include: { roomType: true } } } },
+          folios: { where: { type: 'ROOM' }, orderBy: { createdAt: 'asc' }, take: 1 },
+        }
       });
       if (!resOut) return null;
       const guestNameOut = resOut.primaryGuest?.firstName ? `${resOut.primaryGuest.firstName} ${resOut.primaryGuest.lastName}` : 'A guest';
@@ -351,9 +360,9 @@ async function evaluateEvent(event: NotificationEvent, policy: NotificationPolic
       const phoneOut = resOut.primaryGuest?.phone || 'N/A';
       const checkInOut = resOut.checkIn.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
       const nightsOut = Math.ceil((resOut.checkOut.getTime() - resOut.checkIn.getTime()) / (1000 * 60 * 60 * 24));
-      const totalOut = resOut.totalAmount ? `₦${Number(resOut.totalAmount).toLocaleString()}` : 'N/A';
-      const balanceDue = (resOut as any).balanceDue;
-      const balanceOut = balanceDue != null ? `₦${Number(balanceDue).toLocaleString()}` : 'Settled';
+      const folioOut = resOut.folios?.[0];
+      const totalOut = folioOut ? `${resOut.currency} ${Number(folioOut.totalCharges).toLocaleString()}` : 'N/A';
+      const balanceOut = folioOut ? (Number(folioOut.balance) === 0 ? 'Settled' : `${resOut.currency} ${Number(folioOut.balance).toLocaleString()}`) : 'N/A';
 
       return {
         subject: event.metadata?.isVip ? `⭐ VIP Checked Out — ${guestNameOut}` : `🚪 Guest Checked Out — ${guestNameOut}`,
@@ -370,6 +379,7 @@ async function evaluateEvent(event: NotificationEvent, policy: NotificationPolic
         include: {
           primaryGuest: true,
           reservationRooms: { include: { room: { include: { roomType: true } } } },
+          folios: { where: { type: 'ROOM' }, orderBy: { createdAt: 'asc' }, take: 1 },
         }
       });
       if (!res) return null;
@@ -382,7 +392,8 @@ async function evaluateEvent(event: NotificationEvent, policy: NotificationPolic
         const type = rr.room.roomType?.name || 'Room';
         return `Room ${roomNum} (${type})`;
       }).join(', ');
-      const totalAmount = res.totalAmount ? `₦${Number(res.totalAmount).toLocaleString()}` : 'N/A';
+      const folio = res.folios?.[0];
+      const totalAmount = folio ? `${res.currency} ${Number(folio.totalCharges).toLocaleString()}` : 'N/A';
       const adults = res.adults || 1;
       const phone = res.primaryGuest?.phone || 'N/A';
       
@@ -401,6 +412,7 @@ async function evaluateEvent(event: NotificationEvent, policy: NotificationPolic
         include: {
           primaryGuest: true,
           reservationRooms: { include: { room: { include: { roomType: true } } } },
+          folios: { where: { type: 'ROOM' }, orderBy: { createdAt: 'asc' }, take: 1 },
         }
       });
       if (!res) return null;
@@ -413,9 +425,10 @@ async function evaluateEvent(event: NotificationEvent, policy: NotificationPolic
         const type = rr.room.roomType?.name || 'Room';
         return `Room ${roomNum} (${type})`;
       }).join(', ');
-      const totalAmount = res.totalAmount ? `₦${Number(res.totalAmount).toLocaleString()}` : 'N/A';
+      const folio = res.folios?.[0];
+      const totalAmount = folio ? `${res.currency} ${Number(folio.totalCharges).toLocaleString()}` : 'N/A';
       const phone = res.primaryGuest?.phone || 'N/A';
-      const cancelReason = (event.metadata?.reason as string) || (res as any).cancellationReason || 'No reason provided';
+      const cancelReason = (event.metadata?.reason as string) || res.cancellationReason || 'No reason provided';
       
       return {
         subject: `Reservation Cancelled — ${guestName}`,
@@ -429,7 +442,11 @@ async function evaluateEvent(event: NotificationEvent, policy: NotificationPolic
       if (!policy.notifyOnStayExtended) return null;
       const res = await prisma.reservation.findUnique({
         where: { id: event.entityId },
-        include: { primaryGuest: true, reservationRooms: { include: { room: { include: { roomType: true } } } } }
+        include: {
+          primaryGuest: true,
+          reservationRooms: { include: { room: { include: { roomType: true } } } },
+          folios: { where: { type: 'ROOM' }, orderBy: { createdAt: 'asc' }, take: 1 },
+        }
       });
       if (!res) return null;
       const guestName = res.primaryGuest?.firstName ? `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}` : 'A guest';
@@ -442,7 +459,8 @@ async function evaluateEvent(event: NotificationEvent, policy: NotificationPolic
         : 'N/A';
       const newCheckOut = res.checkOut.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
       const totalNights = Math.ceil((res.checkOut.getTime() - res.checkIn.getTime()) / (1000 * 60 * 60 * 24));
-      const totalAmount = res.totalAmount ? `₦${Number(res.totalAmount).toLocaleString()}` : 'N/A';
+      const folio = res.folios?.[0];
+      const totalAmount = folio ? `${res.currency} ${Number(folio.totalCharges).toLocaleString()}` : 'N/A';
       
       return {
         subject: `📆 Stay Extended — ${guestName}`,
