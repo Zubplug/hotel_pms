@@ -757,12 +757,13 @@ export default function PosTerminalPage() {
                         <span className="text-xs text-slate-400 font-bold">×{item.quantity}</span>
                         <span className="text-xs font-bold text-slate-500">{formatCurrency(item.price * item.quantity)}</span>
                         {item.station && (
-                          <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md ${
+                          <span className={`flex items-center gap-1 text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md ${
                             item.station === 'KITCHEN' ? 'bg-rose-50 text-rose-600' :
                             item.station === 'BAR'     ? 'bg-blue-50 text-blue-600' :
                             'bg-slate-100 text-slate-500'
                           }`}>
-                            {item.station === 'KITCHEN' ? '🔥' : item.station === 'BAR' ? '🍺' : '⚡'}
+                            <span>{item.station === 'KITCHEN' ? '🔥' : item.station === 'BAR' ? '🍺' : '⚡'}</span>
+                            <span>{item.station}</span>
                           </span>
                         )}
                         <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-600 border border-emerald-100">SENT</span>
@@ -804,12 +805,13 @@ export default function PosTerminalPage() {
                             <div className="flex items-center gap-2">
                               {/* Station badge */}
                               {item.station && (
-                                <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md ${
+                                <span className={`flex items-center gap-1 text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md ${
                                   item.station === 'KITCHEN' ? 'bg-rose-50 text-rose-600' :
                                   item.station === 'BAR'     ? 'bg-blue-50 text-blue-600' :
                                   'bg-slate-100 text-slate-500'
                                 }`}>
-                                  {item.station === 'KITCHEN' ? '🔥' : item.station === 'BAR' ? '🍺' : '⚡'}
+                                  <span>{item.station === 'KITCHEN' ? '🔥' : item.station === 'BAR' ? '🍺' : '⚡'}</span>
+                                  <span>{item.station}</span>
                                 </span>
                               )}
                               {/* Qty stepper */}
