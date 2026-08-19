@@ -240,17 +240,21 @@ export default function PosTerminalPage() {
       if (isTableFlow) toast.info(`Table ${order.tableNumber} — existing order loaded`);
     }
 
-    setCart(itemsToLoad.map((i: any) => ({
-      id: i.id,
-      productId: i.productId,
-      name: i.productName,
-      price: Number(i.unitPrice),
-      quantity: i.quantity,
-      taxRate: Number(i.taxRate),
-      kitchenStatus: i.kitchenStatus,
-      modifiers: i.modifiers || [],
-      fired: true, // Mark existing items as fired so they cannot be edited/sent again
-    })));
+    setCart(itemsToLoad.map((i: any) => {
+      const p = products.find(prod => prod.id === i.productId);
+      return {
+        id: i.id,
+        productId: i.productId,
+        name: i.productName,
+        price: Number(i.unitPrice),
+        quantity: i.quantity,
+        taxRate: Number(i.taxRate),
+        kitchenStatus: i.kitchenStatus,
+        station: p ? (p.resolvedStation || p.productionStation || 'KITCHEN') : 'KITCHEN',
+        fired: true,
+        modifiers: i.modifiers || [],
+      };
+    }));
   };
 
   const handleOrderResume = (order: any) => {
@@ -690,16 +694,21 @@ export default function PosTerminalPage() {
                 key={check.id}
                 onClick={() => {
                   setActiveCheckId(check.id);
-                  setCart(check.items.map((i: any) => ({
-                    id: i.id,
-                    productId: i.productId,
-                    name: i.productName,
-                    price: Number(i.unitPrice),
-                    quantity: i.quantity,
-                    taxRate: Number(i.taxRate),
-                    kitchenStatus: i.kitchenStatus,
-                    modifiers: i.modifiers || [],
-                  })));
+                  setCart(check.items.map((i: any) => {
+                    const p = products.find(prod => prod.id === i.productId);
+                    return {
+                      id: i.id,
+                      productId: i.productId,
+                      name: i.productName,
+                      price: Number(i.unitPrice),
+                      quantity: i.quantity,
+                      taxRate: Number(i.taxRate),
+                      kitchenStatus: i.kitchenStatus,
+                      station: p ? (p.resolvedStation || p.productionStation || 'KITCHEN') : 'KITCHEN',
+                      fired: true,
+                      modifiers: i.modifiers || [],
+                    };
+                  }));
                 }}
                 className={`px-4 py-1.5 text-xs font-bold rounded-xl border transition-all whitespace-nowrap ${
                   activeCheckId === check.id
@@ -747,6 +756,15 @@ export default function PosTerminalPage() {
                       <div className="flex items-center gap-3 shrink-0">
                         <span className="text-xs text-slate-400 font-bold">×{item.quantity}</span>
                         <span className="text-xs font-bold text-slate-500">{formatCurrency(item.price * item.quantity)}</span>
+                        {item.station && (
+                          <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md ${
+                            item.station === 'KITCHEN' ? 'bg-rose-50 text-rose-600' :
+                            item.station === 'BAR'     ? 'bg-blue-50 text-blue-600' :
+                            'bg-slate-100 text-slate-500'
+                          }`}>
+                            {item.station === 'KITCHEN' ? '🔥' : item.station === 'BAR' ? '🍺' : '⚡'}
+                          </span>
+                        )}
                         <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-600 border border-emerald-100">SENT</span>
                       </div>
                     </div>
