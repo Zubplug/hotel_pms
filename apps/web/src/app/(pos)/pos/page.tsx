@@ -350,9 +350,11 @@ export default function PosTerminalPage() {
   };
 
   const handleOrderResume = (order: any) => {
+    // If already active, do nothing
+    if (order.id === currentOrderId) return;
     setViewMode('menu');
     loadOrderContext(order, false);
-    toast.success(`Resumed Order ${order.orderNumber}`);
+    toast.success(`Resumed ${order.tableNumber ? `Table ${order.tableNumber}` : order.orderNumber}`);
   };
 
   const handleTableSelect = async (table: any) => {
