@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dashboard_screen.dart';
 
 class MainScreen extends StatefulWidget {
@@ -24,7 +23,6 @@ class _MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     const primaryNavy = Color(0xFF0F172A);
     const goldAccent = Color(0xFFD4AF37);
-    const surfaceNavy = Color(0xFF1E293B);
     const textSecondary = Color(0xFF94A3B8);
 
     return Scaffold(

@@ -84,7 +84,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       }
     } catch (e) {
       HapticFeedback.heavyImpact();
-      setState(() => _errorMessage = 'Invalid email or password. Please try again.');
+      String errorMsg = 'Invalid email or password. Please try again.';
+      if (e.runtimeType.toString().contains('DioException')) {
+        final dynamic dioError = e;
+        final data = dioError.response?.data;
+        if (data != null && data is Map && data['message'] != null) {
+          errorMsg = '${dioError.response?.statusCode}: ${data['message']}';
+        } else {
+          errorMsg = '${dioError.response?.statusCode}: ${dioError.message}';
+        }
+      } else {
+        errorMsg = e.toString();
+      }
+      debugPrint('LOGIN ERROR: $e');
+      setState(() => _errorMessage = errorMsg);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

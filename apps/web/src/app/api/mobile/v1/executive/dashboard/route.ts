@@ -3,6 +3,8 @@ import { successResponse, errorResponse } from '@/lib/api-response';
 import { resolveUser } from '@/lib/resolve-user';
 import { getExecutiveKPISnapshot } from '@/lib/kpi';
 import { evaluatePropertyAlerts } from '@/lib/attention-engine';
+import { fetchHotelPulse } from '@/lib/executive/hotel-pulse';
+import { fetchPendingApprovals } from '@/lib/executive/approvals';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,12 +12,10 @@ export async function GET(req: NextRequest) {
   try {
     const user = await resolveUser(req);
     
-    // Auth & Basic Capability Check
     if (!user) {
       return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
     }
     
-    // Note: Eventually this will use capability-based auth (e.g., hasPermission('dashboard.view:executive'))
     if (!['MANAGER', 'ADMIN', 'SUPER_ADMIN', 'DIRECTOR', 'EXECUTIVE'].includes(user.role) && !user.isSuperAdmin) {
       return errorResponse('FORBIDDEN', 'Executive access required', 403);
     }
@@ -26,28 +26,47 @@ export async function GET(req: NextRequest) {
       return errorResponse('FORBIDDEN', 'No property access', 403);
     }
 
-    // Phase 1: We will aggregate the snapshot for the first property in the list
-    // (Phase 3 handles multi-property consolidation properly)
     const primaryPropertyId = allowedPropertyIds[0];
 
-    // Fetch the authoritative KPI snapshot using the dedicated foundation layer
-    const snapshot = await getExecutiveKPISnapshot(primaryPropertyId);
-
-    // Fetch the live Attention Engine alerts
-    const activeAlerts = await evaluatePropertyAlerts(primaryPropertyId);
-    
-    // Fetch property basic info
     const prismaModule = await import('@hotel-pms/db');
     const prisma = prismaModule.default;
     const property = await prisma.property.findUnique({
       where: { id: primaryPropertyId },
-      select: { name: true }
+      select: { id: true, name: true, timezone: true }
     });
 
+    if (!property) {
+      return errorResponse('NOT_FOUND', 'Property not found', 404);
+    }
+
+    const [snapshot, activeAlerts, hotelPulse, approvals] = await Promise.all([
+      getExecutiveKPISnapshot(primaryPropertyId),
+      evaluatePropertyAlerts(primaryPropertyId),
+      fetchHotelPulse(primaryPropertyId),
+      fetchPendingApprovals(primaryPropertyId)
+    ]);
+
+    const now = new Date();
+
     return successResponse({
-      property: property || { name: 'LodgeCore' },
-      kpi: snapshot,
-      alerts: activeAlerts
+      property: {
+        id: property.id,
+        name: property.name,
+        timezone: property.timezone
+      },
+      businessDate: now.toISOString().split('T')[0], // Typically derived from Property.businessDate in PMS
+      generatedAt: now.toISOString(),
+      
+      performance: snapshot,
+      hotelPulse,
+      attention: activeAlerts,
+      approvals,
+      
+      revenueTrend: null,
+      arrivals: null,
+      guestPulse: null,
+      operationsPulse: null,
+      executiveBrief: null
     }, 200);
 
   } catch (err: any) {
