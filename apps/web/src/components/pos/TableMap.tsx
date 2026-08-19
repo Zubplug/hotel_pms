@@ -10,6 +10,7 @@ interface TableMapProps {
   onTableSelect: (table: any) => void;
   activeTableId?: string | null;
   refreshTrigger?: number;
+  operatorToken?: string | null;
 }
 
 function TableCard({ table, isSelected, onSelect }: { table: any; isSelected: boolean; onSelect: () => void }) {
@@ -74,7 +75,7 @@ function TableCard({ table, isSelected, onSelect }: { table: any; isSelected: bo
   );
 }
 
-export function TableMap({ outletId, onTableSelect, activeTableId, refreshTrigger }: TableMapProps) {
+export function TableMap({ outletId, onTableSelect, activeTableId, refreshTrigger, operatorToken }: TableMapProps) {
   const { provider } = useLodgeCoreProvider();
   const [floorPlans, setFloorPlans] = useState<any[]>([]);
   const [activePlanId, setActivePlanId] = useState<string | null>(null);
@@ -86,7 +87,7 @@ export function TableMap({ outletId, onTableSelect, activeTableId, refreshTrigge
     const fetchFloorPlans = async () => {
       setIsLoading(true);
       try {
-        const res = await provider.pos.getFloorPlans(outletId);
+        const res = await provider.pos.getFloorPlans(outletId, operatorToken);
         if (res.data && res.data.length > 0) {
           setFloorPlans(res.data);
           setActivePlanId(res.data[0].id);

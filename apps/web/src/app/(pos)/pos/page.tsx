@@ -734,11 +734,12 @@ export default function PosTerminalPage() {
               )
             ) : (
               <div className="h-full rounded-2xl overflow-hidden shadow-sm border border-slate-200 bg-white relative">
-                <TableMap
-                  outletId={sessionContext?.outlet?.id || ''}
+                <TableMap 
+                  outletId={sessionContext?.outlet?.id || ''} 
                   onTableSelect={handleTableSelect}
                   activeTableId={activeTableId}
-                  refreshTrigger={tableRefreshTrigger}
+                  refreshTrigger={cart.length}
+                  operatorToken={operatorToken}
                 />
               </div>
             )}

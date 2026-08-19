@@ -157,7 +157,7 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     getAuthorizedOutlets: async (propertyId: string, deviceId: string) => {
       return invokeDesktop('pos.getAuthorizedOutlets', { propertyId, deviceId });
     },
-    getFloorPlans: async (outletId: string) => {
+    getFloorPlans: async (outletId: string, operatorToken?: string | null) => {
       return invokeDesktop('pos.getFloorPlans', { outletId });
     },
     getTables: async (floorPlanId: string) => {
