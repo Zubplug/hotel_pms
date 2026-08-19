@@ -1134,9 +1134,10 @@ model Staff {
   updatedAt DateTime  @updatedAt @db.Timestamptz
   deletedAt DateTime? @db.Timestamptz
 
-  posOrders           PosOrder[]
-  outletAccess        StaffPosOutletAccess[]
+  posOrders            PosOrder[]
+  outletAccess         StaffPosOutletAccess[]
   posProductionBatches PosProductionBatch[]
+  posOperatorSessions  PosOperatorSession[]
 }
 
 model StaffPosOutletAccess {
@@ -1787,12 +1788,13 @@ model GoodsReceivedNoteItem {
 // -----------------------------------------------------------------------------
 
 model PosOutlet {
-  id         String   @id @default(uuid()) @db.Uuid
-  propertyId String   @db.Uuid
-  property   Property @relation(fields: [propertyId], references: [id])
-  name       String
-  type       String
-  isActive   Boolean  @default(true)
+  id              String   @id @default(uuid()) @db.Uuid
+  propertyId      String   @db.Uuid
+  property        Property @relation(fields: [propertyId], references: [id])
+  name            String
+  type            String
+  isActive        Boolean  @default(true)
+  autoLockSeconds Int      @default(60)
 
   categories ProductCategory[]
   sessions   PosSession[]
@@ -1804,6 +1806,7 @@ model PosOutlet {
   updatedBy String?  @db.Uuid
 
   devices     PosDevice[]
+  terminals   PosTerminal[]
   staffAccess StaffPosOutletAccess[]
   floorPlans  PosFloorPlan[]
 }
@@ -1857,11 +1860,11 @@ model ProductCategory {
 }
 
 model PosProduct {
-  id                String             @id @default(uuid()) @db.Uuid
-  propertyId        String             @db.Uuid
-  property          Property           @relation(fields: [propertyId], references: [id])
-  categoryId        String             @db.Uuid
-  category          ProductCategory    @relation(fields: [categoryId], references: [id])
+  id         String          @id @default(uuid()) @db.Uuid
+  propertyId String          @db.Uuid
+  property   Property        @relation(fields: [propertyId], references: [id])
+  categoryId String          @db.Uuid
+  category   ProductCategory @relation(fields: [categoryId], references: [id])
 
   name              String
   description       String?
@@ -1943,7 +1946,7 @@ model PosSession {
   propertyId String?   @db.Uuid
   property   Property? @relation(fields: [propertyId], references: [id])
 
-    orders PosOrder[]
+  orders PosOrder[]
 
   cashMovements       PosCashMovement[]
   receiptAudits       PosReceiptAudit[]
@@ -2099,11 +2102,11 @@ model PosOrder {
   serverStaffId String? @db.Uuid
   serverStaff   Staff?  @relation(fields: [serverStaffId], references: [id])
 
-  orderNumber   String               @unique
-  orderType     PosOrderType         @default(TABLE)
-  status        PosOrderStatus       @default(SUBMITTED)
+  orderNumber   String                @unique
+  orderType     PosOrderType          @default(TABLE)
+  status        PosOrderStatus        @default(SUBMITTED)
   paymentStatus PosOrderPaymentStatus @default(UNPAID)
-  businessDate  DateTime             @db.Date
+  businessDate  DateTime              @db.Date
 
   subtotal  Decimal @default(0) @db.Decimal(18, 4)
   taxAmount Decimal @default(0) @db.Decimal(18, 4)
@@ -2323,4 +2326,75 @@ model PosProductionBatchItem {
   modifiers   Json?
   course      Int?
   createdAt   DateTime           @default(now()) @db.Timestamptz
+}
+
+// -----------------------------------------------------------------------------
+// POS TERMINALS & SESSIONS
+// -----------------------------------------------------------------------------
+
+enum PosTerminalType {
+  RESTAURANT_POS
+  BAR_POS
+  FRONT_DESK
+  KITCHEN_DISPLAY
+  BACK_OFFICE
+}
+
+enum PosTerminalStatus {
+  ACTIVE
+  INACTIVE
+  REVOKED
+}
+
+enum PosLicenseStatus {
+  ACTIVE
+  EXPIRED
+  RESTRICTED
+}
+
+model PosTerminal {
+  id              String            @id @default(uuid()) @db.Uuid
+  terminalCode    String            @unique
+  name            String
+  terminalType    PosTerminalType
+  organisationId  String            @db.Uuid
+  propertyId      String            @db.Uuid
+  outletId        String            @db.Uuid
+  outlet          PosOutlet         @relation(fields: [outletId], references: [id])
+  deviceTokenHash String
+  status          PosTerminalStatus @default(ACTIVE)
+  licenseStatus   PosLicenseStatus  @default(ACTIVE)
+  autoLockSeconds Int?
+  lastSyncAt      DateTime?
+  lastSeenAt      DateTime?
+  registeredAt    DateTime          @default(now())
+  revokedAt       DateTime?
+
+  operatorSessions PosOperatorSession[]
+
+  @@map("pos_terminals")
+}
+
+enum PosOperatorSessionStatus {
+  ACTIVE
+  LOCKED
+  ENDED
+}
+
+model PosOperatorSession {
+  id                   String                   @id @default(uuid()) @db.Uuid
+  terminalId           String                   @db.Uuid
+  terminal             PosTerminal              @relation(fields: [terminalId], references: [id])
+  outletId             String                   @db.Uuid
+  operatorId           String                   @db.Uuid
+  operator             Staff                    @relation(fields: [operatorId], references: [id])
+  startedAt            DateTime                 @default(now())
+  lastActivityAt       DateTime                 @default(now())
+  lockedAt             DateTime?
+  endedAt              DateTime?
+  status               PosOperatorSessionStatus @default(ACTIVE)
+  authenticationMethod String                   @default("PIN")
+  deviceSessionId      String?
+
+  @@map("pos_operator_sessions")
 }

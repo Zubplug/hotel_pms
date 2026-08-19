@@ -140,6 +140,8 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     getActiveStaff: async (propertyId: string) => {
       return invokeDesktop('pos.getActiveStaff', { propertyId });
     },
+    validateSupervisorPin: async (pin: string, propertyId?: string) => { return invokeDesktop("pos.validateSupervisorPin", { pin, propertyId }); },
+
     getCurrentOperator: async (sessionId: string) => {
       return invokeDesktop('pos.getCurrentOperator', { sessionId });
     },

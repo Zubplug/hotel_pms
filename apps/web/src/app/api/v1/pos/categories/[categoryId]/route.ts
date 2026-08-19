@@ -5,13 +5,12 @@ import { successResponse, errorResponse } from '@/lib/api-response';
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { categoryId: string } }
+  { params }: { params: Promise<{ categoryId: string }> }
 ) {
   try {
+    const { categoryId } = await params;
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Unauthorized', 401);
-
-    const { categoryId } = params;
     if (!categoryId) return errorResponse('BAD_REQUEST', 'Category ID is required', 400);
 
     const body = await req.json();

@@ -147,6 +147,27 @@ public partial class MainPage : ContentPage
                 case "hardware.cancelCard":
                     responseData = await hardwareInterop.CancelCardAsync();
                     break;
+                case "hardware.openCashDrawer":
+                    responseData = await pmsInterop.OpenCashDrawerAsync();
+                    break;
+                case "hardware.printReceipt":
+                    responseData = await pmsInterop.PrintReceiptAsync(
+                        System.Text.Json.JsonSerializer.Serialize(parameters?["receipt"]));
+                    break;
+                case "hardware.printKitchenTicket":
+                    responseData = await pmsInterop.PrintKitchenTicketAsync(
+                        System.Text.Json.JsonSerializer.Serialize(parameters?["ticket"]));
+                    break;
+                case "hardware.sendToKds":
+                    responseData = await pmsInterop.SendToKdsAsync(
+                        System.Text.Json.JsonSerializer.Serialize(parameters?["order"]));
+                    break;
+                case "hardware.updateKdsStatus":
+                    responseData = await pmsInterop.UpdateKdsStatusAsync(
+                        parameters?["orderId"]?.ToString() ?? "",
+                        parameters?["itemId"]?.ToString() ?? "",
+                        parameters?["status"]?.ToString() ?? "");
+                    break;
                 case "reservations.get":
                     responseData = await pmsInterop.GetActiveReservationsAsync();
                     break;
@@ -361,6 +382,13 @@ public partial class MainPage : ContentPage
                         parameters?["pin"]?.ToString(),
                         parameters?["propertyId"]?.ToString(),
                         parameters?["sessionId"]?.ToString());
+                    break;
+                case "pos.keepAlive":
+                    responseData = await pmsInterop.KeepAliveAsync();
+                    break;
+                case "pos.validateSupervisorPin":
+                    responseData = await pmsInterop.ValidateSupervisorPinAsync(
+                        parameters?["pin"]?.ToString());
                     break;
                 case "pos.getCurrentOperator":
                     responseData = await pmsInterop.GetCurrentOperatorAsync(parameters?["sessionId"]?.ToString());

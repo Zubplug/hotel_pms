@@ -4,15 +4,14 @@ import { auth } from '@/lib/auth';
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { outletId: string } }
+  { params }: { params: Promise<{ outletId: string }> }
 ) {
   try {
+    const { outletId } = await params;
     const session = await auth();
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    const { outletId } = params;
 
     const floorPlans = await prisma.posFloorPlan.findMany({
       where: { outletId, isActive: true },
@@ -34,15 +33,15 @@ export async function GET(
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { outletId: string } }
+  { params }: { params: Promise<{ outletId: string }> }
 ) {
   try {
+    const { outletId } = await params;
     const session = await auth();
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { outletId } = params;
     const body = await req.json();
     const { name } = body;
 

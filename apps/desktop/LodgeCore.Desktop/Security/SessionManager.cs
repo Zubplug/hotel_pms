@@ -55,6 +55,9 @@ public class SessionManager
             c.IsActive = false;
         }
 
+        // Fetch auto-lock timer from terminal or outlet settings if available, else default 60s
+        var autoLockSeconds = outlet.AutoLockSeconds ?? 60; // 60 seconds default for Restaurant
+
         // Create new trusted context
         var newContext = new LocalOperatorContext
         {
@@ -66,7 +69,7 @@ public class SessionManager
             SessionId = activeSession?.Id ?? string.Empty,
             OperatorTokenVersion = Guid.NewGuid().ToString(),
             AuthenticatedAt = DateTime.UtcNow,
-            ExpiresAt = DateTime.UtcNow.AddHours(12),
+            ExpiresAt = DateTime.UtcNow.AddSeconds(autoLockSeconds), // Enforce Auto-lock timer
             IsActive = true
         };
 
@@ -112,6 +115,18 @@ public class SessionManager
         }
     }
 
+    public async Task KeepAliveAsync()
+    {
+        var context = await _dbContext.OperatorContexts.FirstOrDefaultAsync(c => c.IsActive);
+        if (context != null)
+        {
+            var outlet = await _dbContext.PosOutlets.FirstOrDefaultAsync(o => o.Id == context.OutletId);
+            var autoLockSeconds = outlet?.AutoLockSeconds ?? 60;
+            context.ExpiresAt = DateTime.UtcNow.AddSeconds(autoLockSeconds);
+            await _dbContext.SaveChangesAsync();
+        }
+    }
+
     /// <summary>
     /// Clears the active operator session — called after settlement or explicit logout.
     /// Forces a fresh PIN authentication before the next shift begins.
@@ -129,13 +144,15 @@ public class SessionManager
 
     private bool VerifyPin(string pin, string hash)
     {
-        // Secure hash verification using SHA256
-        using var sha256 = SHA256.Create();
-        var bytes = Encoding.UTF8.GetBytes(pin);
-        var computedHash = Convert.ToBase64String(sha256.ComputeHash(bytes));
+        if (string.IsNullOrEmpty(hash)) return false;
         
-        // In production, PINs must be securely hashed and we strictly compare.
-        // We assume the hash in DB matches the Base64 SHA256 of the PIN.
-        return computedHash == hash;
+        try
+        {
+            return BCrypt.Net.BCrypt.Verify(pin, hash);
+        }
+        catch
+        {
+            return false; // In case hash is somehow invalid BCrypt format
+        }
     }
 }

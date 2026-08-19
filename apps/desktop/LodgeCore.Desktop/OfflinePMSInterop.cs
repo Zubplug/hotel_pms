@@ -647,6 +647,19 @@ public class OfflinePMSInterop
         }
     }
 
+    public async Task<string> KeepAliveAsync()
+    {
+        try
+        {
+            await _sessionManager.KeepAliveAsync();
+            return JsonSerializer.Serialize(new { success = true });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
     private static readonly Dictionary<string, (int Attempts, DateTime LockoutEnd)> _pinFailures = new();
 
     public async Task<string> AuthenticateOperatorAsync(string staffId, string pin, string propertyId, string sessionId)
@@ -658,7 +671,27 @@ public class OfflinePMSInterop
             var staff = await _repo.GetStaffByIdAsync(staffId);
             
             // Return the OperatorTokenVersion as the secure token to React
-            return JsonSerializer.Serialize(new { success = true, data = new { operatorToken = ctx.OperatorTokenVersion, staff } });
+            return JsonSerializer.Serialize(new { success = true, data = new { operatorToken = ctx.OperatorTokenVersion, staff, permissions = new[] { staff.Role } } });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    public async Task<string> ValidateSupervisorPinAsync(string pin)
+    {
+        try
+        {
+            var posCtx = await _sessionManager.GetActiveContextAsync();
+            var supervisor = await _repo.ValidateSupervisorPinAsync(pin, posCtx.PropertyId);
+            
+            if (supervisor == null)
+            {
+                return JsonSerializer.Serialize(new { success = false, error = "Invalid supervisor PIN or unauthorized." });
+            }
+            
+            return JsonSerializer.Serialize(new { success = true, data = new { staffId = supervisor.Id, name = $"{supervisor.FirstName} {supervisor.LastName}" } });
         }
         catch (Exception ex)
         {
@@ -816,6 +849,80 @@ public class OfflinePMSInterop
             await _sessionManager.ClearOperatorSessionAsync();
             
             return JsonSerializer.Serialize(new { success = true, data = settlement });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+    public async Task<string> OpenCashDrawerAsync()
+    {
+        try
+        {
+            // TODO: Integrate with actual cash drawer hardware (e.g., ESC/POS serial port)
+            // For now, log the event for audit trail
+            var ctx = await GetSecureContextAsync();
+            await _repo.LogHardwareEventAsync(ctx.UserId, ctx.DeviceId, "CASH_DRAWER_OPEN", null);
+            return JsonSerializer.Serialize(new { success = true, message = "Cash drawer opened" });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    public async Task<string> PrintReceiptAsync(string receiptDataJson)
+    {
+        try
+        {
+            var ctx = await GetSecureContextAsync();
+            // TODO: Integrate with ESC/POS or Windows printing
+            await _repo.LogHardwareEventAsync(ctx.UserId, ctx.DeviceId, "RECEIPT_PRINT", receiptDataJson);
+            return JsonSerializer.Serialize(new { success = true, message = "Receipt sent to printer" });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    public async Task<string> PrintKitchenTicketAsync(string ticketDataJson)
+    {
+        try
+        {
+            var ctx = await GetSecureContextAsync();
+            // TODO: Route to the correct station printer based on ticket.station
+            await _repo.LogHardwareEventAsync(ctx.UserId, ctx.DeviceId, "KITCHEN_TICKET_PRINT", ticketDataJson);
+            return JsonSerializer.Serialize(new { success = true, message = "Kitchen ticket sent to printer" });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    public async Task<string> SendToKdsAsync(string orderDataJson)
+    {
+        try
+        {
+            var ctx = await GetSecureContextAsync();
+            // TODO: Send via WebSocket or local network to KDS display
+            await _repo.LogHardwareEventAsync(ctx.UserId, ctx.DeviceId, "KDS_ORDER_SENT", orderDataJson);
+            return JsonSerializer.Serialize(new { success = true, message = "Order sent to KDS" });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    public async Task<string> UpdateKdsStatusAsync(string orderId, string itemId, string status)
+    {
+        try
+        {
+            var ctx = await GetSecureContextAsync();
+            await _repo.LogHardwareEventAsync(ctx.UserId, ctx.DeviceId, $"KDS_STATUS_{status}", $"order:{orderId} item:{itemId}");
+            return JsonSerializer.Serialize(new { success = true });
         }
         catch (Exception ex)
         {

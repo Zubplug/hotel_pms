@@ -4,15 +4,15 @@ import { auth } from '@/lib/auth';
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { outletId: string, floorPlanId: string } }
+  { params }: { params: Promise<{ outletId: string, floorPlanId: string }> }
 ) {
   try {
+    const { floorPlanId } = await params;
     const session = await auth();
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { floorPlanId } = params;
     const body = await req.json();
     const { name, capacity, positionX, positionY } = body;
 

@@ -213,6 +213,9 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
         body: JSON.stringify({ staffId, pin, propertyId, sessionId, outletId, deviceId })
       });
     },
+    validateSupervisorPin: async (pin: string, propertyId?: string) => {
+      return Promise.resolve({ data: null, error: 'Not implemented online' });
+    },
     getAuthorizedOutlets: async (propertyId: string, deviceId: string) => {
       return apiFetch(`/api/v1/pos/outlets/authorized?propertyId=${propertyId}&deviceId=${deviceId}`);
     },

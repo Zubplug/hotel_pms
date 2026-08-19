@@ -389,3 +389,18 @@ public class LocalKeycardAudit
     public string OperationId { get; set; } = string.Empty; // Idempotency key
     public string SyncStatus { get; set; } = "PENDING"; // PENDING, SYNCED
 }
+
+public class LocalHardwareAuditLog
+{
+    [Key] public string Id { get; set; } = Guid.NewGuid().ToString();
+    public string UserId { get; set; } = string.Empty;
+    public string DeviceId { get; set; } = string.Empty;
+    /// <summary>
+    /// Hardware event type: CASH_DRAWER_OPEN, RECEIPT_PRINT, KITCHEN_TICKET_PRINT,
+    /// KDS_ORDER_SENT, KDS_STATUS_*
+    /// </summary>
+    public string EventType { get; set; } = string.Empty;
+    public string? Payload { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+

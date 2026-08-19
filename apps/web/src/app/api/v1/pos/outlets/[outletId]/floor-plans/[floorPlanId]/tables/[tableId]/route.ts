@@ -4,15 +4,15 @@ import { auth } from '@/lib/auth';
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { outletId: string, floorPlanId: string, tableId: string } }
+  { params }: { params: Promise<{ outletId: string, floorPlanId: string, tableId: string }> }
 ) {
   try {
+    const { tableId } = await params;
     const session = await auth();
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { tableId } = params;
     const body = await req.json();
     const { name, capacity, positionX, positionY, isActive, currentOrderId } = body;
 
@@ -37,15 +37,14 @@ export async function PUT(
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { outletId: string, floorPlanId: string, tableId: string } }
+  { params }: { params: Promise<{ outletId: string, floorPlanId: string, tableId: string }> }
 ) {
   try {
+    const { tableId } = await params;
     const session = await auth();
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    const { tableId } = params;
 
     // Optional: check if there is an active order on this table before deleting
     const table = await prisma.posTable.findUnique({

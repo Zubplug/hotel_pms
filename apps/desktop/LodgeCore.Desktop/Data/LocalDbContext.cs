@@ -42,6 +42,8 @@ public class LocalDbContext : DbContext
     public DbSet<LocalPosReceiptAudit> PosReceiptAudits { get; set; } = null!;
     public DbSet<LocalPosDiscount> PosDiscounts { get; set; } = null!;
     public DbSet<LocalKeycardAudit> KeycardAudits { get; set; } = null!;
+    public DbSet<LocalHardwareAuditLog> HardwareAuditLogs { get; set; } = null!;
+
 
     public LocalDbContext(DbContextOptions<LocalDbContext> options) : base(options)
     {

@@ -4,15 +4,15 @@ import { auth } from '@/lib/auth';
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { outletId: string, floorPlanId: string } }
+  { params }: { params: Promise<{ outletId: string, floorPlanId: string }> }
 ) {
   try {
+    const { floorPlanId } = await params;
     const session = await auth();
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { floorPlanId } = params;
     const body = await req.json();
     const { name, isActive } = body;
 
@@ -33,15 +33,14 @@ export async function PUT(
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { outletId: string, floorPlanId: string } }
+  { params }: { params: Promise<{ outletId: string, floorPlanId: string }> }
 ) {
   try {
+    const { floorPlanId } = await params;
     const session = await auth();
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    const { floorPlanId } = params;
 
     // Check if tables exist
     const tablesCount = await prisma.posTable.count({

@@ -12,7 +12,12 @@ import { AppSwitcher } from '@/components/layout/AppSwitcher';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { formatCurrency } from '@/lib/utils';
-import { StaffSwitchPad } from '@/components/pos/StaffSwitchPad';
+import { OperatorSelectionScreen } from '@/components/pos/OperatorSelectionScreen';
+import { AutoLockScreen } from '@/components/pos/AutoLockScreen';
+import { CategoryTileGrid } from '@/components/pos/CategoryTileGrid';
+import { ProductCardStepper } from '@/components/pos/ProductCardStepper';
+import { PosStaffStrip } from '@/components/pos/PosStaffStrip';
+import { ChargeModal } from '@/components/pos/ChargeModal';
 import { MySalesModal } from '@/components/pos/MySalesModal';
 import { MyOrdersModal } from '@/components/pos/MyOrdersModal';
 import { ActiveOrdersModal } from '@/components/pos/ActiveOrdersModal';
@@ -21,7 +26,10 @@ import { ModifierSelectionModal } from '@/components/pos/ModifierSelectionModal'
 import { CheckSplitModal } from '@/components/pos/CheckSplitModal';
 import { KotPanel } from '@/components/pos/KotPanel';
 import { PosSidebar } from '@/components/pos/PosSidebar';
-import { PosContextBar } from '@/components/pos/PosContextBar';
+import { StaffSwitchPad } from '@/components/pos/StaffSwitchPad';
+import { usePosOnlineStatus } from '@/lib/pos/usePosOnlineStatus';
+import { useLicenseGuard } from '@/lib/pos/useLicenseGuard';
+import { OfflineSyncQueue } from '@/lib/pos/OfflineSyncQueue';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
@@ -84,6 +92,39 @@ export default function PosTerminalPage() {
   // ── Modals ────────────────────────────────────────────────────────
   const [modifierTarget, setModifierTarget] = useState<any | null>(null);
   const [showSplitModal, setShowSplitModal] = useState(false);
+
+  // ── Orders ────────────────────────────────────────────────────────
+  const [myActiveOrders, setMyActiveOrders] = useState<any[]>([]);
+
+  const refreshActiveOrders = useCallback(async () => {
+    if (!posSessionId || !operatorToken) return;
+    try {
+      const res = await provider.pos.getActiveOrders(posSessionId, operatorToken, 'my_orders');
+      if (!res.error && res.data) {
+        setMyActiveOrders(res.data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch active orders', err);
+    }
+  }, [posSessionId, operatorToken, provider.pos]);
+
+  // ── Audit & Resilience hooks ──────────────────────────────────────
+  const { isOnline, syncPending } = usePosOnlineStatus({ onBackOnline: refreshActiveOrders });
+  const { isExpired, isRevoked, restrictedMode } = useLicenseGuard({ sessionContext });
+
+
+  useEffect(() => {
+    refreshActiveOrders();
+    // Poll every 15 seconds
+    const interval = setInterval(refreshActiveOrders, 15000);
+    return () => clearInterval(interval);
+  }, [refreshActiveOrders]);
+
+  useEffect(() => {
+    if (tableRefreshTrigger) {
+      refreshActiveOrders();
+    }
+  }, [tableRefreshTrigger, refreshActiveOrders]);
 
   // ─────────────────────────────────────────────────────────────────
   // Load products / categories + restore session context
@@ -191,6 +232,29 @@ export default function PosTerminalPage() {
     } else {
       addToCart(product, []);
     }
+  };
+
+  const handleProductDecrement = (productId: string) => {
+    setCart((prev) => {
+      // Find the last unfired item of this product without modifiers
+      const reversed = [...prev].reverse();
+      const targetIndexReverse = reversed.findIndex(
+        (i) => i.productId === productId && !i.fired && (!i.modifiers || i.modifiers.length === 0)
+      );
+
+      if (targetIndexReverse === -1) return prev; // Cannot decrement fired or modifier items this way
+
+      const targetIndex = prev.length - 1 - targetIndexReverse;
+      const targetItem = prev[targetIndex];
+
+      if (targetItem.quantity > 1) {
+        const newCart = [...prev];
+        newCart[targetIndex] = { ...targetItem, quantity: targetItem.quantity - 1 };
+        return newCart;
+      } else {
+        return prev.filter((_, idx) => idx !== targetIndex);
+      }
+    });
   };
 
   const handleModifierConfirm = (product: any, selectedModifiers: any[]) => {
@@ -487,458 +551,384 @@ export default function PosTerminalPage() {
   // Main layout (Premium Redesign)
   // ─────────────────────────────────────────────────────────────────
   return (
-    <div className="flex h-screen w-full overflow-hidden font-sans" style={{ background: '#f1f5f9' }}>
-      
-      {/* 1. Global Sidebar */}
-      <PosSidebar
-        viewMode={viewMode}
-        setViewMode={setViewMode}
-        onOpenMyOrders={() => setShowActiveOrders(true)}
-        onOpenMySales={() => setShowMySales(true)}
-        onOpenKitchen={() => {}}
-        onLock={() => { 
-          setActiveOperator(null); 
-          setOperatorToken(null);
-          localStorage.removeItem('lodgecore_pos_operator_token');
-          setShowSwitchPad(true); 
-        }}
-        isOnline={true}
-        syncPending={0}
-      />
-
-      {/* 2. Main Workspace */}
-      <div className="flex flex-col flex-1 min-w-0" style={{ background: '#f8fafc' }}>
-        <PosContextBar
-          outletName={sessionContext?.outlet?.name}
-          drawerName={session?.user?.name || 'Main Drawer'}
-          operatorName={activeOperator ? `${activeOperator.firstName} ${activeOperator.lastName}` : undefined}
-          isOnline={true}
-          syncPending={0}
+    <AutoLockScreen>
+      <div className="flex h-screen bg-slate-100 overflow-hidden text-slate-800 font-sans">
+        
+        {/* 1. Global Sidebar */}
+        <PosSidebar
+          viewMode={viewMode}
+          setViewMode={setViewMode}
+          onOpenMyOrders={() => setShowActiveOrders(true)}
+          onOpenMySales={() => setShowMySales(true)}
+          onOpenKitchen={() => {}}
+          onLock={() => { 
+            setActiveOperator(null); 
+            setOperatorToken(null);
+            localStorage.removeItem('lodgecore_pos_operator_token');
+            setShowSwitchPad(true); 
+          }}
+          isOnline={isOnline}
+          syncPending={syncPending}
         />
 
-        {/* Category & Search Bar */}
-        {viewMode === 'menu' && (
-          <div className="bg-white border-b border-slate-200 flex items-center gap-4 px-5 py-3 shrink-0 shadow-sm">
-            {/* Category pills */}
-            <div className="flex gap-2 overflow-x-auto flex-1" style={{ scrollbarWidth: 'none' }}>
-              <button
-                onClick={() => setActiveCategory('all')}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-xl font-bold text-xs whitespace-nowrap transition-all duration-200 ${
-                  activeCategory === 'all'
-                    ? 'text-white shadow-lg shadow-indigo-200 scale-105'
-                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700'
-                }`}
-                style={activeCategory === 'all' ? { background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' } : {}}
-              >
-                <Sparkles className="w-3 h-3" />
-                All Items
-              </button>
-              {categories.map((c) => (
-                <button
-                  key={c.id}
-                  onClick={() => setActiveCategory(c.id)}
-                  className={`px-4 py-2 rounded-xl font-bold text-xs whitespace-nowrap transition-all duration-200 ${
-                    activeCategory === c.id
-                      ? 'text-white shadow-lg shadow-amber-200 scale-105'
-                      : 'bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700'
-                  }`}
-                  style={activeCategory === c.id ? { background: 'linear-gradient(135deg, #f59e0b, #d97706)' } : {}}
-                >
-                  {c.name}
-                </button>
-              ))}
-            </div>
-
-            {/* Search */}
-            <div className="relative w-56 shrink-0 hidden md:block">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search menu..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full h-9 pl-9 pr-3 rounded-xl bg-slate-100 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 text-xs font-medium text-slate-700 placeholder:text-slate-400"
-              />
+        {/* Restricted mode overlay (license expired / terminal revoked) */}
+        {restrictedMode && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm">
+            <div className="bg-white rounded-3xl p-10 max-w-md text-center shadow-2xl">
+              <div className="text-5xl mb-4">{isRevoked ? '🚫' : '⏰'}</div>
+              <h2 className="text-2xl font-black text-slate-800 mb-2">
+                {isRevoked ? 'Terminal Revoked' : 'License Expired'}
+              </h2>
+              <p className="text-slate-500 text-sm">
+                {isRevoked
+                  ? 'This terminal has been deactivated by an administrator. Please contact your manager.'
+                  : 'Your LodgeCore license has expired. Please renew to continue processing orders.'}
+              </p>
             </div>
           </div>
         )}
 
-        {/* Content Area */}
-        <div className="flex-1 overflow-auto relative p-5">
-          {viewMode === 'menu' ? (
-            products.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full gap-4">
-                <div className="w-20 h-20 rounded-3xl bg-slate-100 flex items-center justify-center">
-                  <Package2 className="w-10 h-10 text-slate-300" />
-                </div>
-                <div className="text-center">
-                  <p className="font-bold text-slate-500">No products configured</p>
-                  <p className="text-sm text-slate-400 mt-1">Add items from the Admin console.</p>
-                </div>
+        {/* 2. Main Workspace */}
+        <div className="flex flex-col flex-1 min-w-0" style={{ background: '#f8fafc' }}>
+          {/* Category & Search Bar */}
+          {viewMode === 'menu' && (
+            <div className="bg-white border-b border-slate-200 flex flex-col gap-4 px-5 py-4 shrink-0 shadow-sm z-10">
+              <PosStaffStrip 
+                orders={myActiveOrders}
+                onSelectOrder={handleOrderResume}
+                activeOrderId={currentOrderId}
+              />
+              
+              {/* Search */}
+              <div className="relative w-full max-w-md shrink-0">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search menu items..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full h-12 pl-12 pr-4 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 text-sm font-medium text-slate-700 placeholder:text-slate-400"
+                />
               </div>
-            ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                {filteredProducts.map((p) => {
-                  const grad = getProductGradient(p.name);
-                  const emoji = getProductEmoji(p.name, p.category?.name);
-                  return (
-                    <button
-                      key={p.id}
-                      onClick={() => handleProductTap(p)}
-                      className="group relative rounded-2xl overflow-hidden bg-white border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1.5 hover:border-transparent active:scale-95 transition-all duration-200 text-left focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                    >
-                      {/* Image area */}
-                      <div className="relative h-24 flex items-center justify-center overflow-hidden" style={{ background: grad }}>
-                        <span className="text-4xl select-none transition-transform duration-200 group-hover:scale-110 drop-shadow-md">
-                          {emoji}
-                        </span>
-                        {/* Shine overlay on hover */}
-                        <div className="absolute inset-0 opacity-0 group-hover:opacity-10 bg-white transition-opacity duration-200" />
-                      </div>
-
-                      {/* Info area */}
-                      <div className="p-3 pb-3.5 flex flex-col items-center text-center">
-                        <p className="font-bold text-slate-800 text-xs leading-snug line-clamp-2 group-hover:text-indigo-700 transition-colors">{p.name}</p>
-                        <div className="flex items-center justify-center mt-2 relative w-full h-6">
-                          <p className="font-black text-sm text-slate-900 absolute">{formatCurrency(Number(p.price))}</p>
-                          <div className="absolute right-0 w-6 h-6 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 shadow-md" style={{ background: grad }}>
-                            <Plus className="w-3 h-3 text-white" />
-                          </div>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )
-          ) : (
-            <div className="h-full rounded-2xl overflow-hidden shadow-sm border border-slate-200 bg-white relative">
-              <TableMap
-                outletId={sessionContext?.outlet?.id || ''}
-                onTableSelect={handleTableSelect}
-                activeTableId={activeTableId}
-                refreshTrigger={tableRefreshTrigger}
+              
+              <CategoryTileGrid 
+                categories={categories}
+                activeCategory={activeCategory}
+                onSelectCategory={setActiveCategory}
               />
             </div>
           )}
-        </div>
-      </div>
 
-      {/* 3. The Cart Anchor */}
-      {/* 3. The Cart Anchor */}
-      <div className="flex flex-col w-[400px] shrink-0 z-20 bg-white border-l border-slate-200 shadow-2xl">
-
-        {/* Cart Header */}
-        <div className="px-5 pt-5 pb-4 border-b border-slate-100 flex flex-col gap-3 bg-slate-50/50">
-          <div className="flex items-center justify-between">
-            <div className="flex flex-col">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">
-                {currentOrderId ? 'Active Order' : 'New Order'}
-              </span>
-              <span className="text-xl font-black text-slate-800 tracking-tight mt-0.5">
-                {activeOrderType === 'TABLE'
-                  ? (activeTableName ? `Table ${activeTableName}` : 'Select Table')
-                  : (activeDisplayName || activeOrderType.replace('_', ' '))}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setShowActiveOrders(true)}
-                title="Active Orders"
-                className="flex items-center gap-1.5 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 rounded-xl transition-all"
-              >
-                <ShoppingCart className="w-3.5 h-3.5" />
-                Orders
-              </button>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {/* Guest counter */}
-            <div className="flex items-center gap-2 flex-1">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Guests</span>
-              <div className="flex items-center bg-white border border-slate-200 rounded-lg p-0.5">
-                <button onClick={() => setGuestCount((g) => Math.max(1, g - 1))} className="w-6 h-6 rounded flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all">
-                  <Minus className="w-3 h-3" />
-                </button>
-                <span className="w-6 text-center text-xs font-black text-slate-700">{guestCount}</span>
-                <button onClick={() => setGuestCount((g) => g + 1)} className="w-6 h-6 rounded flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all">
-                  <Plus className="w-3 h-3" />
-                </button>
-              </div>
-            </div>
-            {/* Action icons */}
-            <div className="flex items-center gap-1">
-              {cart.length > 0 && (
-                <button onClick={() => setShowSplitModal(true)} title="Split Check" className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all">
-                  <Scissors className="w-4 h-4" />
-                </button>
-              )}
-              {currentOrderId && (
-                <button onClick={() => { setCurrentOrderId(null); setCart([]); setActiveTableId(null); setActiveTableName(null); setActiveOrderType('TABLE'); setActiveDisplayName(''); setTableRefreshTrigger(Date.now()); }} title="Clear Context" className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-all">
-                  <Lock className="w-4 h-4" />
-                </button>
-              )}
-              <button onClick={() => setCart([])} title="Clear Order" className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all">
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Check Tabs */}
-        {orderChecks.length > 0 && (
-          <div className="px-5 py-3 border-b border-slate-100 flex gap-2 overflow-x-auto bg-white" style={{ scrollbarWidth: 'none' }}>
-            {orderChecks.map(check => (
-              <button
-                key={check.id}
-                onClick={() => {
-                  setActiveCheckId(check.id);
-                  setCart(check.items.map((i: any) => {
-                    const p = products.find(prod => prod.id === i.productId);
-                    return {
-                      id: i.id,
-                      productId: i.productId,
-                      name: i.productName,
-                      price: Number(i.unitPrice),
-                      quantity: i.quantity,
-                      taxRate: Number(i.taxRate),
-                      kitchenStatus: i.kitchenStatus,
-                      station: p ? (p.resolvedStation || p.productionStation || 'KITCHEN') : 'KITCHEN',
-                      fired: true,
-                      modifiers: i.modifiers || [],
-                    };
-                  }));
-                }}
-                className={`px-4 py-1.5 text-xs font-bold rounded-xl border transition-all whitespace-nowrap ${
-                  activeCheckId === check.id
-                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-600/20'
-                    : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
-                }`}
-              >
-                Check {check.checkNumber.split('-').pop()} {check.status === 'PAID' ? '✓' : ''}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Cart Items List */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4" style={{ scrollbarWidth: 'thin' }}>
-          {cart.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-slate-300 gap-4 py-16">
-              <div className="w-16 h-16 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center">
-                <ShoppingCart className="w-8 h-8 text-slate-300" />
-              </div>
-              <div className="text-center">
-                <p className="text-sm font-bold text-slate-400">No items yet</p>
-                <p className="text-xs text-slate-300 mt-1">Tap menu items to add them</p>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-3">
-
-              {/* ALREADY SENT SECTION */}
-              {cart.filter(item => item.fired).length > 0 && (
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center gap-2 mb-1">
-                    <div className="h-px flex-1 bg-slate-100" />
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Already Sent</span>
-                    <div className="h-px flex-1 bg-slate-100" />
+          {/* Content Area */}
+          <div className="flex-1 overflow-auto relative p-5">
+            {viewMode === 'menu' ? (
+              products.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full gap-4">
+                  <div className="w-20 h-20 rounded-3xl bg-slate-100 flex items-center justify-center">
+                    <Package2 className="w-10 h-10 text-slate-300" />
                   </div>
-                  {cart.filter(item => item.fired).map((item) => (
-                    <div key={item.id} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-slate-500 text-sm truncate">{item.name}</p>
-                        {item.modifiers?.length > 0 && (
-                          <p className="text-[10px] text-slate-400 mt-0.5 truncate">+ {item.modifiers.map((m: any) => m.name).join(', ')}</p>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-3 shrink-0">
-                        <span className="text-xs text-slate-400 font-bold">×{item.quantity}</span>
-                        <span className="text-xs font-bold text-slate-500">{formatCurrency(item.price * item.quantity)}</span>
-                        {item.station && (
-                          <span className={`flex items-center gap-1 text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md ${
-                            item.station === 'KITCHEN' ? 'bg-rose-50 text-rose-600' :
-                            item.station === 'BAR'     ? 'bg-blue-50 text-blue-600' :
-                            'bg-slate-100 text-slate-500'
-                          }`}>
-                            <span>{item.station === 'KITCHEN' ? '🔥' : item.station === 'BAR' ? '🍺' : '⚡'}</span>
-                            <span>{item.station}</span>
-                          </span>
-                        )}
-                        <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-600 border border-emerald-100">SENT</span>
-                      </div>
-                    </div>
-                  ))}
+                  <div className="text-center">
+                    <p className="font-bold text-slate-500">No products configured</p>
+                    <p className="text-sm text-slate-400 mt-1">Add items from the Admin console.</p>
+                  </div>
                 </div>
-              )}
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 pb-20">
+                  {filteredProducts.map((p) => {
+                    const emoji = getProductEmoji(p.name, p.category?.name);
+                    // Calculate quantity for unfired base items of this product
+                    const qty = cart
+                      .filter((i) => i.productId === p.id && !i.fired && (!i.modifiers || i.modifiers.length === 0))
+                      .reduce((sum, i) => sum + i.quantity, 0);
 
-              {/* NEW ITEMS SECTION */}
-              {cart.filter(item => !item.fired).length > 0 && (
-                <div className="flex flex-col gap-2">
-                  {cart.some(item => item.fired) && (
-                    <div className="flex items-center gap-2 mb-1 mt-2">
+                    return (
+                      <ProductCardStepper
+                        key={p.id}
+                        product={{ id: p.id, name: p.name, price: Number(p.price) }}
+                        quantity={qty}
+                        onIncrement={() => handleProductTap(p)}
+                        onDecrement={() => handleProductDecrement(p.id)}
+                        onClick={() => handleProductTap(p)}
+                        emoji={emoji}
+                      />
+                    );
+                  })}
+                </div>
+              )
+            ) : (
+              <div className="h-full rounded-2xl overflow-hidden shadow-sm border border-slate-200 bg-white relative">
+                <TableMap
+                  outletId={sessionContext?.outlet?.id || ''}
+                  onTableSelect={handleTableSelect}
+                  activeTableId={activeTableId}
+                  refreshTrigger={tableRefreshTrigger}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 3. The Cart Anchor */}
+        <div className="flex flex-col w-[400px] shrink-0 z-20 bg-white border-l border-slate-200 shadow-2xl">
+
+          {/* Cart Header */}
+          <div className="px-5 pt-5 pb-4 border-b border-slate-100 flex flex-col gap-3 bg-slate-50/50">
+            <div className="flex items-center justify-between">
+              <div className="flex flex-col">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">
+                  {currentOrderId ? 'Active Order' : 'New Order'}
+                </span>
+                <span className="text-xl font-black text-slate-800 tracking-tight mt-0.5">
+                  {activeOrderType === 'TABLE'
+                    ? (activeTableName ? `Table ${activeTableName}` : 'Select Table')
+                    : (activeDisplayName || activeOrderType.replace('_', ' '))}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowActiveOrders(true)}
+                  title="Active Orders"
+                  className="flex items-center gap-1.5 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 rounded-xl transition-all"
+                >
+                  <ShoppingCart className="w-3.5 h-3.5" />
+                  Orders
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {/* Guest counter */}
+              <div className="flex items-center gap-2 flex-1">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Guests</span>
+                <div className="flex items-center bg-white border border-slate-200 rounded-lg p-0.5">
+                  <button onClick={() => setGuestCount((g) => Math.max(1, g - 1))} className="w-6 h-6 rounded flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all">
+                    <Minus className="w-3 h-3" />
+                  </button>
+                  <span className="w-6 text-center text-xs font-black text-slate-700">{guestCount}</span>
+                  <button onClick={() => setGuestCount((g) => g + 1)} className="w-6 h-6 rounded flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all">
+                    <Plus className="w-3 h-3" />
+                  </button>
+                </div>
+              </div>
+              {/* Action icons */}
+              <div className="flex items-center gap-1">
+                {cart.length > 0 && (
+                  <button onClick={() => setShowSplitModal(true)} title="Split Check" className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all">
+                    <Scissors className="w-4 h-4" />
+                  </button>
+                )}
+                {currentOrderId && (
+                  <button onClick={() => { setCurrentOrderId(null); setCart([]); setActiveTableId(null); setActiveTableName(null); setActiveOrderType('TABLE'); setActiveDisplayName(''); setTableRefreshTrigger(Date.now()); }} title="Clear Context" className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-all">
+                    <Lock className="w-4 h-4" />
+                  </button>
+                )}
+                <button onClick={() => setCart([])} title="Clear Order" className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Check Tabs */}
+          {orderChecks.length > 0 && (
+            <div className="px-5 py-3 border-b border-slate-100 flex gap-2 overflow-x-auto bg-white" style={{ scrollbarWidth: 'none' }}>
+              {orderChecks.map(check => (
+                <button
+                  key={check.id}
+                  onClick={() => {
+                    setActiveCheckId(check.id);
+                    setCart(check.items.map((i: any) => {
+                      const p = products.find(prod => prod.id === i.productId);
+                      return {
+                        id: i.id,
+                        productId: i.productId,
+                        name: i.productName,
+                        price: Number(i.unitPrice),
+                        quantity: i.quantity,
+                        taxRate: Number(i.taxRate),
+                        kitchenStatus: i.kitchenStatus,
+                        station: p ? (p.resolvedStation || p.productionStation || 'KITCHEN') : 'KITCHEN',
+                        fired: true,
+                        modifiers: i.modifiers || [],
+                      };
+                    }));
+                  }}
+                  className={`px-4 py-1.5 text-xs font-bold rounded-xl border transition-all whitespace-nowrap ${
+                    activeCheckId === check.id
+                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-600/20'
+                      : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  Check {check.checkNumber.split('-').pop()} {check.status === 'PAID' ? '✓' : ''}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Cart Items List */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4" style={{ scrollbarWidth: 'thin' }}>
+            {cart.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-slate-300 gap-4 py-16">
+                <div className="w-16 h-16 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center">
+                  <ShoppingCart className="w-8 h-8 text-slate-300" />
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-bold text-slate-400">No items yet</p>
+                  <p className="text-xs text-slate-300 mt-1">Tap menu items to add them</p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+
+                {/* ALREADY SENT SECTION */}
+                {cart.filter(item => item.fired).length > 0 && (
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2 mb-1">
                       <div className="h-px flex-1 bg-slate-100" />
-                      <span className="text-[9px] font-black text-indigo-400 uppercase tracking-[0.2em]">New Items</span>
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Already Sent</span>
                       <div className="h-px flex-1 bg-slate-100" />
                     </div>
-                  )}
-                  {cart.filter(item => !item.fired).map((item) => (
-                    <div key={item.id} className="group p-3.5 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all">
-                      <div className="flex items-start gap-3">
-                        {/* Emoji avatar */}
-                        <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 text-lg bg-slate-50 border border-slate-100">
-                          {getProductEmoji(item.name)}
-                        </div>
+                    {cart.filter(item => item.fired).map((item) => (
+                      <div key={item.id} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2">
-                            <p className="font-bold text-slate-800 text-sm leading-snug">{item.name}</p>
-                            <button onClick={() => removeItem(item.id)} className="text-slate-300 hover:text-rose-500 transition-colors shrink-0 mt-0.5">
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                          {item.modifiers?.length > 0 && (
-                            <p className="text-[10px] text-slate-500 mt-0.5">+ {item.modifiers.map((m: any) => m.name).join(', ')}</p>
+                          <p className="font-semibold text-slate-500 text-sm truncate">{item.name}</p>
+                          {(item.modifiers ?? []).length > 0 && (
+                            <p className="text-[10px] text-slate-400 mt-0.5 truncate">+ {item.modifiers!.map((m: any) => m.name).join(', ')}</p>
                           )}
-                          <div className="flex items-center justify-between mt-2.5">
-                            <span className="text-xs font-bold text-slate-400">{formatCurrency(item.price)} each</span>
-                            <div className="flex items-center gap-2">
-                              {/* Station badge */}
-                              {item.station && (
-                                <span className={`flex items-center gap-1 text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md ${
-                                  item.station === 'KITCHEN' ? 'bg-rose-50 text-rose-600' :
-                                  item.station === 'BAR'     ? 'bg-blue-50 text-blue-600' :
-                                  'bg-slate-100 text-slate-500'
-                                }`}>
-                                  <span>{item.station === 'KITCHEN' ? '🔥' : item.station === 'BAR' ? '🍺' : '⚡'}</span>
-                                  <span>{item.station}</span>
-                                </span>
-                              )}
-                              {/* Qty stepper */}
-                              <div className="flex items-center gap-1 bg-slate-50 border border-slate-100 rounded-lg p-0.5">
-                                <button onClick={() => updateQuantity(item.id, -1)} className="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-slate-600 hover:bg-white hover:shadow-sm transition-all">
-                                  <Minus className="w-3 h-3" />
-                                </button>
-                                <span className="w-6 text-center text-xs font-black text-slate-700">{item.quantity}</span>
-                                <button onClick={() => updateQuantity(item.id, 1)} className="w-6 h-6 flex items-center justify-center rounded text-indigo-600 hover:bg-white hover:shadow-sm transition-all">
-                                  <Plus className="w-3 h-3" />
-                                </button>
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <span className="text-xs text-slate-400 font-bold">×{item.quantity}</span>
+                          <span className="text-xs font-bold text-slate-500">{formatCurrency(item.price * item.quantity)}</span>
+                          {item.station && (
+                            <span className={`flex items-center gap-1 text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md ${
+                              item.station === 'KITCHEN' ? 'bg-rose-50 text-rose-600' :
+                              item.station === 'BAR'     ? 'bg-blue-50 text-blue-600' :
+                              'bg-slate-100 text-slate-500'
+                            }`}>
+                              <span>{item.station === 'KITCHEN' ? '🔥' : item.station === 'BAR' ? '🍺' : '⚡'}</span>
+                              <span>{item.station}</span>
+                            </span>
+                          )}
+                          <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-600 border border-emerald-100">SENT</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* NEW ITEMS SECTION */}
+                {cart.filter(item => !item.fired).length > 0 && (
+                  <div className="flex flex-col gap-2">
+                    {cart.some(item => item.fired) && (
+                      <div className="flex items-center gap-2 mb-1 mt-2">
+                        <div className="h-px flex-1 bg-slate-100" />
+                        <span className="text-[9px] font-black text-indigo-400 uppercase tracking-[0.2em]">New Items</span>
+                        <div className="h-px flex-1 bg-slate-100" />
+                      </div>
+                    )}
+                    {cart.filter(item => !item.fired).map((item) => (
+                      <div key={item.id} className="group p-3.5 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all">
+                        <div className="flex items-start gap-3">
+                          {/* Emoji avatar */}
+                          <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 text-lg bg-slate-50 border border-slate-100">
+                            {getProductEmoji(item.name)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="font-bold text-slate-800 text-sm leading-snug">{item.name}</p>
+                              <button onClick={() => removeItem(item.id)} className="text-slate-300 hover:text-rose-500 transition-colors shrink-0 mt-0.5">
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                            {(item.modifiers ?? []).length > 0 && (
+                              <p className="text-[10px] text-slate-500 mt-0.5">+ {item.modifiers!.map((m: any) => m.name).join(', ')}</p>
+                            )}
+                            <div className="flex items-center justify-between mt-2.5">
+                              <span className="text-xs font-bold text-slate-400">{formatCurrency(item.price)} each</span>
+                              <div className="flex items-center gap-2">
+                                {/* Station badge */}
+                                {item.station && (
+                                  <span className={`flex items-center gap-1 text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md ${
+                                    item.station === 'KITCHEN' ? 'bg-rose-50 text-rose-600' :
+                                    item.station === 'BAR'     ? 'bg-blue-50 text-blue-600' :
+                                    'bg-slate-100 text-slate-500'
+                                  }`}>
+                                    <span>{item.station === 'KITCHEN' ? '🔥' : item.station === 'BAR' ? '🍺' : '⚡'}</span>
+                                    <span>{item.station}</span>
+                                  </span>
+                                )}
+                                {/* Qty stepper */}
+                                <div className="flex items-center gap-1 bg-slate-50 border border-slate-100 rounded-lg p-0.5">
+                                  <button onClick={() => updateQuantity(item.id, -1)} className="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-slate-600 hover:bg-white hover:shadow-sm transition-all">
+                                    <Minus className="w-3 h-3" />
+                                  </button>
+                                  <span className="w-6 text-center text-xs font-black text-slate-700">{item.quantity}</span>
+                                  <button onClick={() => updateQuantity(item.id, 1)} className="w-6 h-6 flex items-center justify-center rounded text-indigo-600 hover:bg-white hover:shadow-sm transition-all">
+                                    <Plus className="w-3 h-3" />
+                                  </button>
+                                </div>
+                                <span className="text-sm font-black text-slate-900">{formatCurrency(item.price * item.quantity)}</span>
                               </div>
-                              <span className="text-sm font-black text-slate-900">{formatCurrency(item.price * item.quantity)}</span>
                             </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Totals + Actions */}
-        <div className="p-5 border-t border-slate-100 bg-white shrink-0 shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.05)]">
-          {/* Totals */}
-          <div className="space-y-2 mb-4">
-            <div className="flex justify-between text-xs font-medium text-slate-500">
-              <span>Subtotal</span><span>{formatCurrency(subtotal)}</span>
-            </div>
-            <div className="flex justify-between text-xs font-medium text-slate-500">
-              <span>Tax</span><span>{formatCurrency(tax)}</span>
-            </div>
-            <div className="flex justify-between items-center pt-3 border-t border-slate-100 mt-2">
-              <span className="text-xs font-black text-slate-400 uppercase tracking-[0.15em]">Total</span>
-              <span className="font-black text-3xl text-slate-900 tracking-tight">{formatCurrency(total)}</span>
-            </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* STATE A: Cart has items, no active order → SEND ORDER */}
-          {!currentOrderId && cart.length > 0 && (
-            <button
-              className="w-full h-14 font-black text-base tracking-wide text-white rounded-2xl shadow-xl transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700"
-              style={{ boxShadow: '0 8px 24px rgba(79,70,229,0.25)' }}
-              onClick={handleSendOrder}
-              disabled={isProcessing}
-            >
-              <Send className="w-5 h-5" />
-              {isProcessing ? 'SENDING...' : 'SEND ORDER'}
-            </button>
-          )}
+          {/* Totals + Actions */}
+          <div className="p-5 border-t border-slate-100 bg-white shrink-0 shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.05)]">
+            {/* Totals */}
+            <div className="space-y-2 mb-4">
+              <div className="flex justify-between text-xs font-medium text-slate-500">
+                <span>Subtotal</span><span>{formatCurrency(subtotal)}</span>
+              </div>
+              <div className="flex justify-between text-xs font-medium text-slate-500">
+                <span>Tax</span><span>{formatCurrency(tax)}</span>
+              </div>
+              <div className="flex justify-between items-center pt-3 border-t border-slate-100 mt-2">
+                <span className="text-xs font-black text-slate-400 uppercase tracking-[0.15em]">Total</span>
+                <span className="font-black text-3xl text-slate-900 tracking-tight">{formatCurrency(total)}</span>
+              </div>
+            </div>
 
-          {/* STATE B: Active order → FIRE MORE + CHARGE */}
-          {currentOrderId && (
-            <div className="flex flex-col gap-2">
-              {cart.some((i) => !i.fired) && (
+            {/* Action Buttons */}
+            <div className="flex flex-col gap-3">
+              {/* Send Order (if new items exist) */}
+              {cart.some(item => !item.fired) && (
                 <button
-                  className="w-full h-12 font-black text-sm tracking-wide text-white rounded-xl transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 shadow-md"
-                  onClick={handleFireMore}
+                  className="w-full h-14 font-black text-base tracking-wide text-white rounded-2xl shadow-xl transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700"
+                  style={{ boxShadow: '0 8px 24px rgba(79,70,229,0.25)' }}
+                  onClick={handleSendOrder}
                   disabled={isProcessing}
                 >
-                  <Flame className="w-4 h-4" />
-                  {isProcessing ? 'FIRING...' : `FIRE ${cart.filter(i => !i.fired).length} MORE ITEM(S)`}
+                  {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+                  {currentOrderId ? 'FIRE MORE' : 'SEND ORDER'}
                 </button>
               )}
-              <button
-                className="w-full h-14 font-black text-lg tracking-wide text-white rounded-2xl shadow-xl transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800"
-                onClick={() => setShowChargeModal(true)}
-                disabled={isProcessing}
-              >
-                <CreditCard className="w-5 h-5" />
-                CHARGE {formatCurrency(total)}
-              </button>
-            </div>
-          )}
 
-          {/* STATE C: Empty, no order → hint */}
-          {!currentOrderId && cart.length === 0 && (
-            <div className="text-center text-xs text-slate-400 py-3 font-medium">Select items to start an order</div>
-          )}
-        </div>
-      </div>
-
-      {/* Charge Modal */}
-      {showChargeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm">
-          <div className="w-[380px] bg-white rounded-2xl shadow-2xl overflow-hidden">
-            <div className="px-6 py-5 bg-slate-900 text-white">
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Charge</p>
-                  <p className="text-lg font-black">{activeTableName ? `Table ${activeTableName}` : 'Walk-in'}</p>
-                </div>
-                <button onClick={() => setShowChargeModal(false)} className="p-2 hover:bg-white/10 rounded-lg transition">
-                  <X className="w-5 h-5" />
+              {/* Charge (if order exists) */}
+              {currentOrderId && (
+                <button
+                  className={`w-full h-14 font-black text-base tracking-wide rounded-2xl transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 flex items-center justify-center gap-2 ${
+                    cart.some(item => !item.fired) 
+                      ? 'bg-white border-2 border-indigo-100 text-indigo-600 hover:border-indigo-200' 
+                      : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/25'
+                  }`}
+                  onClick={() => setShowChargeModal(true)}
+                  disabled={isProcessing}
+                >
+                  <CreditCard className="w-5 h-5" />
+                  CHARGE
                 </button>
-              </div>
-            </div>
-            <div className="p-6">
-              <div className="space-y-2 mb-5">
-                <div className="flex justify-between text-sm text-slate-500"><span>Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
-                <div className="flex justify-between text-sm text-slate-500"><span>Tax</span><span>{formatCurrency(tax)}</span></div>
-                <div className="flex justify-between items-center pt-3 border-t border-slate-100">
-                  <span className="font-bold text-slate-800">TOTAL</span>
-                  <span className="font-black text-2xl text-slate-900">{formatCurrency(total)}</span>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <Button className="h-12 font-bold text-sm bg-emerald-50 hover:bg-emerald-100 text-emerald-700 shadow-none" onClick={() => handleCharge('CASH')} disabled={isProcessing}>
-                  <Banknote className="w-4 h-4 mr-2" />Cash
-                </Button>
-                <Button className="h-12 font-bold text-sm bg-blue-50 hover:bg-blue-100 text-blue-700 shadow-none" onClick={() => handleCharge('CARD')} disabled={isProcessing}>
-                  <CreditCard className="w-4 h-4 mr-2" />Card
-                </Button>
-                <Button className="h-12 font-bold text-sm bg-purple-50 hover:bg-purple-100 text-purple-700 shadow-none" onClick={() => handleCharge('BANK_TRANSFER')} disabled={isProcessing}>
-                  <Building2 className="w-4 h-4 mr-2" />Transfer
-                </Button>
-                <Button className="h-12 font-bold text-sm bg-indigo-50 hover:bg-indigo-100 text-indigo-700 shadow-none" onClick={() => handleCharge('ROOM_CHARGE')} disabled={isProcessing}>
-                  <User className="w-4 h-4 mr-2" />Room
-                </Button>
-              </div>
+              )}
             </div>
           </div>
         </div>
-      )}
 
       {/* ══ Modals & Overlays ════════════════════════════════════════ */}
 
@@ -948,7 +938,7 @@ export default function PosTerminalPage() {
         cancellable={!!activeOperator}
         outletId={sessionContext?.outlet?.id}
         onCancel={() => setShowSwitchPad(false)}
-        onAuthenticated={(operator, token) => {
+        onAuthenticated={(operator: any, token?: string) => {
           setActiveOperator(operator);
           if (token) {
             setOperatorToken(token);
@@ -983,6 +973,15 @@ export default function PosTerminalPage() {
         />
       )}
 
+      {/* Charge Modal */}
+      <ChargeModal
+        isOpen={showChargeModal}
+        onClose={() => setShowChargeModal(false)}
+        total={total}
+        onCharge={handleCharge}
+        isProcessing={isProcessing}
+      />
+
       {/* My Sales */}
       {activeOperator && operatorToken && (
         <MySalesModal
@@ -1012,5 +1011,6 @@ export default function PosTerminalPage() {
         onViewHistory={() => setShowMyOrders(true)}
       />
     </div>
+    </AutoLockScreen>
   );
 }

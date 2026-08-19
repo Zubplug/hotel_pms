@@ -1159,10 +1159,10 @@ public class LocalRepository
     public async Task<LocalStaff?> AuthenticateOperatorAsync(string staffId, string pin, string propertyId)
     {
         var staff = await _dbContext.Staff.FirstOrDefaultAsync(s => s.Id == staffId && s.PropertyId == propertyId);
-        if (staff == null || !staff.IsActive || !staff.HasPosAccess) return null;
+        if (staff == null || !staff.IsActive || !staff.HasPosAccess || string.IsNullOrEmpty(staff.PosPinHash)) return null;
 
-        // Verify PIN hash
-        if (staff.PosPinHash != pin) return null; 
+        // Verify PIN hash using BCrypt
+        if (!BCrypt.Net.BCrypt.Verify(pin, staff.PosPinHash)) return null; 
 
         return staff;
     }
@@ -1183,8 +1183,8 @@ public class LocalRepository
             throw new Exception($"Account locked due to too many failed attempts. Try again in {(int)(attempt.LockedUntil.Value - DateTime.UtcNow).TotalMinutes} minutes.");
         }
 
-        // 3. Verify PIN Hash
-        if (staff.PosPinHash != pin)
+        // 3. Verify PIN Hash using BCrypt
+        if (string.IsNullOrEmpty(staff.PosPinHash) || !BCrypt.Net.BCrypt.Verify(pin, staff.PosPinHash))
         {
             if (attempt == null)
             {
@@ -1217,11 +1217,21 @@ public class LocalRepository
     public async Task<LocalStaff?> ValidateSupervisorPinAsync(string pin, string propertyId)
     {
         // Locate an active supervisor matching this PIN in this property.
-        // Again, assuming 'pin' here is the hashed value expected to match the database.
-        var supervisor = await _dbContext.Staff
-            .FirstOrDefaultAsync(s => s.PosPinHash == pin && s.PropertyId == propertyId && s.IsActive && s.Role == "MANAGER");
+        // We have to iterate since we need to verify BCrypt hashes.
+        // Get all active supervisors for the property first.
+        var supervisors = await _dbContext.Staff
+            .Where(s => s.PropertyId == propertyId && s.IsActive && s.Role == "MANAGER")
+            .ToListAsync();
 
-        return supervisor;
+        foreach (var s in supervisors)
+        {
+            if (!string.IsNullOrEmpty(s.PosPinHash) && BCrypt.Net.BCrypt.Verify(pin, s.PosPinHash))
+            {
+                return s;
+            }
+        }
+
+        return null;
     }
 
     public async Task<LocalPosOperatorSession> SwitchOperatorAsync(string deviceId, string posSessionId, string staffId, string operationId)
@@ -1437,5 +1447,17 @@ public class LocalRepository
             voids = totalVoids,
             orderCount = orderCount
         };
+    }
+    public async Task LogHardwareEventAsync(string userId, string deviceId, string eventType, string? payload)
+    {
+        _dbContext.HardwareAuditLogs.Add(new LodgeCore.Desktop.Data.Entities.LocalHardwareAuditLog
+        {
+            UserId    = userId,
+            DeviceId  = deviceId,
+            EventType = eventType,
+            Payload   = payload,
+            CreatedAt = DateTime.UtcNow
+        });
+        await _dbContext.SaveChangesAsync();
     }
 }

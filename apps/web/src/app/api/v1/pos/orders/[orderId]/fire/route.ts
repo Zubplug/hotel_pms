@@ -146,10 +146,10 @@ export async function POST(
             firedByStaffId: payload.staffId,
             items: {
               create: stationItems.map(({ id: orderItemId, item }) => ({
-                orderItemId,
+                orderItem: { connect: { id: orderItemId } },
                 productName: item.productName,
                 quantity: item.quantity,
-                modifiers: item.modifiers ?? null,
+                modifiers: item.modifiers ?? undefined,
                 course: item.course ?? null,
               })),
             },
