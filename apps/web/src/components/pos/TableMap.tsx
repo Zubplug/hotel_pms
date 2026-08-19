@@ -105,7 +105,11 @@ export function TableMap({ outletId, onTableSelect, activeTableId, refreshTrigge
     if (!activePlanId) return;
     const fetchTables = async () => {
       try {
-        const res = await provider.pos.getTables(activePlanId);
+        const res = await provider.pos.getTables(activePlanId, operatorToken);
+        console.log('[TableMap DEBUG] getTables response:', res);
+        if (res.debug) {
+          console.warn('[TableMap API DEBUG INFO]', res.debug);
+        }
         if (res.data) setTables(res.data);
       } catch (e) {
         console.error('Failed to fetch tables', e);

@@ -42,10 +42,18 @@ export async function GET(
       currentOrder: table.currentOrderId ? activeOrders.find(o => o.id === table.currentOrderId) : null
     }));
 
-    console.log('GET tables returning count:', tablesWithOrder.length);
-    return NextResponse.json({ data: tablesWithOrder, error: null });
+    const debugInfo = {
+      receivedFloorPlanId: floorPlanId,
+      dbTablesCount: tables.length,
+      activeOrderIdsCount: activeOrderIds.length,
+      activeOrdersFoundCount: activeOrders.length,
+      timestamp: new Date().toISOString()
+    };
+
+    console.log('GET tables returning count:', tablesWithOrder.length, debugInfo);
+    return NextResponse.json({ data: tablesWithOrder, debug: debugInfo, error: null });
   } catch (err: any) {
     console.error('GET tables error:', err);
-    return NextResponse.json({ data: [], error: err.message }, { status: 500 });
+    return NextResponse.json({ data: [], debug: { errorName: err.name, errorMessage: err.message, stack: err.stack }, error: err.message }, { status: 500 });
   }
 }

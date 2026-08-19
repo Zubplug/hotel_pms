@@ -5,18 +5,23 @@ const BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 // Helper for standard API requests
 async function apiFetch(url: string, options: RequestInit = {}) {
   const fullUrl = url.startsWith('/') && BASE_URL ? `${BASE_URL}${url}` : url;
-  const res = await fetch(fullUrl, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  });
-  if (!res.ok) {
-    const errorBody = await res.text();
-    throw new Error(`API Error ${res.status}: ${errorBody}`);
+  try {
+    const res = await fetch(fullUrl, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    });
+    if (!res.ok) {
+      const errorBody = await res.text();
+      throw new Error(`API Error ${res.status}: ${errorBody}`);
+    }
+    const data = await res.json();
+    return { data: data.data || data, error: data.error || null, debug: data.debug };
+  } catch (err: any) {
+    return { data: null, error: err.message };
   }
-  return res.json();
 }
 
 export const OnlineDataProvider: LodgeCoreDataProvider = {
