@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
+import { verifyOperatorToken } from '@/lib/pos/operatorAuth';
 
 export async function GET(
   req: NextRequest,
@@ -8,8 +9,14 @@ export async function GET(
 ) {
   try {
     const { outletId } = await params;
+
+    // Accept either admin session OR POS operator token
     const session = await auth();
-    if (!session?.user) {
+    const authHeader = req.headers.get('Authorization');
+    const operatorToken = authHeader?.replace('Bearer ', '');
+    const operatorPayload = operatorToken ? await verifyOperatorToken(operatorToken) : null;
+
+    if (!session?.user && !operatorPayload) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
