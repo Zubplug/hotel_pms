@@ -73,13 +73,22 @@ class LiveRoomsRepository implements RoomsRepository {
 
   @override
   Future<RoomDetailsData> getRoomDetails(String roomId) async {
-    final response = await _dio.get('/mobile/v1/executive/rooms/$roomId');
+    try {
+      final response = await _dio.get('/mobile/v1/executive/rooms/$roomId');
 
-    if (response.statusCode == 200) {
-      final data = response.data['data'] ?? response.data;
-      return _parseRoomDetails(data as Map<String, dynamic>);
+      if (response.statusCode == 200) {
+        final data = response.data['data'] ?? response.data;
+        return _parseRoomDetails(data as Map<String, dynamic>);
+      }
+      throw Exception('Room details API returned status ${response.statusCode}');
+    } on DioException catch (e) {
+      final status = e.response?.statusCode;
+      final serverMessage = e.response?.data?['error'] as String?;
+      if (status == 401) throw Exception('Session expired. Please log in again.');
+      if (status == 403) throw Exception('Access denied: ${serverMessage ?? 'Insufficient permissions'}');
+      if (status == 404) throw Exception('Room not found: ${serverMessage ?? 'Check room ID and property access'}');
+      throw Exception('Network error loading room details: ${e.message}');
     }
-    throw Exception('Room details API returned status ${response.statusCode}');
   }
 
   RoomDetailsData _parseRoomDetails(Map<String, dynamic> data) {
