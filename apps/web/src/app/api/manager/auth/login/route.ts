@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
     const primaryRole = user.roles?.[0]?.role?.name || 'STAFF';
 
     const defaultCapabilities: string[] = [];
-    if (user.isSuperAdmin || primaryRole === 'SUPER_ADMIN' || primaryRole === 'ADMIN') {
+    if (user.isSuperAdmin || primaryRole === 'SUPER_ADMIN' || primaryRole === 'ADMIN' || primaryRole === 'DIRECTOR' || primaryRole === 'EXECUTIVE') {
       defaultCapabilities.push(
         'ACCESS_FRONT_DESK', 'ACCESS_POS', 'ACCESS_HOUSEKEEPING', 'ACCESS_CASH_MANAGEMENT', 
         'ACCESS_INVENTORY', 'ACCESS_MANAGEMENT', 'ACCESS_NIGHT_AUDIT', 'ACCESS_SYNC_CENTER', 'ACCESS_MAINTENANCE',
@@ -71,8 +71,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (primaryRole !== 'MANAGER' && primaryRole !== 'ADMIN' && primaryRole !== 'SUPER_ADMIN' && !user.isSuperAdmin) {
-       return errorResponse('FORBIDDEN', 'Only managers and admins can access this app', 403);
+    if (primaryRole !== 'MANAGER' && primaryRole !== 'ADMIN' && primaryRole !== 'SUPER_ADMIN' && primaryRole !== 'DIRECTOR' && primaryRole !== 'EXECUTIVE' && !user.isSuperAdmin) {
+       return errorResponse('FORBIDDEN', 'Only managers, admins, and directors can access this app', 403);
     }
 
     capabilities = Array.from(new Set([...capabilities, ...defaultCapabilities]));
