@@ -621,6 +621,7 @@ export default function PosTerminalPage() {
           }}
           isOnline={isOnline}
           syncPending={syncPending}
+          activeOperator={activeOperator}
         />
 
         {/* Restricted mode overlay (license expired / terminal revoked) */}
