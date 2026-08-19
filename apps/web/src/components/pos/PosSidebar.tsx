@@ -30,7 +30,7 @@ export function PosSidebar({
   const operatorName = activeOperator
     ? `${activeOperator.firstName || ''} ${activeOperator.lastName || ''}`.trim() || activeOperator.name || 'Operator'
     : 'Not signed in';
-  const roleName = activeOperator?.role || activeOperator?.posRole || 'Operator';
+  const roleName = activeOperator?.position || activeOperator?.role || activeOperator?.posRole || 'Staff';
 
   // Build initials for avatar
   const initials = operatorName
