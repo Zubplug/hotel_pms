@@ -54,7 +54,11 @@ export const NotificationEngine = {
 
       // 4. Persist
       const notificationRecords = recipientIds.map(recipientId => ({
+        organizationId: event.organizationId,
+        propertyId: event.propertyId,
+        recipientType: 'staff',
         recipientId,
+        status: 'sent',
         channel: 'in_app',
         subject: payload.subject,
         body: payload.body,
@@ -313,9 +317,9 @@ async function evaluateEvent(event: NotificationEvent, policy: NotificationPolic
       
       const resIn = await prisma.reservation.findUnique({
         where: { id: event.entityId },
-        include: { guest: true, reservationRooms: { include: { room: true } } }
+        include: { primaryGuest: true, reservationRooms: { include: { room: true } } }
       });
-      const guestNameIn = resIn?.guest?.firstName ? `${resIn.guest.firstName} ${resIn.guest.lastName}` : 'A guest';
+      const guestNameIn = resIn?.primaryGuest?.firstName ? `${resIn.primaryGuest.firstName} ${resIn.primaryGuest.lastName}` : 'A guest';
       const rawRoomIn = resIn?.reservationRooms?.[0]?.room?.number;
       const roomNumIn = rawRoomIn ? rawRoomIn.split('.').pop() : 'their room';
 
@@ -332,9 +336,9 @@ async function evaluateEvent(event: NotificationEvent, policy: NotificationPolic
       
       const resOut = await prisma.reservation.findUnique({
         where: { id: event.entityId },
-        include: { guest: true, reservationRooms: { include: { room: true } } }
+        include: { primaryGuest: true, reservationRooms: { include: { room: true } } }
       });
-      const guestNameOut = resOut?.guest?.firstName ? `${resOut.guest.firstName} ${resOut.guest.lastName}` : 'A guest';
+      const guestNameOut = resOut?.primaryGuest?.firstName ? `${resOut.primaryGuest.firstName} ${resOut.primaryGuest.lastName}` : 'A guest';
       const rawRoomOut = resOut?.reservationRooms?.[0]?.room?.number;
       const roomNumOut = rawRoomOut ? rawRoomOut.split('.').pop() : 'their room';
 
