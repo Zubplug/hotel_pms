@@ -308,9 +308,16 @@ async function evaluateEvent(event: NotificationEvent, policy: NotificationPolic
     case 'CHECK_IN': {
       if (!policy.notifyOnCheckIn && !event.metadata?.isVip) return null;
       
+      const resIn = await prisma.reservation.findUnique({
+        where: { id: event.entityId },
+        include: { guest: true, reservationRooms: { include: { room: true } } }
+      });
+      const guestNameIn = resIn?.guest?.firstName ? `${resIn.guest.firstName} ${resIn.guest.lastName}` : 'A guest';
+      const roomNumIn = resIn?.reservationRooms?.[0]?.room?.number || 'their room';
+
       return {
         subject: event.metadata?.isVip ? 'VIP Checked In' : 'Guest Checked In',
-        body: `Reservation ${event.metadata?.confirmationNumber || event.entityId} has checked in.`,
+        body: `${guestNameIn} (Conf: ${resIn?.confirmationNumber || event.entityId}) has checked into Room ${roomNumIn}.`,
         category: 'Operations',
         priority: event.metadata?.isVip ? 'High' : 'Normal',
       };
@@ -319,9 +326,16 @@ async function evaluateEvent(event: NotificationEvent, policy: NotificationPolic
     case 'CHECK_OUT': {
       if (!policy.notifyOnCheckOut && !event.metadata?.isVip) return null;
       
+      const resOut = await prisma.reservation.findUnique({
+        where: { id: event.entityId },
+        include: { guest: true, reservationRooms: { include: { room: true } } }
+      });
+      const guestNameOut = resOut?.guest?.firstName ? `${resOut.guest.firstName} ${resOut.guest.lastName}` : 'A guest';
+      const roomNumOut = resOut?.reservationRooms?.[0]?.room?.number || 'their room';
+
       return {
         subject: event.metadata?.isVip ? 'VIP Checked Out' : 'Guest Checked Out',
-        body: `Reservation ${event.metadata?.confirmationNumber || event.entityId} has checked out.`,
+        body: `${guestNameOut} (Conf: ${resOut?.confirmationNumber || event.entityId}) has checked out of Room ${roomNumOut}.`,
         category: 'Operations',
         priority: event.metadata?.isVip ? 'High' : 'Normal',
       };
