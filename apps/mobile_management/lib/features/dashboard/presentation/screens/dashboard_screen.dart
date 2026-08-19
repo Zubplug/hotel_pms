@@ -30,31 +30,53 @@ class DashboardScreen extends ConsumerWidget {
             const Text(
               'EXECUTIVE BRIEFING',
               style: TextStyle(
-                fontSize: 12,
-                letterSpacing: 1.5,
-                fontWeight: FontWeight.w600,
+                fontSize: 10,
+                letterSpacing: 2.0,
+                fontWeight: FontWeight.w700,
                 color: goldAccent,
               ),
             ),
+            const SizedBox(height: 2),
             Text(
               'LodgeCore',
               style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
                 color: textPrimary,
+                letterSpacing: -0.5,
               ),
             ),
           ],
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh, color: goldAccent),
-            onPressed: () => ref.invalidate(dashboardDataProvider),
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.notifications_outlined, color: textSecondary),
+                onPressed: () {},
+              ),
+              Positioned(
+                right: 12,
+                top: 12,
+                child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    color: Colors.redAccent,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+            ],
           ),
-          IconButton(
-            icon: const Icon(Icons.person_outline, color: textPrimary),
-            onPressed: () {},
+          const SizedBox(width: 8),
+          CircleAvatar(
+            radius: 16,
+            backgroundColor: surfaceNavy,
+            child: const Icon(Icons.person, color: goldAccent, size: 20),
           ),
+          const SizedBox(width: 16),
         ],
       ),
       body: dashboardState.when(
