@@ -160,23 +160,21 @@ async function fetchPolicy(propertyId: string): Promise<NotificationPolicy | nul
     select: { settings: true }
   });
 
-  if (!property || !property.settings) return null;
-
-  const settings = property.settings as any;
-  if (!settings.notificationPolicy) return null;
+  const settings = (property?.settings as any) || {};
+  const np = settings.notificationPolicy || {};
 
   return {
-    largePaymentThreshold: settings.notificationPolicy.largePaymentThreshold,
-    highValueRefundThreshold: settings.notificationPolicy.highValueRefundThreshold,
-    cashVarianceThreshold: settings.notificationPolicy.cashVarianceThreshold,
-    significantCancellationThreshold: settings.notificationPolicy.significantCancellationThreshold,
-    significantBookingThreshold: settings.notificationPolicy.significantBookingThreshold,
-    creditLimitThreshold: settings.notificationPolicy.creditLimitThreshold,
-    notifyOnCheckIn: settings.notificationPolicy.notifyOnCheckIn ?? true,
-    notifyOnCheckOut: settings.notificationPolicy.notifyOnCheckOut ?? true,
-    notifyOnReservationCreated: settings.notificationPolicy.notifyOnReservationCreated ?? true,
-    notifyOnReservationCancelled: settings.notificationPolicy.notifyOnReservationCancelled ?? true,
-    notifyOnStayExtended: settings.notificationPolicy.notifyOnStayExtended ?? true,
+    largePaymentThreshold: np.largePaymentThreshold,
+    highValueRefundThreshold: np.highValueRefundThreshold,
+    cashVarianceThreshold: np.cashVarianceThreshold,
+    significantCancellationThreshold: np.significantCancellationThreshold,
+    significantBookingThreshold: np.significantBookingThreshold,
+    creditLimitThreshold: np.creditLimitThreshold,
+    notifyOnCheckIn: np.notifyOnCheckIn ?? true,
+    notifyOnCheckOut: np.notifyOnCheckOut ?? true,
+    notifyOnReservationCreated: np.notifyOnReservationCreated ?? true,
+    notifyOnReservationCancelled: np.notifyOnReservationCancelled ?? true,
+    notifyOnStayExtended: np.notifyOnStayExtended ?? true,
   };
 }
 
