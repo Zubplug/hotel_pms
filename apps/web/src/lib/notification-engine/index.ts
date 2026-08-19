@@ -19,6 +19,7 @@ export interface NotificationPolicy {
   cashVarianceThreshold?: number;
   significantCancellationThreshold?: number;
   significantBookingThreshold?: number;
+  creditLimitThreshold?: number;
   notifyOnCheckIn?: boolean;
   notifyOnCheckOut?: boolean;
 }
@@ -148,6 +149,7 @@ async function fetchPolicy(propertyId: string): Promise<NotificationPolicy | nul
     cashVarianceThreshold: settings.notificationPolicy.cashVarianceThreshold,
     significantCancellationThreshold: settings.notificationPolicy.significantCancellationThreshold,
     significantBookingThreshold: settings.notificationPolicy.significantBookingThreshold,
+    creditLimitThreshold: settings.notificationPolicy.creditLimitThreshold,
     notifyOnCheckIn: settings.notificationPolicy.notifyOnCheckIn,
     notifyOnCheckOut: settings.notificationPolicy.notifyOnCheckOut,
   };
@@ -304,6 +306,51 @@ async function evaluateEvent(event: NotificationEvent, policy: NotificationPolic
         body: `Reservation ${event.metadata?.confirmationNumber || event.entityId} has checked out.`,
         category: 'Operations',
         priority: event.metadata?.isVip ? 'High' : 'Normal',
+      };
+    }
+
+    case 'NIGHT_AUDIT_COMPLETED': {
+      return {
+        subject: 'Night Audit Completed Successfully',
+        body: `Business day closed. Processed ${event.metadata?.tasksCreated} stayover tasks.`,
+        category: 'Operations',
+        priority: 'Normal', // Optional / low-priority
+      };
+    }
+
+    case 'NIGHT_AUDIT_DISCREPANCY': {
+      return {
+        subject: 'Night Audit Completed with Discrepancies',
+        body: `Business day closed but ${event.metadata?.errors} errors occurred.`,
+        category: 'Critical',
+        priority: 'Critical',
+      };
+    }
+
+    case 'NIGHT_AUDIT_FAILED': {
+      return {
+        subject: 'Night Audit Failed!',
+        body: `CRITICAL: The property day could not close. Error: ${event.metadata?.error}`,
+        category: 'Critical',
+        priority: 'Critical',
+      };
+    }
+
+    case 'APPROVAL_REQUESTED': {
+      return {
+        subject: 'Approval Required',
+        body: event.metadata?.requestReason || `A staff member requested an override requiring your approval.`,
+        category: 'Approvals',
+        priority: 'High',
+      };
+    }
+
+    case 'CREDIT_LIMIT_BREACH': {
+      return {
+        subject: 'Credit Limit Breached',
+        body: `Folio balance has crossed the credit limit threshold. Current Balance: ₦${event.metadata?.newBalance}.`,
+        category: 'Finance',
+        priority: 'Critical',
       };
     }
 

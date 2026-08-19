@@ -6,6 +6,7 @@ import { hasPermission } from '@/lib/rbac';
 import { assertPropertyAccess } from '@/lib/property-access';
 import { getPropertyBusinessDate, getNextBusinessDate } from '@/lib/date-utils';
 import crypto from 'crypto';
+import { NotificationEngine } from '@/lib/notification-engine';
 
 const BATCH_SIZE = 50;
 
@@ -205,6 +206,28 @@ export async function POST(req: NextRequest) {
       }
     });
 
+    if (errors > 0) {
+      await NotificationEngine.emit({
+        type: 'NIGHT_AUDIT_DISCREPANCY',
+        organizationId: property.organizationId,
+        propertyId,
+        entityType: 'night_audit',
+        entityId: completedAudit.id,
+        idempotencyKey: `night_audit_${completedAudit.id}_discrepancy`,
+        metadata: { errors }
+      });
+    } else {
+      await NotificationEngine.emit({
+        type: 'NIGHT_AUDIT_COMPLETED',
+        organizationId: property.organizationId,
+        propertyId,
+        entityType: 'night_audit',
+        entityId: completedAudit.id,
+        idempotencyKey: `night_audit_${completedAudit.id}_success`,
+        metadata: { tasksCreated: totalTasksCreated }
+      });
+    }
+
     return successResponse({
       message: 'Night Audit successfully executed.',
       auditId: completedAudit.id,
@@ -215,6 +238,30 @@ export async function POST(req: NextRequest) {
 
   } catch (err: any) {
     console.error('[Night Audit POST]', err);
+    
+    // We attempt to emit the failure, but we may not have propertyId if it failed early.
+    // If it's a severe crash, we emit NIGHT_AUDIT_FAILED if possible.
+    try {
+      const reqBody = await req.clone().json().catch(() => ({}));
+      if (reqBody.propertyId) {
+        // Need to fetch property to get organizationId to emit properly
+        const prop = await prisma.property.findUnique({ where: { id: reqBody.propertyId } });
+        if (prop) {
+           await NotificationEngine.emit({
+             type: 'NIGHT_AUDIT_FAILED',
+             organizationId: prop.organizationId,
+             propertyId: prop.id,
+             entityType: 'night_audit',
+             entityId: 'failed_run',
+             idempotencyKey: `night_audit_fail_${prop.id}_${new Date().toISOString().split('T')[0]}`,
+             metadata: { error: err.message }
+           });
+        }
+      }
+    } catch (e) {
+       console.error('[Night Audit POST] Failed to emit failure notification', e);
+    }
+
     return errorResponse('INTERNAL_ERROR', err.message, 500);
   }
 }

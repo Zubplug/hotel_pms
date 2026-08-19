@@ -462,10 +462,33 @@ export async function POST(request: Request) {
         }
       });
       
-      await prisma.folio.update({
+      const oldFolio = await prisma.folio.findUnique({ where: { id: payload.folioId } });
+      const previousBalance = oldFolio ? Number(oldFolio.balance) : 0;
+
+      const updatedFolio = await prisma.folio.update({
         where: { id: payload.folioId },
-        data: { totalCharges: { increment: payload.amount } }
+        data: { 
+          totalCharges: { increment: payload.amount },
+          balance: { increment: payload.amount }
+        }
       });
+
+      const newBalance = Number(updatedFolio.balance);
+      // Fallback to 150,000 NGN if not specified
+      const creditLimit = (property.settings as any)?.notificationPolicy?.creditLimitThreshold || 150000;
+
+      // Only notify exactly when the line is crossed (not continuously)
+      if (previousBalance <= creditLimit && newBalance > creditLimit) {
+        await NotificationEngine.emit({
+          type: 'CREDIT_LIMIT_BREACH',
+          organizationId: property.organizationId,
+          propertyId,
+          entityType: 'folio',
+          entityId: payload.folioId,
+          idempotencyKey: `credit-breach:${payload.folioId}:${updatedFolio.version || Date.now()}`,
+          metadata: { previousBalance, newBalance }
+        });
+      }
     } else if (entityType === 'POS_SESSION') {
       const existingSession = await prisma.posSession.findUnique({
         where: { id: entityId }
