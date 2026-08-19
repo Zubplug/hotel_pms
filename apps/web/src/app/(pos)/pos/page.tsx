@@ -40,12 +40,14 @@ type OrderItem = {
   productId: string;
   name: string;
   price: number;
-  quantity: number;
+  quantity: number;    // total quantity (firedQty + pendingQty)
+  firedQty: number;   // how many have been sent to kitchen
+  pendingQty: number; // how many are still unsent
   taxRate: number;
   course?: number;
   kitchenStatus?: string;
   station?: string; // KITCHEN | BAR | DIRECT | NONE
-  fired?: boolean;  // true once sent to production
+  fired?: boolean;  // true when firedQty === quantity (fully sent)
   modifiers?: OrderItemModifier[];
 };
 
@@ -192,21 +194,30 @@ export default function PosTerminalPage() {
     const modifierTotal = modifiers.reduce((s, m) => s + Number(m.price || 0), 0);
     const effectivePrice = Number(product.price) + modifierTotal;
     const itemId = `${product.id}_${Date.now()}`;
-    // Use the pre-resolved station from the enriched products API
     const station: string = product.resolvedStation || product.productionStation || 'KITCHEN';
+    // Build a modifier key so Burger+Cheese is separate from plain Burger
+    const modKey = modifiers.map(m => m.id).sort().join(',');
 
     setCart((prev) => {
-      // Only merge if no modifiers and not yet fired (unfired items can be merged)
-      if (modifiers.length === 0) {
-        const existing = prev.find(
-          (i) => i.productId === product.id && !i.fired && (!i.modifiers || i.modifiers.length === 0)
+      // Find any existing item for this product+modifier combo (fired or not)
+      const existing = prev.find(
+        (i) => i.productId === product.id &&
+          (modKey === (i.modifiers ?? []).map((m: any) => m.id).sort().join(','))
+      );
+      if (existing) {
+        // Merge — increase total quantity and pending qty
+        return prev.map((item) =>
+          item.id === existing.id
+            ? {
+                ...item,
+                quantity: item.quantity + 1,
+                pendingQty: (item.pendingQty ?? 0) + 1,
+                fired: false, // has pending items now
+              }
+            : item
         );
-        if (existing) {
-          return prev.map((item) =>
-            item.id === existing.id ? { ...item, quantity: item.quantity + 1 } : item
-          );
-        }
       }
+      // Brand new item
       return [
         ...prev,
         {
@@ -215,6 +226,8 @@ export default function PosTerminalPage() {
           name: product.name,
           price: effectivePrice,
           quantity: 1,
+          firedQty: 0,
+          pendingQty: 1,
           taxRate: Number(product.taxRate || 0),
           kitchenStatus: 'PENDING',
           station,
@@ -236,24 +249,28 @@ export default function PosTerminalPage() {
 
   const handleProductDecrement = (productId: string) => {
     setCart((prev) => {
-      // Find the last unfired item of this product without modifiers
-      const reversed = [...prev].reverse();
-      const targetIndexReverse = reversed.findIndex(
-        (i) => i.productId === productId && !i.fired && (!i.modifiers || i.modifiers.length === 0)
+      // Only decrement pending (unsent) qty — never reduce already-fired items
+      const target = prev.find(
+        (i) => i.productId === productId && (i.pendingQty ?? 0) > 0 && (!i.modifiers || i.modifiers.length === 0)
       );
+      if (!target) return prev;
 
-      if (targetIndexReverse === -1) return prev; // Cannot decrement fired or modifier items this way
+      const newPending = (target.pendingQty ?? 1) - 1;
+      const newQty = target.quantity - 1;
 
-      const targetIndex = prev.length - 1 - targetIndexReverse;
-      const targetItem = prev[targetIndex];
-
-      if (targetItem.quantity > 1) {
-        const newCart = [...prev];
-        newCart[targetIndex] = { ...targetItem, quantity: targetItem.quantity - 1 };
-        return newCart;
-      } else {
-        return prev.filter((_, idx) => idx !== targetIndex);
+      if (newQty <= 0) {
+        return prev.filter((i) => i.id !== target.id);
       }
+      return prev.map((item) =>
+        item.id === target.id
+          ? {
+              ...item,
+              quantity: newQty,
+              pendingQty: newPending,
+              fired: newPending === 0, // fully fired if nothing pending
+            }
+          : item
+      );
     });
   };
 
@@ -264,9 +281,18 @@ export default function PosTerminalPage() {
   const updateQuantity = (itemId: string, delta: number) => {
     setCart((prev) =>
       prev
-        .map((item) =>
-          item.id === itemId ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item
-        )
+        .map((item) => {
+          if (item.id !== itemId) return item;
+          const minQty = item.firedQty ?? 0; // cannot remove already-fired items
+          const newQty = Math.max(minQty, item.quantity + delta);
+          const newPending = Math.max(0, newQty - minQty);
+          return {
+            ...item,
+            quantity: newQty,
+            pendingQty: newPending,
+            fired: newPending === 0,
+          };
+        })
         .filter((item) => item.quantity > 0)
     );
   };
@@ -312,6 +338,8 @@ export default function PosTerminalPage() {
         name: i.productName,
         price: Number(i.unitPrice),
         quantity: i.quantity,
+        firedQty: i.quantity,   // all loaded items are already sent
+        pendingQty: 0,
         taxRate: Number(i.taxRate),
         kitchenStatus: i.kitchenStatus,
         station: p ? (p.resolvedStation || p.productionStation || 'KITCHEN') : 'KITCHEN',
@@ -378,11 +406,11 @@ export default function PosTerminalPage() {
         items: cart.map((item) => ({
           productId: item.productId,
           productName: item.name,
-          quantity: item.quantity,
+          quantity: item.pendingQty ?? item.quantity, // only fire pending qty
           unitPrice: item.price,
           taxRate: item.taxRate,
-          taxAmount: item.price * item.quantity * (item.taxRate / 100),
-          total: item.price * item.quantity,
+          taxAmount: item.price * (item.pendingQty ?? item.quantity) * (item.taxRate / 100),
+          total: item.price * (item.pendingQty ?? item.quantity),
           kitchenStatus: item.kitchenStatus,
           modifiers: item.modifiers ?? [],
         })),
@@ -392,8 +420,8 @@ export default function PosTerminalPage() {
       if (res.error) throw new Error(res.error);
       const orderId = res.data?.id;
       if (orderId) setCurrentOrderId(orderId);
-      // Mark all items as fired
-      setCart((prev) => prev.map((i) => ({ ...i, fired: true })));
+      // Mark all items as fully fired — firedQty = total quantity, pendingQty = 0
+      setCart((prev) => prev.map((i) => ({ ...i, fired: true, firedQty: i.quantity, pendingQty: 0 })));
       setTableRefreshTrigger(Date.now());
       const batchCount = res.data?.productionBatches?.length ?? 0;
       toast.success(`Order sent! ${batchCount > 0 ? `${batchCount} production ticket(s) created 🔥` : 'Items queued for service ⚡'}`);
@@ -410,25 +438,27 @@ export default function PosTerminalPage() {
   const handleFireMore = async () => {
     if (!operatorToken) { toast.error('No operator authenticated'); return; }
     if (!currentOrderId) { toast.error('No active order on this table'); return; }
-    const newItems = cart.filter((i) => !i.fired);
-    if (newItems.length === 0) { toast.error('No new items to fire'); return; }
+    // Only fire items that have a pending (unsent) qty
+    const itemsToFire = cart.filter((i) => (i.pendingQty ?? 0) > 0);
+    if (itemsToFire.length === 0) { toast.error('No new items to fire'); return; }
     setIsProcessing(true);
     try {
-      const res = await provider.pos.fireItems(currentOrderId, newItems.map((item) => ({
+      const res = await provider.pos.fireItems(currentOrderId, itemsToFire.map((item) => ({
         productId: item.productId,
         productName: item.name,
-        quantity: item.quantity,
+        quantity: item.pendingQty!, // only fire the pending delta
         unitPrice: item.price,
         taxRate: item.taxRate,
-        taxAmount: item.price * item.quantity * (item.taxRate / 100),
-        total: item.price * item.quantity,
+        taxAmount: item.price * item.pendingQty! * (item.taxRate / 100),
+        total: item.price * item.pendingQty!,
         modifiers: item.modifiers ?? [],
       })), operatorToken);
       if (res.error) throw new Error(res.error);
-      setCart((prev) => prev.map((i) => ({ ...i, fired: true })));
+      // After firing: firedQty = total quantity, pendingQty = 0 for all items
+      setCart((prev) => prev.map((i) => ({ ...i, fired: true, firedQty: i.quantity, pendingQty: 0 })));
       setTableRefreshTrigger(Date.now());
       const batchCount = res.data?.newBatches?.length ?? 0;
-      toast.success(`${newItems.length} item(s) fired! ${batchCount > 0 ? `${batchCount} ticket(s) sent 🔥` : ''}`);
+      toast.success(`${itemsToFire.length} item(s) fired! ${batchCount > 0 ? `${batchCount} ticket(s) sent 🔥` : ''}`);
     } catch (err: any) {
       toast.error(err.message || 'Failed to fire items');
     } finally {
@@ -644,9 +674,9 @@ export default function PosTerminalPage() {
                 <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-4 pb-20">
                   {filteredProducts.map((p) => {
                     const emoji = getProductEmoji(p.name, p.category?.name);
-                    // Calculate quantity for unfired base items of this product
+                    // Show total quantity for this product (fired + pending) — one consolidated card
                     const qty = cart
-                      .filter((i) => i.productId === p.id && !i.fired && (!i.modifiers || i.modifiers.length === 0))
+                      .filter((i) => i.productId === p.id && (!i.modifiers || i.modifiers.length === 0))
                       .reduce((sum, i) => sum + i.quantity, 0);
 
                     return (
@@ -779,88 +809,91 @@ export default function PosTerminalPage() {
                 <p className="text-xs text-slate-400">Select items from the menu to begin</p>
               </div>
             ) : (
-              <div className="flex flex-col py-2">
-                
-                {/* ALREADY SENT SECTION */}
-                {cart.filter(item => item.fired).length > 0 && (
-                  <div className="flex flex-col mb-4">
-                    <div className="sticky top-0 bg-white/95 backdrop-blur py-2 z-10 border-b border-slate-100 mb-2">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Sent Items</span>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      {cart.filter(item => item.fired).map((item) => (
-                        <div key={item.id} className="flex flex-col p-3 rounded-lg bg-slate-50">
-                          <div className="flex justify-between items-start">
-                            <div className="flex items-start gap-2 max-w-[70%]">
-                              <span className="text-sm font-black text-slate-500 mt-0.5">{item.quantity}</span>
-                              <div className="flex flex-col">
-                                <span className="font-semibold text-slate-700 text-sm leading-tight">{item.name}</span>
-                                {(item.modifiers ?? []).length > 0 && (
-                                  <span className="text-[11px] text-slate-500 mt-0.5 leading-tight">+ {item.modifiers!.map((m: any) => m.name).join(', ')}</span>
-                                )}
-                              </div>
-                            </div>
-                            <span className="text-sm font-bold text-slate-600">{formatCurrency(item.price * item.quantity)}</span>
-                          </div>
-                          <div className="flex items-center gap-2 mt-2 ml-4">
-                            {item.station && (
-                              <span className="text-[9px] font-bold uppercase text-slate-400 tracking-wider">
-                                {item.station}
-                              </span>
-                            )}
-                            <span className="w-1 h-1 rounded-full bg-slate-300" />
-                            <span className="text-[9px] font-bold uppercase text-emerald-500 tracking-wider">Sent</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+              <div className="flex flex-col gap-2 py-2">
+                {cart.map((item) => {
+                  const hasPending = (item.pendingQty ?? 0) > 0;
+                  const hasFired = (item.firedQty ?? 0) > 0;
 
-                {/* NEW ITEMS SECTION */}
-                {cart.filter(item => !item.fired).length > 0 && (
-                  <div className="flex flex-col mb-4">
-                    <div className="sticky top-0 bg-white/95 backdrop-blur py-2 z-10 border-b border-slate-100 mb-2">
-                      <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">Unsent Items</span>
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      {cart.filter(item => !item.fired).map((item) => (
-                        <div key={item.id} className="flex flex-col p-3 rounded-xl bg-white border border-slate-200 shadow-sm relative group">
-                          <button onClick={() => removeItem(item.id)} className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-white border border-slate-200 text-slate-400 hover:text-rose-500 hover:border-rose-200 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm z-10">
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                          <div className="flex justify-between items-start">
-                            <div className="flex flex-col max-w-[70%]">
-                              <span className="font-bold text-slate-800 text-sm leading-tight">{item.name}</span>
-                              {(item.modifiers ?? []).length > 0 && (
-                                <span className="text-[11px] text-slate-500 mt-1 leading-tight">+ {item.modifiers!.map((m: any) => m.name).join(', ')}</span>
-                              )}
-                              {item.station && (
-                                <span className="text-[9px] font-bold uppercase text-slate-400 tracking-wider mt-1.5">
-                                  {item.station}
-                                </span>
-                              )}
-                            </div>
-                            <span className="text-sm font-black text-slate-800">{formatCurrency(item.price * item.quantity)}</span>
-                          </div>
-                          
-                          <div className="flex justify-between items-center mt-3 pt-3 border-t border-slate-100">
-                            <span className="text-xs font-semibold text-slate-400">{formatCurrency(item.price)} each</span>
-                            <div className="flex items-center gap-3 bg-slate-50 rounded-full px-1 py-1 border border-slate-200">
-                              <button onClick={() => updateQuantity(item.id, -1)} className="w-6 h-6 flex items-center justify-center rounded-full text-slate-500 hover:bg-white hover:shadow-sm transition-all">
-                                <Minus className="w-3 h-3" />
-                              </button>
-                              <span className="w-4 text-center text-xs font-black text-slate-800">{item.quantity}</span>
-                              <button onClick={() => updateQuantity(item.id, 1)} className="w-6 h-6 flex items-center justify-center rounded-full text-indigo-600 hover:bg-white hover:shadow-sm transition-all">
-                                <Plus className="w-3 h-3" />
-                              </button>
-                            </div>
+                  return (
+                    <div
+                      key={item.id}
+                      className={`flex flex-col p-3 rounded-xl border transition-all relative group ${
+                        hasPending
+                          ? 'bg-white border-indigo-200 shadow-sm'
+                          : 'bg-slate-50 border-slate-100'
+                      }`}
+                    >
+                      {/* Remove button — only if there are pending items */}
+                      {hasPending && (
+                        <button
+                          onClick={() => removeItem(item.id)}
+                          className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-white border border-slate-200 text-slate-400 hover:text-rose-500 hover:border-rose-200 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm z-10"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+
+                      {/* Top row: name + total price */}
+                      <div className="flex justify-between items-start gap-2">
+                        <div className="flex flex-col min-w-0">
+                          <span className={`font-bold text-sm leading-tight ${hasPending ? 'text-slate-800' : 'text-slate-600'}`}>
+                            {item.name}
+                          </span>
+                          {(item.modifiers ?? []).length > 0 && (
+                            <span className="text-[11px] text-slate-500 mt-0.5 leading-tight">
+                              + {item.modifiers!.map((m: any) => m.name).join(', ')}
+                            </span>
+                          )}
+                        </div>
+                        <span className={`text-sm font-black shrink-0 ${hasPending ? 'text-slate-900' : 'text-slate-600'}`}>
+                          {formatCurrency(item.price * item.quantity)}
+                        </span>
+                      </div>
+
+                      {/* Status row: sent · pending · station */}
+                      <div className="flex items-center gap-2 mt-1.5">
+                        {hasFired && (
+                          <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-full px-2 py-0.5">
+                            {item.firedQty} sent
+                          </span>
+                        )}
+                        {hasPending && (
+                          <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-full px-2 py-0.5">
+                            {item.pendingQty} pending
+                          </span>
+                        )}
+                        {item.station && (
+                          <span className="text-[9px] font-bold uppercase text-slate-400 tracking-wider ml-auto">
+                            {item.station}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Qty stepper — only shown for items with pending qty */}
+                      {hasPending && (
+                        <div className="flex justify-between items-center mt-3 pt-2.5 border-t border-slate-100">
+                          <span className="text-xs font-semibold text-slate-400">{formatCurrency(item.price)} each</span>
+                          <div className="flex items-center gap-3 bg-slate-50 rounded-full px-1 py-1 border border-slate-200">
+                            <button
+                              onClick={() => updateQuantity(item.id, -1)}
+                              disabled={(item.pendingQty ?? 0) <= 0}
+                              className="w-6 h-6 flex items-center justify-center rounded-full text-slate-500 hover:bg-white hover:shadow-sm transition-all disabled:opacity-30"
+                            >
+                              <Minus className="w-3 h-3" />
+                            </button>
+                            <span className="w-5 text-center text-xs font-black text-slate-800">{item.quantity}</span>
+                            <button
+                              onClick={() => updateQuantity(item.id, 1)}
+                              className="w-6 h-6 flex items-center justify-center rounded-full text-indigo-600 hover:bg-white hover:shadow-sm transition-all"
+                            >
+                              <Plus className="w-3 h-3" />
+                            </button>
                           </div>
                         </div>
-                      ))}
+                      )}
                     </div>
-                  </div>
-                )}
+                  );
+                })}
               </div>
             )}
           </div>
