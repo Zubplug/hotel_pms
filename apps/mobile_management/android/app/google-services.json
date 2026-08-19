@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "130772466174",
+    "project_id": "lodgecore",
+    "storage_bucket": "lodgecore.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:130772466174:android:15b0758056204ca073e8af",
+        "android_client_info": {
+          "package_name": "com.lodgecore.lodgemobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBTkWNVvqeiEhjSIOLMfYvUZhwJW8va65c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

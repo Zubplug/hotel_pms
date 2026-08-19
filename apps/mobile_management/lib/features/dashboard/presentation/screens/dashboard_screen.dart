@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/dashboard_provider.dart';
+import 'package:mobile_management/features/notifications/presentation/providers/notifications_provider.dart';
+import 'package:mobile_management/features/notifications/presentation/screens/notifications_screen.dart';
 import '../widgets/performance_card.dart';
 import '../widgets/hotel_pulse.dart';
 import '../widgets/attention_required.dart';
@@ -18,6 +20,7 @@ class DashboardScreen extends ConsumerWidget {
     const surfaceNavy = Color(0xFF1E293B);
 
     final dashboardState = ref.watch(dashboardDataProvider);
+    final unreadCount = ref.watch(unreadCountProvider);
 
     return Scaffold(
       backgroundColor: primaryNavy,
@@ -75,20 +78,26 @@ class DashboardScreen extends ConsumerWidget {
             children: [
               IconButton(
                 icon: const Icon(Icons.notifications_outlined, color: textSecondary),
-                onPressed: () {},
+                onPressed: () {
+                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NotificationsScreen()));
+                },
               ),
-              Positioned(
-                right: 12,
-                top: 12,
-                child: Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    color: Colors.redAccent,
-                    shape: BoxShape.circle,
+              if (unreadCount > 0)
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: Colors.redAccent,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Text(
+                      unreadCount > 99 ? '99+' : unreadCount.toString(),
+                      style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                    ),
                   ),
                 ),
-              ),
             ],
           ),
           const SizedBox(width: 8),
