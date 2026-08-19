@@ -14,6 +14,7 @@ export interface RoomDetailedStatus {
   availabilityStatus: RoomAvailabilityStatus;
   housekeepingStatus: string;
   maintenanceStatus: string;
+  contextualNote: string | null;
 }
 
 export interface RoomStatusOverview {
@@ -54,7 +55,7 @@ export async function calculateRoomStatuses(propertyId: string, businessDate: Da
       checkIn: { lt: endOfDay },
       checkOut: { gt: startOfDay }
     },
-    select: { roomId: true, status: true }
+    select: { roomId: true, status: true, checkIn: true }
   });
 
   // Fetch current active blocks
@@ -65,10 +66,13 @@ export async function calculateRoomStatuses(propertyId: string, businessDate: Da
       startDate: { lte: endOfDay },
       endDate: { gte: startOfDay }
     },
-    select: { roomId: true, type: true }
+    select: { roomId: true, type: true, reason: true, notes: true }
   });
 
   // Map for quick lookups
+  const reservationMap = new Map(activeReservations.map(r => [r.roomId, r]));
+  const blockMap = new Map(activeBlocks.map(b => [b.roomId, b]));
+  
   const occupiedRoomIds = new Set(activeReservations.map(r => r.roomId));
   const oooRoomIds = new Set(activeBlocks.filter(b => b.type === 'OUT_OF_ORDER').map(b => b.roomId));
   const oosRoomIds = new Set(activeBlocks.filter(b => b.type === 'OUT_OF_SERVICE').map(b => b.roomId));
@@ -126,6 +130,24 @@ export async function calculateRoomStatuses(propertyId: string, businessDate: Da
       overview.vacant++;
     }
 
+    let contextualNote: string | null = null;
+    if (isOOO || isOOS) {
+      const block = blockMap.get(room.id);
+      if (block) {
+        contextualNote = [block.reason, block.notes].filter(Boolean).join(' · ');
+      }
+    } else if (isOccupied) {
+      const res = reservationMap.get(room.id);
+      if (res && res.checkIn) {
+        const checkInFmt = res.checkIn.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        contextualNote = `Guest checked in · ${checkInFmt}`;
+      } else {
+        contextualNote = 'Guest checked in';
+      }
+    } else if (displayStatus === 'DIRTY') {
+      contextualNote = `Housekeeping: ${room.housekeepingStatus}`;
+    }
+
     detailedRooms.push({
       id: room.id,
       number: room.number,
@@ -136,7 +158,8 @@ export async function calculateRoomStatuses(propertyId: string, businessDate: Da
       displayStatus,
       availabilityStatus,
       housekeepingStatus: room.housekeepingStatus,
-      maintenanceStatus: room.maintenanceStatus
+      maintenanceStatus: room.maintenanceStatus,
+      contextualNote
     });
   }
 
@@ -168,6 +191,7 @@ export interface RoomIntelligenceData {
     arrivalDate: string;
     arrivalTime: string | null;
     nights: number;
+    status: string;
   } | null;
   housekeeping: {
     status: string;
@@ -187,6 +211,10 @@ export interface RoomIntelligenceData {
     subtitle: string;
     timestamp: string;
   }>;
+  managementAttention: {
+    type: 'WARNING' | 'CRITICAL';
+    message: string;
+  } | null;
 }
 
 export async function getRoomIntelligenceView(
@@ -331,7 +359,8 @@ export async function getRoomIntelligenceView(
       },
       arrivalDate: nextArrivalRes.checkIn.toISOString().split('T')[0],
       arrivalTime: room.property.checkInTime,
-      nights
+      nights,
+      status: nextArrivalRes.status
     };
   }
 
@@ -384,6 +413,25 @@ export async function getRoomIntelligenceView(
     timestamp: record.createdAt.toISOString()
   }));
 
+  // Management Attention derived from multiple conditions
+  let managementAttention: { type: 'WARNING' | 'CRITICAL', message: string } | null = null;
+  
+  if (isOOO || isOOS) {
+    const hours = Math.round((new Date().getTime() - activeBlock!.createdAt.getTime()) / 3600000);
+    let msg = `${isOOO ? 'OOO' : 'OOS'} for ${hours} hours`;
+    if (nextArrivalRes) {
+      const daysToArrival = Math.round((nextArrivalRes.checkIn.getTime() - new Date().getTime()) / 86400000);
+      if (daysToArrival === 0) msg += ' · Next arrival today';
+      else if (daysToArrival === 1) msg += ' · Next arrival tomorrow';
+    }
+    managementAttention = { type: 'CRITICAL', message: msg };
+  } else if (displayStatus === 'DIRTY' && nextArrivalRes) {
+    const daysToArrival = Math.round((nextArrivalRes.checkIn.getTime() - new Date().getTime()) / 86400000);
+    if (daysToArrival === 0) {
+      managementAttention = { type: 'WARNING', message: 'Next arrival today, but room is still dirty' };
+    }
+  }
+
   return {
     room: {
       id: room.id,
@@ -399,6 +447,7 @@ export async function getRoomIntelligenceView(
     nextArrival,
     housekeeping,
     maintenance,
-    timeline
+    timeline,
+    managementAttention
   };
 }

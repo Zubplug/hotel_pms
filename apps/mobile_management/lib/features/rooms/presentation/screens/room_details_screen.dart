@@ -6,380 +6,756 @@ import 'package:intl/intl.dart';
 import '../providers/rooms_provider.dart';
 import '../models/room_data.dart';
 
-class RoomDetailsScreen extends ConsumerWidget {
+class RoomDetailsScreen extends ConsumerStatefulWidget {
   final String roomId;
-
   const RoomDetailsScreen({super.key, required this.roomId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final roomDetailsAsync = ref.watch(roomDetailsProvider(roomId));
+  ConsumerState<RoomDetailsScreen> createState() => _RoomDetailsScreenState();
+}
 
-    const primaryNavy = Color(0xFF0F172A);
+class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen> {
+  bool _timelineExpanded = false;
+  static const int _timelinePreviewCount = 3;
+
+  // Design tokens
+  static const _navy       = Color(0xFF0B1120);
+  static const _surface    = Color(0xFF141E30);
+  static const _card       = Color(0xFF1A2540);
+  static const _border     = Color(0xFF263352);
+  static const _textPrimary   = Color(0xFFE2E8F0);
+  static const _textSecondary = Color(0xFF94A3B8);
+  static const _textMuted     = Color(0xFF475569);
+  static const _gold       = Color(0xFFD4AF37);
+  static const _green      = Color(0xFF10B981);
+  static const _orange     = Color(0xFFF59E0B);
+  static const _red        = Color(0xFFEF4444);
+  static const _blue       = Color(0xFF3B82F6);
+
+  @override
+  Widget build(BuildContext context) {
+    final async = ref.watch(roomDetailsProvider(widget.roomId));
 
     return Scaffold(
-      backgroundColor: primaryNavy,
-      appBar: AppBar(
-        backgroundColor: primaryNavy,
-        elevation: 0,
-        title: const Text('Room Intelligence', style: TextStyle(fontSize: 16)),
-      ),
-      body: roomDetailsAsync.when(
-        data: (data) => _buildBody(context, data),
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, stack) => Center(
-          child: Text('Failed to load room details.\n$err', style: const TextStyle(color: Colors.red)),
-        ),
+      backgroundColor: _navy,
+      extendBodyBehindAppBar: true,
+      appBar: _buildAppBar(),
+      body: async.when(
+        data:    (data)  => _buildBody(data),
+        loading: ()      => _buildLoading(),
+        error:   (e, _)  => _buildError(e),
       ),
     );
   }
 
-  Widget _buildBody(BuildContext context, RoomDetailsData data) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16.0),
+  AppBar _buildAppBar() {
+    return AppBar(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      leading: GestureDetector(
+        onTap: () => Navigator.of(context).pop(),
+        child: Container(
+          margin: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: _card.withValues(alpha: 0.8),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: _border),
+          ),
+          child: const Icon(Icons.arrow_back_ios_new, color: _textPrimary, size: 16),
+        ),
+      ),
+      title: const Text(
+        'Room Intelligence',
+        style: TextStyle(color: _textSecondary, fontSize: 14, fontWeight: FontWeight.w500, letterSpacing: 0.5),
+      ),
+      centerTitle: true,
+    );
+  }
+
+  Widget _buildLoading() {
+    return const Center(
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          _buildHeader(data.room),
-          const SizedBox(height: 24),
-          _buildRevenueAvailability(data),
-          const SizedBox(height: 24),
-          _buildGuestSection(data.currentGuest),
-          const SizedBox(height: 24),
-          _buildNextArrivalSection(data.nextArrival),
-          const SizedBox(height: 24),
-          _buildHousekeepingSection(data.housekeeping),
-          const SizedBox(height: 24),
-          if (data.maintenance != null) ...[
-            _buildMaintenanceSection(data.maintenance!),
-            const SizedBox(height: 24),
-          ],
-          _buildTimelineSection(data.timeline),
-          const SizedBox(height: 48),
-          _buildActionButtons(),
+          CircularProgressIndicator(color: _blue, strokeWidth: 2),
+          SizedBox(height: 16),
+          Text('Loading room data…', style: TextStyle(color: _textSecondary, fontSize: 13)),
         ],
       ),
     );
   }
 
-  Widget _buildHeader(RoomItem room) {
-    Color statusColor;
-    switch (room.displayStatus) {
-      case 'OCCUPIED': statusColor = Colors.blue; break;
-      case 'READY': statusColor = Colors.green; break;
-      case 'DIRTY': statusColor = Colors.orange; break;
-      case 'OUT_OF_ORDER':
-      case 'OUT_OF_SERVICE': statusColor = Colors.red; break;
-      default: statusColor = Colors.grey;
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'ROOM ${room.number}',
-          style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 1.2),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          room.roomType.name,
-          style: const TextStyle(color: Colors.white70, fontSize: 16),
-        ),
-        const SizedBox(height: 16),
-        Row(
+  Widget _buildError(Object e) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.circle, color: statusColor, size: 12),
-            const SizedBox(width: 8),
-            Text(
-              room.displayStatus.replaceAll('_', ' '),
-              style: TextStyle(color: statusColor, fontSize: 16, fontWeight: FontWeight.bold),
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: _red.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: _red.withValues(alpha: 0.3)),
+              ),
+              child: const Icon(Icons.error_outline, color: _red, size: 40),
+            ),
+            const SizedBox(height: 20),
+            const Text('Failed to load room', style: TextStyle(color: _textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Text(e.toString(), style: const TextStyle(color: _textSecondary, fontSize: 12), textAlign: TextAlign.center),
+            const SizedBox(height: 24),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.refresh, size: 16),
+              label: const Text('Retry'),
+              onPressed: () => ref.refresh(roomDetailsProvider(widget.roomId)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _textPrimary,
+                side: const BorderSide(color: _border),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
             ),
           ],
         ),
-      ],
+      ),
     );
   }
 
-  Widget _buildRevenueAvailability(RoomDetailsData data) {
-    Color color;
-    String text;
-    String subtitle = '';
-
-    switch (data.sellability) {
-      case 'READY_TO_SELL':
-        color = Colors.green;
-        text = 'READY TO SELL';
-        break;
-      case 'NOT_SELLABLE':
-        color = Colors.red;
-        text = 'NOT SELLABLE';
-        subtitle = data.maintenance?.reason ?? 'Out of Order';
-        break;
-      case 'NOT_READY':
-      default:
-        color = Colors.orange;
-        text = 'NOT READY';
-        if (data.room.displayStatus == 'OCCUPIED') {
-          subtitle = 'Currently Occupied';
-        } else {
-          subtitle = 'Housekeeping: ${data.housekeeping.status}';
-        }
-        break;
-    }
-
-    return _buildSectionCard(
-      title: 'REVENUE AVAILABILITY',
+  Widget _buildBody(RoomDetailsData data) {
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Icon(Icons.circle, color: color, size: 10),
-              const SizedBox(width: 8),
-              Text(text, style: TextStyle(color: color, fontWeight: FontWeight.bold)),
-            ],
+          _buildHeroHeader(data),
+          _buildManagementAttentionBanner(data.managementAttention),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 20),
+                _buildSellabilityBanner(data),
+                const SizedBox(height: 16),
+                _buildGuestCard(data.currentGuest),
+                const SizedBox(height: 16),
+                _buildNextArrivalCard(data.nextArrival),
+                const SizedBox(height: 16),
+                _buildHousekeepingCard(data.housekeeping),
+                if (data.maintenance != null) ...[
+                  const SizedBox(height: 16),
+                  _buildMaintenanceCard(data.maintenance!),
+                ],
+                const SizedBox(height: 16),
+                _buildTimelineCard(data.timeline),
+              ],
+            ),
           ),
-          if (subtitle.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(subtitle, style: const TextStyle(color: Colors.white70, fontSize: 13)),
-          ],
         ],
       ),
     );
   }
 
-  Widget _buildGuestSection(CurrentGuestInfo? guest) {
+  Widget _buildManagementAttentionBanner(ManagementAttention? attention) {
+    if (attention == null) return const SizedBox.shrink();
+    final color = attention.type == 'CRITICAL' ? _red : _orange;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 20, 16, 0),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(attention.type == 'CRITICAL' ? Icons.warning_amber_rounded : Icons.info_outline, color: color, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              attention.message,
+              style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── Hero Header ────────────────────────────────────────────────────────────
+
+  Widget _buildHeroHeader(RoomDetailsData data) {
+    final (statusColor, statusBg, statusIcon) = _statusMeta(data.room.displayStatus);
+    final dateFormat = DateFormat('EEE, MMM d · yyyy');
+
+    String displayRoomNumber = data.room.number;
+    String? locationSubText;
+    if (data.room.number.contains('.')) {
+      final parts = data.room.number.split('.');
+      if (parts.length >= 3) {
+        displayRoomNumber = parts.last;
+        locationSubText = 'Building ${parts[0]} · Floor ${parts[1]}';
+      }
+    }
+
+    return Container(
+      padding: EdgeInsets.fromLTRB(24, MediaQuery.of(context).padding.top + 40, 24, 20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            _surface,
+            statusBg.withValues(alpha: 0.15),
+          ],
+        ),
+        border: Border(bottom: BorderSide(color: _border)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Room number + type
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                'ROOM',
+                style: TextStyle(color: _textMuted, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 2),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                displayRoomNumber,
+                style: const TextStyle(color: _textPrimary, fontSize: 40, fontWeight: FontWeight.bold, height: 1),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          if (locationSubText != null) ...[
+            Text(locationSubText, style: const TextStyle(color: _textSecondary, fontSize: 13)),
+            const SizedBox(height: 4),
+          ],
+          Text(data.room.roomType.name, style: const TextStyle(color: _textSecondary, fontSize: 15)),
+          const SizedBox(height: 16),
+          // Status badge
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: statusBg.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: statusColor.withValues(alpha: 0.4)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(statusIcon, color: statusColor, size: 13),
+                const SizedBox(width: 6),
+                Text(
+                  data.room.displayStatus.replaceAll('_', ' '),
+                  style: TextStyle(color: statusColor, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Business date
+          Row(
+            children: [
+              const Icon(Icons.calendar_today, color: _textMuted, size: 12),
+              const SizedBox(width: 6),
+              Text(
+                'Business Date: ${dateFormat.format(data.businessDate)}',
+                style: const TextStyle(color: _textMuted, fontSize: 11),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── Sellability Banner ──────────────────────────────────────────────────────
+
+  Widget _buildSellabilityBanner(RoomDetailsData data) {
+    final Color color;
+    final String label;
+    final String sublabel;
+    final IconData icon;
+
+    switch (data.sellability) {
+      case 'READY_TO_SELL':
+        color = _green; label = 'READY TO SELL'; sublabel = 'Available for new bookings';
+        icon = Icons.check_circle_outline;
+        break;
+      case 'NOT_SELLABLE':
+        color = _red; label = 'NOT SELLABLE'; sublabel = data.maintenance?.reason ?? 'Out of Order / Service';
+        icon = Icons.block;
+        break;
+      default:
+        color = _orange; label = 'NOT READY';
+        sublabel = data.room.displayStatus == 'OCCUPIED' ? 'Currently occupied' : 'Housekeeping: ${data.housekeeping.status}';
+        icon = Icons.pending_outlined;
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(color: color.withValues(alpha: 0.15), shape: BoxShape.circle),
+            child: Icon(icon, color: color, size: 18),
+          ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.5)),
+              Text(sublabel, style: TextStyle(color: color.withValues(alpha: 0.7), fontSize: 12)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── Guest Card ──────────────────────────────────────────────────────────────
+
+  Widget _buildGuestCard(CurrentGuestInfo? guest) {
     if (guest == null) {
-      return _buildSectionCard(
+      return _buildCard(
+        icon: Icons.person_outline,
+        iconColor: _textMuted,
         title: 'CURRENT GUEST',
-        child: const Text('No current guest', style: TextStyle(color: Colors.white70)),
+        child: const _EmptyState(message: 'No guest currently in-house'),
       );
     }
 
-    final format = DateFormat('MMM d, h:mm a');
+    final fmt = DateFormat('MMM d');
+    final nights = guest.checkOut.difference(guest.checkIn).inDays;
 
-    return _buildSectionCard(
+    return _buildCard(
+      icon: Icons.person,
+      iconColor: _blue,
       title: 'CURRENT GUEST',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            guest.name ?? 'Guest Name Hidden',
-            style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  guest.name ?? '🔒 Guest details restricted',
+                  style: const TextStyle(color: _textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
+              if (guest.vipLevel != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(color: _gold.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6), border: Border.all(color: _gold.withValues(alpha: 0.4))),
+                  child: Text(guest.vipLevel!, style: const TextStyle(color: _gold, fontSize: 10, fontWeight: FontWeight.bold)),
+                ),
+            ],
           ),
-          if (guest.vipLevel != null) ...[
-            const SizedBox(height: 4),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(color: const Color(0xFFD4AF37), borderRadius: BorderRadius.circular(4)),
-              child: Text(guest.vipLevel!, style: const TextStyle(color: Colors.black, fontSize: 10, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
+          _buildInfoGrid([
+            _InfoItem(Icons.login, 'Check-In', fmt.format(guest.checkIn)),
+            _InfoItem(Icons.logout, 'Check-Out', fmt.format(guest.checkOut)),
+            _InfoItem(Icons.nights_stay, 'Nights', '$nights'),
+            if (guest.folioBalance != null)
+              _InfoItem(Icons.receipt_long, 'Balance', '\$${guest.folioBalance!.toStringAsFixed(2)}'),
+          ]),
+        ],
+      ),
+    );
+  }
+
+  // ─── Next Arrival Card ───────────────────────────────────────────────────────
+
+  Widget _buildNextArrivalCard(NextArrivalInfo? arrival) {
+    if (arrival == null) {
+      return _buildCard(
+        icon: Icons.flight_land_outlined,
+        iconColor: _textMuted,
+        title: 'NEXT ARRIVAL',
+        child: const _EmptyState(message: 'No upcoming arrivals'),
+      );
+    }
+
+    final dateFmt = DateFormat('EEE, MMM d');
+    final isToday = arrival.arrivalDate.year == DateTime.now().year &&
+        arrival.arrivalDate.month == DateTime.now().month &&
+        arrival.arrivalDate.day == DateTime.now().day;
+    final dateStr = isToday ? 'Today' : dateFmt.format(arrival.arrivalDate);
+
+    return _buildCard(
+      icon: Icons.flight_land,
+      iconColor: _blue,
+      title: 'NEXT ARRIVAL',
+      chip: isToday ? _Chip(label: 'TODAY', color: _orange) : null,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            arrival.guestName ?? '🔒 Guest details restricted',
+            style: const TextStyle(color: _textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 12),
+          _buildInfoGrid([
+            _InfoItem(Icons.calendar_today, 'Arrival', dateStr),
+            if (arrival.arrivalTime != null)
+              _InfoItem(Icons.schedule, 'ETA', arrival.arrivalTime!),
+            _InfoItem(Icons.nights_stay, 'Nights', '${arrival.nights}'),
+            _InfoItem(Icons.info_outline, 'Status', _capitalize(arrival.status)),
+          ]),
+        ],
+      ),
+    );
+  }
+
+  // ─── Housekeeping Card ───────────────────────────────────────────────────────
+
+  Widget _buildHousekeepingCard(HousekeepingInfo hk) {
+    final isClean = hk.status == 'CLEAN' || hk.status == 'INSPECTED';
+    final color = isClean ? _green : _orange;
+    final icon = isClean ? Icons.check_circle : Icons.cleaning_services;
+
+    return _buildCard(
+      icon: icon,
+      iconColor: color,
+      title: 'HOUSEKEEPING',
+      chip: _Chip(label: hk.status, color: color),
+      child: Column(
+        children: [
+          if (hk.lastUpdatedAt != null)
+            _buildInfoRow(
+              Icons.update, 
+              hk.status == 'INSPECTED' ? 'Last Inspected' : 'Last Updated', 
+              timeago.format(hk.lastUpdatedAt!)
+            ),
+          if (hk.assignedTo != null) ...[
+            const SizedBox(height: 8),
+            _buildInfoRow(Icons.badge, 'Assigned To', hk.assignedTo!),
+          ],
+          if (hk.lastUpdatedAt == null && hk.assignedTo == null)
+            const _EmptyState(message: 'No housekeeping activity recorded'),
+        ],
+      ),
+    );
+  }
+
+  // ─── Maintenance Card ────────────────────────────────────────────────────────
+
+  Widget _buildMaintenanceCard(MaintenanceInfo m) {
+    return _buildCard(
+      icon: Icons.build,
+      iconColor: _red,
+      title: 'MAINTENANCE',
+      chip: _Chip(label: m.status.replaceAll('_', ' '), color: _red),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: _red.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: _red.withValues(alpha: 0.2)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.report_problem, color: _red, size: 16),
+                const SizedBox(width: 8),
+                Expanded(child: Text(m.reason, style: const TextStyle(color: _textPrimary, fontSize: 13))),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (m.reportedAt != null)
+            _buildInfoRow(Icons.flag, 'Reported', timeago.format(m.reportedAt!)),
+          if (m.expectedResolutionAt != null) ...[
+            const SizedBox(height: 8),
+            _buildInfoRow(
+              Icons.event_available,
+              'Expected Resolution',
+              DateFormat('MMM d · HH:mm').format(m.expectedResolutionAt!),
             ),
           ],
-          const SizedBox(height: 12),
-          _buildInfoRow('Check-In', format.format(guest.checkIn)),
-          const SizedBox(height: 4),
-          _buildInfoRow('Check-Out', format.format(guest.checkOut)),
-          const SizedBox(height: 4),
-          if (guest.folioBalance != null)
-            _buildInfoRow('Balance', '\$${guest.folioBalance!.toStringAsFixed(2)}'),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNextArrivalSection(NextArrivalInfo? arrival) {
-    if (arrival == null) {
-      return _buildSectionCard(
-        title: 'NEXT ARRIVAL',
-        child: const Text('No upcoming arrivals', style: TextStyle(color: Colors.white70)),
-      );
-    }
-
-    final dateFormat = DateFormat('MMM d');
-    final isToday = arrival.arrivalDate.day == DateTime.now().day &&
-        arrival.arrivalDate.month == DateTime.now().month &&
-        arrival.arrivalDate.year == DateTime.now().year;
-    final dateStr = isToday ? 'Today' : dateFormat.format(arrival.arrivalDate);
-    final arrivalTimeDisplay = arrival.arrivalTime != null ? ' · ${arrival.arrivalTime}' : '';
-
-    return _buildSectionCard(
-      title: 'NEXT ARRIVAL',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            arrival.guestName ?? 'Guest Name Hidden',
-            style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 4),
-          Text('$dateStr$arrivalTimeDisplay', style: const TextStyle(color: Colors.white70)),
-          const SizedBox(height: 4),
-          Text('${arrival.nights} nights', style: const TextStyle(color: Colors.white54)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHousekeepingSection(HousekeepingInfo hk) {
-    Color color = hk.status == 'CLEAN' || hk.status == 'INSPECTED' ? Colors.green : Colors.orange;
-    
-    return _buildSectionCard(
-      title: 'HOUSEKEEPING',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.circle, color: color, size: 10),
-              const SizedBox(width: 8),
-              Text(hk.status, style: TextStyle(color: color, fontWeight: FontWeight.bold)),
-            ],
-          ),
-          if (hk.lastUpdatedAt != null) ...[
+          if (m.priority.isNotEmpty) ...[
             const SizedBox(height: 8),
-            Text('Updated: ${timeago.format(hk.lastUpdatedAt!)}', style: const TextStyle(color: Colors.white70, fontSize: 13)),
-          ],
-          if (hk.assignedTo != null) ...[
-            const SizedBox(height: 4),
-            Text('Assigned: ${hk.assignedTo}', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+            _buildInfoRow(Icons.priority_high, 'Priority', m.priority),
           ],
         ],
       ),
     );
   }
 
-  Widget _buildMaintenanceSection(MaintenanceInfo maintenance) {
-    return _buildSectionCard(
-      title: 'MAINTENANCE',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.circle, color: Colors.red, size: 10),
-              const SizedBox(width: 8),
-              Text('${maintenance.priority} · ${maintenance.status.replaceAll('_', ' ')}', style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(maintenance.reason, style: const TextStyle(color: Colors.white, fontSize: 14)),
-          if (maintenance.expectedResolutionAt != null) ...[
-            const SizedBox(height: 8),
-            Text('Expected: ${DateFormat('MMM d · HH:mm').format(maintenance.expectedResolutionAt!)}', style: const TextStyle(color: Colors.white70, fontSize: 13)),
-          ],
-        ],
-      ),
-    );
-  }
+  // ─── Timeline Card ───────────────────────────────────────────────────────────
 
-  Widget _buildTimelineSection(List<TimelineEvent> timeline) {
-    if (timeline.isEmpty) {
-      return _buildSectionCard(
-        title: 'ROOM TIMELINE',
-        child: const Text('No recent activity', style: TextStyle(color: Colors.white70)),
-      );
-    }
+  Widget _buildTimelineCard(List<TimelineEvent> timeline) {
+    final hasMore = timeline.length > _timelinePreviewCount;
+    final displayed = _timelineExpanded ? timeline : timeline.take(_timelinePreviewCount).toList();
 
-    final format = DateFormat('MMM d · HH:mm');
-
-    return _buildSectionCard(
+    return _buildCard(
+      icon: Icons.timeline,
+      iconColor: _blue,
       title: 'ROOM TIMELINE',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: timeline.map((event) {
-          IconData icon;
-          Color color;
-          switch (event.type) {
-            case 'MAINTENANCE': icon = Icons.build; color = Colors.red; break;
-            case 'HOUSEKEEPING': icon = Icons.cleaning_services; color = Colors.orange; break;
-            default: icon = Icons.info_outline; color = Colors.blue; break;
-          }
-
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 16.0),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(icon, color: color, size: 16),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(format.format(event.timestamp), style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 2),
-                      Text(event.title, style: const TextStyle(color: Colors.white, fontSize: 14)),
-                      if (event.subtitle.isNotEmpty) ...[
-                        const SizedBox(height: 2),
-                        Text(event.subtitle, style: const TextStyle(color: Colors.white70, fontSize: 13)),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  Widget _buildActionButtons() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _buildActionButton('View Maintenance', Icons.build_outlined),
-        const SizedBox(height: 12),
-        _buildActionButton('View Room History', Icons.history),
-      ],
-    );
-  }
-
-  Widget _buildActionButton(String label, IconData icon) {
-    return OutlinedButton.icon(
-      icon: Icon(icon, color: Colors.white, size: 18),
-      label: Text(label, style: const TextStyle(color: Colors.white)),
-      onPressed: null, // Read-only v1 — navigation actions to be connected per screen
-      style: OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        side: const BorderSide(color: Color(0xFF334155)),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        disabledForegroundColor: Colors.white54,
-        disabledIconColor: Colors.white54,
-      ),
-    );
-  }
-
-  Widget _buildSectionCard({required String title, required Widget child}) {
-    const surfaceNavy = Color(0xFF1E293B);
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: surfaceNavy,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.1),
-          ),
-          const SizedBox(height: 12),
-          child,
+          if (displayed.isEmpty)
+            const _EmptyState(message: 'No recent room activity')
+          else
+            ...displayed.asMap().entries.map((e) => _buildTimelineEntry(e.value, isLast: e.key == displayed.length - 1)),
+          if (hasMore) ...[
+            const SizedBox(height: 4),
+            GestureDetector(
+              onTap: () => setState(() => _timelineExpanded = !_timelineExpanded),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  border: Border(top: BorderSide(color: _border)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      _timelineExpanded
+                          ? 'Show less'
+                          : 'View ${timeline.length - _timelinePreviewCount} more',
+                      style: const TextStyle(color: _blue, fontSize: 13, fontWeight: FontWeight.w500),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      _timelineExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                      color: _blue, size: 16,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildInfoRow(String label, String value) {
+  Widget _buildTimelineEntry(TimelineEvent event, {required bool isLast}) {
+    final color = _timelineColor(event.type);
+    final icon  = _timelineIcon(event.type);
+    final fmt   = DateFormat('MMM d · HH:mm');
+
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Line + dot
+          Column(
+            children: [
+              Container(
+                width: 28, height: 28,
+                decoration: BoxDecoration(color: color.withValues(alpha: 0.15), shape: BoxShape.circle),
+                child: Icon(icon, color: color, size: 13),
+              ),
+              if (!isLast)
+                Expanded(
+                  child: Container(width: 1.5, color: _border, margin: const EdgeInsets.symmetric(vertical: 4)),
+                ),
+            ],
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(bottom: isLast ? 0 : 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(fmt.format(event.timestamp), style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 2),
+                  Text(event.title, style: const TextStyle(color: _textPrimary, fontSize: 13, fontWeight: FontWeight.w500)),
+                  if (event.subtitle.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(event.subtitle, style: const TextStyle(color: _textSecondary, fontSize: 12)),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── Shared helpers ──────────────────────────────────────────────────────────
+
+  Widget _buildCard({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required Widget child,
+    _Chip? chip,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: _card,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Card header
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(color: iconColor.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
+                  child: Icon(icon, color: iconColor, size: 14),
+                ),
+                const SizedBox(width: 8),
+                Text(title, style: const TextStyle(color: _textSecondary, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                const Spacer(),
+                if (chip != null) chip,
+              ],
+            ),
+          ),
+          // Divider
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Divider(height: 1, color: _border),
+          ),
+          // Content
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: child,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoGrid(List<_InfoItem> items) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: items.map((item) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: _surface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: _border),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(item.icon, color: _textMuted, size: 13),
+            const SizedBox(width: 6),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(item.label, style: const TextStyle(color: _textMuted, fontSize: 10)),
+                Text(item.value, style: const TextStyle(color: _textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ],
+        ),
+      )).toList(),
+    );
+  }
+
+  Widget _buildInfoRow(IconData icon, String label, String value) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: const TextStyle(color: Colors.white54, fontSize: 14)),
-        Text(value, style: const TextStyle(color: Colors.white, fontSize: 14)),
+        Icon(icon, color: _textMuted, size: 14),
+        const SizedBox(width: 8),
+        Text('$label:', style: const TextStyle(color: _textSecondary, fontSize: 13)),
+        const SizedBox(width: 6),
+        Expanded(child: Text(value, style: const TextStyle(color: _textPrimary, fontSize: 13, fontWeight: FontWeight.w500))),
       ],
     );
   }
+
+  // ─── Status meta helpers ─────────────────────────────────────────────────────
+
+  (Color, Color, IconData) _statusMeta(String status) {
+    switch (status) {
+      case 'OCCUPIED':        return (_blue, _blue, Icons.person);
+      case 'READY':           return (_green, _green, Icons.check_circle);
+      case 'DIRTY':           return (_orange, _orange, Icons.cleaning_services);
+      case 'OUT_OF_ORDER':    return (_red, _red, Icons.block);
+      case 'OUT_OF_SERVICE':  return (_red, _red, Icons.engineering);
+      default:                return (_textMuted, _textMuted, Icons.help_outline);
+    }
+  }
+
+  Color _timelineColor(String type) {
+    switch (type) {
+      case 'MAINTENANCE':   return _red;
+      case 'HOUSEKEEPING':  return _orange;
+      case 'RESERVATION':   return _blue;
+      default:              return _textSecondary;
+    }
+  }
+
+  IconData _timelineIcon(String type) {
+    switch (type) {
+      case 'MAINTENANCE':   return Icons.build;
+      case 'HOUSEKEEPING':  return Icons.cleaning_services;
+      case 'RESERVATION':   return Icons.hotel;
+      default:              return Icons.info_outline;
+    }
+  }
+
+  String _capitalize(String s) {
+    if (s.isEmpty) return s;
+    return s[0].toUpperCase() + s.substring(1).toLowerCase().replaceAll('_', ' ');
+  }
+}
+
+// ─── Sub-widgets ────────────────────────────────────────────────────────────────
+
+class _EmptyState extends StatelessWidget {
+  final String message;
+  const _EmptyState({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Text(message, style: const TextStyle(color: Color(0xFF475569), fontSize: 13)),
+    );
+  }
+}
+
+class _Chip extends StatelessWidget {
+  final String label;
+  final Color color;
+  const _Chip({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Text(label, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+    );
+  }
+}
+
+class _InfoItem {
+  final IconData icon;
+  final String label;
+  final String value;
+  const _InfoItem(this.icon, this.label, this.value);
 }

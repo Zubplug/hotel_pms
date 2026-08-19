@@ -64,6 +64,7 @@ class RoomItem {
   final String availabilityStatus;
   final String housekeepingStatus;
   final String maintenanceStatus;
+  final String? contextualNote;
 
   RoomItem({
     required this.id,
@@ -73,12 +74,14 @@ class RoomItem {
     required this.availabilityStatus,
     required this.housekeepingStatus,
     required this.maintenanceStatus,
+    this.contextualNote,
   });
 }
 
 class RoomDetailsData {
   final PropertyInfo property;
   final DateTime businessDate;
+  final DateTime generatedAt;
   final RoomItem room;
   final String sellability;
   final CurrentGuestInfo? currentGuest;
@@ -86,10 +89,12 @@ class RoomDetailsData {
   final HousekeepingInfo housekeeping;
   final MaintenanceInfo? maintenance;
   final List<TimelineEvent> timeline;
+  final ManagementAttention? managementAttention;
 
   RoomDetailsData({
     required this.property,
     required this.businessDate,
+    required this.generatedAt,
     required this.room,
     required this.sellability,
     this.currentGuest,
@@ -97,6 +102,7 @@ class RoomDetailsData {
     required this.housekeeping,
     this.maintenance,
     required this.timeline,
+    this.managementAttention,
   });
 }
 
@@ -122,6 +128,7 @@ class NextArrivalInfo {
   final DateTime arrivalDate;
   final String? arrivalTime;
   final int nights;
+  final String status;
 
   NextArrivalInfo({
     required this.reservationId,
@@ -129,6 +136,7 @@ class NextArrivalInfo {
     required this.arrivalDate,
     this.arrivalTime,
     required this.nights,
+    required this.status,
   });
 }
 
@@ -172,4 +180,18 @@ class TimelineEvent {
     required this.subtitle,
     required this.timestamp,
   });
+}
+
+class ManagementAttention {
+  final String type; // 'WARNING' | 'CRITICAL'
+  final String message;
+
+  ManagementAttention({required this.type, required this.message});
+
+  factory ManagementAttention.fromJson(Map<String, dynamic> json) {
+    return ManagementAttention(
+      type: json['type'] as String,
+      message: json['message'] as String,
+    );
+  }
 }

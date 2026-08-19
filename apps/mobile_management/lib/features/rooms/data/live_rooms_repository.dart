@@ -108,6 +108,7 @@ class LiveRoomsRepository implements RoomsRepository {
         timezone: property['timezone'] as String,
       ),
       businessDate: DateTime.parse(businessDate as String),
+      generatedAt: DateTime.parse(data['generatedAt'] as String),
       room: _parseRoomItem(room as Map<String, dynamic>),
       sellability: room['sellability'] as String,
       currentGuest: data['currentGuest'] != null
@@ -121,6 +122,9 @@ class LiveRoomsRepository implements RoomsRepository {
           ? _parseMaintenance(data['maintenance'] as Map<String, dynamic>)
           : null,
       timeline: _parseTimeline(data['timeline'] as List<dynamic>?),
+      managementAttention: data['managementAttention'] != null
+          ? ManagementAttention.fromJson(data['managementAttention'] as Map<String, dynamic>)
+          : null,
     );
   }
 
@@ -139,6 +143,7 @@ class LiveRoomsRepository implements RoomsRepository {
       availabilityStatus: item['availabilityStatus'] as String,
       housekeepingStatus: item['housekeepingStatus'] as String,
       maintenanceStatus: item['maintenanceStatus'] as String,
+      contextualNote: item['contextualNote'] as String?,
     );
   }
 
@@ -165,6 +170,7 @@ class LiveRoomsRepository implements RoomsRepository {
       arrivalDate: DateTime.parse(data['arrivalDate'] as String),
       arrivalTime: data['arrivalTime'] as String?,
       nights: data['nights'] as int,
+      status: data['status'] as String? ?? 'UNKNOWN',
     );
   }
 

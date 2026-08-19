@@ -108,7 +108,8 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen> {
     if (filter == 'Occupied') return rooms.where((r) => r.displayStatus == 'OCCUPIED').toList();
     if (filter == 'Ready') return rooms.where((r) => r.displayStatus == 'READY').toList();
     if (filter == 'Dirty') return rooms.where((r) => r.displayStatus == 'DIRTY').toList();
-    if (filter == 'OOO') return rooms.where((r) => r.displayStatus == 'OUT_OF_ORDER' || r.displayStatus == 'OUT_OF_SERVICE').toList();
+    if (filter == 'OOO') return rooms.where((r) => r.displayStatus == 'OUT_OF_ORDER').toList();
+    if (filter == 'OOS') return rooms.where((r) => r.displayStatus == 'OUT_OF_SERVICE').toList();
     return rooms;
   }
 
@@ -123,7 +124,7 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen> {
             _buildOverviewCard('Ready', overview.ready.toString(), Colors.green, itemWidth),
             _buildOverviewCard('Occupied', overview.occupied.toString(), Colors.blue, itemWidth),
             _buildOverviewCard('Dirty', overview.dirty.toString(), Colors.orange, itemWidth),
-            _buildOverviewCard('OOO', (overview.outOfOrder + overview.outOfService).toString(), Colors.red, itemWidth),
+            _buildOverviewCard('OOO/OOS', (overview.outOfOrder + overview.outOfService).toString(), Colors.red, itemWidth),
           ],
         );
       },
@@ -164,7 +165,7 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen> {
   }
 
   Widget _buildFilterBar() {
-    final filters = ['All', 'Occupied', 'Ready', 'Dirty', 'OOO'];
+    final filters = ['All', 'Occupied', 'Ready', 'Dirty', 'OOO', 'OOS'];
     
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -228,6 +229,16 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen> {
         statusColor = Colors.grey;
         displayStatusText = room.displayStatus;
     }
+    
+    String displayRoomNumber = room.number;
+    String? locationSubText;
+    if (room.number.contains('.')) {
+      final parts = room.number.split('.');
+      if (parts.length >= 3) {
+        displayRoomNumber = parts.last;
+        locationSubText = 'Building ${parts[0]} · Floor ${parts[1]}';
+      }
+    }
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -254,7 +265,7 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'ROOM ${room.number}',
+                    'ROOM $displayRoomNumber',
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
@@ -266,6 +277,13 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen> {
                 ],
               ),
               const SizedBox(height: 4),
+              if (locationSubText != null) ...[
+                Text(
+                  locationSubText,
+                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+                ),
+                const SizedBox(height: 4),
+              ],
               Text(
                 room.roomType.name,
                 style: const TextStyle(color: Colors.white70, fontSize: 13),
@@ -285,15 +303,13 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
-              if (room.displayStatus == 'OUT_OF_ORDER' || room.displayStatus == 'OUT_OF_SERVICE')
-                _buildIssueRow('Maintenance', 'Check required', Colors.red)
-              else
-                _buildIssueRow(
-                  'Housekeeping', 
-                  _capitalize(room.housekeepingStatus),
-                  room.housekeepingStatus == 'CLEAN' ? Colors.white70 : Colors.orange,
+              if (room.contextualNote != null && room.contextualNote!.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  room.contextualNote!,
+                  style: const TextStyle(color: Colors.white70, fontSize: 13),
                 ),
+              ],
             ],
           ),
         ),
@@ -301,15 +317,4 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen> {
     );
   }
 
-  Widget _buildIssueRow(String label, String value, Color color) {
-    return Text(
-      '$label: $value',
-      style: TextStyle(color: color, fontSize: 13),
-    );
-  }
-
-  String _capitalize(String s) {
-    if (s.isEmpty) return s;
-    return s[0].toUpperCase() + s.substring(1).toLowerCase();
-  }
 }
