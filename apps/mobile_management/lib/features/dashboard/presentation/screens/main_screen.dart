@@ -28,6 +28,7 @@ class _MainScreenState extends State<MainScreen> {
     const textSecondary = Color(0xFF94A3B8);
 
     return Scaffold(
+      backgroundColor: primaryNavy,
       body: _screens[_currentIndex],
       bottomNavigationBar: Theme(
         data: Theme.of(context).copyWith(
