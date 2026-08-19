@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useLodgeCore } from '@/lib/auth/useLodgeCoreSession';
+import { useLodgeCoreSession as useLodgeCore } from '@/lib/auth/useLodgeCoreSession';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 

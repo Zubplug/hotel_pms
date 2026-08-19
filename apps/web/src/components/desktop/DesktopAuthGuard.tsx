@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useLodgeCore } from '@/lib/auth/useLodgeCoreSession';
+import { useLodgeCoreSession as useLodgeCore } from '@/lib/auth/useLodgeCoreSession';
 
 export default function DesktopAuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
