@@ -195,6 +195,15 @@ export async function POST(request: Request) {
                     status: 'OPEN'
                   }
                 });
+
+                await NotificationEngine.emit({
+                  type: 'CRITICAL_STOCKOUT',
+                  organizationId: property.organizationId,
+                  propertyId: property.id,
+                  entityType: 'stockItem',
+                  entityId: ing.stockItemId,
+                  idempotencyKey: `stockout_${ing.stockItemId}_${Date.now()}`
+                });
               }
             }
             
@@ -624,6 +633,20 @@ export async function POST(request: Request) {
           }
         }
       });
+      
+      // Check for High Value Refund Notification
+      await NotificationEngine.emit({
+        type: 'REFUND_HIGH_VALUE',
+        organizationId: property.organizationId,
+        propertyId: property.id,
+        entityType: 'posVoid',
+        entityId: entityId,
+        idempotencyKey: `pos_void_${entityId}`,
+        metadata: {
+          isManagerOverride: !!payload.authorizerId
+        }
+      });
+      
     } else if (entityType === 'POS_DISCOUNT') {
       const existingDiscount = await prisma.posDiscount.findUnique({
         where: { operationId: operationId }

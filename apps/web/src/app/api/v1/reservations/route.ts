@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse, paginatedResponse } from '@/lib/api-response';
 import { getUserPropertyIds } from '@/lib/property-access';
+import { NotificationEngine } from '@/lib/notification-engine';
 
 export async function GET(req: NextRequest) {
   try {
@@ -247,10 +248,25 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      return newReservation;
+      return { newReservation, organizationId: property?.organizationId || '' };
     });
 
-    return successResponse(reservation, 201);
+    if (reservation.organizationId) {
+      await NotificationEngine.emit({
+        type: 'SIGNIFICANT_BOOKING',
+        organizationId: reservation.organizationId,
+        propertyId: propertyId,
+        entityType: 'reservation',
+        entityId: reservation.newReservation.id,
+        idempotencyKey: `sig_booking_${reservation.newReservation.id}`,
+        metadata: {
+           bookingValue: totalAmount,
+           isVip: false // We can check guest VIP status here later
+        }
+      });
+    }
+
+    return successResponse(reservation.newReservation, 201);
   } catch (err: any) {
     console.error('[Reservations POST]', err);
     // Handle PostgreSQL exclusion constraint violation (P2004 or P2010 usually, or raw database error)

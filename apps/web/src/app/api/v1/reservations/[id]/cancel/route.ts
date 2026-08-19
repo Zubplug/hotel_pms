@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { assertPropertyAccess } from '@/lib/property-access';
+import { NotificationEngine } from '@/lib/notification-engine';
 
 export async function POST(
   req: NextRequest,
@@ -66,7 +67,23 @@ export async function POST(
         },
       });
 
-      return { updatedRes, updatedResRoom };
+      return { updatedRes, updatedResRoom, organizationId };
+    });
+
+    const rateSnapshot = existingReservation.ratePlanSnapshot as any;
+    const bookingValue = rateSnapshot?.total || 0;
+
+    await NotificationEngine.emit({
+      type: 'SIGNIFICANT_CANCELLATION',
+      organizationId: cancelled.organizationId,
+      propertyId: existingReservation.propertyId,
+      entityType: 'reservation',
+      entityId: id,
+      idempotencyKey: `sig_cxl_${id}`,
+      metadata: {
+         bookingValue,
+         isVip: false // VIP check can be added later
+      }
     });
 
     return successResponse(cancelled.updatedRes);

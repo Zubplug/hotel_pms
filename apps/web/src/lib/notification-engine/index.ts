@@ -17,6 +17,8 @@ export interface NotificationPolicy {
   largePaymentThreshold?: number;
   highValueRefundThreshold?: number;
   cashVarianceThreshold?: number;
+  significantCancellationThreshold?: number;
+  significantBookingThreshold?: number;
 }
 
 export const NotificationEngine = {
@@ -142,6 +144,8 @@ async function fetchPolicy(propertyId: string): Promise<NotificationPolicy | nul
     largePaymentThreshold: settings.notificationPolicy.largePaymentThreshold,
     highValueRefundThreshold: settings.notificationPolicy.highValueRefundThreshold,
     cashVarianceThreshold: settings.notificationPolicy.cashVarianceThreshold,
+    significantCancellationThreshold: settings.notificationPolicy.significantCancellationThreshold,
+    significantBookingThreshold: settings.notificationPolicy.significantBookingThreshold,
   };
 }
 
@@ -221,6 +225,59 @@ async function evaluateEvent(event: NotificationEvent, policy: NotificationPolic
         body: `Operationally significant room ${room.number} was placed Out of Order.`,
         category: 'Operations',
         priority: 'Normal', // Or Critical depending on occupancy
+      };
+    }
+
+    case 'SIGNIFICANT_CANCELLATION': {
+      if (!policy.significantCancellationThreshold && !event.metadata?.isVip) return null;
+      
+      const amount = event.metadata?.bookingValue || 0;
+      const isVip = event.metadata?.isVip === true;
+
+      if (amount < (policy.significantCancellationThreshold || Infinity) && !isVip) return null;
+
+      return {
+        subject: isVip ? 'VIP Cancellation' : 'Significant Cancellation',
+        body: `A booking valued at ₦${amount.toLocaleString()} has been cancelled.`,
+        category: 'Operations',
+        priority: 'High',
+      };
+    }
+
+    case 'SIGNIFICANT_BOOKING': {
+      if (!policy.significantBookingThreshold && !event.metadata?.isVip) return null;
+      
+      const amount = event.metadata?.bookingValue || 0;
+      const isVip = event.metadata?.isVip === true;
+
+      if (amount < (policy.significantBookingThreshold || Infinity) && !isVip) return null;
+
+      return {
+        subject: isVip ? 'VIP Booking Received' : 'High-Value Booking Received',
+        body: `A new booking valued at ₦${amount.toLocaleString()} was just created.`,
+        category: 'Operations',
+        priority: 'Normal',
+      };
+    }
+
+    case 'CRITICAL_STOCKOUT': {
+      const stockItem = await prisma.stockItem.findUnique({ where: { id: event.entityId } });
+      if (!stockItem) return null;
+
+      return {
+        subject: 'Critical Stockout Alert',
+        body: `Inventory for ${stockItem.name} has dropped to ${stockItem.quantityOnHand}, triggering a critical stockout alert.`,
+        category: 'Operations',
+        priority: 'High',
+      };
+    }
+
+    case 'SECURITY_EXCEPTION': {
+      return {
+        subject: event.metadata?.alertTitle || 'Security Exception',
+        body: event.metadata?.alertDescription || 'A sensitive security or audit event occurred.',
+        category: 'Critical',
+        priority: 'Critical',
       };
     }
 

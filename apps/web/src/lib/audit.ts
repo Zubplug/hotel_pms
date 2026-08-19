@@ -1,4 +1,5 @@
 import prisma from '@hotel-pms/db';
+import { NotificationEngine } from '@/lib/notification-engine';
 
 export interface AuditLogParams {
   organizationId: string;
@@ -35,6 +36,30 @@ export async function createAuditLog(params: AuditLogParams): Promise<void> {
         requestId: params.requestId ?? crypto.randomUUID(),
       },
     });
+
+    // Check for Security Exceptions
+    const SENSITIVE_ACTIONS = [
+      'ROLE_CHANGED', 
+      'PERMISSION_CHANGED', 
+      'FINANCIAL_OVERRIDE', 
+      'UNAUTHORIZED_DISCOUNT', 
+      'USER_DEACTIVATED'
+    ];
+
+    if (SENSITIVE_ACTIONS.includes(params.action)) {
+      await NotificationEngine.emit({
+        type: 'SECURITY_EXCEPTION',
+        organizationId: params.organizationId,
+        propertyId: params.propertyId,
+        entityType: 'auditLog',
+        entityId: params.resourceId,
+        idempotencyKey: `security_${params.requestId || Date.now()}`,
+        metadata: {
+           alertTitle: `Sensitive Action: ${params.action.replace(/_/g, ' ')}`,
+           alertDescription: `User ${params.userEmail || params.userId || 'System'} performed a highly sensitive action: ${params.action} on ${params.resource}.`
+        }
+      });
+    }
   } catch (err) {
     // Audit failures must never crash the main request
     console.error('[Audit] Failed to write audit log:', err);
