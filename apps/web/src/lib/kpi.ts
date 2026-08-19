@@ -6,6 +6,7 @@ export type RevenueSnapshot = {
   totalRevenue: number;
   roomRevenue: number;
   fbRevenue: number;
+  barRevenue: number;
   otherRevenue: number;
 };
 
@@ -67,18 +68,19 @@ export async function calculateDailyRevenue(propertyId: string, businessDate: Da
 
   let roomRevenue = 0;
   let fbRevenue = 0;
+  let barRevenue = 0;
   let otherRevenue = 0;
 
   for (const item of folioItems) {
-    // Discounts are subtracted (assuming they are recorded as positive amounts, or if negative, we add them)
-    // To be safe, we treat CHARGE as positive and DISCOUNT as negative impact.
     const amt = Number(item.amount);
     const sign = item.type === 'CHARGE' ? 1 : -1;
     const value = amt * sign;
 
     if (item.source === 'ROOM_CHARGE') {
       roomRevenue += value;
-    } else if (['POS', 'RESTAURANT', 'BAR'].includes(item.source)) {
+    } else if (item.source === 'BAR') {
+      barRevenue += value;
+    } else if (['POS', 'RESTAURANT'].includes(item.source)) {
       fbRevenue += value;
     } else if (item.source !== 'TAX') {
       otherRevenue += value;
@@ -86,9 +88,10 @@ export async function calculateDailyRevenue(propertyId: string, businessDate: Da
   }
 
   return {
-    totalRevenue: roomRevenue + fbRevenue + otherRevenue,
+    totalRevenue: roomRevenue + fbRevenue + barRevenue + otherRevenue,
     roomRevenue,
     fbRevenue,
+    barRevenue,
     otherRevenue
   };
 }
@@ -165,5 +168,66 @@ export async function getExecutiveKPISnapshot(propertyId: string, targetDate?: D
     availableRooms: roomStats.availableRooms,
     occupiedRooms: roomStats.occupiedRooms,
     revenue
+  };
+}
+
+/**
+ * Efficiently aggregates revenue over a trailing number of business days.
+ */
+export async function getExecutiveRevenueTrend(propertyId: string, endBusinessDate: Date, days: number = 7) {
+  const startBusinessDate = new Date(endBusinessDate);
+  startBusinessDate.setDate(startBusinessDate.getDate() - days);
+
+  const folioItems = await prisma.folioItem.findMany({
+    where: {
+      folio: { propertyId },
+      businessDate: {
+        gt: startOfDay(startBusinessDate),
+        lte: endOfDay(endBusinessDate),
+      },
+      type: { in: ['CHARGE', 'DISCOUNT'] },
+      voidedAt: null,
+    },
+    select: {
+      amount: true,
+      type: true,
+      businessDate: true
+    }
+  });
+
+  // Group by date string (yyyy-MM-dd)
+  const dailyTotals = new Map<string, number>();
+  let totalRevenue = 0;
+
+  for (const item of folioItems) {
+    if (!item.businessDate) continue;
+    const dateStr = format(item.businessDate, 'yyyy-MM-dd');
+    const amt = Number(item.amount);
+    const sign = item.type === 'CHARGE' ? 1 : -1;
+    const value = amt * sign;
+
+    dailyTotals.set(dateStr, (dailyTotals.get(dateStr) || 0) + value);
+    // Don't add total revenue here, we only want the exact N days requested.
+  }
+
+  // Construct the timeline strictly for the requested days
+  const trendDays = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(endBusinessDate);
+    d.setDate(d.getDate() - i);
+    const dateStr = format(d, 'yyyy-MM-dd');
+    const dayRev = dailyTotals.get(dateStr) || 0;
+    
+    trendDays.push({
+      businessDate: dateStr,
+      revenue: dayRev
+    });
+    totalRevenue += dayRev;
+  }
+
+  return {
+    days: trendDays,
+    total: totalRevenue,
+    changePercent: 0 // Placeholder until period-over-period is requested
   };
 }
