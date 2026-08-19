@@ -206,8 +206,8 @@ class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            _surface,
-            statusBg.withValues(alpha: 0.15),
+            _navy,
+            statusBg.withValues(alpha: 0.25),
           ],
         ),
         border: Border(bottom: BorderSide(color: _border)),
@@ -216,30 +216,25 @@ class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Room number + type
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                'ROOM',
-                style: TextStyle(color: _textMuted, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 2),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                displayRoomNumber,
-                style: const TextStyle(color: _textPrimary, fontSize: 40, fontWeight: FontWeight.bold, height: 1),
-              ),
-            ],
+          Text(
+            'ROOM',
+            style: TextStyle(color: _textSecondary, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 2.5),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
+          Text(
+            displayRoomNumber,
+            style: const TextStyle(color: _textPrimary, fontSize: 48, fontWeight: FontWeight.w800, height: 1.1),
+          ),
+          const SizedBox(height: 8),
           if (locationSubText != null) ...[
-            Text(locationSubText, style: const TextStyle(color: _textSecondary, fontSize: 13)),
+            Text(locationSubText, style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 14)),
             const SizedBox(height: 4),
           ],
-          Text(data.room.roomType.name, style: const TextStyle(color: _textSecondary, fontSize: 15)),
+          Text(data.room.roomType.name.toUpperCase(), style: const TextStyle(color: _textSecondary, fontSize: 13, fontWeight: FontWeight.w600, letterSpacing: 1.2)),
           const SizedBox(height: 16),
           // Status badge
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
               color: statusBg.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(20),
@@ -257,15 +252,15 @@ class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 12),
-          // Business date
+          const SizedBox(height: 16),
+          // Business Date
           Row(
             children: [
-              const Icon(Icons.calendar_today, color: _textMuted, size: 12),
+              const Icon(Icons.calendar_today, color: _textSecondary, size: 14),
               const SizedBox(width: 6),
               Text(
                 'Business Date: ${dateFormat.format(data.businessDate)}',
-                style: const TextStyle(color: _textMuted, fontSize: 11),
+                style: const TextStyle(color: _textSecondary, fontSize: 13),
               ),
             ],
           ),
