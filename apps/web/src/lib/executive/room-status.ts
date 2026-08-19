@@ -406,9 +406,14 @@ export async function getRoomIntelligenceView(
     take: 10
   });
 
+  const formatStatus = (s: string) => {
+    if (!s) return '';
+    return s.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+  };
+
   const timeline = historyRecords.map(record => ({
     type: record.source,
-    title: `Status changed: ${record.previousStatus} → ${record.newStatus}`,
+    title: `Status changed: ${formatStatus(record.previousStatus)} → ${formatStatus(record.newStatus)}`,
     subtitle: record.reason ?? '',
     timestamp: record.createdAt.toISOString()
   }));
