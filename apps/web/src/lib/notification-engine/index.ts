@@ -65,6 +65,24 @@ export const NotificationEngine = {
         data: notificationRecords,
       });
 
+      // 5. Firebase Push Dispatch
+      try {
+        const { sendPushNotification } = await import('@/lib/firebase-admin');
+        const tokens = await prisma.deviceToken.findMany({
+          where: { userId: { in: recipientIds } }
+        });
+        
+        for (const t of tokens) {
+          // Fire and forget (don't block the engine)
+          sendPushNotification(t.token, payload.subject, payload.body, {
+            click_action: 'FLUTTER_NOTIFICATION_CLICK',
+            actionUrl: `/${event.entityType}/${event.entityId}`
+          }).catch(err => console.error('[FCM] Push failed:', err));
+        }
+      } catch (err) {
+         console.error('[NotificationEngine] Failed to dispatch FCM:', err);
+      }
+
     } catch (error) {
       console.error('[NotificationEngine] Failed to process event:', error);
     }
