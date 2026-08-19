@@ -18,6 +18,8 @@ class DashboardScreen extends ConsumerWidget {
     const textPrimary = Colors.white;
     const textSecondary = Color(0xFF94A3B8);
 
+    final propertyName = dashboardState.value?['property']?['name'] as String? ?? 'LodgeCore';
+
     return Scaffold(
       backgroundColor: primaryNavy,
       appBar: AppBar(
@@ -38,7 +40,7 @@ class DashboardScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 2),
             Text(
-              'LodgeCore',
+              propertyName,
               style: const TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.w800,
