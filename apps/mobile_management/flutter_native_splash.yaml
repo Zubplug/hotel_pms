@@ -1,0 +1,10 @@
+flutter_native_splash:
+  color: "#F3F4F6"
+  image: assets/images/splash_logo.png
+  android: true
+  ios: true
+  web: false
+  
+  # Ensure the splash screen stays on until we explicitly remove it in main.dart
+  # This prevents the white screen flash
+  fullscreen: true

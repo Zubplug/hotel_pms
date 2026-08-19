@@ -71,6 +71,9 @@ PODS:
   - nanopb/decode (3.30910.0)
   - nanopb/encode (3.30910.0)
   - PromisesObjC (2.4.1)
+  - shared_preferences_foundation (0.0.1):
+    - Flutter
+    - FlutterMacOS
 
 DEPENDENCIES:
   - firebase_core (from `.symlinks/plugins/firebase_core/ios`)
@@ -78,6 +81,7 @@ DEPENDENCIES:
   - Flutter (from `Flutter`)
   - flutter_secure_storage_darwin (from `.symlinks/plugins/flutter_secure_storage_darwin/darwin`)
   - local_auth_darwin (from `.symlinks/plugins/local_auth_darwin/darwin`)
+  - shared_preferences_foundation (from `.symlinks/plugins/shared_preferences_foundation/darwin`)
 
 SPEC REPOS:
   trunk:
@@ -102,6 +106,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/flutter_secure_storage_darwin/darwin"
   local_auth_darwin:
     :path: ".symlinks/plugins/local_auth_darwin/darwin"
+  shared_preferences_foundation:
+    :path: ".symlinks/plugins/shared_preferences_foundation/darwin"
 
 SPEC CHECKSUMS:
   Firebase: e8400c058702940d53f31fc0653e4e7a06332326
@@ -118,6 +124,7 @@ SPEC CHECKSUMS:
   local_auth_darwin: c3ee6cce0a8d56be34c8ccb66ba31f7f180aaebb
   nanopb: fad817b59e0457d11a5dfbde799381cd727c1275
   PromisesObjC: 752c3227f599e3467650e47ea36f433eeb10c273
+  shared_preferences_foundation: 7036424c3d8ec98dfe75ff1667cb0cd531ec82bb
 
 PODFILE CHECKSUM: 53a6aebc29ccee84c41f92f409fc20cd4ca011f1
 
