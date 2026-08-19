@@ -350,14 +350,14 @@ async function evaluateEvent(event: NotificationEvent, policy: NotificationPolic
       if (!policy.notifyOnReservationCreated) return null;
       const res = await prisma.reservation.findUnique({
         where: { id: event.entityId },
-        include: { guest: true, roomType: true }
+        include: { primaryGuest: true }
       });
       if (!res) return null;
-      const guestName = res.guest?.firstName ? `${res.guest.firstName} ${res.guest.lastName}` : 'A guest';
+      const guestName = res.primaryGuest?.firstName ? `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}` : 'A guest';
       
       return {
         subject: 'New Reservation',
-        body: `${guestName} booked a ${res.roomType?.name || 'room'} (Conf: ${res.confirmationNumber || event.entityId}) for ${res.checkIn.toLocaleDateString()}.`,
+        body: `${guestName} booked a room (Conf: ${res.confirmationNumber || event.entityId}) for ${res.checkIn.toLocaleDateString()}.`,
         category: 'Operations',
         priority: 'Normal',
       };
@@ -367,10 +367,10 @@ async function evaluateEvent(event: NotificationEvent, policy: NotificationPolic
       if (!policy.notifyOnReservationCancelled) return null;
       const res = await prisma.reservation.findUnique({
         where: { id: event.entityId },
-        include: { guest: true }
+        include: { primaryGuest: true }
       });
       if (!res) return null;
-      const guestName = res.guest?.firstName ? `${res.guest.firstName} ${res.guest.lastName}` : 'A guest';
+      const guestName = res.primaryGuest?.firstName ? `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}` : 'A guest';
       
       return {
         subject: 'Reservation Cancelled',
@@ -384,10 +384,10 @@ async function evaluateEvent(event: NotificationEvent, policy: NotificationPolic
       if (!policy.notifyOnStayExtended) return null;
       const res = await prisma.reservation.findUnique({
         where: { id: event.entityId },
-        include: { guest: true, reservationRooms: { include: { room: true } } }
+        include: { primaryGuest: true, reservationRooms: { include: { room: true } } }
       });
       if (!res) return null;
-      const guestName = res.guest?.firstName ? `${res.guest.firstName} ${res.guest.lastName}` : 'A guest';
+      const guestName = res.primaryGuest?.firstName ? `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}` : 'A guest';
       const rawRoom = res.reservationRooms?.[0]?.room?.number;
       const roomNum = rawRoom ? rawRoom.split('.').pop() : 'their room';
       
