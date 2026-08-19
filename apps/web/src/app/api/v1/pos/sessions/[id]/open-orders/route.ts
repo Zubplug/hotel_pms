@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-export const dynamic = 'force-dynamic';
 import prisma from '@hotel-pms/db';
 
 // GET /api/v1/pos/sessions/[id]/open-orders

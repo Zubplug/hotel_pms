@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 
-export const dynamic = 'force-dynamic';
-
 // GET /api/v1/pos/floor-plans/[floorPlanId]/tables
 // Used by the TableMap component (no auth required — floor plan data is non-sensitive)
 export async function GET(

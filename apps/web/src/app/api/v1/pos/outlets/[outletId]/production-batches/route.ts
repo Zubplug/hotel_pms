@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-export const dynamic = 'force-dynamic';
 import prisma from '@hotel-pms/db';
 import { ProductionStation } from '@hotel-pms/db';
 
