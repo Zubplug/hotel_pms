@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/rooms_provider.dart';
 import '../models/room_data.dart';
 import 'package:timeago/timeago.dart' as timeago;
+import 'room_details_screen.dart';
 
 class RoomsScreen extends ConsumerStatefulWidget {
   const RoomsScreen({super.key});
@@ -51,14 +52,6 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen> {
           loading: () => const Text('Loading...', style: TextStyle(fontSize: 14)),
           error: (err, stack) => const Text('Offline', style: TextStyle(fontSize: 14)),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh, color: textPrimary),
-            onPressed: () {
-              ref.invalidate(roomsDataProvider);
-            },
-          ),
-        ],
       ),
       body: roomsDataAsync.when(
         data: (data) {
@@ -245,7 +238,11 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen> {
       ),
       child: InkWell(
         onTap: () {
-          // TODO: Navigate to Room Details
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => RoomDetailsScreen(roomId: room.id),
+            ),
+          );
         },
         borderRadius: BorderRadius.circular(16),
         child: Padding(

@@ -14,3 +14,8 @@ final roomsDataProvider = FutureProvider<RoomDashboardData>((ref) async {
   final repository = ref.watch(liveRoomsRepositoryProvider);
   return await repository.fetchRoomsData();
 });
+
+final roomDetailsProvider = FutureProvider.family<RoomDetailsData, String>((ref, roomId) async {
+  final repository = ref.watch(liveRoomsRepositoryProvider);
+  return await repository.getRoomDetails(roomId);
+});

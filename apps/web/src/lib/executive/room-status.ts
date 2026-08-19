@@ -104,7 +104,8 @@ export async function calculateRoomStatuses(propertyId: string, businessDate: Da
     const isClean = room.housekeepingStatus === 'CLEAN' || room.housekeepingStatus === 'INSPECTED';
 
     // Determine Display Status (Canonical)
-    let displayStatus: RoomDisplayStatus = 'UNKNOWN';
+    // Every active room must resolve to one of these statuses — no silent fallback.
+    let displayStatus: RoomDisplayStatus;
 
     if (isOOO) {
       displayStatus = 'OUT_OF_ORDER';
@@ -142,5 +143,231 @@ export async function calculateRoomStatuses(propertyId: string, businessDate: Da
   return {
     overview,
     rooms: detailedRooms
+  };
+}
+
+export interface RoomIntelligenceData {
+  room: {
+    id: string;
+    number: string;
+    roomType: { id: string; name: string; };
+    displayStatus: RoomDisplayStatus;
+    availabilityStatus: RoomAvailabilityStatus;
+    sellability: 'READY_TO_SELL' | 'NOT_READY' | 'NOT_SELLABLE';
+  };
+  currentGuest: {
+    name: string | null;
+    vipLevel: string | null;
+    checkIn: string;
+    checkOut: string;
+    folioBalance: number | null;
+  } | null;
+  nextArrival: {
+    reservationId: string;
+    guest: { name: string | null; };
+    arrivalDate: string;
+    arrivalTime: string | null;
+    nights: number;
+  } | null;
+  housekeeping: {
+    status: string;
+    lastUpdatedAt: string | null;
+    assignedTo: string | null;
+  };
+  maintenance: {
+    status: string;
+    priority: string;
+    reason: string;
+    reportedAt: string | null;
+    expectedResolutionAt: string | null;
+  } | null;
+  timeline: Array<{
+    type: string;
+    title: string;
+    subtitle: string;
+    timestamp: string;
+  }>;
+}
+
+export async function getRoomIntelligenceView(
+  roomId: string, 
+  propertyId: string, 
+  businessDate: Date,
+  permissions: string[]
+): Promise<RoomIntelligenceData | null> {
+  const startOfDay = new Date(businessDate);
+  startOfDay.setUTCHours(0, 0, 0, 0);
+  const endOfDay = new Date(startOfDay);
+  endOfDay.setUTCDate(endOfDay.getUTCDate() + 1);
+
+  const room = await prisma.room.findFirst({
+    where: { id: roomId, propertyId },
+    include: {
+      roomType: { select: { id: true, name: true } },
+      property: { select: { checkInTime: true } }
+    }
+  });
+
+  if (!room) return null;
+
+  // Re-use logic to get canonical status
+  const statuses = await calculateRoomStatuses(propertyId, businessDate);
+  const canonical = statuses.rooms.find(r => r.id === roomId);
+  if (!canonical) return null;
+
+  const displayStatus = canonical.displayStatus;
+  const availabilityStatus = canonical.availabilityStatus;
+
+  let sellability: 'READY_TO_SELL' | 'NOT_READY' | 'NOT_SELLABLE' = 'NOT_READY';
+  if (displayStatus === 'READY') {
+    sellability = 'READY_TO_SELL';
+  } else if (displayStatus === 'OUT_OF_ORDER' || displayStatus === 'OUT_OF_SERVICE') {
+    sellability = 'NOT_SELLABLE';
+  } else {
+    sellability = 'NOT_READY'; // Dirty or Occupied (if occupied, it's not ready to sell to someone else today)
+  }
+
+  // Current Guest (Occupied tonight)
+  const currentRes = await prisma.reservationRoom.findFirst({
+    where: {
+      roomId,
+      status: { notIn: ['CANCELLED', 'NO_SHOW'] },
+      checkIn: { lt: endOfDay },
+      checkOut: { gt: startOfDay }
+    },
+    include: {
+      reservation: {
+        include: { primaryGuest: true, folios: true }
+      }
+    }
+  });
+
+  let currentGuest = null;
+  if (currentRes && permissions.includes('rooms.guest.view')) {
+    const showFolio = permissions.includes('rooms.folio.view');
+    const balance = showFolio && currentRes.reservation.folios.length > 0
+        ? currentRes.reservation.folios.reduce((sum, f) => sum + Number(f.balance), 0)
+        : null;
+
+    currentGuest = {
+      name: `${currentRes.reservation.primaryGuest.firstName} ${currentRes.reservation.primaryGuest.lastName}`,
+      vipLevel: currentRes.reservation.primaryGuest.vipLevel ?? null,
+      checkIn: currentRes.checkIn.toISOString(),
+      checkOut: currentRes.checkOut.toISOString(),
+      folioBalance: balance
+    };
+  } else if (currentRes) {
+    // Guest exists but caller lacks rooms.guest.view permission
+    currentGuest = {
+      name: null,
+      vipLevel: null,
+      checkIn: currentRes.checkIn.toISOString(),
+      checkOut: currentRes.checkOut.toISOString(),
+      folioBalance: null
+    };
+  }
+
+  // Next Arrival (Next reservation strictly AFTER today or checking in today but not currently occupying)
+  // If currentRes exists, next arrival is checkIn >= currentRes.checkOut. 
+  // If no currentRes, next arrival is checkIn >= startOfDay.
+  const nextArrivalRes = await prisma.reservationRoom.findFirst({
+    where: {
+      roomId,
+      status: { notIn: ['CANCELLED', 'NO_SHOW'] },
+      checkIn: { gte: currentRes ? currentRes.checkOut : startOfDay }
+    },
+    orderBy: { checkIn: 'asc' },
+    include: {
+      reservation: { include: { primaryGuest: true } }
+    }
+  });
+
+  let nextArrival = null;
+  if (nextArrivalRes) {
+    const nights = Math.round((nextArrivalRes.checkOut.getTime() - nextArrivalRes.checkIn.getTime()) / (1000 * 60 * 60 * 24));
+    nextArrival = {
+      reservationId: nextArrivalRes.reservationId,
+      guest: {
+        name: permissions.includes('rooms.guest.view') 
+          ? `${nextArrivalRes.reservation.primaryGuest.firstName} ${nextArrivalRes.reservation.primaryGuest.lastName}` 
+          : null
+      },
+      arrivalDate: nextArrivalRes.checkIn.toISOString().split('T')[0],
+      arrivalTime: room.property.checkInTime,
+      nights
+    };
+  }
+
+  // Housekeeping — resolve assigned staff name from Staff table
+  const hkTask = await prisma.housekeepingTask.findFirst({
+    where: { roomId },
+    orderBy: { createdAt: 'desc' }
+  });
+
+  let assignedStaffName: string | null = null;
+  if (hkTask?.assignedTo) {
+    const staff = await prisma.staff.findUnique({
+      where: { id: hkTask.assignedTo },
+      select: { firstName: true, lastName: true }
+    });
+    assignedStaffName = staff ? `${staff.firstName} ${staff.lastName}` : null;
+  }
+
+  const housekeeping = {
+    status: room.housekeepingStatus,
+    lastUpdatedAt: hkTask ? hkTask.updatedAt.toISOString() : null,
+    assignedTo: assignedStaffName
+  };
+
+  // Maintenance (Active block)
+  const activeBlock = await prisma.roomBlock.findFirst({
+    where: {
+      roomId,
+      status: 'ACTIVE',
+      startDate: { lte: endOfDay },
+      endDate: { gte: startOfDay }
+    },
+    orderBy: { startDate: 'desc' }
+  });
+
+  let maintenance = null;
+  if (activeBlock) {
+    maintenance = {
+      status: activeBlock.status,
+      priority: activeBlock.notes ?? 'NORMAL',
+      reason: activeBlock.reason,
+      reportedAt: activeBlock.createdAt.toISOString(),
+      expectedResolutionAt: activeBlock.endDate.toISOString()
+    };
+  }
+
+  // Timeline — pull from RoomStatusHistory for authoritative audit trail
+  const historyRecords = await prisma.roomStatusHistory.findMany({
+    where: { roomId },
+    orderBy: { createdAt: 'desc' },
+    take: 10
+  });
+
+  const timeline = historyRecords.map(record => ({
+    type: record.source,
+    title: `Status changed: ${record.previousStatus} → ${record.newStatus}`,
+    subtitle: record.reason ?? '',
+    timestamp: record.createdAt.toISOString()
+  }));
+
+  return {
+    room: {
+      id: room.id,
+      number: room.number,
+      roomType: { id: room.roomType.id, name: room.roomType.name },
+      displayStatus,
+      availabilityStatus,
+      sellability
+    },
+    currentGuest,
+    nextArrival,
+    housekeeping,
+    maintenance,
+    timeline
   };
 }

@@ -75,3 +75,101 @@ class RoomItem {
     required this.maintenanceStatus,
   });
 }
+
+class RoomDetailsData {
+  final PropertyInfo property;
+  final DateTime businessDate;
+  final RoomItem room;
+  final String sellability;
+  final CurrentGuestInfo? currentGuest;
+  final NextArrivalInfo? nextArrival;
+  final HousekeepingInfo housekeeping;
+  final MaintenanceInfo? maintenance;
+  final List<TimelineEvent> timeline;
+
+  RoomDetailsData({
+    required this.property,
+    required this.businessDate,
+    required this.room,
+    required this.sellability,
+    this.currentGuest,
+    this.nextArrival,
+    required this.housekeeping,
+    this.maintenance,
+    required this.timeline,
+  });
+}
+
+class CurrentGuestInfo {
+  final String? name;
+  final String? vipLevel;
+  final DateTime checkIn;
+  final DateTime checkOut;
+  final double? folioBalance;
+
+  CurrentGuestInfo({
+    this.name,
+    this.vipLevel,
+    required this.checkIn,
+    required this.checkOut,
+    this.folioBalance,
+  });
+}
+
+class NextArrivalInfo {
+  final String reservationId;
+  final String? guestName;
+  final DateTime arrivalDate;
+  final String? arrivalTime;
+  final int nights;
+
+  NextArrivalInfo({
+    required this.reservationId,
+    this.guestName,
+    required this.arrivalDate,
+    this.arrivalTime,
+    required this.nights,
+  });
+}
+
+class HousekeepingInfo {
+  final String status;
+  final DateTime? lastUpdatedAt;
+  final String? assignedTo;
+
+  HousekeepingInfo({
+    required this.status,
+    this.lastUpdatedAt,
+    this.assignedTo,
+  });
+}
+
+class MaintenanceInfo {
+  final String status;
+  final String priority;
+  final String reason;
+  final DateTime? reportedAt;
+  final DateTime? expectedResolutionAt;
+
+  MaintenanceInfo({
+    required this.status,
+    required this.priority,
+    required this.reason,
+    this.reportedAt,
+    this.expectedResolutionAt,
+  });
+}
+
+class TimelineEvent {
+  final String type;
+  final String title;
+  final String subtitle;
+  final DateTime timestamp;
+
+  TimelineEvent({
+    required this.type,
+    required this.title,
+    required this.subtitle,
+    required this.timestamp,
+  });
+}

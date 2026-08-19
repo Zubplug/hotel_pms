@@ -1,0 +1,69 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@hotel-pms/db';
+import { getPropertyBusinessDate } from '@/lib/kpi';
+import { getRoomIntelligenceView } from '@/lib/executive/room-status';
+import { resolveUser } from '@/lib/resolve-user';
+
+export async function GET(
+  req: NextRequest,
+  { params }: { params: { roomId: string } }
+) {
+  try {
+    const user = await resolveUser(req);
+    
+    if (!user) {
+      return NextResponse.json({ success: false, error: 'Authentication required' }, { status: 401 });
+    }
+    
+    if (!['MANAGER', 'ADMIN', 'SUPER_ADMIN', 'DIRECTOR', 'EXECUTIVE'].includes(user.role) && !user.isSuperAdmin) {
+      return NextResponse.json({ success: false, error: 'Executive access required' }, { status: 403 });
+    }
+
+    const allowedPropertyIds = user.allowedProperties;
+
+    if (allowedPropertyIds.length === 0) {
+      return NextResponse.json({ success: false, error: 'No property access' }, { status: 403 });
+    }
+
+    const propertyId = allowedPropertyIds[0];
+    const roomId = params.roomId;
+
+    const property = await prisma.property.findUnique({
+      where: { id: propertyId },
+      select: { id: true, name: true, timezone: true }
+    });
+
+    if (!property) {
+      return NextResponse.json({ success: false, error: 'Property not found' }, { status: 404 });
+    }
+
+    // Use the authenticated user's actual capabilities from their JWT/session
+    const permissions = user.capabilities;
+
+    const businessDateStr = await getPropertyBusinessDate(propertyId);
+    const businessDate = new Date(businessDateStr);
+    
+    const intelligenceView = await getRoomIntelligenceView(roomId, propertyId, businessDate, permissions);
+    
+    if (!intelligenceView) {
+      return NextResponse.json({ success: false, error: 'Room not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        property,
+        businessDate: businessDateStr,
+        generatedAt: new Date().toISOString(),
+        ...intelligenceView
+      }
+    });
+
+  } catch (error: any) {
+    console.error('Error fetching room details:', error);
+    return NextResponse.json(
+      { success: false, error: 'Failed to fetch room details' },
+      { status: 500 }
+    );
+  }
+}
