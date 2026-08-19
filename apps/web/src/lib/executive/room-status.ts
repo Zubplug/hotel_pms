@@ -210,21 +210,58 @@ export async function getRoomIntelligenceView(
 
   if (!room) return null;
 
-  // Re-use logic to get canonical status
-  const statuses = await calculateRoomStatuses(propertyId, businessDate);
-  const canonical = statuses.rooms.find(r => r.id === roomId);
-  if (!canonical) return null;
+  // Calculate canonical status directly for this room (same logic as calculateRoomStatuses)
+  const activeOccupancy = await prisma.reservationRoom.findFirst({
+    where: {
+      roomId,
+      status: { notIn: ['CANCELLED', 'NO_SHOW'] },
+      checkIn: { lt: endOfDay },
+      checkOut: { gt: startOfDay }
+    },
+    select: { id: true }
+  });
 
-  const displayStatus = canonical.displayStatus;
-  const availabilityStatus = canonical.availabilityStatus;
+  const activeBlock = await prisma.roomBlock.findFirst({
+    where: {
+      roomId,
+      status: 'ACTIVE',
+      startDate: { lte: endOfDay },
+      endDate: { gte: startOfDay }
+    }
+  });
 
-  let sellability: 'READY_TO_SELL' | 'NOT_READY' | 'NOT_SELLABLE' = 'NOT_READY';
+  const isOccupied = !!activeOccupancy;
+  const isOOO = activeBlock?.type === 'OUT_OF_ORDER';
+  const isOOS = activeBlock?.type === 'OUT_OF_SERVICE';
+  const isClean = room.housekeepingStatus === 'CLEAN' || room.housekeepingStatus === 'INSPECTED';
+
+  let displayStatus: RoomDisplayStatus;
+  let availabilityStatus: RoomAvailabilityStatus;
+
+  if (isOOO) {
+    displayStatus = 'OUT_OF_ORDER';
+    availabilityStatus = 'UNAVAILABLE';
+  } else if (isOOS) {
+    displayStatus = 'OUT_OF_SERVICE';
+    availabilityStatus = 'UNAVAILABLE';
+  } else if (isOccupied) {
+    displayStatus = 'OCCUPIED';
+    availabilityStatus = 'OCCUPIED';
+  } else if (isClean) {
+    displayStatus = 'READY';
+    availabilityStatus = 'VACANT';
+  } else {
+    displayStatus = 'DIRTY';
+    availabilityStatus = 'VACANT';
+  }
+
+  let sellability: 'READY_TO_SELL' | 'NOT_READY' | 'NOT_SELLABLE';
   if (displayStatus === 'READY') {
     sellability = 'READY_TO_SELL';
   } else if (displayStatus === 'OUT_OF_ORDER' || displayStatus === 'OUT_OF_SERVICE') {
     sellability = 'NOT_SELLABLE';
   } else {
-    sellability = 'NOT_READY'; // Dirty or Occupied (if occupied, it's not ready to sell to someone else today)
+    sellability = 'NOT_READY';
   }
 
   // Current Guest (Occupied tonight)
@@ -319,16 +356,8 @@ export async function getRoomIntelligenceView(
     assignedTo: assignedStaffName
   };
 
-  // Maintenance (Active block)
-  const activeBlock = await prisma.roomBlock.findFirst({
-    where: {
-      roomId,
-      status: 'ACTIVE',
-      startDate: { lte: endOfDay },
-      endDate: { gte: startOfDay }
-    },
-    orderBy: { startDate: 'desc' }
-  });
+  // Maintenance — reuse activeBlock already fetched for status calculation above
+
 
   let maintenance = null;
   if (activeBlock) {
