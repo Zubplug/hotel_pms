@@ -35,8 +35,17 @@ export async function GET(req: NextRequest) {
 
     // Fetch the live Attention Engine alerts
     const activeAlerts = await evaluatePropertyAlerts(primaryPropertyId);
+    
+    // Fetch property basic info
+    const prismaModule = await import('@hotel-pms/db');
+    const prisma = prismaModule.default;
+    const property = await prisma.property.findUnique({
+      where: { id: primaryPropertyId },
+      select: { name: true }
+    });
 
     return successResponse({
+      property: property || { name: 'LodgeCore' },
       kpi: snapshot,
       alerts: activeAlerts
     }, 200);
