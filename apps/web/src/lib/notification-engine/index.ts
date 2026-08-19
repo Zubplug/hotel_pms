@@ -19,6 +19,8 @@ export interface NotificationPolicy {
   cashVarianceThreshold?: number;
   significantCancellationThreshold?: number;
   significantBookingThreshold?: number;
+  notifyOnCheckIn?: boolean;
+  notifyOnCheckOut?: boolean;
 }
 
 export const NotificationEngine = {
@@ -146,6 +148,8 @@ async function fetchPolicy(propertyId: string): Promise<NotificationPolicy | nul
     cashVarianceThreshold: settings.notificationPolicy.cashVarianceThreshold,
     significantCancellationThreshold: settings.notificationPolicy.significantCancellationThreshold,
     significantBookingThreshold: settings.notificationPolicy.significantBookingThreshold,
+    notifyOnCheckIn: settings.notificationPolicy.notifyOnCheckIn,
+    notifyOnCheckOut: settings.notificationPolicy.notifyOnCheckOut,
   };
 }
 
@@ -278,6 +282,28 @@ async function evaluateEvent(event: NotificationEvent, policy: NotificationPolic
         body: event.metadata?.alertDescription || 'A sensitive security or audit event occurred.',
         category: 'Critical',
         priority: 'Critical',
+      };
+    }
+
+    case 'CHECK_IN': {
+      if (!policy.notifyOnCheckIn && !event.metadata?.isVip) return null;
+      
+      return {
+        subject: event.metadata?.isVip ? 'VIP Checked In' : 'Guest Checked In',
+        body: `Reservation ${event.metadata?.confirmationNumber || event.entityId} has checked in.`,
+        category: 'Operations',
+        priority: event.metadata?.isVip ? 'High' : 'Normal',
+      };
+    }
+
+    case 'CHECK_OUT': {
+      if (!policy.notifyOnCheckOut && !event.metadata?.isVip) return null;
+      
+      return {
+        subject: event.metadata?.isVip ? 'VIP Checked Out' : 'Guest Checked Out',
+        body: `Reservation ${event.metadata?.confirmationNumber || event.entityId} has checked out.`,
+        category: 'Operations',
+        priority: event.metadata?.isVip ? 'High' : 'Normal',
       };
     }
 

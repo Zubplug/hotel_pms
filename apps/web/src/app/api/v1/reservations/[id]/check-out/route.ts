@@ -6,6 +6,7 @@ import { hasPermission } from '@/lib/rbac';
 import { assertPropertyAccess } from '@/lib/property-access';
 import { lockOrchestrator } from '@/lib/locks/orchestrator';
 import crypto from 'crypto';
+import { NotificationEngine } from '@/lib/notification-engine';
 
 export async function POST(
   req: NextRequest,
@@ -148,7 +149,19 @@ export async function POST(
           }
         });
       }
+      return property;
     });
+
+    if (txResult) {
+      await NotificationEngine.emit({
+        type: 'CHECK_OUT',
+        organizationId: txResult.organizationId,
+        propertyId: reservation.propertyId,
+        entityType: 'reservation',
+        entityId: id,
+        idempotencyKey: `checkout_${id}_${Date.now()}`
+      });
+    }
 
     // 6. Queue credential revocation (non-blocking)
     let revokedCount = 0;

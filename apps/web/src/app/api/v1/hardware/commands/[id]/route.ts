@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import bcrypt from 'bcryptjs';
+import { NotificationEngine } from '@/lib/notification-engine';
 
 async function authenticateAgent(req: NextRequest) {
   const authHeader = req.headers.get('authorization');
@@ -157,6 +158,14 @@ export async function PATCH(
                 }
               ]
             });
+
+            return {
+              didCheckIn: true,
+              organizationId: res.property.organizationId,
+              propertyId: command.operation.propertyId,
+              reservationId: res.id
+            };
+
           } else if (res && res.status === 'CHECKED_IN') {
              // For Extension or Additional Cards, just log the credential issuance
              const meta = (command.operation.metadata as Record<string, any>) || {};
@@ -187,7 +196,19 @@ export async function PATCH(
           }
         }
       }
+      return null;
     });
+
+    if (txResult?.didCheckIn) {
+      await NotificationEngine.emit({
+        type: 'CHECK_IN',
+        organizationId: txResult.organizationId,
+        propertyId: txResult.propertyId,
+        entityType: 'reservation',
+        entityId: txResult.reservationId,
+        idempotencyKey: `checkin_${txResult.reservationId}_${Date.now()}`
+      });
+    }
 
     return successResponse({ success: true });
   } catch (err) {
