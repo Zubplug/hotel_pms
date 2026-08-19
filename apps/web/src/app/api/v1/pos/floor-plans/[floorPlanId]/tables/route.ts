@@ -8,6 +8,8 @@ export async function GET(
   { params }: { params: Promise<{ floorPlanId: string }> }
 ) {
   try {
+    // Reading searchParams automatically opts this route out of static caching
+    const _t = _req.nextUrl.searchParams.get('_t');
     const { floorPlanId } = await params;
     console.log('GET tables called for floorPlanId:', floorPlanId);
 
