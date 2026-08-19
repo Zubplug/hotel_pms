@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Image from 'next/image';
 import {
   ShoppingCart, Search, Trash2, Plus, Minus, User, Utensils,
   Loader2, CreditCard, Banknote, LayoutGrid,
@@ -577,15 +578,38 @@ export default function PosTerminalPage() {
   // ─────────────────────────────────────────────────────────────────
   if (isLoading) {
     return (
-      <div className="flex h-full w-full items-center justify-center bg-slate-50">
-        <div className="flex flex-col items-center gap-5">
-          <div className="w-20 h-20 rounded-3xl flex items-center justify-center shadow-lg bg-white border border-slate-200 animate-pulse">
-            <Utensils className="w-10 h-10 text-indigo-500" />
+      <div className="flex h-full w-full items-center justify-center" style={{ background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4c1d95 100%)' }}>
+        <div className="flex flex-col items-center gap-8">
+          {/* Logo mark */}
+          <div className="relative">
+            <div className="w-28 h-28 rounded-3xl bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center shadow-2xl">
+              <Image
+                src="/lodgecore-logo.png"
+                alt="LodgeCore"
+                width={80}
+                height={80}
+                className="object-contain"
+                priority
+              />
+            </div>
+            {/* Pulsing ring */}
+            <div className="absolute inset-0 rounded-3xl border-2 border-white/30 animate-ping" style={{ animationDuration: '2s' }} />
           </div>
-          <div className="flex flex-col items-center gap-2">
-            <Loader2 className="w-6 h-6 animate-spin text-indigo-500" />
-            <p className="text-slate-500 font-medium text-sm">Loading POS...</p>
+
+          {/* Brand name */}
+          <div className="flex flex-col items-center gap-1">
+            <h1 className="text-3xl font-black text-white tracking-tight">LodgeCore</h1>
+            <span className="text-indigo-300 font-bold text-sm uppercase tracking-widest">POS Terminal</span>
           </div>
+
+          {/* Loading bar */}
+          <div className="w-48 h-1 bg-white/10 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-indigo-400 to-violet-400 rounded-full animate-pulse"
+              style={{ width: '60%' }}
+            />
+          </div>
+          <p className="text-white/50 text-xs font-medium tracking-wide">Initialising terminal...</p>
         </div>
       </div>
     );

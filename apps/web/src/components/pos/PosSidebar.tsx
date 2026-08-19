@@ -1,7 +1,8 @@
 import React from 'react';
+import Image from 'next/image';
 import {
   LayoutGrid, MapPin, Receipt, TrendingUp, ChefHat,
-  Monitor, Lock, UtensilsCrossed, UserCircle, RefreshCw, Wifi, WifiOff
+  Monitor, Lock, UserCircle, RefreshCw, Wifi, WifiOff
 } from 'lucide-react';
 
 interface PosSidebarProps {
@@ -73,11 +74,15 @@ export function PosSidebar({
       
       {/* Brand */}
       <div className="mb-6 flex items-center gap-3 px-2">
-        <div
-          className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-sm"
-          style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}
-        >
-          <UtensilsCrossed className="w-4 h-4 text-white" />
+        <div className="w-9 h-9 rounded-xl overflow-hidden shrink-0 shadow-sm">
+          <Image
+            src="/lodgecore-logo.png"
+            alt="LodgeCore"
+            width={36}
+            height={36}
+            className="w-full h-full object-contain"
+            priority
+          />
         </div>
         <div className="flex flex-col leading-none">
           <span className="font-black text-slate-800 text-sm tracking-tight">LodgeCore</span>
