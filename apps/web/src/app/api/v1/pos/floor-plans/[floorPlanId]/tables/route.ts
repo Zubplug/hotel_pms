@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 
+export const dynamic = 'force-dynamic';
+
 // GET /api/v1/pos/floor-plans/[floorPlanId]/tables
 // Used by the TableMap component (no auth required — floor plan data is non-sensitive)
 export async function GET(
@@ -9,6 +11,7 @@ export async function GET(
 ) {
   try {
     const { floorPlanId } = await params;
+    console.log('GET tables called for floorPlanId:', floorPlanId);
 
     const tables = await prisma.posTable.findMany({
       where: { floorPlanId, isActive: true },
@@ -39,8 +42,10 @@ export async function GET(
       currentOrder: table.currentOrderId ? activeOrders.find(o => o.id === table.currentOrderId) : null
     }));
 
+    console.log('GET tables returning count:', tablesWithOrder.length);
     return NextResponse.json({ data: tablesWithOrder, error: null });
   } catch (err: any) {
+    console.error('GET tables error:', err);
     return NextResponse.json({ data: [], error: err.message }, { status: 500 });
   }
 }
