@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
+import { NotificationEngine } from '@/lib/notification-engine';
 
 export async function POST(request: Request) {
   try {
@@ -390,6 +391,16 @@ export async function POST(request: Request) {
         data: { totalPayments: { increment: payload.amount } }
       });
       
+      // Emit Notification Event
+      await NotificationEngine.emit({
+        type: 'PAYMENT_LARGE',
+        organizationId: property.organizationId,
+        propertyId: property.id,
+        entityType: 'payment',
+        entityId: entityId,
+        idempotencyKey: `payment_large_${entityId}`,
+      });
+      
     } else if (entityType === 'FOLIO' && operationType === 'ADD_ROOM_CHARGE') {
       const existingCharge = await prisma.folioItem.findFirst({
         where: { operationId: operationId }
@@ -538,6 +549,18 @@ export async function POST(request: Request) {
               variance: variance
             }
           });
+
+          if (variance !== 0) {
+            await NotificationEngine.emit({
+              type: 'CASH_VARIANCE',
+              organizationId: property.organizationId,
+              propertyId: property.id,
+              entityType: 'posSession',
+              entityId: entityId,
+              idempotencyKey: `cash_variance_${entityId}`,
+              metadata: { varianceAmount: variance }
+            });
+          }
         }
       });
     } else if (entityType === 'POS_VOID') {
