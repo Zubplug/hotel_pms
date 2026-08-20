@@ -47,7 +47,7 @@ class NightAuditRepository {
 
   Future<NightAuditPreview> getPreview(String propertyId) async {
     final response = await _dio.get(
-      '/api/mobile/v1/executive/night-audit/preview',
+      '/mobile/v1/executive/night-audit/preview',
       queryParameters: {'propertyId': propertyId},
     );
     return NightAuditPreview.fromJson(response.data['data']);
@@ -55,7 +55,7 @@ class NightAuditRepository {
 
   Future<Map<String, dynamic>> executeNightAudit(String propertyId) async {
     final response = await _dio.post(
-      '/api/mobile/v1/executive/night-audit/execute',
+      '/mobile/v1/executive/night-audit/execute',
       data: {'propertyId': propertyId},
     );
     return response.data['data'];
