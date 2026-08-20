@@ -122,13 +122,28 @@ class ProfileScreen extends ConsumerWidget {
                   _SettingsTile(
                     title: 'Daily Executive Brief',
                     icon: Icons.insights_rounded,
-                    value: profile.preferences.dailyBrief ? 'ON' : 'OFF',
+                    trailingWidget: Switch(
+                      value: profile.preferences.dailyBrief,
+                      onChanged: (val) {},
+                      activeColor: _goldLight,
+                      activeTrackColor: _goldLight.withValues(alpha: 0.3),
+                      inactiveThumbColor: _textMuted,
+                      inactiveTrackColor: _surfaceNavy,
+                    ),
+                    showChevron: false,
                     onTap: () {},
                   ),
                   _SettingsTile(
                     title: 'Biometric Login',
                     icon: Icons.fingerprint_rounded,
-                    value: 'ON', // Handled by device keychain usually
+                    trailingWidget: Switch(
+                      value: true,
+                      onChanged: (val) {},
+                      activeColor: _goldLight,
+                      activeTrackColor: _goldLight.withValues(alpha: 0.3),
+                      inactiveThumbColor: _textMuted,
+                      inactiveTrackColor: _surfaceNavy,
+                    ),
                     showChevron: false,
                     onTap: () {},
                   ),
@@ -180,20 +195,25 @@ class ProfileScreen extends ConsumerWidget {
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     decoration: BoxDecoration(
-                      color: _cardBg,
+                      color: _red.withValues(alpha: 0.05),
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: _red.withValues(alpha: 0.3)),
                     ),
-                    child: const Center(
-                      child: Text(
-                        'LOG OUT',
-                        style: TextStyle(
-                          color: _red,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.2,
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.logout_rounded, color: _red, size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          'LOG OUT',
+                          style: TextStyle(
+                            color: _red,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.2,
+                          ),
                         ),
-                      ),
+                      ],
                     ),
                   ),
                 ),
@@ -367,14 +387,26 @@ class _ProfileHeaderCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: _cardBg,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFF1E3355)),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF172643),
+            Color(0xFF0E172A),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFF1E3355).withValues(alpha: 0.8), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.3),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
+            color: Colors.black.withValues(alpha: 0.4),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+          BoxShadow(
+            color: _goldLight.withValues(alpha: 0.03),
+            blurRadius: 40,
+            spreadRadius: -10,
           ),
         ],
       ),
@@ -382,12 +414,26 @@ class _ProfileHeaderCard extends StatelessWidget {
         children: [
           // Avatar
           Container(
-            width: 72,
-            height: 72,
+            width: 80,
+            height: 80,
             decoration: BoxDecoration(
-              color: _surfaceNavy,
               shape: BoxShape.circle,
-              border: Border.all(color: _goldLight.withValues(alpha: 0.3), width: 2),
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  _surfaceNavy,
+                  _bgDeep,
+                ],
+              ),
+              border: Border.all(color: _goldLight.withValues(alpha: 0.5), width: 2),
+              boxShadow: [
+                BoxShadow(
+                  color: _goldLight.withValues(alpha: 0.15),
+                  blurRadius: 16,
+                  spreadRadius: 2,
+                ),
+              ],
             ),
             child: Center(
               child: Text(
@@ -458,25 +504,46 @@ class _ProfileHeaderCard extends StatelessWidget {
 
 Widget _buildSectionTitle(String title) {
   return Padding(
-    padding: const EdgeInsets.only(left: 4, bottom: 8),
-    child: Text(
-      title,
-      style: const TextStyle(
-        fontSize: 11,
-        fontWeight: FontWeight.w700,
-        color: _textMuted,
-        letterSpacing: 1.5,
-      ),
+    padding: const EdgeInsets.only(left: 4, bottom: 12, top: 8),
+    child: Row(
+      children: [
+        Container(
+          width: 4,
+          height: 14,
+          decoration: BoxDecoration(
+            color: _goldLight,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+            color: _textMuted,
+            letterSpacing: 1.5,
+          ),
+        ),
+      ],
     ),
   );
 }
 
 Widget _buildSettingsGroup(List<Widget> children) {
   return Container(
+    clipBehavior: Clip.antiAlias,
     decoration: BoxDecoration(
-      color: _cardBg,
-      borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: const Color(0xFF1E3355)),
+      color: _cardBg.withValues(alpha: 0.7),
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: const Color(0xFF1E3355).withValues(alpha: 0.6)),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.1),
+          blurRadius: 10,
+          offset: const Offset(0, 4),
+        )
+      ],
     ),
     child: Column(
       children: children.asMap().entries.map((entry) {
@@ -500,6 +567,7 @@ class _SettingsTile extends StatelessWidget {
   final String title;
   final IconData icon;
   final String? value;
+  final Widget? trailingWidget;
   final bool showChevron;
   final VoidCallback onTap;
 
@@ -507,6 +575,7 @@ class _SettingsTile extends StatelessWidget {
     required this.title,
     required this.icon,
     this.value,
+    this.trailingWidget,
     this.showChevron = true,
     required this.onTap,
   });
@@ -532,18 +601,19 @@ class _SettingsTile extends StatelessWidget {
                 ),
               ),
             ),
-            if (value != null) ...[
-              Flexible(
-                child: Text(
-                  value!,
-                  style: const TextStyle(fontSize: 14, color: _textMuted),
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.right,
-                ),
+            if (trailingWidget != null) ...[
+              trailingWidget!,
+              const SizedBox(width: 4),
+            ] else if (value != null) ...[
+              Text(
+                value!,
+                style: const TextStyle(fontSize: 14, color: _textMuted),
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.right,
               ),
               const SizedBox(width: 8),
             ],
-            if (showChevron)
+            if (showChevron && trailingWidget == null)
               const Icon(Icons.chevron_right_rounded, color: _textMuted, size: 20),
           ],
         ),

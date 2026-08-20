@@ -434,18 +434,4 @@ public class LocalPosTerminal
     public int MenuVersion { get; set; } = 0;
 }
 
-public class LocalPosOperatorSession
-{
-    [Key] public string Id { get; set; } = string.Empty;
-    public string TerminalId { get; set; } = string.Empty;
-    public string OutletId { get; set; } = string.Empty;
-    public string OperatorId { get; set; } = string.Empty;
-    
-    public DateTime StartedAt { get; set; } = DateTime.UtcNow;
-    public DateTime LastActivityAt { get; set; } = DateTime.UtcNow;
-    public DateTime? LockedAt { get; set; }
-    public DateTime? EndedAt { get; set; }
-    
-    public string Status { get; set; } = "ACTIVE";
-    public string SessionToken { get; set; } = string.Empty;
-}
+

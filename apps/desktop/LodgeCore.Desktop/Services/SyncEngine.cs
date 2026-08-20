@@ -89,7 +89,7 @@ public class SyncEngine : BackgroundService
         _logger.LogInformation("SyncEngine is stopping.");
     }
 
-    private void BroadcastHealth(SyncState state, string message = null)
+    private void BroadcastHealth(SyncState state, string? message = null)
     {
         using var scope = _serviceProvider.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<LocalDbContext>();

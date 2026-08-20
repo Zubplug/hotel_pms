@@ -602,7 +602,7 @@ public class LocalRepository
         return order;
     }
 
-    public async Task<List<LocalPosOrder>> GetActiveOrdersAsync(string sessionId, string filter = "my_orders", string staffId = null)
+    public async Task<List<LocalPosOrder>> GetActiveOrdersAsync(string sessionId, string filter = "my_orders", string? staffId = null)
     {
         var query = _dbContext.PosOrders
             .Include(o => o.Items)

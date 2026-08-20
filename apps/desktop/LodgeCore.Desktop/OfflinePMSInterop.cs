@@ -819,31 +819,7 @@ public class OfflinePMSInterop
         }
     }
 
-    public async Task<string> GetFloorPlansAsync(string outletId)
-    {
-        try
-        {
-            var res = await _repo.GetFloorPlansAsync(outletId);
-            return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
-        }
-        catch (Exception ex)
-        {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
-        }
-    }
 
-    public async Task<string> GetTablesAsync(string floorPlanId)
-    {
-        try
-        {
-            var res = await _repo.GetTablesAsync(floorPlanId);
-            return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
-        }
-        catch (Exception ex)
-        {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
-        }
-    }
 
     public async Task<string> GetProductModifiersAsync(string productId)
     {
