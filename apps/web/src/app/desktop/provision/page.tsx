@@ -22,14 +22,19 @@ export default function ProvisionTerminalPage() {
     setIsProvisioning(true);
     try {
       // Send IPC command to C# to handle provisioning
-      await provider.system?.provisionTerminal?.({
+      const res = await provider.system?.provisionTerminal?.({
         email, password, propertyId, outletId, terminalName
       });
+      
+      if (res && res.success === false) {
+        throw new Error(res.error || 'Provisioning failed');
+      }
+
       // Redirect back to root desktop which will now see REGISTERED and show Operator selection
       router.push('/desktop');
-    } catch (err) {
+    } catch (err: any) {
       console.error('Provisioning failed:', err);
-      alert('Provisioning failed. Check logs.');
+      alert(`Provisioning failed: ${err.message || 'Check logs'}`);
     } finally {
       setIsProvisioning(false);
     }

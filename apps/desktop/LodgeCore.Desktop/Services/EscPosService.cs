@@ -443,14 +443,4 @@ public class EscPosService
         foreach (var a in arrays) { Buffer.BlockCopy(a, 0, result, offset, a.Length); offset += a.Length; }
         return result;
     }
-
-    private static byte[] BuildBytes(byte[][] arrays)
-    {
-        int total = 0;
-        foreach (var a in arrays) total += a.Length;
-        var result = new byte[total];
-        int offset = 0;
-        foreach (var a in arrays) { Buffer.BlockCopy(a, 0, result, offset, a.Length); offset += a.Length; }
-        return result;
-    }
 }
