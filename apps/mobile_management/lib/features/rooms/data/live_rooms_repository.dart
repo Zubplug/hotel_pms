@@ -105,12 +105,12 @@ class LiveRoomsRepository implements RoomsRepository {
       property: PropertyInfo(
         id: property['id'] as String,
         name: property['name'] as String,
-        timezone: property['timezone'] as String,
+        timezone: property['timezone'] as String? ?? 'UTC',
       ),
       businessDate: DateTime.parse(businessDate as String),
       generatedAt: DateTime.parse(data['generatedAt'] as String),
       room: _parseRoomItem(room as Map<String, dynamic>),
-      sellability: room['sellability'] as String,
+      sellability: room['sellability'] as String? ?? 'UNKNOWN',
       currentGuest: data['currentGuest'] != null
           ? _parseCurrentGuest(data['currentGuest'] as Map<String, dynamic>)
           : null,
@@ -139,10 +139,10 @@ class LiveRoomsRepository implements RoomsRepository {
         id: roomType['id'] as String,
         name: roomType['name'] as String,
       ),
-      displayStatus: item['displayStatus'] as String,
-      availabilityStatus: item['availabilityStatus'] as String,
-      housekeepingStatus: item['housekeepingStatus'] as String,
-      maintenanceStatus: item['maintenanceStatus'] as String,
+      displayStatus: item['displayStatus'] as String? ?? 'UNKNOWN',
+      availabilityStatus: item['availabilityStatus'] as String? ?? 'UNKNOWN',
+      housekeepingStatus: item['housekeepingStatus'] as String? ?? 'UNKNOWN',
+      maintenanceStatus: item['maintenanceStatus'] as String? ?? 'NONE',
       contextualNote: item['contextualNote'] as String?,
     );
   }

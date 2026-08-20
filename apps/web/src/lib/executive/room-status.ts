@@ -177,6 +177,9 @@ export interface RoomIntelligenceData {
     displayStatus: RoomDisplayStatus;
     availabilityStatus: RoomAvailabilityStatus;
     sellability: 'READY_TO_SELL' | 'NOT_READY' | 'NOT_SELLABLE';
+    housekeepingStatus: string;
+    maintenanceStatus: string;
+    contextualNote: string | null;
   };
   currentGuest: {
     name: string | null;
@@ -444,7 +447,10 @@ export async function getRoomIntelligenceView(
       roomType: { id: room.roomType.id, name: room.roomType.name },
       displayStatus,
       availabilityStatus,
-      sellability
+      sellability,
+      housekeepingStatus: room.housekeepingStatus,
+      maintenanceStatus: room.maintenanceStatus,
+      contextualNote: null // Contextual note is already provided in timeline/management attention for Details
     },
     currentGuest,
     nextArrival,
