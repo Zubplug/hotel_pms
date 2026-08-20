@@ -25,7 +25,7 @@
 
 		<!-- MSIX Auto Update & Signing Configuration -->
 		<GenerateAppInstallerFile>True</GenerateAppInstallerFile>
-		<AppInstallerUri>https://hotel-pms-web-nine.vercel.app/desktop</AppInstallerUri>
+		<AppInstallerUri>https://hotel-pms-web-nine.vercel.app/api/desktop-update</AppInstallerUri>
 		<AppxAutoUpdateEnabled>True</AppxAutoUpdateEnabled>
 		<AppxUpdateFrequency>OnLaunch</AppxUpdateFrequency>
 		<AppxShowProgress>True</AppxShowProgress>
