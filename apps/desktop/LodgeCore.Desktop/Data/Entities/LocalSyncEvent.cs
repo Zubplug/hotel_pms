@@ -18,6 +18,9 @@ public class LocalSyncEvent
     public string OutletId { get; set; } = string.Empty;
     public string SessionId { get; set; } = string.Empty;
     public string OperatorId { get; set; } = string.Empty;
+    
+    [NotMapped] public string UserId { get => OperatorId; set => OperatorId = value; }
+    [NotMapped] public string DeviceId { get => TerminalId; set => TerminalId = value; }
 
     public string EntityType { get; set; } = string.Empty; 
     public string EntityId { get; set; } = string.Empty;

@@ -11,6 +11,7 @@ public class LocalPosOutlet
     public string Name { get; set; } = string.Empty;
     public string Type { get; set; } = string.Empty;
     public bool IsActive { get; set; }
+    public int? AutoLockSeconds { get; set; }
 }
 
 public class LocalProductCategory
@@ -102,6 +103,7 @@ public class LocalPosOrder
     public string? OperationId { get; set; }
     public string? DeviceId { get; set; }
     public DateTime UpdatedAt { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public ICollection<LocalPosOrderItem> Items { get; set; } = new List<LocalPosOrderItem>();
     public List<LocalPosPayment> Payments { get; set; } = new();
@@ -128,6 +130,7 @@ public class LocalPosOrderItem
     public string? VoidReason { get; set; }
     public string? CheckId { get; set; }
     public string? KotId { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public List<LocalPosOrderItemModifier> Modifiers { get; set; } = new();
 }
@@ -332,6 +335,11 @@ public class LocalPosKot
     public int AttemptCount { get; set; }
     public DateTime? PrintedAt { get; set; }
     public DateTime CreatedAt { get; set; }
+    public string OrderNumber { get; set; } = string.Empty;
+    public string? TableNumber { get; set; }
+    public string? ServerName { get; set; }
+    public DateTime? FiredAt { get; set; }
+    public string ItemIdsJson { get; set; } = "[]";
 }
 
 public class LocalPosProductModifier
