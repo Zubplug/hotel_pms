@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 5. Transaction to check for existing OPEN session on this DEVICE and create new
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: any) => {
       const existingSession = await tx.posSession.findFirst({
         where: {
           deviceId: device.id,

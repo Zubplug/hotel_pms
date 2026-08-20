@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
     ]);
 
     const totalRooms = rooms.length;
-    const availableRooms = rooms.filter(r => r.status === 'AVAILABLE' || r.status === 'CLEAN').length;
+    const availableRooms = rooms.filter((r: any) => r.status === 'AVAILABLE' || r.status === 'CLEAN').length;
 
     let encoderStatus = 'OFFLINE';
     let encoderMessage = 'Check the front-desk hardware connection.';

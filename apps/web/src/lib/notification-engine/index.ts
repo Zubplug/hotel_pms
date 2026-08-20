@@ -124,7 +124,7 @@ async function resolveRecipients(organizationId: string, propertyId?: string): P
   });
 
   // Unique list of user IDs
-  return Array.from(new Set(userRoles.map(ur => ur.userId)));
+  return Array.from(new Set(userRoles.map((ur: any) => ur.userId)));
 }
 
 /**
@@ -387,7 +387,7 @@ async function evaluateEvent(event: NotificationEvent, policy: NotificationPolic
       const checkIn = res.checkIn.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
       const checkOut = res.checkOut.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
       const nights = Math.ceil((res.checkOut.getTime() - res.checkIn.getTime()) / (1000 * 60 * 60 * 24));
-      const roomDetails = res.reservationRooms.map(rr => {
+      const roomDetails = res.reservationRooms.map((rr: any) => {
         const roomNum = rr.room?.number.split('.').pop() || 'N/A';
         const type = rr.room?.roomType?.name || 'Room';
         return `Room ${roomNum} (${type})`;
@@ -420,7 +420,7 @@ async function evaluateEvent(event: NotificationEvent, policy: NotificationPolic
       const checkIn = res.checkIn.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
       const checkOut = res.checkOut.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
       const nights = Math.ceil((res.checkOut.getTime() - res.checkIn.getTime()) / (1000 * 60 * 60 * 24));
-      const roomDetails = res.reservationRooms.map(rr => {
+      const roomDetails = res.reservationRooms.map((rr: any) => {
         const roomNum = rr.room?.number.split('.').pop() || 'N/A';
         const type = rr.room?.roomType?.name || 'Room';
         return `Room ${roomNum} (${type})`;

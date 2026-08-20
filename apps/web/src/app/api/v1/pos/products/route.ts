@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
     });
 
     // Compute resolved productionStation + hasModifiers so the UI doesn't need extra calls
-    const enriched = products.map((p) => ({
+    const enriched = products.map((p: any) => ({
       ...p,
       hasModifiers: p.modifiers.length > 0,
       // Product-level override wins; fall back to category default

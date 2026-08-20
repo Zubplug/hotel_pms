@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
     for (const evt of body.events) {
       try {
         // Idempotency Check: run inside a transaction
-        await prisma.$transaction(async (tx) => {
+        await prisma.$transaction(async (tx: any) => {
           // Check if already processed
           const existing = await tx.posProcessedEvent.findUnique({
             where: { eventId: evt.operationId }

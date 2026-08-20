@@ -41,9 +41,9 @@ export async function POST(req: NextRequest) {
     const propertyIds: string[] = [];
     
     if (user.roles) {
-      user.roles.forEach(ur => {
+      user.roles.forEach((ur: any) => {
         if (ur.propertyId) propertyIds.push(ur.propertyId);
-        ur.role.permissions.forEach(rp => {
+        ur.role.permissions.forEach((rp: any) => {
           if (rp.permission?.name) {
             capabilities.push(rp.permission.name);
           }

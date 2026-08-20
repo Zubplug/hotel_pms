@@ -33,7 +33,7 @@ export async function POST(
     if (!canCheckOut) return errorResponse('FORBIDDEN', 'Insufficient permissions', 403);
 
     // Run the operational checkout transaction
-    const txResult = await prisma.$transaction(async (tx) => {
+    const txResult = await prisma.$transaction(async (tx: any) => {
       // 1. Verify and Lock Financial State (Check Folios)
       // Note: In Postgres, FOR UPDATE ensures that concurrent transactions modifying these folios are blocked.
       const folios = await tx.$queryRaw<any[]>`
@@ -83,7 +83,7 @@ export async function POST(
           let priority = 'NORMAL';
           if (nextReservation) {
             priority = 'HIGH';
-            if (nextReservation.reservation.priorities?.some(p => p.type === 'VIP' || p.type === 'MANAGEMENT')) {
+            if (nextReservation.reservation.priorities?.some((p: any) => p.type === 'VIP' || p.type === 'MANAGEMENT')) {
               priority = 'CRITICAL';
             }
           }

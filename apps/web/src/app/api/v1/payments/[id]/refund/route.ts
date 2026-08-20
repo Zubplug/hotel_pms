@@ -109,7 +109,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     // 6. Atomic Ledger Update
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: any) => {
       // Re-sum existing refunds in transaction to prevent concurrency attacks
       const aggregates = await tx.refund.aggregate({
         where: { paymentId: payment.id, status: { not: 'FAILED' } },

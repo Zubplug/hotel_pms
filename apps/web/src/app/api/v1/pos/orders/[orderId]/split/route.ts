@@ -28,7 +28,7 @@ export async function POST(
       return NextResponse.json({ error: 'No matching items found on this order' }, { status: 400 });
     }
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: any) => {
       const existingChecks = await tx.posCheck.count({ where: { orderId } });
       const checkNumber = `${order.orderNumber}-CHK${existingChecks + 1}`;
       const checkTotal  = matchingItems.reduce((sum: number, item: any) => sum + Number(item.total), 0);

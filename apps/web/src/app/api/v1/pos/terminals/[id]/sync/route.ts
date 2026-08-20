@@ -46,7 +46,7 @@ export async function GET(
       include: { staff: true }
     });
 
-    const staff = staffAccess.map(sa => sa.staff);
+    const staff = staffAccess.map((sa: any) => sa.staff);
 
     // 2. Categories & Products
     const categories = await prisma.productCategory.findMany({
@@ -70,7 +70,7 @@ export async function GET(
           licenseState: terminal.licenseState,
           autoLockSeconds: terminal.autoLockSeconds ?? terminal.outlet.autoLockSeconds
         },
-        staff: staff.map(s => ({
+        staff: staff.map((s: any) => ({
           id: s.id,
           firstName: s.firstName,
           lastName: s.lastName,

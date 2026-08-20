@@ -27,7 +27,7 @@ export async function POST(
     const requestHash = crypto.createHash('sha256').update(bodyText).digest('hex');
 
     // Execute in a transaction for safety
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: any) => {
       // 1. Resolve Approval
       const approvalRequest = await tx.approvalRequest.findUnique({
         where: { id: approvalId },

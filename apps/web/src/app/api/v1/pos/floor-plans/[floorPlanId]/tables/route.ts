@@ -16,7 +16,7 @@ export async function GET(
       orderBy: { name: 'asc' },
     });
 
-    const activeOrderIds = tables.map((t) => t.currentOrderId).filter(Boolean) as string[];
+    const activeOrderIds = tables.map((t: any) => t.currentOrderId).filter(Boolean) as string[];
 
     let activeOrders: any[] = [];
     if (activeOrderIds.length > 0) {
@@ -35,7 +35,7 @@ export async function GET(
       });
     }
 
-    const tablesWithOrder = tables.map(table => ({
+    const tablesWithOrder = tables.map((table: any) => ({
       ...table,
       currentOrder: table.currentOrderId ? activeOrders.find(o => o.id === table.currentOrderId) : null
     }));

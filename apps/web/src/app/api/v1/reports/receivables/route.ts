@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
 
     const now = new Date();
 
-    const reportData = folios.map(f => {
+    const reportData = folios.map((f: any) => {
       let status = 'CURRENT';
       let daysOutstanding = 0;
       

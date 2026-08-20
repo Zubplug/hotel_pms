@@ -68,11 +68,11 @@ export async function GET(req: NextRequest) {
     let authorizedProperties: { id: string; name: string; code: string }[] = [];
     if (staff && staff.organization) {
        if (systemRole === 'ADMIN' || systemRole === 'DIRECTOR') {
-          authorizedProperties = staff.organization.properties.map(p => ({ id: p.id, name: p.name, code: p.code }));
+          authorizedProperties = staff.organization.properties.map((p: any) => ({ id: p.id, name: p.name, code: p.code }));
        } else if (staff.propertyAccess && staff.propertyAccess.length > 0) {
           authorizedProperties = staff.organization.properties
-             .filter(p => staff.propertyAccess.includes(p.id))
-             .map(p => ({ id: p.id, name: p.name, code: p.code }));
+             .filter((p: any) => staff.propertyAccess.includes(p.id))
+             .map((p: any) => ({ id: p.id, name: p.name, code: p.code }));
        }
     }
 

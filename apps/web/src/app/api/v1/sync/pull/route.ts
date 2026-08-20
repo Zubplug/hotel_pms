@@ -93,7 +93,7 @@ export async function GET(req: NextRequest) {
 
     // For each staff member, resolve their permission names via their User roles
     const staffWithPermissions = await Promise.all(
-      staffList.map(async (staff) => {
+      staffList.map(async (staff: any) => {
         let permissions: string[] = [];
         let roleName = '';
         let hasPosAccess = false;
@@ -119,13 +119,11 @@ export async function GET(req: NextRequest) {
           });
 
           // Flatten all permission names across all roles
-          permissions = [
-            ...new Set(
-              userRoles.flatMap(ur =>
-                ur.role.permissions.map(rp => rp.permission.name)
-              )
+          permissions = Array.from(new Set<string>(
+            userRoles.flatMap((ur: any) =>
+              ur.role.permissions.map((rp: any) => rp.permission.name)
             )
-          ];
+          ));
 
           // Use the most privileged role name for the session
           roleName = userRoles[0]?.role?.name ?? staff.position;

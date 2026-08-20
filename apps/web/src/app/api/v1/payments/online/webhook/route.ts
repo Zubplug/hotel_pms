@@ -72,7 +72,7 @@ async function handleChargeSuccess(req: NextRequest, event: any, provider: Payst
     }
 
     // 5. Atomic Financial Transaction
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: any) => {
       // Lock and re-read the Folio
       const folio = await tx.folio.findUnique({
         where: { id: payment.folioId }
@@ -202,7 +202,7 @@ async function handleRefundProcessed(req: NextRequest, event: any) {
 
     const numericAmount = amount / 100; // Paystack sends in kobo
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: any) => {
       // 1. Mark Refund as COMPLETED
       await tx.refund.update({
         where: { id: refund.id },
@@ -279,7 +279,7 @@ async function handleRefundFailed(req: NextRequest, event: any) {
 
     if (!refund) return NextResponse.json({ message: 'Refund not found or not processing' }, { status: 200 });
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: any) => {
       await tx.refund.update({
         where: { id: refund.id },
         data: { status: 'FAILED' }

@@ -41,7 +41,7 @@ export async function POST(
 
     const payload = JSON.parse(conflict.payload as string);
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: any) => {
       let resolutionNote = '';
       
       if (action === 'CITY_LEDGER') {

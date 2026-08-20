@@ -39,12 +39,12 @@ export async function GET(req: NextRequest) {
       }
     });
 
-    const isSystemAdmin = user.roles.some(r => r.role.name === 'ADMIN' || r.role.name === 'SUPER_ADMIN' || r.role.name === 'DIRECTOR');
+    const isSystemAdmin = user.roles.some((r: any) => r.role.name === 'ADMIN' || r.role.name === 'SUPER_ADMIN' || r.role.name === 'DIRECTOR');
     
     let allowedPropertyIds: string[] = [];
     if (staff && staff.organization) {
       if (isSystemAdmin) {
-        allowedPropertyIds = staff.organization.properties.map(p => p.id);
+        allowedPropertyIds = staff.organization.properties.map((p: any) => p.id);
       } else if (staff.propertyAccess) {
         allowedPropertyIds = staff.propertyAccess;
       }
@@ -116,7 +116,7 @@ export async function GET(req: NextRequest) {
 
     // 4. Determine Quick Actions based on Role/Capabilities
     const quickActions = [];
-    if (isSystemAdmin || user.roles.some(r => r.role.name === 'MANAGER' || r.role.name === 'EXECUTIVE')) {
+    if (isSystemAdmin || user.roles.some((r: any) => r.role.name === 'MANAGER' || r.role.name === 'EXECUTIVE')) {
       quickActions.push({ id: 'approvals', label: 'Approvals', icon: 'check_circle', capability: 'approvals.view' });
       quickActions.push({ id: 'alerts', label: 'Alerts', icon: 'warning', capability: 'alerts.view' });
       quickActions.push({ id: 'broadcast', label: 'Broadcast', icon: 'campaign', capability: 'notifications.broadcast' });
@@ -139,7 +139,7 @@ export async function GET(req: NextRequest) {
         pendingApprovals: pendingApprovals.length,
         criticalInterventions: criticalInterventions.length
       },
-      approvals: pendingApprovals.map(app => ({
+      approvals: pendingApprovals.map((app: any) => ({
         id: app.id,
         type: app.type,
         amount: app.amount ? Number(app.amount) : null,
@@ -158,7 +158,7 @@ export async function GET(req: NextRequest) {
         },
         details: app.details
       })),
-      interventions: criticalInterventions.map(int => ({
+      interventions: criticalInterventions.map((int: any) => ({
         id: int.id,
         title: int.subject || 'Intervention Required',
         message: int.body,

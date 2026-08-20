@@ -15,7 +15,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const allowedPropertyIds = user.allowedProperties;
     
     // Begin an atomic transaction to ensure idempotency and safety
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: any) => {
       // 1. Fetch the request
       const approval = await tx.approvalRequest.findUnique({
         where: { id: (await params).id },

@@ -41,7 +41,7 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: any) => {
       // If overridden, audit it
       if (overridePosConflicts) {
         await tx.posAuthorizationAudit.create({

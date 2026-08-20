@@ -97,7 +97,7 @@ export async function GET(req: NextRequest) {
     });
 
     if (highBalanceFolios.length > 0) {
-      const totalExposure = highBalanceFolios.reduce((acc, f) => acc + Number(f.balance), 0);
+      const totalExposure = highBalanceFolios.reduce((acc: any, f: any) => acc + Number(f.balance), 0);
       attention.push({
         id: `high-balance-${primaryPropertyId}`,
         priority: 'P0',
@@ -119,7 +119,7 @@ export async function GET(req: NextRequest) {
     });
     
     if (pendingRefunds.length > 0) {
-      const totalRefundExposure = pendingRefunds.reduce((acc, r) => acc + Number(r.amount), 0);
+      const totalRefundExposure = pendingRefunds.reduce((acc: any, r: any) => acc + Number(r.amount), 0);
       attention.push({
         id: `pending-refund-${primaryPropertyId}`,
         priority: 'P1',

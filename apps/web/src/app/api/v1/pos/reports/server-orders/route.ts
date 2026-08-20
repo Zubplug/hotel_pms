@@ -74,7 +74,7 @@ export async function GET(req: NextRequest) {
       }
     });
 
-    const formattedOrders = orders.map(order => ({
+    const formattedOrders = orders.map((order: any) => ({
       ...order,
       sessionOwnerName: order.session?.openedBy ?? 'Unknown',
       verificationToken: `${order.orderNumber}-${Math.random().toString(36).substring(2, 10).toUpperCase()}`

@@ -114,6 +114,9 @@ importers:
         specifier: ^3.22.0
         version: 3.25.76
     devDependencies:
+      '@prisma/client':
+        specifier: ^5.10.0
+        version: 5.22.0(prisma@5.22.0)
       '@tailwindcss/postcss':
         specifier: ^4
         version: 4.3.3

@@ -112,7 +112,7 @@ export async function POST(req: NextRequest) {
     const totalAmount = Number(baseRate) * nights;
 
     // 2. Create the Reservation transactionally
-    const reservation = await prisma.$transaction(async (tx) => {
+    const reservation = await prisma.$transaction(async (tx: any) => {
       // Resolve Guest
       let finalGuestId = guestId;
       if (!finalGuestId) {

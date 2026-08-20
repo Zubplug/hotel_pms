@@ -68,7 +68,7 @@ export async function GET(req: NextRequest) {
       const pTx = providerTxMap.get(lp.providerRef);
       let reconciliationStatus = 'MATCHED';
 
-      const totalRefunds = lp.refunds.reduce((sum, r) => sum + Number(r.amount), 0);
+      const totalRefunds = lp.refunds.reduce((sum: any, r: any) => sum + Number(r.amount), 0);
       const netPmsAmount = Number(lp.amount) - totalRefunds;
 
       if (!pTx) {

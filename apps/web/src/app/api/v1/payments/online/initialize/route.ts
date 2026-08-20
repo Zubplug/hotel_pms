@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
     
     // We create the payment record FIRST in our DB as PENDING, to ensure we have a record 
     // even if the user drops off before checking out.
-    const payment = await prisma.$transaction(async (tx) => {
+    const payment = await prisma.$transaction(async (tx: any) => {
       const p = await tx.payment.create({
         data: {
           folioId: folio.id,

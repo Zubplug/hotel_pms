@@ -62,7 +62,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ status: 'ALREADY_APPLIED', message: 'Idempotent replay' }, { status: 200 });
       }
 
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(async (tx: any) => {
         // Create PosOrder
         const newOrder = await tx.posOrder.create({
           data: {
@@ -237,7 +237,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ status: 'ALREADY_APPLIED', message: 'Idempotent replay' }, { status: 200 });
       }
 
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(async (tx: any) => {
         // Update Order core fields
         await tx.posOrder.update({
           where: { id: entityId },
@@ -498,7 +498,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ status: 'ALREADY_APPLIED' }, { status: 200 });
       }
 
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(async (tx: any) => {
         if (operationType === 'CREATE' || !existingSession) {
           await tx.posSession.create({
             data: {
@@ -603,7 +603,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ status: 'ALREADY_APPLIED' }, { status: 200 });
       }
 
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(async (tx: any) => {
         await tx.posVoid.create({
           data: {
             id: entityId,

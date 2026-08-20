@@ -77,7 +77,7 @@ export async function GET(
     });
 
     // Format the response
-    const formattedOrders = orders.map(order => ({
+    const formattedOrders = orders.map((order: any) => ({
       id: order.id,
       orderNumber: order.orderNumber,
       orderType: order.orderType,

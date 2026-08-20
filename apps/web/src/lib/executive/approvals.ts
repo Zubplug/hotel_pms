@@ -12,14 +12,14 @@ export async function fetchPendingApprovals(propertyId: string) {
     take: 10 // only return top 10 for dashboard preview
   });
 
-  const totalAmount = pendingRequests.reduce((sum, req) => {
+  const totalAmount = pendingRequests.reduce((sum: any, req: any) => {
     return sum + (req.amount ? Number(req.amount) : 0);
   }, 0);
 
   return {
     pendingCount: pendingRequests.length,
     totalAmount,
-    items: pendingRequests.map(req => ({
+    items: pendingRequests.map((req: any) => ({
       id: req.id,
       type: req.type,
       title: `${req.type} Request`,

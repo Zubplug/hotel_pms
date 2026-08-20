@@ -49,7 +49,7 @@ export async function PATCH(
     }
 
     // Use a transaction for the critical state transitions
-    const txResult = await prisma.$transaction(async (tx) => {
+    const txResult = await prisma.$transaction(async (tx: any) => {
       // 1. Update Command
       await tx.lockCommand.update({
         where: { id },

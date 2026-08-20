@@ -68,7 +68,7 @@ export async function GET(req: NextRequest) {
     let cardSales = 0;
     let roomCharges = 0;
 
-    orders.forEach(order => {
+    orders.forEach((order: any) => {
       if (order.status !== 'VOIDED') {
         const orderTotal = Number(order.total);
         const orderDiscount = Number(order.discount);
@@ -77,7 +77,7 @@ export async function GET(req: NextRequest) {
         totalDiscounts += orderDiscount;
         netSales += orderTotal;
 
-        order.payments.forEach(payment => {
+        order.payments.forEach((payment: any) => {
           const amount = Number(payment.amount);
           if (payment.method === 'CASH') cashSales += amount;
           else if (payment.method === 'CARD') cardSales += amount;

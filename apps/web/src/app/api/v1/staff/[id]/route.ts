@@ -28,7 +28,7 @@ export async function PUT(
       posPinHash = await hash(posPin, 10);
     }
 
-    const updatedStaff = await prisma.$transaction(async (tx) => {
+    const updatedStaff = await prisma.$transaction(async (tx: any) => {
       // Update basic details
       const staff = await tx.staff.update({
         where: { id },

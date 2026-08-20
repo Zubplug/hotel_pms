@@ -84,7 +84,7 @@ export async function evaluatePropertyAlerts(propertyId: string): Promise<Manage
   });
 
   if (highBalanceFolios.length > 0) {
-    const totalExposure = highBalanceFolios.reduce((acc, f) => acc + Number(f.balance), 0);
+    const totalExposure = highBalanceFolios.reduce((acc: any, f: any) => acc + Number(f.balance), 0);
     
     alerts.push({
       id: `finance-${propertyId}-balance`,

@@ -62,7 +62,7 @@ export async function GET(req: NextRequest) {
     });
 
     let available = 0, occupied = 0, cleaning = 0, outOfOrder = 0;
-    rooms.forEach(r => {
+    rooms.forEach((r: any) => {
       if (r.status === 'AVAILABLE') available += r._count;
       else if (r.status === 'OCCUPIED' || r.status === 'RESERVED') occupied += r._count;
       else if (['DIRTY', 'CLEANING', 'CLEAN', 'INSPECTED'].includes(r.status)) cleaning += r._count;

@@ -71,7 +71,7 @@ export async function PATCH(
     }
 
     // Atomic Transaction to synchronize Task and Room
-    const updatedTask = await prisma.$transaction(async (tx) => {
+    const updatedTask = await prisma.$transaction(async (tx: any) => {
       let roomStatusUpdate = undefined;
       let roomHskUpdate = targetStatus;
 

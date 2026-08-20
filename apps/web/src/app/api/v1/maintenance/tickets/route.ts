@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
             rooms: {
               where: {
                 id: {
-                  in: await prisma.maintenanceTicket.findMany({ where }).then(res => res.map(t => t.roomId).filter(Boolean) as string[])
+                  in: await prisma.maintenanceTicket.findMany({ where }).then((res: any) => res.map((t: any) => t.roomId).filter(Boolean) as string[])
                 }
               }
             }
@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const ticket = await prisma.$transaction(async (tx) => {
+    const ticket = await prisma.$transaction(async (tx: any) => {
       const newTicket = await tx.maintenanceTicket.create({
         data: {
           propertyId,

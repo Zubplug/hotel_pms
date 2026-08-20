@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
       select: { id: true }
     });
     
-    const outletIds = outlets.map(o => o.id);
+    const outletIds = outlets.map((o: any) => o.id);
 
     const categories = await prisma.productCategory.findMany({
       where: { outletId: { in: outletIds }, isActive: true },

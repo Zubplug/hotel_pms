@@ -195,7 +195,7 @@ export async function PATCH(
     }
 
     // Begin atomic transaction
-    const updated = await prisma.$transaction(async (tx) => {
+    const updated = await prisma.$transaction(async (tx: any) => {
       // 1. Update ReservationRoom
       const updatedResRoom = await tx.reservationRoom.update({
         where: { id: existingReservation.reservationRooms[0].id },
@@ -260,8 +260,8 @@ export async function PATCH(
           await tx.folioItem.createMany({ data: folioItems });
 
           const allFolioItems = await tx.folioItem.findMany({ where: { folioId: folio.id } });
-          const newTotalCharges = allFolioItems.filter(i => i.type === 'CHARGE').reduce((acc, item) => acc + Number(item.amount), 0);
-          const newTotalPayments = allFolioItems.filter(i => i.type === 'PAYMENT').reduce((acc, item) => acc + Number(item.amount), 0);
+          const newTotalCharges = allFolioItems.filter((i: any) => i.type === 'CHARGE').reduce((acc: any, item: any) => acc + Number(item.amount), 0);
+          const newTotalPayments = allFolioItems.filter((i: any) => i.type === 'PAYMENT').reduce((acc: any, item: any) => acc + Number(item.amount), 0);
           const newBalance = newTotalCharges - newTotalPayments;
           
           await tx.folio.update({

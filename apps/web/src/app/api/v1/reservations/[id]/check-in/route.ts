@@ -76,7 +76,7 @@ export async function POST(
     }
 
     // 6. Create the Operation, Command, and Audit Log Atomically
-    const newOperation = await prisma.$transaction(async (tx) => {
+    const newOperation = await prisma.$transaction(async (tx: any) => {
       // --- 7D.6 FINANCIAL GUARD ---
       // Lock the folios associated with this reservation to prevent concurrent mutations
       const folios = await tx.$queryRaw<any[]>`

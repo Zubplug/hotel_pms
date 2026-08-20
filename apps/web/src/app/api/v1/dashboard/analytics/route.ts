@@ -75,7 +75,7 @@ export async function GET(req: NextRequest) {
     });
 
     let available = 0, occupied = 0, cleaning = 0, outOfOrder = 0;
-    rooms.forEach(r => {
+    rooms.forEach((r: any) => {
       if (r.status === 'AVAILABLE') available += r._count;
       else if (r.status === 'OCCUPIED' || r.status === 'RESERVED') occupied += r._count; // RESERVED isn't strictly occupied, but for simplicity
       else if (['DIRTY', 'CLEANING', 'CLEAN', 'INSPECTED'].includes(r.status)) cleaning += r._count;
@@ -129,9 +129,9 @@ export async function GET(req: NextRequest) {
       }
     });
 
-    const propertyComparisons = propertiesData.map(p => {
+    const propertyComparisons = propertiesData.map((p: any) => {
       let pAvailable = 0, pOccupied = 0, pCleaning = 0, pOutOfOrder = 0;
-      p.rooms.forEach(r => {
+      p.rooms.forEach((r: any) => {
         if (r.status === 'AVAILABLE') pAvailable++;
         else if (r.status === 'OCCUPIED' || r.status === 'RESERVED') pOccupied++;
         else if (['DIRTY', 'CLEANING', 'CLEAN', 'INSPECTED'].includes(r.status)) pCleaning++;
@@ -140,8 +140,8 @@ export async function GET(req: NextRequest) {
       const pSellable = pAvailable + pOccupied + pCleaning;
       const pOccupancy = pSellable > 0 ? (pOccupied / pSellable) * 100 : 0;
       
-      const pGross = p.payments.reduce((sum, pay) => sum + Number(pay.amount), 0);
-      const pRefunds = p.refunds.reduce((sum, ref) => sum + Number(ref.amount), 0);
+      const pGross = p.payments.reduce((sum: any, pay: any) => sum + Number(pay.amount), 0);
+      const pRefunds = p.refunds.reduce((sum: any, ref: any) => sum + Number(ref.amount), 0);
       const pNet = pGross - pRefunds;
 
       const adr = pOccupied > 0 ? pNet / pOccupied : 0; // Simplified ADR approximation using net collected
@@ -195,9 +195,9 @@ export async function GET(req: NextRequest) {
     });
 
     for (const item of trendData) {
-      const pDay = payments14d.filter(p => new Date(p.createdAt).getTime() >= item.timestamp && new Date(p.createdAt).getTime() < item.timestamp + 86400000);
-      const rDay = refunds14d.filter(r => new Date(r.createdAt).getTime() >= item.timestamp && new Date(r.createdAt).getTime() < item.timestamp + 86400000);
-      const net = pDay.reduce((sum, p) => sum + Number(p.amount), 0) - rDay.reduce((sum, r) => sum + Number(r.amount), 0);
+      const pDay = payments14d.filter((p: any) => new Date(p.createdAt).getTime() >= item.timestamp && new Date(p.createdAt).getTime() < item.timestamp + 86400000);
+      const rDay = refunds14d.filter((r: any) => new Date(r.createdAt).getTime() >= item.timestamp && new Date(r.createdAt).getTime() < item.timestamp + 86400000);
+      const net = pDay.reduce((sum: any, p: any) => sum + Number(p.amount), 0) - rDay.reduce((sum: any, r: any) => sum + Number(r.amount), 0);
       item.revenue = net;
     }
 
@@ -263,10 +263,10 @@ export async function GET(req: NextRequest) {
         roomNights: d.roomNights
       })),
       properties: propertyComparisons,
-      activity: activity.map(a => ({
+      activity: activity.map((a: any) => ({
         id: a.id,
         action: a.action,
-        property: propertiesData.find(p => p.id === a.propertyId)?.name || 'System',
+        property: propertiesData.find((p: any) => p.id === a.propertyId)?.name || 'System',
         timeAgo: a.createdAt.toISOString(),
         details: a.newValue
       }))

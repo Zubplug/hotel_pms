@@ -37,7 +37,7 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
       }
     }
 
-    const updatedTicket = await prisma.$transaction(async (tx) => {
+    const updatedTicket = await prisma.$transaction(async (tx: any) => {
       const data: any = {
         status: status || ticket.status,
       };

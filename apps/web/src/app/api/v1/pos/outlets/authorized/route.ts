@@ -60,14 +60,14 @@ export async function GET(req: NextRequest) {
         include: { outlet: true }
       });
       authorizedOutlets = staffAccess
-        .filter(access => access.outlet.isActive && access.outlet.propertyId === propertyId)
-        .map(access => access.outlet);
+        .filter((access: any) => access.outlet.isActive && access.outlet.propertyId === propertyId)
+        .map((access: any) => access.outlet);
     }
 
     // 4. Apply Intersection Logic (Device Binding)
     if (device.outletId) {
       // Device is strictly bound to one outlet
-      const boundOutlet = authorizedOutlets.find(o => o.id === device.outletId);
+      const boundOutlet = authorizedOutlets.find((o: any) => o.id === device.outletId);
       
       if (boundOutlet) {
         return NextResponse.json({

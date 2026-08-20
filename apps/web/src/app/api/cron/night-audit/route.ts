@@ -67,7 +67,7 @@ export async function POST(request: Request) {
         let chargesPosted = 0;
 
         // Execute Audit in a Transaction
-        await prisma.$transaction(async (tx) => {
+        await prisma.$transaction(async (tx: any) => {
           // Step 2: Post eligible room charges
           // Find all CHECKED_IN reservations
           const activeReservations = await tx.reservation.findMany({
@@ -77,7 +77,7 @@ export async function POST(request: Request) {
 
           for (const res of activeReservations) {
             // Find the main folio
-            let mainFolio = res.folios.find(f => f.type === 'ROOM');
+            let mainFolio = res.folios.find((f: any) => f.type === 'ROOM');
             if (!mainFolio) {
               mainFolio = await tx.folio.create({
                 data: {
@@ -146,7 +146,7 @@ export async function POST(request: Request) {
           // Step 4: Generate OccupancySnapshot
           const totalRooms = await tx.room.count({ where: { propertyId: property.id, isActive: true } });
           const outOfOrderRooms = await tx.room.count({ where: { propertyId: property.id, status: 'OUT_OF_ORDER' } });
-          const occupiedRooms = activeReservations.reduce((acc, r) => acc + r.reservationRooms.length, 0);
+          const occupiedRooms = activeReservations.reduce((acc: any, r: any) => acc + r.reservationRooms.length, 0);
           const availableRooms = totalRooms - outOfOrderRooms - occupiedRooms;
           const occupancyPct = totalRooms > 0 ? (occupiedRooms / (totalRooms - outOfOrderRooms)) * 100 : 0;
           const adr = occupiedRooms > 0 ? totalRoomRevenue / occupiedRooms : 0;

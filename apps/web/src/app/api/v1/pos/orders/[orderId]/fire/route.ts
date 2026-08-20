@@ -80,7 +80,7 @@ export async function POST(
       return 'KITCHEN';
     }
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: any) => {
       // Create new order items
       const createdItems = await Promise.all(
         items.map(item =>

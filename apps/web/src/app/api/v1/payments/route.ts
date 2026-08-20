@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. Atomic Transaction for Financial Integrity
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: any) => {
       // A. Optimistic Concurrency Control update on Folio
       const updatedFolio = await tx.folio.update({
         where: { 

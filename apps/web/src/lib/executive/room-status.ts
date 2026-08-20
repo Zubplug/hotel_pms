@@ -70,12 +70,12 @@ export async function calculateRoomStatuses(propertyId: string, businessDate: Da
   });
 
   // Map for quick lookups
-  const reservationMap = new Map(activeReservations.map(r => [r.roomId, r]));
-  const blockMap = new Map(activeBlocks.map(b => [b.roomId, b]));
+  const reservationMap = new Map(activeReservations.map((r: any) => [r.roomId, r]));
+  const blockMap = new Map(activeBlocks.map((b: any) => [b.roomId, b]));
   
-  const occupiedRoomIds = new Set(activeReservations.map(r => r.roomId));
-  const oooRoomIds = new Set(activeBlocks.filter(b => b.type === 'OUT_OF_ORDER').map(b => b.roomId));
-  const oosRoomIds = new Set(activeBlocks.filter(b => b.type === 'OUT_OF_SERVICE').map(b => b.roomId));
+  const occupiedRoomIds = new Set(activeReservations.map((r: any) => r.roomId));
+  const oooRoomIds = new Set(activeBlocks.filter((b: any) => b.type === 'OUT_OF_ORDER').map((b: any) => b.roomId));
+  const oosRoomIds = new Set(activeBlocks.filter((b: any) => b.type === 'OUT_OF_SERVICE').map((b: any) => b.roomId));
 
   const overview = {
     total: allRooms.length,
@@ -311,7 +311,7 @@ export async function getRoomIntelligenceView(
   if (currentRes && permissions.includes('rooms.guest.view')) {
     const showFolio = permissions.includes('rooms.folio.view');
     const balance = showFolio && currentRes.reservation.folios.length > 0
-        ? currentRes.reservation.folios.reduce((sum, f) => sum + Number(f.balance), 0)
+        ? currentRes.reservation.folios.reduce((sum: any, f: any) => sum + Number(f.balance), 0)
         : null;
 
     currentGuest = {
@@ -411,7 +411,7 @@ export async function getRoomIntelligenceView(
     return s.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
   };
 
-  const timeline = historyRecords.map(record => ({
+  const timeline = historyRecords.map((record: any) => ({
     type: record.source,
     title: `Status changed: ${formatStatus(record.previousStatus)} → ${formatStatus(record.newStatus)}`,
     subtitle: record.reason ?? '',

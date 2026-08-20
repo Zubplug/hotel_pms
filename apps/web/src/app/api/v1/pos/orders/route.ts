@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
       return 'KITCHEN';
     }
 
-    const order = await prisma.$transaction(async (tx) => {
+    const order = await prisma.$transaction(async (tx: any) => {
       // Generate human-readable order number
       const count = await tx.posOrder.count({ where: { propertyId } });
       const orderNumber = `ORD-${String(count + 1).padStart(5, '0')}`;

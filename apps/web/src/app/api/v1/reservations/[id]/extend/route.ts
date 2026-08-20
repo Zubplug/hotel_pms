@@ -98,7 +98,7 @@ export async function POST(
     };
 
     // Atomic transaction: extend dates + post folio charge
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: any) => {
       // 1. Update Reservation checkout
       await tx.reservation.update({
         where: { id: reservation.id },
@@ -142,11 +142,11 @@ export async function POST(
         // Recalculate folio totals
         const allItems = await tx.folioItem.findMany({ where: { folioId: folio.id } });
         const totalCharges = allItems
-          .filter(i => i.type === 'CHARGE' && !i.voidedAt)
-          .reduce((acc, item) => acc + Number(item.amount), 0);
+          .filter((i: any) => i.type === 'CHARGE' && !i.voidedAt)
+          .reduce((acc: any, item: any) => acc + Number(item.amount), 0);
         const totalPayments = allItems
-          .filter(i => i.type === 'PAYMENT' && !i.voidedAt)
-          .reduce((acc, item) => acc + Number(item.amount), 0);
+          .filter((i: any) => i.type === 'PAYMENT' && !i.voidedAt)
+          .reduce((acc: any, item: any) => acc + Number(item.amount), 0);
 
         await tx.folio.update({
           where: { id: folio.id },

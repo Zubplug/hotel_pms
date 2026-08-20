@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
       posPinHash = await hash(posPin, 10);
     }
 
-    const newStaff = await prisma.$transaction(async (tx) => {
+    const newStaff = await prisma.$transaction(async (tx: any) => {
       const staff = await tx.staff.create({
         data: {
           organizationId,

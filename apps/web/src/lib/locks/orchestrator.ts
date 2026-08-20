@@ -272,7 +272,7 @@ export const lockOrchestrator = {
     // ✅ Commit DB records first, then notify Redis OUTSIDE the transaction.
     // Putting Redis inside a Prisma interactive transaction holds the DB connection
     // open while awaiting network I/O, easily blowing the 5s default timeout.
-    const op = await prisma.$transaction(async (tx) => {
+    const op = await prisma.$transaction(async (tx: any) => {
       const newOp = await tx.lockOperation.create({
         data: {
           idempotencyKey,
@@ -329,7 +329,7 @@ export const lockOrchestrator = {
     const idempotencyKey = `CANCEL_CARD:${propertyId}:${Date.now()}`;
 
     // ✅ Commit DB records first, then notify Redis OUTSIDE the transaction.
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: any) => {
       const op = await tx.lockOperation.create({
         data: {
           idempotencyKey,

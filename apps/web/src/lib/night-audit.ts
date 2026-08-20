@@ -73,13 +73,13 @@ export async function executeNightAudit(propertyId: string, userId: string, user
   for (let i = 0; i < eligibleReservations.length; i += BATCH_SIZE) {
     const batch = eligibleReservations.slice(i, i + BATCH_SIZE);
     
-    await Promise.all(batch.map(async (reservation) => {
+    await Promise.all(batch.map(async (reservation: any) => {
       for (const rr of reservation.reservationRooms) {
         const room = rr.room;
         if (!room) continue;
 
         try {
-          await prisma.$transaction(async (tx) => {
+          await prisma.$transaction(async (tx: any) => {
             const idempotencyKey = `STAYOVER_${reservation.id}_${room.id}_${nextBusinessDate.toISOString().split('T')[0]}`;
             
             const existingTask = await tx.housekeepingTask.findUnique({
