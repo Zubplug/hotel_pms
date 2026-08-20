@@ -194,11 +194,16 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message });
         }
     }
-    private async Task<(string UserId, string DeviceId)> GetSecureContextAsync()
+    private async Task<(string UserId, string DeviceId, string? OutletId)> GetSecureContextAsync()
     {
         var session = await _authManager.GetSessionAsync();
         if (session == null) throw new UnauthorizedAccessException("No active desktop session.");
-        return (session.UserId, session.DeviceId);
+        
+        using var scope = _serviceProvider.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
+        var terminal = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(context.PosTerminals);
+        
+        return (session.UserId, session.DeviceId, terminal?.OutletId);
     }
 
     public async Task<string> AssignRoomAsync(string reservationId, string roomId, string roomNumber)
