@@ -51,19 +51,32 @@ jobs:
         $subject = $cert.Subject
         (Get-Content $manifestPath) -replace 'Publisher="[^"]+"', "Publisher=`"$subject`"" | Set-Content $manifestPath
     - name: Publish MAUI Windows MSIX
-      working-directory: ./apps/desktop/LodgeCore.Desktop
-      run: >
-        dotnet publish -c Release -f net10.0-windows10.0.19041.0 
-        /p:GenerateAppxPackageOnBuild=true 
-        /p:AppxPackageSigningEnabled=true 
-        /p:PackageCertificateKeyFile=Certificates\LodgeCore.pfx 
-        /p:PackageCertificatePassword=lodgecore2026
-    - name: Prepare Release Artifacts
+      shell: powershell
       run: |
-        New-Item -ItemType Directory -Force -Path .\release-artifacts
-        # The exact path varies slightly depending on SDK, we find the .appinstaller and .msix dynamically
-        Copy-Item -Path .\apps\desktop\LodgeCore.Desktop\bin\Release\net10.0-windows10.0.19041.0\win-x86\AppPackages\LodgeCore.Desktop_*\*.msix -Destination .\release-artifacts\
-        Copy-Item -Path .\apps\desktop\LodgeCore.Desktop\bin\Release\net10.0-windows10.0.19041.0\win-x86\AppPackages\LodgeCore.Desktop_*\*.appinstaller -Destination .\release-artifacts\
+        $certFile = "$PWD\apps\desktop\LodgeCore.Desktop\Certificates\LodgeCore.pfx"
+        dotnet publish apps/desktop/LodgeCore.Desktop `
+          -c Release `
+          -f net10.0-windows10.0.19041.0 `
+          /p:GenerateAppxPackageOnBuild=true `
+          /p:AppxPackageSigningEnabled=true `
+          "/p:PackageCertificateKeyFile=$certFile" `
+          /p:PackageCertificatePassword=lodgecore2026
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    - name: Prepare Release Artifacts
+      shell: powershell
+      run: |
+        New-Item -ItemType Directory -Force -Path .\release-artifacts | Out-Null
+        # Search recursively so we are not tied to a specific RID (win-x86, win10-x86, etc.)
+        $msixFiles = Get-ChildItem -Path .\apps\desktop\LodgeCore.Desktop\bin -Recurse -Filter "*.msix" -ErrorAction SilentlyContinue
+        $appinstallerFiles = Get-ChildItem -Path .\apps\desktop\LodgeCore.Desktop\bin -Recurse -Filter "*.appinstaller" -ErrorAction SilentlyContinue
+        if ($msixFiles.Count -eq 0) {
+          Write-Error "ERROR: No .msix files found! Check dotnet publish output above."
+          exit 1
+        }
+        $msixFiles | Copy-Item -Destination .\release-artifacts\ -Force
+        $appinstallerFiles | Copy-Item -Destination .\release-artifacts\ -Force
+        Write-Host "=== Release artifacts ==="
+        Get-ChildItem .\release-artifacts\
     - name: Upload Release
       uses: softprops/action-gh-release@v2
       if: startsWith(github.ref, 'refs/tags/')
