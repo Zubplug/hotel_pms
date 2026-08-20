@@ -45,6 +45,11 @@ jobs:
         $cert = New-SelfSignedCertificate -CertStoreLocation Cert:\CurrentUser\My -DnsName "LodgeCore" -Type CodeSigningCert -Subject "CN=LodgeCore, O=LodgeCore, L=Lagos, S=Lagos, C=NG"
         $pwd = ConvertTo-SecureString -String "lodgecore2026" -Force -AsPlainText
         Export-PfxCertificate -Cert $cert -FilePath .\apps\desktop\LodgeCore.Desktop\Certificates\LodgeCore.pfx -Password $pwd
+        
+        # Prevent APPX0101 by syncing the manifest Publisher with the exact certificate Subject
+        $manifestPath = ".\apps\desktop\LodgeCore.Desktop\Platforms\Windows\Package.appxmanifest"
+        $subject = $cert.Subject
+        (Get-Content $manifestPath) -replace 'Publisher="[^"]+"', "Publisher=`"$subject`"" | Set-Content $manifestPath
     - name: Publish MAUI Windows MSIX
       working-directory: ./apps/desktop/LodgeCore.Desktop
       run: >

@@ -68,6 +68,11 @@ jobs:
           $publicCertPath = "LodgeCorePilot.cer"
           $certBytes = $cert.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Cert)
           [IO.File]::WriteAllBytes("$PWD\$publicCertPath", $certBytes)
+          
+          # Prevent APPX0101 by syncing the manifest Publisher with the exact certificate Subject
+          $manifestPath = "apps\desktop\LodgeCore.Desktop\Platforms\Windows\Package.appxmanifest"
+          $subject = $cert.Subject
+          (Get-Content $manifestPath) -replace 'Publisher="[^"]+"', "Publisher=`"$subject`"" | Set-Content $manifestPath
 
       - name: Build and Publish MSIX
         shell: powershell
