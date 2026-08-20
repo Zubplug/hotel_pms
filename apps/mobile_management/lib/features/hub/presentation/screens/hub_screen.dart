@@ -123,10 +123,19 @@ class HubScreen extends ConsumerWidget {
                 action: qa,
                 onTap: () {
                   if (qa.id == 'run_night_audit') {
+                    if (data.scope.property == 'ALL_AUTHORIZED') {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: const Text('Please select a specific property from the dropdown to run Night Audit.'),
+                          backgroundColor: Theme.of(context).colorScheme.primary,
+                        ),
+                      );
+                      return;
+                    }
                     Navigator.push(context, MaterialPageRoute(
                       builder: (ctx) => NightAuditReviewScreen(
-                        propertyId: data.scope.property, // Assumes a single property is selected in Hub, or requires one
-                        propertyName: data.scope.property == 'ALL_AUTHORIZED' ? 'Selected Properties' : 'Property ${data.scope.property.substring(0, 4)}...',
+                        propertyId: data.scope.property,
+                        propertyName: 'Property ${data.scope.property.substring(0, 4)}...',
                       ),
                     ));
                   } else {

@@ -11,7 +11,9 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { propertyId } = body;
 
-    if (!propertyId) return errorResponse('BAD_REQUEST', 'Missing propertyId', 400);
+    if (!propertyId || propertyId === 'ALL_AUTHORIZED') {
+      return errorResponse('BAD_REQUEST', 'Please specify a single valid propertyId', 400);
+    }
 
     const hasGlobalAccess = user.isSuperAdmin;
     const hasSpecificAccess = user.allowedProperties.includes(propertyId);
