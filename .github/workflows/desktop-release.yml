@@ -57,14 +57,15 @@ jobs:
       working-directory: ./apps/desktop/LodgeCore.Desktop
       run: >
         dotnet publish -c Release -f net10.0-windows10.0.19041.0 
-        -p:GenerateAppxPackageOnBuild=true 
-        -p:AppxPackageSigningEnabled=true 
-        -p:PackageCertificateKeyFile=Certificates\LodgeCore.pfx 
-        -p:PackageCertificatePassword=lodgecore2026
+        /p:RuntimeIdentifierOverride=win10-x86
+        /p:GenerateAppxPackageOnBuild=true 
+        /p:AppxPackageSigningEnabled=true 
+        /p:PackageCertificateKeyFile=Certificates\LodgeCore.pfx 
+        /p:PackageCertificatePassword=lodgecore2026
 
     - name: Prepare Release Artifacts
       run: |
-        mkdir -p ./release-artifacts
+        New-Item -ItemType Directory -Force -Path .\release-artifacts
         # The exact path varies slightly depending on SDK, we find the .appinstaller and .msix dynamically
         Copy-Item -Path .\apps\desktop\LodgeCore.Desktop\bin\Release\net10.0-windows10.0.19041.0\win-x86\AppPackages\LodgeCore.Desktop_*\*.msix -Destination .\release-artifacts\
         Copy-Item -Path .\apps\desktop\LodgeCore.Desktop\bin\Release\net10.0-windows10.0.19041.0\win-x86\AppPackages\LodgeCore.Desktop_*\*.appinstaller -Destination .\release-artifacts\
