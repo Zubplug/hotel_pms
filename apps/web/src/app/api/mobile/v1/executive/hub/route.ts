@@ -17,18 +17,6 @@ export async function GET(req: NextRequest) {
     const user = await prisma.user.findUnique({
       where: { id: session.id },
       include: {
-        staff: {
-          include: {
-            organization: {
-              include: {
-                properties: {
-                  where: { isActive: true },
-                  select: { id: true }
-                }
-              }
-            }
-          }
-        },
         roles: {
           include: { role: true }
         }
@@ -37,14 +25,28 @@ export async function GET(req: NextRequest) {
 
     if (!user) return errorResponse('UNAUTHORIZED', 'User not found', 401);
 
+    const staff = await prisma.staff.findFirst({
+      where: user.staffId ? { id: user.staffId } : { userId: user.id },
+      include: {
+        organization: {
+          include: {
+            properties: {
+              where: { isActive: true },
+              select: { id: true }
+            }
+          }
+        }
+      }
+    });
+
     const isSystemAdmin = user.roles.some(r => r.role.name === 'ADMIN' || r.role.name === 'SUPER_ADMIN' || r.role.name === 'DIRECTOR');
     
     let allowedPropertyIds: string[] = [];
-    if (user.staff && user.staff.organization) {
+    if (staff && staff.organization) {
       if (isSystemAdmin) {
-        allowedPropertyIds = user.staff.organization.properties.map(p => p.id);
-      } else if (user.staff.propertyAccess) {
-        allowedPropertyIds = user.staff.propertyAccess;
+        allowedPropertyIds = staff.organization.properties.map(p => p.id);
+      } else if (staff.propertyAccess) {
+        allowedPropertyIds = staff.propertyAccess;
       }
     }
 
@@ -172,6 +174,7 @@ export async function GET(req: NextRequest) {
 
   } catch (err: any) {
     console.error('[Mobile Executive Hub GET]', err);
-    return errorResponse('INTERNAL_ERROR', 'Unexpected error fetching hub data', 500);
+    return errorResponse('INTERNAL_ERROR', err?.message || 'Unexpected error fetching hub data', 500);
   }
 }
+
