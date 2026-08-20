@@ -328,7 +328,9 @@ class ProfileScreen extends ConsumerWidget {
                   children: [
                     const Icon(Icons.check_circle_rounded, color: _green, size: 16),
                     const SizedBox(width: 8),
-                    Text(c, style: const TextStyle(fontSize: 14, color: _textSecondary)),
+                    Expanded(
+                      child: Text(c, style: const TextStyle(fontSize: 14, color: _textSecondary)),
+                    ),
                   ],
                 ),
               )
@@ -429,6 +431,7 @@ class _ProfileHeaderCard extends StatelessWidget {
           
           // Status indicator
           Row(
+            mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
@@ -436,9 +439,12 @@ class _ProfileHeaderCard extends StatelessWidget {
                 decoration: const BoxDecoration(color: _green, shape: BoxShape.circle),
               ),
               const SizedBox(width: 8),
-              Text(
-                "Active · \${profile.authorization.properties.isNotEmpty ? profile.authorization.properties.first.name : 'No Property'}",
-                style: const TextStyle(fontSize: 12, color: _textMuted),
+              Flexible(
+                child: Text(
+                  "Active · \${profile.authorization.properties.isNotEmpty ? profile.authorization.properties.first.name : 'No Property'}",
+                  style: const TextStyle(fontSize: 12, color: _textMuted),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ],
           ),
