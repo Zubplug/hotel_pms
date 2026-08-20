@@ -236,7 +236,7 @@ class ProfileScreen extends ConsumerWidget {
           const Text('Could not load profile',
               style: TextStyle(color: _textPrimary, fontSize: 16, fontWeight: FontWeight.w600)),
           const SizedBox(height: 6),
-          Text('\$err', style: const TextStyle(color: _textSecondary, fontSize: 12)),
+          Text(err.toString(), style: const TextStyle(color: _textSecondary, fontSize: 12), textAlign: TextAlign.center),
           const SizedBox(height: 20),
           GestureDetector(
             onTap: () => ref.read(profileProvider.notifier).loadProfile(),
