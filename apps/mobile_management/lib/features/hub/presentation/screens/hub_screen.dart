@@ -132,10 +132,17 @@ class HubScreen extends ConsumerWidget {
                       );
                       return;
                     }
+                    final propertyId = data.scope.property;
+                    final propertyName = data.scope.availableProperties
+                            .where((p) => p.id == propertyId)
+                            .firstOrNull
+                            ?.name ??
+                        'Property ${propertyId.substring(0, 4)}...';
+
                     Navigator.push(context, MaterialPageRoute(
                       builder: (ctx) => NightAuditReviewScreen(
-                        propertyId: data.scope.property,
-                        propertyName: 'Property ${data.scope.property.substring(0, 4)}...',
+                        propertyId: propertyId,
+                        propertyName: propertyName,
                       ),
                     ));
                   } else {
