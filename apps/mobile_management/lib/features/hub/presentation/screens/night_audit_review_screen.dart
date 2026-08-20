@@ -35,7 +35,8 @@ class _NightAuditReviewScreenState extends ConsumerState<NightAuditReviewScreen>
               backgroundColor: Color(0xFF22C55E),
             ),
           );
-          Navigator.of(context).pop(true);
+          // ignore: unused_result
+          ref.refresh(nightAuditPreviewProvider(widget.propertyId));
         },
         error: (err, stack) {
           ScaffoldMessenger.of(context).showSnackBar(
