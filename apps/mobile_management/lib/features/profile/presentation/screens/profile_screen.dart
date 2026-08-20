@@ -60,6 +60,12 @@ class ProfileScreen extends ConsumerWidget {
             ),
           ),
           centerTitle: true,
+          leading: Navigator.canPop(context) 
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new_rounded, color: _textSecondary, size: 20),
+                onPressed: () => Navigator.pop(context),
+              )
+            : null,
         ),
 
         SliverToBoxAdapter(
