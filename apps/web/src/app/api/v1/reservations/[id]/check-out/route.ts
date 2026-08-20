@@ -33,7 +33,7 @@ export async function POST(
     if (!canCheckOut) return errorResponse('FORBIDDEN', 'Insufficient permissions', 403);
 
     // Run the operational checkout transaction
-    await prisma.$transaction(async (tx) => {
+    const txResult = await prisma.$transaction(async (tx) => {
       // 1. Verify and Lock Financial State (Check Folios)
       // Note: In Postgres, FOR UPDATE ensures that concurrent transactions modifying these folios are blocked.
       const folios = await tx.$queryRaw<any[]>`

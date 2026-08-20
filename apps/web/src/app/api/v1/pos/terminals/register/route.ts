@@ -45,9 +45,9 @@ export async function POST(req: NextRequest) {
         organisationId: outlet.property.organizationId,
         propertyId,
         outletId,
-        deviceTokenHash,
-        status: 'ACTIVE',
-        licenseStatus: 'ACTIVE',
+        deviceCredentialHash: deviceTokenHash,
+        registrationState: 'REGISTERED',
+        licenseState: 'VALID',
       }
     });
 
@@ -58,8 +58,8 @@ export async function POST(req: NextRequest) {
           terminalCode: terminal.terminalCode,
           name: terminal.name,
           terminalType: terminal.terminalType,
-          status: terminal.status,
-          licenseStatus: terminal.licenseStatus
+          registrationState: terminal.registrationState,
+          licenseState: terminal.licenseState
         },
         // The token is ONLY returned this one time during provisioning
         deviceToken

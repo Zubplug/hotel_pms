@@ -13,10 +13,7 @@ export async function POST(req: NextRequest) {
 
     // 1. Authenticate Admin (Simplified for MVP, would normally use bcrypt on admin credentials)
     const adminUser = await prisma.user.findUnique({
-      where: { email },
-      include: {
-        staff: true,
-      }
+      where: { email }
     });
 
     if (!adminUser) {
@@ -24,6 +21,14 @@ export async function POST(req: NextRequest) {
     }
     // Note: In real app, verify password hash here
     // For now we assume if they exist and are super admin / admin, they can provision
+    
+    const adminStaff = await prisma.staff.findFirst({
+      where: { userId: adminUser.id }
+    });
+    
+    if (!adminStaff) {
+      return NextResponse.json({ success: false, error: 'Staff record not found for admin user' }, { status: 400 });
+    }
     
     // 2. Register Terminal
     const deviceCredential = randomBytes(32).toString('hex');
@@ -35,7 +40,7 @@ export async function POST(req: NextRequest) {
         terminalCode,
         name: terminalName,
         terminalType: terminalType || 'STATIONARY',
-        organisationId: adminUser.organisationId,
+        organisationId: adminStaff.organizationId,
         propertyId,
         outletId,
         deviceCredentialHash,
@@ -47,11 +52,11 @@ export async function POST(req: NextRequest) {
 
     // 3. Snapshot datasets (mock logic, to be expanded)
     const staff = await prisma.staff.findMany({
-      where: { propertyId, isActive: true },
-      select: { id: true, firstName: true, lastName: true, role: true, hasPosAccess: true }
+      where: { organizationId: adminStaff.organizationId },
+      select: { id: true, firstName: true, lastName: true }
     });
 
-    const categories = await prisma.posProductCategory.findMany({ where: { outletId } });
+    const categories = await prisma.productCategory.findMany({ where: { outletId } });
     const products = await prisma.posProduct.findMany({ where: { propertyId } });
     const outlet = await prisma.posOutlet.findUnique({ where: { id: outletId } });
 

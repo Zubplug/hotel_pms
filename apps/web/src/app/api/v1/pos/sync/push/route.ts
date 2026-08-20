@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
       where: { id: terminalId }
     });
 
-    if (!terminal || terminal.status !== 'ACTIVE') {
+    if (!terminal || terminal.registrationState !== 'REGISTERED') {
       return NextResponse.json({ error: "Terminal inactive or unauthorized" }, { status: 403 });
     }
     

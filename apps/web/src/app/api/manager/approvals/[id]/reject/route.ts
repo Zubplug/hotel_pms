@@ -1,9 +1,10 @@
 import { NextRequest } from 'next/server';
 import prisma from '@hotel-pms/db';
+import crypto from 'crypto';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { resolveUser } from '@/lib/resolve-user';
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await resolveUser(req);
     if (!user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
@@ -16,7 +17,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const result = await prisma.$transaction(async (tx) => {
       const approval = await tx.approvalRequest.findUnique({
-        where: { id: params.id },
+        where: { id: (await params).id },
       });
 
       if (!approval) throw new Error('NOT_FOUND');
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       if (approval.status !== 'PENDING') throw new Error('CONFLICT');
 
       const updatedApproval = await tx.approvalRequest.update({
-        where: { id: params.id },
+        where: { id: (await params).id },
         data: {
           status: 'REJECTED',
           reviewedBy: user.id,
@@ -45,12 +46,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           propertyId: approval.propertyId,
           userId: user.id,
           action: 'REJECT_REQUEST',
-          entityType: 'ApprovalRequest',
-          entityId: approval.id,
-          details: { type: approval.type, amount: approval.amount, reason },
-          ipAddress: req.ip || '',
+          resource: 'ApprovalRequest',
+          resourceId: approval.id,
+          newValue: { type: approval.type, amount: approval.amount, reason },
+          ipAddress: req.headers.get('x-forwarded-for') || '',
           userAgent: req.headers.get('user-agent') || '',
-          status: 'SUCCESS',
+          requestId: crypto.randomUUID()
         },
       });
 

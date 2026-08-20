@@ -2,6 +2,14 @@ import type { NextConfig } from "next";
 
 const isDesktop = process.env.NEXT_PUBLIC_IS_DESKTOP === "true";
 
+if (process.env.NODE_ENV === 'production' && !isDesktop) {
+  const isDevUrl = (url?: string) => url?.includes('localhost') || url?.includes('127.0.0.1') || url?.includes('0.0.0.0');
+  
+  if (isDevUrl(process.env.NEXT_PUBLIC_API_URL)) {
+    throw new Error('Production build cannot use development endpoints (localhost/127.0.0.1) for NEXT_PUBLIC_API_URL');
+  }
+}
+
 const nextConfig: NextConfig = {
   output: isDesktop ? "export" : undefined,
   images: isDesktop ? { unoptimized: true } : undefined,
@@ -19,10 +27,7 @@ const nextConfig: NextConfig = {
     AUTH_SECRET: process.env.AUTH_SECRET || "fallback",
   },
   typescript: {
-    // !! WARN !!
-    // Dangerously allow production builds to successfully complete even if
-    // your project has type errors.
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
   // Ignore API routes and middleware (.ts files) when building for Desktop static export
   pageExtensions: isDesktop ? ['tsx', 'jsx'] : ['tsx', 'ts', 'jsx', 'js'],

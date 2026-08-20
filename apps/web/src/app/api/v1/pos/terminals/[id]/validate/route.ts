@@ -4,7 +4,7 @@ import { compare } from 'bcryptjs';
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const authHeader = req.headers.get('authorization');
@@ -15,25 +15,25 @@ export async function POST(
     const deviceToken = authHeader.split(' ')[1];
 
     const terminal = await prisma.posTerminal.findUnique({
-      where: { id: params.id }
+      where: { id: (await params).id }
     });
 
     if (!terminal) {
       return NextResponse.json({ error: 'Terminal not found' }, { status: 404 });
     }
 
-    if (terminal.status !== 'ACTIVE') {
-      return NextResponse.json({ error: `Terminal is ${terminal.status.toLowerCase()}` }, { status: 403 });
+    if (terminal.registrationState !== 'REGISTERED') {
+      return NextResponse.json({ error: `Terminal is ${terminal.registrationState.toLowerCase()}` }, { status: 403 });
     }
 
-    const isTokenValid = await compare(deviceToken, terminal.deviceTokenHash);
+    const isTokenValid = await compare(deviceToken, terminal.deviceCredentialHash);
     if (!isTokenValid) {
       return NextResponse.json({ error: 'Invalid device token' }, { status: 401 });
     }
 
     // Update last seen
     await prisma.posTerminal.update({
-      where: { id: params.id },
+      where: { id: (await params).id },
       data: { lastSeenAt: new Date() }
     });
 
@@ -41,8 +41,8 @@ export async function POST(
       data: {
         isValid: true,
         terminal: {
-          status: terminal.status,
-          licenseStatus: terminal.licenseStatus
+          status: terminal.registrationState,
+          licenseState: terminal.licenseState
         }
       }
     });

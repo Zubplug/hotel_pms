@@ -4,6 +4,8 @@ export interface LodgeCoreDataProvider {
     provisionDevice: (deviceToken: string) => Promise<any>;
     getActiveStaff: () => Promise<any>;
     login: (staffId: string, pin: string) => Promise<any>;
+    logout?: () => Promise<any>;
+    lock?: () => Promise<any>;
     clearSession?: () => Promise<any>;
   };
   system?: {
@@ -75,7 +77,7 @@ export interface LodgeCoreDataProvider {
     getAuthorizedOutlets(propertyId: string, deviceId: string): Promise<{ data: { outlets: any[], device: any } | null, error: string | null }>;
     // Phase 1.8 — Restaurant Operations
     getFloorPlans(outletId: string, operatorToken?: string | null): Promise<{ data: any[], error: string | null }>;
-    getTables(floorPlanId: string): Promise<{ data: any[], error: string | null }>;
+    getTables(floorPlanId: string, operatorToken?: string | null): Promise<{ data: any[], error: string | null }>;
     getProductModifiers(productId: string): Promise<{ data: any[], error: string | null }>;
     splitCheck(orderId: string, itemIds: string[], userId: string): Promise<{ data: any, error: string | null }>;
     fireKot(orderId: string, itemIds: string[], operatorToken: string): Promise<{ data: any, error: string | null }>;

@@ -6,7 +6,7 @@ import { resolveUser } from '@/lib/resolve-user';
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { roomId: string } }
+  { params }: { params: Promise<{ roomId: string }> }
 ) {
   try {
     const user = await resolveUser(req);
@@ -26,7 +26,7 @@ export async function GET(
     }
 
     const propertyId = allowedPropertyIds[0];
-    const roomId = params.roomId;
+    const { roomId } = await params;
 
     const property = await prisma.property.findUnique({
       where: { id: propertyId },

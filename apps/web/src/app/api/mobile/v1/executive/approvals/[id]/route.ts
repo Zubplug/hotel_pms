@@ -7,14 +7,14 @@ import * as crypto from 'crypto';
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await resolveUser(req);
     
     if (!user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
     
-    const approvalId = params.id;
+    const approvalId = (await params).id;
     const bodyText = await req.text();
     const body = bodyText ? JSON.parse(bodyText) : {};
     const { action, comments } = body; // action: 'APPROVE' | 'REJECT'
@@ -84,9 +84,8 @@ export async function POST(
         where: { id: approvalId, status: 'PENDING' },
         data: {
           status: newStatus,
-          reviewedBy: user.id, // Or user.staffId if we enforce it
+          reviewedBy: user.id,
           reviewedAt: new Date(),
-          comments: comments || undefined,
         }
       });
 
@@ -124,10 +123,19 @@ export async function POST(
       return successResponse(result.payload, 200);
     }
 
+    if (!result.payload || typeof result.payload !== 'object' || !('updatedRequest' in result.payload) || !result.payload.updatedRequest) {
+      throw new Error('INTERNAL_ERROR:Invalid payload returned');
+    }
+
+    const payloadObj = result.payload as { updatedRequest: any; action: string; comments: string };
+    
+    // Fetch property to get organizationId
+    const property = await prisma.property.findUnique({ where: { id: payloadObj.updatedRequest.propertyId } });
+
     // 8. Fire and forget audit log outside of transaction to use standard utility
     createAuditLog({
-      organizationId: user.organizationId || 'UNKNOWN',
-      propertyId: result.payload.updatedRequest.propertyId,
+      organizationId: property?.organizationId || 'UNKNOWN',
+      propertyId: payloadObj.updatedRequest.propertyId,
       userId: user.id,
       userRole: user.role,
       action: `APPROVAL_${action}`,
@@ -139,7 +147,7 @@ export async function POST(
       userAgent: req.headers.get('user-agent') || undefined,
     });
 
-    return successResponse(result.payload.updatedRequest, 200);
+    return successResponse(payloadObj.updatedRequest, 200);
 
   } catch (err: any) {
     if (err.message && err.message.includes(':')) {

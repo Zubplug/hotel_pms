@@ -21,13 +21,13 @@ public static class MauiProgram
         builder.Services.AddSingleton<ILockProvider>(sp =>
         {
             var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
-            // Retrieve configured provider, defaulting to HsLock for testing
-            var providerType = Microsoft.Maui.Storage.Preferences.Default.Get("LockProviderType", "HsLock");
+            // Retrieve configured provider, defaulting to Elock (Deluns)
+            var providerType = Microsoft.Maui.Storage.Preferences.Default.Get("LockProviderType", "Elock");
             
             return providerType.ToLowerInvariant() switch
             {
                 "hslock" => new HsLockProvider(loggerFactory.CreateLogger<HsLockProvider>()),
-                _        => new DelunsLockProvider(loggerFactory.CreateLogger<DelunsLockProvider>())
+                _        => new DelunsLockProvider(loggerFactory.CreateLogger<DelunsLockProvider>()) // Elock is the default
             };
         });
         builder.Services.AddSingleton<HardwareInterop>();
@@ -59,7 +59,23 @@ public static class MauiProgram
         builder.Services.AddHostedService<LodgeCore.Desktop.Services.SyncEngine>();
         builder.Services.AddHostedService<LodgeCore.Desktop.Services.KotPrintService>();
         builder.Services.AddSingleton<OfflinePMSInterop>();
-        builder.Services.AddSingleton<HttpClient>();
+        builder.Services.AddSingleton(sp => 
+        {
+            var baseUrl = Environment.GetEnvironmentVariable("LODGECORE_API_URL") 
+                          ?? Microsoft.Maui.Storage.Preferences.Default.Get("ApiBaseUrl", "https://hotel-pms-web-nine.vercel.app/api/v1/");
+
+#if !DEBUG
+            if (baseUrl.Contains("localhost") || baseUrl.Contains("127.0.0.1") || baseUrl.Contains("0.0.0.0"))
+            {
+                throw new Exception("Production builds cannot use development endpoints (localhost/127.0.0.1) for API URLs.");
+            }
+#endif
+
+            // Ensure trailing slash for base address
+            if (!baseUrl.EndsWith("/")) baseUrl += "/";
+
+            return new HttpClient { BaseAddress = new Uri(baseUrl) };
+        });
         builder.Services.AddSingleton<LodgeCore.Desktop.Services.ICredentialStorageService, LodgeCore.Desktop.Services.DpapiCredentialStorageService>();
         builder.Services.AddSingleton<LodgeCore.Desktop.Services.TerminalBootstrapService>();
 

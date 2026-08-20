@@ -26,11 +26,7 @@ export async function GET(req: NextRequest) {
         propertyId: { in: allowedPropertyIds },
         status: 'PENDING'
       },
-      include: {
-        requester: {
-          select: { firstName: true, lastName: true, department: true }
-        }
-      },
+
       orderBy: { createdAt: 'desc' },
       take: 20
     });

@@ -388,8 +388,8 @@ async function evaluateEvent(event: NotificationEvent, policy: NotificationPolic
       const checkOut = res.checkOut.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
       const nights = Math.ceil((res.checkOut.getTime() - res.checkIn.getTime()) / (1000 * 60 * 60 * 24));
       const roomDetails = res.reservationRooms.map(rr => {
-        const roomNum = rr.room.number.split('.').pop();
-        const type = rr.room.roomType?.name || 'Room';
+        const roomNum = rr.room?.number.split('.').pop() || 'N/A';
+        const type = rr.room?.roomType?.name || 'Room';
         return `Room ${roomNum} (${type})`;
       }).join(', ');
       const folio = res.folios?.[0];
@@ -421,8 +421,8 @@ async function evaluateEvent(event: NotificationEvent, policy: NotificationPolic
       const checkOut = res.checkOut.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
       const nights = Math.ceil((res.checkOut.getTime() - res.checkIn.getTime()) / (1000 * 60 * 60 * 24));
       const roomDetails = res.reservationRooms.map(rr => {
-        const roomNum = rr.room.number.split('.').pop();
-        const type = rr.room.roomType?.name || 'Room';
+        const roomNum = rr.room?.number.split('.').pop() || 'N/A';
+        const type = rr.room?.roomType?.name || 'Room';
         return `Room ${roomNum} (${type})`;
       }).join(', ');
       const folio = res.folios?.[0];

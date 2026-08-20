@@ -3,7 +3,7 @@ import prisma from '@hotel-pms/db';
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const authHeader = req.headers.get('authorization');
@@ -14,7 +14,7 @@ export async function GET(
     // In a real app we would check admin session or device token depending on the caller.
     // For now we just return the terminal details without sensitive tokens.
     const terminal = await prisma.posTerminal.findUnique({
-      where: { id: params.id },
+      where: { id: (await params).id },
       include: { outlet: true }
     });
 
@@ -30,8 +30,8 @@ export async function GET(
         terminalType: terminal.terminalType,
         propertyId: terminal.propertyId,
         outletId: terminal.outletId,
-        status: terminal.status,
-        licenseStatus: terminal.licenseStatus,
+        registrationState: terminal.registrationState,
+        licenseState: terminal.licenseState,
         autoLockSeconds: terminal.autoLockSeconds ?? terminal.outlet.autoLockSeconds,
         lastSyncAt: terminal.lastSyncAt
       }

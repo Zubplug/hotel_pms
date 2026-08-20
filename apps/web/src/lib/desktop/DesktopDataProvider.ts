@@ -159,6 +159,9 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     getCurrentOperator: async (sessionId: string, operatorToken?: string | null) => {
       return invokeDesktop('pos.getCurrentOperator', { sessionId });
     },
+    authenticateOperator: async (staffId: string, pin: string, propertyId: string, sessionId: string, outletId: string, deviceId: string) => {
+      return invokeDesktop('pos.authenticateOperator', { staffId, pin, propertyId, sessionId, outletId, deviceId });
+    },
     startSession: async (data: { userId: string; propertyId: string; deviceId: string; outletId: string; openingCash: number }) => {
       return invokeDesktop('pos.startSession', data);
     },

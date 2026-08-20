@@ -4,10 +4,10 @@ import { compare } from 'bcryptjs';
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const terminalId = params.id;
+    const terminalId = (await params).id;
     const authHeader = req.headers.get('authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return NextResponse.json({ error: 'Missing or invalid authorization header' }, { status: 401 });
@@ -24,11 +24,11 @@ export async function GET(
       return NextResponse.json({ error: 'Terminal not found' }, { status: 404 });
     }
 
-    if (terminal.status !== 'ACTIVE') {
-      return NextResponse.json({ error: `Terminal is ${terminal.status.toLowerCase()}` }, { status: 403 });
+    if (terminal.registrationState !== 'REGISTERED') {
+      return NextResponse.json({ error: `Terminal is ${terminal.registrationState.toLowerCase()}` }, { status: 403 });
     }
 
-    const isTokenValid = await compare(deviceToken, terminal.deviceTokenHash);
+    const isTokenValid = await compare(deviceToken, terminal.deviceCredentialHash);
     if (!isTokenValid) {
       return NextResponse.json({ error: 'Invalid device token' }, { status: 401 });
     }
@@ -46,7 +46,7 @@ export async function GET(
       include: { staff: true }
     });
 
-    const staff = staffAccess.map(sa => sa.staff).filter(s => s.isActive);
+    const staff = staffAccess.map(sa => sa.staff);
 
     // 2. Categories & Products
     const categories = await prisma.productCategory.findMany({
@@ -67,7 +67,7 @@ export async function GET(
           terminalCode: terminal.terminalCode,
           name: terminal.name,
           terminalType: terminal.terminalType,
-          licenseStatus: terminal.licenseStatus,
+          licenseState: terminal.licenseState,
           autoLockSeconds: terminal.autoLockSeconds ?? terminal.outlet.autoLockSeconds
         },
         staff: staff.map(s => ({

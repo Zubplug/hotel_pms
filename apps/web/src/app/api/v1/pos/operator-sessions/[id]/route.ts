@@ -3,7 +3,7 @@ import prisma from '@hotel-pms/db';
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const authHeader = req.headers.get('authorization');
@@ -11,7 +11,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Missing or invalid authorization header' }, { status: 401 });
     }
 
-    const sessionId = params.id;
+    const { id: sessionId } = await params;
     const body = await req.json();
     const { lastActivityAt, lockedAt, endedAt, status } = body;
 

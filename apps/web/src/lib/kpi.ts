@@ -82,7 +82,7 @@ export async function calculateDailyRevenue(propertyId: string, businessDate: Da
       barRevenue += value;
     } else if (['POS', 'RESTAURANT'].includes(item.source)) {
       fbRevenue += value;
-    } else if (item.source !== 'TAX') {
+    } else {
       otherRevenue += value;
     }
   }

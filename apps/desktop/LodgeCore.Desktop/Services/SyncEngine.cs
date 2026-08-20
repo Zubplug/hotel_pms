@@ -37,13 +37,12 @@ public class SyncEngine : BackgroundService
     
     private DateTime _lastSuccess = DateTime.MinValue;
 
-    public SyncEngine(IServiceProvider serviceProvider, ILogger<SyncEngine> logger, AuthManager authManager)
+    public SyncEngine(IServiceProvider serviceProvider, ILogger<SyncEngine> logger, AuthManager authManager, HttpClient httpClient)
     {
         _serviceProvider = serviceProvider;
         _logger = logger;
         _authManager = authManager;
-        // In reality, this would use IHttpClientFactory configured with BaseAddress & Auth
-        _httpClient = new HttpClient { BaseAddress = new Uri("https://api.lodgecore.com/v1/") };
+        _httpClient = httpClient;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

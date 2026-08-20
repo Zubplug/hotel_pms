@@ -2,8 +2,7 @@ import { LodgeCoreDataProvider } from './DataProvider';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
-// Helper for standard API requests
-async function apiFetch(url: string, options: RequestInit = {}) {
+async function apiFetchResult<T = any>(url: string, options: RequestInit = {}): Promise<{ data: T; error: string | null }> {
   const fullUrl = url.startsWith('/') && BASE_URL ? `${BASE_URL}${url}` : url;
   try {
     const res = await fetch(fullUrl, {
@@ -18,10 +17,16 @@ async function apiFetch(url: string, options: RequestInit = {}) {
       throw new Error(`API Error ${res.status}: ${errorBody}`);
     }
     const data = await res.json();
-    return { data: data.data || data, error: data.error || null, debug: data.debug };
+    return { data: (data.data || data) as T, error: (data.error || null) as string | null };
   } catch (err: any) {
-    return { data: null, error: err.message };
+    return { data: null as unknown as T, error: err.message };
   }
+}
+
+async function apiFetch<T = any>(url: string, options: RequestInit = {}): Promise<T> {
+  const res = await apiFetchResult<T>(url, options);
+  if (res.error) throw new Error(res.error);
+  return res.data;
 }
 
 export const OnlineDataProvider: LodgeCoreDataProvider = {
@@ -201,7 +206,7 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
   },
   pos: {
     getProducts: async (propertyId: string) => {
-      return apiFetch(`/api/v1/pos/products?propertyId=${propertyId}`);
+      return apiFetchResult(`/api/v1/pos/products?propertyId=${propertyId}`);
     },
     getCategories: async (propertyId: string) => {
       return apiFetch(`/api/v1/pos/categories?propertyId=${propertyId}`);

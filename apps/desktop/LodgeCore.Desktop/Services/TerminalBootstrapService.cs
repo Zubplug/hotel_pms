@@ -91,7 +91,7 @@ public class TerminalBootstrapService
             terminalType = "STATIONARY"
         };
 
-        var response = await _httpClient.PostAsJsonAsync("https://hotel-pms-web-nine.vercel.app/api/v1/pos/provision", requestPayload);
+        var response = await _httpClient.PostAsJsonAsync("pos/provision", requestPayload);
         
         if (!response.IsSuccessStatusCode)
         {

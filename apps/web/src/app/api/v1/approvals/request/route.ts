@@ -35,9 +35,7 @@ export async function POST(req: NextRequest) {
         type,
         status: 'PENDING',
         reason,
-        requestedEntityId: requestedEntityId || null,
-        requestedEntityType: requestedEntityType || null,
-        metadata: metadata || {}
+        details: { requestedEntityId, requestedEntityType, metadata }
       }
     });
 

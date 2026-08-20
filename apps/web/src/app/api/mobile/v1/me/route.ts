@@ -65,7 +65,7 @@ export async function GET(req: NextRequest) {
     // Gather property access. 
     // For admins/directors, they typically have access to all active properties in the org.
     // Otherwise, restrict to staff.propertyAccess
-    let authorizedProperties = [];
+    let authorizedProperties: { id: string; name: string; code: string }[] = [];
     if (staff && staff.organization) {
        if (systemRole === 'ADMIN' || systemRole === 'DIRECTOR') {
           authorizedProperties = staff.organization.properties.map(p => ({ id: p.id, name: p.name, code: p.code }));

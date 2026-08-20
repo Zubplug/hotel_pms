@@ -24,7 +24,7 @@ export async function POST(
     const revokedTerminal = await prisma.posTerminal.update({
       where: { id },
       data: {
-        status: 'REVOKED',
+        registrationState: 'REVOKED',
         revokedAt: new Date()
       }
     });
