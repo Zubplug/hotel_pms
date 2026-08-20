@@ -128,7 +128,9 @@ class NotificationsNotifier extends StateNotifier<NotificationsState> {
 
     try {
       await _repository.markAllAsRead();
-    } catch (e) {}
+    } catch (e) {
+      // Ignore errors marking as read globally.
+    }
   }
 }
 

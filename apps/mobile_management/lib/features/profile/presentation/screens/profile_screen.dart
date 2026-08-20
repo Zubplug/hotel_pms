@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../authentication/presentation/providers/auth_provider.dart';
 import '../providers/profile_provider.dart';
 import '../models/user_profile.dart';
-import 'dart:ui';
+
 
 // ─── Design Tokens ───────────────────────────────────────────────────────────
 const _bgDeep = Color(0xFF070D1A);
@@ -72,8 +72,8 @@ class ProfileScreen extends ConsumerWidget {
                 const SizedBox(height: 32),
 
                 // ── Account Section ─────────────────────────────────────────
-                _SectionTitle('ACCOUNT'),
-                _SettingsGroup([
+                _buildSectionTitle('ACCOUNT'),
+                _buildSettingsGroup([
                   _SettingsTile(
                     title: 'Personal Information',
                     icon: Icons.person_outline_rounded,
@@ -88,8 +88,8 @@ class ProfileScreen extends ConsumerWidget {
                 const SizedBox(height: 24),
 
                 // ── Access Section ──────────────────────────────────────────
-                _SectionTitle('ACCESS'),
-                _SettingsGroup([
+                _buildSectionTitle('ACCESS'),
+                _buildSettingsGroup([
                   _SettingsTile(
                     title: 'Role & Access',
                     icon: Icons.shield_outlined,
@@ -106,8 +106,8 @@ class ProfileScreen extends ConsumerWidget {
                 const SizedBox(height: 24),
 
                 // ── Preferences Section ─────────────────────────────────────
-                _SectionTitle('PREFERENCES'),
-                _SettingsGroup([
+                _buildSectionTitle('PREFERENCES'),
+                _buildSettingsGroup([
                   _SettingsTile(
                     title: 'Notifications',
                     icon: Icons.notifications_none_rounded,
@@ -130,8 +130,8 @@ class ProfileScreen extends ConsumerWidget {
                 const SizedBox(height: 24),
 
                 // ── Security Section ────────────────────────────────────────
-                _SectionTitle('SECURITY'),
-                _SettingsGroup([
+                _buildSectionTitle('SECURITY'),
+                _buildSettingsGroup([
                   _SettingsTile(
                     title: 'Change Password',
                     icon: Icons.lock_outline_rounded,
@@ -152,8 +152,8 @@ class ProfileScreen extends ConsumerWidget {
                 const SizedBox(height: 24),
 
                 // ── Support Section ─────────────────────────────────────────
-                _SectionTitle('SUPPORT'),
-                _SettingsGroup([
+                _buildSectionTitle('SUPPORT'),
+                _buildSettingsGroup([
                   _SettingsTile(
                     title: 'Help & Support',
                     icon: Icons.help_outline_rounded,
@@ -176,7 +176,7 @@ class ProfileScreen extends ConsumerWidget {
                     decoration: BoxDecoration(
                       color: _cardBg,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: _red.withOpacity(0.3)),
+                      border: Border.all(color: _red.withValues(alpha: 0.3)),
                     ),
                     child: const Center(
                       child: Text(
@@ -204,11 +204,11 @@ class ProfileScreen extends ConsumerWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    _FooterLink('Terms'),
+                    _buildFooterLink('Terms'),
                     const Text('  ·  ', style: TextStyle(color: _textMuted)),
-                    _FooterLink('Privacy'),
+                    _buildFooterLink('Privacy'),
                     const Text('  ·  ', style: TextStyle(color: _textMuted)),
-                    _FooterLink('Support'),
+                    _buildFooterLink('Support'),
                   ],
                 ),
                 const SizedBox(height: 40),
@@ -288,7 +288,7 @@ class ProfileScreen extends ConsumerWidget {
               child: Container(
                 width: 40, height: 4,
                 decoration: BoxDecoration(
-                  color: _textMuted.withOpacity(0.5),
+                  color: _textMuted.withValues(alpha: 0.5),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -364,7 +364,7 @@ class _ProfileHeaderCard extends StatelessWidget {
         border: Border.all(color: const Color(0xFF1E3355)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.3),
+            color: Colors.black.withValues(alpha: 0.3),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -379,7 +379,7 @@ class _ProfileHeaderCard extends StatelessWidget {
             decoration: BoxDecoration(
               color: _surfaceNavy,
               shape: BoxShape.circle,
-              border: Border.all(color: _goldLight.withOpacity(0.3), width: 2),
+              border: Border.all(color: _goldLight.withValues(alpha: 0.3), width: 2),
             ),
             child: Center(
               child: Text(
@@ -444,7 +444,7 @@ class _ProfileHeaderCard extends StatelessWidget {
 
 // ─── Settings Components ──────────────────────────────────────────────────────
 
-Widget _SectionTitle(String title) {
+Widget _buildSectionTitle(String title) {
   return Padding(
     padding: const EdgeInsets.only(left: 4, bottom: 8),
     child: Text(
@@ -459,7 +459,7 @@ Widget _SectionTitle(String title) {
   );
 }
 
-Widget _SettingsGroup(List<Widget> children) {
+Widget _buildSettingsGroup(List<Widget> children) {
   return Container(
     decoration: BoxDecoration(
       color: _cardBg,
@@ -476,7 +476,7 @@ Widget _SettingsGroup(List<Widget> children) {
         return Column(
           children: [
             child,
-            Divider(color: const Color(0xFF1E3355).withOpacity(0.5), height: 1, indent: 52),
+            Divider(color: const Color(0xFF1E3355).withValues(alpha: 0.5), height: 1, indent: 52),
           ],
         );
       }).toList(),
@@ -536,7 +536,7 @@ class _SettingsTile extends StatelessWidget {
   }
 }
 
-Widget _FooterLink(String label) {
+Widget _buildFooterLink(String label) {
   return GestureDetector(
     onTap: () {},
     child: Text(

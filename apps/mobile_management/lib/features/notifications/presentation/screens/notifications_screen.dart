@@ -17,7 +17,6 @@ const _red           = Color(0xFFEF4444);
 const _orange        = Color(0xFFF97316);
 const _blue          = Color(0xFF3B82F6);
 const _green         = Color(0xFF22C55E);
-const _purple        = Color(0xFF8B5CF6);
 
 class NotificationsScreen extends ConsumerStatefulWidget {
   const NotificationsScreen({super.key});
@@ -86,9 +85,6 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     final state    = ref.watch(notificationsProvider);
     final notifier = ref.read(notificationsProvider.notifier);
 
-    final criticalCount = state.notifications
-        .where((n) => n.isCritical && !n.isRead)
-        .length;
 
     return Scaffold(
       backgroundColor: _bg,
@@ -249,7 +245,7 @@ class _Header extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
       decoration: BoxDecoration(
         color: _bg,
-        border: Border(bottom: BorderSide(color: _border.withOpacity(0.6), width: 0.5)),
+        border: Border(bottom: BorderSide(color: _border.withValues(alpha: 0.6), width: 0.5)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -301,9 +297,9 @@ class _Header extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: _gold.withOpacity(0.1),
+                  color: _gold.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: _gold.withOpacity(0.3)),
+                  border: Border.all(color: _gold.withValues(alpha: 0.3)),
                 ),
                 child: const Text(
                   'Mark all read',
@@ -316,70 +312,6 @@ class _Header extends StatelessWidget {
               ),
             ),
         ],
-      ),
-    );
-  }
-}
-
-// ─── Summary Bar ──────────────────────────────────────────────────────────────
-class _SummaryBar extends StatelessWidget {
-  final int unread;
-  final int critical;
-  final int total;
-  const _SummaryBar({required this.unread, required this.critical, required this.total});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      child: Container(
-        decoration: BoxDecoration(
-          color: _surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: _border),
-        ),
-        child: IntrinsicHeight(
-          child: Row(
-            children: [
-              _SummaryCell(value: unread, label: 'Unread', color: _gold),
-              VerticalDivider(color: _border, width: 1, thickness: 1),
-              _SummaryCell(value: critical, label: 'Critical', color: _red),
-              VerticalDivider(color: _border, width: 1, thickness: 1),
-              _SummaryCell(value: total, label: 'Total', color: _textSecondary),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SummaryCell extends StatelessWidget {
-  final int value;
-  final String label;
-  final Color color;
-  const _SummaryCell({required this.value, required this.label, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        child: Column(
-          children: [
-            Text(
-              '$value',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                color: color,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(label,
-                style: const TextStyle(fontSize: 10, color: _textMuted, letterSpacing: 0.5)),
-          ],
-        ),
       ),
     );
   }
@@ -409,7 +341,7 @@ class _CategoryFilter extends StatelessWidget {
                 duration: const Duration(milliseconds: 180),
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
-                  color: isSelected ? _gold.withOpacity(0.12) : _surface,
+                  color: isSelected ? _gold.withValues(alpha: 0.12) : _surface,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
                     color: isSelected ? _gold : _border,
@@ -498,9 +430,13 @@ class _NotificationCard extends StatelessWidget {
 
     // Card glow/border colour
     Color borderColor;
-    if (isCritical && isUnread)   borderColor = _red.withOpacity(0.35);
-    else if (isUnread)            borderColor = _gold.withOpacity(0.25);
-    else                         borderColor = _border.withOpacity(0.5);
+    if (isCritical && isUnread) {
+      borderColor = _red.withValues(alpha: 0.35);
+    } else if (isUnread) {
+      borderColor = _gold.withValues(alpha: 0.25);
+    } else {
+      borderColor = _border.withValues(alpha: 0.5);
+    }
 
     return GestureDetector(
       onTap: onTap,
@@ -510,7 +446,7 @@ class _NotificationCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: borderColor),
           boxShadow: isCritical && isUnread
-              ? [BoxShadow(color: _red.withOpacity(0.08), blurRadius: 12, spreadRadius: 1)]
+              ? [BoxShadow(color: _red.withValues(alpha: 0.08), blurRadius: 12, spreadRadius: 1)]
               : null,
         ),
         clipBehavior: Clip.antiAlias,
@@ -583,9 +519,9 @@ class _NotificationCard extends StatelessWidget {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                               decoration: BoxDecoration(
-                                color: categoryColor.withOpacity(0.1),
+                                color: categoryColor.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(6),
-                                border: Border.all(color: categoryColor.withOpacity(0.25)),
+                                border: Border.all(color: categoryColor.withValues(alpha: 0.25)),
                               ),
                               child: Text(
                                 n.category!.toUpperCase(),
@@ -609,9 +545,9 @@ class _NotificationCard extends StatelessWidget {
                               child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                 decoration: BoxDecoration(
-                                  color: _gold.withOpacity(0.1),
+                                  color: _gold.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: _gold.withOpacity(0.3)),
+                                  border: Border.all(color: _gold.withValues(alpha: 0.3)),
                                 ),
                                 child: const Text(
                                   'Mark read',
@@ -657,9 +593,9 @@ class _PriorityBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
+        color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withOpacity(0.4)),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
       ),
       child: Text(
         label,

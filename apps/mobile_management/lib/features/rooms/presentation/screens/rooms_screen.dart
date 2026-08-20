@@ -136,11 +136,11 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen>
                     children: [
                       AnimatedBuilder(
                         animation: _pulseAnim,
-                        builder: (_, __) => Container(
+                        builder: (context, child) => Container(
                           width: 6, height: 6,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: _green.withOpacity(_pulseAnim.value),
+                            color: _green.withValues(alpha: _pulseAnim.value),
                           ),
                         ),
                       ),
@@ -158,9 +158,9 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: _gold.withOpacity(0.12),
+                  color: _gold.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: _gold.withOpacity(0.3)),
+                  border: Border.all(color: _gold.withValues(alpha: 0.3)),
                 ),
                 child: Text(
                   '${data.businessDate.day} ${_monthName(data.businessDate.month)}',
@@ -330,7 +330,7 @@ class _OccupancyBanner extends StatelessWidget {
         border: Border.all(color: const Color(0xFF252A35)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.3),
+            color: Colors.black.withValues(alpha: 0.3),
             blurRadius: 20,
             offset: const Offset(0, 6),
           ),
@@ -370,9 +370,9 @@ class _OccupancyBanner extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
-                  color: _blue.withOpacity(0.12),
+                  color: _blue.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: _blue.withOpacity(0.25)),
+                  border: Border.all(color: _blue.withValues(alpha: 0.25)),
                 ),
                 child: Column(
                   children: [
@@ -410,7 +410,7 @@ class _OccupancyBanner extends StatelessWidget {
           ),
 
           const SizedBox(height: 16),
-          Divider(color: const Color(0xFF252A35).withOpacity(0.8), height: 1),
+          Divider(color: const Color(0xFF252A35).withValues(alpha: 0.8), height: 1),
           const SizedBox(height: 16),
 
           // Stat pills row
@@ -443,9 +443,9 @@ class _StatPill extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.08),
+          color: color.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: color.withOpacity(0.2)),
+          border: Border.all(color: color.withValues(alpha: 0.2)),
         ),
         child: Column(
           children: [
@@ -459,7 +459,7 @@ class _StatPill extends StatelessWidget {
             ),
             const SizedBox(height: 2),
             Text(label,
-                style: TextStyle(fontSize: 9, color: color.withOpacity(0.7), letterSpacing: 0.3)),
+                style: TextStyle(fontSize: 9, color: color.withValues(alpha: 0.7), letterSpacing: 0.3)),
           ],
         ),
       ),
@@ -508,7 +508,7 @@ class _FilterBar extends StatelessWidget {
                 duration: const Duration(milliseconds: 200),
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
-                  color: isSelected ? _gold.withOpacity(0.12) : _surface,
+                  color: isSelected ? _gold.withValues(alpha: 0.12) : _surface,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
                     color: isSelected ? _gold : const Color(0xFF252A35),
@@ -530,7 +530,7 @@ class _FilterBar extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                       decoration: BoxDecoration(
-                        color: isSelected ? _gold.withOpacity(0.2) : const Color(0xFF252A35),
+                        color: isSelected ? _gold.withValues(alpha: 0.2) : const Color(0xFF252A35),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Text(
@@ -585,7 +585,7 @@ class _RoomCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: const Color(0xFF111318),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: statusColor.withOpacity(0.2)),
+          border: Border.all(color: statusColor.withValues(alpha: 0.2)),
         ),
         clipBehavior: Clip.antiAlias,
         child: IntrinsicHeight(
@@ -647,7 +647,7 @@ class _RoomCard extends StatelessWidget {
                                 room.contextualNote!,
                                 style: TextStyle(
                                   fontSize: 11,
-                                  color: statusColor.withOpacity(0.8),
+                                  color: statusColor.withValues(alpha: 0.8),
                                   fontStyle: FontStyle.italic,
                                 ),
                                 maxLines: 1,
@@ -667,9 +667,9 @@ class _RoomCard extends StatelessWidget {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
-                              color: statusColor.withOpacity(0.12),
+                              color: statusColor.withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: statusColor.withOpacity(0.35)),
+                              border: Border.all(color: statusColor.withValues(alpha: 0.35)),
                             ),
                             child: Text(
                               statusLabel,

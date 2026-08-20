@@ -635,7 +635,7 @@ class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen> {
                 const SizedBox(width: 8),
                 Text(title, style: const TextStyle(color: _textSecondary, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
                 const Spacer(),
-                if (chip != null) chip,
+                ?chip,
               ],
             ),
           ),

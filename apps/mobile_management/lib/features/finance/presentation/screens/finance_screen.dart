@@ -9,7 +9,6 @@ import 'package:timeago/timeago.dart' as timeago;
 // ─── Design Tokens ────────────────────────────────────────────────────────────
 const _bg = Color(0xFF08090E);
 const _surface = Color(0xFF111318);
-const _surfaceElevated = Color(0xFF181C24);
 const _border = Color(0xFF252A35);
 const _gold = Color(0xFFD4AF37);
 const _goldDim = Color(0xFFB8962F);
@@ -17,7 +16,6 @@ const _textPrimary = Color(0xFFF0F4FF);
 const _textSecondary = Color(0xFF8B92A5);
 const _textMuted = Color(0xFF4E5566);
 const _green = Color(0xFF22C55E);
-const _greenDim = Color(0xFF16A34A);
 const _red = Color(0xFFEF4444);
 const _orange = Color(0xFFF97316);
 const _blue = Color(0xFF3B82F6);
@@ -111,12 +109,12 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen>
                       children: [
                         AnimatedBuilder(
                           animation: _pulseAnim,
-                          builder: (_, __) => Container(
+                          builder: (context, child) => Container(
                             width: 6,
                             height: 6,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: _green.withOpacity(_pulseAnim.value),
+                              color: _green.withValues(alpha: _pulseAnim.value),
                             ),
                           ),
                         ),
@@ -211,6 +209,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen>
   }
 
   // ── Skeleton Loading ────────────────────────────────────────────────────────
+  // ignore: unused_element
   Widget _buildSkeleton() {
     return SingleChildScrollView(
       physics: const NeverScrollableScrollPhysics(),
@@ -510,9 +509,9 @@ class _HeroRevenueCard extends StatelessWidget {
           colors: [Color(0xFF161A24), Color(0xFF0F1219)],
         ),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _gold.withOpacity(0.25), width: 1),
+        border: Border.all(color: _gold.withValues(alpha: 0.25), width: 1),
         boxShadow: [
-          BoxShadow(color: _gold.withOpacity(0.06), blurRadius: 32, offset: const Offset(0, 8)),
+          BoxShadow(color: _gold.withValues(alpha: 0.06), blurRadius: 32, offset: const Offset(0, 8)),
         ],
       ),
       child: Column(
@@ -524,9 +523,9 @@ class _HeroRevenueCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: _gold.withOpacity(0.12),
+                  color: _gold.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: _gold.withOpacity(0.3)),
+                  border: Border.all(color: _gold.withValues(alpha: 0.3)),
                 ),
                 child: const Text(
                   "TODAY'S POSTED REVENUE",
@@ -560,9 +559,9 @@ class _HeroRevenueCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: (isUp ? _green : _red).withOpacity(0.12),
+                  color: (isUp ? _green : _red).withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: (isUp ? _green : _red).withOpacity(0.3)),
+                  border: Border.all(color: (isUp ? _green : _red).withValues(alpha: 0.3)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -698,7 +697,7 @@ class _KpiCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.12),
+                color: color.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(icon, color: color, size: 14),
@@ -998,14 +997,14 @@ class _PaymentsCard extends StatelessWidget {
 
           return Column(
             children: [
-              if (i > 0) Divider(color: _border.withOpacity(0.6), height: 20),
+              if (i > 0) Divider(color: _border.withValues(alpha: 0.6), height: 20),
               Row(
                 children: [
                   Container(
                     width: 36,
                     height: 36,
                     decoration: BoxDecoration(
-                      color: _green.withOpacity(0.1),
+                      color: _green.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(icon, color: _green, size: 18),
@@ -1121,7 +1120,7 @@ class _TrendCard extends StatelessWidget {
                             Container(
                               height: 90,
                               decoration: BoxDecoration(
-                                color: _border.withOpacity(0.4),
+                                color: _border.withValues(alpha: 0.4),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                             ),
@@ -1133,7 +1132,7 @@ class _TrendCard extends StatelessWidget {
                                   end: Alignment.topCenter,
                                   colors: isToday
                                       ? [_gold, _goldDim]
-                                      : [_blue.withOpacity(0.8), _blue.withOpacity(0.4)],
+                                      : [_blue.withValues(alpha: 0.8), _blue.withValues(alpha: 0.4)],
                                 ),
                                 borderRadius: BorderRadius.circular(6),
                               ),
@@ -1183,9 +1182,9 @@ class _AttentionCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.06),
+        color: color.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withOpacity(0.25)),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1193,7 +1192,7 @@ class _AttentionCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.12),
+              color: color.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(
@@ -1211,7 +1210,7 @@ class _AttentionCard extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: color.withOpacity(0.15),
+                        color: color.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(alert.priority,
@@ -1237,7 +1236,7 @@ class _AttentionCard extends StatelessWidget {
               ],
             ),
           ),
-          Icon(Icons.chevron_right_rounded, color: color.withOpacity(0.5), size: 18),
+          Icon(Icons.chevron_right_rounded, color: color.withValues(alpha: 0.5), size: 18),
         ],
       ),
     );
@@ -1265,9 +1264,9 @@ class _SectionHeader extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
               decoration: BoxDecoration(
-                color: _red.withOpacity(0.15),
+                color: _red.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: _red.withOpacity(0.3)),
+                border: Border.all(color: _red.withValues(alpha: 0.3)),
               ),
               child: Text('$count',
                   style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: _red)),
@@ -1289,9 +1288,9 @@ class _PillBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Text(label,
           style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color, letterSpacing: 0.5)),
@@ -1327,11 +1326,11 @@ class _SkeletonState extends State<_Skeleton> with SingleTickerProviderStateMixi
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: _a,
-      builder: (_, __) => Container(
+      builder: (context, child) => Container(
         height: widget.height,
         width: widget.width,
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(_a.value * 0.08),
+          color: Colors.white.withValues(alpha: _a.value * 0.08),
           borderRadius: BorderRadius.circular(widget.borderRadius),
         ),
       ),
