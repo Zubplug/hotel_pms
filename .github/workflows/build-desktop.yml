@@ -27,13 +27,12 @@ jobs:
       - name: Install Node Dependencies
         run: pnpm install --no-frozen-lockfile
 
-      - name: Build Next.js Static Export
-        env:
-          NEXT_PUBLIC_API_URL: https://hotel-pms-web-nine.vercel.app
       - name: Generate Prisma Types
         run: pnpm --filter @hotel-pms/db run db:generate
 
       - name: Build Web (Next.js Static Export)
+        env:
+          NEXT_PUBLIC_API_URL: https://hotel-pms-web-nine.vercel.app
         run: pnpm build:desktop
 
       - name: Setup .NET 10
