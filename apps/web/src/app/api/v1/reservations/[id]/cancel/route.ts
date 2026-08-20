@@ -43,7 +43,7 @@ export async function POST(
 
       const updatedRes = await tx.reservation.update({
         where: { id },
-        data: { status: 'CANCELLED' }
+        data: { status: 'CANCELLED', cancellationReason: reason }
       });
 
       const organizationId = existingReservation.property.organizationId;
@@ -93,6 +93,7 @@ export async function POST(
       entityType: 'reservation',
       entityId: id,
       idempotencyKey: `res_cancelled_${id}`,
+      metadata: { reason },
     });
 
     return successResponse(cancelled.updatedRes);
