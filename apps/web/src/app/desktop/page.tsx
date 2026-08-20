@@ -5,59 +5,152 @@ import { useRouter } from 'next/navigation';
 import { useLodgeCoreProvider as useLodgeCore } from '@/lib/desktop/DataProviderContext';
 import { Button } from '@/components/ui/button';
 import { OperatorSelectionScreen } from '@/components/pos/OperatorSelectionScreen';
+import { AlertTriangle, ServerOff, ShieldAlert, Loader2 } from 'lucide-react';
+
+type TerminalState = {
+  registrationState: 'UNREGISTERED' | 'ACTIVE' | 'CORRUPTED' | 'UNKNOWN';
+  desktopMode?: 'FRONT_DESK' | 'POS' | 'UNKNOWN';
+  error?: string;
+  terminalId?: string;
+  name?: string;
+};
 
 export default function DesktopEntryPage() {
   const router = useRouter();
   const { provider } = useLodgeCore();
-  const [terminalState, setTerminalState] = useState<any>(null);
+  const [terminalState, setTerminalState] = useState<TerminalState | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     async function checkTerminal() {
       try {
-        const res = await provider.system?.getTerminalStatus?.() || { registrationState: 'UNREGISTERED' };
-        setTerminalState(res);
-      } catch (e) {
-        console.error('Failed to get terminal status', e);
-        setTerminalState({ registrationState: 'UNKNOWN' });
+        // getTerminalStatus goes through IPC to C# — has a 30s timeout.
+        // If the method doesn't exist (web-only preview mode), treat as UNREGISTERED.
+        const res = await provider.system?.getTerminalStatus?.();
+
+        if (!res) {
+          // provider.system is not available (running in browser, not MAUI)
+          setTerminalState({ registrationState: 'UNREGISTERED' });
+          return;
+        }
+
+        setTerminalState(res as TerminalState);
+      } catch (e: any) {
+        console.error('[Desktop] Failed to get terminal status:', e);
+        // IPC error = bridge not ready or timed out = treat as unregistered
+        setTerminalState({ registrationState: 'UNREGISTERED', error: e?.message });
       }
     }
+
     checkTerminal();
   }, [provider]);
 
+  // ── Loading ────────────────────────────────────────────────────────────────
   if (!terminalState) {
-    return <div className="flex h-screen items-center justify-center">Loading...</div>;
+    return (
+      <div className="flex h-screen flex-col items-center justify-center gap-4 bg-slate-50">
+        <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
+        <p className="text-slate-500 text-sm font-medium">Starting LodgeCore…</p>
+      </div>
+    );
   }
 
-  if (terminalState.registrationState === 'UNREGISTERED') {
+  // ── Not yet provisioned → send to setup wizard ────────────────────────────
+  if (
+    terminalState.registrationState === 'UNREGISTERED' ||
+    terminalState.registrationState === 'UNKNOWN'
+  ) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center p-8 bg-slate-50">
-        <h1 className="text-3xl font-bold mb-4">Unregistered Terminal</h1>
-        <p className="text-slate-600 mb-8 max-w-md text-center">
-          This terminal has not been registered with LodgeCore Cloud. An administrator must provision this device.
-        </p>
-        <Button onClick={() => router.push('/desktop/provision')} size="lg">
-          Provision Terminal
+      <div className="flex h-screen flex-col items-center justify-center gap-6 p-8 bg-slate-50">
+        <div className="flex flex-col items-center gap-3 max-w-md text-center">
+          <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center">
+            <ServerOff className="h-8 w-8 text-blue-600" />
+          </div>
+          <h1 className="text-2xl font-bold text-slate-800">Terminal Not Set Up</h1>
+          <p className="text-slate-500 text-sm leading-relaxed">
+            This device has not been registered with LodgeCore Cloud yet.
+            An administrator needs to provision it before use.
+          </p>
+          {terminalState.error && (
+            <p className="text-xs text-slate-400 font-mono bg-slate-100 rounded px-3 py-1">
+              {terminalState.error}
+            </p>
+          )}
+        </div>
+        <Button
+          onClick={() => router.push('/desktop/provision')}
+          size="lg"
+          className="min-w-[200px]"
+        >
+          Set Up This Terminal
         </Button>
       </div>
     );
   }
 
-  // Active / Registered
-  if (terminalState.desktopMode === 'UNKNOWN') {
+  // ── Corrupted state → credential wiped, need to re-provision ──────────────
+  if (terminalState.registrationState === 'CORRUPTED') {
     return (
-      <div className="flex h-screen flex-col items-center justify-center p-8 bg-slate-50">
-        <h1 className="text-3xl font-bold mb-4 text-red-600">Configuration Error</h1>
-        <p className="text-slate-600 mb-8 max-w-md text-center">
-          This terminal has an invalid or unknown outlet configuration. Please contact support or re-provision the device.
-        </p>
+      <div className="flex h-screen flex-col items-center justify-center gap-6 p-8 bg-slate-50">
+        <div className="flex flex-col items-center gap-3 max-w-md text-center">
+          <div className="w-16 h-16 rounded-full bg-amber-50 flex items-center justify-center">
+            <ShieldAlert className="h-8 w-8 text-amber-500" />
+          </div>
+          <h1 className="text-2xl font-bold text-slate-800">Terminal Credential Lost</h1>
+          <p className="text-slate-500 text-sm leading-relaxed">
+            This terminal was previously registered but its security credential is missing —
+            likely due to a reinstall or system reset. Re-provision the device to restore access.
+          </p>
+        </div>
+        <div className="flex flex-col gap-3 min-w-[200px]">
+          <Button
+            onClick={() => router.push('/desktop/provision')}
+            size="lg"
+          >
+            Re-Provision Terminal
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setTerminalState(null)}
+          >
+            Retry
+          </Button>
+        </div>
       </div>
     );
   }
 
+  // ── Outlet not configured correctly ───────────────────────────────────────
+  if (terminalState.desktopMode === 'UNKNOWN') {
+    return (
+      <div className="flex h-screen flex-col items-center justify-center gap-6 p-8 bg-slate-50">
+        <div className="flex flex-col items-center gap-3 max-w-md text-center">
+          <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center">
+            <AlertTriangle className="h-8 w-8 text-red-500" />
+          </div>
+          <h1 className="text-2xl font-bold text-slate-800">Outlet Not Configured</h1>
+          <p className="text-slate-500 text-sm leading-relaxed">
+            This terminal is registered but its outlet type is not recognised.
+            Contact your LodgeCore administrator to assign the correct outlet.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          onClick={() => router.push('/desktop/provision')}
+          size="lg"
+        >
+          Re-Provision
+        </Button>
+      </div>
+    );
+  }
+
+  // ── Active & configured → show operator login ─────────────────────────────
   return (
     <div className="flex h-screen bg-slate-50">
-      <OperatorSelectionScreen 
-        isOpen={true} 
+      <OperatorSelectionScreen
+        isOpen={true}
         onAuthenticated={() => {
           if (terminalState.desktopMode === 'FRONT_DESK') {
             router.push('/desktop/frontdesk');
@@ -66,7 +159,7 @@ export default function DesktopEntryPage() {
           } else {
             router.push('/desktop');
           }
-        }} 
+        }}
         cancellable={false}
       />
     </div>

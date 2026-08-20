@@ -42,8 +42,11 @@ public class TerminalBootstrapService
         var secret = _credentialStorage.LoadCredential("deviceCredential");
         if (string.IsNullOrEmpty(secret))
         {
-            // Database says registered, but OS secret is missing! This is a corrupted/revoked state.
-            return new { registrationState = "CORRUPTED", error = "Missing device credential in OS secure storage." };
+        // Database says registered, but OS secret is missing!
+        // Auto-heal: wipe the stale row so the terminal is treated as brand-new.
+        context.PosTerminals.Remove(terminal);
+        await context.SaveChangesAsync();
+        return new { registrationState = "UNREGISTERED", error = "Credential was missing — terminal reset to factory state. Please re-provision." };
         }
 
         string? outletType = null;
