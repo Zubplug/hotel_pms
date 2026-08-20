@@ -81,7 +81,7 @@ public class TerminalBootstrapService
         };
     }
 
-    public async Task<object> ProvisionTerminalAsync(string email, string password, string propertyId, string outletId, string terminalName)
+    public async Task<object> ProvisionTerminalAsync(string email, string password, string propertyId, string outletId, string terminalName, string terminalType)
     {
         // 1. Call Cloud API
         var requestPayload = new
@@ -91,7 +91,7 @@ public class TerminalBootstrapService
             propertyId,
             outletId,
             terminalName,
-            terminalType = "STATIONARY"
+            terminalType
         };
 
         var response = await _httpClient.PostAsJsonAsync("pos/provision", requestPayload);

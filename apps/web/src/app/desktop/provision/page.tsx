@@ -15,6 +15,7 @@ export default function ProvisionTerminalPage() {
   const [propertyId, setPropertyId] = useState('');
   const [outletId, setOutletId] = useState('');
   const [terminalName, setTerminalName] = useState('MAIN-POS-01');
+  const [terminalType, setTerminalType] = useState('RESTAURANT_POS');
   const [isProvisioning, setIsProvisioning] = useState(false);
 
   async function handleProvision(e: React.FormEvent) {
@@ -23,7 +24,7 @@ export default function ProvisionTerminalPage() {
     try {
       // Send IPC command to C# to handle provisioning
       const res = await provider.system?.provisionTerminal?.({
-        email, password, propertyId, outletId, terminalName
+        email, password, propertyId, outletId, terminalName, terminalType
       });
       
       if (res && res.success === false) {
@@ -65,6 +66,21 @@ export default function ProvisionTerminalPage() {
           <div>
             <label className="text-sm font-semibold text-slate-700">Terminal Name</label>
             <Input value={terminalName} onChange={e => setTerminalName(e.target.value)} required />
+          </div>
+          <div>
+            <label className="text-sm font-semibold text-slate-700">Terminal Type</label>
+            <select
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              value={terminalType}
+              onChange={e => setTerminalType(e.target.value)}
+              required
+            >
+              <option value="RESTAURANT_POS">Restaurant POS</option>
+              <option value="BAR_POS">Bar POS</option>
+              <option value="FRONT_DESK">Front Desk</option>
+              <option value="KITCHEN_DISPLAY">Kitchen Display</option>
+              <option value="BACK_OFFICE">Back Office</option>
+            </select>
           </div>
           <Button type="submit" disabled={isProvisioning} className="mt-4">
             {isProvisioning ? 'Provisioning...' : 'Provision Now'}

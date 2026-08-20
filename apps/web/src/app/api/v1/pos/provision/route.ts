@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
       data: {
         terminalCode,
         name: terminalName,
-        terminalType: terminalType || 'STATIONARY',
+        terminalType: (terminalType === 'STATIONARY' || !terminalType) ? 'RESTAURANT_POS' : terminalType,
         organisationId: adminStaff.organizationId,
         propertyId,
         outletId,

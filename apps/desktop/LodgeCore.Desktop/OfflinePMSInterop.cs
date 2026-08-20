@@ -39,11 +39,12 @@ public class OfflinePMSInterop
         }
     }
 
-    public async Task<string> ProvisionTerminalAsync(string email, string password, string propertyId, string outletId, string terminalName)
+    [JSInvokable]
+    public async Task<string> ProvisionTerminalAsync(string email, string password, string propertyId, string outletId, string terminalName, string terminalType)
     {
         try
         {
-            var result = await _terminalBootstrap.ProvisionTerminalAsync(email, password, propertyId, outletId, terminalName);
+            var result = await _terminalBootstrap.ProvisionTerminalAsync(email, password, propertyId, outletId, terminalName, terminalType);
             return JsonSerializer.Serialize(result, _jsonOptions);
         }
         catch (Exception ex)
