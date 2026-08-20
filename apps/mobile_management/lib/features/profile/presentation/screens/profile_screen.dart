@@ -105,7 +105,7 @@ class ProfileScreen extends ConsumerWidget {
                   _SettingsTile(
                     title: 'Property Access',
                     icon: Icons.domain_rounded,
-                    value: '\${profile.authorization.properties.length}',
+                    value: '${profile.authorization.properties.length}',
                     onTap: () {},
                   ),
                 ]),
@@ -441,7 +441,7 @@ class _ProfileHeaderCard extends StatelessWidget {
               const SizedBox(width: 8),
               Flexible(
                 child: Text(
-                  "Active · \${profile.authorization.properties.isNotEmpty ? profile.authorization.properties.first.name : 'No Property'}",
+                  "Active · ${profile.authorization.properties.isNotEmpty ? profile.authorization.properties.first.name : 'No Property'}",
                   style: const TextStyle(fontSize: 12, color: _textMuted),
                   overflow: TextOverflow.ellipsis,
                 ),

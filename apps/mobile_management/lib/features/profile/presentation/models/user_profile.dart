@@ -48,10 +48,10 @@ class UserData {
   
   String get initials {
     if (firstName.isEmpty && lastName.isEmpty) return 'U';
-    return '\${firstName.isNotEmpty ? firstName[0] : ''}\${lastName.isNotEmpty ? lastName[0] : ''}';
+    return '${firstName.isNotEmpty ? firstName[0] : ''}${lastName.isNotEmpty ? lastName[0] : ''}';
   }
   
-  String get fullName => '\$firstName \$lastName'.trim();
+  String get fullName => '$firstName $lastName'.trim();
 }
 
 class StaffData {

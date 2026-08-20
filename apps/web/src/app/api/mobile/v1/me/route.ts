@@ -18,7 +18,11 @@ export async function GET(req: NextRequest) {
       select: {
         id: true,
         email: true,
-        roles: true,
+        roles: {
+          include: {
+            role: true,
+          }
+        },
         mfaEnabled: true,
         notificationPreferences: true,
       },
@@ -44,7 +48,7 @@ export async function GET(req: NextRequest) {
     });
 
     // Map system role (first role or default)
-    const systemRole = dbUser.roles && dbUser.roles.length > 0 ? dbUser.roles[0].toString() : 'STAFF';
+    const systemRole = dbUser.roles && dbUser.roles.length > 0 ? dbUser.roles[0].role.name : 'STAFF';
 
     // Build human-readable capabilities based on role (mock logic for now as requested by user to show human readable permissions)
     const capabilities = [];
