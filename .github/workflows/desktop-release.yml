@@ -1,11 +1,9 @@
 name: Build and Release Desktop App
-
 on:
   push:
     tags:
       - 'v*' # Trigger only when a new version tag is pushed (e.g., v1.0.1)
   workflow_dispatch: # Allow manual trigger from GitHub Actions UI
-
 jobs:
   build-desktop:
     runs-on: windows-latest
@@ -13,7 +11,6 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
@@ -23,27 +20,20 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: '20'
-
     - name: Install .NET MAUI Workloads
       run: dotnet workload install maui-windows
-
     - name: Install pnpm
       uses: pnpm/action-setup@v3
       with:
         version: 8
-
     - name: Install Web Dependencies
       run: pnpm install --no-frozen-lockfile
-
     - name: Generate Prisma Types
       run: pnpm --filter @hotel-pms/db run db:generate
-
     - name: Build Web (Next.js Static Export)
       run: pnpm build:desktop
       env:
         NEXT_PUBLIC_IS_DESKTOP: "true"
-
-
     - name: Move Web Export to MAUI wwwroot
       run: |
         Remove-Item -Recurse -Force ./apps/desktop/LodgeCore.Desktop/wwwroot -ErrorAction Ignore
@@ -55,24 +45,20 @@ jobs:
         $cert = New-SelfSignedCertificate -CertStoreLocation Cert:\CurrentUser\My -DnsName "LodgeCore" -Type CodeSigningCert -Subject "CN=LodgeCore, O=LodgeCore, L=Lagos, S=Lagos, C=NG"
         $pwd = ConvertTo-SecureString -String "lodgecore2026" -Force -AsPlainText
         Export-PfxCertificate -Cert $cert -FilePath .\apps\desktop\LodgeCore.Desktop\Certificates\LodgeCore.pfx -Password $pwd
-
     - name: Publish MAUI Windows MSIX
       working-directory: ./apps/desktop/LodgeCore.Desktop
       run: >
         dotnet publish -c Release -f net10.0-windows10.0.19041.0 
-
         /p:GenerateAppxPackageOnBuild=true 
         /p:AppxPackageSigningEnabled=true 
         /p:PackageCertificateKeyFile=Certificates\LodgeCore.pfx 
         /p:PackageCertificatePassword=lodgecore2026
-
     - name: Prepare Release Artifacts
       run: |
         New-Item -ItemType Directory -Force -Path .\release-artifacts
         # The exact path varies slightly depending on SDK, we find the .appinstaller and .msix dynamically
         Copy-Item -Path .\apps\desktop\LodgeCore.Desktop\bin\Release\net10.0-windows10.0.19041.0\win-x86\AppPackages\LodgeCore.Desktop_*\*.msix -Destination .\release-artifacts\
         Copy-Item -Path .\apps\desktop\LodgeCore.Desktop\bin\Release\net10.0-windows10.0.19041.0\win-x86\AppPackages\LodgeCore.Desktop_*\*.appinstaller -Destination .\release-artifacts\
-
     - name: Upload Release
       uses: softprops/action-gh-release@v2
       if: startsWith(github.ref, 'refs/tags/')
