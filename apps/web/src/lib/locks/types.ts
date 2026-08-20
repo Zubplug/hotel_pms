@@ -1,4 +1,4 @@
-import { LockCredential, LockOperation } from '@prisma/client';
+import { LockCredential, LockOperation } from '@hotel-pms/db';
 
 export interface LockProviderCapabilities {
   supportsDuplicateCards: boolean;
