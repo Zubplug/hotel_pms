@@ -39,7 +39,6 @@ public class OfflinePMSInterop
         }
     }
 
-    [JSInvokable]
     public async Task<string> ProvisionTerminalAsync(string email, string password, string propertyId, string outletId, string terminalName, string terminalType)
     {
         try
