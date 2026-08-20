@@ -76,10 +76,22 @@ jobs:
         echo "CERT_THUMBPRINT=$thumbprint" >> $env:GITHUB_ENV
         echo "CERT_SUBJECT=$subject" >> $env:GITHUB_ENV
 
-        # Sync manifest Publisher with the exact cert Subject to prevent APPX0101
+        # Parse version from tag (e.g. v1.2.9 -> 1.2.9.0)
+        if ("${{ github.ref_name }}" -match "^v") {
+            $tag = "${{ github.ref_name }}"
+            $version = $tag.TrimStart('v') + ".0"
+        } else {
+            $version = "1.0.0.0"
+        }
+        echo "APP_VERSION=$version" >> $env:GITHUB_ENV
+
+        # Sync manifest Publisher and Version with the exact cert Subject and tag version to prevent APPX0101 and fix updates
         $manifestPath = ".\apps\desktop\LodgeCore.Desktop\Platforms\Windows\Package.appxmanifest"
-        (Get-Content $manifestPath) -replace 'Publisher="[^"]+"', "Publisher=`"$subject`"" | Set-Content $manifestPath
-        Write-Host "Manifest Publisher updated to: $subject"
+        $manifest = Get-Content $manifestPath
+        $manifest = $manifest -replace 'Publisher="[^"]+"', "Publisher=`"$subject`""
+        $manifest = $manifest -replace '(<Identity[^>]+?Version=)"[^"]+"', "`$1`"$version`""
+        $manifest | Set-Content $manifestPath
+        Write-Host "Manifest Publisher updated to: $subject, Version updated to: $version"
 
     - name: Publish MAUI Windows MSIX
       shell: powershell
@@ -90,15 +102,16 @@ jobs:
           /p:RuntimeIdentifierOverride=win10-x86 `
           /p:GenerateAppxPackageOnBuild=true `
           /p:AppxPackageSigningEnabled=true `
-          "/p:PackageCertificateThumbprint=$env:CERT_THUMBPRINT"
+          "/p:PackageCertificateThumbprint=$env:CERT_THUMBPRINT" `
+          "/p:Version=$env:APP_VERSION" `
+          "/p:ApplicationVersion=$env:APP_VERSION"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     - name: Generate .appinstaller for Auto-Update
       shell: powershell
       run: |
-        # Parse version from tag (e.g. v1.2.9 -> 1.2.9.0)
         $tag = "${{ github.ref_name }}"
-        $version = $tag.TrimStart('v') + ".0"
+        $version = $env:APP_VERSION
         $repo = "${{ github.repository }}"
 
         # Find the built MSIX file
