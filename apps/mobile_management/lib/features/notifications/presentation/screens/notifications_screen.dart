@@ -258,6 +258,13 @@ class _Header extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
+                GestureDetector(
+                  onTap: () => Navigator.of(context).pop(),
+                  child: const Padding(
+                    padding: EdgeInsets.only(right: 12),
+                    child: Icon(Icons.arrow_back_ios_new_rounded, color: _textPrimary, size: 20),
+                  ),
+                ),
                 const Text(
                   'NOTIFICATIONS',
                   style: TextStyle(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dashboard_screen.dart';
 import 'package:mobile_management/features/rooms/presentation/screens/rooms_screen.dart';
 import 'package:mobile_management/features/finance/presentation/screens/finance_screen.dart';
+import 'package:mobile_management/features/profile/presentation/screens/profile_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -18,7 +19,7 @@ class _MainScreenState extends State<MainScreen> {
     const RoomsScreen(),
     const FinanceScreen(),
     const _ComingSoonScreen(title: 'Hub', icon: Icons.apps_rounded),
-    const _ComingSoonScreen(title: 'You', icon: Icons.person_rounded),
+    const ProfileScreen(),
   ];
 
   @override

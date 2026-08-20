@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/dashboard_provider.dart';
 import 'package:mobile_management/features/notifications/presentation/providers/notifications_provider.dart';
 import 'package:mobile_management/features/notifications/presentation/screens/notifications_screen.dart';
+import 'package:mobile_management/features/profile/presentation/screens/profile_screen.dart';
 import '../widgets/performance_card.dart';
 import '../widgets/hotel_pulse.dart';
 import '../widgets/attention_required.dart';
@@ -101,10 +102,15 @@ class DashboardScreen extends ConsumerWidget {
             ],
           ),
           const SizedBox(width: 8),
-          const CircleAvatar(
-            radius: 16,
-            backgroundColor: surfaceNavy,
-            child: Icon(Icons.person, color: goldAccent, size: 20),
+          GestureDetector(
+            onTap: () {
+              Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProfileScreen()));
+            },
+            child: const CircleAvatar(
+              radius: 16,
+              backgroundColor: surfaceNavy,
+              child: Icon(Icons.person, color: goldAccent, size: 20),
+            ),
           ),
           const SizedBox(width: 16),
         ],
