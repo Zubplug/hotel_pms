@@ -43,11 +43,30 @@ export default function DesktopEntryPage() {
   }
 
   // Active / Registered
+  if (terminalState.desktopMode === 'UNKNOWN') {
+    return (
+      <div className="flex h-screen flex-col items-center justify-center p-8 bg-slate-50">
+        <h1 className="text-3xl font-bold mb-4 text-red-600">Configuration Error</h1>
+        <p className="text-slate-600 mb-8 max-w-md text-center">
+          This terminal has an invalid or unknown outlet configuration. Please contact support or re-provision the device.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen bg-slate-50">
       <OperatorSelectionScreen 
         isOpen={true} 
-        onAuthenticated={() => router.push('/desktop/pos')} 
+        onAuthenticated={() => {
+          if (terminalState.desktopMode === 'FRONT_DESK') {
+            router.push('/desktop/frontdesk');
+          } else if (terminalState.desktopMode === 'POS') {
+            router.push('/desktop/pos');
+          } else {
+            router.push('/desktop');
+          }
+        }} 
         cancellable={false}
       />
     </div>

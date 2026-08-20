@@ -46,12 +46,35 @@ public class TerminalBootstrapService
             return new { registrationState = "CORRUPTED", error = "Missing device credential in OS secure storage." };
         }
 
+        string? outletType = null;
+        string desktopMode = "UNKNOWN";
+
+        if (!string.IsNullOrEmpty(terminal.OutletId))
+        {
+            var outlet = await context.PosOutlets.FirstOrDefaultAsync(o => o.Id == terminal.OutletId);
+            if (outlet != null)
+            {
+                outletType = outlet.Type;
+                if (outletType == "FRONT_DESK")
+                {
+                    desktopMode = "FRONT_DESK";
+                }
+                else if (outletType == "RESTAURANT" || outletType == "BAR" || outletType == "POOL" || outletType == "ROOM_SERVICE")
+                {
+                    desktopMode = "POS";
+                }
+            }
+        }
+
         return new
         {
             registrationState = terminal.RegistrationState,
             terminalId = terminal.Id,
             name = terminal.Name,
-            licenseState = terminal.LicenseState
+            licenseState = terminal.LicenseState,
+            outletId = terminal.OutletId,
+            outletType = outletType,
+            desktopMode = desktopMode
         };
     }
 
