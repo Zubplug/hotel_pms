@@ -117,23 +117,15 @@ jobs:
         # Direct download URL for the MSIX on GitHub Releases
         $msixUrl = "https://github.com/$repo/releases/download/$tag/$msixName"
 
-        $xml = @"
-<?xml version="1.0" encoding="utf-8"?>
-<AppInstaller Uri="$appinstallerUrl"
-              Version="$version"
-              xmlns="http://schemas.microsoft.com/appx/appinstaller/2018">
-  <MainPackage Name="LodgeCore.Desktop"
-               Version="$version"
-               Publisher="$env:CERT_SUBJECT"
-               Uri="$msixUrl"
-               ProcessorArchitecture="x86" />
-  <UpdateSettings>
-    <OnLaunch HoursBetweenUpdateChecks="24" ShowPrompt="false" UpdateBlocksActivation="false" />
-    <AutomaticBackgroundTask />
-    <ForceUpdateFromAnyVersion>true</ForceUpdateFromAnyVersion>
-  </UpdateSettings>
-</AppInstaller>
-"@
+        $xml = "<?xml version=`"1.0`" encoding=`"utf-8`"?>`n" +
+               "<AppInstaller Uri=`"$appinstallerUrl`" Version=`"$version`" xmlns=`"http://schemas.microsoft.com/appx/appinstaller/2018`">`n" +
+               "  <MainPackage Name=`"LodgeCore.Desktop`" Version=`"$version`" Publisher=`"$env:CERT_SUBJECT`" Uri=`"$msixUrl`" ProcessorArchitecture=`"x86`" />`n" +
+               "  <UpdateSettings>`n" +
+               "    <OnLaunch HoursBetweenUpdateChecks=`"24`" ShowPrompt=`"false`" UpdateBlocksActivation=`"false`" />`n" +
+               "    <AutomaticBackgroundTask />`n" +
+               "    <ForceUpdateFromAnyVersion>true</ForceUpdateFromAnyVersion>`n" +
+               "  </UpdateSettings>`n" +
+               "</AppInstaller>"
         New-Item -ItemType Directory -Force -Path .\release-artifacts | Out-Null
         $xml | Out-File -FilePath .\release-artifacts\LodgeCore.appinstaller -Encoding utf8
         Write-Host "=== Generated .appinstaller ==="
