@@ -2,14 +2,15 @@ import { NextResponse } from 'next/server';
 
 export async function GET(
   request: Request,
-  { params }: { params: { file: string[] } }
+  { params }: { params: Promise<{ file: string[] }> }
 ) {
-  if (!params.file || params.file.length === 0) {
+  const resolvedParams = await params;
+  if (!resolvedParams.file || resolvedParams.file.length === 0) {
     return new NextResponse('Bad Request', { status: 400 });
   }
 
   // Extract the actual filename being requested (e.g., LodgeCore.Desktop.appinstaller or .msix)
-  const fileName = params.file[params.file.length - 1];
+  const fileName = resolvedParams.file[resolvedParams.file.length - 1];
 
   // The GitHub repository where releases are hosted
   const githubRepo = 'Zubplug/hotel_pms';
