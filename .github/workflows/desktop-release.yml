@@ -40,27 +40,45 @@ jobs:
         Copy-Item -Path ./apps/web/out -Destination ./apps/desktop/LodgeCore.Desktop/wwwroot -Recurse
         
     - name: Create Self-Signed Certificate (for CI)
+      id: create_cert
+      shell: powershell
       run: |
-        New-Item -ItemType Directory -Force -Path .\apps\desktop\LodgeCore.Desktop\Certificates
-        $cert = New-SelfSignedCertificate -CertStoreLocation Cert:\CurrentUser\My -DnsName "LodgeCore" -Type CodeSigningCert -Subject "CN=LodgeCore, O=LodgeCore, L=Lagos, S=Lagos, C=NG"
+        # Create self-signed cert and install it to CurrentUser\My store
+        $cert = New-SelfSignedCertificate `
+          -CertStoreLocation Cert:\CurrentUser\My `
+          -DnsName "LodgeCore" `
+          -Type CodeSigningCert `
+          -Subject "CN=LodgeCore, O=LodgeCore, L=Lagos, S=Lagos, C=NG"
+
+        # Capture the real subject as written by Windows (may be reordered)
+        $subject = $cert.Subject
+        $thumbprint = $cert.Thumbprint
+        Write-Host "Certificate Subject: $subject"
+        Write-Host "Certificate Thumbprint: $thumbprint"
+
+        # Export PFX for reference (not used for signing below)
+        New-Item -ItemType Directory -Force -Path .\apps\desktop\LodgeCore.Desktop\Certificates | Out-Null
         $pwd = ConvertTo-SecureString -String "lodgecore2026" -Force -AsPlainText
         Export-PfxCertificate -Cert $cert -FilePath .\apps\desktop\LodgeCore.Desktop\Certificates\LodgeCore.pfx -Password $pwd
-        
-        # Prevent APPX0101 by syncing the manifest Publisher with the exact certificate Subject
+
+        # Persist thumbprint to GITHUB_ENV so subsequent steps can read it
+        echo "CERT_THUMBPRINT=$thumbprint" >> $env:GITHUB_ENV
+
+        # Prevent APPX0101 by syncing the manifest Publisher with the exact Windows-issued Subject
         $manifestPath = ".\apps\desktop\LodgeCore.Desktop\Platforms\Windows\Package.appxmanifest"
-        $subject = $cert.Subject
         (Get-Content $manifestPath) -replace 'Publisher="[^"]+"', "Publisher=`"$subject`"" | Set-Content $manifestPath
+        Write-Host "Manifest Publisher updated to: $subject"
+
     - name: Publish MAUI Windows MSIX
       shell: powershell
       run: |
-        $certFile = "$PWD\apps\desktop\LodgeCore.Desktop\Certificates\LodgeCore.pfx"
+        # Use thumbprint-based signing (same as working build-desktop.yml)
         dotnet publish apps/desktop/LodgeCore.Desktop `
           -c Release `
           -f net10.0-windows10.0.19041.0 `
           /p:GenerateAppxPackageOnBuild=true `
           /p:AppxPackageSigningEnabled=true `
-          "/p:PackageCertificateKeyFile=$certFile" `
-          /p:PackageCertificatePassword=lodgecore2026
+          "/p:PackageCertificateThumbprint=$env:CERT_THUMBPRINT"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     - name: Prepare Release Artifacts
       shell: powershell
