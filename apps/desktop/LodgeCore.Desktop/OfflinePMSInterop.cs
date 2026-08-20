@@ -199,9 +199,7 @@ public class OfflinePMSInterop
         var session = await _authManager.GetSessionAsync();
         if (session == null) throw new UnauthorizedAccessException("No active desktop session.");
         
-        using var scope = _serviceProvider.CreateScope();
-        var context = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
-        var terminal = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(context.PosTerminals);
+        var terminal = await _repo.GetTerminalAsync(session.DeviceId);
         
         return (session.UserId, session.DeviceId, terminal?.OutletId);
     }
