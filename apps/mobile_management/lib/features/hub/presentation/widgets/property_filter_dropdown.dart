@@ -27,7 +27,7 @@ class PropertyFilterDropdown extends ConsumerWidget {
       if (match != null) {
         displayText = match.name;
       } else {
-        displayText = 'Property ${selectedProperty.substring(0, 4)}...';
+        displayText = 'Unknown Property';
       }
     }
 
