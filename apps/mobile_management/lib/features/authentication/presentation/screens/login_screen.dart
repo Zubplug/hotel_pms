@@ -29,6 +29,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   final _passCtrl   = TextEditingController();
   bool _obscure     = true;
   bool _isLoading   = false;
+  bool _rememberMe  = false;
   String? _errorMessage;
 
   late final AnimationController _entryCtrl;
@@ -52,6 +53,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         .animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
 
     _entryCtrl.forward();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final tokenStorage = ref.read(tokenStorageProvider);
+      final email = await tokenStorage.getRememberedEmail();
+      if (email != null && email.isNotEmpty && mounted) {
+        setState(() {
+          _emailCtrl.text = email;
+          _rememberMe = true;
+        });
+      }
+    });
   }
 
   @override
@@ -79,6 +91,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         final token = res.data['data']['token'] as String?;
         if (token != null) {
           HapticFeedback.mediumImpact();
+          final tokenStorage = ref.read(tokenStorageProvider);
+          if (_rememberMe) {
+            await tokenStorage.saveRememberedEmail(_emailCtrl.text.trim());
+          } else {
+            await tokenStorage.clearRememberedEmail();
+          }
           await ref.read(authProvider.notifier).login(token);
         }
       }
@@ -286,20 +304,43 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
 
                                         const SizedBox(height: 12),
 
-                                        // Forgot password
-                                        Align(
-                                          alignment: Alignment.centerRight,
-                                          child: GestureDetector(
-                                            onTap: () {},
-                                            child: const Text(
-                                              'Forgot password?',
+                                        // Remember me and Forgot password
+                                        Row(
+                                          children: [
+                                            SizedBox(
+                                              height: 24,
+                                              width: 24,
+                                              child: Checkbox(
+                                                value: _rememberMe,
+                                                onChanged: (v) => setState(() => _rememberMe = v ?? false),
+                                                activeColor: _goldLight,
+                                                checkColor: _bgDeep,
+                                                side: const BorderSide(color: _inputBorder, width: 1.5),
+                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            const Text(
+                                              'Remember me',
                                               style: TextStyle(
                                                 fontSize: 13,
-                                                color: _goldLight,
+                                                color: _textMuted,
                                                 fontWeight: FontWeight.w500,
                                               ),
                                             ),
-                                          ),
+                                            const Spacer(),
+                                            GestureDetector(
+                                              onTap: () {},
+                                              child: const Text(
+                                                'Forgot password?',
+                                                style: TextStyle(
+                                                  fontSize: 13,
+                                                  color: _goldLight,
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
                                         ),
 
                                         const SizedBox(height: 28),
