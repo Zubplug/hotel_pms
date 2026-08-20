@@ -7,7 +7,7 @@ import '../widgets/quick_action_button.dart';
 import '../widgets/property_filter_dropdown.dart';
 import '../../data/hub_model.dart';
 import 'approval_review_screen.dart';
-
+import 'night_audit_review_screen.dart';
 // ─── Design Tokens ───────────────────────────────────────────────────────────
 const _bgDeep = Color(0xFF070D1A);
 const _cardBg = Color(0xFF111D33);
@@ -119,7 +119,21 @@ class HubScreen extends ConsumerWidget {
               mainAxisSpacing: 12,
               crossAxisSpacing: 12,
               childAspectRatio: 2.5,
-              children: data.quickActions.map((qa) => QuickActionButton(action: qa)).toList(),
+              children: data.quickActions.map((qa) => QuickActionButton(
+                action: qa,
+                onTap: () {
+                  if (qa.id == 'run_night_audit') {
+                    Navigator.push(context, MaterialPageRoute(
+                      builder: (ctx) => NightAuditReviewScreen(
+                        propertyId: data.scope.property, // Assumes a single property is selected in Hub, or requires one
+                        propertyName: data.scope.property == 'ALL_AUTHORIZED' ? 'Selected Properties' : 'Property ${data.scope.property.substring(0, 4)}...',
+                      ),
+                    ));
+                  } else {
+                    // Handle other quick actions...
+                  }
+                },
+              )).toList(),
             ),
             const SizedBox(height: 32),
           ],

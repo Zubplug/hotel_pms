@@ -6,8 +6,9 @@ const _textPrimary = Color(0xFFEEF2FF);
 
 class QuickActionButton extends StatelessWidget {
   final HubQuickAction action;
+  final VoidCallback? onTap;
 
-  const QuickActionButton({super.key, required this.action});
+  const QuickActionButton({super.key, required this.action, this.onTap});
 
   IconData _getIcon() {
     switch (action.icon) {
@@ -15,6 +16,7 @@ class QuickActionButton extends StatelessWidget {
       case 'warning': return Icons.warning_amber_rounded;
       case 'campaign': return Icons.campaign_rounded;
       case 'analytics': return Icons.analytics_outlined;
+      case 'nightlight_round': return Icons.nightlight_round;
       default: return Icons.widgets_rounded;
     }
   }
@@ -22,7 +24,7 @@ class QuickActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: () {},
+      onTap: onTap,
       borderRadius: BorderRadius.circular(12),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16),

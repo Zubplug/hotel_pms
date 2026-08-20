@@ -94,8 +94,8 @@ export async function GET(req: NextRequest) {
       where: {
         recipientId: user.id,
         channel: 'in_app',
-        priority: { in: ['Critical', 'High'] }, // Map to P0/P1
-        isRead: false
+        priority: { in: ['P0', 'P1'] }, // Map to P0/P1
+        readAt: null
       },
       orderBy: { createdAt: 'desc' },
       take: 5
@@ -108,6 +108,7 @@ export async function GET(req: NextRequest) {
       quickActions.push({ id: 'alerts', label: 'Alerts', icon: 'warning', capability: 'alerts.view' });
       quickActions.push({ id: 'broadcast', label: 'Broadcast', icon: 'campaign', capability: 'notifications.broadcast' });
       quickActions.push({ id: 'executive_brief', label: 'Executive Brief', icon: 'analytics', capability: 'reports.view' });
+      quickActions.push({ id: 'run_night_audit', label: 'Run Night Audit', icon: 'nightlight_round', capability: 'night_audit.run' });
     }
 
     // 5. Mock Executive Brief (to be replaced with actual brief logic later)
@@ -146,13 +147,13 @@ export async function GET(req: NextRequest) {
       })),
       interventions: criticalInterventions.map(int => ({
         id: int.id,
-        title: int.title,
-        message: int.message,
+        title: int.subject || 'Intervention Required',
+        message: int.body,
         priority: int.priority,
         category: int.category,
         createdAt: int.createdAt,
-        actionUrl: int.actionUrl,
-        meta: int.meta
+        actionUrl: int.action,
+        meta: int.metadata
       })),
       quickActions,
       executiveBrief

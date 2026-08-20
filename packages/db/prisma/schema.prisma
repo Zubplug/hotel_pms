@@ -1174,8 +1174,8 @@ model User {
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
 
-  roles UserRole[]
-  deviceTokens DeviceToken[]
+  roles                   UserRole[]
+  deviceTokens            DeviceToken[]
   notificationPreferences UserNotificationPreference[]
 }
 
@@ -1185,7 +1185,7 @@ model DeviceToken {
   userId    String   @db.Uuid
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   token     String   @unique
-  platform  String   // 'ios' | 'android'
+  platform  String // 'ios' | 'android'
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
 
@@ -1193,12 +1193,12 @@ model DeviceToken {
 }
 
 model UserNotificationPreference {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @db.Uuid
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  category  String   // 'CRITICAL' | 'APPROVALS' | 'OPERATIONS' | 'REPORTS'
-  
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  category String // 'CRITICAL' | 'APPROVALS' | 'OPERATIONS' | 'REPORTS'
+
   push      Boolean  @default(true)
   inApp     Boolean  @default(true)
   email     Boolean  @default(false)
@@ -1207,6 +1207,7 @@ model UserNotificationPreference {
 
   @@unique([userId, category])
 }
+
 model Role {
   id             String       @id @default(uuid()) @db.Uuid
   organizationId String       @db.Uuid
@@ -2470,28 +2471,48 @@ enum ApprovalRequestStatus {
 }
 
 model ApprovalRequest {
-  id          String   @id @default(uuid()) @db.Uuid
-  propertyId  String   @db.Uuid
-  property    Property @relation(fields: [propertyId], references: [id])
-  outletId    String?  @db.Uuid
-  
-  type        String // 'REFUND', 'VOID', 'DISCOUNT', 'INVENTORY_ADJUSTMENT'
-  status      ApprovalRequestStatus @default(PENDING)
-  
+  id         String   @id @default(uuid()) @db.Uuid
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id])
+  outletId   String?  @db.Uuid
+
+  type   String // 'REFUND', 'VOID', 'DISCOUNT', 'INVENTORY_ADJUSTMENT'
+  status ApprovalRequestStatus @default(PENDING)
+
   requestedBy String   @db.Uuid // Staff ID
   requestedAt DateTime @default(now()) @db.Timestamptz
-  
-  reviewedBy  String?  @db.Uuid // Staff ID
-  reviewedAt  DateTime? @db.Timestamptz
-  
-  amount      Decimal? @db.Decimal(18, 4)
-  currency    String?
-  
-  reason      String
-  details     Json? // Detailed payload/snapshot of the request
-  
-  expiresAt   DateTime? @db.Timestamptz
-  
-  createdAt   DateTime @default(now()) @db.Timestamptz
-  updatedAt   DateTime @updatedAt @db.Timestamptz
+
+  reviewedBy String?   @db.Uuid // Staff ID
+  reviewedAt DateTime? @db.Timestamptz
+
+  amount   Decimal? @db.Decimal(18, 4)
+  currency String?
+
+  reason  String
+  details Json? // Detailed payload/snapshot of the request
+
+  expiresAt DateTime? @db.Timestamptz
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  mutations ApprovalMutation[]
+}
+
+model ApprovalMutation {
+  id             String          @id @default(uuid()) @db.Uuid
+  idempotencyKey String          @unique
+  userId         String          @db.Uuid
+  approvalId     String          @db.Uuid
+  approval       ApprovalRequest @relation(fields: [approvalId], references: [id])
+
+  action          String
+  requestHash     String
+  status          String
+  responsePayload Json?
+
+  createdAt   DateTime  @default(now()) @db.Timestamptz
+  completedAt DateTime? @db.Timestamptz
+
+  @@index([idempotencyKey])
 }

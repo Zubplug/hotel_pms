@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
 
     if (category && category !== 'All') {
       if (category === 'Critical') {
-        whereClause.priority = 'Critical';
+        whereClause.priority = { in: ['Critical', 'High'] };
       } else {
         whereClause.category = category;
       }
