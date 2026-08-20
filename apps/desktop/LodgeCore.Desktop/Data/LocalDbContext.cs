@@ -48,6 +48,7 @@ public class LocalDbContext : DbContext
 
     public LocalDbContext(DbContextOptions<LocalDbContext> options) : base(options)
     {
+        Database.EnsureCreated();
     }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
