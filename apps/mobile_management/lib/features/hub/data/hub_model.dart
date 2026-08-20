@@ -43,11 +43,18 @@ class HubData {
 
 class HubScope {
   final String property;
+  final List<HubProperty> availableProperties;
 
-  HubScope({required this.property});
+  HubScope({required this.property, required this.availableProperties});
 
   factory HubScope.fromJson(Map<String, dynamic> json) {
-    return HubScope(property: json['property'] ?? '');
+    return HubScope(
+      property: json['property'] ?? '',
+      availableProperties: (json['availableProperties'] as List<dynamic>?)
+              ?.map((e) => HubProperty.fromJson(e))
+              .toList() ??
+          [],
+    );
   }
 }
 

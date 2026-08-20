@@ -130,10 +130,16 @@ export async function GET(req: NextRequest) {
       summary: "Hotel performance is trending positively today. Occupancy is 72%, up 4.2% from yesterday. Two approvals require your decision."
     };
 
+    const authorizedPropertiesDetails = await prisma.property.findMany({
+      where: { id: { in: allowedPropertyIds } },
+      select: { id: true, name: true, code: true }
+    });
+
     return successResponse({
       generatedAt: new Date().toISOString(),
       scope: {
-        property: propertyId || 'ALL_AUTHORIZED'
+        property: propertyId || 'ALL_AUTHORIZED',
+        availableProperties: authorizedPropertiesDetails
       },
       summary: {
         pendingApprovals: pendingApprovals.length,
