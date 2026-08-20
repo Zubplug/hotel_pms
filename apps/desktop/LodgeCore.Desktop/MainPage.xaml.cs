@@ -121,7 +121,8 @@ public partial class MainPage : ContentPage
                         parameters?["password"]?.ToString(),
                         parameters?["propertyId"]?.ToString(),
                         parameters?["outletId"]?.ToString(),
-                        parameters?["terminalName"]?.ToString()
+                        parameters?["terminalName"]?.ToString(),
+                        parameters?["terminalType"]?.ToString()
                     );
                     break;
                 case "auth.getSession":
