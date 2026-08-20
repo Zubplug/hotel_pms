@@ -441,6 +441,25 @@ public partial class MainPage : ContentPage
                         parameters?["propertyId"]?.ToString(),
                         parameters?["deviceId"]?.ToString());
                     break;
+
+                // ── Printer Management ────────────────────────────────────────
+                case "hardware.getPrinters":
+                    responseData = await pmsInterop.GetPrintersAsync();
+                    break;
+                case "hardware.savePrinter":
+                    responseData = await pmsInterop.SavePrinterAsync(
+                        parameters?["config"]?.ToString() ?? "{}");
+                    break;
+                case "hardware.deletePrinter":
+                    responseData = await pmsInterop.DeletePrinterAsync(
+                        parameters?["id"]?.ToString() ?? "");
+                    break;
+                case "hardware.testPrinter":
+                    responseData = await pmsInterop.TestPrinterAsync(
+                        parameters?["ip"]?.ToString() ?? "",
+                        parameters?["port"] != null ? int.Parse(parameters["port"]!.ToString()!) : 9100);
+                    break;
+
                 default:
                     SendError(sender, id, $"Method {method} not found in allowlist.");
                     return;

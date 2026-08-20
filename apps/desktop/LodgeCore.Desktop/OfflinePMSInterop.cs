@@ -1,6 +1,9 @@
+using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using LodgeCore.Desktop.Services;
 using LodgeCore.Desktop.Security;
+using Microsoft.EntityFrameworkCore;
 
 namespace LodgeCore.Desktop;
 
@@ -10,13 +13,15 @@ public class OfflinePMSInterop
     private readonly AuthManager _authManager;
     private readonly SessionManager _sessionManager;
     private readonly TerminalBootstrapService _terminalBootstrap;
+    private readonly EscPosService _escPos;
 
-    public OfflinePMSInterop(LocalRepository repo, AuthManager authManager, SessionManager sessionManager, TerminalBootstrapService terminalBootstrap)
+    public OfflinePMSInterop(LocalRepository repo, AuthManager authManager, SessionManager sessionManager, TerminalBootstrapService terminalBootstrap, EscPosService escPos)
     {
         _repo = repo;
         _authManager = authManager;
         _sessionManager = sessionManager;
         _terminalBootstrap = terminalBootstrap;
+        _escPos = escPos;
     }
 
     private readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
@@ -992,9 +997,18 @@ public class OfflinePMSInterop
         try
         {
             var ctx = await GetSecureContextAsync();
-            // TODO: Integrate with ESC/POS or Windows printing
             await _repo.LogHardwareEventAsync(ctx.UserId, ctx.DeviceId, "RECEIPT_PRINT", receiptDataJson);
-            return JsonSerializer.Serialize(new { success = true, message = "Receipt sent to printer" });
+
+            var receipt = JsonSerializer.Deserialize<ReceiptData>(
+                receiptDataJson,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+            );
+
+            if (receipt == null)
+                return JsonSerializer.Serialize(new { success = false, error = "Invalid receipt data" });
+
+            var (success, error) = await _escPos.PrintReceiptAsync(receipt, ctx.OutletId);
+            return JsonSerializer.Serialize(new { success, error });
         }
         catch (Exception ex)
         {
@@ -1007,9 +1021,84 @@ public class OfflinePMSInterop
         try
         {
             var ctx = await GetSecureContextAsync();
-            // TODO: Route to the correct station printer based on ticket.station
             await _repo.LogHardwareEventAsync(ctx.UserId, ctx.DeviceId, "KITCHEN_TICKET_PRINT", ticketDataJson);
-            return JsonSerializer.Serialize(new { success = true, message = "Kitchen ticket sent to printer" });
+
+            var kot = JsonSerializer.Deserialize<KotData>(
+                ticketDataJson,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+            );
+
+            if (kot == null)
+                return JsonSerializer.Serialize(new { success = false, error = "Invalid KOT data" });
+
+            var (success, error) = await _escPos.PrintKotAsync(kot, ctx.OutletId);
+            return JsonSerializer.Serialize(new { success, error });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    // ── Printer Configuration Management ──────────────────────────────────────
+
+    public async Task<string> GetPrintersAsync()
+    {
+        try
+        {
+            var ctx = await GetSecureContextAsync();
+            var printers = await _escPos.GetPrintersAsync(ctx.OutletId);
+            return JsonSerializer.Serialize(new { success = true, data = printers });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    public async Task<string> SavePrinterAsync(string printerConfigJson)
+    {
+        try
+        {
+            await GetSecureContextAsync();
+            var config = JsonSerializer.Deserialize<LocalPrinterConfig>(
+                printerConfigJson,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+            );
+            if (config == null)
+                return JsonSerializer.Serialize(new { success = false, error = "Invalid printer config" });
+
+            if (string.IsNullOrEmpty(config.Id)) config.Id = Guid.NewGuid().ToString();
+            var saved = await _escPos.SavePrinterAsync(config);
+            return JsonSerializer.Serialize(new { success = true, data = saved });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    public async Task<string> DeletePrinterAsync(string printerId)
+    {
+        try
+        {
+            await GetSecureContextAsync();
+            await _escPos.DeletePrinterAsync(printerId);
+            return JsonSerializer.Serialize(new { success = true });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    public async Task<string> TestPrinterAsync(string ip, int port = 9100)
+    {
+        try
+        {
+            await GetSecureContextAsync();
+            var (success, message) = await _escPos.TestConnectionAsync(ip, port);
+            return JsonSerializer.Serialize(new { success, message });
         }
         catch (Exception ex)
         {

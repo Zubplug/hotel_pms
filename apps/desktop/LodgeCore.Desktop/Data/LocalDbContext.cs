@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using LodgeCore.Desktop.Data.Entities;
+using LodgeCore.Desktop.Services;
 
 namespace LodgeCore.Desktop.Data;
 
@@ -44,6 +45,7 @@ public class LocalDbContext : DbContext
     public DbSet<LocalPosDiscount> PosDiscounts { get; set; } = null!;
     public DbSet<LocalKeycardAudit> KeycardAudits { get; set; } = null!;
     public DbSet<LocalHardwareAuditLog> HardwareAuditLogs { get; set; } = null!;
+    public DbSet<LocalPrinterConfig> PrinterConfigs { get; set; } = null!;
 
 
     public LocalDbContext(DbContextOptions<LocalDbContext> options) : base(options)

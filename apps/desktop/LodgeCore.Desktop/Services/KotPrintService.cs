@@ -1,26 +1,36 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using LodgeCore.Desktop.Data;
+using LodgeCore.Desktop.Data.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace LodgeCore.Desktop.Services;
 
 public class KotPrintService : BackgroundService
 {
     private readonly IServiceProvider _serviceProvider;
+    private readonly EscPosService _escPos;
+    private readonly ILogger<KotPrintService> _logger;
     private readonly TimeSpan _pollInterval = TimeSpan.FromSeconds(5);
 
-    public KotPrintService(IServiceProvider serviceProvider)
+    public KotPrintService(IServiceProvider serviceProvider, EscPosService escPos, ILogger<KotPrintService> logger)
     {
         _serviceProvider = serviceProvider;
+        _escPos = escPos;
+        _logger = logger;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        _logger.LogInformation("KOT Print Service started.");
+
         while (!stoppingToken.IsCancellationRequested)
         {
             try
@@ -29,7 +39,7 @@ public class KotPrintService : BackgroundService
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"KOT Print Service Error: {ex.Message}");
+                _logger.LogError(ex, "KOT Print Service error in poll cycle.");
             }
 
             await Task.Delay(_pollInterval, stoppingToken);
@@ -48,36 +58,66 @@ public class KotPrintService : BackgroundService
             .Take(10)
             .ToListAsync(cancellationToken);
 
+        if (!queuedKots.Any()) return;
+
         foreach (var kot in queuedKots)
         {
+            kot.AttemptCount++;
+
             try
             {
-                kot.AttemptCount++;
-                
-                // Hardware integration (Phase 4): Implement ESC/POS TCP/IP printing 
-                // using the local network printer IP defined in the POS Outlet configuration.
-                // For now, mark as printed to clear the local queue.
-                bool success = true;
+                // Load the order items for this KOT
+                var itemIds = JsonSerializer.Deserialize<List<string>>(kot.ItemIdsJson) ?? new List<string>();
+                var items = await dbContext.PosOrderItems
+                    .Where(i => itemIds.Contains(i.Id))
+                    .Include(i => i.Modifiers)
+                    .ToListAsync(cancellationToken);
+
+                // Build the KotData DTO for the ESC/POS service
+                var kotData = new KotData(
+                    KotNumber: kot.KotNumber,
+                    OrderNumber: kot.OrderNumber,
+                    TableNumber: kot.TableNumber,
+                    ServerName: kot.ServerName,
+                    OutletName: await GetOutletNameAsync(dbContext, kot.OutletId),
+                    Items: items.Select(i => new KotItem(
+                        Name: i.ProductName,
+                        Quantity: i.Quantity,
+                        Course: i.Course,
+                        Notes: null,
+                        Modifiers: i.Modifiers.Select(m => m.Name).ToList()
+                    )).ToList(),
+                    FiredAt: kot.FiredAt ?? kot.CreatedAt
+                );
+
+                var (success, error) = await _escPos.PrintKotAsync(kotData, kot.OutletId);
 
                 if (success)
                 {
                     kot.PrintStatus = "PRINTED";
                     kot.PrintedAt = DateTime.UtcNow;
+                    _logger.LogInformation("KOT {KotNumber} printed successfully.", kot.KotNumber);
                 }
                 else
                 {
-                    kot.PrintStatus = "FAILED";
+                    kot.PrintStatus = kot.AttemptCount >= 3 ? "FAILED" : "QUEUED";
+                    _logger.LogWarning("KOT {KotNumber} print failed (attempt {Attempt}): {Error}",
+                        kot.KotNumber, kot.AttemptCount, error);
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                kot.PrintStatus = "FAILED";
+                kot.PrintStatus = kot.AttemptCount >= 3 ? "FAILED" : "QUEUED";
+                _logger.LogError(ex, "Exception printing KOT {KotNumber}.", kot.KotNumber);
             }
         }
 
-        if (queuedKots.Any())
-        {
-            await dbContext.SaveChangesAsync(cancellationToken);
-        }
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private static async Task<string> GetOutletNameAsync(LocalDbContext db, string outletId)
+    {
+        var outlet = await db.PosOutlets.FindAsync(outletId);
+        return outlet?.Name ?? "Kitchen";
     }
 }
