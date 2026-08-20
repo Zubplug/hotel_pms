@@ -71,15 +71,12 @@ export async function GET(req: NextRequest) {
     }
 
     // 2. Fetch Pending Approvals
-    const pendingApprovals = await prisma.approvalRequest.findMany({
+    const pendingApprovalsRaw = await prisma.approvalRequest.findMany({
       where: {
         propertyId: { in: targetProperties },
         status: 'PENDING'
       },
       include: {
-        requester: {
-          select: { firstName: true, lastName: true, department: true }
-        },
         property: {
           select: { id: true, name: true, code: true }
         }
@@ -88,13 +85,27 @@ export async function GET(req: NextRequest) {
       take: 10
     });
 
+    const staffIds = pendingApprovalsRaw.map((a: any) => a.requestedBy);
+    const staffMembers = await prisma.staff.findMany({
+      where: { id: { in: staffIds } },
+      select: { id: true, firstName: true, lastName: true, department: true }
+    });
+    
+    const pendingApprovals = pendingApprovalsRaw.map((app: any) => {
+      const staff = staffMembers.find((s: any) => s.id === app.requestedBy);
+      return {
+        ...app,
+        requester: staff || { firstName: 'Unknown', lastName: 'Staff', department: 'Unknown' }
+      };
+    });
+
     // 3. Fetch P0/P1 Critical Interventions (from Notifications or a dedicated Alerts table)
-    // We'll use the Notification table filtering for Critical priority
+    // We'll use the Notification table filtering for Critical/High priority
     const criticalInterventions = await prisma.notification.findMany({
       where: {
         recipientId: user.id,
         channel: 'in_app',
-        priority: { in: ['P0', 'P1'] }, // Map to P0/P1
+        priority: { in: ['Critical', 'High'] }, // Map to Critical/High
         readAt: null
       },
       orderBy: { createdAt: 'desc' },
