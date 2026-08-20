@@ -1,8 +1,9 @@
 import React from 'react';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import {
   LayoutGrid, MapPin, Receipt, TrendingUp, ChefHat,
-  Monitor, Lock, UserCircle, RefreshCw, Wifi, WifiOff
+  Monitor, Lock, UserCircle, RefreshCw, Wifi, WifiOff, Printer
 } from 'lucide-react';
 
 interface PosSidebarProps {
@@ -28,6 +29,7 @@ export function PosSidebar({
   syncPending,
   activeOperator,
 }: PosSidebarProps) {
+  const router = useRouter();
   const operatorName = activeOperator
     ? `${activeOperator.firstName || ''} ${activeOperator.lastName || ''}`.trim() || activeOperator.name || 'Operator'
     : 'Not signed in';
@@ -116,6 +118,7 @@ export function PosSidebar({
         <NavItem icon={TrendingUp} label="My Sales"   onClick={onOpenMySales}  active={false} />
         <NavItem icon={ChefHat}   label="Kitchen"     onClick={onOpenKitchen}  active={false} />
         <NavItem icon={Monitor}   label="KDS Display" onClick={() => window.open('/pos/kds', '_blank')} active={false} />
+        <NavItem icon={Printer}   label="Printers"    onClick={() => router.push('/pos/printer-settings')} active={false} />
       </div>
 
       {/* Spacer */}
