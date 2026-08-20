@@ -8,7 +8,7 @@ final hubRepositoryProvider = Provider<HubRepository>((ref) {
   return HubRepository(dio);
 });
 
-final selectedHubPropertyProvider = StateProvider<String>((ref) => 'ALL_AUTHORIZED');
+final selectedHubPropertyProvider = StateProvider<String>((ref) => 'AUTO_SELECT_FIRST');
 
 final hubDataProvider = FutureProvider<HubData>((ref) async {
   final repository = ref.watch(hubRepositoryProvider);

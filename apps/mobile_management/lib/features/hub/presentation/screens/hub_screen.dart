@@ -24,20 +24,6 @@ class HubScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    ref.listen<AsyncValue<HubData>>(hubDataProvider, (previous, next) {
-      if (previous?.value == null && next.value != null) {
-        final data = next.value!;
-        if (data.scope.availableProperties.isNotEmpty) {
-          final currentSelected = ref.read(selectedHubPropertyProvider);
-          if (currentSelected == 'ALL_AUTHORIZED') {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              ref.read(selectedHubPropertyProvider.notifier).state = data.scope.availableProperties.first.id;
-            });
-          }
-        }
-      }
-    });
-
     final hubState = ref.watch(hubDataProvider);
 
     return Scaffold(

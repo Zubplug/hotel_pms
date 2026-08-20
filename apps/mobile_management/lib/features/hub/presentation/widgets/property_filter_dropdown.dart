@@ -13,7 +13,6 @@ class PropertyFilterDropdown extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final selectedProperty = ref.watch(selectedHubPropertyProvider);
     final hubState = ref.watch(hubDataProvider);
 
     final availableProperties = hubState.maybeWhen(
@@ -21,9 +20,15 @@ class PropertyFilterDropdown extends ConsumerWidget {
       orElse: () => <HubProperty>[],
     );
 
+    final providerSelected = ref.watch(selectedHubPropertyProvider);
+    final activeProperty = hubState.maybeWhen(
+      data: (data) => data.scope.property,
+      orElse: () => providerSelected == 'AUTO_SELECT_FIRST' ? '' : providerSelected,
+    );
+
     String displayText = 'All Properties';
-    if (selectedProperty != 'ALL_AUTHORIZED') {
-      final match = availableProperties.where((p) => p.id == selectedProperty).firstOrNull;
+    if (activeProperty.isNotEmpty && activeProperty != 'ALL_AUTHORIZED') {
+      final match = availableProperties.where((p) => p.id == activeProperty).firstOrNull;
       if (match != null) {
         displayText = match.name;
       } else {
@@ -32,7 +37,7 @@ class PropertyFilterDropdown extends ConsumerWidget {
     }
 
     return GestureDetector(
-      onTap: () => _showPropertySelector(context, ref, availableProperties, selectedProperty),
+      onTap: () => _showPropertySelector(context, ref, availableProperties, activeProperty),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(

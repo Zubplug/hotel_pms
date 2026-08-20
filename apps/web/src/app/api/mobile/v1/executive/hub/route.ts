@@ -64,9 +64,15 @@ export async function GET(req: NextRequest) {
 
     // Filter by requested property if specified and authorized
     let targetProperties = allowedPropertyIds;
-    if (propertyId && propertyId !== 'ALL_AUTHORIZED') {
+    let resolvedPropertyScope = propertyId || 'ALL_AUTHORIZED';
+
+    if (propertyId === 'AUTO_SELECT_FIRST' && allowedPropertyIds.length > 0) {
+      targetProperties = [allowedPropertyIds[0]];
+      resolvedPropertyScope = allowedPropertyIds[0];
+    } else if (propertyId && propertyId !== 'ALL_AUTHORIZED') {
       if (allowedPropertyIds.includes(propertyId)) {
         targetProperties = [propertyId];
+        resolvedPropertyScope = propertyId;
       } else {
         return errorResponse('FORBIDDEN', 'Access denied to this property', 403);
       }
@@ -138,7 +144,7 @@ export async function GET(req: NextRequest) {
     return successResponse({
       generatedAt: new Date().toISOString(),
       scope: {
-        property: propertyId || 'ALL_AUTHORIZED',
+        property: resolvedPropertyScope,
         availableProperties: authorizedPropertiesDetails
       },
       summary: {
