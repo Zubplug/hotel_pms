@@ -1,19 +1,19 @@
 import { NextRequest } from 'next/server';
-import { auth } from '@/lib/auth';
+import { resolveUser } from '@/lib/resolve-user';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 
 export async function GET(req: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) {
+    const user = await resolveUser(req);
+    if (!user) {
       return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
     }
 
-    const userId = session.user.id;
+    const userId = user.id;
 
     // Fetch user and staff details, ensuring we only select needed fields
-    const user = await prisma.user.findUnique({
+    const dbUser = await prisma.user.findUnique({
       where: { id: userId },
       select: {
         id: true,
@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    if (!user) {
+    if (!dbUser) {
       return errorResponse('NOT_FOUND', 'User profile not found', 404);
     }
 
@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
     });
 
     // Map system role (first role or default)
-    const systemRole = user.roles && user.roles.length > 0 ? user.roles[0].toString() : 'STAFF';
+    const systemRole = dbUser.roles && dbUser.roles.length > 0 ? dbUser.roles[0].toString() : 'STAFF';
 
     // Build human-readable capabilities based on role (mock logic for now as requested by user to show human readable permissions)
     const capabilities = [];
@@ -75,10 +75,10 @@ export async function GET(req: NextRequest) {
     // Explicit DTO mapping
     const dto = {
       user: {
-        id: user.id,
+        id: dbUser.id,
         firstName: staff?.firstName || 'User',
         lastName: staff?.lastName || '',
-        email: user.email,
+        email: dbUser.email,
         phone: staff?.phone || null,
       },
       staff: staff ? {
@@ -100,7 +100,7 @@ export async function GET(req: NextRequest) {
           guestExperience: true,
         },
         dailyBrief: true,
-        mfaEnabled: user.mfaEnabled,
+        mfaEnabled: dbUser.mfaEnabled,
       }
     };
 
