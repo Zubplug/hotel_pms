@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'hub_model.dart';
 
 class HubRepository {
@@ -16,11 +17,17 @@ class HubRepository {
       );
       return HubData.fromJson(response.data['data']);
     } on DioException catch (e) {
+      debugPrint('[HubRepository] DioException: ${e.message}');
+      debugPrint('[HubRepository] URL: ${e.requestOptions.uri}');
+      debugPrint('[HubRepository] Status: ${e.response?.statusCode}');
+      debugPrint('[HubRepository] Response Data: ${e.response?.data}');
       if (e.response != null) {
-        throw Exception(e.response?.data['message'] ?? 'Failed to load hub data');
+        throw Exception(e.response?.data['message'] ?? e.response?.data['error'] ?? 'Failed to load hub data (HTTP ${e.response?.statusCode})');
       }
-      throw Exception('Network error occurred');
-    } catch (e) {
+      throw Exception('Network error occurred: ${e.message}');
+    } catch (e, stacktrace) {
+      debugPrint('[HubRepository] Unknown Exception: $e');
+      debugPrint('[HubRepository] Stacktrace: $stacktrace');
       throw Exception('Failed to load hub data: $e');
     }
   }
