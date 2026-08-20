@@ -4,6 +4,7 @@ on:
     tags:
       - 'v*' # Trigger only when a new version tag is pushed (e.g., v1.0.1)
   workflow_dispatch: # Allow manual trigger from GitHub Actions UI
+
 jobs:
   build-desktop:
     runs-on: windows-latest
@@ -13,60 +14,69 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: '10.0.x'
-        
+
     - name: Setup Node.js (for React frontend)
       uses: actions/setup-node@v4
       with:
         node-version: '20'
+
     - name: Install .NET MAUI Workloads
       run: dotnet workload install maui-windows
+
     - name: Install pnpm
       uses: pnpm/action-setup@v3
       with:
         version: 8
+
     - name: Install Web Dependencies
       run: pnpm install --no-frozen-lockfile
+
     - name: Generate Prisma Types
       run: pnpm --filter @hotel-pms/db run db:generate
+
     - name: Build Web (Next.js Static Export)
       run: pnpm build:desktop
       env:
         NEXT_PUBLIC_IS_DESKTOP: "true"
+
     - name: Move Web Export to MAUI wwwroot
+      shell: powershell
       run: |
         Remove-Item -Recurse -Force ./apps/desktop/LodgeCore.Desktop/wwwroot -ErrorAction Ignore
         Copy-Item -Path ./apps/web/out -Destination ./apps/desktop/LodgeCore.Desktop/wwwroot -Recurse
-        
-    - name: Create Self-Signed Certificate (for CI)
-      id: create_cert
+
+    - name: Import Permanent Code-Signing Certificate
+      id: import_cert
       shell: powershell
+      env:
+        CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+        CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
       run: |
-        # Create self-signed cert and install it to CurrentUser\My store
-        $cert = New-SelfSignedCertificate `
-          -CertStoreLocation Cert:\CurrentUser\My `
-          -DnsName "LodgeCore" `
-          -Type CodeSigningCert `
-          -Subject "CN=LodgeCore, O=LodgeCore, L=Lagos, S=Lagos, C=NG"
-
-        # Capture the real subject as written by Windows (may be reordered)
-        $subject = $cert.Subject
-        $thumbprint = $cert.Thumbprint
-        Write-Host "Certificate Subject: $subject"
-        Write-Host "Certificate Thumbprint: $thumbprint"
-
-        # Export PFX for reference (not used for signing below)
+        # Decode the permanent PFX from GitHub secret (stripping newlines)
+        $base64 = $env:CERTIFICATE_BASE64 -replace '\s',''
+        $pfxBytes = [System.Convert]::FromBase64String($base64)
         New-Item -ItemType Directory -Force -Path .\apps\desktop\LodgeCore.Desktop\Certificates | Out-Null
-        $pwd = ConvertTo-SecureString -String "lodgecore2026" -Force -AsPlainText
-        Export-PfxCertificate -Cert $cert -FilePath .\apps\desktop\LodgeCore.Desktop\Certificates\LodgeCore.pfx -Password $pwd
+        $pfxPath = "$PWD\apps\desktop\LodgeCore.Desktop\Certificates\LodgeCore.pfx"
+        [IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
 
-        # Persist thumbprint to GITHUB_ENV so subsequent steps can read it
+        # Import into CurrentUser\My store so SignTool can find it by thumbprint
+        $secPwd = ConvertTo-SecureString -String $env:CERTIFICATE_PASSWORD -Force -AsPlainText
+        $cert = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $secPwd
+        $thumbprint = $cert.Thumbprint
+        $subject = $cert.Subject
+
+        Write-Host "Certificate imported. Subject: $subject | Thumbprint: $thumbprint"
+
+        # Write to GITHUB_ENV for subsequent steps
         echo "CERT_THUMBPRINT=$thumbprint" >> $env:GITHUB_ENV
+        echo "CERT_SUBJECT=$subject" >> $env:GITHUB_ENV
 
-        # Prevent APPX0101 by syncing the manifest Publisher with the exact Windows-issued Subject
+        # Sync manifest Publisher with the exact cert Subject to prevent APPX0101
         $manifestPath = ".\apps\desktop\LodgeCore.Desktop\Platforms\Windows\Package.appxmanifest"
         (Get-Content $manifestPath) -replace 'Publisher="[^"]+"', "Publisher=`"$subject`"" | Set-Content $manifestPath
         Write-Host "Manifest Publisher updated to: $subject"
@@ -74,34 +84,90 @@ jobs:
     - name: Publish MAUI Windows MSIX
       shell: powershell
       run: |
-        # Use thumbprint-based signing (same as working build-desktop.yml)
         dotnet publish apps/desktop/LodgeCore.Desktop `
           -c Release `
           -f net10.0-windows10.0.19041.0 `
+          /p:RuntimeIdentifierOverride=win10-x86 `
           /p:GenerateAppxPackageOnBuild=true `
           /p:AppxPackageSigningEnabled=true `
           "/p:PackageCertificateThumbprint=$env:CERT_THUMBPRINT"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+    - name: Generate .appinstaller for Auto-Update
+      shell: powershell
+      run: |
+        # Parse version from tag (e.g. v1.2.9 -> 1.2.9.0)
+        $tag = "${{ github.ref_name }}"
+        $version = $tag.TrimStart('v') + ".0"
+        $repo = "${{ github.repository }}"
+
+        # Find the built MSIX file
+        $msixFile = Get-ChildItem -Path .\apps\desktop\LodgeCore.Desktop\bin -Recurse -Filter "*.msix" |
+                    Where-Object { $_.Name -notlike "*Dependencies*" } |
+                    Select-Object -First 1
+        if (-not $msixFile) {
+          Write-Error "No MSIX file found!"
+          exit 1
+        }
+        $msixName = $msixFile.Name
+        Write-Host "MSIX: $msixName"
+
+        # The stable URL where this .appinstaller will be hosted (Vercel proxy)
+        $appinstallerUrl = "https://hotel-pms-web-nine.vercel.app/api/desktop-update/LodgeCore.appinstaller"
+        # Direct download URL for the MSIX on GitHub Releases
+        $msixUrl = "https://github.com/$repo/releases/download/$tag/$msixName"
+
+        $xml = @"
+<?xml version="1.0" encoding="utf-8"?>
+<AppInstaller Uri="$appinstallerUrl"
+              Version="$version"
+              xmlns="http://schemas.microsoft.com/appx/appinstaller/2018">
+  <MainPackage Name="LodgeCore.Desktop"
+               Version="$version"
+               Publisher="$env:CERT_SUBJECT"
+               Uri="$msixUrl"
+               ProcessorArchitecture="x86" />
+  <UpdateSettings>
+    <OnLaunch HoursBetweenUpdateChecks="24" ShowPrompt="false" UpdateBlocksActivation="false" />
+    <AutomaticBackgroundTask />
+    <ForceUpdateFromAnyVersion>true</ForceUpdateFromAnyVersion>
+  </UpdateSettings>
+</AppInstaller>
+"@
+        New-Item -ItemType Directory -Force -Path .\release-artifacts | Out-Null
+        $xml | Out-File -FilePath .\release-artifacts\LodgeCore.appinstaller -Encoding utf8
+        Write-Host "=== Generated .appinstaller ==="
+        Get-Content .\release-artifacts\LodgeCore.appinstaller
+
     - name: Prepare Release Artifacts
       shell: powershell
       run: |
-        New-Item -ItemType Directory -Force -Path .\release-artifacts | Out-Null
-        # Search recursively so we are not tied to a specific RID (win-x86, win10-x86, etc.)
-        $msixFiles = Get-ChildItem -Path .\apps\desktop\LodgeCore.Desktop\bin -Recurse -Filter "*.msix" -ErrorAction SilentlyContinue
-        $appinstallerFiles = Get-ChildItem -Path .\apps\desktop\LodgeCore.Desktop\bin -Recurse -Filter "*.appinstaller" -ErrorAction SilentlyContinue
+        # Copy MSIX to release-artifacts
+        $msixFiles = Get-ChildItem -Path .\apps\desktop\LodgeCore.Desktop\bin -Recurse -Filter "*.msix" `
+                     -ErrorAction SilentlyContinue |
+                     Where-Object { $_.Name -notlike "*Dependencies*" }
         if ($msixFiles.Count -eq 0) {
-          Write-Error "ERROR: No .msix files found! Check dotnet publish output above."
+          Write-Error "No .msix files found!"
           exit 1
         }
         $msixFiles | Copy-Item -Destination .\release-artifacts\ -Force
-        $appinstallerFiles | Copy-Item -Destination .\release-artifacts\ -Force
         Write-Host "=== Release artifacts ==="
         Get-ChildItem .\release-artifacts\
+
     - name: Upload Release
       uses: softprops/action-gh-release@v2
       if: startsWith(github.ref, 'refs/tags/')
       with:
-        files: release-artifacts/*.msix
+        files: |
+          release-artifacts/*.msix
+          release-artifacts/*.appinstaller
         generate_release_notes: true
+        body: |
+          ## Installation
+
+          **First time install:** Download and run `LodgeCore.Desktop_*.msix`
+          > You will need to trust the LodgeCore certificate first. See [setup guide](https://hotel-pms-web-nine.vercel.app).
+
+          **Auto-update:** If already installed, the app will check for updates automatically every 24 hours.
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
