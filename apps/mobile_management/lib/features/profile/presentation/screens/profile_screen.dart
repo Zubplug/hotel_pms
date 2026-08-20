@@ -533,9 +533,13 @@ class _SettingsTile extends StatelessWidget {
               ),
             ),
             if (value != null) ...[
-              Text(
-                value!,
-                style: const TextStyle(fontSize: 14, color: _textMuted),
+              Flexible(
+                child: Text(
+                  value!,
+                  style: const TextStyle(fontSize: 14, color: _textMuted),
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.right,
+                ),
               ),
               const SizedBox(width: 8),
             ],
