@@ -95,9 +95,18 @@ export function OperatorSelectionScreen({ isOpen, onAuthenticated, onCancel, can
   };
 
   const handleProcessLoginSuccess = async (authRes: any, staffObj: any, token: string) => {
+    // Only Front-of-House roles typically need personal banks in SERVER_BANKING mode
+    const needsTillRole = ['WAITER', 'BARTENDER', 'CASHIER'].includes(staffObj.role || staffObj.position);
+    
     if (authRes.requiresBank) {
       setBankState('CENTRAL_CASHIER_UNAVAILABLE');
-    } else if (!authRes.posSessionId && !authRes.sessionId && !localStorage.getItem('lodgecore_pos_session_id')) {
+    } else if (
+      !authRes.posSessionId && 
+      !authRes.sessionId && 
+      !localStorage.getItem('lodgecore_pos_session_id') &&
+      authRes.bankingModel === 'SERVER_BANKING' &&
+      needsTillRole
+    ) {
       setAuthData({ operator: staffObj, token });
       setBankState('NEEDS_SERVER_BANK');
     } else {

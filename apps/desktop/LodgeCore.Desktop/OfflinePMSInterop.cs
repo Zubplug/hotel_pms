@@ -241,10 +241,6 @@ public class OfflinePMSInterop
                         {
                             posSessionId = openSession.Id;
                         }
-                        else
-                        {
-                            posSessionId = await _repo.EnsureActiveServerBankAsync(staff.Id, propertyId, terminal.OutletId, session.DeviceId);
-                        }
                     }
                     else
                     {
@@ -990,7 +986,7 @@ public class OfflinePMSInterop
 
     private static readonly Dictionary<string, (int Attempts, DateTime LockoutEnd)> _pinFailures = new();
 
-    public async Task<string> AuthenticateOperatorAsync(string staffId, string pin, string propertyId, string sessionId)
+    public async Task<string> AuthenticateOperatorAsync(string staffId, string pin, string propertyId, string? sessionId, string? outletId, string? deviceId)
     {
         try
         {
@@ -998,8 +994,51 @@ public class OfflinePMSInterop
             var ctx = await _sessionManager.AuthenticateOperatorAsync(staffId, pin);
             var staff = await _repo.GetStaffByIdAsync(staffId);
             
+            var property = await _repo.GetPropertyAsync(propertyId);
+            var actualBankingModel = property?.BankingModel ?? "CENTRAL_CASHIER";
+
+            string? posSessionId = null;
+            bool requiresBank = false;
+            string? bankOwner = null;
+
+            if (!string.IsNullOrEmpty(deviceId) && !string.IsNullOrEmpty(outletId))
+            {
+                if (actualBankingModel == "SERVER_BANKING")
+                {
+                    var openSession = await _repo.GetActiveServerBankAsync(staff.Id, propertyId, outletId);
+                    if (openSession != null)
+                    {
+                        posSessionId = openSession.Id;
+                    }
+                }
+                else
+                {
+                    var openSession = await _repo.GetActiveSessionForDeviceAsync(deviceId);
+                    if (openSession != null)
+                    {
+                        posSessionId = openSession.Id;
+                    }
+                    else
+                    {
+                        requiresBank = true;
+                        bankOwner = "MANAGER";
+                    }
+                }
+            }
+
             // Return the OperatorTokenVersion as the secure token to React
-            return JsonSerializer.Serialize(new { success = true, data = new { operatorToken = ctx.OperatorTokenVersion, staff, permissions = new[] { staff.Role } } }, _jsonOptions);
+            return JsonSerializer.Serialize(new { 
+                success = true, 
+                data = new { 
+                    operatorToken = ctx.OperatorTokenVersion, 
+                    staff, 
+                    permissions = new[] { staff.Role },
+                    bankingModel = actualBankingModel,
+                    posSessionId,
+                    requiresBank,
+                    bankOwner
+                } 
+            }, _jsonOptions);
         }
         catch (Exception ex)
         {

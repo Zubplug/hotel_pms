@@ -453,7 +453,9 @@ public partial class MainPage : ContentPage
                         parameters?["staffId"]?.ToString(),
                         parameters?["pin"]?.ToString(),
                         parameters?["propertyId"]?.ToString(),
-                        parameters?["sessionId"]?.ToString());
+                        parameters?["sessionId"]?.ToString(),
+                        parameters?["outletId"]?.ToString(),
+                        parameters?["deviceId"]?.ToString());
                     break;
                 case "pos.startEmergencyBank":
                     responseData = await pmsInterop.StartEmergencyBankAsync(
