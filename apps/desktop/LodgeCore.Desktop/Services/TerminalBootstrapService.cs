@@ -140,8 +140,16 @@ public class TerminalBootstrapService
 
         context.PosTerminals.Add(newTerminal);
         
-        // Optional: Save snapshot data (staff, menu, etc.) here
-        // ...
+        context.PosOutlets.RemoveRange(context.PosOutlets);
+
+        if (result.Data.Snapshot.ValueKind != JsonValueKind.Undefined && result.Data.Snapshot.TryGetProperty("outlet", out var outletProp))
+        {
+            var outlet = JsonSerializer.Deserialize<LocalPosOutlet>(outletProp.GetRawText(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            if (outlet != null)
+            {
+                context.PosOutlets.Add(outlet);
+            }
+        }
         
         await context.SaveChangesAsync();
 
