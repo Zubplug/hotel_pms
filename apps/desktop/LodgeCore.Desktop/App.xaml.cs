@@ -21,8 +21,12 @@ public partial class App : Application
                 // Start asynchronously without blocking window creation
                 _ = serviceManager.StartAllAsync();
 
-                // Hook shutdown lifecycle. LodgeCore currently enforces a single-window
-                // application paradigm on Desktop, so Window.Destroying equates to App Exit.
+                // Hook shutdown lifecycle. 
+                // NOTE: LodgeCore Desktop is currently a single-window application; 
+                // the primary window's destruction represents full application shutdown.
+                // If multi-window support is ever added, this lifecycle hook must be 
+                // moved to an application-level event (e.g. Application.Current.Quit) 
+                // to prevent closing one window from tearing down all background services.
                 window.Destroying += (s, e) => 
                 {
                     // Fire and forget the graceful shutdown sequence

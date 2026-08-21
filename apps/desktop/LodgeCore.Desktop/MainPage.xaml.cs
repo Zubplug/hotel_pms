@@ -121,6 +121,9 @@ public partial class MainPage : ContentPage
                 case "system.getSyncHealth":
                     responseData = await pmsInterop.GetSyncHealthAsync();
                     break;
+                case "system.getServiceHealth":
+                    responseData = await pmsInterop.GetServiceHealthAsync();
+                    break;
                 case "system.provisionTerminal":
                     responseData = await pmsInterop.ProvisionTerminalAsync(
                         parameters?["email"]?.ToString(),

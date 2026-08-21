@@ -14,14 +14,16 @@ public class OfflinePMSInterop
     private readonly SessionManager _sessionManager;
     private readonly TerminalBootstrapService _terminalBootstrap;
     private readonly EscPosService _escPos;
+    private readonly DesktopServiceManager _serviceManager;
 
-    public OfflinePMSInterop(LocalRepository repo, AuthManager authManager, SessionManager sessionManager, TerminalBootstrapService terminalBootstrap, EscPosService escPos)
+    public OfflinePMSInterop(LocalRepository repo, AuthManager authManager, SessionManager sessionManager, TerminalBootstrapService terminalBootstrap, EscPosService escPos, DesktopServiceManager serviceManager)
     {
         _repo = repo;
         _authManager = authManager;
         _sessionManager = sessionManager;
         _terminalBootstrap = terminalBootstrap;
         _escPos = escPos;
+        _serviceManager = serviceManager;
     }
 
     private readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
@@ -75,6 +77,30 @@ public class OfflinePMSInterop
                 return JsonSerializer.Serialize(new { success = true }, _jsonOptions);
             }
             return JsonSerializer.Serialize(new { success = false, error = "SyncEngine not running" }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
+    public async Task<string> GetServiceHealthAsync()
+    {
+        try
+        {
+            var health = _serviceManager.GetServiceHealth();
+            
+            // Map our ServiceState enum to strings matching frontend expectation
+            var mappedHealth = new Dictionary<string, object>();
+            foreach(var kvp in health)
+            {
+                mappedHealth[kvp.Key] = new {
+                    state = kvp.Value.ToString(),
+                    lastError = kvp.Value == ServiceState.Error ? "Service failed during startup or operation" : null
+                };
+            }
+
+            return JsonSerializer.Serialize(new { success = true, services = mappedHealth }, _jsonOptions);
         }
         catch (Exception ex)
         {

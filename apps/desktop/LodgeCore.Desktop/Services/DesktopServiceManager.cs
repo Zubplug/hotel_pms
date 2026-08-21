@@ -59,7 +59,7 @@ public class DesktopServiceManager
             _serviceHealth[serviceName] = ServiceState.Starting;
 
             // Start services concurrently but safely capture individual failures
-            var startTask = Task.Run(async () =>
+            var startTask = async () =>
             {
                 try
                 {
@@ -72,9 +72,9 @@ public class DesktopServiceManager
                     _serviceHealth[serviceName] = ServiceState.Error;
                     _logger.LogError(ex, $"Failed to start service {serviceName}");
                 }
-            }, cancellationToken);
+            };
 
-            startTasks.Add(startTask);
+            startTasks.Add(startTask());
         }
 
         await Task.WhenAll(startTasks);
@@ -107,7 +107,7 @@ public class DesktopServiceManager
             var serviceName = service.GetType().Name;
             _serviceHealth[serviceName] = ServiceState.Stopping;
 
-            var stopTask = Task.Run(async () =>
+            var stopTask = async () =>
             {
                 try
                 {
@@ -120,9 +120,9 @@ public class DesktopServiceManager
                     _serviceHealth[serviceName] = ServiceState.Error;
                     _logger.LogError(ex, $"Error stopping service {serviceName}");
                 }
-            }, cancellationToken);
+            };
 
-            stopTasks.Add(stopTask);
+            stopTasks.Add(stopTask());
         }
 
         await Task.WhenAll(stopTasks);
