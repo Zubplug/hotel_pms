@@ -81,6 +81,13 @@ public class SyncEngine : BackgroundService
         {
             using var scope = _serviceProvider.CreateScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
+
+            // Ensure the SyncMetadata table exists, as EnsureCreated() won't add it 
+            // to existing SQLite databases (no migrations).
+            await dbContext.Database.ExecuteSqlRawAsync(
+                "CREATE TABLE IF NOT EXISTS LocalSyncMetadata (Id TEXT PRIMARY KEY, SchemaVersion TEXT, LastSuccessfulSyncAt TEXT);"
+            );
+
             var meta = await dbContext.SyncMetadata.FirstOrDefaultAsync(stoppingToken);
             if (meta != null && meta.LastSuccessfulSyncAt.HasValue)
             {
@@ -408,11 +415,9 @@ public class SyncEngine : BackgroundService
         _httpClient.DefaultRequestHeaders.Authorization =
             new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
-        try
-        {
-            var response = await _httpClient.GetAsync(
-                $"sync/pull?propertyId={Uri.EscapeDataString(propertyId)}",
-                cancellationToken);
+        var response = await _httpClient.GetAsync(
+            $"sync/pull?propertyId={Uri.EscapeDataString(propertyId)}",
+            cancellationToken);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -533,17 +538,5 @@ public class SyncEngine : BackgroundService
             _lastError = null;
             BroadcastHealth(SyncState.UP_TO_DATE, null, "COMPLETE", 1, 1, "Sync complete");
             _logger.LogInformation("Sync pull completed successfully.");
-        }
-        catch (HttpRequestException ex)
-        {
-            _consecutiveFailures++;
-            _logger.LogWarning($"Sync pull network error: {ex.Message}");
-        }
-        catch (Exception ex)
-        {
-            _consecutiveFailures++;
-            _logger.LogError(ex, "Sync pull failed unexpectedly.");
-        }
-    }
 }
 
