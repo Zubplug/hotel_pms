@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
         data: {
           propertyId,
           outletId: outlet.id,
-          deviceId: device.id,
+          deviceId: bankingModel === 'SERVER_BANKING' ? null : device.id,
           businessDate: new Date(),
           openingCash: openingCash || 0,
           expectedCash: openingCash || 0,

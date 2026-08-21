@@ -573,7 +573,7 @@ export async function POST(request: Request) {
             data: {
               id: entityId,
               propertyId: propertyId,
-              deviceId: deviceId,
+              deviceId: (payload.bankingModel === 'SERVER_BANKING') ? null : deviceId,
               bankingModel: payload.bankingModel || 'CENTRAL_CASHIER',
               bankType: payload.bankType || 'CENTRAL',
               primaryOperatorId: payload.primaryOperatorId || null,
