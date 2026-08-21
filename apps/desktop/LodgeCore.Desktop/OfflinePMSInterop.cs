@@ -1157,7 +1157,7 @@ public class OfflinePMSInterop
     {
         try
         {
-            var ctx = await GetSecureContextAsync();
+            var ctx = await _sessionManager.GetActiveContextAsync();
             
             if (!string.IsNullOrEmpty(operatorToken) && ctx.OperatorTokenVersion != operatorToken)
             {
