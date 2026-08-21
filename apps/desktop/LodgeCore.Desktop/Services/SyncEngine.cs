@@ -49,6 +49,10 @@ public class SyncEngine : BackgroundService
     private DateTime? _lastSuccess = null;
     private string? _lastError = null;
     private SyncState _lastSyncState = SyncState.NEVER_SYNCED;
+    private string? _lastPhase = null;
+    private int _lastCurrent = 0;
+    private int _lastTotal = 0;
+    private string? _lastMessage = null;
 
     public SyncEngine(IServiceProvider serviceProvider, ILogger<SyncEngine> logger, AuthManager authManager, HttpClient httpClient, ICredentialStorageService credentialStorage)
     {
@@ -152,6 +156,13 @@ public class SyncEngine : BackgroundService
     {
         _lastSyncState = state;
         if (error != null) _lastError = SanitizeErrorMessage(error);
+        if (phase != null) _lastPhase = phase;
+        if (total > 0)
+        {
+            _lastCurrent = current;
+            _lastTotal = total;
+        }
+        if (message != null) _lastMessage = message;
 
         using var scope = _serviceProvider.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
@@ -203,7 +214,11 @@ public class SyncEngine : BackgroundService
             Sync = _lastSyncState,
             LastSyncAt = _lastSuccess,
             PendingOperations = pendingCount,
-            LastError = _lastError
+            LastError = _lastError,
+            Phase = _lastPhase,
+            Current = _lastCurrent,
+            Total = _lastTotal,
+            Message = _lastMessage
         };
     }
 
@@ -373,11 +388,11 @@ public class SyncEngine : BackgroundService
         var dbContext = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
 
         var terminal = await dbContext.PosTerminals.FirstOrDefaultAsync(cancellationToken);
-        if (terminal == null) return;
+        if (terminal == null) throw new Exception("Terminal not provisioned (missing in local DB).");
 
         var session = await _authManager.GetSessionAsync();
         var propertyId = session?.PropertyId ?? terminal.PropertyId;
-        if (string.IsNullOrEmpty(propertyId)) return;
+        if (string.IsNullOrEmpty(propertyId)) throw new Exception("Property ID not found.");
 
         var token = _credentialStorage.LoadCredential("deviceCredential");
         if (string.IsNullOrEmpty(token))
@@ -386,8 +401,7 @@ public class SyncEngine : BackgroundService
             token = await _authManager.GetAuthTokenAsync();
             if (string.IsNullOrEmpty(token))
             {
-                _logger.LogDebug("No auth token available; skipping pull.");
-                return;
+                throw new Exception("No auth token available; skipping pull.");
             }
         }
 
@@ -402,8 +416,7 @@ public class SyncEngine : BackgroundService
 
             if (!response.IsSuccessStatusCode)
             {
-                _logger.LogWarning($"Sync pull returned {(int)response.StatusCode}");
-                return;
+                throw new Exception($"Sync pull returned {(int)response.StatusCode}");
             }
 
             var json = await response.Content.ReadAsStringAsync(cancellationToken);
