@@ -153,7 +153,7 @@ export default function DesktopEntryPage() {
         isOpen={true}
         onAuthenticated={() => {
           if (terminalState.desktopMode === 'FRONT_DESK') {
-            router.push('/frontdesk');
+            router.push('/hub');
           } else if (terminalState.desktopMode === 'POS') {
             router.push('/pos');
           } else {
