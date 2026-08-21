@@ -476,7 +476,7 @@ public class SyncEngine : BackgroundService
                         existing.Role = staffEl.TryGetProperty("role", out var role)
                             ? role.GetString() ?? existing.Role : existing.Role;
                         existing.PosPinHash = staffEl.TryGetProperty("posPinHash", out var pin)
-                            ? pin.GetString() : existing.PosPinHash;
+                            ? (pin.GetString() ?? "") : existing.PosPinHash;
                         existing.PosTokenVersion = staffEl.TryGetProperty("posTokenVersion", out var tv)
                             ? tv.GetInt32() : existing.PosTokenVersion;
                         existing.IsActive = staffEl.TryGetProperty("isActive", out var ia)
@@ -496,7 +496,7 @@ public class SyncEngine : BackgroundService
                             FirstName       = staffEl.TryGetProperty("firstName", out var fn2) ? fn2.GetString() ?? "" : "",
                             LastName        = staffEl.TryGetProperty("lastName",  out var ln2) ? ln2.GetString() ?? "" : "",
                             Role            = staffEl.TryGetProperty("role",      out var role2) ? role2.GetString() ?? "" : "",
-                            PosPinHash      = staffEl.TryGetProperty("posPinHash", out var pin2) ? pin2.GetString() : null,
+                            PosPinHash      = staffEl.TryGetProperty("posPinHash", out var pin2) ? (pin2.GetString() ?? "") : "",
                             PosTokenVersion = staffEl.TryGetProperty("posTokenVersion", out var tv2) ? tv2.GetInt32() : 1,
                             IsActive        = staffEl.TryGetProperty("isActive",   out var ia2) && ia2.GetBoolean(),
                             HasPosAccess    = staffEl.TryGetProperty("hasPosAccess", out var hpa2) && hpa2.GetBoolean(),
