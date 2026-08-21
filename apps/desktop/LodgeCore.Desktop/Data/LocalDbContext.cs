@@ -47,7 +47,7 @@ public class LocalDbContext : DbContext
     public DbSet<LocalKeycardAudit> KeycardAudits { get; set; } = null!;
     public DbSet<LocalHardwareAuditLog> HardwareAuditLogs { get; set; } = null!;
     public DbSet<LocalPrinterConfig> PrinterConfigs { get; set; } = null!;
-
+    public DbSet<LocalSyncMetadata> SyncMetadata { get; set; } = null!;
 
     public LocalDbContext(DbContextOptions<LocalDbContext> options) : base(options)
     {

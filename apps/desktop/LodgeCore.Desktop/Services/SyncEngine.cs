@@ -73,6 +73,22 @@ public class SyncEngine : BackgroundService
     {
         _logger.LogInformation("SyncEngine is starting.");
 
+        try 
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
+            var meta = await dbContext.SyncMetadata.FirstOrDefaultAsync(stoppingToken);
+            if (meta != null && meta.LastSuccessfulSyncAt.HasValue)
+            {
+                _lastSuccess = meta.LastSuccessfulSyncAt.Value;
+                _logger.LogInformation($"Restored last successful sync timestamp: {_lastSuccess}");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to load sync metadata on startup.");
+        }
+
         while (!stoppingToken.IsCancellationRequested)
         {
             if (_isOnline)
@@ -489,6 +505,14 @@ public class SyncEngine : BackgroundService
                     _logger.LogInformation($"Removed {obsoleteStaff.Count} revoked staff members.");
                 }
             }
+
+            var meta = await dbContext.SyncMetadata.FirstOrDefaultAsync(cancellationToken);
+            if (meta == null)
+            {
+                meta = new LodgeCore.Desktop.Data.Entities.LocalSyncMetadata { Id = "singleton", SchemaVersion = "1.0" };
+                dbContext.SyncMetadata.Add(meta);
+            }
+            meta.LastSuccessfulSyncAt = DateTime.UtcNow;
 
             await dbContext.SaveChangesAsync(cancellationToken);
             _consecutiveFailures = 0;
