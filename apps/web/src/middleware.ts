@@ -64,6 +64,12 @@ export default auth((req) => {
 
   // Protected route — redirect to login if not authenticated
   if (!isLoggedIn) {
+    // If we are on the desktop app, auth is handled by client-side guards (useLodgeCoreSession)
+    // because NextAuth cookies do not exist in the WebView2 session.
+    if (process.env.NEXT_PUBLIC_IS_DESKTOP === 'true') {
+      return;
+    }
+
     const loginUrl = new URL('/login', nextUrl);
     loginUrl.searchParams.set('callbackUrl', nextUrl.pathname);
     return Response.redirect(loginUrl);
