@@ -27,12 +27,18 @@ export function OperatorSelectionScreen({ isOpen, onAuthenticated, onCancel, can
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    if (isOpen && propertyId) {
+    if (!isOpen) return;
+
+    if (isDesktopMode) {
       provider.auth.getActiveStaff().then(res => {
-        if (res.data) setStaff(res.data);
+        if (res?.data) setStaff(res.data);
+      }).catch(console.error);
+    } else if (propertyId) {
+      provider.pos.getActiveStaff(propertyId).then(res => {
+        if (res?.data) setStaff(res.data);
       }).catch(console.error);
     }
-  }, [isOpen, propertyId, provider]);
+  }, [isOpen, propertyId, provider, isDesktopMode]);
 
   useEffect(() => {
     if (isOpen) {

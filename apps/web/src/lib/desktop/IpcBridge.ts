@@ -9,11 +9,17 @@ if (typeof window !== 'undefined' && (window as any).chrome?.webview) {
       if (data.id && pendingRequests.has(data.id)) {
         const { resolve, reject } = pendingRequests.get(data.id)!;
         pendingRequests.delete(data.id);
+        let result = data.result;
+        if (typeof result === 'string') {
+          try {
+            result = JSON.parse(result);
+          } catch(e) {}
+        }
         
         if (data.error) {
           reject(new Error(data.error));
         } else {
-          resolve(data.result);
+          resolve(result);
         }
       }
     } catch (e) {
