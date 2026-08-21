@@ -66,13 +66,14 @@ export async function POST(req: NextRequest) {
             propertyId,
             outletId,
             deviceId,
+            businessDate: new Date(),
             status: 'OPEN',
             bankType,
             bankingModel,
             primaryOperatorId: staff.id,
             openedBy: session?.user?.id || staff.id,
             expectedCash: 0,
-            openingBalance: 0
+            openingCash: 0
           }
         });
         activeSessionId = newSession.id;
