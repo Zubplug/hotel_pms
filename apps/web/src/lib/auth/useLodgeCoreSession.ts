@@ -27,7 +27,9 @@ export function useLodgeCoreSession() {
     queryKey: ['desktop_auth'],
     queryFn: async () => {
       const res = await provider.auth.getSession();
-      return typeof res === 'string' ? JSON.parse(res) : res;
+      const parsed = typeof res === 'string' ? JSON.parse(res) : res;
+      // In Desktop mode, getSession returns { success: true, data: sessionObject }
+      return parsed?.data || parsed;
     },
     // Only run on desktop — avoids the /api/auth/session 404 in WebView2
     enabled: IS_DESKTOP,
