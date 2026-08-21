@@ -54,28 +54,9 @@ export async function POST(req: NextRequest) {
     capabilities = Array.from(new Set(capabilities));
     const primaryRole = user.roles?.[0]?.role?.name || 'STAFF';
 
-    const defaultCapabilities: string[] = [];
-    if (user.isSuperAdmin || primaryRole === 'SUPER_ADMIN' || primaryRole === 'ADMIN' || primaryRole === 'DIRECTOR' || primaryRole === 'EXECUTIVE') {
-      defaultCapabilities.push(
-        'ACCESS_FRONT_DESK', 'ACCESS_POS', 'ACCESS_HOUSEKEEPING', 'ACCESS_CASH_MANAGEMENT', 
-        'ACCESS_INVENTORY', 'ACCESS_MANAGEMENT', 'ACCESS_NIGHT_AUDIT', 'ACCESS_SYNC_CENTER', 'ACCESS_MAINTENANCE',
-        'ACCESS_REFUNDS', 'LIMIT_REFUND_UNLIMITED', 'ACCESS_VOID', 'ACCESS_DISCOUNTS', 'AUTHORIZE_VOID', 'AUTHORIZE_POST_KITCHEN_VOID',
-        'AUTHORIZE_DISCOUNT', 'APPROVE_DRAWER_VARIANCE', 'OVERRIDE_NIGHT_AUDIT', 'POST_CITY_LEDGER', 'ACCESS_REPORTS'
-      );
-    } else if (primaryRole === 'MANAGER') {
-      defaultCapabilities.push(
-        'ACCESS_FRONT_DESK', 'ACCESS_POS', 'ACCESS_HOUSEKEEPING', 'ACCESS_CASH_MANAGEMENT', 
-        'ACCESS_INVENTORY', 'ACCESS_MANAGEMENT', 'ACCESS_NIGHT_AUDIT', 'ACCESS_SYNC_CENTER', 'ACCESS_MAINTENANCE',
-        'ACCESS_REFUNDS', 'LIMIT_REFUND_250K', 'ACCESS_VOID', 'ACCESS_DISCOUNTS', 'AUTHORIZE_VOID',
-        'AUTHORIZE_DISCOUNT', 'APPROVE_DRAWER_VARIANCE', 'OVERRIDE_NIGHT_AUDIT', 'POST_CITY_LEDGER', 'ACCESS_REPORTS'
-      );
-    }
-
     if (primaryRole !== 'MANAGER' && primaryRole !== 'ADMIN' && primaryRole !== 'SUPER_ADMIN' && primaryRole !== 'DIRECTOR' && primaryRole !== 'EXECUTIVE' && !user.isSuperAdmin) {
        return errorResponse('FORBIDDEN', 'Only managers, admins, and directors can access this app', 403);
     }
-
-    capabilities = Array.from(new Set([...capabilities, ...defaultCapabilities]));
 
     // Generate JWT
     const tokenPayload = {

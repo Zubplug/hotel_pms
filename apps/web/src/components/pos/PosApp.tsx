@@ -179,14 +179,14 @@ export default function PosApp() {
                setActiveOperator(operatorRes.data.staff);
                setOperatorToken(savedToken);
              } else {
-               // Token invalid, go to login
-               router.push('/pos/operator-login');
+               // Token invalid, clear operator
+               setActiveOperator(null);
              }
            } catch {
              console.error('Failed to load operator');
            }
         } else {
-           router.push('/pos/operator-login');
+           setActiveOperator(null);
         }
       } catch (err) {
         console.error('Failed to fetch POS data', err);
@@ -201,9 +201,9 @@ export default function PosApp() {
   useEffect(() => {
     if (sessionStatus === 'authenticated') {
       const savedToken = localStorage.getItem('lodgecore_pos_operator_token');
-      if (!savedToken) router.push('/pos/operator-login');
+      if (!savedToken) setActiveOperator(null);
     }
-  }, [sessionStatus, router]);
+  }, [sessionStatus]);
 
   // ─────────────────────────────────────────────────────────────────
   // Cart helpers

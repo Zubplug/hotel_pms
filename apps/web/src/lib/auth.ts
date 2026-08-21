@@ -65,40 +65,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         
         const primaryRole = user.roles?.[0]?.role?.name || 'STAFF';
 
-        const defaultCapabilities: string[] = [];
-        if (user.isSuperAdmin || primaryRole === 'SUPER_ADMIN' || primaryRole === 'ADMIN') {
-          defaultCapabilities.push(
-            'ACCESS_FRONT_DESK', 'ACCESS_POS', 'ACCESS_HOUSEKEEPING', 'ACCESS_CASH_MANAGEMENT', 
-            'ACCESS_INVENTORY', 'ACCESS_MANAGEMENT', 'ACCESS_NIGHT_AUDIT', 'ACCESS_SYNC_CENTER', 'ACCESS_MAINTENANCE',
-            'ACCESS_REFUNDS', 'LIMIT_REFUND_UNLIMITED', 'ACCESS_VOID', 'ACCESS_DISCOUNTS', 'AUTHORIZE_VOID', 'AUTHORIZE_POST_KITCHEN_VOID',
-            'AUTHORIZE_DISCOUNT', 'APPROVE_DRAWER_VARIANCE', 'OVERRIDE_NIGHT_AUDIT', 'POST_CITY_LEDGER', 'ACCESS_REPORTS'
-          );
-        } else if (primaryRole === 'MANAGER') {
-          defaultCapabilities.push(
-            'ACCESS_FRONT_DESK', 'ACCESS_POS', 'ACCESS_HOUSEKEEPING', 'ACCESS_CASH_MANAGEMENT', 
-            'ACCESS_INVENTORY', 'ACCESS_MANAGEMENT', 'ACCESS_NIGHT_AUDIT', 'ACCESS_SYNC_CENTER', 'ACCESS_MAINTENANCE',
-            'ACCESS_REFUNDS', 'LIMIT_REFUND_250K', 'ACCESS_VOID', 'ACCESS_DISCOUNTS', 'AUTHORIZE_VOID',
-            'AUTHORIZE_DISCOUNT', 'APPROVE_DRAWER_VARIANCE', 'OVERRIDE_NIGHT_AUDIT', 'POST_CITY_LEDGER', 'ACCESS_REPORTS'
-          );
-        } else if (primaryRole === 'FRONT_DESK' || primaryRole === 'RECEPTIONIST') {
-          defaultCapabilities.push('ACCESS_FRONT_DESK', 'ACCESS_HOUSEKEEPING', 'ACCESS_REFUNDS', 'LIMIT_REFUND_50K', 'ACCESS_REPORTS');
-        } else if (primaryRole === 'CASHIER' || primaryRole === 'BARTENDER') {
-          defaultCapabilities.push('ACCESS_POS', 'ACCESS_CASH_MANAGEMENT');
-        } else if (primaryRole === 'WAITER') {
-          defaultCapabilities.push('ACCESS_POS');
-        } else if (primaryRole === 'HOUSEKEEPER') {
-          defaultCapabilities.push('ACCESS_HOUSEKEEPING');
-        } else if (primaryRole === 'NIGHT_AUDITOR') {
-          defaultCapabilities.push('ACCESS_FRONT_DESK', 'ACCESS_NIGHT_AUDIT', 'ACCESS_REPORTS');
-        } else if (primaryRole === 'MAINTENANCE') {
-          defaultCapabilities.push('ACCESS_MAINTENANCE');
-        } else if (primaryRole === 'INVENTORY_MANAGER') {
-          defaultCapabilities.push('ACCESS_INVENTORY');
-        }
-
-        // Merge DB capabilities with role defaults
-        capabilities = Array.from(new Set([...capabilities, ...defaultCapabilities]));
-
         // Return user object
         return {
           id: user.id,
