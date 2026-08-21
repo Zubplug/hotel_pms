@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
+import { compare } from 'bcryptjs';
 
 /**
  * GET /api/v1/sync/pull
@@ -31,19 +32,26 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'propertyId is required' }, { status: 400 });
     }
 
-    // Verify the device token against the registered POS device
-    const device = await prisma.posDevice.findFirst({
+    
+
+    // Verify the device token against the registered POS terminals
+    const terminals = await prisma.posTerminal.findMany({
       where: {
         propertyId,
-        status: 'ACTIVE',
-        // In production: deviceToken field would be stored hashed on PosDevice
-        // For now: identifier matches the token prefix (pre-production placeholder)
-        identifier: { startsWith: deviceToken.substring(0, 16) }
+        registrationState: 'REGISTERED' // or whatever active state is
       }
     });
 
+    let device = null;
+    for (const t of terminals) {
+      if (t.deviceCredentialHash && await compare(deviceToken, t.deviceCredentialHash)) {
+        device = t;
+        break;
+      }
+    }
+
     if (!device) {
-      return NextResponse.json({ error: 'Device not authorized' }, { status: 403 });
+      return NextResponse.json({ error: 'Terminal not authorized' }, { status: 403 });
     }
 
     // ---- Load property config -------------------------------------------
