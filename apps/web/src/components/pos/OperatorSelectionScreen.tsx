@@ -97,6 +97,9 @@ export function OperatorSelectionScreen({ isOpen, onAuthenticated, onCancel, can
   const handleProcessLoginSuccess = async (authRes: any, staffObj: any, token: string) => {
     if (authRes.requiresBank) {
       setBankState('CENTRAL_CASHIER_UNAVAILABLE');
+    } else if (!authRes.posSessionId && !authRes.sessionId && !localStorage.getItem('lodgecore_pos_session_id')) {
+      setAuthData({ operator: staffObj, token });
+      setBankState('NEEDS_SERVER_BANK');
     } else {
       if (authRes.posSessionId || authRes.sessionId) {
         localStorage.setItem('lodgecore_pos_session_id', authRes.posSessionId || authRes.sessionId);
@@ -169,12 +172,20 @@ export function OperatorSelectionScreen({ isOpen, onAuthenticated, onCancel, can
       };
 
       if (isDesktopMode) {
-        // Desktop handles it locally or via IPC
-        // In desktop mode we assume the backend handles it or we call a new provider method
-        // For now, onAuthenticated directly since we don't have a desktop startSession implemented yet
-        // Wait, desktop session is started via API when online? 
-        // We can just call the /api/v1/pos/sessions directly or rely on the web app for this phase
-        onAuthenticated(authData.operator, authData.token);
+        const res = await provider.pos.startSession({
+          userId: authData.operator.id,
+          propertyId,
+          deviceId,
+          outletId: req.outletId,
+          openingCash: req.openingCash
+        });
+        
+        if (res && !res.error && res.data) {
+          localStorage.setItem('lodgecore_pos_session_id', res.data.sessionId || '');
+          onAuthenticated(authData.operator, authData.token);
+        } else {
+          setError(res?.error || 'Failed to start shift on desktop');
+        }
       } else {
         const res = await fetch('/api/v1/pos/sessions', {
           method: 'POST',

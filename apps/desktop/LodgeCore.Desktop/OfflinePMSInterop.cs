@@ -1114,13 +1114,27 @@ public class OfflinePMSInterop
         }
     }
 
-    public async Task<string> GetCurrentOperatorAsync(string sessionId)
+    public async Task<string> GetCurrentOperatorAsync(string? sessionId, string? operatorToken = null)
     {
         try
         {
             var ctx = await GetSecureContextAsync();
-            var session = await _repo.GetCurrentOperatorSessionAsync(ctx.DeviceId, sessionId);
-            return JsonSerializer.Serialize(new { success = true, data = session }, _jsonOptions);
+            
+            if (!string.IsNullOrEmpty(operatorToken) && ctx.OperatorTokenVersion != operatorToken)
+            {
+                return JsonSerializer.Serialize(new { success = false, error = "Invalid operator token" }, _jsonOptions);
+            }
+
+            var staff = await _repo.GetStaffByIdAsync(ctx.StaffId);
+            
+            // To ensure compatibility with frontend's existing expectations if a session actually existed
+            object? sessionData = null;
+            if (!string.IsNullOrEmpty(sessionId)) 
+            {
+                sessionData = await _repo.GetCurrentOperatorSessionAsync(ctx.DeviceId, sessionId);
+            }
+            
+            return JsonSerializer.Serialize(new { success = true, data = new { staff, operatorSession = sessionData } }, _jsonOptions);
         }
         catch (Exception ex)
         {

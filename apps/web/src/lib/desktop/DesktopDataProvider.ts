@@ -163,13 +163,13 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     validateSupervisorPin: async (pin: string, propertyId?: string) => { return invokeDesktop("pos.validateSupervisorPin", { pin, propertyId }); },
 
     getCurrentOperator: async (sessionId: string, operatorToken?: string | null) => {
-      return invokeDesktop('pos.getCurrentOperator', { sessionId });
+      return invokeDesktop('pos.getCurrentOperator', { sessionId, operatorToken });
     },
     authenticateOperator: async (staffId: string, pin: string, propertyId: string, sessionId: string, outletId: string, deviceId: string) => {
       return invokeDesktop('pos.authenticateOperator', { staffId, pin, propertyId, sessionId, outletId, deviceId });
     },
     startSession: async (data: { userId: string; propertyId: string; deviceId: string; outletId: string; openingCash: number }) => {
-      return invokeDesktop('pos.startSession', data);
+      return invokeDesktop('pos.startSession', { ...data, openingBalance: data.openingCash });
     },
     startEmergencyBank: async (pin: string, reason: string, operatorToken: string) => {
       return invokeDesktop('pos.startEmergencyBank', { pin, reason, operatorToken });

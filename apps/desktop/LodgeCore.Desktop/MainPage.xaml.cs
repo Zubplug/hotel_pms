@@ -469,7 +469,9 @@ public partial class MainPage : ContentPage
                         parameters?["pin"]?.ToString());
                     break;
                 case "pos.getCurrentOperator":
-                    responseData = await pmsInterop.GetCurrentOperatorAsync(parameters?["sessionId"]?.ToString());
+                    responseData = await pmsInterop.GetCurrentOperatorAsync(
+                        parameters?["sessionId"]?.ToString(),
+                        parameters?["operatorToken"]?.ToString());
                     break;
                 case "pos.getActiveStaff":
                     responseData = await pmsInterop.GetActiveStaffAsync(parameters?["propertyId"]?.ToString());

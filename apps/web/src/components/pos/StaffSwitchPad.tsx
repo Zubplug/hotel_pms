@@ -61,6 +61,9 @@ export function StaffSwitchPad({ isOpen, onAuthenticated, onCancel, cancellable 
   const handleProcessLoginSuccess = async (authRes: any, staffObj: any, token: string) => {
     if (authRes.requiresBank) {
       setBankState('CENTRAL_CASHIER_UNAVAILABLE');
+    } else if (!authRes.posSessionId && !authRes.sessionId && !localStorage.getItem('lodgecore_pos_session_id')) {
+      setAuthData({ operator: staffObj, token });
+      setBankState('NEEDS_SERVER_BANK');
     } else {
       if (authRes.posSessionId || authRes.sessionId) {
         localStorage.setItem('lodgecore_pos_session_id', authRes.posSessionId || authRes.sessionId);
@@ -125,21 +128,38 @@ export function StaffSwitchPad({ isOpen, onAuthenticated, onCancel, cancellable 
         openingCash: parseFloat(openingFloat) || 0
       };
 
-      const res = await fetch('/api/v1/pos/sessions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authData.token}`
-        },
-        body: JSON.stringify(req)
-      });
-
-      const data = await res.json();
-      if (res.ok && data.data?.sessionId) {
-        localStorage.setItem('lodgecore_pos_session_id', data.data.sessionId);
-        onAuthenticated(authData.operator, authData.token);
+      if (isDesktopMode) {
+        const res = await provider.pos.startSession({
+          userId: authData.operator.id,
+          propertyId,
+          deviceId,
+          outletId: req.outletId,
+          openingCash: req.openingCash
+        });
+        
+        if (res && !res.error && res.data) {
+          localStorage.setItem('lodgecore_pos_session_id', res.data.sessionId || '');
+          onAuthenticated(authData.operator, authData.token);
+        } else {
+          setError(res?.error || 'Failed to start shift on desktop');
+        }
       } else {
-        setError(data.error || 'Failed to start shift');
+        const res = await fetch('/api/v1/pos/sessions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authData.token}`
+          },
+          body: JSON.stringify(req)
+        });
+
+        const data = await res.json();
+        if (res.ok && data.data?.sessionId) {
+          localStorage.setItem('lodgecore_pos_session_id', data.data.sessionId);
+          onAuthenticated(authData.operator, authData.token);
+        } else {
+          setError(data.error || 'Failed to start shift');
+        }
       }
     } catch (e: any) {
       setError(e.message || 'Failed to start shift');
