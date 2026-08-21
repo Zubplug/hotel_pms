@@ -85,7 +85,7 @@ export function OperatorSelectionScreen({ isOpen, onAuthenticated, onCancel, can
         // Web Mode: We get an operator token for the existing session
         const sessionId = localStorage.getItem('lodgecore_pos_session_id') || '';
         const deviceId = localStorage.getItem('lodgecore_pos_device_id') || '';
-        const authRes = await provider.pos.authenticateOperator(selectedStaff.id, pin, propertyId, sessionId, outletId, deviceId);
+        const authRes = await provider.pos.authenticateOperator(selectedStaff.id, pin, propertyId, sessionId, outletId || '', deviceId);
         
         if (!authRes.error && authRes.data?.success) {
            onAuthenticated(authRes.data.staff, authRes.data.operatorToken);

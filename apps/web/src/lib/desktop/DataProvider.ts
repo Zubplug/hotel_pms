@@ -13,7 +13,7 @@ export interface LodgeCoreDataProvider {
     provisionTerminal?: (data: any) => Promise<any>;
   };
   properties: {
-    list(): Promise<any[]>;
+    list(): Promise<any>;
   };
   hardware: {
     poll(operationId: string): Promise<any>;

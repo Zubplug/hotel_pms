@@ -98,25 +98,28 @@ async function main() {
 
   const org = await prisma.organization.findFirst({ where: { slug: 'lodgecore' } });
   if (!org) {
-    console.error('Organization not found! Please run the main seed first.');
+    console.error('Organization not found!');
     return;
   }
+  
+  console.log('Org found. Upserting permissions in batch...');
 
-  // 1. Upsert Permissions
-  for (const perm of permissionsList) {
+  await Promise.all(permissionsList.map(async (perm) => {
     const existing = await prisma.permission.findUnique({ where: { name: perm.name } });
     if (existing) {
-      await prisma.permission.update({
+      return prisma.permission.update({
         where: { id: existing.id },
         data: { resource: perm.resource, action: perm.action, description: perm.description }
       });
     } else {
-      await prisma.permission.create({ data: perm });
+      return prisma.permission.create({ data: perm });
     }
-  }
+  }));
 
-  // 2. Upsert System Roles and Reconcile Permissions
+  console.log('Permissions upserted. Reconciling roles...');
+
   for (const [roleName, capabilities] of Object.entries(systemRoles)) {
+    console.log(`Processing role: ${roleName}`);
     let role = await prisma.role.findFirst({ where: { organizationId: org.id, name: roleName, isSystem: true } });
     if (!role) {
       role = await prisma.role.create({
@@ -139,22 +142,22 @@ async function main() {
       });
       const currentPermIds = currentAssignments.map(a => a.permissionId);
 
-      for (const p of dbPerms) {
-        if (!currentPermIds.includes(p.id)) {
-          await prisma.rolePermission.create({
-            data: { roleId: role.id, permissionId: p.id }
-          });
-        }
+      const toAdd = dbPerms.filter(p => !currentPermIds.includes(p.id));
+      if (toAdd.length > 0) {
+        await Promise.all(toAdd.map(p => prisma.rolePermission.create({
+          data: { roleId: role.id, permissionId: p.id }
+        })));
+        console.log(`  Added ${toAdd.length} permissions to ${roleName}`);
       }
       
-      for (const curr of currentAssignments) {
-        if (!dbPerms.find(dp => dp.id === curr.permissionId)) {
-          await prisma.rolePermission.delete({
-            where: {
-              roleId_permissionId: { roleId: role.id, permissionId: curr.permissionId }
-            }
-          });
-        }
+      const toRemove = currentAssignments.filter(curr => !dbPerms.find(dp => dp.id === curr.permissionId));
+      if (toRemove.length > 0) {
+        await Promise.all(toRemove.map(curr => prisma.rolePermission.delete({
+          where: {
+            roleId_permissionId: { roleId: role.id, permissionId: curr.permissionId }
+          }
+        })));
+        console.log(`  Removed ${toRemove.length} permissions from ${roleName}`);
       }
     }
   }

@@ -1,7 +1,8 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 async function run() {
-  const roles = await prisma.role.findMany({ select: { id: true, name: true, isSystem: true, organizationId: true } });
-  console.log(JSON.stringify(roles, null, 2));
+  console.log("Testing basic query");
+  const org = await prisma.organization.findFirst({ where: { slug: 'lodgecore' } });
+  console.log("Org:", org);
 }
 run().catch(console.error).finally(() => prisma.$disconnect());
