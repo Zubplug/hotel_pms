@@ -85,7 +85,7 @@ public class SyncEngine : BackgroundService
             // Ensure the SyncMetadata table exists, as EnsureCreated() won't add it 
             // to existing SQLite databases (no migrations).
             await dbContext.Database.ExecuteSqlRawAsync(
-                "CREATE TABLE IF NOT EXISTS LocalSyncMetadata (Id TEXT PRIMARY KEY, SchemaVersion TEXT, LastSuccessfulSyncAt TEXT);"
+                "CREATE TABLE IF NOT EXISTS SyncMetadata (Id TEXT PRIMARY KEY, LastSuccessfulSyncAt TEXT, LastSyncVersion TEXT, SchemaVersion TEXT);"
             );
 
             var meta = await dbContext.SyncMetadata.FirstOrDefaultAsync(stoppingToken);
