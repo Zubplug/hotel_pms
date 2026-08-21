@@ -18,6 +18,7 @@ public class SyncEngine : BackgroundService
     private readonly ILogger<SyncEngine> _logger;
     private readonly HttpClient _httpClient;
     private readonly AuthManager _authManager;
+    private readonly ICredentialStorageService _credentialStorage;
     
     // We can wire this to MAUI Connectivity events. For now, assume online.
     private bool _isOnline = true; 
@@ -37,12 +38,13 @@ public class SyncEngine : BackgroundService
     
     private DateTime _lastSuccess = DateTime.MinValue;
 
-    public SyncEngine(IServiceProvider serviceProvider, ILogger<SyncEngine> logger, AuthManager authManager, HttpClient httpClient)
+    public SyncEngine(IServiceProvider serviceProvider, ILogger<SyncEngine> logger, AuthManager authManager, HttpClient httpClient, ICredentialStorageService credentialStorage)
     {
         _serviceProvider = serviceProvider;
         _logger = logger;
         _authManager = authManager;
         _httpClient = httpClient;
+        _credentialStorage = credentialStorage;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -286,11 +288,16 @@ public class SyncEngine : BackgroundService
         var propertyId = session?.PropertyId ?? terminal.PropertyId;
         if (string.IsNullOrEmpty(propertyId)) return;
 
-        var token = await _authManager.GetAuthTokenAsync();
+        var token = _credentialStorage.LoadCredential("deviceCredential");
         if (string.IsNullOrEmpty(token))
         {
-            _logger.LogDebug("No auth token available; skipping pull.");
-            return;
+            // Fallback to AuthManager in case it was stored there
+            token = await _authManager.GetAuthTokenAsync();
+            if (string.IsNullOrEmpty(token))
+            {
+                _logger.LogDebug("No auth token available; skipping pull.");
+                return;
+            }
         }
 
         _httpClient.DefaultRequestHeaders.Authorization =
