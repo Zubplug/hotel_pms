@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Strict Postgres Transaction
-    const result = await prisma.$transaction(async (tx: any) => {
+    const result = await prisma.$transaction(async (tx) => {
       // Ensure an EMERGENCY_BANK CashAccount exists for this property/outlet
       let emergencyBank = await tx.cashAccount.findFirst({
         where: {
@@ -79,17 +79,18 @@ export async function POST(req: NextRequest) {
         throw new Error('An emergency bank is already active on this terminal.');
       }
 
-      // Create new session linked to this emergency bank account
-      const posSession = await tx.posSession.create({
+      // Create new session linked      // 3. Create POS Session for Manager
+      const newSession = await tx.posSession.create({
         data: {
           propertyId,
-          outletId,
           deviceId,
+          outlet: { connect: { id: outletId } },
+          bankingModel: 'CENTRAL_CASHIER',
           openedBy: manager.id,
           status: 'OPEN',
           openingCash: 0,
           expectedCash: 0,
-          businessDate: new Date(),
+          businessDate: new Date(), // Mocking business date for now
           bankType: 'EMERGENCY'
         }
       });
@@ -100,13 +101,15 @@ export async function POST(req: NextRequest) {
           propertyId,
           deviceId,
           userId: manager.id,
-          receiptType: 'REPRINT', // Mocking audit action type for general log
-          originalOrderId: posSession.id, 
-          reason: `Emergency Bank Opened: ${reason}`
+          type: 'REPRINT',
+          posSessionId: newSession.id,
+          reason: `Emergency Bank created for Manager ${manager.id}. Reason: ${reason}`,
+          operationId: `audit_emergency_bank_${newSession.id}`,
+          businessDate: newSession.businessDate
         }
       });
 
-      return posSession;
+      return newSession;
     });
 
     return NextResponse.json({ data: { sessionId: result.id } });

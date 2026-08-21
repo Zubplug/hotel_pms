@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
+import { compare } from 'bcryptjs';
 import { auth } from '@/lib/auth';
 
 
@@ -18,20 +19,23 @@ export async function POST(req: NextRequest) {
 
     const operationId = `safe_open_${crypto.randomUUID()}`; // Unique operation ID
 
-    const result = await prisma.$transaction(async (tx: any) => {
+    const result = await prisma.$transaction(async (tx) => {
       // 1. Validate Manager Authorization
-      const manager = await tx.staff.findFirst({
+      const potentialManagers = await tx.staff.findMany({
         where: {
-          propertyId,
-          pin: managerPin,
+          propertyAccess: { has: propertyId },
           isActive: true,
-          OR: [
-            { role: 'HOTEL_MANAGER' },
-            { role: 'SUPER_ADMIN' },
-            { isSupervisor: true }
-          ]
+          posPinHash: { not: null }
         }
       });
+
+      let manager = null;
+      for (const m of potentialManagers) {
+        if (m.posPinHash && (await compare(managerPin, m.posPinHash))) {
+          manager = m;
+          break;
+        }
+      }
 
       if (!manager) {
         throw new Error('Invalid Manager PIN or insufficient permissions.');
@@ -66,10 +70,10 @@ export async function POST(req: NextRequest) {
           userId: manager.id,
           amount: amount,
           currency: 'NGN',
-          type: 'SAFE_OPENING_BALANCE',
+          type: 'CASH_TRANSFER_IN',
           reasonCode: 'SAFE_OPEN',
           notes: `Initial safe balance recorded by manager`,
-          authorizerId: manager.id,
+          authorizedBy: manager.id,
           operationId,
           sourceAccountId: externalAccount.id,
           destinationAccountId: safeAccount.id

@@ -3,6 +3,7 @@ import prisma from '@hotel-pms/db';
 import { compare } from 'bcryptjs';
 import { auth } from '@/lib/auth';
 
+
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth();
@@ -20,7 +21,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const operationId = `handover_${posSessionId}`;
 
-    const result = await prisma.$transaction(async (tx: any) => {
+    const result = await prisma.$transaction(async (tx) => {
       // 1. Validate session and settlement state
       const posSession = await tx.posSession.findUnique({
         where: { id: posSessionId }
@@ -66,26 +67,37 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       }
 
       // 3. Resolve Cash Accounts for Double-Entry
-      // Source = Waiter's SERVER_BANK or Outlet STATION_BANK
-      let sourceAccount = await tx.cashAccount.findFirst({
-        where: {
-          propertyId: posSession.propertyId,
-          ownerId: posSession.openedBy,
-          type: 'SERVER_BANK'
-        }
-      });
+      let sourceAccount = null;
+      let movementType = 'SERVER_HANDOVER' as any;
+
+      if (posSession.bankType === 'SERVER') {
+        sourceAccount = await tx.cashAccount.findFirst({
+          where: {
+            propertyId: posSession.propertyId!,
+            ownerId: posSession.openedBy,
+            type: 'SERVER_BANK'
+          }
+        });
+      } else if (posSession.bankType === 'CENTRAL') {
+        movementType = 'STATION_HANDOVER';
+        sourceAccount = await tx.cashAccount.findFirst({
+          where: { propertyId: posSession.propertyId!, outletId: posSession.outletId, type: 'STATION_BANK' }
+        });
+      } else if (posSession.bankType === 'EMERGENCY') {
+        movementType = 'EMERGENCY_HANDOVER';
+        sourceAccount = await tx.cashAccount.findFirst({
+          where: { propertyId: posSession.propertyId!, outletId: posSession.outletId, type: 'EMERGENCY_BANK' }
+        });
+      }
       
       if (!sourceAccount) {
-        // Fallback to station bank if no specific server bank found
-        sourceAccount = await tx.cashAccount.findFirst({
-          where: { propertyId: posSession.propertyId, outletId: posSession.outletId, type: 'STATION_BANK' }
-        });
+        throw new Error(`Source CashAccount not found for bankType ${posSession.bankType}`);
       }
 
       // Destination = Main Property SAFE
       const destinationAccount = await tx.cashAccount.findFirst({
         where: {
-          propertyId: posSession.propertyId,
+          propertyId: posSession.propertyId!,
           type: 'SAFE'
         }
       });
@@ -97,29 +109,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       // 4. Create double-entry cash movement
       const movement = await tx.posCashMovement.create({
         data: {
-          propertyId: posSession.propertyId,
-          deviceId: posSession.deviceId,
+          propertyId: posSession.propertyId!,
+          deviceId: posSession.deviceId!,
           posSessionId: posSessionId,
           userId: manager.id,
           amount: settlement.actualCash,
           currency: 'NGN',
-          type: 'CASH_HANDOVER',
+          type: movementType,
           reasonCode: 'SHIFT_HANDOVER',
           notes: `Manager handover confirmed for session ${posSessionId}`,
-          authorizerId: manager.id,
+          authorizedBy: manager.id,
           operationId,
-          sourceAccountId: sourceAccount?.id,
+          sourceAccountId: sourceAccount.id,
           destinationAccountId: destinationAccount.id
         }
       });
 
       // Update source and destination balances
-      if (sourceAccount) {
-        await tx.cashAccount.update({
-          where: { id: sourceAccount.id },
-          data: { balance: { decrement: settlement.actualCash } }
-        });
-      }
+      await tx.cashAccount.update({
+        where: { id: sourceAccount.id },
+        data: { balance: { decrement: settlement.actualCash } }
+      });
       
       await tx.cashAccount.update({
         where: { id: destinationAccount.id },
@@ -140,12 +150,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       // 6. Create Audit Event
       await tx.posReceiptAudit.create({
         data: {
-          propertyId: posSession.propertyId,
-          deviceId: posSession.deviceId,
+          propertyId: posSession.propertyId!,
+          deviceId: posSession.deviceId || 'NO_DEVICE',
           userId: manager.id,
-          receiptType: 'REPRINT', 
-          originalOrderId: posSessionId,
-          reason: `Shift handover confirmed and cash moved to SAFE.`
+          type: 'REPRINT', 
+          posSessionId: posSessionId,
+          reason: `Shift handover confirmed and cash moved to SAFE.`,
+          operationId: `audit_handover_${posSessionId}`,
+          businessDate: posSession.businessDate
         }
       });
 

@@ -20,7 +20,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // Protect idempotency with a unique operation ID based on session + settle
     const operationId = `settle_${posSessionId}`;
 
-    const result = await prisma.$transaction(async (tx: any) => {
+    const result = await prisma.$transaction(async (tx) => {
       // 1. Validate session state
       const posSession = await tx.posSession.findUnique({
         where: { id: posSessionId }
@@ -70,21 +70,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       }
 
       // 3. Update session
-      // Waiter banks require handover. Emergency banks or stationary registers might not.
-      const newStatus = posSession.bankType === 'SERVER' ? 'PENDING_HANDOVER' : 'CLOSED';
+      // ALL bank types (SERVER, CENTRAL, EMERGENCY) require a physical handover.
+      const newSessionStatus = 'RECONCILIATION_REQUIRED';
+      const newSettlementStatus = 'PENDING_HANDOVER';
       
       await tx.posSession.update({
         where: { id: posSessionId },
-        data: { status: newStatus }
+        data: { status: newSessionStatus }
       });
 
       // 4. Create Settlement Record
       const settlement = await tx.posSettlement.create({
         data: {
           sessionId: posSessionId,
-          propertyId: posSession.propertyId,
+          propertyId: posSession.propertyId!,
           outletId: posSession.outletId,
-          deviceId: posSession.deviceId,
+          deviceId: posSession.deviceId || 'NO_DEVICE',
           sessionOwnerId: posSession.openedBy,
           operatorId: operatorId || session.user.id,
           businessDate: posSession.businessDate,
@@ -93,7 +94,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           variance,
           authorizerId,
           settledAt: new Date(),
-          status: newStatus === 'PENDING_HANDOVER' ? 'PENDING_HANDOVER' : 'SETTLED',
+          status: newSettlementStatus,
           operationId
         }
       });
@@ -101,12 +102,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       // 5. Create Audit Event
       await tx.posReceiptAudit.create({
         data: {
-          propertyId: posSession.propertyId,
-          deviceId: posSession.deviceId,
+          propertyId: posSession.propertyId!,
+          deviceId: posSession.deviceId || 'NO_DEVICE',
           userId: operatorId || session.user.id,
-          receiptType: 'REPRINT', // Mocking audit action type
-          originalOrderId: posSessionId,
-          reason: `Session Settled. Expected: ${expectedCash}, Actual: ${actualCash}, Variance: ${variance}`
+          type: 'REPRINT',
+          posSessionId: posSessionId,
+          reason: `Session Settled. Expected: ${expectedCash}, Actual: ${actualCash}, Variance: ${variance}`,
+          operationId: `audit_settle_${posSessionId}`,
+          businessDate: posSession.businessDate
         }
       });
 
