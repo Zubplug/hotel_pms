@@ -279,8 +279,12 @@ public class SyncEngine : BackgroundService
         using var scope = _serviceProvider.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
 
+        var terminal = await dbContext.PosTerminals.FirstOrDefaultAsync(cancellationToken);
+        if (terminal == null) return;
+
         var session = await _authManager.GetSessionAsync();
-        if (session == null) return;
+        var propertyId = session?.PropertyId ?? terminal.PropertyId;
+        if (string.IsNullOrEmpty(propertyId)) return;
 
         var token = await _authManager.GetAuthTokenAsync();
         if (string.IsNullOrEmpty(token))
@@ -295,7 +299,7 @@ public class SyncEngine : BackgroundService
         try
         {
             var response = await _httpClient.GetAsync(
-                $"sync/pull?propertyId={Uri.EscapeDataString(session.PropertyId)}",
+                $"sync/pull?propertyId={Uri.EscapeDataString(propertyId)}",
                 cancellationToken);
 
             if (!response.IsSuccessStatusCode)
@@ -312,7 +316,7 @@ public class SyncEngine : BackgroundService
             if (root.TryGetProperty("property", out var propEl))
             {
                 var localProp = await dbContext.Properties
-                    .FirstOrDefaultAsync(p => p.Id == session.PropertyId, cancellationToken);
+                    .FirstOrDefaultAsync(p => p.Id == propertyId, cancellationToken);
 
                 if (localProp != null)
                 {
@@ -369,7 +373,7 @@ public class SyncEngine : BackgroundService
                         dbContext.Staff.Add(new LodgeCore.Desktop.Data.Entities.LocalStaff
                         {
                             Id              = staffId,
-                            PropertyId      = session.PropertyId,
+                            PropertyId      = propertyId,
                             FirstName       = staffEl.TryGetProperty("firstName", out var fn2) ? fn2.GetString() ?? "" : "",
                             LastName        = staffEl.TryGetProperty("lastName",  out var ln2) ? ln2.GetString() ?? "" : "",
                             Role            = staffEl.TryGetProperty("role",      out var role2) ? role2.GetString() ?? "" : "",

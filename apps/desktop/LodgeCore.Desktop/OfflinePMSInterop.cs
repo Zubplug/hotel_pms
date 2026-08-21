@@ -91,8 +91,15 @@ public class OfflinePMSInterop
             
             if (string.IsNullOrEmpty(propertyId))
             {
-                var properties = await _repo.GetPropertiesAsync();
-                propertyId = properties?.FirstOrDefault()?.Id ?? "";
+                var termStatus = await _terminalBootstrap.GetTerminalStatusAsync() as dynamic;
+                propertyId = termStatus?.propertyId;
+                
+                if (string.IsNullOrEmpty(propertyId))
+                {
+                    var properties = await _repo.GetPropertiesAsync();
+                    propertyId = properties?.FirstOrDefault()?.Id ?? "";
+                }
+                
                 System.Diagnostics.Debug.WriteLine($"[GetActiveStaffAsync] Fallback propertyId: {propertyId}");
             }
             

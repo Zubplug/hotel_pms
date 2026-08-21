@@ -74,6 +74,7 @@ public class TerminalBootstrapService
             registrationState = terminal.RegistrationState,
             terminalId = terminal.Id,
             name = terminal.Name,
+            propertyId = terminal.PropertyId,
             licenseState = terminal.LicenseState,
             outletId = terminal.OutletId,
             outletType = outletType,
