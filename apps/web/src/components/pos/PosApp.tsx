@@ -205,6 +205,19 @@ export default function PosApp() {
     }
   }, [sessionStatus]);
 
+  // Redirect to device registration if not registered
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const isDesktopApp = window.navigator.userAgent.includes('Electron');
+      const deviceId = localStorage.getItem('lodgecore_pos_device_id');
+      
+      if (!deviceId && !isDesktopApp) {
+        // If not registered and running in a standard web browser, force registration
+        router.push('/pos/device-registration');
+      }
+    }
+  }, [router]);
+
   // ─────────────────────────────────────────────────────────────────
   // Cart helpers
   // ─────────────────────────────────────────────────────────────────
