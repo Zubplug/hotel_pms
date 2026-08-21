@@ -39,6 +39,9 @@ export function PropertySelector({ className }: { className?: string }) {
     queryKey: ['properties', 'all'],
     queryFn: async () => {
       const list = await provider.properties.list();
+      if (list && Array.isArray(list.data)) {
+        return list.data as Property[];
+      }
       return (Array.isArray(list) ? list : []) as Property[];
     },
   });

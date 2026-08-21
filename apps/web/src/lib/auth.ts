@@ -82,8 +82,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           );
         } else if (primaryRole === 'FRONT_DESK' || primaryRole === 'RECEPTIONIST') {
           defaultCapabilities.push('ACCESS_FRONT_DESK', 'ACCESS_HOUSEKEEPING', 'ACCESS_REFUNDS', 'LIMIT_REFUND_50K', 'ACCESS_REPORTS');
-        } else if (primaryRole === 'CASHIER' || primaryRole === 'BARTENDER' || primaryRole === 'WAITER') {
+        } else if (primaryRole === 'CASHIER' || primaryRole === 'BARTENDER') {
           defaultCapabilities.push('ACCESS_POS', 'ACCESS_CASH_MANAGEMENT');
+        } else if (primaryRole === 'WAITER') {
+          defaultCapabilities.push('ACCESS_POS');
         } else if (primaryRole === 'HOUSEKEEPER') {
           defaultCapabilities.push('ACCESS_HOUSEKEEPING');
         } else if (primaryRole === 'NIGHT_AUDITOR') {

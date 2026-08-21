@@ -141,9 +141,12 @@ public class OfflinePMSInterop
                 staff.PosTokenVersion
             );
 
+            var property = await _repo.GetPropertyAsync(propertyId);
+            var actualBankingModel = property?.BankingModel ?? "CENTRAL_CASHIER";
+
             string? posSessionId = null;
 
-            if (bankingModel == "SERVER_BANKING" && session != null)
+            if (actualBankingModel == "SERVER_BANKING" && session != null)
             {
                 var terminal = await _repo.GetTerminalAsync(session.DeviceId);
                 if (terminal != null)
@@ -152,7 +155,7 @@ public class OfflinePMSInterop
                 }
             }
 
-            return JsonSerializer.Serialize(new { success = true, posSessionId, bankingModel });
+            return JsonSerializer.Serialize(new { success = true, posSessionId, bankingModel = actualBankingModel });
         }
         catch (Exception ex)
         {

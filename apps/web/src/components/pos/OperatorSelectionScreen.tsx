@@ -60,8 +60,8 @@ export function OperatorSelectionScreen({ isOpen, onAuthenticated, onCancel, can
 
     try {
       if (isDesktopMode) {
-        // We pass SERVER_BANKING to trigger the idempotent backend bank creation for this pilot
-        const authRes = await provider.auth.login(selectedStaff.id, pin, "SERVER_BANKING");
+        // Desktop backend automatically looks up the banking model for this property securely
+        const authRes = await provider.auth.login(selectedStaff.id, pin);
 
         if (!authRes.error && authRes.success) {
           if (authRes.posSessionId) {

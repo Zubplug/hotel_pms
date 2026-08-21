@@ -171,6 +171,7 @@ export async function GET(req: NextRequest) {
       // earlyCheckinWindowHours lives in the property settings JSON blob.
       // Default to 2 if not yet configured.
       earlyCheckinWindowHours: (settings.earlyCheckinWindowHours as number) ?? 2,
+      bankingModel: ((settings.pos as any)?.bankingModel as string) ?? 'CENTRAL_CASHIER',
     };
 
     return NextResponse.json({

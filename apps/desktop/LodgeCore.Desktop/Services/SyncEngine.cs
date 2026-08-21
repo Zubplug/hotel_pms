@@ -322,6 +322,9 @@ public class SyncEngine : BackgroundService
                     if (propEl.TryGetProperty("earlyCheckinWindowHours", out var eciw))
                         localProp.EarlyCheckinWindowHours = eciw.GetInt32();
 
+                    if (propEl.TryGetProperty("bankingModel", out var bm))
+                        localProp.BankingModel = bm.GetString() ?? localProp.BankingModel;
+
                     if (propEl.TryGetProperty("businessDate", out var bd) &&
                         DateTime.TryParse(bd.GetString(), out var parsedDate))
                         localProp.BusinessDate = parsedDate;

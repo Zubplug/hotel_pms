@@ -17,4 +17,5 @@ public class LocalProperty
     /// Synced from cloud PMS property settings. Default: 2.
     /// </summary>
     public int EarlyCheckinWindowHours { get; set; } = 2;
+    public string BankingModel { get; set; } = "CENTRAL_CASHIER";
 }

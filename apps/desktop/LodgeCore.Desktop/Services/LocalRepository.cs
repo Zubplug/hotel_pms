@@ -298,7 +298,8 @@ public class LocalRepository
                 Timezone = "America/Los_Angeles",
                 BusinessDate = DateTime.UtcNow.Date,
                 IsActive = true,
-                EarlyCheckinWindowHours = 2 // Configurable; synced from cloud settings
+                EarlyCheckinWindowHours = 2, // Configurable; synced from cloud settings
+                BankingModel = "SERVER_BANKING"
             });
             await _dbContext.SaveChangesAsync();
         }
