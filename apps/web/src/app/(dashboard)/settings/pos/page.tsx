@@ -7,10 +7,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useSession } from 'next-auth/react';
 import { toast } from 'sonner';
+import { useProperty } from '@/components/PropertyProvider';
 
 export default function PosSettingsPage() {
-  const { data: session, status } = useSession();
-  const propertyId = (session?.user as any)?.propertyId;
+  const { status } = useSession();
+  const { propertyId } = useProperty();
 
   const [outlets, setOutlets] = useState<any[]>([]);
   const [property, setProperty] = useState<any>(null);

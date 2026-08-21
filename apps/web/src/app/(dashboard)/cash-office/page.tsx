@@ -9,11 +9,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArrowDownToLine, ArrowUpFromLine, HandCoins, AlertCircle, Check, RefreshCcw, Banknote, ShieldAlert, History } from 'lucide-react';
 import { StaffSwitchPad } from '@/components/pos/StaffSwitchPad';
 import { ActionSuccessModal } from '@/components/pos/ActionSuccessModal';
+import { useProperty } from '@/components/PropertyProvider';
 
 export default function CashOfficePage() {
   const { provider } = useLodgeCoreProvider();
-  const { data: session } = useLodgeCoreSession();
-  const propertyId = (session?.user as any)?.propertyId;
+  const { propertyId } = useProperty();
 
   const [activeTab, setActiveTab] = useState('overview');
   const [isLoading, setIsLoading] = useState(true);
