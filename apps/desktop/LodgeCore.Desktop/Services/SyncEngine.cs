@@ -123,7 +123,7 @@ public class SyncEngine : BackgroundService
                 catch (Exception ex)
                 {
                     _consecutiveFailures++;
-                    _lastError = SanitizeErrorMessage(ex.Message);
+                    _lastError = SanitizeErrorMessage(ex);
                     _logger.LogError(ex, $"An error occurred during the sync cycle. Failure count: {_consecutiveFailures}");
                     BroadcastHealth(SyncState.ERROR, _lastError);
                 }
@@ -149,16 +149,17 @@ public class SyncEngine : BackgroundService
         _logger.LogInformation("SyncEngine is stopping.");
     }
 
-    private string SanitizeErrorMessage(string rawMessage)
+    private string SanitizeErrorMessage(Exception ex)
     {
-        // Temporarily expose the raw message so we can debug this crash!
-        return string.IsNullOrEmpty(rawMessage) ? "Unknown error occurred" : rawMessage;
+        // Temporarily expose the raw inner message so we can debug this crash!
+        var msg = ex.InnerException != null ? ex.InnerException.Message : ex.Message;
+        return string.IsNullOrEmpty(msg) ? "Unknown error occurred" : msg;
     }
 
     private void BroadcastHealth(SyncState state, string? error = null, string? phase = null, int current = 0, int total = 0, string? message = null)
     {
         _lastSyncState = state;
-        if (error != null) _lastError = SanitizeErrorMessage(error);
+        if (error != null) _lastError = error;
         if (phase != null) _lastPhase = phase;
         if (total > 0)
         {
