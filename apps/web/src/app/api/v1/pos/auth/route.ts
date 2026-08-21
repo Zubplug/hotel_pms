@@ -14,8 +14,22 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { staffId, pin, propertyId } = body;
     const sessionId = body.sessionId || undefined;
-    const outletId = body.outletId || undefined;
-    const deviceId = body.deviceId || undefined;
+    let outletId = body.outletId || undefined;
+    const clientDeviceIdentifier = body.deviceId || undefined;
+    let dbDeviceId: string | undefined = undefined;
+
+    if (clientDeviceIdentifier) {
+      // The frontend passes the device identifier string (e.g. dev_123). We must resolve it to the true UUID.
+      const device = await prisma.posDevice.findUnique({
+        where: { identifier: clientDeviceIdentifier }
+      });
+      if (device) {
+        dbDeviceId = device.id;
+        if (!outletId && device.outletId) {
+          outletId = device.outletId;
+        }
+      }
+    }
 
     if (!staffId || !pin) {
       return NextResponse.json({ error: 'Missing required fields: staffId, pin' }, { status: 400 });
@@ -60,12 +74,12 @@ export async function POST(req: NextRequest) {
       });
       if (openSession) {
         activeSessionId = openSession.id;
-      } else if (deviceId && outletId) {
+      } else if (dbDeviceId && outletId) {
         const newSession = await prisma.posSession.create({
           data: {
             propertyId,
             outletId,
-            deviceId,
+            deviceId: dbDeviceId,
             businessDate: new Date(),
             status: 'OPEN',
             bankType,
@@ -78,12 +92,16 @@ export async function POST(req: NextRequest) {
         });
         activeSessionId = newSession.id;
       } else {
-        return NextResponse.json({ error: 'Missing required fields: propertyId, deviceId, outletId' }, { status: 400 });
+        return NextResponse.json({ error: 'This browser/device is not registered as a POS terminal. Please register it in settings first.' }, { status: 400 });
       }
     } else {
       // CENTRAL_CASHIER
+      if (!dbDeviceId || !outletId) {
+        return NextResponse.json({ error: 'This browser/device is not registered as a POS terminal. Please register it in settings first.' }, { status: 400 });
+      }
+      
       const openSession = await prisma.posSession.findFirst({
-        where: { propertyId, outletId, deviceId, status: 'OPEN' },
+        where: { propertyId, outletId, deviceId: dbDeviceId, status: 'OPEN' },
         orderBy: { openedAt: 'desc' }
       });
       if (openSession) {
@@ -100,7 +118,7 @@ export async function POST(req: NextRequest) {
       propertyId, 
       sessionId: activeSessionId,
       outletId,
-      deviceId,
+      deviceId: dbDeviceId,
       tokenVersion: staff.posTokenVersion
     })
       .setProtectedHeader({ alg: 'HS256' })

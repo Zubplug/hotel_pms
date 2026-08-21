@@ -130,12 +130,17 @@ export async function GET(req: NextRequest) {
 
           // POS access = has any POS-related permission or explicit department
           hasPosAccess = permissions.some(p =>
-            p.startsWith('pos:') ||
-            p.startsWith('ACCESS_KEYCARD') ||
-            p === 'frontdesk:access'
-          ) || ['RECEPTIONIST', 'CASHIER', 'WAITER', 'BARTENDER', 'FRONT_OFFICE_MANAGER'].includes(
+            p === 'ACCESS_POS' ||
+            p === 'ACCESS_FRONT_DESK' ||
+            p === 'ACCESS_CASH_MANAGEMENT' ||
+            p === 'USE_EMERGENCY_CASHIER' ||
+            p.startsWith('ACCESS_KEYCARD')
+          ) || ['RECEPTIONIST', 'CASHIER', 'WAITER', 'BARTENDER', 'FRONT_OFFICE_MANAGER', 'MANAGER', 'DIRECTOR', 'EXECUTIVE', 'SUPER_ADMIN'].includes(
             staff.position?.toUpperCase()
+          ) || ['RECEPTIONIST', 'CASHIER', 'WAITER', 'BARTENDER', 'FRONT_OFFICE_MANAGER', 'MANAGER', 'DIRECTOR', 'EXECUTIVE', 'SUPER_ADMIN'].includes(
+            roleName?.toUpperCase()
           );
+
         }
 
         return {
