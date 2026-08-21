@@ -1817,7 +1817,7 @@ public class LocalRepository
             .FirstOrDefaultAsync(s => s.DeviceId == deviceId && s.Status == "OPEN");
     }
 
-    public async Task<string> EnsureActiveServerBankAsync(string staffId, string propertyId, string outletId, string deviceId)
+    public async Task<string> EnsureActiveServerBankAsync(string staffId, string propertyId, string outletId, string deviceId, string bankingModel = "SERVER_BANKING", string bankType = "SERVER")
     {
         var activeSession = await GetActiveServerBankAsync(staffId, propertyId, outletId);
         if (activeSession != null)
@@ -1833,8 +1833,8 @@ public class LocalRepository
             DeviceId = deviceId,
             UserId = staffId,
             Status = "OPEN",
-            BankingModel = "SERVER_BANKING",
-            BankType = "SERVER",
+            BankingModel = bankingModel,
+            BankType = bankType,
             PrimaryOperatorId = staffId,
             OpenedAt = DateTime.UtcNow,
             OpeningBalance = 0,

@@ -47,6 +47,7 @@ export async function POST(req: NextRequest) {
       where: { id: propertyId }
     });
     const bankingModel = (property?.settings as any)?.pos?.bankingModel || 'CENTRAL_CASHIER';
+    const bankType = bankingModel === 'SERVER_BANKING' ? 'SERVER' : 'CENTRAL';
 
     let activeSessionId = sessionId || null;
     let requiresBank = false;
@@ -66,8 +67,8 @@ export async function POST(req: NextRequest) {
             outletId,
             deviceId,
             status: 'OPEN',
-            bankType: 'SERVER',
-            bankingModel: 'SERVER_BANKING',
+            bankType,
+            bankingModel,
             primaryOperatorId: staff.id,
             openedByUserId: session?.user?.id,
             expectedCash: 0,
