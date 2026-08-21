@@ -64,6 +64,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         capabilities = Array.from(new Set(capabilities));
         
         const primaryRole = user.roles?.[0]?.role?.name || 'STAFF';
+        const organizationId = user.roles?.[0]?.role?.organizationId || null;
 
         // Return user object
         return {
@@ -74,7 +75,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           role: primaryRole,
           capabilities,
           sessionVersion: user.sessionVersion || 1,
-          propertyId: propertyIds.length > 0 ? propertyIds[0] : null
+          propertyId: propertyIds.length > 0 ? propertyIds[0] : null,
+          organizationId
         };
       },
     }),
@@ -90,6 +92,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.capabilities = (user as any).capabilities;
         token.sessionVersion = (user as any).sessionVersion;
         token.propertyId = (user as any).propertyId;
+        token.organizationId = (user as any).organizationId;
       } else if (token.id) {
         // Validate session version on subsequent requests to support remote revocation
         try {
@@ -112,10 +115,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.id = token.id as string;
         session.user.staffId = token.staffId as string;
         session.user.isSuperAdmin = token.isSuperAdmin as boolean;
-        (session.user as any).role = token.role;
-        (session.user as any).capabilities = token.capabilities || [];
-        (session.user as any).sessionVersion = token.sessionVersion || 1;
-        (session.user as any).propertyId = token.propertyId;
+        session.user.role = token.role as string;
+        session.user.capabilities = token.capabilities as string[];
+        session.user.sessionVersion = token.sessionVersion as number;
+        session.user.propertyId = token.propertyId as string | null;
+        session.user.organizationId = token.organizationId as string | null;
       }
       return session;
     },

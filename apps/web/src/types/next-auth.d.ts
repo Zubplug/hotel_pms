@@ -7,6 +7,7 @@ declare module 'next-auth' {
       staffId?: string | null;
       isSuperAdmin: boolean;
       propertyId?: string | null;
+      organizationId?: string | null;
       capabilities?: string[];
       role?: string;
       sessionVersion?: number;
@@ -17,6 +18,7 @@ declare module 'next-auth' {
     staffId?: string | null;
     isSuperAdmin: boolean;
     propertyId?: string | null;
+    organizationId?: string | null;
     capabilities?: string[];
     role?: string;
     sessionVersion?: number;
