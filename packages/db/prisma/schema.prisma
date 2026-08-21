@@ -1228,11 +1228,14 @@ model Role {
 }
 
 model Permission {
-  id          String  @id @default(uuid()) @db.Uuid
-  name        String  @unique // e.g. "reservation:create"
-  resource    String
-  action      String
-  description String?
+  id               String  @id @default(uuid()) @db.Uuid
+  name             String  @unique // e.g. "reservation:create"
+  resource         String
+  action           String
+  description      String?
+  riskLevel        String  @default("LOW") // 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
+  isSystem         Boolean @default(true)
+  requiresApproval Boolean @default(false)
 
   roles RolePermission[]
 }

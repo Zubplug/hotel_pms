@@ -3,51 +3,55 @@ const prisma = new PrismaClient();
 
 const permissionsList = [
   // Core Modules
-  { name: 'ACCESS_FRONT_DESK', resource: 'SYSTEM', action: 'ACCESS', description: 'Access Front Desk module' },
-  { name: 'ACCESS_POS', resource: 'SYSTEM', action: 'ACCESS', description: 'Access POS module' },
-  { name: 'ACCESS_HOUSEKEEPING', resource: 'SYSTEM', action: 'ACCESS', description: 'Access Housekeeping module' },
-  { name: 'ACCESS_CASH_MANAGEMENT', resource: 'SYSTEM', action: 'ACCESS', description: 'Access Cash Management module' },
-  { name: 'ACCESS_INVENTORY', resource: 'SYSTEM', action: 'ACCESS', description: 'Access Inventory module' },
-  { name: 'ACCESS_MANAGEMENT', resource: 'SYSTEM', action: 'ACCESS', description: 'Access Management module' },
-  { name: 'ACCESS_NIGHT_AUDIT', resource: 'SYSTEM', action: 'ACCESS', description: 'Access Night Audit module' },
-  { name: 'ACCESS_SYNC_CENTER', resource: 'SYSTEM', action: 'ACCESS', description: 'Access Sync Center module' },
-  { name: 'ACCESS_MAINTENANCE', resource: 'SYSTEM', action: 'ACCESS', description: 'Access Maintenance module' },
-  { name: 'ACCESS_REPORTS', resource: 'SYSTEM', action: 'ACCESS', description: 'Access Reports module' },
+  { name: 'ACCESS_FRONT_DESK', resource: 'SYSTEM', action: 'ACCESS', description: 'Access Front Desk module', riskLevel: 'LOW', isSystem: true, requiresApproval: false },
+  { name: 'ACCESS_POS', resource: 'SYSTEM', action: 'ACCESS', description: 'Access POS module', riskLevel: 'LOW', isSystem: true, requiresApproval: false },
+  { name: 'ACCESS_HOUSEKEEPING', resource: 'SYSTEM', action: 'ACCESS', description: 'Access Housekeeping module', riskLevel: 'LOW', isSystem: true, requiresApproval: false },
+  { name: 'ACCESS_CASH_MANAGEMENT', resource: 'SYSTEM', action: 'ACCESS', description: 'Access Cash Management module', riskLevel: 'LOW', isSystem: true, requiresApproval: false },
+  { name: 'ACCESS_INVENTORY', resource: 'SYSTEM', action: 'ACCESS', description: 'Access Inventory module', riskLevel: 'LOW', isSystem: true, requiresApproval: false },
+  { name: 'ACCESS_MANAGEMENT', resource: 'SYSTEM', action: 'ACCESS', description: 'Access Management module', riskLevel: 'LOW', isSystem: true, requiresApproval: false },
+  { name: 'ACCESS_NIGHT_AUDIT', resource: 'SYSTEM', action: 'ACCESS', description: 'Access Night Audit module', riskLevel: 'LOW', isSystem: true, requiresApproval: false },
+  { name: 'ACCESS_SYNC_CENTER', resource: 'SYSTEM', action: 'ACCESS', description: 'Access Sync Center module', riskLevel: 'LOW', isSystem: true, requiresApproval: false },
+  { name: 'ACCESS_MAINTENANCE', resource: 'SYSTEM', action: 'ACCESS', description: 'Access Maintenance module', riskLevel: 'LOW', isSystem: true, requiresApproval: false },
+  { name: 'ACCESS_REPORTS', resource: 'SYSTEM', action: 'ACCESS', description: 'Access Reports module', riskLevel: 'LOW', isSystem: true, requiresApproval: false },
 
   // POS
-  { name: 'PROCESS_CASH_PAYMENT', resource: 'POS', action: 'CREATE', description: 'Process cash payments' },
-  { name: 'PROCESS_CARD_PAYMENT', resource: 'POS', action: 'CREATE', description: 'Process card payments' },
-  { name: 'PROCESS_ROOM_CHARGE', resource: 'POS', action: 'CREATE', description: 'Process room charges' },
-  { name: 'ACCESS_POS_SETTINGS', resource: 'POS', action: 'ACCESS', description: 'Access POS settings' },
+  { name: 'PROCESS_CASH_PAYMENT', resource: 'POS', action: 'CREATE', description: 'Process cash payments', riskLevel: 'MEDIUM', isSystem: true, requiresApproval: false },
+  { name: 'PROCESS_CARD_PAYMENT', resource: 'POS', action: 'CREATE', description: 'Process card payments', riskLevel: 'MEDIUM', isSystem: true, requiresApproval: false },
+  { name: 'PROCESS_ROOM_CHARGE', resource: 'POS', action: 'CREATE', description: 'Process room charges', riskLevel: 'MEDIUM', isSystem: true, requiresApproval: false },
+  { name: 'ACCESS_POS_SETTINGS', resource: 'POS', action: 'ACCESS', description: 'Access POS settings', riskLevel: 'LOW', isSystem: true, requiresApproval: false },
 
   // Cash Management
-  { name: 'VIEW_CASH_HANDOVERS', resource: 'CASH', action: 'READ', description: 'View cash handovers' },
-  { name: 'CONFIRM_CASH_HANDOVER', resource: 'CASH', action: 'UPDATE', description: 'Confirm cash handover' },
-  { name: 'OPEN_SAFE', resource: 'CASH', action: 'UPDATE', description: 'Open safe' },
-  { name: 'DEPOSIT_SAFE', resource: 'CASH', action: 'CREATE', description: 'Deposit to safe' },
-  { name: 'VIEW_CASH_LEDGER', resource: 'CASH', action: 'READ', description: 'View cash ledger' },
+  { name: 'VIEW_CASH_HANDOVERS', resource: 'CASH', action: 'READ', description: 'View cash handovers', riskLevel: 'LOW', isSystem: true, requiresApproval: false },
+  { name: 'CONFIRM_CASH_HANDOVER', resource: 'CASH', action: 'UPDATE', description: 'Confirm cash handover', riskLevel: 'HIGH', isSystem: true, requiresApproval: true },
+  { name: 'OPEN_SAFE', resource: 'CASH', action: 'UPDATE', description: 'Open safe', riskLevel: 'HIGH', isSystem: true, requiresApproval: true },
+  { name: 'DEPOSIT_SAFE', resource: 'CASH', action: 'CREATE', description: 'Deposit to safe', riskLevel: 'HIGH', isSystem: true, requiresApproval: true },
+  { name: 'VIEW_CASH_LEDGER', resource: 'CASH', action: 'READ', description: 'View cash ledger', riskLevel: 'LOW', isSystem: true, requiresApproval: false },
 
   // Refunds & Voids
-  { name: 'ACCESS_REFUNDS', resource: 'REFUND', action: 'ACCESS', description: 'Access refunds' },
-  { name: 'PROCESS_REFUND', resource: 'REFUND', action: 'CREATE', description: 'Process refund' },
-  { name: 'APPROVE_REFUND', resource: 'REFUND', action: 'UPDATE', description: 'Approve refund' },
-  { name: 'LIMIT_REFUND_50K', resource: 'REFUND', action: 'LIMIT', description: 'Refund limit 50K' },
-  { name: 'LIMIT_REFUND_250K', resource: 'REFUND', action: 'LIMIT', description: 'Refund limit 250K' },
-  { name: 'LIMIT_REFUND_UNLIMITED', resource: 'REFUND', action: 'LIMIT', description: 'Unlimited refunds' },
-  { name: 'ACCESS_VOID', resource: 'VOID', action: 'ACCESS', description: 'Access voids' },
-  { name: 'AUTHORIZE_VOID', resource: 'VOID', action: 'UPDATE', description: 'Authorize voids' },
-  { name: 'AUTHORIZE_POST_KITCHEN_VOID', resource: 'VOID', action: 'UPDATE', description: 'Authorize voids after kitchen printing' },
+  { name: 'ACCESS_REFUNDS', resource: 'REFUND', action: 'ACCESS', description: 'Access refunds', riskLevel: 'LOW', isSystem: true, requiresApproval: false },
+  { name: 'PROCESS_REFUND', resource: 'REFUND', action: 'CREATE', description: 'Process refund', riskLevel: 'MEDIUM', isSystem: true, requiresApproval: false },
+  { name: 'APPROVE_REFUND', resource: 'REFUND', action: 'UPDATE', description: 'Approve refund', riskLevel: 'HIGH', isSystem: true, requiresApproval: true },
+  { name: 'LIMIT_REFUND_50K', resource: 'REFUND', action: 'LIMIT', description: 'Refund limit 50K', riskLevel: 'LOW', isSystem: true, requiresApproval: false },
+  { name: 'LIMIT_REFUND_250K', resource: 'REFUND', action: 'LIMIT', description: 'Refund limit 250K', riskLevel: 'MEDIUM', isSystem: true, requiresApproval: false },
+  { name: 'LIMIT_REFUND_UNLIMITED', resource: 'REFUND', action: 'LIMIT', description: 'Unlimited refunds', riskLevel: 'CRITICAL', isSystem: true, requiresApproval: true },
+  { name: 'ACCESS_VOID', resource: 'VOID', action: 'ACCESS', description: 'Access voids', riskLevel: 'LOW', isSystem: true, requiresApproval: false },
+  { name: 'AUTHORIZE_VOID', resource: 'VOID', action: 'UPDATE', description: 'Authorize voids', riskLevel: 'MEDIUM', isSystem: true, requiresApproval: false },
+  { name: 'AUTHORIZE_POST_KITCHEN_VOID', resource: 'VOID', action: 'UPDATE', description: 'Authorize voids after kitchen printing', riskLevel: 'HIGH', isSystem: true, requiresApproval: true },
 
   // Emergency
-  { name: 'USE_EMERGENCY_CASHIER', resource: 'EMERGENCY', action: 'CREATE', description: 'Use emergency cashier' },
-  { name: 'AUTHORIZE_EMERGENCY_BANK', resource: 'EMERGENCY', action: 'UPDATE', description: 'Authorize emergency bank' },
+  { name: 'USE_EMERGENCY_CASHIER', resource: 'EMERGENCY', action: 'CREATE', description: 'Use emergency cashier', riskLevel: 'CRITICAL', isSystem: true, requiresApproval: true },
+  { name: 'AUTHORIZE_EMERGENCY_BANK', resource: 'EMERGENCY', action: 'UPDATE', description: 'Authorize emergency bank', riskLevel: 'HIGH', isSystem: true, requiresApproval: true },
+
+  // Admin & Security
+  { name: 'MANAGE_ROLES', resource: 'SECURITY', action: 'UPDATE', description: 'Manage custom roles and system role permissions', riskLevel: 'CRITICAL', isSystem: true, requiresApproval: true },
+  { name: 'MANAGE_SYSTEM_PERMISSIONS', resource: 'SECURITY', action: 'UPDATE', description: 'Manage system baseline permissions', riskLevel: 'CRITICAL', isSystem: true, requiresApproval: true },
 
   // Misc
-  { name: 'ACCESS_DISCOUNTS', resource: 'DISCOUNT', action: 'ACCESS', description: 'Access discounts' },
-  { name: 'AUTHORIZE_DISCOUNT', resource: 'DISCOUNT', action: 'UPDATE', description: 'Authorize discounts' },
-  { name: 'APPROVE_DRAWER_VARIANCE', resource: 'CASH', action: 'UPDATE', description: 'Approve drawer variance' },
-  { name: 'OVERRIDE_NIGHT_AUDIT', resource: 'AUDIT', action: 'UPDATE', description: 'Override night audit' },
-  { name: 'POST_CITY_LEDGER', resource: 'LEDGER', action: 'CREATE', description: 'Post to city ledger' },
+  { name: 'ACCESS_DISCOUNTS', resource: 'DISCOUNT', action: 'ACCESS', description: 'Access discounts', riskLevel: 'LOW', isSystem: true, requiresApproval: false },
+  { name: 'AUTHORIZE_DISCOUNT', resource: 'DISCOUNT', action: 'UPDATE', description: 'Authorize discounts', riskLevel: 'MEDIUM', isSystem: true, requiresApproval: false },
+  { name: 'APPROVE_DRAWER_VARIANCE', resource: 'CASH', action: 'UPDATE', description: 'Approve drawer variance', riskLevel: 'HIGH', isSystem: true, requiresApproval: true },
+  { name: 'OVERRIDE_NIGHT_AUDIT', resource: 'AUDIT', action: 'UPDATE', description: 'Override night audit', riskLevel: 'HIGH', isSystem: true, requiresApproval: true },
+  { name: 'POST_CITY_LEDGER', resource: 'LEDGER', action: 'CREATE', description: 'Post to city ledger', riskLevel: 'HIGH', isSystem: true, requiresApproval: true },
 ];
 
 const systemRoles = {
