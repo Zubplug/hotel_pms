@@ -155,7 +155,7 @@ export default function DesktopEntryPage() {
           if (terminalState.desktopMode === 'FRONT_DESK') {
             router.push('/frontdesk');
           } else if (terminalState.desktopMode === 'POS') {
-            router.push('/desktop/pos');
+            router.push('/pos');
           } else {
             router.push('/desktop');
           }
