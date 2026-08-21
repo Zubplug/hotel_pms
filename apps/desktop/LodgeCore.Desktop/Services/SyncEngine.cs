@@ -538,5 +538,6 @@ public class SyncEngine : BackgroundService
             _lastError = null;
             BroadcastHealth(SyncState.UP_TO_DATE, null, "COMPLETE", 1, 1, "Sync complete");
             _logger.LogInformation("Sync pull completed successfully.");
+    }
 }
 
