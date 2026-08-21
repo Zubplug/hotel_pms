@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArrowDownToLine, ArrowUpFromLine, HandCoins, AlertCircle, Check, RefreshCcw, Banknote, ShieldAlert, History } from 'lucide-react';
 import { StaffSwitchPad } from '@/components/pos/StaffSwitchPad';
+import { ActionSuccessModal } from '@/components/pos/ActionSuccessModal';
 
 export default function CashOfficePage() {
   const { provider } = useLodgeCoreProvider();
@@ -32,7 +33,7 @@ export default function CashOfficePage() {
   const [pendingAction, setPendingAction] = useState<any>(null);
   
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [successDialog, setSuccessDialog] = useState<{isOpen: boolean, title: string, message: string} | null>(null);
 
   const fetchData = async () => {
     if (!propertyId) return;
@@ -61,21 +62,33 @@ export default function CashOfficePage() {
   }, [propertyId]);
 
   const handleAction = async (action: any, operator: any) => {
-    setError(''); setSuccess('');
+    setError(''); 
     try {
       if (action.type === 'APPROVE_HANDOVER') {
         const res = await provider.pos.confirmHandover(action.sessionId, operator.pin);
         if (res.error) throw new Error(res.error);
-        setSuccess('Handover approved successfully.');
+        setSuccessDialog({
+          isOpen: true,
+          title: 'Handover Confirmed',
+          message: 'The shift\'s physical cash has been securely transferred to the main safe.'
+        });
       } else if (action.type === 'OPEN_SAFE') {
         const res = await provider.pos.openSafe(propertyId, action.amount, operator.pin);
         if (res.error) throw new Error(res.error);
-        setSuccess('Safe opened successfully.');
+        setSuccessDialog({
+          isOpen: true,
+          title: 'Safe Opened',
+          message: 'The opening float has been securely provisioned to the Cashier.'
+        });
         setOpenSafeAmount('');
       } else if (action.type === 'BANK_DEPOSIT') {
         const res = await provider.pos.recordBankDeposit(propertyId, action.amount, action.reference, operator.pin);
         if (res.error) throw new Error(res.error);
-        setSuccess('Bank deposit recorded successfully.');
+        setSuccessDialog({
+          isOpen: true,
+          title: 'Bank Deposit Recorded',
+          message: 'The cash drop has been securely transferred out of the safe to the bank.'
+        });
         setDepositAmount('');
         setDepositRef('');
       }
@@ -103,15 +116,9 @@ export default function CashOfficePage() {
       </div>
 
       {error && (
-        <div className="bg-rose-50 text-rose-600 p-4 rounded-xl text-sm flex items-start gap-3 border border-rose-100 mb-6 animate-in fade-in">
-          <AlertCircle className="w-5 h-5 mt-0.5 shrink-0" />
-          <span className="font-medium">{error}</span>
-        </div>
-      )}
-      {success && (
-        <div className="bg-emerald-50 text-emerald-700 p-4 rounded-xl text-sm flex items-start gap-3 border border-emerald-100 mb-6 animate-in fade-in">
-          <Check className="w-5 h-5 mt-0.5 shrink-0" />
-          <span className="font-medium">{success}</span>
+        <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-lg flex items-center gap-3 text-red-600">
+          <AlertCircle className="w-5 h-5" />
+          <p className="font-medium">{error}</p>
         </div>
       )}
 
@@ -337,6 +344,16 @@ export default function CashOfficePage() {
         }}
         onAuthenticated={(operator) => handleAction(pendingAction, operator)} 
       />
+      
+      {successDialog && (
+        <ActionSuccessModal
+          isOpen={successDialog.isOpen}
+          title={successDialog.title}
+          message={successDialog.message}
+          onClose={() => setSuccessDialog(null)}
+          autoCloseMs={3500}
+        />
+      )}
     </div>
   );
 }

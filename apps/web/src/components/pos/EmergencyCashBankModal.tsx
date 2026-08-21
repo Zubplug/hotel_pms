@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Loader2, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { ActionSuccessModal } from '@/components/pos/ActionSuccessModal';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { toast } from 'sonner';
 
@@ -17,6 +18,7 @@ export function EmergencyCashBankModal({ isOpen, onClose, onSuccess, operatorTok
   const [managerPin, setManagerPin] = useState('');
   const [reason, setReason] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successDialog, setSuccessDialog] = useState<{isOpen: boolean, sessionId: string} | null>(null);
 
   const handleOpenBank = async () => {
     setErrorMsg(null);
@@ -40,11 +42,7 @@ export function EmergencyCashBankModal({ isOpen, onClose, onSuccess, operatorTok
       if (openRes.error) {
         setErrorMsg(openRes.error);
       } else if (openRes.data?.sessionId) {
-        toast.success('Emergency Bank Opened', {
-          description: `Bank successfully minted for Manager Override.`
-        });
-        onSuccess(openRes.data.sessionId);
-        onClose();
+        setSuccessDialog({ isOpen: true, sessionId: openRes.data.sessionId });
       } else {
         setErrorMsg('Failed to open emergency bank.');
       }
@@ -126,6 +124,20 @@ export function EmergencyCashBankModal({ isOpen, onClose, onSuccess, operatorTok
           </button>
         </DialogFooter>
       </DialogContent>
+      
+      {successDialog && (
+        <ActionSuccessModal
+          isOpen={successDialog.isOpen}
+          title="Emergency Bank Active"
+          message="Emergency Central Cashier Bank successfully minted for Manager Override."
+          onClose={() => {
+            setSuccessDialog(null);
+            onSuccess(successDialog.sessionId);
+            onClose();
+          }}
+          autoCloseMs={3500}
+        />
+      )}
     </Dialog>
   );
 }

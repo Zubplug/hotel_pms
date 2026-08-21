@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { signOut } from 'next-auth/react';
+import { ActionSuccessModal } from '@/components/pos/ActionSuccessModal';
 
 export default function StartShiftPage() {
   const router = useRouter();
@@ -23,6 +24,7 @@ export default function StartShiftPage() {
   const [isLoadingContext, setIsLoadingContext] = useState(true);
   const [isStarting, setIsStarting] = useState(false);
   const [error, setError] = useState('');
+  const [successDialog, setSuccessDialog] = useState(false);
 
   // If already have a session, redirect to pos
   useEffect(() => {
@@ -96,7 +98,7 @@ export default function StartShiftPage() {
       
       if (res.data?.sessionId) {
         localStorage.setItem('lodgecore_pos_session_id', res.data.sessionId);
-        window.location.href = '/pos';
+        setSuccessDialog(true);
       } else {
         setError('Failed to start shift: ' + (res.error || 'Unknown error'));
         setIsStarting(false);
@@ -213,6 +215,21 @@ export default function StartShiftPage() {
         </div>
       </div>
 
+      {successDialog && (
+        <ActionSuccessModal
+          isOpen={successDialog}
+          title="Shift Started Successfully"
+          message="Your personal banking session is active. Drawer is provisioned."
+          actionLabel="Go to POS"
+          onAction={() => {
+            window.location.href = '/pos';
+          }}
+          autoCloseMs={2500}
+          onClose={() => {
+            window.location.href = '/pos';
+          }}
+        />
+      )}
     </div>
   );
 }

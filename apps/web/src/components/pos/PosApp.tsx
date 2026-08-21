@@ -21,6 +21,7 @@ import { CategoryTileGrid } from '@/components/pos/CategoryTileGrid';
 import { ProductCardStepper } from '@/components/pos/ProductCardStepper';
 import { PosStaffStrip } from '@/components/pos/PosStaffStrip';
 import { ChargeModal } from '@/components/pos/ChargeModal';
+import { ActionSuccessModal } from '@/components/pos/ActionSuccessModal';
 import { MySalesModal } from '@/components/pos/MySalesModal';
 import { MyOrdersModal } from '@/components/pos/MyOrdersModal';
 import { ActiveOrdersModal } from '@/components/pos/ActiveOrdersModal';
@@ -99,6 +100,7 @@ export default function PosApp() {
   // ── Modals ────────────────────────────────────────────────────────
   const [modifierTarget, setModifierTarget] = useState<any | null>(null);
   const [showSplitModal, setShowSplitModal] = useState(false);
+  const [successDialog, setSuccessDialog] = useState<{isOpen: boolean, title: string, message: string} | null>(null);
 
   // ── Orders ────────────────────────────────────────────────────────
   const [myActiveOrders, setMyActiveOrders] = useState<any[]>([]);
@@ -506,16 +508,23 @@ export default function PosApp() {
     try {
       const paymentData = { method, amount: total, currency: 'NGN', checkId: activeCheckId };
       const res = await provider.pos.payOrder(currentOrderId, paymentData, operatorToken);
-      if (res.error) throw new Error(res.error);
-      toast.success(`Payment of ${formatCurrency(total)} via ${method} processed ✓`);
-      setCart([]);
-      setActiveTableId(null);
-      setActiveTableName(null);
-      setCurrentOrderId(null);
-      setActiveCheckId(null);
-      setOrderChecks([]);
-      setShowChargeModal(false);
-      setTableRefreshTrigger(Date.now());
+      if (!res.error) {
+        setCart([]);
+        setOrderChecks([]);
+        setCurrentOrderId(null);
+        setActiveCheckId(null);
+        setActiveOrderType('TABLE');
+        setActiveDisplayName('');
+        setShowChargeModal(false);
+        setSuccessDialog({
+          isOpen: true,
+          title: 'Payment Successful!',
+          message: `Payment of ${formatCurrency(total)} via ${method} has been processed successfully.`
+        });
+        setTableRefreshTrigger(Date.now());
+      } else {
+        throw new Error(res.error);
+      }
     } catch (err: any) {
       toast.error(err.message || 'Payment failed');
     } finally {
@@ -1083,7 +1092,11 @@ export default function PosApp() {
           items={cart}
           userId={(session?.user as any)?.id || ''}
           onSplitComplete={() => {
-            toast.success('Check split successfully');
+            setSuccessDialog({
+              isOpen: true,
+              title: 'Checks Split Successfully',
+              message: 'The items have been moved to separate checks for payment.'
+            });
             if (activeTableId && currentOrderId) {
               handleTableSelect({ id: activeTableId, name: activeTableName, currentOrderId });
             }
@@ -1128,6 +1141,16 @@ export default function PosApp() {
         onOrderSelect={handleOrderResume}
         onViewHistory={() => setShowMyOrders(true)}
       />
+      
+      {successDialog && (
+        <ActionSuccessModal
+          isOpen={successDialog.isOpen}
+          title={successDialog.title}
+          message={successDialog.message}
+          onClose={() => setSuccessDialog(null)}
+          autoCloseMs={3500}
+        />
+      )}
     </div>
     </AutoLockScreen>
   );

@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ShieldAlert, MonitorCheck, Loader2 } from 'lucide-react';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
+import { ActionSuccessModal } from '@/components/pos/ActionSuccessModal';
 
 export default function DeviceRegistrationPage() {
   const router = useRouter();
@@ -86,22 +87,6 @@ export default function DeviceRegistrationPage() {
       setLoading(false);
     }
   };
-
-  if (success) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-[#0a0a0a]">
-        <div className="w-full max-w-md bg-white dark:bg-[#1a1a1a] rounded-xl shadow-xl border border-gray-100 dark:border-[#2a2a2a] p-8 text-center space-y-4">
-          <div className="mx-auto w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
-            <MonitorCheck className="w-8 h-8 text-green-600 dark:text-green-400" />
-          </div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Device Registered</h2>
-          <p className="text-gray-500 dark:text-gray-400">
-            This terminal has been successfully registered. Redirecting to shift start...
-          </p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-[#0a0a0a] p-4">
@@ -218,6 +203,20 @@ export default function DeviceRegistrationPage() {
           </div>
         </form>
       </div>
+
+      {success && (
+        <ActionSuccessModal
+          isOpen={success}
+          title="Device Registered"
+          message="This terminal has been successfully registered and bound to your PMS."
+          actionLabel="Continue"
+          onClose={() => {
+            setSuccess(false);
+            router.push('/pos/start-shift');
+          }}
+          autoCloseMs={2500}
+        />
+      )}
     </div>
   );
 }

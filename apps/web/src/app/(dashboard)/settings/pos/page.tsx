@@ -9,7 +9,7 @@ import { useSession } from 'next-auth/react';
 import { toast } from 'sonner';
 
 export default function PosSettingsPage() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const propertyId = (session?.user as any)?.propertyId;
 
   const [outlets, setOutlets] = useState<any[]>([]);
@@ -22,7 +22,10 @@ export default function PosSettingsPage() {
   const [error, setError] = useState('');
 
   const fetchData = async () => {
-    if (!propertyId) return;
+    if (!propertyId) {
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
     try {
       const [outletsRes, propertyRes] = await Promise.all([
@@ -43,8 +46,13 @@ export default function PosSettingsPage() {
   };
 
   useEffect(() => {
+    if (status === 'loading') return;
+    if (!propertyId) {
+      setIsLoading(false);
+      return;
+    }
     fetchData();
-  }, [propertyId]);
+  }, [propertyId, status]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();

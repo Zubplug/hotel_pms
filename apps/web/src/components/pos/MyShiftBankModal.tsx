@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Wallet, DollarSign, ArrowRightLeft, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ActionSuccessModal } from '@/components/pos/ActionSuccessModal';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 
@@ -25,7 +26,8 @@ export function MyShiftBankModal({
 }: MyShiftBankModalProps) {
   const [sessionDetails, setSessionDetails] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [actualCashStr, setActualCashStr] = useState('');
+  const [actualCashStr, setActualCashStr] = useState<string>('');
+  const [successDialog, setSuccessDialog] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -62,9 +64,7 @@ export function MyShiftBankModal({
     try {
       const res = await provider.pos.closeSession(posSessionId, actualCash, 0);
       if (!res.error) {
-        toast.success('Shift Bank successfully sent for Manager Confirmation.');
-        if (onReconciled) onReconciled();
-        onClose();
+        setSuccessDialog(true);
       } else {
         toast.error(res.error || 'Failed to reconcile shift.');
       }
@@ -207,6 +207,19 @@ export function MyShiftBankModal({
           </Button>
         </div>
       </div>
+      
+      {successDialog && (
+        <ActionSuccessModal
+          isOpen={successDialog}
+          title="Shift Declared Successfully"
+          message="Your shift bank has been submitted to the Cash Office for manager handover. You will now be securely logged out."
+          onClose={() => {
+            setSuccessDialog(false);
+            if (onReconciled) onReconciled();
+            onClose();
+          }}
+        />
+      )}
     </div>
   );
 }
