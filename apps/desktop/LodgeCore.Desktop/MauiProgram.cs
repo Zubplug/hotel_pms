@@ -59,6 +59,7 @@ public static class MauiProgram
         builder.Services.AddHostedService<LodgeCore.Desktop.Services.SyncEngine>();
         builder.Services.AddSingleton<LodgeCore.Desktop.Services.EscPosService>();
         builder.Services.AddHostedService<LodgeCore.Desktop.Services.KotPrintService>();
+        builder.Services.AddSingleton<LodgeCore.Desktop.Services.DesktopServiceManager>();
         builder.Services.AddSingleton<OfflinePMSInterop>();
         builder.Services.AddSingleton(sp => 
         {
