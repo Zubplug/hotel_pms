@@ -101,6 +101,9 @@ export function OperatorSelectionScreen({ isOpen, onAuthenticated, onCancel, can
       if (authRes.posSessionId || authRes.sessionId) {
         localStorage.setItem('lodgecore_pos_session_id', authRes.posSessionId || authRes.sessionId);
       }
+      if (token) {
+        localStorage.setItem('lodgecore_pos_operator_token', token);
+      }
       onAuthenticated(staffObj, token);
     }
   };
