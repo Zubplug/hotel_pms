@@ -59,9 +59,24 @@ export async function POST(req: NextRequest) {
       });
       if (openSession) {
         activeSessionId = openSession.id;
+      } else if (deviceId && outletId) {
+        const newSession = await prisma.posSession.create({
+          data: {
+            propertyId,
+            outletId,
+            deviceId,
+            status: 'OPEN',
+            bankType: 'SERVER',
+            bankingModel: 'SERVER_BANKING',
+            primaryOperatorId: staff.id,
+            openedByUserId: session?.user?.id,
+            expectedCash: 0,
+            openingBalance: 0
+          }
+        });
+        activeSessionId = newSession.id;
       } else {
-        requiresBank = true;
-        activeSessionId = null;
+        return NextResponse.json({ error: 'Missing required fields: propertyId, deviceId, outletId' }, { status: 400 });
       }
     } else {
       // CENTRAL_CASHIER

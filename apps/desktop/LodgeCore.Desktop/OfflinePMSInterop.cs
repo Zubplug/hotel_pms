@@ -168,7 +168,7 @@ public class OfflinePMSInterop
                         }
                         else
                         {
-                            requiresBank = true;
+                            posSessionId = await _repo.EnsureActiveServerBankAsync(staff.Id, propertyId, terminal.OutletId, session.DeviceId);
                         }
                     }
                     else

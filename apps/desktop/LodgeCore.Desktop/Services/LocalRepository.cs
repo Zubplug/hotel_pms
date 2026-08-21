@@ -1817,6 +1817,48 @@ public class LocalRepository
             .FirstOrDefaultAsync(s => s.DeviceId == deviceId && s.Status == "OPEN");
     }
 
+    public async Task<string> EnsureActiveServerBankAsync(string staffId, string propertyId, string outletId, string deviceId)
+    {
+        var activeSession = await GetActiveServerBankAsync(staffId, propertyId, outletId);
+        if (activeSession != null)
+        {
+            return activeSession.Id;
+        }
+
+        var newSession = new LodgeCore.Desktop.Data.Entities.LocalPosSession
+        {
+            Id = Guid.NewGuid().ToString(),
+            PropertyId = propertyId,
+            OutletId = outletId,
+            DeviceId = deviceId,
+            UserId = staffId,
+            Status = "OPEN",
+            BankingModel = "SERVER_BANKING",
+            BankType = "SERVER",
+            PrimaryOperatorId = staffId,
+            OpenedAt = DateTime.UtcNow,
+            OpeningBalance = 0,
+            ExpectedCash = 0,
+            StaffId = staffId
+        };
+
+        _dbContext.PosSessions.Add(newSession);
+
+        AppendSyncEvent(
+            entityType: "POS_SESSION",
+            entityId: newSession.Id,
+            operationType: "CREATE",
+            payload: newSession,
+            terminalId: deviceId,
+            outletId: outletId,
+            sessionId: newSession.Id,
+            operatorId: staffId
+        );
+
+        await _dbContext.SaveChangesAsync();
+        return newSession.Id;
+    }
+
     public async Task<string> EnsureEmergencyBankAsync(string managerId, string managerName, string primaryOperatorId, string deviceId, string outletId, string propertyId, string reason)
     {
         // 1. Concurrency Check: Verify no existing OPEN emergency bank for this terminal

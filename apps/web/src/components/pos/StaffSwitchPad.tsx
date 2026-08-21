@@ -15,7 +15,7 @@ type StaffSwitchPadProps = {
 };
 
 export function StaffSwitchPad({ isOpen, onAuthenticated, onCancel, cancellable = false, outletId }: StaffSwitchPadProps) {
-  const { provider } = useLodgeCoreProvider();
+  const { provider, isDesktopMode } = useLodgeCoreProvider();
   const { data: session } = useLodgeCoreSession();
   const propertyId = (session?.user as any)?.propertyId || '';
 
@@ -60,40 +60,7 @@ export function StaffSwitchPad({ isOpen, onAuthenticated, onCancel, cancellable 
 
   const handleProcessLoginSuccess = async (authRes: any, staffObj: any, token: string) => {
     if (authRes.requiresBank) {
-      if (authRes.bankingModel === 'SERVER_BANKING') {
-        // Automatically start the server bank with 0 float
-        try {
-          const deviceId = localStorage.getItem('lodgecore_pos_device_id') || '';
-          
-          const req = {
-            propertyId,
-            deviceId,
-            outletId: outletId || localStorage.getItem('lodgecore_pos_outlet_id') || '',
-            openingCash: 0
-          };
-
-          const res = await fetch('/api/v1/pos/sessions', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify(req)
-          });
-
-          const data = await res.json();
-          if (res.ok && data.data?.sessionId) {
-            localStorage.setItem('lodgecore_pos_session_id', data.data.sessionId);
-            onAuthenticated(staffObj, token);
-          } else {
-            setError(data.error || 'Failed to start shift automatically');
-          }
-        } catch (e: any) {
-          setError(e.message || 'Failed to start shift automatically');
-        }
-      } else {
-        setBankState('CENTRAL_CASHIER_UNAVAILABLE');
-      }
+      setBankState('CENTRAL_CASHIER_UNAVAILABLE');
     } else {
       if (authRes.posSessionId || authRes.sessionId) {
         localStorage.setItem('lodgecore_pos_session_id', authRes.posSessionId || authRes.sessionId);
