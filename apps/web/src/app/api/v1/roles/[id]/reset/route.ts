@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth();
     if (!session || !session.user?.organizationId) {
@@ -14,7 +14,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     const { organizationId } = session.user;
-    const roleId = params.id;
+    const { id: roleId } = await params;
 
     const existingRole = await prisma.role.findUnique({
       where: { id: roleId },
