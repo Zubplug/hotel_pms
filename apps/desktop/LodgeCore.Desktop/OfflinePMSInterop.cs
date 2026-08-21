@@ -85,7 +85,13 @@ public class OfflinePMSInterop
             // Desktop usually operates for the property it was provisioned to.
             // If offline, returning all synced staff is usually fine.
             var session = await _authManager.GetSessionAsync();
-            var propertyId = session?.PropertyId ?? "";
+            var propertyId = session?.PropertyId;
+            
+            if (string.IsNullOrEmpty(propertyId))
+            {
+                var properties = await _repo.GetPropertiesAsync();
+                propertyId = properties?.FirstOrDefault()?.Id ?? "";
+            }
             
             var staff = await _repo.GetActiveStaffAsync(propertyId);
             
