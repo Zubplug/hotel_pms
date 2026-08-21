@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
             bankType,
             bankingModel,
             primaryOperatorId: staff.id,
-            openedByUserId: session?.user?.id,
+            openedBy: session?.user?.id || staff.id,
             expectedCash: 0,
             openingBalance: 0
           }
