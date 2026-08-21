@@ -135,9 +135,9 @@ export async function GET(req: NextRequest) {
             p === 'ACCESS_CASH_MANAGEMENT' ||
             p === 'USE_EMERGENCY_CASHIER' ||
             p.startsWith('ACCESS_KEYCARD')
-          ) || ['RECEPTIONIST', 'CASHIER', 'WAITER', 'BARTENDER', 'FRONT_OFFICE_MANAGER', 'MANAGER', 'DIRECTOR', 'EXECUTIVE', 'SUPER_ADMIN'].includes(
+          ) || ['RECEPTIONIST', 'CASHIER', 'WAITER', 'BARTENDER', 'FRONT_OFFICE_MANAGER', 'MANAGER', 'GENERAL MANAGER', 'GENERAL_MANAGER', 'ADMIN', 'DIRECTOR', 'EXECUTIVE', 'SUPER_ADMIN'].includes(
             staff.position?.toUpperCase()
-          ) || ['RECEPTIONIST', 'CASHIER', 'WAITER', 'BARTENDER', 'FRONT_OFFICE_MANAGER', 'MANAGER', 'DIRECTOR', 'EXECUTIVE', 'SUPER_ADMIN'].includes(
+          ) || ['RECEPTIONIST', 'CASHIER', 'WAITER', 'BARTENDER', 'FRONT_OFFICE_MANAGER', 'MANAGER', 'GENERAL MANAGER', 'GENERAL_MANAGER', 'ADMIN', 'DIRECTOR', 'EXECUTIVE', 'SUPER_ADMIN'].includes(
             roleName?.toUpperCase()
           );
 
