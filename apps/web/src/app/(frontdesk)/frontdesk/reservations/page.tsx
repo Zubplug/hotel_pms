@@ -65,7 +65,8 @@ export default function FrontDeskReservationsPage() {
     },
   });
 
-  const reservations: Reservation[] = (data as any)?.data ?? [];
+  const rawData = data as any;
+  const reservations: Reservation[] = Array.isArray(rawData) ? rawData : (rawData?.data ?? []);
 
   // Client-side filtering for complex filters that the API might not natively support yet
   const filteredReservations = reservations.filter(res => {

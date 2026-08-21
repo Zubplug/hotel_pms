@@ -65,11 +65,13 @@ export default function ReceptionistDashboardPage() {
     );
   }
 
-  if (isLoading || !res?.data) {
+  const dashboardData = res?.data || res;
+
+  if (isLoading || !dashboardData?.kpis) {
     return <LoadingState message="Loading operational dashboard..." />;
   }
 
-  const { kpis, hardware, arrivals, departures, businessDate } = res.data;
+  const { kpis, hardware, arrivals, departures, businessDate } = dashboardData;
   const bDate = new Date(businessDate);
   const firstName = session?.user?.email?.split('@')[0] || 'Staff';
   
