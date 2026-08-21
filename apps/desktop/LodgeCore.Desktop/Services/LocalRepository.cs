@@ -979,8 +979,7 @@ public class LocalRepository
                 payload: account,
                 terminalId: null, // Global to property usually
                 sessionId: null,
-                outletId: null,
-                propertyId: propertyId
+                outletId: null
             );
             await _dbContext.SaveChangesAsync();
         }
@@ -1309,7 +1308,7 @@ public class LocalRepository
             .Sum(m => m.Amount);
 
         decimal todayVariances = await _dbContext.PosSettlements
-            .Where(s => s.PropertyId == propertyId && s.CreatedAt >= today)
+            .Where(s => s.PropertyId == propertyId && s.SettledAt >= today)
             .SumAsync(s => s.Variance);
 
         return new {
@@ -1905,8 +1904,7 @@ public class LocalRepository
             payload: newAccount,
             terminalId: deviceId,
             sessionId: sessionId,
-            outletId: outletId,
-            propertyId: propertyId
+            outletId: outletId
         );
 
         AppendSyncEvent(
