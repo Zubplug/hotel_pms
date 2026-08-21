@@ -35,12 +35,32 @@ export function OperatorSelectionScreen({ isOpen, onAuthenticated, onCancel, can
 
     if (isDesktopMode) {
       provider.auth.getActiveStaff().then(res => {
-        if (res?.data) setStaff(res.data);
-      }).catch(console.error);
+        if (res?.error) {
+          console.error("Desktop getActiveStaff returned error:", res.error);
+        }
+        if (res?.data) {
+          console.log("Desktop getActiveStaff loaded successfully:", res.data.length, "profiles");
+          setStaff(res.data);
+        } else if (!res?.data && !res?.error) {
+          console.warn("Desktop getActiveStaff returned unexpected format:", res);
+        }
+      }).catch(err => {
+        console.error("Desktop getActiveStaff threw exception:", err);
+      });
     } else if (propertyId) {
       provider.pos.getActiveStaff(propertyId).then(res => {
-        if (res?.data) setStaff(res.data);
-      }).catch(console.error);
+        if (res?.error) {
+          console.error("POS getActiveStaff returned error:", res.error);
+        }
+        if (res?.data) {
+          console.log("POS getActiveStaff loaded successfully:", res.data.length, "profiles");
+          setStaff(res.data);
+        } else if (!res?.data && !res?.error) {
+          console.warn("POS getActiveStaff returned unexpected format:", res);
+        }
+      }).catch(err => {
+        console.error("POS getActiveStaff threw exception:", err);
+      });
     }
   }, [isOpen, propertyId, provider, isDesktopMode]);
 

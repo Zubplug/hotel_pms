@@ -70,11 +70,11 @@ public class OfflinePMSInterop
         try
         {
             await _authManager.StoreDeviceTokenAsync(deviceToken);
-            return JsonSerializer.Serialize(new { success = true });
+            return JsonSerializer.Serialize(new { success = true }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 
@@ -87,13 +87,17 @@ public class OfflinePMSInterop
             var session = await _authManager.GetSessionAsync();
             var propertyId = session?.PropertyId;
             
+            System.Diagnostics.Debug.WriteLine($"[GetActiveStaffAsync] Called. Session propertyId: {propertyId}");
+            
             if (string.IsNullOrEmpty(propertyId))
             {
                 var properties = await _repo.GetPropertiesAsync();
                 propertyId = properties?.FirstOrDefault()?.Id ?? "";
+                System.Diagnostics.Debug.WriteLine($"[GetActiveStaffAsync] Fallback propertyId: {propertyId}");
             }
             
             var staff = await _repo.GetActiveStaffAsync(propertyId);
+            System.Diagnostics.Debug.WriteLine($"[GetActiveStaffAsync] Retrieved {staff?.Count ?? 0} staff members from local database.");
             
             // SECURITY: Never expose PosPinHash or sensitive sync fields to the React UI
             var safeStaff = staff.Select(s => new
@@ -107,11 +111,12 @@ public class OfflinePMSInterop
                 // PermissionsJson is also intentionally omitted; React relies on DesktopSession role
             });
 
-            return JsonSerializer.Serialize(new { success = true, data = safeStaff });
+            return JsonSerializer.Serialize(new { success = true, data = safeStaff }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            System.Diagnostics.Debug.WriteLine($"[GetActiveStaffAsync] Exception: {ex}");
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 
@@ -122,7 +127,7 @@ public class OfflinePMSInterop
             var staff = await _repo.AuthenticateDesktopUserAsync(staffId, pin);
             if (staff == null)
             {
-                return JsonSerializer.Serialize(new { success = false, error = "Invalid PIN" });
+                return JsonSerializer.Serialize(new { success = false, error = "Invalid PIN" }, _jsonOptions);
             }
 
             var session = await _authManager.GetSessionAsync();
@@ -193,11 +198,11 @@ public class OfflinePMSInterop
                 bankingModel = actualBankingModel,
                 requiresBank,
                 bankOwner
-            });
+            }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 
@@ -214,20 +219,20 @@ public class OfflinePMSInterop
             // Validate property is in CENTRAL_CASHIER mode
             if (property.BankingModel != PosConstants.BankingModels.CentralCashier)
             {
-                return JsonSerializer.Serialize(new { success = false, error = "Emergency override is only applicable in Station Banking (Central Cashier) mode." });
+                return JsonSerializer.Serialize(new { success = false, error = "Emergency override is only applicable in Station Banking (Central Cashier) mode." }, _jsonOptions);
             }
 
             // Authenticate the Manager PIN
             var managerRes = await _repo.ValidateSupervisorPinAsync(pin, desktopSession.PropertyId);
             if (managerRes == null)
             {
-                return JsonSerializer.Serialize(new { success = false, error = "Invalid manager PIN." });
+                return JsonSerializer.Serialize(new { success = false, error = "Invalid manager PIN." }, _jsonOptions);
             }
 
             // Validate reason
             if (string.IsNullOrWhiteSpace(reason) || reason.Length < 5)
             {
-                return JsonSerializer.Serialize(new { success = false, error = "A descriptive reason is required." });
+                return JsonSerializer.Serialize(new { success = false, error = "A descriptive reason is required." }, _jsonOptions);
             }
 
             // Get the primary operator's ID from operatorToken
@@ -236,7 +241,7 @@ public class OfflinePMSInterop
             
             string primaryOperatorId = posCtx.StaffId;
             if (string.IsNullOrEmpty(primaryOperatorId)) {
-                return JsonSerializer.Serialize(new { success = false, error = "Invalid primary operator ID." });
+                return JsonSerializer.Serialize(new { success = false, error = "Invalid primary operator ID." }, _jsonOptions);
             }
 
             string posSessionId = await _repo.EnsureEmergencyBankAsync(
@@ -249,11 +254,11 @@ public class OfflinePMSInterop
                 reason: reason
             );
 
-            return JsonSerializer.Serialize(new { success = true, posSessionId });
+            return JsonSerializer.Serialize(new { success = true, posSessionId }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 
@@ -262,11 +267,11 @@ public class OfflinePMSInterop
         try
         {
             _authManager.ClearAuthData();
-            return JsonSerializer.Serialize(new { success = true });
+            return JsonSerializer.Serialize(new { success = true }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 
@@ -282,11 +287,11 @@ public class OfflinePMSInterop
         try
         {
             var data = await _repo.GetPropertiesAsync();
-            return JsonSerializer.Serialize(new { success = true, data });
+            return JsonSerializer.Serialize(new { success = true, data }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 
@@ -295,11 +300,11 @@ public class OfflinePMSInterop
         try
         {
             var res = await _repo.GetActiveReservationsAsync();
-            return JsonSerializer.Serialize(new { success = true, data = res });
+            return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
     private async Task<(string UserId, string DeviceId, string? OutletId)> GetSecureContextAsync()
@@ -318,11 +323,11 @@ public class OfflinePMSInterop
         {
             var ctx = await GetSecureContextAsync();
             var success = await _repo.AssignRoomAsync(reservationId, roomId, roomNumber, ctx.UserId, ctx.DeviceId);
-            return JsonSerializer.Serialize(new { success });
+            return JsonSerializer.Serialize(new { success }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
     public async Task<string> CancelReservationAsync(string reservationId)
@@ -331,11 +336,11 @@ public class OfflinePMSInterop
         {
             var ctx = await GetSecureContextAsync();
             var success = await _repo.CancelReservationAsync(reservationId, ctx.UserId, ctx.DeviceId);
-            return JsonSerializer.Serialize(new { success });
+            return JsonSerializer.Serialize(new { success }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
     public async Task<string> CheckAvailabilityAsync(string roomNumber, DateTime checkIn, DateTime checkOut)
@@ -343,11 +348,11 @@ public class OfflinePMSInterop
         try
         {
             var isAvailable = await _repo.IsRoomAvailableAsync(roomNumber, checkIn, checkOut);
-            return JsonSerializer.Serialize(new { success = true, isAvailable });
+            return JsonSerializer.Serialize(new { success = true, isAvailable }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
     public async Task<string> RecordChargeAsync(string folioId, decimal amount, string description)
@@ -356,11 +361,11 @@ public class OfflinePMSInterop
         {
             var ctx = await GetSecureContextAsync();
             var success = await _repo.RecordChargeAsync(folioId, amount, description, ctx.UserId, ctx.DeviceId);
-            return JsonSerializer.Serialize(new { success });
+            return JsonSerializer.Serialize(new { success }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
     public async Task<string> RecordPaymentAsync(string folioId, decimal amount, string method)
@@ -369,11 +374,11 @@ public class OfflinePMSInterop
         {
             var ctx = await GetSecureContextAsync();
             var success = await _repo.RecordPaymentAsync(folioId, amount, method, ctx.UserId, ctx.DeviceId);
-            return JsonSerializer.Serialize(new { success });
+            return JsonSerializer.Serialize(new { success }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
     public async Task<string> ProcessCheckInAsync(string reservationId)
@@ -382,11 +387,11 @@ public class OfflinePMSInterop
         {
             var ctx = await GetSecureContextAsync();
             var success = await _repo.ProcessCheckInAsync(reservationId, ctx.UserId, ctx.DeviceId);
-            return JsonSerializer.Serialize(new { success });
+            return JsonSerializer.Serialize(new { success }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
     public async Task<string> ProcessCheckOutAsync(string reservationId)
@@ -395,11 +400,11 @@ public class OfflinePMSInterop
         {
             var ctx = await GetSecureContextAsync();
             var success = await _repo.ProcessCheckOutAsync(reservationId, ctx.UserId, ctx.DeviceId);
-            return JsonSerializer.Serialize(new { success });
+            return JsonSerializer.Serialize(new { success }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
     public async Task<string> UpdateHousekeepingTaskStatusAsync(string taskId, string status)
@@ -408,11 +413,11 @@ public class OfflinePMSInterop
         {
             var ctx = await GetSecureContextAsync();
             var success = await _repo.UpdateHousekeepingTaskStatusAsync(taskId, status, ctx.UserId, ctx.DeviceId);
-            return JsonSerializer.Serialize(new { success });
+            return JsonSerializer.Serialize(new { success }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
     public async Task<string> ResolveMaintenanceTicketAsync(string ticketId)
@@ -421,11 +426,11 @@ public class OfflinePMSInterop
         {
             var ctx = await GetSecureContextAsync();
             var success = await _repo.ResolveMaintenanceTicketAsync(ticketId, ctx.UserId, ctx.DeviceId);
-            return JsonSerializer.Serialize(new { success });
+            return JsonSerializer.Serialize(new { success }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
     public async Task<string> GetDashboardAsync(string propertyId)
@@ -433,11 +438,11 @@ public class OfflinePMSInterop
         try
         {
             var data = await _repo.GetDashboardAsync(propertyId);
-            return JsonSerializer.Serialize(new { success = true, data });
+            return JsonSerializer.Serialize(new { success = true, data }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
     public async Task<string> GetGuestsAsync()
@@ -445,11 +450,11 @@ public class OfflinePMSInterop
         try
         {
             var data = await _repo.GetGuestsAsync();
-            return JsonSerializer.Serialize(new { success = true, data });
+            return JsonSerializer.Serialize(new { success = true, data }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
     public async Task<string> GetRoomTypesAsync(string propertyId)
@@ -457,16 +462,16 @@ public class OfflinePMSInterop
         try
         {
             var data = await _repo.GetRoomTypesAsync(propertyId);
-            return JsonSerializer.Serialize(new { success = true, data });
+            return JsonSerializer.Serialize(new { success = true, data }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
     public async Task<string> LookupReservationByRoomAsync(string roomNo, string propertyId)
     {
-        return JsonSerializer.Serialize(new { success = false, error = "Room lookup is not available in offline mode." });
+        return JsonSerializer.Serialize(new { success = false, error = "Room lookup is not available in offline mode." }, _jsonOptions);
     }
     public async Task<string> CreateReservationAsync(string dataJson)
     {
@@ -476,11 +481,11 @@ public class OfflinePMSInterop
             if (data == null) throw new Exception("Invalid reservation data");
             
             var res = await _repo.CreateReservationAsync(data, "System", "Device1");
-            return JsonSerializer.Serialize(new { success = true, data = res });
+            return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
     public async Task<string> GetRoomsAsync(string propertyId)
@@ -488,11 +493,11 @@ public class OfflinePMSInterop
         try
         {
             var data = await _repo.GetRoomsAsync(propertyId);
-            return JsonSerializer.Serialize(new { success = true, data });
+            return JsonSerializer.Serialize(new { success = true, data }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
     public async Task<string> GetAvailableRoomsAsync(string propertyId, string roomTypeId, string checkIn, string checkOut)
@@ -502,32 +507,32 @@ public class OfflinePMSInterop
             var ci = DateTime.Parse(checkIn);
             var co = DateTime.Parse(checkOut);
             var data = await _repo.GetAvailableRoomsAsync(propertyId, roomTypeId, ci, co);
-            return JsonSerializer.Serialize(new { success = true, data });
+            return JsonSerializer.Serialize(new { success = true, data }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
     public async Task<string> ExtendStayAsync(string reservationId, string newCheckOutDate)
     {
-        return JsonSerializer.Serialize(new { success = true });
+        return JsonSerializer.Serialize(new { success = true }, _jsonOptions);
     }
     public async Task<string> GetFolioAsync(string folioId)
     {
-        return JsonSerializer.Serialize(new { success = true, data = new { } });
+        return JsonSerializer.Serialize(new { success = true, data = new { } }, _jsonOptions);
     }
     public async Task<string> GetHousekeepingTasksAsync(string propertyId)
     {
-        return JsonSerializer.Serialize(new { success = true, data = new object[] { } });
+        return JsonSerializer.Serialize(new { success = true, data = new object[] { } }, _jsonOptions);
     }
     public async Task<string> GetMaintenanceTicketsAsync(string propertyId)
     {
-        return JsonSerializer.Serialize(new { success = true, data = new object[] { } });
+        return JsonSerializer.Serialize(new { success = true, data = new object[] { } }, _jsonOptions);
     }
     public async Task<string> GenerateReceiptAsync(string folioId)
     {
-        return JsonSerializer.Serialize(new { success = true, data = new { } });
+        return JsonSerializer.Serialize(new { success = true, data = new { } }, _jsonOptions);
     }
 
     public async Task<string> GetPosProductsAsync(string propertyId)
@@ -599,11 +604,11 @@ public class OfflinePMSInterop
             order.CreatedBy = posCtx.StaffId;
 
             var res = await _repo.CreatePosOrderAsync(order, posCtx.StaffId, posCtx.DeviceId);
-            return JsonSerializer.Serialize(new { success = true, data = res });
+            return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 
@@ -613,11 +618,11 @@ public class OfflinePMSInterop
         {
             var posCtx = await _sessionManager.GetActiveContextAsync();
             var res = await _repo.SplitCheckAsync(orderId, itemIds, posCtx.StaffId, posCtx.DeviceId);
-            return JsonSerializer.Serialize(new { success = true, data = res });
+            return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 
@@ -672,11 +677,11 @@ public class OfflinePMSInterop
         {
             var posCtx = await _sessionManager.GetActiveContextAsync();
             var res = await _repo.UpdateOrderStatusAsync(orderId, status, reason, posCtx.StaffId, posCtx.DeviceId);
-            return JsonSerializer.Serialize(new { success = true, data = res });
+            return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 
@@ -702,19 +707,19 @@ public class OfflinePMSInterop
                 if (property != null) 
                 {
                     if (property.BankingModel == PosConstants.BankingModels.CentralCashier) {
-                        return JsonSerializer.Serialize(new { success = false, error = "Waiters cannot process payments. Please direct the guest to the Cashier." });
+                        return JsonSerializer.Serialize(new { success = false, error = "Waiters cannot process payments. Please direct the guest to the Cashier." }, _jsonOptions);
                     } else if (property.BankingModel == PosConstants.BankingModels.ServerBanking) {
-                        return JsonSerializer.Serialize(new { success = false, error = "No personal bank found. Please start your personal shift bank." });
+                        return JsonSerializer.Serialize(new { success = false, error = "No personal bank found. Please start your personal shift bank." }, _jsonOptions);
                     }
                 }
             }
 
             var res = await _repo.PayOrderAsync(orderId, method, amount, currency, checkId, posCtx.StaffId, posCtx.DeviceId);
-            return JsonSerializer.Serialize(new { success = true, data = res });
+            return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 
@@ -723,11 +728,11 @@ public class OfflinePMSInterop
         try
         {
             var res = await _repo.GetOrderAsync(orderId);
-            return JsonSerializer.Serialize(new { success = true, data = res });
+            return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 
@@ -736,11 +741,11 @@ public class OfflinePMSInterop
         try
         {
             var res = await _repo.GetReceiptAsync(orderId);
-            return JsonSerializer.Serialize(new { success = true, data = res });
+            return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 
@@ -750,11 +755,11 @@ public class OfflinePMSInterop
         {
             var ctx = await _sessionManager.GetActiveContextAsync();
             var res = await _repo.GetServerOrdersAsync(ctx.StaffId, ctx.PropertyId, range, statusFilter, sessionId);
-            return JsonSerializer.Serialize(new { success = true, data = res });
+            return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 
@@ -764,11 +769,11 @@ public class OfflinePMSInterop
         {
             var ctx = await _sessionManager.GetActiveContextAsync();
             var res = await _repo.GetServerSalesAsync(ctx.StaffId, ctx.PropertyId, range, sessionId);
-            return JsonSerializer.Serialize(new { success = true, data = res });
+            return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 
@@ -778,11 +783,11 @@ public class OfflinePMSInterop
         {
             var ctx = await GetSecureContextAsync();
             var res = await _repo.OpenPosSessionAsync(propertyId, openingBalance, ctx.UserId, ctx.DeviceId);
-            return JsonSerializer.Serialize(new { success = true, data = res });
+            return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 
@@ -792,11 +797,11 @@ public class OfflinePMSInterop
         {
             var ctx = await GetSecureContextAsync();
             var res = await _repo.SettleSessionAsync(sessionId, actualCash, ctx.UserId, null, ctx.DeviceId);
-            return JsonSerializer.Serialize(new { success = true, data = res });
+            return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 
@@ -806,11 +811,11 @@ public class OfflinePMSInterop
         {
             var ctx = await GetSecureContextAsync();
             var res = await _repo.ConfirmHandoverAsync(sessionId, managerPin, ctx.DeviceId);
-            return JsonSerializer.Serialize(new { success = true, data = res });
+            return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 
@@ -824,15 +829,15 @@ public class OfflinePMSInterop
             var authorizer = await _repo.ValidateSupervisorPinAsync(supervisorPin, posCtx.PropertyId);
             if (authorizer == null)
             {
-                return JsonSerializer.Serialize(new { success = false, error = "Invalid supervisor PIN or unauthorized." });
+                return JsonSerializer.Serialize(new { success = false, error = "Invalid supervisor PIN or unauthorized." }, _jsonOptions);
             }
 
             var res = await _repo.AuthorizeVoidAsync(orderId, orderItemId, reason, authorizer.Id, posCtx.StaffId, posCtx.DeviceId);
-            return JsonSerializer.Serialize(new { success = true, data = res });
+            return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 
@@ -846,15 +851,15 @@ public class OfflinePMSInterop
             var authorizer = await _repo.ValidateSupervisorPinAsync(supervisorPin, posCtx.PropertyId);
             if (authorizer == null)
             {
-                return JsonSerializer.Serialize(new { success = false, error = "Invalid supervisor PIN or unauthorized." });
+                return JsonSerializer.Serialize(new { success = false, error = "Invalid supervisor PIN or unauthorized." }, _jsonOptions);
             }
 
             var res = await _repo.RecordRefundAsync(orderId, amount, method, authorizer.Id, posCtx.StaffId, posCtx.DeviceId);
-            return JsonSerializer.Serialize(new { success = true, data = res });
+            return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
     public async Task<string> AuthorizeCashMovementAsync(string propertyId, string sessionId, decimal amount, string type, string reasonCode, string? notes, string supervisorPin)
@@ -868,7 +873,7 @@ public class OfflinePMSInterop
             if (authorizer == null)
             {
                 // Log failed attempt if needed, but definitely block
-                return JsonSerializer.Serialize(new { success = false, error = "Invalid supervisor PIN or unauthorized." });
+                return JsonSerializer.Serialize(new { success = false, error = "Invalid supervisor PIN or unauthorized." }, _jsonOptions);
             }
 
             // Create movement
@@ -877,11 +882,11 @@ public class OfflinePMSInterop
             // Log authorization explicitly
             await _repo.LogAuthorizationAsync(propertyId, sessionId, ctx.UserId, authorizer.Id, type, reasonCode, res.OperationId, ctx.DeviceId);
 
-            return JsonSerializer.Serialize(new { success = true, data = res });
+            return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 
@@ -892,11 +897,11 @@ public class OfflinePMSInterop
             var ctx = await GetSecureContextAsync();
             
             var res = await _repo.RecordReceiptPrintAsync(propertyId, orderId, sessionId, type, reason, printCount, ctx.UserId, ctx.DeviceId);
-            return JsonSerializer.Serialize(new { success = true, data = res });
+            return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 
@@ -905,11 +910,11 @@ public class OfflinePMSInterop
         try
         {
             await _sessionManager.KeepAliveAsync();
-            return JsonSerializer.Serialize(new { success = true });
+            return JsonSerializer.Serialize(new { success = true }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 
@@ -924,11 +929,11 @@ public class OfflinePMSInterop
             var staff = await _repo.GetStaffByIdAsync(staffId);
             
             // Return the OperatorTokenVersion as the secure token to React
-            return JsonSerializer.Serialize(new { success = true, data = new { operatorToken = ctx.OperatorTokenVersion, staff, permissions = new[] { staff.Role } } });
+            return JsonSerializer.Serialize(new { success = true, data = new { operatorToken = ctx.OperatorTokenVersion, staff, permissions = new[] { staff.Role } } }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 
@@ -941,14 +946,14 @@ public class OfflinePMSInterop
             
             if (supervisor == null)
             {
-                return JsonSerializer.Serialize(new { success = false, error = "Invalid supervisor PIN or unauthorized." });
+                return JsonSerializer.Serialize(new { success = false, error = "Invalid supervisor PIN or unauthorized." }, _jsonOptions);
             }
             
-            return JsonSerializer.Serialize(new { success = true, data = new { staffId = supervisor.Id, name = $"{supervisor.FirstName} {supervisor.LastName}" } });
+            return JsonSerializer.Serialize(new { success = true, data = new { staffId = supervisor.Id, name = $"{supervisor.FirstName} {supervisor.LastName}" } }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 
@@ -957,11 +962,11 @@ public class OfflinePMSInterop
         try
         {
             var res = await _repo.GetActiveStaffAsync(propertyId);
-            return JsonSerializer.Serialize(new { success = true, data = res });
+            return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 
@@ -972,11 +977,11 @@ public class OfflinePMSInterop
         try
         {
             var res = await _repo.GetProductModifiersAsync(productId);
-            return JsonSerializer.Serialize(new { success = true, data = res });
+            return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 
@@ -985,11 +990,11 @@ public class OfflinePMSInterop
         try
         {
             var res = await _repo.GetAuthorizedOutletsAsync(propertyId, deviceId);
-            return JsonSerializer.Serialize(new { success = true, data = res });
+            return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 
@@ -1045,11 +1050,11 @@ public class OfflinePMSInterop
         {
             var ctx = await GetSecureContextAsync();
             var session = await _repo.GetCurrentOperatorSessionAsync(ctx.DeviceId, sessionId);
-            return JsonSerializer.Serialize(new { success = true, data = session });
+            return JsonSerializer.Serialize(new { success = true, data = session }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 
@@ -1061,11 +1066,11 @@ public class OfflinePMSInterop
             // If they pass null/empty or it's for their own session, we use the active one
             string targetSession = string.IsNullOrEmpty(sessionId) ? posCtx.SessionId : sessionId;
             var movements = await _repo.GetCashMovementsAsync(targetSession);
-            return JsonSerializer.Serialize(new { success = true, data = movements });
+            return JsonSerializer.Serialize(new { success = true, data = movements }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 
@@ -1094,11 +1099,11 @@ public class OfflinePMSInterop
                     transfersOut = details.TransfersOut,
                     cashRefunds = details.CashRefunds
                 }
-            });
+            }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 
@@ -1109,11 +1114,11 @@ public class OfflinePMSInterop
             var posCtx = await _sessionManager.GetActiveContextAsync();
             // Enforce identity
             var movement = await _repo.RecordCashMovementAsync(posCtx.PropertyId, posCtx.SessionId, amount, type, reasonCode, notes, receiptReference, authorizerId, posCtx.StaffId, posCtx.DeviceId);
-            return JsonSerializer.Serialize(new { success = true, data = movement });
+            return JsonSerializer.Serialize(new { success = true, data = movement }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 
@@ -1128,27 +1133,27 @@ public class OfflinePMSInterop
             // Log out the operator securely after settling
             await _sessionManager.ClearOperatorSessionAsync();
             
-            return JsonSerializer.Serialize(new { success = true, data = settlement });
+            return JsonSerializer.Serialize(new { success = true, data = settlement }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
     public async Task<string> GetPendingHandoversAsync(string propertyId)
     {
         try {
             var data = await _repo.GetPendingHandoversAsync(propertyId);
-            return JsonSerializer.Serialize(new { success = true, data });
-        } catch (Exception ex) { return JsonSerializer.Serialize(new { success = false, error = ex.Message }); }
+            return JsonSerializer.Serialize(new { success = true, data }, _jsonOptions);
+        } catch (Exception ex) { return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions); }
     }
 
     public async Task<string> GetCashOfficeOverviewAsync(string propertyId)
     {
         try {
             var data = await _repo.GetCashOfficeOverviewAsync(propertyId);
-            return JsonSerializer.Serialize(new { success = true, data });
-        } catch (Exception ex) { return JsonSerializer.Serialize(new { success = false, error = ex.Message }); }
+            return JsonSerializer.Serialize(new { success = true, data }, _jsonOptions);
+        } catch (Exception ex) { return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions); }
     }
 
     public async Task<string> OpenSafeAsync(string propertyId, decimal amount, string managerPin)
@@ -1156,16 +1161,16 @@ public class OfflinePMSInterop
         try {
             var ctx = await _sessionManager.GetActiveContextAsync();
             var data = await _repo.OpenSafeAsync(propertyId, amount, managerPin, ctx.DeviceId);
-            return JsonSerializer.Serialize(new { success = true, data });
-        } catch (Exception ex) { return JsonSerializer.Serialize(new { success = false, error = ex.Message }); }
+            return JsonSerializer.Serialize(new { success = true, data }, _jsonOptions);
+        } catch (Exception ex) { return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions); }
     }
 
     public async Task<string> GetSafeLedgerAsync(string propertyId)
     {
         try {
             var data = await _repo.GetSafeLedgerAsync(propertyId);
-            return JsonSerializer.Serialize(new { success = true, data });
-        } catch (Exception ex) { return JsonSerializer.Serialize(new { success = false, error = ex.Message }); }
+            return JsonSerializer.Serialize(new { success = true, data }, _jsonOptions);
+        } catch (Exception ex) { return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions); }
     }
 
     public async Task<string> RecordBankDepositAsync(string propertyId, decimal amount, string reference, string managerPin)
@@ -1173,8 +1178,8 @@ public class OfflinePMSInterop
         try {
             var ctx = await _sessionManager.GetActiveContextAsync();
             var data = await _repo.RecordBankDepositAsync(propertyId, amount, reference, managerPin, ctx.DeviceId);
-            return JsonSerializer.Serialize(new { success = true, data });
-        } catch (Exception ex) { return JsonSerializer.Serialize(new { success = false, error = ex.Message }); }
+            return JsonSerializer.Serialize(new { success = true, data }, _jsonOptions);
+        } catch (Exception ex) { return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions); }
     }
 
     public async Task<string> OpenCashDrawerAsync()
@@ -1185,11 +1190,11 @@ public class OfflinePMSInterop
             // For now, log the event for audit trail
             var ctx = await GetSecureContextAsync();
             await _repo.LogHardwareEventAsync(ctx.UserId, ctx.DeviceId, "CASH_DRAWER_OPEN", null);
-            return JsonSerializer.Serialize(new { success = true, message = "Cash drawer opened" });
+            return JsonSerializer.Serialize(new { success = true, message = "Cash drawer opened" }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 
@@ -1206,14 +1211,14 @@ public class OfflinePMSInterop
             );
 
             if (receipt == null)
-                return JsonSerializer.Serialize(new { success = false, error = "Invalid receipt data" });
+                return JsonSerializer.Serialize(new { success = false, error = "Invalid receipt data" }, _jsonOptions);
 
             var (success, error) = await _escPos.PrintReceiptAsync(receipt, ctx.OutletId);
-            return JsonSerializer.Serialize(new { success, error });
+            return JsonSerializer.Serialize(new { success, error }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 
@@ -1230,14 +1235,14 @@ public class OfflinePMSInterop
             );
 
             if (kot == null)
-                return JsonSerializer.Serialize(new { success = false, error = "Invalid KOT data" });
+                return JsonSerializer.Serialize(new { success = false, error = "Invalid KOT data" }, _jsonOptions);
 
             var (success, error) = await _escPos.PrintKotAsync(kot, ctx.OutletId);
-            return JsonSerializer.Serialize(new { success, error });
+            return JsonSerializer.Serialize(new { success, error }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 
@@ -1249,11 +1254,11 @@ public class OfflinePMSInterop
         {
             var ctx = await GetSecureContextAsync();
             var printers = await _escPos.GetPrintersAsync(ctx.OutletId);
-            return JsonSerializer.Serialize(new { success = true, data = printers });
+            return JsonSerializer.Serialize(new { success = true, data = printers }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 
@@ -1267,15 +1272,15 @@ public class OfflinePMSInterop
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
             );
             if (config == null)
-                return JsonSerializer.Serialize(new { success = false, error = "Invalid printer config" });
+                return JsonSerializer.Serialize(new { success = false, error = "Invalid printer config" }, _jsonOptions);
 
             if (string.IsNullOrEmpty(config.Id)) config.Id = Guid.NewGuid().ToString();
             var saved = await _escPos.SavePrinterAsync(config);
-            return JsonSerializer.Serialize(new { success = true, data = saved });
+            return JsonSerializer.Serialize(new { success = true, data = saved }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 
@@ -1285,11 +1290,11 @@ public class OfflinePMSInterop
         {
             await GetSecureContextAsync();
             await _escPos.DeletePrinterAsync(printerId);
-            return JsonSerializer.Serialize(new { success = true });
+            return JsonSerializer.Serialize(new { success = true }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 
@@ -1299,11 +1304,11 @@ public class OfflinePMSInterop
         {
             await GetSecureContextAsync();
             var (success, message) = await _escPos.TestConnectionAsync(ip, port);
-            return JsonSerializer.Serialize(new { success, message });
+            return JsonSerializer.Serialize(new { success, message }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 
@@ -1314,11 +1319,11 @@ public class OfflinePMSInterop
             var ctx = await GetSecureContextAsync();
             // TODO: Send via WebSocket or local network to KDS display
             await _repo.LogHardwareEventAsync(ctx.UserId, ctx.DeviceId, "KDS_ORDER_SENT", orderDataJson);
-            return JsonSerializer.Serialize(new { success = true, message = "Order sent to KDS" });
+            return JsonSerializer.Serialize(new { success = true, message = "Order sent to KDS" }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 
@@ -1328,11 +1333,11 @@ public class OfflinePMSInterop
         {
             var ctx = await GetSecureContextAsync();
             await _repo.LogHardwareEventAsync(ctx.UserId, ctx.DeviceId, $"KDS_STATUS_{status}", $"order:{orderId} item:{itemId}");
-            return JsonSerializer.Serialize(new { success = true });
+            return JsonSerializer.Serialize(new { success = true }, _jsonOptions);
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
 }

@@ -29,6 +29,8 @@ namespace LodgeCore.Desktop;
 /// </summary>
 public class HardwareInterop
 {
+    private static readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+
     private readonly ILockProvider _lockProvider;
     private readonly AuthManager _authManager;
     private readonly IServiceScopeFactory _scopeFactory;
@@ -167,7 +169,7 @@ public class HardwareInterop
                     : $"HARDWARE_ERROR - {result.ErrorMessage}",
                 cardSnr: result.CardSnr);
 
-            return JsonSerializer.Serialize(new { success = result.Success, data = result });
+            return JsonSerializer.Serialize(new { success = result.Success, data = result }, _jsonOptions);
         }
         catch (Exception ex)
         {
@@ -372,7 +374,7 @@ public class HardwareInterop
                     : $"HARDWARE_ERROR - {encodeResult.ErrorMessage}",
                 roomId, reservationId);
 
-            return JsonSerializer.Serialize(new { success = encodeResult.Success, data = encodeResult });
+            return JsonSerializer.Serialize(new { success = encodeResult.Success, data = encodeResult }, _jsonOptions);
         }
         catch (Exception ex)
         {
@@ -409,7 +411,7 @@ public class HardwareInterop
                     ? "SUCCESS"
                     : $"HARDWARE_ERROR - {result.ErrorMessage}");
 
-            return JsonSerializer.Serialize(new { success = result.Success, data = result });
+            return JsonSerializer.Serialize(new { success = result.Success, data = result }, _jsonOptions);
         }
         catch (Exception ex)
         {
@@ -420,5 +422,5 @@ public class HardwareInterop
 
     // -----------------------------------------------------------------------
     private static string Fail(string message)
-        => JsonSerializer.Serialize(new { success = false, error = message });
+        => JsonSerializer.Serialize(new { success = false, error = message }, _jsonOptions);
 }
