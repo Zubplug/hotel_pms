@@ -115,6 +115,12 @@ public partial class MainPage : ContentPage
                 case "system.getTerminalStatus":
                     responseData = await pmsInterop.GetTerminalStatusAsync();
                     break;
+                case "system.forceSync":
+                    responseData = await pmsInterop.ForceSyncAsync();
+                    break;
+                case "system.getSyncHealth":
+                    responseData = await pmsInterop.GetSyncHealthAsync();
+                    break;
                 case "system.provisionTerminal":
                     responseData = await pmsInterop.ProvisionTerminalAsync(
                         parameters?["email"]?.ToString(),

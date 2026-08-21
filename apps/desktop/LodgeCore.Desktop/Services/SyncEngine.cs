@@ -23,20 +23,32 @@ public class SyncEngine : BackgroundService
     // We can wire this to MAUI Connectivity events. For now, assume online.
     private bool _isOnline = true; 
     private int _consecutiveFailures = 0; // Tracks failures for exponential backoff
+    private bool _isSyncing = false;
+    private readonly SemaphoreSlim _forceSyncSemaphore = new SemaphoreSlim(0, 1);
 
-    public enum SyncState { Syncing, Pending, Error, Offline, UpToDate }
+    public enum NetworkState { ONLINE, OFFLINE }
+    public enum SyncState { NEVER_SYNCED, SYNCING, UP_TO_DATE, ERROR }
     
     public class SyncHealthInfo
     {
-        public SyncState State { get; set; }
-        public DateTime LastSuccessfulSync { get; set; }
+        public NetworkState Network { get; set; }
+        public SyncState Sync { get; set; }
+        public DateTime? LastSyncAt { get; set; }
+        public string? LastError { get; set; }
+        public string? Phase { get; set; }
+        public int Current { get; set; }
+        public int Total { get; set; }
+        public string? Message { get; set; }
         public int PendingOperations { get; set; }
-        public string ErrorMessage { get; set; }
     }
 
     public static event Action<SyncHealthInfo> OnSyncHealthChanged;
     
-    private DateTime _lastSuccess = DateTime.MinValue;
+    public static SyncEngine? Instance { get; private set; }
+
+    private DateTime? _lastSuccess = null;
+    private string? _lastError = null;
+    private SyncState _lastSyncState = SyncState.NEVER_SYNCED;
 
     public SyncEngine(IServiceProvider serviceProvider, ILogger<SyncEngine> logger, AuthManager authManager, HttpClient httpClient, ICredentialStorageService credentialStorage)
     {
@@ -45,6 +57,16 @@ public class SyncEngine : BackgroundService
         _authManager = authManager;
         _httpClient = httpClient;
         _credentialStorage = credentialStorage;
+        Instance = this;
+    }
+
+    public void TriggerManualSync()
+    {
+        if (_isSyncing) return;
+        if (_forceSyncSemaphore.CurrentCount == 0)
+        {
+            _forceSyncSemaphore.Release();
+        }
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -55,9 +77,10 @@ public class SyncEngine : BackgroundService
         {
             if (_isOnline)
             {
+                _isSyncing = true;
                 try
                 {
-                    BroadcastHealth(SyncState.Syncing, "Syncing...");
+                    BroadcastHealth(SyncState.SYNCING, null, "PREP", 0, 1, "Preparing sync...");
                     await PushPendingEventsAsync(stoppingToken);
                     await PushKeycardAuditsAsync(stoppingToken);
                     
@@ -73,25 +96,47 @@ public class SyncEngine : BackgroundService
                 catch (Exception ex)
                 {
                     _consecutiveFailures++;
+                    _lastError = SanitizeErrorMessage(ex.Message);
                     _logger.LogError(ex, $"An error occurred during the sync cycle. Failure count: {_consecutiveFailures}");
-                    BroadcastHealth(SyncState.Error, ex.Message);
+                    BroadcastHealth(SyncState.ERROR, _lastError);
+                }
+                finally
+                {
+                    _isSyncing = false;
                 }
             }
             else
             {
-                BroadcastHealth(SyncState.Offline, "Device is offline");
+                BroadcastHealth(_lastSyncState, "Device is offline");
             }
 
             // Exponential backoff logic: Max 5 minutes (300 seconds), Base 30 seconds
             var delaySeconds = Math.Min(300, 30 * Math.Pow(2, _consecutiveFailures));
-            await Task.Delay(TimeSpan.FromSeconds(delaySeconds), stoppingToken);
+            try 
+            {
+                await _forceSyncSemaphore.WaitAsync(TimeSpan.FromSeconds(delaySeconds), stoppingToken);
+            }
+            catch (OperationCanceledException) { }
         }
 
         _logger.LogInformation("SyncEngine is stopping.");
     }
 
-    private void BroadcastHealth(SyncState state, string? message = null)
+    private string SanitizeErrorMessage(string rawMessage)
     {
+        // Simple sanitization to hide sensitive details from UI
+        if (string.IsNullOrEmpty(rawMessage)) return "Unknown error occurred";
+        if (rawMessage.Contains("401") || rawMessage.Contains("403")) return "Authentication failed";
+        if (rawMessage.Contains("Token")) return "Invalid security token";
+        if (rawMessage.Contains("Connection refused")) return "Could not connect to cloud server";
+        return "Synchronization failed";
+    }
+
+    private void BroadcastHealth(SyncState state, string? error = null, string? phase = null, int current = 0, int total = 0, string? message = null)
+    {
+        _lastSyncState = state;
+        if (error != null) _lastError = SanitizeErrorMessage(error);
+
         using var scope = _serviceProvider.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
         
@@ -102,18 +147,48 @@ public class SyncEngine : BackgroundService
         } 
         catch { }
 
-        if (state == SyncState.Syncing && pendingCount == 0)
+        if (state == SyncState.SYNCING && pendingCount == 0 && string.IsNullOrEmpty(phase))
         {
-            state = SyncState.UpToDate;
+            // Just starting push phase, keep syncing state
+        }
+        else if (state == SyncState.SYNCING && phase == null)
+        {
+            // Legacy call compatibility
         }
 
         OnSyncHealthChanged?.Invoke(new SyncHealthInfo
         {
-            State = state,
-            LastSuccessfulSync = _lastSuccess,
+            Network = _isOnline ? NetworkState.ONLINE : NetworkState.OFFLINE,
+            Sync = state,
+            LastSyncAt = _lastSuccess,
             PendingOperations = pendingCount,
-            ErrorMessage = message
+            LastError = _lastError,
+            Phase = phase,
+            Current = current,
+            Total = total,
+            Message = message
         });
+    }
+
+    public SyncHealthInfo GetCurrentHealth()
+    {
+        int pendingCount = 0;
+        try 
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
+            pendingCount = dbContext.SyncEvents.Count(e => e.Status == "PENDING" || e.Status == "FAILED");
+        } 
+        catch { }
+
+        return new SyncHealthInfo
+        {
+            Network = _isOnline ? NetworkState.ONLINE : NetworkState.OFFLINE,
+            Sync = _lastSyncState,
+            LastSyncAt = _lastSuccess,
+            PendingOperations = pendingCount,
+            LastError = _lastError
+        };
     }
 
     /// <summary>
@@ -346,8 +421,14 @@ public class SyncEngine : BackgroundService
             if (root.TryGetProperty("staff", out var staffArray))
             {
                 var incomingStaffIds = new HashSet<string>();
+                var staffArrayLength = staffArray.GetArrayLength();
+                var currentIndex = 0;
+
                 foreach (var staffEl in staffArray.EnumerateArray())
                 {
+                    currentIndex++;
+                    BroadcastHealth(SyncState.SYNCING, null, "STAFF", currentIndex, staffArrayLength, "Downloading staff...");
+
                     var staffId = staffEl.GetProperty("id").GetString() ?? "";
                     if (string.IsNullOrEmpty(staffId)) continue;
 
@@ -412,7 +493,8 @@ public class SyncEngine : BackgroundService
             await dbContext.SaveChangesAsync(cancellationToken);
             _consecutiveFailures = 0;
             _lastSuccess = DateTime.UtcNow;
-            BroadcastHealth(SyncState.UpToDate);
+            _lastError = null;
+            BroadcastHealth(SyncState.UP_TO_DATE, null, "COMPLETE", 1, 1, "Sync complete");
             _logger.LogInformation("Sync pull completed successfully.");
         }
         catch (HttpRequestException ex)

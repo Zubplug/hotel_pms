@@ -31,8 +31,8 @@ export default function ProvisionTerminalPage() {
         throw new Error(res.error || 'Provisioning failed');
       }
 
-      // Redirect back to root desktop which will now see REGISTERED and show Operator selection
-      router.push('/desktop');
+      // Redirect to the new Setup Sync screen to hydrate the database
+      router.push('/desktop/setup-sync');
     } catch (err: any) {
       console.error('Provisioning failed:', err);
       alert(`Provisioning failed: ${err.message || 'Check logs'}`);

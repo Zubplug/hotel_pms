@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { PinPad } from './PinPad';
+import { Wifi, WifiOff, RefreshCw } from 'lucide-react';
 
 type OperatorSelectionScreenProps = {
   isOpen: boolean;
@@ -29,6 +30,10 @@ export function OperatorSelectionScreen({ isOpen, onAuthenticated, onCancel, can
   const [bankState, setBankState] = useState<'NONE' | 'NEEDS_SERVER_BANK' | 'CENTRAL_CASHIER_UNAVAILABLE'>('NONE');
   const [openingFloat, setOpeningFloat] = useState<string>('0');
   const [authData, setAuthData] = useState<{ operator: any, token: string } | null>(null);
+  const [isFetchingStaff, setIsFetchingStaff] = useState(true);
+  
+  // Use the context's network/sync status for the header
+  const { isOnline, syncStatus } = useLodgeCoreProvider();
 
   useEffect(() => {
     if (!isOpen) return;
@@ -46,6 +51,8 @@ export function OperatorSelectionScreen({ isOpen, onAuthenticated, onCancel, can
         }
       }).catch(err => {
         console.error("Desktop getActiveStaff threw exception:", err);
+      }).finally(() => {
+        setIsFetchingStaff(false);
       });
     } else if (propertyId) {
       provider.pos.getActiveStaff(propertyId).then(res => {
@@ -60,6 +67,8 @@ export function OperatorSelectionScreen({ isOpen, onAuthenticated, onCancel, can
         }
       }).catch(err => {
         console.error("POS getActiveStaff threw exception:", err);
+      }).finally(() => {
+        setIsFetchingStaff(false);
       });
     }
   }, [isOpen, propertyId, provider, isDesktopMode]);
@@ -198,7 +207,15 @@ export function OperatorSelectionScreen({ isOpen, onAuthenticated, onCancel, can
         <div className="flex-1 bg-slate-50 p-10 border-r border-slate-200 h-[640px] overflow-y-auto">
           <div className="flex items-center justify-between mb-8">
             <div>
-              <h2 className="text-3xl font-bold text-slate-800 tracking-tight">Select Operator</h2>
+              <div className="flex items-center gap-3 mb-2">
+                <h2 className="text-3xl font-bold text-slate-800 tracking-tight">Select Operator</h2>
+                {isDesktopMode && (
+                  <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${isOnline ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-600'}`}>
+                    {isOnline ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
+                    {isOnline ? 'Online' : 'Offline'}
+                  </div>
+                )}
+              </div>
               <p className="text-slate-500 mt-1">Tap your profile to sign in</p>
             </div>
             {cancellable && (
@@ -233,9 +250,36 @@ export function OperatorSelectionScreen({ isOpen, onAuthenticated, onCancel, can
               </button>
             ))}
             
-            {staff.length === 0 && (
+            {staff.length === 0 && isFetchingStaff && (
               <div className="col-span-2 text-center text-slate-500 py-12">
                 Loading staff profiles...
+              </div>
+            )}
+
+            {staff.length === 0 && !isFetchingStaff && (
+              <div className="col-span-2 flex flex-col items-center justify-center text-center p-8 bg-white border border-slate-200 rounded-3xl shadow-sm">
+                <div className="w-16 h-16 rounded-full bg-amber-50 text-amber-500 flex items-center justify-center mb-4">
+                  <AlertCircle className="w-8 h-8" />
+                </div>
+                <h3 className="text-xl font-bold text-slate-800 mb-2">No Profiles Found</h3>
+                <p className="text-slate-500 text-sm mb-6 max-w-xs">
+                  Your terminal needs an initial sync to download staff profiles before you can sign in.
+                </p>
+                {isDesktopMode && provider.system?.forceSync && (
+                  <Button onClick={() => {
+                    provider.system?.forceSync?.();
+                    setIsFetchingStaff(true);
+                    setTimeout(() => {
+                      provider.auth.getActiveStaff().then(res => {
+                        if (res?.data) setStaff(res.data);
+                        setIsFetchingStaff(false);
+                      });
+                    }, 2000);
+                  }} size="lg" className="rounded-xl">
+                    <RefreshCw className="w-5 h-5 mr-2" />
+                    Sync Now
+                  </Button>
+                )}
               </div>
             )}
           </div>

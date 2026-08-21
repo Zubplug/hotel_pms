@@ -31,6 +31,12 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     },
     provisionTerminal: async (data: any) => {
       return invokeDesktop('system.provisionTerminal', data);
+    },
+    forceSync: async () => {
+      return invokeDesktop('system.forceSync');
+    },
+    getSyncHealth: async () => {
+      return invokeDesktop('system.getSyncHealth');
     }
   },
   properties: {

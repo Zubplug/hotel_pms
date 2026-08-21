@@ -11,6 +11,8 @@ export interface LodgeCoreDataProvider {
   system?: {
     getTerminalStatus?: () => Promise<any>;
     provisionTerminal?: (data: any) => Promise<any>;
+    forceSync?: () => Promise<any>;
+    getSyncHealth?: () => Promise<any>;
   };
   properties: {
     list(): Promise<any>;

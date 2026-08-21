@@ -65,6 +65,43 @@ public class OfflinePMSInterop
         }
     }
 
+    public async Task<string> ForceSyncAsync()
+    {
+        try
+        {
+            if (SyncEngine.Instance != null)
+            {
+                SyncEngine.Instance.TriggerManualSync();
+                return JsonSerializer.Serialize(new { success = true }, _jsonOptions);
+            }
+            return JsonSerializer.Serialize(new { success = false, error = "SyncEngine not running" }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
+    public async Task<string> GetSyncHealthAsync()
+    {
+        try
+        {
+            if (SyncEngine.Instance != null)
+            {
+                var health = SyncEngine.Instance.GetCurrentHealth();
+                // Ensure Enums are serialized as strings
+                var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+                options.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+                return JsonSerializer.Serialize(new { success = true, data = health }, options);
+            }
+            return JsonSerializer.Serialize(new { success = false, error = "SyncEngine not running" }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
     public async Task<string> ProvisionDeviceAsync(string deviceToken)
     {
         try
