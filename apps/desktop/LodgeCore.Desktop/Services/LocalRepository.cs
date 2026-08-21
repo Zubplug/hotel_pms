@@ -581,7 +581,7 @@ public class LocalRepository
         return session;
     }
 
-    public async Task<LocalPosOrder> GetOrderAsync(string orderId)
+    public async Task<LocalPosOrder?> GetOrderAsync(string orderId)
     {
         var order = await _dbContext.PosOrders
             .Include(o => o.Items)
@@ -798,7 +798,7 @@ public class LocalRepository
     }
 
     /// <summary>Returns a single staff member by Id.</summary>
-    public async Task<LocalStaff> GetStaffByIdAsync(string staffId)
+    public async Task<LocalStaff?> GetStaffByIdAsync(string staffId)
     {
         return await _dbContext.Staff.FirstOrDefaultAsync(s => s.Id == staffId);
     }
@@ -979,7 +979,8 @@ public class LocalRepository
                 payload: account,
                 terminalId: null, // Global to property usually
                 sessionId: null,
-                outletId: null
+                outletId: null,
+                operatorId: null
             );
             await _dbContext.SaveChangesAsync();
         }
@@ -1659,7 +1660,7 @@ public class LocalRepository
         return await _dbContext.PosOutlets.FirstOrDefaultAsync(o => o.Id == outletId);
     }
 
-    public async Task<LocalPosSession> GetSessionContextAsync(string sessionId)
+    public async Task<LocalPosSession?> GetSessionContextAsync(string sessionId)
     {
         return await _dbContext.PosSessions.FirstOrDefaultAsync(s => s.Id == sessionId);
     }
@@ -1774,7 +1775,7 @@ public class LocalRepository
         });
         await _dbContext.SaveChangesAsync();
     }
-    public void AppendSyncEvent(string entityType, string entityId, string operationType, object payload, string terminalId, string outletId, string sessionId, string operatorId)
+    public void AppendSyncEvent(string entityType, string entityId, string operationType, object payload, string? terminalId, string? outletId, string? sessionId, string? operatorId)
     {
         var payloadJson = System.Text.Json.JsonSerializer.Serialize(payload);
         var hashBytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(payloadJson));
@@ -1904,7 +1905,8 @@ public class LocalRepository
             payload: newAccount,
             terminalId: deviceId,
             sessionId: sessionId,
-            outletId: outletId
+            outletId: outletId,
+            operatorId: managerId
         );
 
         AppendSyncEvent(

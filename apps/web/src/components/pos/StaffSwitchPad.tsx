@@ -126,7 +126,7 @@ export function StaffSwitchPad({ isOpen, onAuthenticated, onCancel, cancellable 
                   <User className="w-6 h-6" />
                 </div>
                 <span className="font-semibold text-slate-800">{s.firstName} {s.lastName}</span>
-                <span className="text-xs text-slate-500 mt-1">{s.role}</span>
+                <span className="text-xs text-slate-500 mt-1">{s.role || s.position}</span>
               </button>
             ))}
             

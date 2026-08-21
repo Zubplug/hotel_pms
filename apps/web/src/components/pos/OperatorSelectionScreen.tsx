@@ -151,7 +151,7 @@ export function OperatorSelectionScreen({ isOpen, onAuthenticated, onCancel, can
                   <User className="w-8 h-8" />
                 </div>
                 <span className="font-semibold text-lg text-slate-800 tracking-tight">{s.firstName} {s.lastName}</span>
-                <span className="text-sm font-medium text-slate-500 mt-1">{s.role}</span>
+                <span className="text-sm font-medium text-slate-500 mt-1">{s.role || s.position}</span>
               </button>
             ))}
             

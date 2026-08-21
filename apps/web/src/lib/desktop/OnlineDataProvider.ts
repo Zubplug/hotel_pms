@@ -209,17 +209,17 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
       return apiFetchResult(`/api/v1/pos/products?propertyId=${propertyId}`);
     },
     getCategories: async (propertyId: string) => {
-      return apiFetch(`/api/v1/pos/categories?propertyId=${propertyId}`);
+      return apiFetchResult(`/api/v1/pos/categories?propertyId=${propertyId}`);
     },
     getActiveStaff: async (propertyId: string) => {
-      return apiFetch(`/api/v1/pos/staff?propertyId=${propertyId}`);
+      return apiFetchResult(`/api/v1/pos/staff?propertyId=${propertyId}`);
     },
     getCurrentOperator: async (sessionId: string, operatorToken?: string | null) => {
       const headers: Record<string, string> = operatorToken ? { Authorization: `Bearer ${operatorToken}` } : {};
-      return apiFetch(`/api/v1/pos/operator?sessionId=${sessionId}`, { headers });
+      return apiFetchResult(`/api/v1/pos/operator?sessionId=${sessionId}`, { headers });
     },
     authenticateOperator: async (staffId: string, pin: string, propertyId: string, sessionId: string, outletId?: string, deviceId?: string) => {
-      return apiFetch(`/api/v1/pos/auth`, {
+      return apiFetchResult(`/api/v1/pos/auth`, {
         method: 'POST',
         body: JSON.stringify({ staffId, pin, propertyId, sessionId, outletId, deviceId })
       });
@@ -228,10 +228,10 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
       return Promise.resolve({ data: null, error: 'Not implemented online' });
     },
     getAuthorizedOutlets: async (propertyId: string, deviceId: string) => {
-      return apiFetch(`/api/v1/pos/outlets/authorized?propertyId=${propertyId}&deviceId=${deviceId}`);
+      return apiFetchResult(`/api/v1/pos/outlets/authorized?propertyId=${propertyId}&deviceId=${deviceId}`);
     },
     startSession: async (data: { userId: string; propertyId: string; deviceId: string; outletId: string; openingCash: number }) => {
-      return apiFetch(`/api/v1/pos/sessions`, {
+      return apiFetchResult(`/api/v1/pos/sessions`, {
         method: 'POST',
         body: JSON.stringify(data)
       });
@@ -243,147 +243,136 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
         deviceId = localStorage.getItem('lodgecore_pos_device_id') || 'web-browser';
         outletId = localStorage.getItem('lodgecore_pos_outlet_id') || '';
       }
-      return apiFetch(`/api/v1/pos/sessions/emergency-bank`, {
+      return apiFetchResult(`/api/v1/pos/sessions/emergency-bank`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${operatorToken}` },
         body: JSON.stringify({ pin, reason, deviceId, outletId })
       });
     },
     getSessionContext: async (sessionId: string) => {
-      return apiFetch(`/api/v1/pos/sessions/${sessionId}`);
+      return apiFetchResult(`/api/v1/pos/sessions/${sessionId}/context`);
     },
     getFloorPlans: async (outletId: string, operatorToken?: string | null) => {
       const headers: Record<string, string> = operatorToken ? { Authorization: `Bearer ${operatorToken}` } : {};
-      return apiFetch(`/api/v1/pos/outlets/${outletId}/floor-plans`, { headers });
+      return apiFetchResult(`/api/v1/pos/outlets/${outletId}/floor-plans`, { headers });
     },
     getTables: async (floorPlanId: string, operatorToken?: string | null) => {
       const headers: Record<string, string> = operatorToken ? { Authorization: `Bearer ${operatorToken}` } : {};
-      return apiFetch(`/api/v1/pos/floor-plans/${floorPlanId}/tables`, { headers });
+      return apiFetchResult(`/api/v1/pos/floor-plans/${floorPlanId}/tables`, { headers });
     },
     getProductModifiers: async (productId: string) => {
-      return apiFetch(`/api/v1/pos/products/${productId}/modifiers`);
+      return apiFetchResult(`/api/v1/pos/products/${productId}/modifiers`);
     },
     splitCheck: async (orderId: string, itemIds: string[], userId: string) => {
-      return apiFetch(`/api/v1/pos/orders/${orderId}/split`, {
+      return apiFetchResult(`/api/v1/pos/orders/${orderId}/split`, {
         method: 'POST',
-        body: JSON.stringify({ itemIds, userId }),
+        body: JSON.stringify({ itemIds, userId })
       });
     },
     fireKot: async (orderId: string, itemIds: string[], operatorToken: string) => {
-      return apiFetch(`/api/v1/pos/orders/${orderId}/fire`, {
+      return apiFetchResult(`/api/v1/pos/orders/${orderId}/fire`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${operatorToken}` },
-        body: JSON.stringify({ itemIds }),
+        body: JSON.stringify({ itemIds })
       });
     },
     createOrder: async (data: any, operatorToken: string) => {
-      return apiFetch(`/api/v1/pos/orders`, {
+      return apiFetchResult(`/api/v1/pos/orders`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${operatorToken}` },
-        body: JSON.stringify(data),
+        body: JSON.stringify(data)
       });
     },
     updateOrderStatus: async (orderId: string, status: string, reason?: string) => {
-      return apiFetch(`/api/v1/pos/orders/${orderId}/status`, {
+      return apiFetchResult(`/api/v1/pos/orders/${orderId}/status`, {
         method: 'PATCH',
-        body: JSON.stringify({ status, reason }),
+        body: JSON.stringify({ status, reason })
       });
     },
     payOrder: async (orderId: string, paymentData: any, operatorToken: string) => {
-      return apiFetch(`/api/v1/pos/orders/${orderId}/pay`, {
+      return apiFetchResult(`/api/v1/pos/orders/${orderId}/pay`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${operatorToken}` },
-        body: JSON.stringify(paymentData),
+        body: JSON.stringify(paymentData)
       });
     },
     getOrder: async (orderId: string) => {
-      return apiFetch(`/api/v1/pos/orders/${orderId}`);
+      return apiFetchResult(`/api/v1/pos/orders/${orderId}`);
     },
     getReceipt: async (orderId: string) => {
-      return apiFetch(`/api/v1/pos/orders/${orderId}/receipt`);
+      return apiFetchResult(`/api/v1/pos/orders/${orderId}/receipt`);
     },
     getServerOrders: async (range: string, statusFilter: string, sessionId?: string, operatorToken?: string) => {
-      let url = `/api/v1/pos/reports/server-orders?range=${range}&status=${statusFilter}`;
-      if (sessionId) url += `&sessionId=${sessionId}`;
-      const options: RequestInit = {};
-      if (operatorToken) {
-        options.headers = { 'Authorization': `Bearer ${operatorToken}` };
-      }
-      return apiFetch(url, options);
+      const headers = operatorToken ? { Authorization: `Bearer ${operatorToken}` } : undefined;
+      return apiFetchResult(`/api/v1/pos/reports/server-orders?range=${range}&status=${statusFilter}${sessionId ? `&sessionId=${sessionId}` : ''}`, { headers });
     },
     getServerSales: async (range: string, sessionId?: string, operatorToken?: string) => {
-      let url = `/api/v1/pos/reports/server-sales?range=${range}`;
-      if (sessionId) url += `&sessionId=${sessionId}`;
-      const options: RequestInit = {};
-      if (operatorToken) {
-        options.headers = { 'Authorization': `Bearer ${operatorToken}` };
-      }
-      return apiFetch(url, options);
+      const headers = operatorToken ? { Authorization: `Bearer ${operatorToken}` } : undefined;
+      return apiFetchResult(`/api/v1/pos/reports/server-sales?range=${range}${sessionId ? `&sessionId=${sessionId}` : ''}`, { headers });
     },
     getCashMovements: async (sessionId: string) => {
-      return apiFetch(`/api/v1/pos/sessions/${sessionId}/movements`);
+      return apiFetchResult(`/api/v1/pos/sessions/${sessionId}/cash-movements`);
     },
     createCashMovement: async (propertyId: string, sessionId: string, amount: number, type: string, reasonCode: string, notes?: string, receiptReference?: string, authorizerId?: string) => {
-      return apiFetch(`/api/v1/pos/sessions/${sessionId}/movements`, {
+      return apiFetchResult(`/api/v1/pos/sessions/${sessionId}/cash-movements`, {
         method: 'POST',
         body: JSON.stringify({ propertyId, amount, type, reasonCode, notes, receiptReference, authorizerId })
       });
     },
     getSessionSettlementDetails: async (sessionId: string) => {
-      return apiFetch(`/api/v1/pos/sessions/${sessionId}/settlement-details`);
+      return apiFetchResult(`/api/v1/pos/sessions/${sessionId}/settlement-details`);
     },
     settleSession: async (sessionId: string, actualCash: number, operatorId: string, authorizerId?: string) => {
-      return apiFetch(`/api/v1/pos/sessions/${sessionId}/settle`, {
+      return apiFetchResult(`/api/v1/pos/sessions/${sessionId}/settle`, {
         method: 'POST',
         body: JSON.stringify({ actualCash, operatorId, authorizerId })
       });
     },
     confirmHandover: async (sessionId: string, managerPin: string) => {
-      return apiFetch(`/api/v1/pos/sessions/${sessionId}/confirm-handover`, {
+      return apiFetchResult(`/api/v1/pos/sessions/${sessionId}/confirm-handover`, {
         method: 'POST',
         body: JSON.stringify({ managerPin })
       });
     },
     getCashOfficeOverview: async (propertyId: string) => {
-      return apiFetch(`/api/v1/pos/cash-office/overview?propertyId=${propertyId}`);
+      return apiFetchResult(`/api/v1/pos/cash-office/overview?propertyId=${propertyId}`);
     },
     getPendingHandovers: async (propertyId: string) => {
-      return apiFetch(`/api/v1/pos/cash-office/handovers/pending?propertyId=${propertyId}`);
+      return apiFetchResult(`/api/v1/pos/cash-office/handovers?propertyId=${propertyId}`);
     },
     getSafeLedger: async (propertyId: string) => {
-      return apiFetch(`/api/v1/pos/cash-office/safe?propertyId=${propertyId}`);
+      return apiFetchResult(`/api/v1/pos/cash-office/ledger?propertyId=${propertyId}`);
     },
     openSafe: async (propertyId: string, amount: number, managerPin: string) => {
-      return apiFetch(`/api/v1/pos/cash-office/safe/open`, {
+      return apiFetchResult(`/api/v1/pos/cash-office/open-safe`, {
         method: 'POST',
         body: JSON.stringify({ propertyId, amount, managerPin })
       });
     },
     recordBankDeposit: async (propertyId: string, amount: number, reference: string, managerPin: string) => {
-      return apiFetch(`/api/v1/pos/cash-office/safe/deposit`, {
+      return apiFetchResult(`/api/v1/pos/cash-office/deposit`, {
         method: 'POST',
         body: JSON.stringify({ propertyId, amount, reference, managerPin })
       });
     },
     // Service-first waiter flow
     fireItems: async (orderId: string, items: any[], operatorToken: string) => {
-      return apiFetch(`/api/v1/pos/orders/${orderId}/fire`, {
+      return apiFetchResult(`/api/v1/pos/orders/${orderId}/fire`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${operatorToken}` },
         body: JSON.stringify({ items }),
       });
     },
     getActiveOrders: async (sessionId: string, operatorToken: string, filter?: string) => {
-      const res = await fetch(`/api/v1/pos/sessions/${sessionId}/active-orders${filter ? `?filter=${filter}` : ''}`, {
+      return apiFetchResult(`/api/v1/pos/sessions/${sessionId}/active-orders${filter ? `?filter=${filter}` : ''}`, {
         headers: { 'Authorization': `Bearer ${operatorToken}` }
       });
-      return res.json();
     },
     getProductionBatches: async (outletId: string, station: string) => {
-      return apiFetch(`/api/v1/pos/outlets/${outletId}/production-batches?station=${station}`);
+      return apiFetchResult(`/api/v1/pos/outlets/${outletId}/production-batches?station=${station}`);
     },
     updateBatchStatus: async (batchId: string, status: string) => {
-      return apiFetch(`/api/v1/pos/production-batches/${batchId}/status`, {
+      return apiFetchResult(`/api/v1/pos/production-batches/${batchId}/status`, {
         method: 'PATCH',
         body: JSON.stringify({ status }),
       });
