@@ -12,7 +12,10 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { staffId, pin, propertyId, sessionId, outletId, deviceId } = body;
+    const { staffId, pin, propertyId } = body;
+    const sessionId = body.sessionId || undefined;
+    const outletId = body.outletId || undefined;
+    const deviceId = body.deviceId || undefined;
 
     if (!staffId || !pin) {
       return NextResponse.json({ error: 'Missing required fields: staffId, pin' }, { status: 400 });
