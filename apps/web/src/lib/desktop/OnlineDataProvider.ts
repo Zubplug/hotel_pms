@@ -237,7 +237,17 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
       });
     },
     startEmergencyBank: async (pin: string, reason: string, operatorToken: string) => {
-      return { data: { sessionId: `emerg_${Date.now()}` }, error: null };
+      let deviceId = 'web-browser';
+      let outletId = '';
+      if (typeof window !== 'undefined') {
+        deviceId = localStorage.getItem('lodgecore_pos_device_id') || 'web-browser';
+        outletId = localStorage.getItem('lodgecore_pos_outlet_id') || '';
+      }
+      return apiFetch(`/api/v1/pos/sessions/emergency-bank`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${operatorToken}` },
+        body: JSON.stringify({ pin, reason, deviceId, outletId })
+      });
     },
     getSessionContext: async (sessionId: string) => {
       return apiFetch(`/api/v1/pos/sessions/${sessionId}`);
