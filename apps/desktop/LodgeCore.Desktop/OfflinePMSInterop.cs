@@ -1096,6 +1096,7 @@ public class OfflinePMSInterop
         {
             return JsonSerializer.Serialize(new { success = false, error = ex.Message });
         }
+    }
     public async Task<string> GetPendingHandoversAsync(string propertyId)
     {
         try {
