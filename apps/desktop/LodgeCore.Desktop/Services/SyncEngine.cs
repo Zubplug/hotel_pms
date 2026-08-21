@@ -151,12 +151,8 @@ public class SyncEngine : BackgroundService
 
     private string SanitizeErrorMessage(string rawMessage)
     {
-        // Simple sanitization to hide sensitive details from UI
-        if (string.IsNullOrEmpty(rawMessage)) return "Unknown error occurred";
-        if (rawMessage.Contains("401") || rawMessage.Contains("403")) return "Authentication failed";
-        if (rawMessage.Contains("Token")) return "Invalid security token";
-        if (rawMessage.Contains("Connection refused")) return "Could not connect to cloud server";
-        return "Synchronization failed";
+        // Temporarily expose the raw message so we can debug this crash!
+        return string.IsNullOrEmpty(rawMessage) ? "Unknown error occurred" : rawMessage;
     }
 
     private void BroadcastHealth(SyncState state, string? error = null, string? phase = null, int current = 0, int total = 0, string? message = null)
