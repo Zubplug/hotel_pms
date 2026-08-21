@@ -174,7 +174,7 @@ public class OfflinePMSInterop
             if (property == null) throw new Exception("Property not found.");
             
             // Validate property is in CENTRAL_CASHIER mode
-            if (property.BankingModel != "CENTRAL_CASHIER")
+            if (property.BankingModel != PosConstants.BankingModels.CentralCashier)
             {
                 return JsonSerializer.Serialize(new { success = false, error = "Emergency override is only applicable in Station Banking (Central Cashier) mode." });
             }
@@ -649,22 +649,23 @@ public class OfflinePMSInterop
             var paymentData = JsonSerializer.Deserialize<Dictionary<string, object>>(paymentDataJson);
             if (paymentData == null) throw new Exception("Invalid payment data");
 
+            var posCtx = await _sessionManager.GetActiveContextAsync();
+            var property = await _repo.GetPropertyAsync(posCtx.PropertyId);
+            string fallbackCurrency = property?.Currency ?? "NGN";
+
             string method = paymentData.ContainsKey("method") ? paymentData["method"].ToString() : "CASH";
             decimal amount = paymentData.ContainsKey("amount") ? decimal.Parse(paymentData["amount"].ToString()) : 0;
-            string currency = paymentData.ContainsKey("currency") ? paymentData["currency"].ToString() : "NGN";
+            string currency = paymentData.ContainsKey("currency") ? paymentData["currency"].ToString() : fallbackCurrency;
             string checkId = paymentData.ContainsKey("checkId") ? paymentData["checkId"]?.ToString() : null;
-
-            var posCtx = await _sessionManager.GetActiveContextAsync();
             
             // AUTHORIZATION CHECK
             if (string.IsNullOrEmpty(posCtx.SessionId))
             {
-                var property = await _repo.GetPropertyAsync(posCtx.PropertyId);
                 if (property != null) 
                 {
-                    if (property.BankingModel == "CENTRAL_CASHIER") {
+                    if (property.BankingModel == PosConstants.BankingModels.CentralCashier) {
                         return JsonSerializer.Serialize(new { success = false, error = "Waiters cannot process payments. Please direct the guest to the Cashier." });
-                    } else if (property.BankingModel == "SERVER_BANKING") {
+                    } else if (property.BankingModel == PosConstants.BankingModels.ServerBanking) {
                         return JsonSerializer.Serialize(new { success = false, error = "No personal bank found. Please start your personal shift bank." });
                     }
                 }

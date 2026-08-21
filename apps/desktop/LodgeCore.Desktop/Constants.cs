@@ -37,5 +37,18 @@ namespace LodgeCore.Desktop
             public const string Open = "OPEN";
             public const string Closed = "CLOSED";
         }
+        public static class CashMovementTypes
+        {
+            public const string SafeOpeningBalance = "SAFE_OPENING_BALANCE";
+            public const string BankDeposit = "BANK_DEPOSIT";
+        }
+
+        public static class PaymentMethods
+        {
+            public const string Cash = "CASH";
+            public const string Card = "CARD";
+            public const string BankTransfer = "BANK_TRANSFER";
+            public const string RoomCharge = "ROOM_CHARGE";
+        }
     }
 }

@@ -1015,19 +1015,22 @@ public class LocalRepository
 
             // Resolve correct source account based on BankType
             LodgeCore.Desktop.Data.Entities.LocalCashAccount sourceAccount;
-            if (session.BankType == "EMERGENCY") {
-                sourceAccount = await _dbContext.CashAccounts.FirstOrDefaultAsync(a => a.Type == "EMERGENCY_BANK" && a.OwnerId == session.AuthorizedBy)
+            if (session.BankType == PosConstants.BankTypes.Emergency) {
+                sourceAccount = await _dbContext.CashAccounts.FirstOrDefaultAsync(a => a.Type == PosConstants.CashAccountTypes.EmergencyBank && a.OwnerId == session.AuthorizedBy)
                                 ?? throw new Exception("Emergency Bank account not found.");
-            } else if (session.BankType == "CENTRAL" || session.BankingModel == "CENTRAL_CASHIER") {
-                sourceAccount = await EnsureCashAccountAsync(session.PropertyId, "STATION_BANK", $"Station Bank - {session.UserId}", session.UserId);
+            } else if (session.BankType == PosConstants.BankTypes.Central || session.BankingModel == PosConstants.BankingModels.CentralCashier) {
+                sourceAccount = await EnsureCashAccountAsync(session.PropertyId, PosConstants.CashAccountTypes.StationBank, $"Station Bank - {session.UserId}", session.UserId);
             } else {
-                sourceAccount = await EnsureCashAccountAsync(session.PropertyId, "SERVER_BANK", $"Server Bank - {session.UserId}", session.UserId);
+                sourceAccount = await EnsureCashAccountAsync(session.PropertyId, PosConstants.CashAccountTypes.ServerBank, $"Server Bank - {session.UserId}", session.UserId);
             }
             
-            var safeAccount = await EnsureCashAccountAsync(session.PropertyId, "SAFE", "Central Safe");
+            var safeAccount = await EnsureCashAccountAsync(session.PropertyId, PosConstants.CashAccountTypes.Safe, "Central Safe");
 
-            string handoverType = session.BankType == "EMERGENCY" ? "EMERGENCY_HANDOVER" : 
-                                 (session.BankType == "CENTRAL" || session.BankingModel == "CENTRAL_CASHIER" ? "STATION_HANDOVER" : "SERVER_HANDOVER");
+            string handoverType = session.BankType == PosConstants.BankTypes.Emergency ? PosConstants.HandoverTypes.EmergencyHandover : 
+                                 (session.BankType == PosConstants.BankTypes.Central || session.BankingModel == PosConstants.BankingModels.CentralCashier ? PosConstants.HandoverTypes.StationHandover : PosConstants.HandoverTypes.ServerHandover);
+
+            var prop = await _dbContext.Properties.FindAsync(session.PropertyId);
+            string currency = prop?.Currency ?? "NGN";
 
             var handoverMovement = new LocalPosCashMovement
             {
@@ -1037,7 +1040,7 @@ public class LocalRepository
                 DeviceId = deviceId,
                 UserId = authorizer.Id,
                 Amount = settlement.ActualCash, // Actual Cash moved!
-                Currency = "NGN",
+                Currency = currency,
                 Type = handoverType,
                 SourceAccountId = sourceAccount.Id,
                 DestinationAccountId = safeAccount.Id,
@@ -1105,11 +1108,11 @@ public class LocalRepository
         decimal openingFloat = movements.Where(m => m.Type == "OPENING_FLOAT").Sum(m => m.Amount);
         
         // Sales breakdown
-        decimal cashSales = payments.Where(p => p.Method == "CASH").Sum(p => p.Amount);
-        decimal cardSales = payments.Where(p => p.Method == "CARD").Sum(p => p.Amount);
-        decimal bankTransferSales = payments.Where(p => p.Method == "BANK_TRANSFER").Sum(p => p.Amount);
-        decimal roomChargeSales = payments.Where(p => p.Method == "ROOM_CHARGE").Sum(p => p.Amount);
-        decimal otherSales = payments.Where(p => p.Method != "CASH" && p.Method != "CARD" && p.Method != "BANK_TRANSFER" && p.Method != "ROOM_CHARGE").Sum(p => p.Amount);
+        decimal cashSales = payments.Where(p => p.Method == PosConstants.PaymentMethods.Cash).Sum(p => p.Amount);
+        decimal cardSales = payments.Where(p => p.Method == PosConstants.PaymentMethods.Card).Sum(p => p.Amount);
+        decimal bankTransferSales = payments.Where(p => p.Method == PosConstants.PaymentMethods.BankTransfer).Sum(p => p.Amount);
+        decimal roomChargeSales = payments.Where(p => p.Method == PosConstants.PaymentMethods.RoomCharge).Sum(p => p.Amount);
+        decimal otherSales = payments.Where(p => p.Method != PosConstants.PaymentMethods.Cash && p.Method != PosConstants.PaymentMethods.Card && p.Method != PosConstants.PaymentMethods.BankTransfer && p.Method != PosConstants.PaymentMethods.RoomCharge).Sum(p => p.Amount);
         decimal totalSales = payments.Sum(p => p.Amount);
 
         decimal cashIn = movements.Where(m => m.Type == "CASH_IN" || m.Type == "CASH_TRANSFER_IN").Sum(m => m.Amount);
@@ -1216,6 +1219,9 @@ public class LocalRepository
     {
         string operationId = $"op_cashmvt_{deviceId}_{DateTime.UtcNow.Ticks}";
         
+        var prop = await _dbContext.Properties.FindAsync(propertyId);
+        string currency = prop?.Currency ?? "NGN";
+
         var movement = new LocalPosCashMovement
         {
             Id = Guid.NewGuid().ToString(),
@@ -1224,7 +1230,7 @@ public class LocalRepository
             DeviceId = deviceId,
             UserId = userId,
             Amount = amount,
-            Currency = "NGN",
+            Currency = currency,
             Type = type,
             SourceAccountId = sourceAccountId,
             DestinationAccountId = destinationAccountId,
@@ -1275,7 +1281,7 @@ public class LocalRepository
 
     public async Task<object> GetCashOfficeOverviewAsync(string propertyId)
     {
-        var safeAccount = await EnsureCashAccountAsync(propertyId, "SAFE", "Central Safe");
+        var safeAccount = await EnsureCashAccountAsync(propertyId, PosConstants.CashAccountTypes.Safe, "Central Safe");
         
         var pendingHandoversCount = await _dbContext.PosSessions
             .CountAsync(s => s.PropertyId == propertyId && (s.Status == "PENDING_HANDOVER" || s.Status == "RECONCILIATION_REQUIRED"));
@@ -1299,7 +1305,7 @@ public class LocalRepository
                             - safeMovements.Where(m => m.SourceAccountId == safeAccount.Id).Sum(m => m.Amount);
 
         decimal todayDeposits = safeMovements
-            .Where(m => m.SourceAccountId == safeAccount.Id && m.Type == "BANK_DEPOSIT" && m.CreatedAt >= today)
+            .Where(m => m.SourceAccountId == safeAccount.Id && m.Type == PosConstants.CashMovementTypes.BankDeposit && m.CreatedAt >= today)
             .Sum(m => m.Amount);
 
         decimal todayVariances = await _dbContext.PosSettlements
@@ -1320,12 +1326,15 @@ public class LocalRepository
         var authorizer = await ValidateSupervisorPinAsync(managerPin, propertyId);
         if (authorizer == null) throw new UnauthorizedAccessException("Invalid Manager PIN");
 
-        var safeAccount = await EnsureCashAccountAsync(propertyId, "SAFE", "Central Safe");
-        var externalAccount = await EnsureCashAccountAsync(propertyId, "EXTERNAL", "External Funds");
+        var safeAccount = await EnsureCashAccountAsync(propertyId, PosConstants.CashAccountTypes.Safe, "Central Safe");
+        var externalAccount = await EnsureCashAccountAsync(propertyId, PosConstants.CashAccountTypes.External, "External Funds");
 
         // Check if already opened (idempotency check for opening float)
-        var exists = await _dbContext.PosCashMovements.AnyAsync(m => m.DestinationAccountId == safeAccount.Id && m.Type == "SAFE_OPENING_BALANCE");
+        var exists = await _dbContext.PosCashMovements.AnyAsync(m => m.DestinationAccountId == safeAccount.Id && m.Type == PosConstants.CashMovementTypes.SafeOpeningBalance);
         if (exists) throw new Exception("The safe has already been initialized with an opening balance.");
+
+        var prop = await _dbContext.Properties.FindAsync(propertyId);
+        string currency = prop?.Currency ?? "NGN";
 
         var movement = new LocalPosCashMovement
         {
@@ -1334,8 +1343,8 @@ public class LocalRepository
             DeviceId = deviceId,
             UserId = authorizer.Id,
             Amount = amount,
-            Currency = "NGN",
-            Type = "SAFE_OPENING_BALANCE",
+            Currency = currency,
+            Type = PosConstants.CashMovementTypes.SafeOpeningBalance,
             SourceAccountId = externalAccount.Id,
             DestinationAccountId = safeAccount.Id,
             ReasonCode = "INITIALIZATION",
@@ -1353,7 +1362,7 @@ public class LocalRepository
 
     public async Task<List<LocalPosCashMovement>> GetSafeLedgerAsync(string propertyId)
     {
-        var safeAccount = await EnsureCashAccountAsync(propertyId, "SAFE", "Central Safe");
+        var safeAccount = await EnsureCashAccountAsync(propertyId, PosConstants.CashAccountTypes.Safe, "Central Safe");
         return await _dbContext.PosCashMovements
             .Where(m => m.PropertyId == propertyId && (m.SourceAccountId == safeAccount.Id || m.DestinationAccountId == safeAccount.Id))
             .OrderByDescending(m => m.CreatedAt)
@@ -1365,8 +1374,8 @@ public class LocalRepository
         var authorizer = await ValidateSupervisorPinAsync(managerPin, propertyId);
         if (authorizer == null) throw new UnauthorizedAccessException("Invalid Manager PIN");
 
-        var safeAccount = await EnsureCashAccountAsync(propertyId, "SAFE", "Central Safe");
-        var bankAccount = await EnsureCashAccountAsync(propertyId, "BANK_ACCOUNT", "Main Bank Account");
+        var safeAccount = await EnsureCashAccountAsync(propertyId, PosConstants.CashAccountTypes.Safe, "Central Safe");
+        var bankAccount = await EnsureCashAccountAsync(propertyId, PosConstants.CashAccountTypes.BankAccount, "Main Bank Account");
 
         var safeMovements = await _dbContext.PosCashMovements
             .Where(m => m.PropertyId == propertyId && (m.SourceAccountId == safeAccount.Id || m.DestinationAccountId == safeAccount.Id))
@@ -1377,6 +1386,9 @@ public class LocalRepository
 
         if (amount > currentBalance) throw new Exception("Insufficient funds in Central Safe.");
 
+        var prop = await _dbContext.Properties.FindAsync(propertyId);
+        string currency = prop?.Currency ?? "NGN";
+
         var movement = new LocalPosCashMovement
         {
             Id = Guid.NewGuid().ToString(),
@@ -1384,11 +1396,11 @@ public class LocalRepository
             DeviceId = deviceId,
             UserId = authorizer.Id,
             Amount = amount,
-            Currency = "NGN",
-            Type = "BANK_DEPOSIT",
+            Currency = currency,
+            Type = PosConstants.CashMovementTypes.BankDeposit,
             SourceAccountId = safeAccount.Id,
             DestinationAccountId = bankAccount.Id,
-            ReasonCode = "BANK_DEPOSIT",
+            ReasonCode = PosConstants.CashMovementTypes.BankDeposit,
             ReceiptReference = reference,
             OperationId = $"op_bank_dep_{deviceId}_{DateTime.UtcNow.Ticks}",
             AuthorizedBy = authorizer.Id,
@@ -1878,7 +1890,7 @@ public class LocalRepository
             Id = cashAccountId,
             PropertyId = propertyId,
             OutletId = outletId,
-            Type = "EMERGENCY_BANK",
+            Type = PosConstants.CashAccountTypes.EmergencyBank,
             Name = $"Emergency Bank - {managerName} - {DateTime.UtcNow:HH:mm}",
             Balance = 0,
             OwnerId = managerId,
