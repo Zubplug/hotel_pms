@@ -433,6 +433,18 @@ public class SyncEngine : BackgroundService
 
                 if (localProp != null)
                 {
+                    if (propEl.TryGetProperty("name", out var name))
+                        localProp.Name = name.GetString() ?? localProp.Name;
+                    
+                    if (propEl.TryGetProperty("code", out var code))
+                        localProp.Code = code.GetString() ?? localProp.Code;
+
+                    if (propEl.TryGetProperty("city", out var city))
+                        localProp.City = city.GetString() ?? localProp.City;
+                    
+                    if (propEl.TryGetProperty("currency", out var curr))
+                        localProp.Currency = curr.GetString() ?? localProp.Currency;
+
                     if (propEl.TryGetProperty("timezone", out var tz))
                         localProp.Timezone = tz.GetString() ?? localProp.Timezone;
 
@@ -445,6 +457,23 @@ public class SyncEngine : BackgroundService
                     if (propEl.TryGetProperty("businessDate", out var bd) &&
                         DateTime.TryParse(bd.GetString(), out var parsedDate))
                         localProp.BusinessDate = parsedDate;
+                }
+                else
+                {
+                    localProp = new LodgeCore.Desktop.Data.Entities.LocalProperty
+                    {
+                        Id = propertyId,
+                        Name = propEl.TryGetProperty("name", out var n) ? n.GetString() ?? "Unknown" : "Unknown",
+                        Code = propEl.TryGetProperty("code", out var c) ? c.GetString() ?? "" : "",
+                        City = propEl.TryGetProperty("city", out var cy) ? cy.GetString() ?? "" : "",
+                        Currency = propEl.TryGetProperty("currency", out var cur) ? cur.GetString() ?? "NGN" : "NGN",
+                        Timezone = propEl.TryGetProperty("timezone", out var tz2) ? tz2.GetString() ?? "UTC" : "UTC",
+                        IsActive = true,
+                        EarlyCheckinWindowHours = propEl.TryGetProperty("earlyCheckinWindowHours", out var eciw2) ? eciw2.GetInt32() : 2,
+                        BankingModel = propEl.TryGetProperty("bankingModel", out var bm2) ? bm2.GetString() ?? "SERVER_BANKING" : "SERVER_BANKING",
+                        BusinessDate = propEl.TryGetProperty("businessDate", out var bd2) && DateTime.TryParse(bd2.GetString(), out var parsedDate2) ? parsedDate2 : DateTime.UtcNow.Date
+                    };
+                    dbContext.Properties.Add(localProp);
                 }
             }
 

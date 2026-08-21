@@ -359,7 +359,10 @@ public class LocalRepository
         var inHouse = await _dbContext.Reservations.CountAsync(r => r.PropertyId == propertyId && r.Status == "CHECKED_IN");
         var totalRooms = await _dbContext.Rooms.CountAsync(r => r.PropertyId == propertyId);
         
+        var property = await _dbContext.Properties.FirstOrDefaultAsync(p => p.Id == propertyId);
+
         return new {
+            property = property != null ? new { name = property.Name } : null,
             kpis = new {
                 arrivals = arrivals.Count,
                 departures = departures.Count,
