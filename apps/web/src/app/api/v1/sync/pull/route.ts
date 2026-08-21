@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { compare } from 'bcryptjs';
+import { createHash } from 'crypto';
 
 /**
  * GET /api/v1/sync/pull
@@ -32,8 +33,6 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'propertyId is required' }, { status: 400 });
     }
 
-    
-
     // Verify the device token against the registered POS terminals
     const terminals = await prisma.posTerminal.findMany({
       where: {
@@ -43,10 +42,20 @@ export async function GET(req: NextRequest) {
     });
 
     let device = null;
+    const sha256Hash = createHash('sha256').update(deviceToken).digest('hex');
+
     for (const t of terminals) {
-      if (t.deviceCredentialHash && await compare(deviceToken, t.deviceCredentialHash)) {
-        device = t;
-        break;
+      if (t.deviceCredentialHash) {
+        if (t.deviceCredentialHash === sha256Hash) {
+           device = t;
+           break;
+        }
+        if (t.deviceCredentialHash.length === 60) {
+           if (await compare(deviceToken, t.deviceCredentialHash)) {
+             device = t;
+             break;
+           }
+        }
       }
     }
 
