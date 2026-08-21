@@ -56,9 +56,16 @@ public class LocalPosSession
 {
     [Key] public string Id { get; set; } = string.Empty;
     public string PropertyId { get; set; } = string.Empty;
+    public string OutletId { get; set; } = string.Empty;
     public string DeviceId { get; set; } = string.Empty;
     public string UserId { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
+
+    public string BankingModel { get; set; } = "CENTRAL_CASHIER";
+    public string BankType { get; set; } = "CENTRAL";
+    public string? PrimaryOperatorId { get; set; }
+    public string? AuthorizedBy { get; set; }
+    public string? Reason { get; set; }
 
     public DateTime OpenedAt { get; set; }
     public DateTime? ClosedAt { get; set; }
@@ -83,7 +90,7 @@ public class LocalPosOrder
     [Key] public string Id { get; set; } = string.Empty;
     public string PropertyId { get; set; } = string.Empty;
     public string OutletId { get; set; } = string.Empty;
-    public string SessionId { get; set; } = string.Empty;
+    public string? SessionId { get; set; }
     public string? FolioId { get; set; }
     public string OrderNumber { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
@@ -151,6 +158,7 @@ public class LocalPosPayment
     public DateTime? PaidAt { get; set; }
     public string? CheckId { get; set; }
     public string? SessionId { get; set; }
+    public string? ProcessedById { get; set; }
     public DateTime CreatedAt { get; set; }
 }
 
@@ -195,15 +203,34 @@ public class LocalPosDiscount
     public DateTime CreatedAt { get; set; }
 }
 
+public class LocalCashAccount
+{
+    [Key] public string Id { get; set; } = string.Empty;
+    public string PropertyId { get; set; } = string.Empty;
+    public string? OutletId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Type { get; set; } = string.Empty; // e.g. SAFE, SERVER_BANK, BANK_ACCOUNT, EXTERNAL
+    public decimal Balance { get; set; }
+    public string? OwnerId { get; set; }
+    public bool IsActive { get; set; } = true;
+}
+
 public class LocalPosCashMovement
 {
     [Key] public string Id { get; set; } = string.Empty;
     public string PropertyId { get; set; } = string.Empty;
     public string DeviceId { get; set; } = string.Empty;
-    public string PosSessionId { get; set; } = string.Empty;
+    public string? PosSessionId { get; set; } // Now optional
     public string UserId { get; set; } = string.Empty;
+    
     public decimal Amount { get; set; }
+    public string Currency { get; set; } = "NGN"; // Added Currency
     public string Type { get; set; } = string.Empty;
+    
+    // Immutable accounting
+    public string SourceAccountId { get; set; } = string.Empty;
+    public string DestinationAccountId { get; set; } = string.Empty;
+    
     public string ReasonCode { get; set; } = string.Empty;
     public string? Notes { get; set; }
     public string? ReceiptReference { get; set; }

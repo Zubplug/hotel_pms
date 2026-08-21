@@ -9,9 +9,31 @@ interface ChargeModalProps {
   total: number;
   onCharge: (method: string) => Promise<void>;
   isProcessing: boolean;
+  posSessionId?: string | null;
+  bankingModel?: string;
+  currentOperatorId?: string;
 }
 
-export function ChargeModal({ isOpen, onClose, total, onCharge, isProcessing }: ChargeModalProps) {
+export function ChargeModal({ isOpen, onClose, total, onCharge, isProcessing, posSessionId, bankingModel = 'CENTRAL_CASHIER', currentOperatorId }: ChargeModalProps) {
+  const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
+
+  const handleCharge = (method: string) => {
+    setErrorMsg(null);
+    
+    if (!posSessionId) {
+      if (bankingModel === 'CENTRAL_CASHIER') {
+         setErrorMsg('Waiters cannot process payments. Please direct the guest to the Cashier to complete this transaction.');
+         return;
+      } else if (bankingModel === 'SERVER_BANKING') {
+         setErrorMsg('No personal bank found. Please start your personal shift bank before processing payments.');
+         return;
+      }
+    }
+    
+    // Allow EMERGENCY_MANAGER to process payments
+    
+    onCharge(method);
+  };
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !isProcessing && !open && onClose()}>
       <DialogContent className="max-w-md p-0 overflow-hidden bg-slate-50 border-0 rounded-[2rem]">
@@ -30,7 +52,7 @@ export function ChargeModal({ isOpen, onClose, total, onCharge, isProcessing }: 
           <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 text-center">Select Payment Method</p>
           <div className="grid grid-cols-2 gap-4">
             <button
-              onClick={() => onCharge('CASH')}
+              onClick={() => handleCharge('CASH')}
               disabled={isProcessing}
               className="flex flex-col items-center justify-center gap-3 p-6 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md hover:border-emerald-200 hover:bg-emerald-50 text-slate-600 hover:text-emerald-700 transition-all disabled:opacity-50 group"
             >
@@ -40,7 +62,7 @@ export function ChargeModal({ isOpen, onClose, total, onCharge, isProcessing }: 
               <span className="font-bold text-sm">Cash</span>
             </button>
             <button
-              onClick={() => onCharge('CARD')}
+              onClick={() => handleCharge('CARD')}
               disabled={isProcessing}
               className="flex flex-col items-center justify-center gap-3 p-6 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-200 hover:bg-blue-50 text-slate-600 hover:text-blue-700 transition-all disabled:opacity-50 group"
             >
@@ -50,7 +72,7 @@ export function ChargeModal({ isOpen, onClose, total, onCharge, isProcessing }: 
               <span className="font-bold text-sm">Card</span>
             </button>
             <button
-              onClick={() => onCharge('BANK_TRANSFER')}
+              onClick={() => handleCharge('BANK_TRANSFER')}
               disabled={isProcessing}
               className="flex flex-col items-center justify-center gap-3 p-6 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md hover:border-purple-200 hover:bg-purple-50 text-slate-600 hover:text-purple-700 transition-all disabled:opacity-50 group"
             >
@@ -60,7 +82,7 @@ export function ChargeModal({ isOpen, onClose, total, onCharge, isProcessing }: 
               <span className="font-bold text-sm">Transfer</span>
             </button>
             <button
-              onClick={() => onCharge('ROOM_CHARGE')}
+              onClick={() => handleCharge('ROOM_CHARGE')}
               disabled={isProcessing}
               className="flex flex-col items-center justify-center gap-3 p-6 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md hover:border-amber-200 hover:bg-amber-50 text-slate-600 hover:text-amber-700 transition-all disabled:opacity-50 group"
             >
@@ -70,6 +92,12 @@ export function ChargeModal({ isOpen, onClose, total, onCharge, isProcessing }: 
               <span className="font-bold text-sm">Room</span>
             </button>
           </div>
+          
+          {errorMsg && (
+            <div className="mt-6 p-4 rounded-xl bg-red-50 border border-red-200 text-red-600 text-sm font-medium text-center">
+              {errorMsg}
+            </div>
+          )}
           
           {isProcessing && (
             <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center z-20 rounded-[2rem]">

@@ -12,8 +12,8 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     getActiveStaff: async () => {
       return invokeDesktop('auth.getActiveStaff');
     },
-    login: async (staffId: string, pin: string) => {
-      return invokeDesktop('auth.login', { staffId, pin });
+    login: async (staffId: string, pin: string, bankingModel?: string) => {
+      return invokeDesktop('auth.login', { staffId, pin, bankingModel });
     },
     logout: async () => {
       return invokeDesktop('auth.logout');
@@ -165,6 +165,9 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     startSession: async (data: { userId: string; propertyId: string; deviceId: string; outletId: string; openingCash: number }) => {
       return invokeDesktop('pos.startSession', data);
     },
+    startEmergencyBank: async (pin: string, reason: string, operatorToken: string) => {
+      return invokeDesktop('pos.startEmergencyBank', { pin, reason, operatorToken });
+    },
     getSessionContext: async (sessionId: string) => {
       return invokeDesktop('pos.getSessionContext', { sessionId });
     },
@@ -217,7 +220,26 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
       return invokeDesktop('pos.getSessionSettlementDetails', { sessionId });
     },
     settleSession: async (sessionId: string, actualCash: number, operatorId: string, authorizerId?: string) => {
-      return invokeDesktop('pos.settleSession', { sessionId, actualCash, operatorId, authorizerId });
+      // In offline mode, we just pass actualCash. cashPaidOut is legacy.
+      return invokeDesktop('pos.closeSession', { sessionId, actualCash, cashPaidOut: 0 });
+    },
+    confirmHandover: async (sessionId: string, managerPin: string) => {
+      return invokeDesktop('pos.confirmHandover', { sessionId, managerPin });
+    },
+    getPendingHandovers: async (propertyId: string) => {
+      return invokeDesktop('pos.getPendingHandovers', { propertyId });
+    },
+    getCashOfficeOverview: async (propertyId: string) => {
+      return invokeDesktop('pos.getCashOfficeOverview', { propertyId });
+    },
+    openSafe: async (propertyId: string, amount: number, managerPin: string) => {
+      return invokeDesktop('pos.openSafe', { propertyId, amount, managerPin });
+    },
+    getSafeLedger: async (propertyId: string) => {
+      return invokeDesktop('pos.getSafeLedger', { propertyId });
+    },
+    recordBankDeposit: async (propertyId: string, amount: number, reference: string, managerPin: string) => {
+      return invokeDesktop('pos.recordBankDeposit', { propertyId, amount, reference, managerPin });
     },
     // Service-first waiter flow
     fireItems: async (orderId: string, items: any[], operatorToken: string) => {

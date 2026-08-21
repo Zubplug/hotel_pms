@@ -70,8 +70,8 @@ const settingsLinks = [
   },
   {
     title: 'POS Outlets',
-    description: 'Manage point of sale locations like Restaurants and Bars.',
-    href: '/settings/pos-outlets',
+    description: 'Manage POS settings, banking models, and physical outlets.',
+    href: '/settings/pos',
     icon: Store,
     color: 'text-orange-500',
     bgColor: 'bg-orange-500/10'

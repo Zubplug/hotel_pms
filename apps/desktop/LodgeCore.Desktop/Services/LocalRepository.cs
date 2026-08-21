@@ -860,7 +860,7 @@ public class LocalRepository
         var details = await GetSessionSettlementDetailsAsync(sessionId);
 
         // Validation for override variance
-        if (details.Variance != 0 && string.IsNullOrEmpty(authorizerId))
+        if (session.BankType != "SERVER" && details.Variance != 0 && string.IsNullOrEmpty(authorizerId))
         {
             throw new UnauthorizedAccessException("Variance requires supervisor approval.");
         }
@@ -881,7 +881,7 @@ public class LocalRepository
             Variance = actualCash - details.ExpectedCash,
             AuthorizerId = authorizerId,
             SettledAt = DateTime.UtcNow,
-            Status = "SETTLED",
+            Status = session.BankType == "SERVER" ? "PENDING_HANDOVER" : "SETTLED",
             OperationId = operationId
         };
 
@@ -923,7 +923,7 @@ public class LocalRepository
             _dbContext.PosCashMovements.Add(varMovement);
         }
 
-        session.Status = "CLOSED";
+        session.Status = session.BankType == "SERVER" ? "RECONCILIATION_REQUIRED" : "CLOSED";
         session.ClosedAt = DateTime.UtcNow;
 
         _dbContext.SyncEvents.Add(new LocalSyncEvent
@@ -944,7 +944,7 @@ public class LocalRepository
             EntityType = "POS_SESSION",
             EntityId = session.Id,
             OperationType = "UPDATE",
-            PayloadJson = JsonSerializer.Serialize(new { Status = "CLOSED", ClosedAt = session.ClosedAt }),
+            PayloadJson = JsonSerializer.Serialize(new { Status = session.Status, ClosedAt = session.ClosedAt }),
             UserId = operatorId,
             DeviceId = deviceId
         });
@@ -953,7 +953,141 @@ public class LocalRepository
         return settlement;
     }
 
-    public async Task<(decimal ExpectedCash, decimal Variance)> GetSessionSettlementDetailsAsync(string sessionId)
+    public async Task<LocalCashAccount> EnsureCashAccountAsync(string propertyId, string accountType, string name, string? referenceId = null)
+    {
+        string accountId = referenceId != null ? $"{accountType}_{referenceId}" : $"{accountType}_MAIN";
+        var account = await _dbContext.CashAccounts.FindAsync(accountId);
+        
+        if (account == null)
+        {
+            account = new LocalCashAccount
+            {
+                Id = accountId,
+                PropertyId = propertyId,
+                Name = name,
+                Type = accountType,
+                OwnerId = referenceId,
+                Balance = 0,
+                IsActive = true
+            };
+            _dbContext.CashAccounts.Add(account);
+            AppendSyncEvent(
+                entityType: "CASH_ACCOUNT",
+                entityId: accountId,
+                operationType: "CREATE",
+                payload: account,
+                terminalId: null, // Global to property usually
+                sessionId: null,
+                outletId: null,
+                propertyId: propertyId
+            );
+            await _dbContext.SaveChangesAsync();
+        }
+        return account;
+    }
+
+    public async Task<LocalPosSettlement> ConfirmHandoverAsync(string sessionId, string managerPin, string deviceId)
+    {
+        using var transaction = await _dbContext.Database.BeginTransactionAsync();
+        try
+        {
+            var session = await _dbContext.PosSessions.FindAsync(sessionId);
+            if (session == null) throw new Exception("Session not found");
+            if (session.Status != "PENDING_HANDOVER" && session.Status != "RECONCILIATION_REQUIRED") 
+                throw new Exception("Session is not in a handover state.");
+
+            var settlement = await _dbContext.PosSettlements.FirstOrDefaultAsync(s => s.SessionId == sessionId);
+            if (settlement == null) throw new Exception("Settlement record not found.");
+            if (settlement.Status == "CLOSED") throw new Exception("Settlement has already been confirmed.");
+
+            // Idempotency: Check if a SERVER_HANDOVER movement already exists for this session
+            bool handoverExists = await _dbContext.PosCashMovements.AnyAsync(m => m.PosSessionId == sessionId && m.Type == "SERVER_HANDOVER");
+            if (handoverExists) throw new Exception("Handover movement already exists for this session.");
+
+            // Authorize Manager
+            var authorizer = await ValidateSupervisorPinAsync(managerPin, session.PropertyId);
+            if (authorizer == null) throw new UnauthorizedAccessException("Invalid Manager PIN");
+
+            // Separation of Duties check
+            if (authorizer.Id == settlement.OperatorId || authorizer.Id == session.UserId)
+                throw new UnauthorizedAccessException("The authorizing manager cannot be the same operator who declared the shift.");
+
+            // Resolve correct source account based on BankType
+            LodgeCore.Desktop.Data.Entities.LocalCashAccount sourceAccount;
+            if (session.BankType == "EMERGENCY") {
+                sourceAccount = await _dbContext.CashAccounts.FirstOrDefaultAsync(a => a.Type == "EMERGENCY_BANK" && a.OwnerId == session.AuthorizedBy)
+                                ?? throw new Exception("Emergency Bank account not found.");
+            } else if (session.BankType == "STATION" || session.BankingModel == "CENTRAL_CASHIER") {
+                sourceAccount = await EnsureCashAccountAsync(session.PropertyId, "STATION_BANK", $"Station Bank - {session.UserId}", session.UserId);
+            } else {
+                sourceAccount = await EnsureCashAccountAsync(session.PropertyId, "SERVER_BANK", $"Server Bank - {session.UserId}", session.UserId);
+            }
+            
+            var safeAccount = await EnsureCashAccountAsync(session.PropertyId, "SAFE", "Central Safe");
+
+            string handoverType = session.BankType == "EMERGENCY" ? "EMERGENCY_HANDOVER" : 
+                                 (session.BankType == "STATION" || session.BankingModel == "CENTRAL_CASHIER" ? "STATION_HANDOVER" : "SERVER_HANDOVER");
+
+            var handoverMovement = new LocalPosCashMovement
+            {
+                Id = Guid.NewGuid().ToString(),
+                PropertyId = session.PropertyId,
+                PosSessionId = sessionId,
+                DeviceId = deviceId,
+                UserId = authorizer.Id,
+                Amount = settlement.ActualCash, // Actual Cash moved!
+                Currency = "NGN",
+                Type = handoverType,
+                SourceAccountId = sourceAccount.Id,
+                DestinationAccountId = safeAccount.Id,
+                ReasonCode = "MANAGER_CONFIRMATION",
+                OperationId = $"op_handover_mvt_{deviceId}_{DateTime.UtcNow.Ticks}",
+                AuthorizedBy = authorizer.Id,
+                CreatedAt = DateTime.UtcNow,
+                BusinessDate = session.OpenedAt.Date
+            };
+
+            _dbContext.PosCashMovements.Add(handoverMovement);
+
+            settlement.Status = "CLOSED";
+            settlement.AuthorizerId = authorizer.Id;
+
+            session.Status = "CLOSED";
+            
+            _dbContext.SyncEvents.Add(new LocalSyncEvent
+            {
+                OperationId = $"op_handover_conf_{deviceId}_{DateTime.UtcNow.Ticks}",
+                EntityType = "POS_SESSION",
+                EntityId = session.Id,
+                OperationType = "UPDATE",
+                PayloadJson = JsonSerializer.Serialize(new { Status = "CLOSED" }),
+                UserId = authorizer.Id,
+                DeviceId = deviceId
+            });
+
+            _dbContext.SyncEvents.Add(new LocalSyncEvent
+            {
+                OperationId = $"op_settlement_conf_{deviceId}_{DateTime.UtcNow.Ticks}",
+                EntityType = "POS_SETTLEMENT",
+                EntityId = settlement.Id,
+                OperationType = "UPDATE",
+                PayloadJson = JsonSerializer.Serialize(new { Status = "CLOSED", AuthorizerId = authorizer.Id }),
+                UserId = authorizer.Id,
+                DeviceId = deviceId
+            });
+
+            await _dbContext.SaveChangesAsync();
+            await transaction.CommitAsync();
+            return settlement;
+        }
+        catch (Exception)
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
+    public async Task<(decimal ExpectedCash, decimal Variance, decimal OpeningFloat, decimal CashSales, decimal CardSales, decimal BankTransferSales, decimal RoomChargeSales, decimal OtherSales, decimal TotalSales, decimal CashIn, decimal CashDrops, decimal PaidOuts, decimal TransfersOut, decimal CashRefunds)> GetSessionSettlementDetailsAsync(string sessionId)
     {
         var session = await _dbContext.PosSessions.FindAsync(sessionId);
         if (session == null) throw new Exception("Session not found");
@@ -964,11 +1098,19 @@ public class LocalRepository
 
         var payments = await _dbContext.PosPayments
             .Include(p => p.OrderId)
-            .Where(p => p.Method == "CASH" && p.Status == "COMPLETED" && _dbContext.PosOrders.Any(o => o.Id == p.OrderId && o.SessionId == sessionId))
+            .Where(p => p.Status == "COMPLETED" && _dbContext.PosOrders.Any(o => o.Id == p.OrderId && o.SessionId == sessionId))
             .ToListAsync();
 
         decimal openingFloat = movements.Where(m => m.Type == "OPENING_FLOAT").Sum(m => m.Amount);
-        decimal cashSales = payments.Sum(p => p.Amount);
+        
+        // Sales breakdown
+        decimal cashSales = payments.Where(p => p.Method == "CASH").Sum(p => p.Amount);
+        decimal cardSales = payments.Where(p => p.Method == "CARD").Sum(p => p.Amount);
+        decimal bankTransferSales = payments.Where(p => p.Method == "BANK_TRANSFER").Sum(p => p.Amount);
+        decimal roomChargeSales = payments.Where(p => p.Method == "ROOM_CHARGE").Sum(p => p.Amount);
+        decimal otherSales = payments.Where(p => p.Method != "CASH" && p.Method != "CARD" && p.Method != "BANK_TRANSFER" && p.Method != "ROOM_CHARGE").Sum(p => p.Amount);
+        decimal totalSales = payments.Sum(p => p.Amount);
+
         decimal cashIn = movements.Where(m => m.Type == "CASH_IN" || m.Type == "CASH_TRANSFER_IN").Sum(m => m.Amount);
         decimal cashDrops = movements.Where(m => m.Type == "CASH_DROP").Sum(m => m.Amount);
         decimal paidOuts = movements.Where(m => m.Type == "PAID_OUT").Sum(m => m.Amount);
@@ -977,7 +1119,22 @@ public class LocalRepository
 
         decimal expectedCash = openingFloat + cashSales + cashIn - cashDrops - paidOuts - transfersOut - refunds;
 
-        return (expectedCash, 0); // Variance is 0 until actual is counted
+        return (
+            expectedCash,
+            0,
+            openingFloat,
+            cashSales,
+            cardSales,
+            bankTransferSales,
+            roomChargeSales,
+            otherSales,
+            totalSales,
+            cashIn,
+            cashDrops,
+            paidOuts,
+            transfersOut,
+            refunds
+        );
     }
 
     public async Task<List<LocalPosCashMovement>> GetCashMovementsAsync(string sessionId)
@@ -1054,7 +1211,7 @@ public class LocalRepository
         return payment;
     }
 
-    public async Task<LocalPosCashMovement> RecordCashMovementAsync(string propertyId, string sessionId, decimal amount, string type, string reasonCode, string? notes, string? receiptReference, string? authorizedBy, string userId, string deviceId)
+    public async Task<LocalPosCashMovement> RecordCashMovementAsync(string propertyId, string sessionId, decimal amount, string type, string reasonCode, string? notes, string? receiptReference, string? authorizedBy, string userId, string deviceId, string sourceAccountId = "", string destinationAccountId = "")
     {
         string operationId = $"op_cashmvt_{deviceId}_{DateTime.UtcNow.Ticks}";
         
@@ -1066,12 +1223,16 @@ public class LocalRepository
             DeviceId = deviceId,
             UserId = userId,
             Amount = amount,
+            Currency = "NGN",
             Type = type,
+            SourceAccountId = sourceAccountId,
+            DestinationAccountId = destinationAccountId,
             ReasonCode = reasonCode,
             Notes = notes,
             ReceiptReference = receiptReference,
             OperationId = operationId,
             AuthorizedBy = authorizedBy,
+            BusinessDate = DateTime.UtcNow.Date,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -1088,6 +1249,153 @@ public class LocalRepository
             DeviceId = deviceId
         });
 
+        await _dbContext.SaveChangesAsync();
+        return movement;
+    }
+
+    public async Task<List<object>> GetPendingHandoversAsync(string propertyId)
+    {
+        var pendingSessions = await _dbContext.PosSessions
+            .Where(s => s.PropertyId == propertyId && (s.Status == "PENDING_HANDOVER" || s.Status == "RECONCILIATION_REQUIRED"))
+            .ToListAsync();
+            
+        var settlements = await _dbContext.PosSettlements
+            .Where(s => s.PropertyId == propertyId && pendingSessions.Select(p => p.Id).Contains(s.SessionId))
+            .ToListAsync();
+
+        return pendingSessions.Select(session => {
+            var stl = settlements.FirstOrDefault(s => s.SessionId == session.Id);
+            return (object)new {
+                Session = session,
+                Settlement = stl
+            };
+        }).ToList();
+    }
+
+    public async Task<object> GetCashOfficeOverviewAsync(string propertyId)
+    {
+        var safeAccount = await EnsureCashAccountAsync(propertyId, "SAFE", "Central Safe");
+        
+        var pendingHandoversCount = await _dbContext.PosSessions
+            .CountAsync(s => s.PropertyId == propertyId && (s.Status == "PENDING_HANDOVER" || s.Status == "RECONCILIATION_REQUIRED"));
+
+        var pendingSessions = await _dbContext.PosSessions
+            .Where(s => s.PropertyId == propertyId && (s.Status == "PENDING_HANDOVER" || s.Status == "RECONCILIATION_REQUIRED"))
+            .Select(s => s.Id)
+            .ToListAsync();
+            
+        var pendingCashAmount = await _dbContext.PosSettlements
+            .Where(s => pendingSessions.Contains(s.SessionId))
+            .SumAsync(s => s.ActualCash);
+
+        var today = DateTime.UtcNow.Date;
+        
+        var safeMovements = await _dbContext.PosCashMovements
+            .Where(m => m.PropertyId == propertyId && (m.SourceAccountId == safeAccount.Id || m.DestinationAccountId == safeAccount.Id))
+            .ToListAsync();
+            
+        decimal safeBalance = safeMovements.Where(m => m.DestinationAccountId == safeAccount.Id).Sum(m => m.Amount)
+                            - safeMovements.Where(m => m.SourceAccountId == safeAccount.Id).Sum(m => m.Amount);
+
+        decimal todayDeposits = safeMovements
+            .Where(m => m.SourceAccountId == safeAccount.Id && m.Type == "BANK_DEPOSIT" && m.CreatedAt >= today)
+            .Sum(m => m.Amount);
+
+        decimal todayVariances = await _dbContext.PosSettlements
+            .Where(s => s.PropertyId == propertyId && s.CreatedAt >= today)
+            .SumAsync(s => s.Variance);
+
+        return new {
+            PendingHandoversCount = pendingHandoversCount,
+            PendingCashAmount = pendingCashAmount,
+            SafeBalance = safeBalance,
+            TodayDeposits = todayDeposits,
+            TodayVariances = todayVariances
+        };
+    }
+
+    public async Task<LocalPosCashMovement> OpenSafeAsync(string propertyId, decimal amount, string managerPin, string deviceId)
+    {
+        var authorizer = await ValidateSupervisorPinAsync(managerPin, propertyId);
+        if (authorizer == null) throw new UnauthorizedAccessException("Invalid Manager PIN");
+
+        var safeAccount = await EnsureCashAccountAsync(propertyId, "SAFE", "Central Safe");
+        var externalAccount = await EnsureCashAccountAsync(propertyId, "EXTERNAL", "External Funds");
+
+        // Check if already opened (idempotency check for opening float)
+        var exists = await _dbContext.PosCashMovements.AnyAsync(m => m.DestinationAccountId == safeAccount.Id && m.Type == "SAFE_OPENING_BALANCE");
+        if (exists) throw new Exception("The safe has already been initialized with an opening balance.");
+
+        var movement = new LocalPosCashMovement
+        {
+            Id = Guid.NewGuid().ToString(),
+            PropertyId = propertyId,
+            DeviceId = deviceId,
+            UserId = authorizer.Id,
+            Amount = amount,
+            Currency = "NGN",
+            Type = "SAFE_OPENING_BALANCE",
+            SourceAccountId = externalAccount.Id,
+            DestinationAccountId = safeAccount.Id,
+            ReasonCode = "INITIALIZATION",
+            Notes = "Initial safe float",
+            OperationId = $"op_safe_open_{deviceId}_{DateTime.UtcNow.Ticks}",
+            AuthorizedBy = authorizer.Id,
+            BusinessDate = DateTime.UtcNow.Date,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _dbContext.PosCashMovements.Add(movement);
+        await _dbContext.SaveChangesAsync();
+        return movement;
+    }
+
+    public async Task<List<LocalPosCashMovement>> GetSafeLedgerAsync(string propertyId)
+    {
+        var safeAccount = await EnsureCashAccountAsync(propertyId, "SAFE", "Central Safe");
+        return await _dbContext.PosCashMovements
+            .Where(m => m.PropertyId == propertyId && (m.SourceAccountId == safeAccount.Id || m.DestinationAccountId == safeAccount.Id))
+            .OrderByDescending(m => m.CreatedAt)
+            .ToListAsync();
+    }
+
+    public async Task<LocalPosCashMovement> RecordBankDepositAsync(string propertyId, decimal amount, string reference, string managerPin, string deviceId)
+    {
+        var authorizer = await ValidateSupervisorPinAsync(managerPin, propertyId);
+        if (authorizer == null) throw new UnauthorizedAccessException("Invalid Manager PIN");
+
+        var safeAccount = await EnsureCashAccountAsync(propertyId, "SAFE", "Central Safe");
+        var bankAccount = await EnsureCashAccountAsync(propertyId, "BANK_ACCOUNT", "Main Bank Account");
+
+        var safeMovements = await _dbContext.PosCashMovements
+            .Where(m => m.PropertyId == propertyId && (m.SourceAccountId == safeAccount.Id || m.DestinationAccountId == safeAccount.Id))
+            .ToListAsync();
+            
+        decimal currentBalance = safeMovements.Where(m => m.DestinationAccountId == safeAccount.Id).Sum(m => m.Amount)
+                               - safeMovements.Where(m => m.SourceAccountId == safeAccount.Id).Sum(m => m.Amount);
+
+        if (amount > currentBalance) throw new Exception("Insufficient funds in Central Safe.");
+
+        var movement = new LocalPosCashMovement
+        {
+            Id = Guid.NewGuid().ToString(),
+            PropertyId = propertyId,
+            DeviceId = deviceId,
+            UserId = authorizer.Id,
+            Amount = amount,
+            Currency = "NGN",
+            Type = "BANK_DEPOSIT",
+            SourceAccountId = safeAccount.Id,
+            DestinationAccountId = bankAccount.Id,
+            ReasonCode = "BANK_DEPOSIT",
+            ReceiptReference = reference,
+            OperationId = $"op_bank_dep_{deviceId}_{DateTime.UtcNow.Ticks}",
+            AuthorizedBy = authorizer.Id,
+            BusinessDate = DateTime.UtcNow.Date,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _dbContext.PosCashMovements.Add(movement);
         await _dbContext.SaveChangesAsync();
         return movement;
     }
@@ -1482,5 +1790,124 @@ public class LocalRepository
         };
 
         _dbContext.SyncEvents.Add(syncEvent);
+    }
+
+    public async Task<string> EnsureActiveServerBankAsync(string staffId, string propertyId, string outletId, string deviceId)
+    {
+        var activeSession = await _dbContext.PosSessions
+            .FirstOrDefaultAsync(s => s.PrimaryOperatorId == staffId && s.OutletId == outletId && s.Status == "OPEN" && s.BankType == "SERVER");
+
+        if (activeSession != null)
+        {
+            return activeSession.Id;
+        }
+
+        var newSession = new LodgeCore.Desktop.Data.Entities.LocalPosSession
+        {
+            Id = Guid.NewGuid().ToString(),
+            PropertyId = propertyId,
+            OutletId = outletId,
+            DeviceId = deviceId,
+            UserId = staffId,
+            Status = "OPEN",
+            BankingModel = "SERVER_BANKING",
+            BankType = "SERVER",
+            PrimaryOperatorId = staffId,
+            OpenedAt = DateTime.UtcNow,
+            OpeningBalance = 0,
+            ExpectedCash = 0,
+            StaffId = staffId // For backwards compatibility
+        };
+
+        _dbContext.PosSessions.Add(newSession);
+
+        AppendSyncEvent(
+            entityType: "POS_SESSION",
+            entityId: newSession.Id,
+            operationType: "CREATE",
+            payload: newSession,
+            terminalId: deviceId,
+            outletId: outletId,
+            sessionId: newSession.Id,
+            operatorId: staffId
+        );
+
+        await _dbContext.SaveChangesAsync();
+        return newSession.Id;
+    }
+
+    public async Task<string> EnsureEmergencyBankAsync(string managerId, string managerName, string primaryOperatorId, string deviceId, string outletId, string propertyId, string reason)
+    {
+        // 1. Concurrency Check: Verify no existing OPEN emergency bank for this terminal
+        var existingSession = await _dbContext.PosSessions
+            .FirstOrDefaultAsync(s => s.DeviceId == deviceId && s.Status == "OPEN" && s.BankingModel == "EMERGENCY_MANAGER");
+
+        if (existingSession != null)
+        {
+            return existingSession.Id;
+        }
+
+        // 2. Create Emergency Session
+        var sessionId = Guid.NewGuid().ToString();
+        var newSession = new LodgeCore.Desktop.Data.Entities.LocalPosSession
+        {
+            Id = sessionId,
+            PropertyId = propertyId,
+            OutletId = outletId,
+            DeviceId = deviceId,
+            UserId = primaryOperatorId, // Maintains waiter's identity as operator
+            Status = "OPEN",
+            BankingModel = "EMERGENCY_MANAGER",
+            BankType = "EMERGENCY",
+            PrimaryOperatorId = primaryOperatorId, // Acting For
+            AuthorizedBy = managerId, // Manager Identity
+            Reason = reason,
+            OpenedAt = DateTime.UtcNow,
+            OpeningBalance = 0,
+            ExpectedCash = 0,
+            StaffId = primaryOperatorId
+        };
+
+        _dbContext.PosSessions.Add(newSession);
+
+        // 3. Create explicit LocalCashAccount for this Emergency Session
+        var cashAccountId = Guid.NewGuid().ToString();
+        var newAccount = new LodgeCore.Desktop.Data.Entities.LocalCashAccount
+        {
+            Id = cashAccountId,
+            PropertyId = propertyId,
+            OutletId = outletId,
+            Type = "EMERGENCY_BANK",
+            Name = $"Emergency Bank - {managerName} - {DateTime.UtcNow:HH:mm}",
+            Balance = 0,
+            OwnerId = managerId,
+            IsActive = true
+        };
+        _dbContext.CashAccounts.Add(newAccount);
+
+        AppendSyncEvent(
+            entityType: "CASH_ACCOUNT",
+            entityId: cashAccountId,
+            operationType: "CREATE",
+            payload: newAccount,
+            terminalId: deviceId,
+            sessionId: sessionId,
+            outletId: outletId,
+            propertyId: propertyId
+        );
+
+        AppendSyncEvent(
+            entityType: "POS_SESSION",
+            entityId: sessionId,
+            operationType: "CREATE",
+            payload: newSession,
+            terminalId: deviceId,
+            outletId: outletId,
+            sessionId: sessionId,
+            operatorId: managerId
+        );
+
+        await _dbContext.SaveChangesAsync();
+        return sessionId;
     }
 }

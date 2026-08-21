@@ -23,6 +23,7 @@ import {
   MoonStar,
   Brush,
   Wrench,
+  HandCoins,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -60,6 +61,7 @@ const ALL_NAV = [
       { name: 'Room Status', href: '/reports/room-status' },
     ]
   },
+  { name: 'Cash Office', href: '/cash-office', icon: HandCoins, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'ACCOUNTANT'] },
   { name: 'Settings', href: '/settings', icon: Settings, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER'] },
 ];
 

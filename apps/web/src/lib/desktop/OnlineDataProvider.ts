@@ -41,7 +41,7 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
     async getActiveStaff() {
       throw new Error('getActiveStaff is only supported on Desktop offline auth');
     },
-    async login(staffId, pin) {
+    async login(staffId: string, pin: string, bankingModel?: string): Promise<{ success: boolean; error?: string; posSessionId?: string; bankingModel?: string }> {
       throw new Error('login is only supported on Desktop offline auth');
     }
   },
@@ -236,6 +236,9 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
         body: JSON.stringify(data)
       });
     },
+    startEmergencyBank: async (pin: string, reason: string, operatorToken: string) => {
+      return { data: { sessionId: `emerg_${Date.now()}` }, error: null };
+    },
     getSessionContext: async (sessionId: string) => {
       return apiFetch(`/api/v1/pos/sessions/${sessionId}`);
     },
@@ -323,6 +326,33 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
       return apiFetch(`/api/v1/pos/sessions/${sessionId}/settle`, {
         method: 'POST',
         body: JSON.stringify({ actualCash, operatorId, authorizerId })
+      });
+    },
+    confirmHandover: async (sessionId: string, managerPin: string) => {
+      return apiFetch(`/api/v1/pos/sessions/${sessionId}/confirm-handover`, {
+        method: 'POST',
+        body: JSON.stringify({ managerPin })
+      });
+    },
+    getCashOfficeOverview: async (propertyId: string) => {
+      return apiFetch(`/api/v1/pos/cash-office/overview?propertyId=${propertyId}`);
+    },
+    getPendingHandovers: async (propertyId: string) => {
+      return apiFetch(`/api/v1/pos/cash-office/handovers/pending?propertyId=${propertyId}`);
+    },
+    getSafeLedger: async (propertyId: string) => {
+      return apiFetch(`/api/v1/pos/cash-office/safe?propertyId=${propertyId}`);
+    },
+    openSafe: async (propertyId: string, amount: number, managerPin: string) => {
+      return apiFetch(`/api/v1/pos/cash-office/safe/open`, {
+        method: 'POST',
+        body: JSON.stringify({ propertyId, amount, managerPin })
+      });
+    },
+    recordBankDeposit: async (propertyId: string, amount: number, reference: string, managerPin: string) => {
+      return apiFetch(`/api/v1/pos/cash-office/safe/deposit`, {
+        method: 'POST',
+        body: JSON.stringify({ propertyId, amount, reference, managerPin })
       });
     },
     // Service-first waiter flow

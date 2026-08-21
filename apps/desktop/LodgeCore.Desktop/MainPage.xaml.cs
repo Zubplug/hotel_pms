@@ -139,7 +139,8 @@ public partial class MainPage : ContentPage
                 case "auth.login":
                     responseData = await pmsInterop.LoginAsync(
                         parameters?["staffId"]?.ToString(),
-                        parameters?["pin"]?.ToString()
+                        parameters?["pin"]?.ToString(),
+                        parameters?["bankingModel"]?.ToString()
                     );
                     break;
                 case "auth.clearSession":
@@ -369,6 +370,42 @@ public partial class MainPage : ContentPage
                         parameters?["actualCash"]?.GetValue<decimal>() ?? 0,
                         parameters?["cashPaidOut"]?.GetValue<decimal>() ?? 0);
                     break;
+                case "pos.confirmHandover":
+                    responseData = await pmsInterop.ConfirmHandoverAsync(
+                        parameters?["sessionId"]?.ToString(),
+                        parameters?["managerPin"]?.ToString()
+                    );
+                    break;
+                case "pos.getPendingHandovers":
+                    responseData = await pmsInterop.GetPendingHandoversAsync(
+                        parameters?["propertyId"]?.ToString()
+                    );
+                    break;
+                case "pos.getCashOfficeOverview":
+                    responseData = await pmsInterop.GetCashOfficeOverviewAsync(
+                        parameters?["propertyId"]?.ToString()
+                    );
+                    break;
+                case "pos.openSafe":
+                    responseData = await pmsInterop.OpenSafeAsync(
+                        parameters?["propertyId"]?.ToString(),
+                        parameters?["amount"]?.GetValue<decimal>() ?? 0,
+                        parameters?["managerPin"]?.ToString()
+                    );
+                    break;
+                case "pos.getSafeLedger":
+                    responseData = await pmsInterop.GetSafeLedgerAsync(
+                        parameters?["propertyId"]?.ToString()
+                    );
+                    break;
+                case "pos.recordBankDeposit":
+                    responseData = await pmsInterop.RecordBankDepositAsync(
+                        parameters?["propertyId"]?.ToString(),
+                        parameters?["amount"]?.GetValue<decimal>() ?? 0,
+                        parameters?["reference"]?.ToString(),
+                        parameters?["managerPin"]?.ToString()
+                    );
+                    break;
                 case "pos.authorizeVoid":
                     responseData = await pmsInterop.AuthorizeVoidAsync(
                         parameters?["orderId"]?.ToString(),
@@ -408,6 +445,12 @@ public partial class MainPage : ContentPage
                         parameters?["pin"]?.ToString(),
                         parameters?["propertyId"]?.ToString(),
                         parameters?["sessionId"]?.ToString());
+                    break;
+                case "pos.startEmergencyBank":
+                    responseData = await pmsInterop.StartEmergencyBankAsync(
+                        parameters?["pin"]?.ToString(),
+                        parameters?["reason"]?.ToString(),
+                        parameters?["operatorToken"]?.ToString());
                     break;
                 case "pos.keepAlive":
                     responseData = await pmsInterop.KeepAliveAsync();

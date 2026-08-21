@@ -14,6 +14,8 @@ import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { formatCurrency } from '@/lib/utils';
 import { OperatorSelectionScreen } from '@/components/pos/OperatorSelectionScreen';
+import { MyShiftBankModal } from '@/components/pos/MyShiftBankModal';
+import { EmergencyCashBankModal } from '@/components/pos/EmergencyCashBankModal';
 import { AutoLockScreen } from '@/components/pos/AutoLockScreen';
 import { CategoryTileGrid } from '@/components/pos/CategoryTileGrid';
 import { ProductCardStepper } from '@/components/pos/ProductCardStepper';
@@ -86,6 +88,8 @@ export default function PosApp() {
   const [operatorToken, setOperatorToken] = useState<string | null>(null);
   const [showSwitchPad, setShowSwitchPad] = useState(false);
   const [showMySales, setShowMySales] = useState(false);
+  const [showShiftBank, setShowShiftBank] = useState(false);
+  const [showEmergencyModal, setShowEmergencyModal] = useState(false);
   const [showMyOrders, setShowMyOrders] = useState(false);
   const [showActiveOrders, setShowActiveOrders] = useState(false);
   const [showChargeModal, setShowChargeModal] = useState(false);
@@ -150,24 +154,37 @@ export default function PosApp() {
 
         if (activeSessionId) {
           try {
-            const savedToken = localStorage.getItem('lodgecore_pos_operator_token');
-            const [operatorRes, contextRes] = await Promise.all([
-              provider.pos.getCurrentOperator(activeSessionId, savedToken),
-              provider.pos.getSessionContext(activeSessionId),
-            ]);
-            if (!operatorRes.error && operatorRes.data?.staff) {
-              setActiveOperator(operatorRes.data.staff);
-              if (savedToken) setOperatorToken(savedToken);
-            }
+            const contextRes = await provider.pos.getSessionContext(activeSessionId);
             if (!contextRes.error && contextRes.data) {
               setSessionContext(contextRes.data);
             } else {
+              // The cash bank doesn't exist anymore, but we don't kick them out of the POS.
+              // Just clear the cash bank ID.
               localStorage.removeItem('lodgecore_pos_session_id');
-              router.push('/pos/start-shift');
+              setPosSessionId('');
             }
           } catch {
-            console.error('Failed to load POS session context');
+            console.error('Failed to load POS cash bank context');
           }
+        }
+        
+        const savedToken = localStorage.getItem('lodgecore_pos_operator_token');
+        if (savedToken) {
+           try {
+             // Fetch operator independently of the cash bank
+             const operatorRes = await provider.pos.getCurrentOperator(activeSessionId || '', savedToken);
+             if (!operatorRes.error && operatorRes.data?.staff) {
+               setActiveOperator(operatorRes.data.staff);
+               setOperatorToken(savedToken);
+             } else {
+               // Token invalid, go to login
+               router.push('/pos/operator-login');
+             }
+           } catch {
+             console.error('Failed to load operator');
+           }
+        } else {
+           router.push('/pos/operator-login');
         }
       } catch (err) {
         console.error('Failed to fetch POS data', err);
@@ -178,15 +195,13 @@ export default function PosApp() {
     fetchData();
   }, [propertyId, provider, session]);
 
-  // Redirect if no drawer session
+  // Redirect if no operator logged in (not cash drawer)
   useEffect(() => {
     if (sessionStatus === 'authenticated') {
-      const activeSessionId =
-        (session as any)?.sessionId ||
-        localStorage.getItem('lodgecore_pos_session_id');
-      if (!activeSessionId) router.push('/pos/start-shift');
+      const savedToken = localStorage.getItem('lodgecore_pos_operator_token');
+      if (!savedToken) router.push('/pos/operator-login');
     }
-  }, [sessionStatus, session, router]);
+  }, [sessionStatus, router]);
 
   // ─────────────────────────────────────────────────────────────────
   // Cart helpers
@@ -636,6 +651,7 @@ export default function PosApp() {
           setViewMode={setViewMode}
           onOpenMyOrders={() => setShowActiveOrders(true)}
           onOpenMySales={() => setShowMySales(true)}
+          onOpenShiftBank={() => setShowShiftBank(true)}
           onOpenKitchen={() => {}}
           onLock={() => { 
             setActiveOperator(null); 
@@ -643,6 +659,7 @@ export default function PosApp() {
             localStorage.removeItem('lodgecore_pos_operator_token');
             setShowSwitchPad(true); 
           }}
+          onEmergencyOverride={() => setShowEmergencyModal(true)}
           isOnline={isOnline}
           syncPending={syncPending}
           activeOperator={activeOperator}
@@ -1013,6 +1030,41 @@ export default function PosApp() {
           setShowSwitchPad(false);
         }}
       />
+
+      {/* Shift Bank Details Modal */}
+      {showShiftBank && (
+        <MyShiftBankModal
+          isOpen={showShiftBank}
+          onClose={() => setShowShiftBank(false)}
+          posSessionId={posSessionId || ''}
+          provider={provider}
+          operatorToken={operatorToken || ''}
+          onReconciled={() => {
+            // Log out the user once reconciled
+            setActiveOperator(null);
+            setOperatorToken(null);
+            localStorage.removeItem('lodgecore_pos_operator_token');
+            localStorage.removeItem('lodgecore_pos_session_id');
+            setPosSessionId('');
+            setShowSwitchPad(true);
+          }}
+        />
+      )}
+
+      {/* Emergency Bank Modal */}
+      {showEmergencyModal && (
+        <EmergencyCashBankModal
+          isOpen={showEmergencyModal}
+          onClose={() => setShowEmergencyModal(false)}
+          operatorToken={operatorToken || ''}
+          onSuccess={(newSessionId) => {
+            setPosSessionId(newSessionId);
+            localStorage.setItem('lodgecore_pos_session_id', newSessionId);
+            setShowEmergencyModal(false);
+            setTableRefreshTrigger(Date.now());
+          }}
+        />
+      )}
 
       {/* Modifier Selection */}
       <ModifierSelectionModal

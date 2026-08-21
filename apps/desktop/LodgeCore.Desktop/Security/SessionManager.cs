@@ -42,9 +42,10 @@ public class SessionManager
         if (outlet == null)
             throw new Exception("No active POS outlet found for this property.");
 
-        // Find if there's an active POS session for this outlet
+        // Find if there's an active POS session for this specific operator or terminal
         var activeSession = await _dbContext.PosSessions
-            .Where(s => s.PropertyId == property.Id && s.Status == "OPEN")
+            .Where(s => s.PropertyId == property.Id && s.Status == "OPEN" && 
+                        (s.UserId == staff.Id || (s.BankType == "STATION" && s.DeviceId == (await Microsoft.Maui.Storage.SecureStorage.Default.GetAsync("DEVICE_ID") ?? "UNKNOWN_DEVICE"))))
             .OrderByDescending(s => s.OpenedAt)
             .FirstOrDefaultAsync();
 
@@ -92,7 +93,8 @@ public class SessionManager
 
         // Check if POS Session changed
         var activePosSession = await _dbContext.PosSessions
-            .Where(s => s.PropertyId == context.PropertyId && s.Status == "OPEN")
+            .Where(s => s.PropertyId == context.PropertyId && s.Status == "OPEN" &&
+                        (s.UserId == context.StaffId || (s.BankType == "STATION" && s.DeviceId == context.DeviceId)))
             .OrderByDescending(s => s.OpenedAt)
             .FirstOrDefaultAsync();
             

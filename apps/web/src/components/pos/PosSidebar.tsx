@@ -2,8 +2,8 @@ import React from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import {
-  LayoutGrid, MapPin, Receipt, TrendingUp, ChefHat,
-  Monitor, Lock, UserCircle, RefreshCw, Wifi, WifiOff, Printer
+  LayoutGrid, MapPin, Receipt, TrendingUp, ChefHat, Wallet,
+  Monitor, Lock, UserCircle, RefreshCw, Wifi, WifiOff, Printer, AlertTriangle
 } from 'lucide-react';
 
 interface PosSidebarProps {
@@ -11,8 +11,10 @@ interface PosSidebarProps {
   setViewMode: (mode: 'menu' | 'tables') => void;
   onOpenMyOrders: () => void;
   onOpenMySales: () => void;
+  onOpenShiftBank: () => void;
   onOpenKitchen: () => void;
   onLock: () => void;
+  onEmergencyOverride?: () => void;
   isOnline: boolean;
   syncPending: number;
   activeOperator: any | null;
@@ -23,8 +25,10 @@ export function PosSidebar({
   setViewMode,
   onOpenMyOrders,
   onOpenMySales,
+  onOpenShiftBank,
   onOpenKitchen,
   onLock,
+  onEmergencyOverride,
   isOnline,
   syncPending,
   activeOperator,
@@ -116,6 +120,7 @@ export function PosSidebar({
         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-4 mb-1">Manage</p>
         <NavItem icon={Receipt}   label="All Orders"  onClick={onOpenMyOrders} active={false} />
         <NavItem icon={TrendingUp} label="My Sales"   onClick={onOpenMySales}  active={false} />
+        <NavItem icon={Wallet}     label="My Shift Bank" onClick={onOpenShiftBank} active={false} />
         <NavItem icon={ChefHat}   label="Kitchen"     onClick={onOpenKitchen}  active={false} />
         <NavItem icon={Monitor}   label="KDS Display" onClick={() => window.open('/pos/kds', '_blank')} active={false} />
         <NavItem icon={Printer}   label="Printers"    onClick={() => router.push('/pos/printer-settings')} active={false} />
@@ -157,7 +162,6 @@ export function PosSidebar({
             </div>
           </div>
 
-          {/* Switch Operator button */}
           <button
             onClick={onLock}
             className="w-full py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-all flex items-center justify-center gap-2 shadow-sm"
@@ -165,6 +169,16 @@ export function PosSidebar({
             <Lock className="w-3.5 h-3.5" />
             Switch Operator
           </button>
+
+          {onEmergencyOverride && (
+            <button
+              onClick={onEmergencyOverride}
+              className="w-full py-2 rounded-xl bg-red-50 border border-red-200 text-xs font-bold text-red-600 hover:bg-red-100 hover:border-red-300 transition-all flex items-center justify-center gap-2 shadow-sm mt-1"
+            >
+              <AlertTriangle className="w-3.5 h-3.5" />
+              Emergency Override
+            </button>
+          )}
         </div>
       </div>
     </div>

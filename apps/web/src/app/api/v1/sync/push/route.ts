@@ -63,6 +63,61 @@ export async function POST(request: Request) {
       }
 
       await prisma.$transaction(async (tx: any) => {
+        // 1. Transactional Payment Invariant Validation
+        const bankingModel = (property.settings as any)?.pos?.bankingModel || 'CENTRAL_CASHIER';
+        const validatedPayments = [];
+        
+        for (const pmt of payload.payments || []) {
+          let finalSessionId = pmt.sessionId || payload.sessionId || null;
+
+          if (!finalSessionId) {
+            if (bankingModel === 'CENTRAL_CASHIER') {
+              throw new Error('PAYMENT_REJECTED: Under the CENTRAL_CASHIER model, only cashiers with an active cash bank can process payments.');
+            } else if (bankingModel === 'SERVER_BANKING') {
+              throw new Error('PAYMENT_REJECTED: Under the SERVER_BANKING model, waiters must open their personal shift bank before processing payments.');
+            }
+          }
+
+          if (pmt.method === 'CASH') {
+            if (!finalSessionId) {
+              throw new Error('CASH_PAYMENT_REJECTED: A valid cash bank sessionId is required for CASH payments.');
+            }
+
+            const cashBank = await tx.posSession.findUnique({
+              where: { id: finalSessionId }
+            });
+
+            if (!cashBank) {
+              throw new Error('CASH_PAYMENT_REJECTED: Specified cash bank does not exist.');
+            }
+
+            if (cashBank.propertyId && cashBank.propertyId !== propertyId) {
+              throw new Error('CASH_PAYMENT_REJECTED: Cash bank belongs to a different property.');
+            }
+
+            if (cashBank.status !== 'OPEN') {
+              throw new Error('CASH_PAYMENT_REJECTED: Cash bank is closed or reconciled.');
+            }
+
+            // At this point we could also validate if the current operator is authorized for this bank
+          }
+          // Note: We deliberately do NOT strip finalSessionId for non-cash payments.
+          // In the CENTRAL_CASHIER model, the cashier processes all payments (Card, Room Charge, etc)
+          // and those payments should retain the Cashier's posSessionId to track shift collections.
+
+          validatedPayments.push({
+            id: pmt.id,
+            method: pmt.method,
+            status: pmt.status,
+            amount: pmt.amount,
+            currency: pmt.currency || 'NGN',
+            sessionId: finalSessionId,
+            processedById: pmt.processedById || userId,
+            operationId: pmt.operationId || `${operationId}_pmt_${pmt.id}`,
+            deviceId: deviceId
+          });
+        }
+
         // Create PosOrder
         const newOrder = await tx.posOrder.create({
           data: {
@@ -145,15 +200,7 @@ export async function POST(request: Request) {
             
             // Map payments
             payments: {
-              create: payload.payments.map((pmt: any) => ({
-                id: pmt.id,
-                method: pmt.method,
-                status: pmt.status,
-                amount: pmt.amount,
-                currency: pmt.currency || 'NGN',
-                operationId: pmt.operationId || `${operationId}_pmt_${pmt.id}`,
-                deviceId: deviceId
-              }))
+              create: validatedPayments
             }
           }
         });
@@ -500,11 +547,38 @@ export async function POST(request: Request) {
 
       await prisma.$transaction(async (tx: any) => {
         if (operationType === 'CREATE' || !existingSession) {
+          
+          if (payload.bankType === 'EMERGENCY') {
+            // Concurrency Protection: Lock the property row to serialize emergency bank creation
+            // This prevents the exact race condition where two managers click "Open Emergency Bank"
+            // simultaneously and create duplicate banks.
+            await tx.$executeRaw`SELECT id FROM properties WHERE id = ${propertyId}::uuid FOR UPDATE`;
+            
+            const existingEmergency = await tx.posSession.findFirst({
+              where: {
+                propertyId: propertyId,
+                deviceId: deviceId,
+                bankType: 'EMERGENCY',
+                status: 'OPEN'
+              }
+            });
+            
+            if (existingEmergency && existingEmergency.id !== entityId) {
+              // Gracefully reject the duplicate creation; the client should reload and use the existing bank
+              return;
+            }
+          }
+
           await tx.posSession.create({
             data: {
               id: entityId,
               propertyId: propertyId,
               deviceId: deviceId,
+              bankingModel: payload.bankingModel || 'CENTRAL_CASHIER',
+              bankType: payload.bankType || 'CENTRAL',
+              primaryOperatorId: payload.primaryOperatorId || null,
+              authorizedBy: payload.authorizedBy || null,
+              reason: payload.reason || null,
               openedBy: payload.userId || userId,
               status: payload.status,
               openedAt: new Date(payload.openedAt),
@@ -519,7 +593,10 @@ export async function POST(request: Request) {
             _sum: { amount: true },
             where: {
               method: 'CASH',
-              order: { sessionId: entityId },
+              OR: [
+                { sessionId: entityId },
+                { order: { sessionId: entityId } } // Legacy fallback
+              ],
               status: { in: ['CONFIRMED', 'PAID'] }
             }
           });
@@ -527,7 +604,10 @@ export async function POST(request: Request) {
             _sum: { amount: true },
             where: {
               method: 'CASH',
-              order: { sessionId: entityId },
+              OR: [
+                { sessionId: entityId },
+                { order: { sessionId: entityId } }
+              ],
               status: 'REFUNDED' 
             }
           });
@@ -691,6 +771,37 @@ export async function POST(request: Request) {
           businessDate: payload.businessDate ? new Date(payload.businessDate) : (desktopBusinessDate || new Date()),
         }
       });
+    } else if (entityType === 'CASH_ACCOUNT') {
+      const existingAccount = await prisma.cashAccount.findUnique({
+        where: { id: entityId }
+      });
+
+      if (existingAccount && operationType === 'CREATE') {
+        return NextResponse.json({ status: 'ALREADY_APPLIED' }, { status: 200 });
+      }
+
+      if (operationType === 'CREATE' || !existingAccount) {
+        await prisma.cashAccount.create({
+          data: {
+            id: entityId,
+            propertyId: propertyId,
+            outletId: payload.outletId || null,
+            name: payload.name || 'Unknown Account',
+            type: payload.type || 'EXTERNAL',
+            balance: payload.balance || 0,
+            ownerId: payload.ownerId || null,
+            isActive: payload.isActive !== undefined ? payload.isActive : true
+          }
+        });
+      } else if (operationType === 'UPDATE') {
+        await prisma.cashAccount.update({
+          where: { id: entityId },
+          data: {
+            balance: payload.balance,
+            isActive: payload.isActive
+          }
+        });
+      }
     } else if (entityType === 'POS_CASH_MOVEMENT') {
       const existingMovement = await prisma.posCashMovement.findUnique({
         where: { operationId: operationId }
@@ -704,10 +815,13 @@ export async function POST(request: Request) {
           id: entityId,
           propertyId: propertyId,
           deviceId: deviceId,
-          posSessionId: payload.posSessionId,
+          posSessionId: payload.posSessionId || null,
           userId: payload.userId,
           amount: payload.amount,
+          currency: payload.currency || 'NGN',
           type: payload.type,
+          sourceAccountId: payload.sourceAccountId,
+          destinationAccountId: payload.destinationAccountId,
           reasonCode: payload.reasonCode,
           notes: payload.notes,
           receiptReference: payload.receiptReference,

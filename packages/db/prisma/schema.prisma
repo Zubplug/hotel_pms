@@ -114,10 +114,11 @@ model Property {
   inventoryAlerts      InventoryAlert[]
   approvalRequests     ApprovalRequest[]
 
-  createdAt  DateTime     @default(now()) @db.Timestamptz
-  updatedAt  DateTime     @updatedAt @db.Timestamptz
-  deletedAt  DateTime?    @db.Timestamptz
-  PosSession PosSession[]
+  createdAt   DateTime      @default(now()) @db.Timestamptz
+  updatedAt   DateTime      @updatedAt @db.Timestamptz
+  deletedAt   DateTime?     @db.Timestamptz
+  PosSession  PosSession[]
+  CashAccount CashAccount[]
 }
 
 model Building {
@@ -1139,6 +1140,9 @@ model Staff {
   outletAccess         StaffPosOutletAccess[]
   posProductionBatches PosProductionBatch[]
   posOperatorSessions  PosOperatorSession[]
+  primaryPosSessions   PosSession[]           @relation("PosSessionPrimaryOperator")
+  processedPosPayments PosPayment[]           @relation("PaymentProcessedBy")
+  CashAccount          CashAccount[]
 }
 
 model StaffPosOutletAccess {
@@ -1847,6 +1851,7 @@ model PosOutlet {
   terminals   PosTerminal[]
   staffAccess StaffPosOutletAccess[]
   floorPlans  PosFloorPlan[]
+  CashAccount CashAccount[]
 }
 
 model PosFloorPlan {
@@ -1959,6 +1964,13 @@ model PosSession {
   outletId String    @db.Uuid
   outlet   PosOutlet @relation(fields: [outletId], references: [id])
 
+  bankingModel      String // 'SERVER_BANKING' or 'CENTRAL_CASHIER'
+  bankType          String // 'SERVER', 'CENTRAL', or 'EMERGENCY'
+  primaryOperatorId String? @db.Uuid
+  primaryOperator   Staff?  @relation("PosSessionPrimaryOperator", fields: [primaryOperatorId], references: [id])
+  authorizedBy      String? @db.Uuid
+  reason            String?
+
   status       PosSessionStatus @default(OPEN)
   businessDate DateTime         @db.Date
 
@@ -1978,13 +1990,14 @@ model PosSession {
   closedAt   DateTime? @db.Timestamptz
   approvedAt DateTime? @db.Timestamptz
 
-  deviceId String    @db.Uuid
-  device   PosDevice @relation(fields: [deviceId], references: [id])
+  deviceId String?    @db.Uuid // Made optional to allow Cashier Takeovers across devices
+  device   PosDevice? @relation(fields: [deviceId], references: [id])
 
   propertyId String?   @db.Uuid
   property   Property? @relation(fields: [propertyId], references: [id])
 
-  orders PosOrder[]
+  orders   PosOrder[]
+  payments PosPayment[]
 
   cashMovements       PosCashMovement[]
   receiptAudits       PosReceiptAudit[]
@@ -2003,24 +2016,51 @@ enum PosCashMovementType {
   FLOAT_ADJUSTMENT
   SETTLED_ACTUAL
   VARIANCE
+  SERVER_HANDOVER
+  STATION_HANDOVER
+  EMERGENCY_HANDOVER
+}
+
+model CashAccount {
+  id         String     @id @default(uuid()) @db.Uuid
+  propertyId String     @db.Uuid
+  property   Property   @relation(fields: [propertyId], references: [id])
+  outletId   String?    @db.Uuid
+  outlet     PosOutlet? @relation(fields: [outletId], references: [id])
+  name       String
+  type       String // e.g. SAFE, SERVER_BANK, STATION_BANK, EMERGENCY_BANK, BANK_ACCOUNT, EXTERNAL
+  balance    Decimal    @default(0) @db.Decimal(18, 4)
+  ownerId    String?    @db.Uuid
+  owner      Staff?     @relation(fields: [ownerId], references: [id])
+  isActive   Boolean    @default(true)
+  createdAt  DateTime   @default(now()) @db.Timestamptz
+  updatedAt  DateTime   @updatedAt @db.Timestamptz
+
+  sourceMovements      PosCashMovement[] @relation("SourceAccount")
+  destinationMovements PosCashMovement[] @relation("DestinationAccount")
 }
 
 model PosCashMovement {
-  id               String              @id @default(uuid()) @db.Uuid
-  propertyId       String              @db.Uuid
-  deviceId         String
-  posSessionId     String              @db.Uuid
-  userId           String              @db.Uuid
-  amount           Decimal             @db.Decimal(18, 4)
-  type             PosCashMovementType
-  reasonCode       String
-  notes            String?
-  receiptReference String?
-  operationId      String              @unique
-  businessDate     DateTime?           @db.Date
-  authorizedBy     String?             @db.Uuid
+  id                   String              @id @default(uuid()) @db.Uuid
+  propertyId           String              @db.Uuid
+  deviceId             String
+  posSessionId         String?             @db.Uuid
+  userId               String              @db.Uuid
+  amount               Decimal             @db.Decimal(18, 4)
+  currency             String              @default("NGN")
+  type                 PosCashMovementType
+  sourceAccountId      String              @db.Uuid
+  destinationAccountId String              @db.Uuid
+  reasonCode           String
+  notes                String?
+  receiptReference     String?
+  operationId          String              @unique
+  businessDate         DateTime?           @db.Date
+  authorizedBy         String?             @db.Uuid
 
-  session PosSession @relation(fields: [posSessionId], references: [id])
+  session            PosSession? @relation(fields: [posSessionId], references: [id])
+  sourceAccount      CashAccount @relation("SourceAccount", fields: [sourceAccountId], references: [id])
+  destinationAccount CashAccount @relation("DestinationAccount", fields: [destinationAccountId], references: [id])
 
   createdAt DateTime @default(now()) @db.Timestamptz
 }
@@ -2127,15 +2167,15 @@ enum PosOrderType {
 }
 
 model PosOrder {
-  id         String     @id @default(uuid()) @db.Uuid
-  propertyId String     @db.Uuid
-  property   Property   @relation(fields: [propertyId], references: [id])
-  outletId   String     @db.Uuid
-  outlet     PosOutlet  @relation(fields: [outletId], references: [id])
-  sessionId  String     @db.Uuid
-  session    PosSession @relation(fields: [sessionId], references: [id])
-  folioId    String?    @db.Uuid
-  folio      Folio?     @relation(fields: [folioId], references: [id])
+  id         String      @id @default(uuid()) @db.Uuid
+  propertyId String      @db.Uuid
+  property   Property    @relation(fields: [propertyId], references: [id])
+  outletId   String      @db.Uuid
+  outlet     PosOutlet   @relation(fields: [outletId], references: [id])
+  sessionId  String?     @db.Uuid
+  session    PosSession? @relation(fields: [sessionId], references: [id])
+  folioId    String?     @db.Uuid
+  folio      Folio?      @relation(fields: [folioId], references: [id])
 
   serverStaffId String? @db.Uuid
   serverStaff   Staff?  @relation(fields: [serverStaffId], references: [id])
@@ -2287,6 +2327,12 @@ model PosPayment {
   status   PosPaymentStatus @default(PENDING)
   amount   Decimal          @db.Decimal(18, 4)
   currency String           @default("NGN")
+
+  sessionId String?     @db.Uuid
+  session   PosSession? @relation(fields: [sessionId], references: [id])
+
+  processedById String? @db.Uuid
+  processedBy   Staff?  @relation("PaymentProcessedBy", fields: [processedById], references: [id])
 
   reference            String?
   gateway              String?

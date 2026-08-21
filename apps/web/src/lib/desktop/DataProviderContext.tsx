@@ -10,15 +10,7 @@ interface DataProviderContextValue {
   isDesktopMode: boolean;
   isOnline: boolean;
   syncStatus: 'synced' | 'syncing' | 'offline' | 'error';
-  pos: {
-    getProducts: (propertyId: string) => Promise<{ data: any[], error: string | null }>;
-    getCategories: (propertyId: string) => Promise<{ data: any[], error: string | null }>;
-    getActiveStaff: (propertyId: string) => Promise<{ data: any[], error: string | null }>;
-    getCurrentOperator: (sessionId: string) => Promise<{ data: any, error: string | null }>;
-    authenticateOperator: (staffId: string, pin: string, propertyId: string, sessionId: string) => Promise<{ data: any, error: string | null }>;
-    startSession: (data: { userId: string, propertyId: string, openingCash: number }) => Promise<{ data: any, error: string | null }>;
-    getAuthorizedOutlets: (propertyId: string, deviceId: string) => Promise<{ data: { outlets: any[], device: any } | null, error: string | null }>;
-  };
+  pos: LodgeCoreDataProvider['pos'];
 }
 
 const DataProviderContext = createContext<DataProviderContextValue>({

@@ -3,7 +3,7 @@ export interface LodgeCoreDataProvider {
     getSession: () => Promise<any>;
     provisionDevice: (deviceToken: string) => Promise<any>;
     getActiveStaff: () => Promise<any>;
-    login: (staffId: string, pin: string) => Promise<any>;
+    login: (staffId: string, pin: string, bankingModel?: string) => Promise<{ success: boolean; error?: string; posSessionId?: string; bankingModel?: string }>;
     logout?: () => Promise<any>;
     lock?: () => Promise<any>;
     clearSession?: () => Promise<any>;
@@ -73,6 +73,7 @@ export interface LodgeCoreDataProvider {
     authenticateOperator(staffId: string, pin: string, propertyId: string, sessionId: string, outletId: string, deviceId: string): Promise<{ data: any, error: string | null }>;
     validateSupervisorPin(pin: string, propertyId?: string): Promise<{ data: any, error: string | null }>;
     startSession(data: { userId: string; propertyId: string; deviceId: string; outletId: string; openingCash: number }): Promise<{ data: any, error: string | null }>;
+    startEmergencyBank(pin: string, reason: string, operatorToken: string): Promise<{ data: any, error: string | null }>;
     getSessionContext(sessionId: string): Promise<{ data: any, error: string | null }>;
     getAuthorizedOutlets(propertyId: string, deviceId: string): Promise<{ data: { outlets: any[], device: any } | null, error: string | null }>;
     // Phase 1.8 — Restaurant Operations
@@ -92,6 +93,12 @@ export interface LodgeCoreDataProvider {
     createCashMovement(propertyId: string, sessionId: string, amount: number, type: string, reasonCode: string, notes?: string, receiptReference?: string, authorizerId?: string): Promise<{ data: any, error: string | null }>;
     getSessionSettlementDetails(sessionId: string): Promise<{ data: any, error: string | null }>;
     settleSession(sessionId: string, actualCash: number, operatorId: string, authorizerId?: string): Promise<{ data: any, error: string | null }>;
+    confirmHandover: (sessionId: string, managerPin: string) => Promise<any>;
+    getCashOfficeOverview: (propertyId: string) => Promise<{ data: any, error: string | null }>;
+    getPendingHandovers: (propertyId: string) => Promise<{ data: any[], error: string | null }>;
+    getSafeLedger: (propertyId: string) => Promise<{ data: any, error: string | null }>;
+    openSafe: (propertyId: string, amount: number, managerPin: string) => Promise<{ data: any, error: string | null }>;
+    recordBankDeposit: (propertyId: string, amount: number, reference: string, managerPin: string) => Promise<{ data: any, error: string | null }>;
     // Service-first waiter flow
     fireItems(orderId: string, items: any[], operatorToken: string): Promise<{ data: any, error: string | null }>;
     getActiveOrders(sessionId: string, operatorToken: string, filter?: string): Promise<{ data: any[], error: string | null }>;

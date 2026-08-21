@@ -109,7 +109,7 @@ public class OfflinePMSInterop
         }
     }
 
-    public async Task<string> LoginAsync(string staffId, string pin)
+    public async Task<string> LoginAsync(string staffId, string pin, string? bankingModel = null)
     {
         try
         {
@@ -141,7 +141,75 @@ public class OfflinePMSInterop
                 staff.PosTokenVersion
             );
 
-            return JsonSerializer.Serialize(new { success = true });
+            string? posSessionId = null;
+
+            if (bankingModel == "SERVER_BANKING" && session != null)
+            {
+                var terminal = await _repo.GetTerminalAsync(session.DeviceId);
+                if (terminal != null)
+                {
+                    posSessionId = await _repo.EnsureActiveServerBankAsync(staff.Id, propertyId, terminal.OutletId, session.DeviceId);
+                }
+            }
+
+            return JsonSerializer.Serialize(new { success = true, posSessionId, bankingModel });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    public async Task<string> StartEmergencyBankAsync(string pin, string reason, string operatorToken)
+    {
+        try
+        {
+            var ctx = await GetSecureContextAsync();
+            var property = await _repo.GetPropertyAsync();
+            if (property == null) throw new Exception("Property not found.");
+            
+            // Validate property is in CENTRAL_CASHIER mode
+            if (property.BankingModel != "CENTRAL_CASHIER")
+            {
+                return JsonSerializer.Serialize(new { success = false, error = "Emergency override is only applicable in Station Banking (Central Cashier) mode." });
+            }
+
+            // Authenticate the Manager PIN
+            var managerRes = await _repo.ValidateSupervisorPinAsync(pin, null);
+            if (!managerRes.isValid || managerRes.staff == null)
+            {
+                return JsonSerializer.Serialize(new { success = false, error = "Invalid manager PIN." });
+            }
+
+            // Validate reason
+            if (string.IsNullOrWhiteSpace(reason) || reason.Length < 5)
+            {
+                return JsonSerializer.Serialize(new { success = false, error = "A descriptive reason is required." });
+            }
+
+            // Get the primary operator's ID from operatorToken
+            var tokenClaims = _authManager.ValidatePosToken(operatorToken);
+            if (tokenClaims == null || !tokenClaims.TryGetValue("userId", out var primaryOperatorIdObj))
+            {
+                return JsonSerializer.Serialize(new { success = false, error = "Invalid primary operator session." });
+            }
+
+            string primaryOperatorId = primaryOperatorIdObj.ToString() ?? "";
+            if (string.IsNullOrEmpty(primaryOperatorId)) {
+                return JsonSerializer.Serialize(new { success = false, error = "Invalid primary operator ID." });
+            }
+
+            string posSessionId = await _repo.EnsureEmergencyBankAsync(
+                managerId: managerRes.staff.Id, 
+                managerName: managerRes.staff.Name,
+                primaryOperatorId: primaryOperatorId, 
+                deviceId: ctx.DeviceId, 
+                outletId: ctx.OutletId ?? "", 
+                propertyId: property.Id, 
+                reason: reason
+            );
+
+            return JsonSerializer.Serialize(new { success = true, posSessionId });
         }
         catch (Exception ex)
         {
@@ -585,6 +653,21 @@ public class OfflinePMSInterop
             string checkId = paymentData.ContainsKey("checkId") ? paymentData["checkId"]?.ToString() : null;
 
             var posCtx = await _sessionManager.GetActiveContextAsync();
+            
+            // AUTHORIZATION CHECK
+            if (string.IsNullOrEmpty(posCtx.SessionId))
+            {
+                var property = await _repo.GetPropertyAsync();
+                if (property != null) 
+                {
+                    if (property.BankingModel == "CENTRAL_CASHIER") {
+                        return JsonSerializer.Serialize(new { success = false, error = "Waiters cannot process payments. Please direct the guest to the Cashier." });
+                    } else if (property.BankingModel == "SERVER_BANKING") {
+                        return JsonSerializer.Serialize(new { success = false, error = "No personal bank found. Please start your personal shift bank." });
+                    }
+                }
+            }
+
             var res = await _repo.PayOrderAsync(orderId, method, amount, currency, checkId, posCtx.StaffId, posCtx.DeviceId);
             return JsonSerializer.Serialize(new { success = true, data = res });
         }
@@ -668,6 +751,20 @@ public class OfflinePMSInterop
         {
             var ctx = await GetSecureContextAsync();
             var res = await _repo.SettleSessionAsync(sessionId, actualCash, ctx.UserId, null, ctx.DeviceId);
+            return JsonSerializer.Serialize(new { success = true, data = res });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+        }
+    }
+
+    public async Task<string> ConfirmHandoverAsync(string sessionId, string managerPin)
+    {
+        try
+        {
+            var ctx = await GetSecureContextAsync();
+            var res = await _repo.ConfirmHandoverAsync(sessionId, managerPin, ctx.DeviceId);
             return JsonSerializer.Serialize(new { success = true, data = res });
         }
         catch (Exception ex)
@@ -937,8 +1034,26 @@ public class OfflinePMSInterop
         {
             var posCtx = await _sessionManager.GetActiveContextAsync();
             string targetSession = string.IsNullOrEmpty(sessionId) ? posCtx.SessionId : sessionId;
-            var (expectedCash, variance) = await _repo.GetSessionSettlementDetailsAsync(targetSession);
-            return JsonSerializer.Serialize(new { success = true, data = new { expectedCash, variance } });
+            var details = await _repo.GetSessionSettlementDetailsAsync(targetSession);
+            return JsonSerializer.Serialize(new { 
+                success = true, 
+                data = new {
+                    expectedCash = details.ExpectedCash,
+                    variance = details.Variance,
+                    openingBalance = details.OpeningFloat,
+                    cashSales = details.CashSales,
+                    cardSales = details.CardSales,
+                    bankTransferSales = details.BankTransferSales,
+                    roomChargeSales = details.RoomChargeSales,
+                    otherSales = details.OtherSales,
+                    totalSales = details.TotalSales,
+                    cashIn = details.CashIn,
+                    cashDrops = details.CashDrops,
+                    paidOuts = details.PaidOuts,
+                    transfersOut = details.TransfersOut,
+                    cashRefunds = details.CashRefunds
+                }
+            });
         }
         catch (Exception ex)
         {
@@ -978,7 +1093,48 @@ public class OfflinePMSInterop
         {
             return JsonSerializer.Serialize(new { success = false, error = ex.Message });
         }
+    public async Task<string> GetPendingHandoversAsync(string propertyId)
+    {
+        try {
+            var data = await _repo.GetPendingHandoversAsync(propertyId);
+            return JsonSerializer.Serialize(new { success = true, data });
+        } catch (Exception ex) { return JsonSerializer.Serialize(new { success = false, error = ex.Message }); }
     }
+
+    public async Task<string> GetCashOfficeOverviewAsync(string propertyId)
+    {
+        try {
+            var data = await _repo.GetCashOfficeOverviewAsync(propertyId);
+            return JsonSerializer.Serialize(new { success = true, data });
+        } catch (Exception ex) { return JsonSerializer.Serialize(new { success = false, error = ex.Message }); }
+    }
+
+    public async Task<string> OpenSafeAsync(string propertyId, decimal amount, string managerPin)
+    {
+        try {
+            var ctx = await _sessionManager.GetActiveContextAsync();
+            var data = await _repo.OpenSafeAsync(propertyId, amount, managerPin, ctx.DeviceId);
+            return JsonSerializer.Serialize(new { success = true, data });
+        } catch (Exception ex) { return JsonSerializer.Serialize(new { success = false, error = ex.Message }); }
+    }
+
+    public async Task<string> GetSafeLedgerAsync(string propertyId)
+    {
+        try {
+            var data = await _repo.GetSafeLedgerAsync(propertyId);
+            return JsonSerializer.Serialize(new { success = true, data });
+        } catch (Exception ex) { return JsonSerializer.Serialize(new { success = false, error = ex.Message }); }
+    }
+
+    public async Task<string> RecordBankDepositAsync(string propertyId, decimal amount, string reference, string managerPin)
+    {
+        try {
+            var ctx = await _sessionManager.GetActiveContextAsync();
+            var data = await _repo.RecordBankDepositAsync(propertyId, amount, reference, managerPin, ctx.DeviceId);
+            return JsonSerializer.Serialize(new { success = true, data });
+        } catch (Exception ex) { return JsonSerializer.Serialize(new { success = false, error = ex.Message }); }
+    }
+
     public async Task<string> OpenCashDrawerAsync()
     {
         try

@@ -59,9 +59,14 @@ export function OperatorSelectionScreen({ isOpen, onAuthenticated, onCancel, can
     setError('');
 
     try {
-      const authRes = await provider.auth.login(selectedStaff.id, pin);
+      // We pass SERVER_BANKING to trigger the idempotent backend bank creation for this pilot
+      const authRes = await provider.auth.login(selectedStaff.id, pin, "SERVER_BANKING");
 
       if (!authRes.error && authRes.success) {
+        if (authRes.posSessionId) {
+          localStorage.setItem('lodgecore_pos_session_id', authRes.posSessionId);
+        }
+        
         // auth.login sets the session in the backend. 
         // We fetch the updated session immediately to pass to onAuthenticated.
         const sessionResStr = await provider.auth.getSession();

@@ -39,6 +39,7 @@ public class LocalDbContext : DbContext
     public DbSet<LocalPosProductModifier> PosProductModifiers { get; set; } = null!;
     public DbSet<LocalPosOrderItemModifier> PosOrderItemModifiers { get; set; } = null!;
     public DbSet<LocalPosCashMovement> PosCashMovements { get; set; } = null!;
+    public DbSet<LocalCashAccount> CashAccounts { get; set; } = null!;
     public DbSet<LocalPosSettlement> PosSettlements { get; set; } = null!;
     public DbSet<LocalPosVoid> PosVoids { get; set; } = null!;
     public DbSet<LocalPosReceiptAudit> PosReceiptAudits { get; set; } = null!;
