@@ -167,8 +167,10 @@ public class OfflinePMSInterop
     {
         try
         {
-            var ctx = await GetSecureContextAsync();
-            var property = await _repo.GetPropertyAsync();
+            var desktopSession = await _authManager.GetSessionAsync();
+            if (desktopSession == null) throw new Exception("No active terminal session.");
+
+            var property = await _repo.GetPropertyAsync(desktopSession.PropertyId);
             if (property == null) throw new Exception("Property not found.");
             
             // Validate property is in CENTRAL_CASHIER mode
@@ -178,8 +180,8 @@ public class OfflinePMSInterop
             }
 
             // Authenticate the Manager PIN
-            var managerRes = await _repo.ValidateSupervisorPinAsync(pin, null);
-            if (!managerRes.isValid || managerRes.staff == null)
+            var managerRes = await _repo.ValidateSupervisorPinAsync(pin, desktopSession.PropertyId);
+            if (managerRes == null)
             {
                 return JsonSerializer.Serialize(new { success = false, error = "Invalid manager PIN." });
             }
@@ -191,23 +193,20 @@ public class OfflinePMSInterop
             }
 
             // Get the primary operator's ID from operatorToken
-            var tokenClaims = _authManager.ValidatePosToken(operatorToken);
-            if (tokenClaims == null || !tokenClaims.TryGetValue("userId", out var primaryOperatorIdObj))
-            {
-                return JsonSerializer.Serialize(new { success = false, error = "Invalid primary operator session." });
-            }
-
-            string primaryOperatorId = primaryOperatorIdObj.ToString() ?? "";
+            // In the desktop app, the primary operator session is managed by SessionManager.
+            var posCtx = await _sessionManager.GetActiveContextAsync();
+            
+            string primaryOperatorId = posCtx.StaffId;
             if (string.IsNullOrEmpty(primaryOperatorId)) {
                 return JsonSerializer.Serialize(new { success = false, error = "Invalid primary operator ID." });
             }
 
             string posSessionId = await _repo.EnsureEmergencyBankAsync(
-                managerId: managerRes.staff.Id, 
-                managerName: managerRes.staff.Name,
+                managerId: managerRes.Id, 
+                managerName: $"{managerRes.FirstName} {managerRes.LastName}",
                 primaryOperatorId: primaryOperatorId, 
-                deviceId: ctx.DeviceId, 
-                outletId: ctx.OutletId ?? "", 
+                deviceId: desktopSession.DeviceId, 
+                outletId: posCtx.OutletId ?? "", 
                 propertyId: property.Id, 
                 reason: reason
             );
@@ -660,7 +659,7 @@ public class OfflinePMSInterop
             // AUTHORIZATION CHECK
             if (string.IsNullOrEmpty(posCtx.SessionId))
             {
-                var property = await _repo.GetPropertyAsync();
+                var property = await _repo.GetPropertyAsync(posCtx.PropertyId);
                 if (property != null) 
                 {
                     if (property.BankingModel == "CENTRAL_CASHIER") {

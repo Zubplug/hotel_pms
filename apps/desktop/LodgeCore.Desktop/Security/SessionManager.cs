@@ -42,10 +42,13 @@ public class SessionManager
         if (outlet == null)
             throw new Exception("No active POS outlet found for this property.");
 
+        // Fetch device ID ahead of LINQ query to avoid expression tree await error
+        var deviceId = await Microsoft.Maui.Storage.SecureStorage.Default.GetAsync("DEVICE_ID") ?? "UNKNOWN_DEVICE";
+
         // Find if there's an active POS session for this specific operator or terminal
         var activeSession = await _dbContext.PosSessions
             .Where(s => s.PropertyId == property.Id && s.Status == "OPEN" && 
-                        (s.UserId == staff.Id || (s.BankType == "STATION" && s.DeviceId == (await Microsoft.Maui.Storage.SecureStorage.Default.GetAsync("DEVICE_ID") ?? "UNKNOWN_DEVICE"))))
+                        (s.UserId == staff.Id || (s.BankType == "STATION" && s.DeviceId == deviceId)))
             .OrderByDescending(s => s.OpenedAt)
             .FirstOrDefaultAsync();
 
