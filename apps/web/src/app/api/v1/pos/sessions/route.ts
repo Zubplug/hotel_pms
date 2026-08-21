@@ -1,22 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
+import { verifyOperatorToken } from '@/lib/pos/operatorAuth';
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const authHeader = req.headers.get('Authorization');
+    const token = authHeader?.replace('Bearer ', '');
 
-    const staffId = session.user.staffId;
-    if (!staffId && session.user.role !== 'SUPER_ADMIN' && session.user.role !== 'HOTEL_MANAGER') {
-      return NextResponse.json({ error: 'Forbidden: No staff profile linked' }, { status: 403 });
+    let staffId: string | null = null;
+    let propertyId: string | null = null;
+    let loggedInUserId: string | null = null;
+    let isManager = false;
+
+    if (token) {
+      const payload = await verifyOperatorToken(token);
+      if (!payload) return NextResponse.json({ error: 'Invalid operator token' }, { status: 401 });
+      staffId = payload.staffId;
+      propertyId = payload.propertyId;
+      loggedInUserId = payload.staffId; // Since Waiters don't always have a User account, we use their staffId as openedBy
+    } else {
+      const session = await auth();
+      if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      staffId = session.user.staffId;
+      propertyId = (session.user as any).propertyId;
+      loggedInUserId = session.user.id;
+      isManager = session.user.role === 'SUPER_ADMIN' || session.user.role === 'HOTEL_MANAGER';
+      if (!staffId && !isManager) return NextResponse.json({ error: 'Forbidden: No staff profile linked' }, { status: 403 });
     }
 
     const data = await req.json();
-    // Use token propertyId if available, else from payload
-    const propertyId = (session.user as any).propertyId || data.propertyId;
+    propertyId = propertyId || data.propertyId;
     const { deviceId, outletId, openingCash } = data;
 
     if (!propertyId || !deviceId || !outletId) {
@@ -28,10 +42,7 @@ export async function POST(req: NextRequest) {
       where: { identifier: deviceId }
     });
 
-    if (!device) {
-      return NextResponse.json({ error: 'Device not found' }, { status: 404 });
-    }
-
+    if (!device) return NextResponse.json({ error: 'Device not found' }, { status: 404 });
     if (device.propertyId !== propertyId || device.status !== 'ACTIVE') {
       return NextResponse.json({ error: `Device is invalid or not active (Status: ${device?.status})` }, { status: 403 });
     }
@@ -51,59 +62,49 @@ export async function POST(req: NextRequest) {
     }
 
     // 4. Verify Staff has access to Outlet
-    if (session.user.role !== 'SUPER_ADMIN' && session.user.role !== 'HOTEL_MANAGER') {
+    if (!isManager) {
       const access = await prisma.staffPosOutletAccess.findUnique({
-        where: {
-          staffId_outletId: {
-            staffId: staffId as string,
-            outletId: outlet.id
-          }
-        }
+        where: { staffId_outletId: { staffId: staffId as string, outletId: outlet.id } }
       });
-
-      if (!access) {
-        return NextResponse.json({ error: 'You are not authorized to open a session at this outlet' }, { status: 403 });
-      }
+      if (!access) return NextResponse.json({ error: 'You are not authorized to open a session at this outlet' }, { status: 403 });
     }
     
     // 5. Fetch Property settings for banking model
-    const property = await prisma.property.findUnique({
-      where: { id: propertyId }
-    });
-    
+    const property = await prisma.property.findUnique({ where: { id: propertyId } });
     const bankingModel = (property?.settings as any)?.pos?.bankingModel || 'CENTRAL_CASHIER';
     const bankType = bankingModel === 'SERVER_BANKING' ? 'SERVER' : 'CENTRAL';
 
-    // 6. Transaction to check for existing OPEN session on this DEVICE and create new
+    // 6. Transaction to check for existing OPEN session and create new
     const result = await prisma.$transaction(async (tx: any) => {
-      const existingSession = await tx.posSession.findFirst({
-        where: {
-          deviceId: device.id,
-          status: 'OPEN'
+      if (bankingModel === 'SERVER_BANKING') {
+        const existingBank = await tx.posSession.findFirst({
+          where: { propertyId, outletId, primaryOperatorId: staffId, status: 'OPEN', bankType: 'SERVER' }
+        });
+        if (existingBank) return existingBank; // Idempotent logic per Waiter
+      } else {
+        const existingSession = await tx.posSession.findFirst({
+          where: { deviceId: device.id, status: 'OPEN' }
+        });
+        if (existingSession) {
+          if (existingSession.openedBy === loggedInUserId && existingSession.outletId === outlet.id) {
+            return existingSession;
+          }
+          throw new Error('This terminal already has an OPEN financial session by another cashier.');
         }
-      });
-
-      if (existingSession) {
-        // If it's the exact same user/outlet trying to reconnect, return it
-        if (existingSession.openedBy === session.user.id && existingSession.outletId === outlet.id) {
-          return existingSession;
-        }
-        throw new Error('This terminal already has an OPEN financial session by another cashier.');
       }
 
-      // Create the PosSession
       return tx.posSession.create({
         data: {
-          propertyId: propertyId,
+          propertyId,
           outletId: outlet.id,
           deviceId: device.id,
           businessDate: new Date(),
           openingCash: openingCash || 0,
           expectedCash: openingCash || 0,
-          openedBy: session.user.id, // Cashier who opens the drawer
-          primaryOperatorId: session.user.id,
-          bankingModel: bankingModel,
-          bankType: bankType,
+          openedBy: loggedInUserId,
+          primaryOperatorId: staffId,
+          bankingModel,
+          bankType,
           status: 'OPEN'
         }
       });

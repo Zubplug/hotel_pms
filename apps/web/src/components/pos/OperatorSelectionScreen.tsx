@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { User, AlertCircle, X } from 'lucide-react';
+import { User, AlertCircle, X, Banknote, ShieldAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
@@ -26,6 +26,10 @@ export function OperatorSelectionScreen({ isOpen, onAuthenticated, onCancel, can
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
+  const [bankState, setBankState] = useState<'NONE' | 'NEEDS_SERVER_BANK' | 'CENTRAL_CASHIER_UNAVAILABLE'>('NONE');
+  const [openingFloat, setOpeningFloat] = useState<string>('0');
+  const [authData, setAuthData] = useState<{ operator: any, token: string } | null>(null);
+
   useEffect(() => {
     if (!isOpen) return;
 
@@ -45,6 +49,8 @@ export function OperatorSelectionScreen({ isOpen, onAuthenticated, onCancel, can
       setPin('');
       setError('');
       setSelectedStaff(null);
+      setBankState('NONE');
+      setAuthData(null);
     }
   }, [isOpen]);
 
@@ -59,6 +65,52 @@ export function OperatorSelectionScreen({ isOpen, onAuthenticated, onCancel, can
     setPin(prev => prev.slice(0, -1));
   };
 
+  const handleProcessLoginSuccess = async (authRes: any, staffObj: any, token: string) => {
+    if (authRes.requiresBank) {
+      if (authRes.bankingModel === 'SERVER_BANKING') {
+        // Automatically start the server bank with 0 float
+        try {
+          const deviceId = localStorage.getItem('lodgecore_pos_device_id') || '';
+          
+          const req = {
+            propertyId,
+            deviceId,
+            outletId: outletId || localStorage.getItem('lodgecore_pos_outlet_id') || '',
+            openingCash: 0
+          };
+
+          if (isDesktopMode) {
+            onAuthenticated(staffObj, token);
+          } else {
+            const res = await fetch('/api/v1/pos/sessions', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify(req)
+            });
+
+            const data = await res.json();
+            if (res.ok && data.data?.sessionId) {
+              localStorage.setItem('lodgecore_pos_session_id', data.data.sessionId);
+              onAuthenticated(staffObj, token);
+            } else {
+              setError(data.error || 'Failed to start shift automatically');
+            }
+          }
+        } catch (e: any) {
+          setError(e.message || 'Failed to start shift automatically');
+        }
+      } else {
+        setBankState('CENTRAL_CASHIER_UNAVAILABLE');
+      }
+    } else {
+      if (authRes.posSessionId) localStorage.setItem('lodgecore_pos_session_id', authRes.posSessionId);
+      onAuthenticated(staffObj, token);
+    }
+  };
+
   const handleLogin = async () => {
     if (!selectedStaff || pin.length < 4) return;
     setIsLoading(true);
@@ -66,35 +118,25 @@ export function OperatorSelectionScreen({ isOpen, onAuthenticated, onCancel, can
 
     try {
       if (isDesktopMode) {
-        // Desktop backend automatically looks up the banking model for this property securely
         const authRes = await provider.auth.login(selectedStaff.id, pin);
 
         if (!authRes.error && authRes.success) {
-          if (authRes.posSessionId) {
-            localStorage.setItem('lodgecore_pos_session_id', authRes.posSessionId);
-          }
-          
-          // auth.login sets the session in the backend. 
-          // We fetch the updated session immediately to pass to onAuthenticated.
           const sessionResStr = await provider.auth.getSession();
           const sessionRes = typeof sessionResStr === 'string' ? JSON.parse(sessionResStr) : sessionResStr;
-          if (sessionRes.success && sessionRes.data?.user) {
-             onAuthenticated(sessionRes.data.user, sessionRes.data.sessionId);
-          } else {
-             onAuthenticated(selectedStaff, "desktop_token");
-          }
+          const userObj = (sessionRes.success && sessionRes.data?.user) ? sessionRes.data.user : selectedStaff;
+          
+          await handleProcessLoginSuccess(authRes, userObj, "desktop_token");
         } else {
           setError(authRes.error || 'Authentication failed');
           setPin('');
         }
       } else {
-        // Web Mode: We get an operator token for the existing session
         const sessionId = localStorage.getItem('lodgecore_pos_session_id') || '';
         const deviceId = localStorage.getItem('lodgecore_pos_device_id') || '';
         const authRes = await provider.pos.authenticateOperator(selectedStaff.id, pin, propertyId, sessionId, outletId || '', deviceId);
         
         if (!authRes.error && authRes.data?.success) {
-           onAuthenticated(authRes.data.staff, authRes.data.operatorToken);
+           await handleProcessLoginSuccess(authRes.data, authRes.data.staff, authRes.data.operatorToken);
         } else {
            setError(authRes.error || 'Authentication failed');
            setPin('');
@@ -113,6 +155,53 @@ export function OperatorSelectionScreen({ isOpen, onAuthenticated, onCancel, can
       handleLogin();
     }
   }, [pin]);
+
+  const handleStartShift = async () => {
+    if (!authData) return;
+    setIsLoading(true);
+    setError('');
+
+    try {
+      const deviceId = localStorage.getItem('lodgecore_pos_device_id') || '';
+      
+      const req = {
+        propertyId,
+        deviceId,
+        outletId: outletId || localStorage.getItem('lodgecore_pos_outlet_id') || '',
+        openingCash: parseFloat(openingFloat) || 0
+      };
+
+      if (isDesktopMode) {
+        // Desktop handles it locally or via IPC
+        // In desktop mode we assume the backend handles it or we call a new provider method
+        // For now, onAuthenticated directly since we don't have a desktop startSession implemented yet
+        // Wait, desktop session is started via API when online? 
+        // We can just call the /api/v1/pos/sessions directly or rely on the web app for this phase
+        onAuthenticated(authData.operator, authData.token);
+      } else {
+        const res = await fetch('/api/v1/pos/sessions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authData.token}`
+          },
+          body: JSON.stringify(req)
+        });
+
+        const data = await res.json();
+        if (res.ok && data.data?.sessionId) {
+          localStorage.setItem('lodgecore_pos_session_id', data.data.sessionId);
+          onAuthenticated(authData.operator, authData.token);
+        } else {
+          setError(data.error || 'Failed to start shift');
+        }
+      }
+    } catch (e: any) {
+      setError(e.message || 'Failed to start shift');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -138,7 +227,11 @@ export function OperatorSelectionScreen({ isOpen, onAuthenticated, onCancel, can
             {staff.map(s => (
               <button
                 key={s.id}
-                onClick={() => setSelectedStaff(s)}
+                onClick={() => {
+                  setSelectedStaff(s);
+                  setPin('');
+                  setBankState('NONE');
+                }}
                 className={`flex flex-col items-center justify-center p-6 rounded-3xl border-2 transition-all ${
                   selectedStaff?.id === s.id 
                     ? 'border-indigo-600 bg-indigo-50/50 shadow-sm ring-4 ring-indigo-600/10' 
@@ -163,36 +256,100 @@ export function OperatorSelectionScreen({ isOpen, onAuthenticated, onCancel, can
           </div>
         </div>
 
-        {/* Right Side - PIN Pad */}
+        {/* Right Side - Dynamic */}
         <div className="w-full md:w-[420px] p-10 flex flex-col h-[640px] bg-white">
-          <div className="text-center mb-10">
-            <h3 className="text-xl font-semibold text-slate-800 mb-2">
-              {selectedStaff ? `Enter PIN for ${selectedStaff.firstName}` : 'Select a profile first'}
-            </h3>
-            
-            {/* PIN Dots */}
-            <div className="flex justify-center gap-4 my-8">
-              {[0, 1, 2, 3].map(i => (
-                <div 
-                  key={i} 
-                  className={`w-5 h-5 rounded-full transition-all duration-200 ${
-                    i < pin.length ? 'bg-indigo-600 scale-110 shadow-md' : 'bg-slate-100 border border-slate-200'
-                  }`} 
-                />
-              ))}
-            </div>
+          
+          {bankState === 'NONE' && (
+            <>
+              <div className="text-center mb-10">
+                <h3 className="text-xl font-semibold text-slate-800 mb-2">
+                  {selectedStaff ? `Enter PIN for ${selectedStaff.firstName}` : 'Select a profile first'}
+                </h3>
+                
+                {/* PIN Dots */}
+                <div className="flex justify-center gap-4 my-8">
+                  {[0, 1, 2, 3].map(i => (
+                    <div 
+                      key={i} 
+                      className={`w-5 h-5 rounded-full transition-all duration-200 ${
+                        i < pin.length ? 'bg-indigo-600 scale-110 shadow-md' : 'bg-slate-100 border border-slate-200'
+                      }`} 
+                    />
+                  ))}
+                </div>
 
-            {error && (
-              <div className="flex items-center justify-center gap-2 text-red-600 text-sm font-medium bg-red-50 p-4 rounded-xl border border-red-100">
-                <AlertCircle className="w-5 h-5 flex-shrink-0" />
-                {error}
+                {error && (
+                  <div className="flex items-center justify-center gap-2 text-red-600 text-sm font-medium bg-red-50 p-4 rounded-xl border border-red-100">
+                    <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                    {error}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
 
-          <PinPad pin={pin} onNumPad={handleNumPad} onDelete={handleDelete} disabled={!selectedStaff || isLoading} />
+              <PinPad pin={pin} onNumPad={handleNumPad} onDelete={handleDelete} disabled={!selectedStaff || isLoading} />
+            </>
+          )}
+
+          {bankState === 'NEEDS_SERVER_BANK' && (
+            <div className="flex flex-col h-full animate-in slide-in-from-right-4">
+              <div className="text-center mb-8">
+                <div className="w-16 h-16 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center mx-auto mb-4">
+                  <Banknote className="w-8 h-8" />
+                </div>
+                <h3 className="text-2xl font-bold text-slate-800">Start Personal Shift Bank</h3>
+                <p className="text-slate-500 mt-2">Welcome {authData?.operator?.firstName}!</p>
+              </div>
+
+              <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 mb-6 flex-1">
+                <label className="block text-sm font-semibold text-slate-700 mb-2">Opening Float (Optional)</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium text-lg">₦</span>
+                  <input 
+                    type="number"
+                    min="0"
+                    step="100"
+                    value={openingFloat}
+                    onChange={e => setOpeningFloat(e.target.value)}
+                    className="w-full pl-10 pr-4 py-4 bg-white border border-slate-300 rounded-xl text-lg font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-600 focus:border-transparent transition-all"
+                  />
+                </div>
+                <p className="text-xs text-slate-500 mt-3">Leave as 0 if you are starting with no cash.</p>
+
+                {error && (
+                  <div className="mt-4 flex items-center gap-2 text-red-600 text-sm font-medium bg-red-50 p-3 rounded-lg">
+                    <AlertCircle className="w-4 h-4" />
+                    {error}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-3">
+                <Button size="lg" className="h-14 text-lg rounded-xl" onClick={handleStartShift} disabled={isLoading}>
+                  {isLoading ? 'Starting...' : 'Start Shift'}
+                </Button>
+                <Button variant="outline" size="lg" className="h-14 rounded-xl" onClick={() => setBankState('NONE')}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {bankState === 'CENTRAL_CASHIER_UNAVAILABLE' && (
+            <div className="flex flex-col h-full items-center justify-center text-center animate-in zoom-in-95">
+              <div className="w-20 h-20 rounded-full bg-red-50 flex items-center justify-center mb-6">
+                <ShieldAlert className="w-10 h-10 text-red-500" />
+              </div>
+              <h3 className="text-2xl font-bold text-slate-800 mb-3">Central Cashier Unavailable</h3>
+              <p className="text-slate-600 leading-relaxed mb-8">
+                The central till has not been opened. Please contact a manager to open the till before you can place orders.
+              </p>
+              <Button variant="outline" size="lg" className="w-full h-14 text-lg rounded-xl" onClick={() => setBankState('NONE')}>
+                Back
+              </Button>
+            </div>
+          )}
+
         </div>
-
       </div>
     </div>
   );

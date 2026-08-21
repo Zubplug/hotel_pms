@@ -151,17 +151,49 @@ public class OfflinePMSInterop
             var actualBankingModel = property?.BankingModel ?? "CENTRAL_CASHIER";
 
             string? posSessionId = null;
+            bool requiresBank = false;
+            string? bankOwner = null;
 
-            if (actualBankingModel == "SERVER_BANKING" && session != null)
+            if (session != null)
             {
                 var terminal = await _repo.GetTerminalAsync(session.DeviceId);
                 if (terminal != null)
                 {
-                    posSessionId = await _repo.EnsureActiveServerBankAsync(staff.Id, propertyId, terminal.OutletId, session.DeviceId);
+                    if (actualBankingModel == "SERVER_BANKING")
+                    {
+                        var openSession = await _repo.GetActiveServerBankAsync(staff.Id, propertyId, terminal.OutletId);
+                        if (openSession != null)
+                        {
+                            posSessionId = openSession.Id;
+                        }
+                        else
+                        {
+                            requiresBank = true;
+                        }
+                    }
+                    else
+                    {
+                        var openSession = await _repo.GetActiveSessionForDeviceAsync(session.DeviceId);
+                        if (openSession != null)
+                        {
+                            posSessionId = openSession.Id;
+                        }
+                        else
+                        {
+                            requiresBank = true;
+                            bankOwner = "MANAGER";
+                        }
+                    }
                 }
             }
 
-            return JsonSerializer.Serialize(new { success = true, posSessionId, bankingModel = actualBankingModel });
+            return JsonSerializer.Serialize(new { 
+                success = true, 
+                posSessionId, 
+                bankingModel = actualBankingModel,
+                requiresBank,
+                bankOwner
+            });
         }
         catch (Exception ex)
         {

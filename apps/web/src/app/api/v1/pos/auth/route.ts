@@ -39,10 +39,46 @@ export async function POST(req: NextRequest) {
     const jwtSecret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
     if (!jwtSecret) throw new Error('NEXTAUTH_SECRET missing');
     const secret = new TextEncoder().encode(jwtSecret);
+
+    const property = await prisma.property.findUnique({
+      where: { id: propertyId }
+    });
+    const bankingModel = (property?.settings as any)?.pos?.bankingModel || 'CENTRAL_CASHIER';
+
+    let activeSessionId = sessionId || null;
+    let requiresBank = false;
+    let bankOwner = null;
+
+    if (bankingModel === 'SERVER_BANKING') {
+      const openSession = await prisma.posSession.findFirst({
+        where: { propertyId, outletId, primaryOperatorId: staff.id, status: 'OPEN', bankType: 'SERVER' },
+        orderBy: { openedAt: 'desc' }
+      });
+      if (openSession) {
+        activeSessionId = openSession.id;
+      } else {
+        requiresBank = true;
+        activeSessionId = null;
+      }
+    } else {
+      // CENTRAL_CASHIER
+      const openSession = await prisma.posSession.findFirst({
+        where: { propertyId, outletId, deviceId, status: 'OPEN' },
+        orderBy: { openedAt: 'desc' }
+      });
+      if (openSession) {
+        activeSessionId = openSession.id;
+      } else {
+        requiresBank = true;
+        activeSessionId = null;
+        bankOwner = "MANAGER";
+      }
+    }
+
     const operatorToken = await new SignJWT({ 
       staffId: staff.id, 
       propertyId, 
-      sessionId,
+      sessionId: activeSessionId,
       outletId,
       deviceId,
       tokenVersion: staff.posTokenVersion
@@ -59,7 +95,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ 
       data: {
         success: true,
+        authenticated: true,
         operatorToken,
+        bankingModel,
+        sessionId: activeSessionId,
+        requiresBank,
+        bankOwner,
         staff: {
           id: staff.id,
           firstName: staff.firstName,

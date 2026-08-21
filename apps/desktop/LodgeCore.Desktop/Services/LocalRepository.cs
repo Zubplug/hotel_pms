@@ -1805,48 +1805,16 @@ public class LocalRepository
         _dbContext.SyncEvents.Add(syncEvent);
     }
 
-    public async Task<string> EnsureActiveServerBankAsync(string staffId, string propertyId, string outletId, string deviceId)
+    public async Task<LodgeCore.Desktop.Data.Entities.LocalPosSession?> GetActiveServerBankAsync(string staffId, string propertyId, string outletId)
     {
-        var activeSession = await _dbContext.PosSessions
+        return await _dbContext.PosSessions
             .FirstOrDefaultAsync(s => s.PrimaryOperatorId == staffId && s.OutletId == outletId && s.Status == "OPEN" && s.BankType == "SERVER");
+    }
 
-        if (activeSession != null)
-        {
-            return activeSession.Id;
-        }
-
-        var newSession = new LodgeCore.Desktop.Data.Entities.LocalPosSession
-        {
-            Id = Guid.NewGuid().ToString(),
-            PropertyId = propertyId,
-            OutletId = outletId,
-            DeviceId = deviceId,
-            UserId = staffId,
-            Status = "OPEN",
-            BankingModel = "SERVER_BANKING",
-            BankType = "SERVER",
-            PrimaryOperatorId = staffId,
-            OpenedAt = DateTime.UtcNow,
-            OpeningBalance = 0,
-            ExpectedCash = 0,
-            StaffId = staffId // For backwards compatibility
-        };
-
-        _dbContext.PosSessions.Add(newSession);
-
-        AppendSyncEvent(
-            entityType: "POS_SESSION",
-            entityId: newSession.Id,
-            operationType: "CREATE",
-            payload: newSession,
-            terminalId: deviceId,
-            outletId: outletId,
-            sessionId: newSession.Id,
-            operatorId: staffId
-        );
-
-        await _dbContext.SaveChangesAsync();
-        return newSession.Id;
+    public async Task<LodgeCore.Desktop.Data.Entities.LocalPosSession?> GetActiveSessionForDeviceAsync(string deviceId)
+    {
+        return await _dbContext.PosSessions
+            .FirstOrDefaultAsync(s => s.DeviceId == deviceId && s.Status == "OPEN");
     }
 
     public async Task<string> EnsureEmergencyBankAsync(string managerId, string managerName, string primaryOperatorId, string deviceId, string outletId, string propertyId, string reason)
