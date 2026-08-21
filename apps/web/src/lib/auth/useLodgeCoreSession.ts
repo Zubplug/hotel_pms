@@ -42,21 +42,31 @@ export function useLodgeCoreSession() {
     if (isLoading) {
       return { data: null, status: 'loading' as const };
     }
-    if (!desktopSession?.userId) {
+    if (!desktopSession?.userId && !desktopSession?.UserId) {
       return { data: null, status: 'unauthenticated' as const };
     }
+    
+    // Extract property gracefully regardless of C# serialization case
+    const uid = desktopSession?.userId || desktopSession?.UserId;
+    const displayName = desktopSession?.displayName || desktopSession?.DisplayName;
+    const email = desktopSession?.email || desktopSession?.Email;
+    const role = desktopSession?.role || desktopSession?.Role;
+    const staffId = desktopSession?.staffId || desktopSession?.StaffId;
+    const propId = desktopSession?.propertyId || desktopSession?.PropertyId;
+    const sid = desktopSession?.sessionId || desktopSession?.SessionId;
+    const expires = desktopSession?.expiresAt || desktopSession?.ExpiresAt;
     return {
       data: {
         user: {
-          id: desktopSession.userId,
-          name: desktopSession.displayName ?? desktopSession.userId,
-          email: desktopSession.email ?? `${desktopSession.userId}@desktop.local`,
-          role: desktopSession.role,
-          staffId: desktopSession.staffId,
-          propertyId: desktopSession.propertyId,
+          id: uid,
+          name: displayName ?? uid,
+          email: email ?? `${uid}@desktop.local`,
+          role: role,
+          staffId: staffId,
+          propertyId: propId,
         },
-        sessionId: desktopSession.sessionId,
-        expires: desktopSession.expiresAt ?? '',
+        sessionId: sid,
+        expires: expires ?? '',
       },
       status: 'authenticated' as const,
     };
