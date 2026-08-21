@@ -65,8 +65,16 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'You are not authorized to open a session at this outlet' }, { status: 403 });
       }
     }
+    
+    // 5. Fetch Property settings for banking model
+    const property = await prisma.property.findUnique({
+      where: { id: propertyId }
+    });
+    
+    const bankingModel = (property?.settings as any)?.pos?.bankingModel || 'CENTRAL_CASHIER';
+    const bankType = bankingModel === 'SERVER_BANKING' ? 'SERVER' : 'CENTRAL';
 
-    // 5. Transaction to check for existing OPEN session on this DEVICE and create new
+    // 6. Transaction to check for existing OPEN session on this DEVICE and create new
     const result = await prisma.$transaction(async (tx: any) => {
       const existingSession = await tx.posSession.findFirst({
         where: {
@@ -93,6 +101,9 @@ export async function POST(req: NextRequest) {
           openingCash: openingCash || 0,
           expectedCash: openingCash || 0,
           openedBy: session.user.id, // Cashier who opens the drawer
+          primaryOperatorId: session.user.id,
+          bankingModel: bankingModel,
+          bankType: bankType,
           status: 'OPEN'
         }
       });

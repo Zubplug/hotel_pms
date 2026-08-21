@@ -16,7 +16,7 @@ type OperatorSelectionScreenProps = {
 };
 
 export function OperatorSelectionScreen({ isOpen, onAuthenticated, onCancel, cancellable = false, outletId }: OperatorSelectionScreenProps) {
-  const { provider } = useLodgeCoreProvider();
+  const { provider, isDesktopMode } = useLodgeCoreProvider();
   const { data: session } = useLodgeCoreSession();
   const propertyId = (session?.user as any)?.propertyId || '';
 
@@ -59,26 +59,40 @@ export function OperatorSelectionScreen({ isOpen, onAuthenticated, onCancel, can
     setError('');
 
     try {
-      // We pass SERVER_BANKING to trigger the idempotent backend bank creation for this pilot
-      const authRes = await provider.auth.login(selectedStaff.id, pin, "SERVER_BANKING");
+      if (isDesktopMode) {
+        // We pass SERVER_BANKING to trigger the idempotent backend bank creation for this pilot
+        const authRes = await provider.auth.login(selectedStaff.id, pin, "SERVER_BANKING");
 
-      if (!authRes.error && authRes.success) {
-        if (authRes.posSessionId) {
-          localStorage.setItem('lodgecore_pos_session_id', authRes.posSessionId);
-        }
-        
-        // auth.login sets the session in the backend. 
-        // We fetch the updated session immediately to pass to onAuthenticated.
-        const sessionResStr = await provider.auth.getSession();
-        const sessionRes = typeof sessionResStr === 'string' ? JSON.parse(sessionResStr) : sessionResStr;
-        if (sessionRes.success && sessionRes.data?.user) {
-           onAuthenticated(sessionRes.data.user, sessionRes.data.sessionId);
+        if (!authRes.error && authRes.success) {
+          if (authRes.posSessionId) {
+            localStorage.setItem('lodgecore_pos_session_id', authRes.posSessionId);
+          }
+          
+          // auth.login sets the session in the backend. 
+          // We fetch the updated session immediately to pass to onAuthenticated.
+          const sessionResStr = await provider.auth.getSession();
+          const sessionRes = typeof sessionResStr === 'string' ? JSON.parse(sessionResStr) : sessionResStr;
+          if (sessionRes.success && sessionRes.data?.user) {
+             onAuthenticated(sessionRes.data.user, sessionRes.data.sessionId);
+          } else {
+             onAuthenticated(selectedStaff, "desktop_token");
+          }
         } else {
-           onAuthenticated(selectedStaff, "desktop_token");
+          setError(authRes.error || 'Authentication failed');
+          setPin('');
         }
       } else {
-        setError(authRes.error || 'Authentication failed');
-        setPin('');
+        // Web Mode: We get an operator token for the existing session
+        const sessionId = localStorage.getItem('lodgecore_pos_session_id') || '';
+        const deviceId = localStorage.getItem('lodgecore_pos_device_id') || '';
+        const authRes = await provider.pos.authenticateOperator(selectedStaff.id, pin, propertyId, sessionId, outletId, deviceId);
+        
+        if (!authRes.error && authRes.data?.success) {
+           onAuthenticated(authRes.data.staff, authRes.data.operatorToken);
+        } else {
+           setError(authRes.error || 'Authentication failed');
+           setPin('');
+        }
       }
     } catch (e: any) {
       setError(e.message || 'Authentication failed');
