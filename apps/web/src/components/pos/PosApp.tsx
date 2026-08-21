@@ -58,7 +58,7 @@ type OrderItem = {
 type ViewMode = 'menu' | 'tables';
 
 export default function PosApp() {
-  const { provider } = useLodgeCoreProvider();
+  const { provider, isDesktopMode } = useLodgeCoreProvider();
   const { data: session, status: sessionStatus } = useLodgeCoreSession();
   const propertyId = (session?.user as any)?.propertyId || '';
   const router = useRouter();
@@ -208,15 +208,14 @@ export default function PosApp() {
   // Redirect to device registration if not registered
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const isDesktopApp = window.navigator.userAgent.includes('Electron');
       const deviceId = localStorage.getItem('lodgecore_pos_device_id');
       
-      if (!deviceId && !isDesktopApp) {
+      if (!deviceId && !isDesktopMode) {
         // If not registered and running in a standard web browser, force registration
         router.push('/pos/device-registration');
       }
     }
-  }, [router]);
+  }, [router, isDesktopMode]);
 
   // ─────────────────────────────────────────────────────────────────
   // Cart helpers
