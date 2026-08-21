@@ -25,7 +25,7 @@ function ReservationDetailContent() {
     enabled: !!id,
   });
 
-  const reservation = res?.data;
+  const reservation = res?.data || res;
 
   if (isLoading) {
     return (

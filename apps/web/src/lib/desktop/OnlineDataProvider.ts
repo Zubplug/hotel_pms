@@ -23,10 +23,10 @@ async function apiFetchResult<T = any>(url: string, options: RequestInit = {}): 
   }
 }
 
-async function apiFetch<T = any>(url: string, options: RequestInit = {}): Promise<T> {
+async function apiFetch<T = any>(url: string, options: RequestInit = {}): Promise<any> {
   const res = await apiFetchResult<T>(url, options);
   if (res.error) throw new Error(res.error);
-  return res.data;
+  return { success: true, data: res.data };
 }
 
 export const OnlineDataProvider: LodgeCoreDataProvider = {
