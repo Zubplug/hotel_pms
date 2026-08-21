@@ -1018,7 +1018,7 @@ public class LocalRepository
             if (session.BankType == "EMERGENCY") {
                 sourceAccount = await _dbContext.CashAccounts.FirstOrDefaultAsync(a => a.Type == "EMERGENCY_BANK" && a.OwnerId == session.AuthorizedBy)
                                 ?? throw new Exception("Emergency Bank account not found.");
-            } else if (session.BankType == "STATION" || session.BankingModel == "CENTRAL_CASHIER") {
+            } else if (session.BankType == "CENTRAL" || session.BankingModel == "CENTRAL_CASHIER") {
                 sourceAccount = await EnsureCashAccountAsync(session.PropertyId, "STATION_BANK", $"Station Bank - {session.UserId}", session.UserId);
             } else {
                 sourceAccount = await EnsureCashAccountAsync(session.PropertyId, "SERVER_BANK", $"Server Bank - {session.UserId}", session.UserId);
@@ -1027,7 +1027,7 @@ public class LocalRepository
             var safeAccount = await EnsureCashAccountAsync(session.PropertyId, "SAFE", "Central Safe");
 
             string handoverType = session.BankType == "EMERGENCY" ? "EMERGENCY_HANDOVER" : 
-                                 (session.BankType == "STATION" || session.BankingModel == "CENTRAL_CASHIER" ? "STATION_HANDOVER" : "SERVER_HANDOVER");
+                                 (session.BankType == "CENTRAL" || session.BankingModel == "CENTRAL_CASHIER" ? "STATION_HANDOVER" : "SERVER_HANDOVER");
 
             var handoverMovement = new LocalPosCashMovement
             {
