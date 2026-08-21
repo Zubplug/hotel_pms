@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     } else {
       const session = await auth();
       if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-      staffId = session.user.staffId;
+      staffId = session.user.staffId || null;
       propertyId = (session.user as any).propertyId;
       loggedInUserId = session.user.id;
       isManager = session.user.role === 'SUPER_ADMIN' || session.user.role === 'HOTEL_MANAGER';
