@@ -2302,6 +2302,7 @@ model PosOrderItemModifier {
 
 model PosCheck {
   id      String   @id @default(uuid()) @db.Uuid
+  version Int      @default(1)
   orderId String   @db.Uuid
   order   PosOrder @relation(fields: [orderId], references: [id])
 
@@ -2508,6 +2509,7 @@ enum PosOperatorSessionStatus {
 
 model PosOperatorSession {
   id                   String                   @id @default(uuid()) @db.Uuid
+  version              Int                      @default(1)
   terminalId           String                   @db.Uuid
   terminal             PosTerminal              @relation(fields: [terminalId], references: [id])
   outletId             String                   @db.Uuid

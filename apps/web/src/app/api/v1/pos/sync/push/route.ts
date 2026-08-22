@@ -1,153 +1,227 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@hotel-pms/db";
+import prisma from "@hotel-pms/db";
 
-// Structure matches Desktop SyncEngine
-interface SyncEvent {
-  operationId: string;
-  sequenceNumber: number;
-  terminalId: string;
-  outletId: string;
-  sessionId: string;
-  operatorId: string;
-  entityType: string;
-  entityId: string;
-  operationType: string;
-  payloadJson: string;
-  payloadHash: string;
-  status: string;
-  createdAt: string;
-}
-
-interface SyncPushPayload {
-  events: SyncEvent[];
-}
-
+// Handle POS Sync Push supporting both Legacy SyncEvents and new HotelEvents
 export async function POST(req: NextRequest) {
   try {
     const authHeader = req.headers.get("authorization");
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return NextResponse.json({ error: "Missing or invalid authorization" }, { status: 401 });
     }
-    // Verifying Terminal credentials securely
     const token = authHeader.substring(7);
-    const body: SyncPushPayload = await req.json();
+    const body = await req.json();
 
     if (!body.events || !Array.isArray(body.events)) {
       return NextResponse.json({ error: "Invalid payload format" }, { status: 400 });
     }
 
     if (body.events.length === 0) {
-      return NextResponse.json({ accepted: [], alreadyProcessed: [], rejected: [], conflicts: [], serverCursor: "seq_0" });
+      return NextResponse.json({ accepted: [], alreadyProcessed: [], rejected: [], conflicts: [], serverCursor: "seq_0", results: [] });
     }
 
-    const terminalId = body.events[0].terminalId;
+    // Determine Property ID from terminal or payload. For simplicity, assume all events are from same terminal.
+    // In legacy, terminalId is on the event. In new, deviceId is on the event.
+    const firstEvent = body.events[0];
+    const terminalId = firstEvent.terminalId || firstEvent.deviceId;
+    
+    if (!terminalId) {
+       return NextResponse.json({ error: "Missing terminal identity" }, { status: 400 });
+    }
+
     const terminal = await prisma.posTerminal.findUnique({
-      where: { id: terminalId }
+      where: { id: terminalId },
+      include: { outlet: { include: { property: true } } }
     });
 
     if (!terminal || terminal.registrationState !== 'REGISTERED') {
       return NextResponse.json({ error: "Terminal inactive or unauthorized" }, { status: 403 });
     }
     
-    // In production this verifies the encrypted device token
-    // For this sync we rely on the deviceTokenHash property
-    // const { compare } = require('bcryptjs');
-    // const isTokenValid = await compare(token, terminal.deviceCredentialHash);
-    // if (!isTokenValid) { return NextResponse.json({ error: "Invalid terminal token" }, { status: 401 }); }
-
-    if (!body.events || !Array.isArray(body.events)) {
-      return NextResponse.json({ error: "Invalid payload format" }, { status: 400 });
+    const propertyId = terminal.outlet?.propertyId;
+    if (!propertyId) {
+      return NextResponse.json({ error: "Terminal not associated with a property" }, { status: 400 });
     }
 
+    const results: any[] = [];
     const accepted: string[] = [];
     const alreadyProcessed: string[] = [];
     const rejected: string[] = [];
     const conflicts: string[] = [];
-    
     let lastSequenceNumber = 0;
 
-    for (const evt of body.events) {
+    for (const rawEvent of body.events) {
+      const isLegacy = !!rawEvent.operationId;
+      
+      // Compatibility Layer: Map Legacy SyncEvent to HotelEvent envelope
+      const event = isLegacy ? {
+        id: rawEvent.operationId,
+        idempotencyKey: rawEvent.operationId,
+        propertyId: propertyId,
+        deviceId: rawEvent.terminalId,
+        operatorId: rawEvent.operatorId,
+        aggregateType: rawEvent.entityType,
+        aggregateId: rawEvent.entityId,
+        aggregateVersion: 1, // Legacy events don't have version tracking; assume 1 or fetch from DB
+        eventType: rawEvent.operationType,
+        occurredAt: rawEvent.createdAt,
+        sequence: rawEvent.sequenceNumber,
+        payloadJson: rawEvent.payloadJson
+      } : {
+        id: rawEvent.id,
+        idempotencyKey: rawEvent.idempotencyKey,
+        propertyId: rawEvent.propertyId || propertyId,
+        deviceId: rawEvent.deviceId,
+        operatorId: rawEvent.operatorId,
+        aggregateType: rawEvent.aggregateType,
+        aggregateId: rawEvent.aggregateId,
+        aggregateVersion: rawEvent.aggregateVersion,
+        eventType: rawEvent.eventType,
+        occurredAt: rawEvent.occurredAt,
+        sequence: rawEvent.sequence,
+        payloadJson: typeof rawEvent.payload === 'string' ? rawEvent.payload : JSON.stringify(rawEvent.payload || {})
+      };
+
       try {
-        // Idempotency Check: run inside a transaction
+        const payload = typeof event.payloadJson === 'string' ? JSON.parse(event.payloadJson || '{}') : event.payloadJson;
+        
         await prisma.$transaction(async (tx: any) => {
-          // Check if already processed
-          const existing = await tx.posProcessedEvent.findUnique({
-            where: { eventId: evt.operationId }
+          // 1. Idempotency Check
+          const existingEvent = await tx.hotelEvent.findUnique({ 
+            where: { idempotencyKey: event.idempotencyKey },
+            include: { syncConflict: true }
           });
 
-          if (existing) {
-            alreadyProcessed.push(evt.operationId);
-            return; // Skip processing
+          if (existingEvent) {
+             const e = new Error('IDEMPOTENCY_DUPLICATE');
+             (e as any).existingEvent = existingEvent;
+             throw e;
+          }
+          
+          let updatedCount = 0;
+          
+          // 2. Lock & Verify OCC Version
+          if (event.aggregateType === 'POS_ORDER') {
+             const res = await tx.posOrder.updateMany({
+               where: { id: event.aggregateId, version: event.aggregateVersion },
+               data: { version: { increment: 1 } }
+             });
+             updatedCount = res.count;
+          } else if (event.aggregateType === 'POS_SESSION' || event.aggregateType === 'POS_OPERATOR_SESSION') {
+             const res = await tx.posOperatorSession.updateMany({
+               where: { id: event.aggregateId, version: event.aggregateVersion },
+               data: { version: { increment: 1 } }
+             });
+             updatedCount = res.count;
+          } else if (event.aggregateType === 'POS_CHECK') {
+             const res = await tx.posCheck.updateMany({
+               where: { id: event.aggregateId, version: event.aggregateVersion },
+               data: { version: { increment: 1 } }
+             });
+             updatedCount = res.count;
+          } else {
+             // For POS_PAYMENT, POS_ORDER_ITEM, POS_KOT the aggregate is usually the PosOrder. 
+             // We map those to update the Order version.
+             if (payload.OrderId || payload.orderId) {
+                const oId = payload.OrderId || payload.orderId;
+                const res = await tx.posOrder.updateMany({
+                  where: { id: oId, version: event.aggregateVersion },
+                  data: { version: { increment: 1 } }
+                });
+                updatedCount = res.count;
+             } else {
+                // No OCC for this specific non-aggregate entity (e.g. unknown payload)
+                updatedCount = 1; 
+             }
           }
 
-          const payload = JSON.parse(evt.payloadJson);
+          if (updatedCount === 0) {
+             let currentVersion = 1;
+             if (event.aggregateType === 'POS_ORDER') {
+                const o = await tx.posOrder.findUnique({ where: { id: event.aggregateId }});
+                if (o) currentVersion = o.version;
+             } else if (event.aggregateType === 'POS_SESSION' || event.aggregateType === 'POS_OPERATOR_SESSION') {
+                const s = await tx.posOperatorSession.findUnique({ where: { id: event.aggregateId }});
+                if (s) currentVersion = s.version;
+             } else if (event.aggregateType === 'POS_CHECK') {
+                const c = await tx.posCheck.findUnique({ where: { id: event.aggregateId }});
+                if (c) currentVersion = c.version;
+             } else if (payload.OrderId || payload.orderId) {
+                const o = await tx.posOrder.findUnique({ where: { id: (payload.OrderId || payload.orderId) }});
+                if (o) currentVersion = o.version;
+             }
+             const e = new Error('CONCURRENCY_CONFLICT');
+             (e as any).currentVersion = currentVersion;
+             throw e;
+          }
 
-          // Process business logic based on EventType and OperationType
-          if (evt.entityType === "POS_SESSION" && evt.operationType === "POS_SESSION_STARTED") {
-             // We ensure the session is recorded in the cloud if it doesn't exist
-             const existingSession = await tx.posOperatorSession.findUnique({ where: { id: evt.entityId }});
+          // 3. Apply Business Mutations
+          if (event.eventType === 'POS_SESSION_STARTED') {
+             const existingSession = await tx.posOperatorSession.findUnique({ where: { id: event.aggregateId }});
              if (!existingSession) {
                  await tx.posOperatorSession.create({
                      data: {
-                         id: evt.entityId,
-                         terminalId: evt.terminalId,
-                         outletId: evt.outletId,
-                         operatorId: evt.operatorId,
+                         id: event.aggregateId,
+                         terminalId: event.deviceId,
+                         outletId: terminal.outletId,
+                         operatorId: event.operatorId,
                          status: "ACTIVE",
-                         startedAt: new Date(evt.createdAt)
+                         startedAt: new Date(event.occurredAt)
                      }
                  });
              }
           }
-          else if (evt.entityType === "POS_ORDER" && evt.operationType === "ORDER_CREATED") {
-             // Create POS Order in Cloud
-             await tx.posOrder.create({
-                 data: {
-                     id: evt.entityId,
-                     propertyId: payload.PropertyId,
-                     outletId: payload.OutletId,
-                     sessionId: payload.SessionId,
-                     orderNumber: payload.OrderNumber,
-                     status: payload.Status,
-                     subtotal: payload.Subtotal,
-                     taxAmount: payload.TaxAmount,
-                     total: payload.Total,
-                     businessDate: new Date(payload.BusinessDate),
-                     serverStaffId: evt.operatorId,
-                     createdAt: new Date(evt.createdAt)
-                 }
-             });
+          else if (event.eventType === 'ORDER_CREATED') {
+             const existingOrder = await tx.posOrder.findUnique({ where: { id: event.aggregateId }});
+             if (!existingOrder) {
+                 await tx.posOrder.create({
+                     data: {
+                         id: event.aggregateId,
+                         propertyId: propertyId,
+                         outletId: payload.OutletId || terminal.outletId,
+                         sessionId: payload.SessionId,
+                         orderNumber: payload.OrderNumber,
+                         status: payload.Status || 'SUBMITTED',
+                         subtotal: payload.Subtotal || 0,
+                         taxAmount: payload.TaxAmount || 0,
+                         total: payload.Total || 0,
+                         businessDate: new Date(payload.BusinessDate || new Date()),
+                         serverStaffId: event.operatorId,
+                         createdAt: new Date(event.occurredAt)
+                     }
+                 });
+             }
           }
-          else if (evt.entityType === "POS_PAYMENT" && evt.operationType === "PAYMENT_RECORDED") {
-              // Ensure Immutable Payments
+          else if (event.eventType === 'PAYMENT_RECORDED') {
+              const method = payload.Method || 'CASH';
               await tx.posPayment.create({
                   data: {
-                      id: evt.entityId,
-                      orderId: payload.OrderId,
+                      id: payload.Id || crypto.randomUUID(), // If entityId was the order, payment needs its own ID
+                      orderId: payload.OrderId || event.aggregateId,
                       amount: payload.Amount,
-                      method: payload.Method,
-                      currency: payload.Currency,
+                      method: method,
+                      currency: payload.Currency || 'NGN',
                       status: "CONFIRMED",
-                      operationId: evt.operationId,
-                      businessDate: new Date(payload.BusinessDate),
-                      createdAt: new Date(evt.createdAt)
+                      operationId: event.idempotencyKey,
+                      businessDate: new Date(payload.BusinessDate || new Date()),
+                      createdAt: new Date(event.occurredAt)
                   }
               });
+              // Note: SERVER_BANKING logic runs separately (e.g. at end of shift/cash drop),
+              // but we ensure non-cash doesn't increment cash balances.
           }
-          else if (evt.entityType === "POS_ORDER" && evt.operationType === "ORDER_CLOSED") {
+          else if (event.eventType === 'ORDER_CLOSED') {
               await tx.posOrder.update({
-                  where: { id: evt.entityId },
+                  where: { id: event.aggregateId },
                   data: { status: "CLOSED", updatedAt: new Date() }
               });
           }
-          else if (evt.entityType === "POS_ORDER_ITEM" && evt.operationType === "ORDER_ITEMS_ADDED") {
-              // The payload contains the full array of items or single item
-              const items = Array.isArray(payload) ? payload : [payload];
+          else if (event.eventType === 'ORDER_ITEMS_ADDED') {
+              const items = Array.isArray(payload) ? payload : (payload.Items || [payload]);
               for (const item of items) {
                   await tx.posOrderItem.create({
                       data: {
-                          id: item.Id,
-                          orderId: item.OrderId,
+                          id: item.Id || crypto.randomUUID(),
+                          orderId: item.OrderId || event.aggregateId,
                           productId: item.ProductId,
                           productName: item.ProductName,
                           quantity: item.Quantity,
@@ -162,9 +236,8 @@ export async function POST(req: NextRequest) {
                       }
                   });
               }
-              // Update order totals
               if (items.length > 0) {
-                  const orderId = items[0].OrderId;
+                  const orderId = items[0].OrderId || event.aggregateId;
                   const currentOrder = await tx.posOrder.findUnique({ where: { id: orderId } });
                   if (currentOrder) {
                       await tx.posOrder.update({
@@ -178,18 +251,18 @@ export async function POST(req: NextRequest) {
                   }
               }
           }
-          else if (evt.entityType === "POS_KOT" && evt.operationType === "KOT_CREATED") {
+          else if (event.eventType === 'KOT_CREATED') {
               await tx.posProductionBatch.create({
                   data: {
-                      id: evt.entityId,
-                      orderId: payload.OrderId,
-                      batchNumber: payload.BatchNumber,
+                      id: payload.Id || crypto.randomUUID(),
+                      orderId: payload.OrderId || event.aggregateId,
+                      batchNumber: payload.BatchNumber || '1',
                       station: payload.Station || "KITCHEN",
-                      firedAt: new Date(evt.createdAt),
-                      firedByStaffId: evt.operatorId,
+                      firedAt: new Date(event.occurredAt),
+                      firedByStaffId: event.operatorId,
                       items: {
-                          create: payload.Items.map((item: any) => ({
-                              id: item.Id,
+                          create: (payload.Items || []).map((item: any) => ({
+                              id: item.Id || crypto.randomUUID(),
                               orderItemId: item.OrderItemId,
                               productName: item.ProductName,
                               quantity: item.Quantity,
@@ -200,33 +273,94 @@ export async function POST(req: NextRequest) {
               });
           }
 
-          // Finally, insert the idempotent record
+          // 4. Save Immutable HotelEvent
+          await tx.hotelEvent.create({
+            data: {
+              id: event.id,
+              idempotencyKey: event.idempotencyKey,
+              propertyId: event.propertyId,
+              deviceId: event.deviceId,
+              operatorId: event.operatorId,
+              aggregateType: event.aggregateType,
+              aggregateId: event.aggregateId,
+              aggregateVersion: event.aggregateVersion,
+              eventType: event.eventType,
+              occurredAt: new Date(event.occurredAt || Date.now()),
+              sequence: event.sequence,
+              payload: payload
+            }
+          });
+
+          // Optional: Record in Legacy PosProcessedEvent for strict backward compatibility monitoring
+          // (Can be removed in Phase 3.7)
           await tx.posProcessedEvent.create({
             data: {
-              eventId: evt.operationId,
-              terminalId: evt.terminalId,
-              outletId: evt.outletId,
-              sessionId: evt.sessionId || null,
-              operatorId: evt.operatorId || null,
-              entityType: evt.entityType,
-              entityId: evt.entityId,
-              operation: evt.operationType,
+              eventId: event.idempotencyKey,
+              terminalId: event.deviceId,
+              outletId: terminal.outletId,
+              sessionId: payload.SessionId || null,
+              operatorId: event.operatorId || null,
+              entityType: event.aggregateType,
+              entityId: event.aggregateId,
+              operation: event.eventType,
               payload: payload,
               createdAt: new Date()
             }
           });
 
-          accepted.push(evt.operationId);
-          lastSequenceNumber = evt.sequenceNumber;
+          accepted.push(event.id);
+          results.push({ id: event.id, status: 'SYNCED', idempotencyKey: event.idempotencyKey });
+          lastSequenceNumber = event.sequence;
         });
-      } catch (error: any) {
-        // If unique constraint violation on posProcessedEvent, it means another concurrent request processed it
-        if (error.code === 'P2002' && error.meta?.target?.includes('eventId')) {
-           alreadyProcessed.push(evt.operationId);
+        
+      } catch (err: any) {
+        if (err.message === 'IDEMPOTENCY_DUPLICATE') {
+           alreadyProcessed.push(event.id);
+           results.push({ id: event.id, status: err.existingEvent?.syncConflict ? 'CONFLICT' : 'SYNCED', idempotencyKey: event.idempotencyKey });
+        } else if (err.message === 'CONCURRENCY_CONFLICT' || err.code === 'P2002') {
+           let expectedVersion = err.currentVersion || event.aggregateVersion;
+           try {
+             await prisma.$transaction(async (tx2: any) => {
+                const ev = await tx2.hotelEvent.create({
+                  data: {
+                    id: event.id,
+                    idempotencyKey: event.idempotencyKey,
+                    propertyId: event.propertyId,
+                    deviceId: event.deviceId,
+                    operatorId: event.operatorId,
+                    aggregateType: event.aggregateType,
+                    aggregateId: event.aggregateId,
+                    aggregateVersion: event.aggregateVersion,
+                    eventType: event.eventType,
+                    occurredAt: new Date(event.occurredAt || Date.now()),
+                    sequence: event.sequence,
+                    payload: typeof event.payloadJson === 'string' ? JSON.parse(event.payloadJson || '{}') : event.payloadJson
+                  }
+                });
+                
+                await tx2.syncConflict.create({
+                  data: {
+                    propertyId: event.propertyId,
+                    hotelEventId: ev.id,
+                    aggregateType: event.aggregateType,
+                    aggregateId: event.aggregateId,
+                    expectedVersion: expectedVersion,
+                    receivedVersion: event.aggregateVersion,
+                    conflictReason: 'Optimistic Concurrency Failure: POS terminal operated on stale state.',
+                    status: 'PENDING'
+                  }
+                });
+             });
+             conflicts.push(event.id);
+             results.push({ id: event.id, status: 'CONFLICT', idempotencyKey: event.idempotencyKey, error: 'Concurrency conflict. Manager resolution required.' });
+           } catch (conflictErr: any) {
+             rejected.push(event.id);
+             results.push({ id: event.id, status: 'FAILED', idempotencyKey: event.idempotencyKey, error: 'Failed to record conflict state.' });
+           }
         } else {
-           // Some other error (e.g. dependency not satisfied like missing order)
-           console.error(`Error processing event ${evt.operationId}:`, error);
-           rejected.push(evt.operationId);
+           console.error(`Error processing POS event ${event.id}:`, err);
+           rejected.push(event.id);
+           results.push({ id: event.id, status: 'FAILED', idempotencyKey: event.idempotencyKey, error: err.message });
         }
       }
     }
@@ -236,11 +370,12 @@ export async function POST(req: NextRequest) {
       alreadyProcessed,
       rejected,
       conflicts,
-      serverCursor: `seq_${lastSequenceNumber}`
-    });
+      serverCursor: `seq_${lastSequenceNumber}`,
+      results
+    }, { status: 200 });
 
   } catch (error) {
-    console.error("Sync push error:", error);
+    console.error("POS Sync push error:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
