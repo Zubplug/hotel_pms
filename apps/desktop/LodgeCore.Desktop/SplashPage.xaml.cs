@@ -19,8 +19,8 @@ public partial class SplashPage : ContentPage
     {
         // Step 1: Fade in main content
         await Task.WhenAll(
-            ContentPanel.FadeTo(1, 500, Easing.CubicOut),
-            ContentPanel.ScaleTo(1.0, 1, Easing.Default)
+            ContentPanel.FadeToAsync(1, 500, Easing.CubicOut),
+            ContentPanel.ScaleToAsync(1.0, 1, Easing.Default)
         );
         await Task.Delay(100);
 
@@ -33,15 +33,15 @@ public partial class SplashPage : ContentPage
         await AnimateLoadingAsync("Loading modules...", 85, 100, 350);
 
         // Step 3: Fade in version footer
-        await VersionPanel.FadeTo(1, 300, Easing.CubicOut);
+        await VersionPanel.FadeToAsync(1, 300, Easing.CubicOut);
 
         // Step 4: Brief hold at 100%
         await Task.Delay(600);
 
         // Step 5: Fade out gracefully and navigate
         await Task.WhenAll(
-            ContentPanel.FadeTo(0, 400, Easing.CubicIn),
-            VersionPanel.FadeTo(0, 400, Easing.CubicIn)
+            ContentPanel.FadeToAsync(0, 400, Easing.CubicIn),
+            VersionPanel.FadeToAsync(0, 400, Easing.CubicIn)
         );
 
         // Navigate to main page
@@ -77,9 +77,9 @@ public partial class SplashPage : ContentPage
     {
         while (true)
         {
-            await OuterRing.ScaleTo(1.12, 1400, Easing.SinInOut);
+            await OuterRing.ScaleToAsync(1.12, 1400, Easing.SinInOut);
             OuterRing.Opacity = 0.15;
-            await OuterRing.ScaleTo(1.0, 1400, Easing.SinInOut);
+            await OuterRing.ScaleToAsync(1.0, 1400, Easing.SinInOut);
             OuterRing.Opacity = 0.3;
         }
     }
