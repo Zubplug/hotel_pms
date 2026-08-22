@@ -260,6 +260,9 @@ public partial class MainPage : ContentPage
                 case "reservations.list":
                     responseData = await pmsInterop.GetActiveReservationsAsync();
                     break;
+                case "reservations.get":
+                    responseData = await pmsInterop.GetReservationAsync(parameters?["id"]?.ToString() ?? "");
+                    break;
                 case "sync.outbox":
                     responseData = await pmsInterop.GetOutboxEventsAsync();
                     break;
