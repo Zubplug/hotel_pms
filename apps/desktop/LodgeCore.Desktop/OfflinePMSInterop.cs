@@ -728,6 +728,7 @@ public class OfflinePMSInterop
             res.Children = root.TryGetProperty("children", out var ch) ? ch.GetInt32() : 0;
             
             var reqStatus = root.TryGetProperty("status", out var st) ? st.GetString() : "PENDING";
+            var validStatuses = new[] { "PENDING", "CHECKED_IN", "CHECKED_OUT", "CANCELLED", "NO_SHOW" };
             res.Status = validStatuses.Contains(reqStatus) ? (reqStatus ?? "PENDING") : "PENDING";
             
             var created = await _repo.CreateReservationAsync(res, "System", "Device1");
