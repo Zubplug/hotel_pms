@@ -11,8 +11,11 @@ import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
  * Ensures that clicking 'Logout' on the desktop app actually clears 
  * the underlying C# wrapper authentication state in addition to the web session.
  */
+import { useRouter } from 'next/navigation';
+
 export function useLogout() {
-  const { provider } = useLodgeCoreProvider();
+  const { provider, isDesktopMode } = useLodgeCoreProvider();
+  const router = useRouter();
 
   const handleLogout = useCallback(async () => {
     try {
@@ -28,9 +31,13 @@ export function useLogout() {
       console.warn('[Desktop Logout] Error during logout', error);
     } finally {
       // 2. Clear Web session (NextAuth) and redirect to login
-      await signOut({ callbackUrl: '/login' });
+      if (isDesktopMode) {
+        router.push('/desktop');
+      } else {
+        await signOut({ callbackUrl: '/login' });
+      }
     }
-  }, [provider]);
+  }, [provider, isDesktopMode, router]);
 
   return handleLogout;
 }
