@@ -8,7 +8,6 @@ public class DelunsLockProvider : ILockProvider
 {
     private readonly ILogger<DelunsLockProvider> _logger;
     private bool _initialized = false;
-    private int _lockType = 5; // default RF50
     private const string DateFormat = "yyyy-MM-dd HH:mm";
 
     public DelunsLockProvider(ILogger<DelunsLockProvider> logger)
@@ -23,7 +22,11 @@ public class DelunsLockProvider : ILockProvider
         int lockType = 4; // RF57 is typical default, could be 5 for RF50
         try
         {
-            lockType = Microsoft.Maui.Storage.Preferences.Default.Get("DelunsLockType", 4);
+            var envLockType = Environment.GetEnvironmentVariable("DELUNS_LOCK_TYPE");
+            if (!string.IsNullOrEmpty(envLockType) && int.TryParse(envLockType, out var parsedType))
+            {
+                lockType = parsedType;
+            }
         }
         catch { }
 
