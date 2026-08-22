@@ -86,7 +86,7 @@ public class DelunsLockProvider : ILockProvider
     {
         _logger.LogInformation("Running Deluns Diagnostic Read...");
         EnsureInitialized();
-        if (!_initialized) return new DiagnosticResult { Success = false, ErrorMessage = "SDK not initialized", VendorName = VendorName };
+        if (!_initialized) return new DiagnosticResult { Success = false, ErrorMessage = "SDK not initialized", Vendor = VendorName };
 
         var cardSnr = new StringBuilder(20);
         int result = NativeSdkBridge.TP_GetCardSnr(cardSnr);
