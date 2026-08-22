@@ -404,12 +404,14 @@ public class OfflinePMSInterop
             var mapped = res.Select(r => new
             {
                 id = r.Id,
-                confirmationNumber = r.Id.Substring(0, 8).ToUpper(),
+                confirmationNumber = !string.IsNullOrEmpty(r.ConfirmationNumber) ? r.ConfirmationNumber : r.Id.Substring(0, 8).ToUpper(),
                 status = r.Status,
                 propertyId = r.PropertyId,
                 checkIn = r.CheckInDate,
                 checkOut = r.CheckOutDate,
-                primaryGuest = new { firstName = r.Guest?.FirstName, lastName = r.Guest?.LastName, phone = r.Guest?.Phone },
+                primaryGuest = r.Guest != null 
+                    ? new { id = r.Guest.Id, firstName = r.Guest.FirstName, lastName = r.Guest.LastName, phone = r.Guest.Phone } 
+                    : new { id = "unknown", firstName = "Unknown", lastName = "Guest", phone = "" },
                 reservationRooms = new[] { new { room = new { number = r.RoomNumber, status = "CLEAN" }, roomType = new { name = "Standard" } } },
                 folio = new { balance = r.Folio?.OutstandingBalance ?? 0 },
                 isDirty = r.IsDirty
