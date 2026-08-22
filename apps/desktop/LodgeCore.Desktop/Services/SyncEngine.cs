@@ -355,7 +355,6 @@ public class SyncEngine : BackgroundService
                             evt.ErrorMessage = "Cloud response omitted this event";
                         }
                     }
-                    }
                 }
             }
             else
