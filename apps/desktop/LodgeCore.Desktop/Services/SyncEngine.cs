@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Net.Http.Headers;
 using LodgeCore.Desktop.Data;
 using LodgeCore.Desktop.Data.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -42,7 +43,7 @@ public class SyncEngine : BackgroundService
         public int PendingOperations { get; set; }
     }
 
-    public static event Action<SyncHealthInfo> OnSyncHealthChanged;
+    public static event Action<SyncHealthInfo>? OnSyncHealthChanged;
     
     public static SyncEngine? Instance { get; private set; }
 
@@ -777,8 +778,7 @@ public class SyncEngine : BackgroundService
         _logger.LogInformation($"Pushing {pendingEvents.Count} Front Desk outbox events to cloud...");
         BroadcastHealth(SyncState.SYNCING, null, "PUSH_FD", 0, pendingEvents.Count, "Pushing Front Desk events...");
 
-        var httpClient = _httpClientFactory.CreateClient();
-        httpClient.Timeout = TimeSpan.FromSeconds(30);
+        _httpClient.Timeout = TimeSpan.FromSeconds(30);
 
         var request = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/api/v1/sync/push/frontdesk");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -804,10 +804,10 @@ public class SyncEngine : BackgroundService
 
         try
         {
-            var response = await httpClient.SendAsync(request, stoppingToken);
+            var response = await _httpClient.SendAsync(request, stoppingToken);
             if (response.IsSuccessStatusCode)
             {
-                var result = await response.Content.ReadFromJsonAsync<SyncPushFrontDeskResponse>(stoppingToken: stoppingToken);
+                var result = await response.Content.ReadFromJsonAsync<SyncPushFrontDeskResponse>(cancellationToken: stoppingToken);
                 if (result != null && result.Status == "SUCCESS" && result.Results != null)
                 {
                     foreach (var res in result.Results)
@@ -855,7 +855,7 @@ public class SyncEngine : BackgroundService
                 if (statusCode == 401 || statusCode == 403)
                 {
                     // Authentication/Authorization: Pause sync loop, don't increment attempt count
-                    BroadcastHealth(SyncState.FAILED, null, "AUTH_ERROR", 0, 1, $"Auth failed: {statusCode}. Please re-authenticate.");
+                    BroadcastHealth(SyncState.ERROR, null, "AUTH_ERROR", 0, 1, $"Auth failed: {statusCode}. Please re-authenticate.");
                     return; 
                 }
 
