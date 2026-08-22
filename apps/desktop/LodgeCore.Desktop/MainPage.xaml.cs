@@ -224,6 +224,12 @@ public partial class MainPage : ContentPage
                 case "guests.list":
                     responseData = await pmsInterop.GetGuestsAsync();
                     break;
+                case "guests.update":
+                    responseData = await pmsInterop.UpdateGuestAsync(
+                        parameters?["guestId"]?.ToString() ?? "",
+                        System.Text.Json.JsonSerializer.Serialize(parameters?["guestData"])
+                    );
+                    break;
                 case "roomTypes.list":
                     responseData = await pmsInterop.GetRoomTypesAsync(parameters?["propertyId"]?.ToString() ?? "");
                     break;
@@ -293,7 +299,7 @@ public partial class MainPage : ContentPage
                     responseData = await pmsInterop.GetMaintenanceTicketsAsync(parameters?["propertyId"]?.ToString() ?? "");
                     break;
                 case "maintenance.createTicket":
-                    responseData = await pmsInterop.CreateReservationAsync(parameters?["data"]?.ToString() ?? ""); // Temporary stub mapped to creation logic structure
+                    responseData = await pmsInterop.CreateMaintenanceTicketAsync(parameters?["data"]?.ToString() ?? "");
                     break;
                 case "maintenance.resolveTicket":
                     responseData = await pmsInterop.ResolveMaintenanceTicketAsync(
@@ -386,7 +392,10 @@ public partial class MainPage : ContentPage
                 case "pos.startSession":
                     responseData = await pmsInterop.OpenPosSessionAsync(
                         parameters?["propertyId"]?.ToString() ?? "",
-                        parameters?["openingBalance"]?.GetValue<decimal>() ?? 0);
+                        parameters?["outletId"]?.ToString() ?? "",
+                        parameters?["bankType"]?.ToString() ?? "SERVER",
+                        parameters?["bankingModel"]?.ToString() ?? "SERVER_BANKING",
+                        parameters?["openingCash"]?.GetValue<decimal>() ?? 0);
                     break;
                 case "pos.closeSession":
                     responseData = await pmsInterop.ClosePosSessionAsync(

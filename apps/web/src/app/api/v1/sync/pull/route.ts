@@ -28,6 +28,8 @@ export async function GET(req: NextRequest) {
 
     const deviceToken = authHeader.substring(7);
     const propertyId  = req.nextUrl.searchParams.get('propertyId');
+    const sinceParam  = req.nextUrl.searchParams.get('since');
+    const since = sinceParam ? new Date(sinceParam) : undefined;
 
     if (!propertyId) {
       return NextResponse.json({ error: 'propertyId is required' }, { status: 400 });
@@ -199,10 +201,10 @@ export async function GET(req: NextRequest) {
     // ---- Load Front Desk Operational Cache ------------------------------
     // 1. Rooms & Room Types
     const rooms = await prisma.room.findMany({
-      where: { propertyId, isActive: true }
+      where: { propertyId, isActive: true, ...(since ? { updatedAt: { gte: since } } : {}) }
     });
     const roomTypes = await prisma.roomType.findMany({
-      where: { propertyId, isActive: true }
+      where: { propertyId, isActive: true, ...(since ? { updatedAt: { gte: since } } : {}) }
     });
 
     // 2. Target window for Reservations: In-house + 3 days out + today's departures
@@ -216,6 +218,7 @@ export async function GET(req: NextRequest) {
       where: {
         propertyId,
         deletedAt: null,
+        ...(since ? { updatedAt: { gte: since } } : {}),
         OR: [
           { status: 'CHECKED_IN' },
           { status: 'CONFIRMED', checkIn: { lte: threeDaysFromNow, gte: yesterday } },
@@ -254,10 +257,11 @@ export async function GET(req: NextRequest) {
       // Extract Room ID and Number for Desktop Offline Sync
       const roomId = r.reservationRooms?.[0]?.roomId || null;
       const roomNumber = r.reservationRooms?.[0]?.room?.number || null;
+      const roomTypeId = r.reservationRooms?.[0]?.room?.roomTypeId || null;
 
       // Return clean reservation without nested big objects
       const { primaryGuest, reservationGuests, folios: rFolios, reservationRooms, ...rest } = r;
-      return { ...rest, roomId, roomNumber };
+      return { ...rest, roomId, roomNumber, roomTypeId };
     });
 
     const guests = Array.from(guestMap.values());
@@ -277,9 +281,25 @@ export async function GET(req: NextRequest) {
     });
     
     // PosProducts usually have categoryId. Let's fetch them based on category or outlet.
-    // Assuming PosProduct has propertyId (based on LocalPosProduct.cs having PropertyId).
     const posProducts = await prisma.posProduct.findMany({
-      where: { propertyId, isActive: true }
+      where: { propertyId, isActive: true },
+      include: { modifiers: true }
+    });
+
+    const posFloorPlans = await prisma.posFloorPlan.findMany({
+      where: { outletId: { in: outletIds }, isActive: true }
+    });
+
+    const posTables = await prisma.posTable.findMany({
+      where: { floorPlanId: { in: posFloorPlans.map((fp: any) => fp.id) }, isActive: true }
+    });
+
+    const housekeepingTasks = await prisma.housekeepingTask.findMany({
+      where: { propertyId, ...(since ? { updatedAt: { gte: since } } : {}) }
+    });
+
+    const maintenanceTickets = await prisma.maintenanceTicket.findMany({
+      where: { propertyId, ...(since ? { updatedAt: { gte: since } } : {}) }
     });
 
     return NextResponse.json({
@@ -293,7 +313,11 @@ export async function GET(req: NextRequest) {
       folios,
       posOutlets,
       posCategories,
-      posProducts
+      posProducts,
+      posFloorPlans,
+      posTables,
+      housekeepingTasks,
+      maintenanceTickets
     });
 
   } catch (error: any) {

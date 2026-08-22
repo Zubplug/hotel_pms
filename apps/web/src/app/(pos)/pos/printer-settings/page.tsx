@@ -77,7 +77,7 @@ function PrinterCard({
         setTestMsg(res.message ?? 'Connected!');
       } else {
         setTestStatus('failed');
-        setTestMsg(res?.error ?? 'Connection failed');
+        setTestMsg(res?.message ?? res?.error ?? 'Connection failed');
       }
     } catch {
       setTestStatus('failed');

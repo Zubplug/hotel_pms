@@ -272,6 +272,83 @@ export async function POST(req: NextRequest) {
                   }
               });
           }
+          else if (event.eventType === 'POS_SETTLEMENT') {
+              const operationId = payload.OperationId || payload.operationId || event.idempotencyKey;
+              
+              const existing = await tx.posSettlement.findUnique({
+                  where: { operationId }
+              });
+              if (existing) {
+                  // Handled by outer duplicate check mostly, but for double safety
+                  // we could just ignore
+              } else {
+                  const session = await tx.posOperatorSession.findUnique({
+                      where: { id: payload.SessionId || payload.sessionId }
+                  });
+                  if (!session) throw new Error(`PosSession ${payload.SessionId} not found`);
+
+                  await tx.posSettlement.create({
+                      data: {
+                          id: payload.Id || payload.id || crypto.randomUUID(),
+                          sessionId: session.id,
+                          propertyId: propertyId,
+                          outletId: session.outletId,
+                          deviceId: payload.DeviceId || payload.deviceId || event.deviceId,
+                          sessionOwnerId: payload.SessionOwnerId || payload.sessionOwnerId || session.operatorId,
+                          operatorId: payload.OperatorId || payload.operatorId || event.operatorId,
+                          businessDate: payload.BusinessDate ? new Date(payload.BusinessDate) : session.startedAt,
+                          expectedCash: Number(payload.ExpectedCash ?? payload.expectedCash ?? 0),
+                          actualCash: Number(payload.ActualCash ?? payload.actualCash ?? 0),
+                          variance: Number(payload.Variance ?? payload.variance ?? 0),
+                          authorizerId: payload.AuthorizerId || payload.authorizerId || null,
+                          settledAt: payload.SettledAt ? new Date(payload.SettledAt) : new Date(event.occurredAt),
+                          status: payload.Status || 'SETTLED',
+                          operationId,
+                      }
+                  });
+
+                  await tx.posOperatorSession.update({
+                      where: { id: session.id },
+                      data: {
+                          status: 'CLOSED',
+                          actualCash: Number(payload.ActualCash ?? payload.actualCash ?? 0),
+                          variance: Number(payload.Variance ?? payload.variance ?? 0),
+                          closedAt: payload.SettledAt ? new Date(payload.SettledAt) : new Date(event.occurredAt),
+                          closedBy: payload.OperatorId || payload.operatorId || null,
+                      }
+                  });
+              }
+          }
+          else if (event.eventType === 'POS_CASH_MOVEMENT' || event.eventType === 'CASH_MOVEMENT') {
+              const operationId = payload.OperationId || payload.operationId || event.idempotencyKey;
+
+              const existing = await tx.posCashMovement.findFirst({
+                  where: { operationId }
+              });
+              if (!existing) {
+                  const session = await tx.posOperatorSession.findUnique({
+                      where: { id: payload.PosSessionId || payload.posSessionId }
+                  });
+                  if (!session) {
+                      throw new Error(`Session ${payload.PosSessionId} not found for cash movement`);
+                  }
+
+                  await tx.posCashMovement.create({
+                      data: {
+                          id: payload.Id || payload.id || crypto.randomUUID(),
+                          propertyId: propertyId,
+                          posSessionId: session.id,
+                          deviceId: payload.DeviceId || payload.deviceId || event.deviceId,
+                          userId: payload.UserId || payload.userId || event.operatorId,
+                          amount: Number(payload.Amount ?? payload.amount ?? 0),
+                          type: payload.Type || payload.type || 'CASH_IN',
+                          reasonCode: payload.ReasonCode || payload.reasonCode || 'MANUAL',
+                          operationId,
+                          authorizedBy: payload.AuthorizedBy || payload.authorizedBy || null,
+                      }
+                  });
+              }
+          }
 
           // 4. Save Immutable HotelEvent
           await tx.hotelEvent.create({

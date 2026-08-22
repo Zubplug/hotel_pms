@@ -65,6 +65,42 @@ public class SyncEngine : BackgroundService
         Instance = this;
     }
 
+    public override Task StartAsync(CancellationToken cancellationToken)
+    {
+#if WINDOWS || MACCATALYST || IOS || ANDROID
+        _isOnline = Microsoft.Maui.Networking.Connectivity.Current.NetworkAccess == Microsoft.Maui.Networking.NetworkAccess.Internet;
+        Microsoft.Maui.Networking.Connectivity.Current.ConnectivityChanged += OnConnectivityChanged;
+#endif
+        return base.StartAsync(cancellationToken);
+    }
+
+    public override Task StopAsync(CancellationToken cancellationToken)
+    {
+#if WINDOWS || MACCATALYST || IOS || ANDROID
+        Microsoft.Maui.Networking.Connectivity.Current.ConnectivityChanged -= OnConnectivityChanged;
+#endif
+        return base.StopAsync(cancellationToken);
+    }
+
+#if WINDOWS || MACCATALYST || IOS || ANDROID
+    private void OnConnectivityChanged(object? sender, Microsoft.Maui.Networking.ConnectivityChangedEventArgs e)
+    {
+        bool wasOnline = _isOnline;
+        _isOnline = e.NetworkAccess == Microsoft.Maui.Networking.NetworkAccess.Internet;
+        
+        if (!wasOnline && _isOnline)
+        {
+            _logger.LogInformation("Network connectivity restored. Triggering immediate sync.");
+            TriggerManualSync();
+        }
+        else if (wasOnline && !_isOnline)
+        {
+            _logger.LogWarning("Network connectivity lost. Pausing sync operations.");
+            BroadcastHealth(_lastSyncState, "Device is offline");
+        }
+    }
+#endif
+
     public void TriggerManualSync()
     {
         if (_isSyncing) return;
@@ -129,6 +165,11 @@ public class SyncEngine : BackgroundService
                     }
 
                     await PullUpdatesAsync(stoppingToken);
+                    
+                    _consecutiveFailures = 0;
+                    _lastSuccess = DateTime.UtcNow;
+                    _lastError = null;
+                    BroadcastHealth(SyncState.UP_TO_DATE, null, "COMPLETE", 1, 1, "Sync complete");
                 }
                 catch (Exception ex)
                 {
@@ -184,7 +225,8 @@ public class SyncEngine : BackgroundService
         var pendingCount = 0;
         try 
         {
-            pendingCount = dbContext.SyncEvents.Count(e => e.Status == "PENDING" || e.Status == "FAILED");
+            pendingCount = dbContext.SyncEvents.Count(e => e.Status == "PENDING" || e.Status == "FAILED")
+                         + dbContext.OutboxEvents.Count(e => e.Status == "PENDING" || e.Status == "FAILED");
         } 
         catch { }
 
@@ -218,7 +260,8 @@ public class SyncEngine : BackgroundService
         {
             using var scope = _serviceProvider.CreateScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
-            pendingCount = dbContext.SyncEvents.Count(e => e.Status == "PENDING" || e.Status == "FAILED");
+            pendingCount = dbContext.SyncEvents.Count(e => e.Status == "PENDING" || e.Status == "FAILED")
+                         + dbContext.OutboxEvents.Count(e => e.Status == "PENDING" || e.Status == "FAILED");
         } 
         catch { }
 
@@ -312,25 +355,27 @@ public class SyncEngine : BackgroundService
                             evt.ErrorMessage = "Cloud response omitted this event";
                         }
                     }
-                    _consecutiveFailures = 0;
+                    }
                 }
             }
             else
             {
-                _consecutiveFailures++;
                 _logger.LogWarning($"Network error pushing events. Status: {response.StatusCode}");
                 foreach (var evt in eventsToPush) evt.Status = "FAILED";
+                await dbContext.SaveChangesAsync(stoppingToken);
+                throw new Exception($"Network error pushing POS events. Status: {response.StatusCode}");
             }
         }
         catch (Exception ex)
         {
-            _consecutiveFailures++;
             _logger.LogError(ex, "Failed to push sync events");
             foreach (var evt in eventsToPush)
             {
                 evt.Status = "FAILED";
                 evt.ErrorMessage = ex.Message;
             }
+            await dbContext.SaveChangesAsync(stoppingToken);
+            throw;
         }
 
         await dbContext.SaveChangesAsync(stoppingToken);
@@ -422,16 +467,27 @@ public class SyncEngine : BackgroundService
         _httpClient.DefaultRequestHeaders.Authorization =
             new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
+        var lastPullStr = Preferences.Get($"LastPull_{propertyId}", "");
+        var sinceParam = string.IsNullOrEmpty(lastPullStr) ? "" : $"&since={Uri.EscapeDataString(lastPullStr)}";
+
         var response = await _httpClient.GetAsync(
-            $"sync/pull?propertyId={Uri.EscapeDataString(propertyId)}",
+            $"sync/pull?propertyId={Uri.EscapeDataString(propertyId)}{sinceParam}",
             stoppingToken);
 
-            if (!response.IsSuccessStatusCode)
+        if (!response.IsSuccessStatusCode)
+        {
+            if ((int)response.StatusCode == 401 || (int)response.StatusCode == 403)
             {
-                throw new Exception($"Sync pull returned {(int)response.StatusCode}");
+                if (await TryRefreshDeviceTokenAsync(stoppingToken))
+                {
+                    throw new Exception("Refreshed device token. Will retry pull in next cycle.");
+                }
+                BroadcastHealth(SyncState.ERROR, null, "AUTH_ERROR", 0, 1, $"Auth failed: {response.StatusCode}. Please re-authenticate.");
             }
+            throw new Exception($"Sync pull returned {(int)response.StatusCode}");
+        }
 
-            var json = await response.Content.ReadAsStringAsync(stoppingToken);
+        var json = await response.Content.ReadAsStringAsync(stoppingToken);
             using var doc = System.Text.Json.JsonDocument.Parse(json);
             var root = doc.RootElement;
 
@@ -463,6 +519,13 @@ public class SyncEngine : BackgroundService
 
                     if (propEl.TryGetProperty("bankingModel", out var bm))
                         localProp.BankingModel = bm.GetString() ?? localProp.BankingModel;
+
+                    localProp.UpdatedAt = DateTime.UtcNow;
+
+                    if (root.TryGetProperty("syncedAt", out var syncedAtEl))
+                    {
+                        Preferences.Set($"LastPull_{propertyId}", syncedAtEl.GetString());
+                    }
 
                     if (propEl.TryGetProperty("businessDate", out var bd) &&
                         DateTime.TryParse(bd.GetString(), out var parsedDate))
@@ -608,6 +671,8 @@ public class SyncEngine : BackgroundService
                     }
                     room.Number = el.TryGetProperty("number", out var num) ? num.GetString() ?? "" : "";
                     room.Status = el.TryGetProperty("status", out var st) ? st.GetString() ?? "" : "";
+                    room.HousekeepingStatus = el.TryGetProperty("housekeepingStatus", out var hs) ? hs.GetString() ?? "" : "";
+                    room.MaintenanceStatus = el.TryGetProperty("maintenanceStatus", out var ms) ? ms.GetString() ?? "" : "";
                     room.RoomTypeId = el.TryGetProperty("roomTypeId", out var rti) ? rti.GetString() ?? "" : "";
                     room.LockSystemCode = el.TryGetProperty("code", out var code) ? code.GetString() : null;
                     room.UpdatedAt = DateTime.UtcNow;
@@ -672,6 +737,16 @@ public class SyncEngine : BackgroundService
                         res.CheckInDate = cid;
                     if (el.TryGetProperty("checkOut", out var co) && DateTime.TryParse(co.GetString(), out var cod))
                         res.CheckOutDate = cod;
+                    
+                    res.Adults = el.TryGetProperty("adults", out var adl) ? adl.GetInt32() : res.Adults;
+                    res.Children = el.TryGetProperty("children", out var chl) ? chl.GetInt32() : res.Children;
+                    res.RoomTypeId = el.TryGetProperty("roomTypeId", out var rti2) ? rti2.GetString() : res.RoomTypeId;
+                    res.SpecialRequests = el.TryGetProperty("specialRequests", out var sr) ? sr.GetString() : res.SpecialRequests;
+                    res.ConfirmationNumber = el.TryGetProperty("confirmationNumber", out var cn) ? cn.GetString() : res.ConfirmationNumber;
+                    if (el.TryGetProperty("depositRequired", out var dr) && decimal.TryParse(dr.GetString() ?? dr.GetRawText(), out var drv))
+                        res.DepositRequired = drv;
+                    if (el.TryGetProperty("depositPaid", out var dp2) && decimal.TryParse(dp2.GetString() ?? dp2.GetRawText(), out var dpv))
+                        res.DepositPaid = dpv;
                         
                     res.UpdatedAt = DateTime.UtcNow;
                 }
@@ -810,15 +885,185 @@ public class SyncEngine : BackgroundService
                     }
                     prod.CategoryId = el.TryGetProperty("categoryId", out var cid) ? cid.GetString() ?? "" : "";
                     prod.Name = el.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
-                    prod.Price = el.TryGetProperty("price", out var pr) && pr.ValueKind == System.Text.Json.JsonValueKind.Number ? pr.GetDecimal() : 0m;
-                    prod.TaxRate = el.TryGetProperty("taxRate", out var tr) && tr.ValueKind == System.Text.Json.JsonValueKind.Number ? tr.GetDecimal() : 0m;
+                    prod.Price = el.TryGetProperty("price", out var pr) 
+                        ? (pr.ValueKind == System.Text.Json.JsonValueKind.Number ? pr.GetDecimal() : (pr.ValueKind == System.Text.Json.JsonValueKind.String && decimal.TryParse(pr.GetString(), out var dp) ? dp : 0m)) 
+                        : 0m;
+                    prod.TaxRate = el.TryGetProperty("taxRate", out var tr) 
+                        ? (tr.ValueKind == System.Text.Json.JsonValueKind.Number ? tr.GetDecimal() : (tr.ValueKind == System.Text.Json.JsonValueKind.String && decimal.TryParse(tr.GetString(), out var dt) ? dt : 0m)) 
+                        : 0m;
                     prod.IsActive = el.TryGetProperty("isActive", out var ia) && ia.GetBoolean();
+                    
+                    if (el.TryGetProperty("modifiers", out var mods) && mods.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    {
+                        prod.HasModifiers = mods.GetArrayLength() > 0;
+                        var modIds = new HashSet<string>();
+                        foreach (var m in mods.EnumerateArray())
+                        {
+                            var mId = m.TryGetProperty("id", out var mid) ? mid.GetString() : null;
+                            if (string.IsNullOrEmpty(mId)) continue;
+                            modIds.Add(mId);
+
+                            var localMod = await dbContext.PosProductModifiers.FirstOrDefaultAsync(x => x.Id == mId, stoppingToken);
+                            if (localMod == null)
+                            {
+                                localMod = new LodgeCore.Desktop.Data.Entities.LocalPosProductModifier { Id = mId, ProductId = id };
+                                dbContext.PosProductModifiers.Add(localMod);
+                            }
+                            localMod.Name = m.TryGetProperty("name", out var mn) ? mn.GetString() ?? "" : "";
+                            localMod.Price = m.TryGetProperty("price", out var mpr) 
+                                ? (mpr.ValueKind == System.Text.Json.JsonValueKind.Number ? mpr.GetDecimal() : (mpr.ValueKind == System.Text.Json.JsonValueKind.String && decimal.TryParse(mpr.GetString(), out var mdp) ? mdp : 0m)) 
+                                : 0m;
+                            localMod.IsActive = m.TryGetProperty("isActive", out var mia) ? mia.GetBoolean() : true;
+                        }
+
+                        // Remove stale modifiers for THIS product
+                        var staleMods = await dbContext.PosProductModifiers.Where(m => m.ProductId == id && !modIds.Contains(m.Id)).ToListAsync(stoppingToken);
+                        if (staleMods.Any()) dbContext.PosProductModifiers.RemoveRange(staleMods);
+                    }
+                    else
+                    {
+                        prod.HasModifiers = false;
+                    }
                 }
                 
                 if (posProductsArray.GetArrayLength() > 0)
                 {
                     var stale = await dbContext.PosProducts.Where(p => p.PropertyId == propertyId && !incomingIds.Contains(p.Id)).ToListAsync(stoppingToken);
                     if (stale.Any()) dbContext.PosProducts.RemoveRange(stale);
+                }
+            }
+
+            // 9. POS Floor Plans
+            if (root.TryGetProperty("posFloorPlans", out var posFloorPlansArray))
+            {
+                var incomingIds = new HashSet<string>();
+                var outletIds = await dbContext.PosOutlets.Where(o => o.PropertyId == propertyId).Select(o => o.Id).ToListAsync(stoppingToken);
+
+                foreach (var el in posFloorPlansArray.EnumerateArray())
+                {
+                    var id = el.GetProperty("id").GetString();
+                    var outletId = el.TryGetProperty("outletId", out var oid) ? oid.GetString() : "";
+
+                    if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(outletId) || !outletIds.Contains(outletId)) continue;
+                    incomingIds.Add(id);
+
+                    var fp = await dbContext.PosFloorPlans.FirstOrDefaultAsync(x => x.Id == id, stoppingToken);
+                    if (fp == null)
+                    {
+                        fp = new LodgeCore.Desktop.Data.Entities.LocalPosFloorPlan { Id = id, OutletId = outletId };
+                        dbContext.PosFloorPlans.Add(fp);
+                    }
+                    fp.Name = el.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
+                    fp.IsActive = el.TryGetProperty("isActive", out var ia) ? ia.GetBoolean() : true;
+                }
+
+                if (posFloorPlansArray.GetArrayLength() > 0)
+                {
+                    var stale = await dbContext.PosFloorPlans.Where(f => outletIds.Contains(f.OutletId) && !incomingIds.Contains(f.Id)).ToListAsync(stoppingToken);
+                    if (stale.Any()) dbContext.PosFloorPlans.RemoveRange(stale);
+                }
+            }
+
+            // 10. POS Tables
+            if (root.TryGetProperty("posTables", out var posTablesArray))
+            {
+                var incomingIds = new HashSet<string>();
+                var outletIds = await dbContext.PosOutlets.Where(o => o.PropertyId == propertyId).Select(o => o.Id).ToListAsync(stoppingToken);
+                var validFloorPlanIds = await dbContext.PosFloorPlans.Where(f => outletIds.Contains(f.OutletId)).Select(f => f.Id).ToListAsync(stoppingToken);
+
+                foreach (var el in posTablesArray.EnumerateArray())
+                {
+                    var id = el.GetProperty("id").GetString();
+                    var fpId = el.TryGetProperty("floorPlanId", out var fpid) ? fpid.GetString() : "";
+
+                    if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(fpId) || !validFloorPlanIds.Contains(fpId)) continue;
+                    incomingIds.Add(id);
+
+                    var table = await dbContext.PosTables.FirstOrDefaultAsync(x => x.Id == id, stoppingToken);
+                    if (table == null)
+                    {
+                        table = new LodgeCore.Desktop.Data.Entities.LocalPosTable { Id = id, FloorPlanId = fpId };
+                        dbContext.PosTables.Add(table);
+                    }
+                    table.Name = el.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
+                    table.Capacity = el.TryGetProperty("capacity", out var cap) && cap.ValueKind == System.Text.Json.JsonValueKind.Number ? cap.GetInt32() : 4;
+                    table.PositionX = el.TryGetProperty("positionX", out var px) && px.ValueKind == System.Text.Json.JsonValueKind.Number ? px.GetInt32() : 0;
+                    table.PositionY = el.TryGetProperty("positionY", out var py) && py.ValueKind == System.Text.Json.JsonValueKind.Number ? py.GetInt32() : 0;
+                    table.IsActive = el.TryGetProperty("isActive", out var ia) ? ia.GetBoolean() : true;
+                }
+
+                if (posTablesArray.GetArrayLength() > 0)
+                {
+                    var stale = await dbContext.PosTables.Where(t => validFloorPlanIds.Contains(t.FloorPlanId) && !incomingIds.Contains(t.Id)).ToListAsync(stoppingToken);
+                    if (stale.Any()) dbContext.PosTables.RemoveRange(stale);
+                }
+            }
+
+            // 11. Housekeeping Tasks
+            if (root.TryGetProperty("housekeepingTasks", out var housekeepingTasksArray))
+            {
+                var incomingIds = new HashSet<string>();
+                foreach (var el in housekeepingTasksArray.EnumerateArray())
+                {
+                    var id = el.GetProperty("id").GetString();
+                    if (string.IsNullOrEmpty(id)) continue;
+                    incomingIds.Add(id);
+
+                    var task = await dbContext.HousekeepingTasks.FirstOrDefaultAsync(x => x.Id == id, stoppingToken);
+                    if (task == null)
+                    {
+                        task = new LodgeCore.Desktop.Data.Entities.LocalHousekeepingTask { Id = id };
+                        dbContext.HousekeepingTasks.Add(task);
+                    }
+                    
+                    task.RoomId = el.TryGetProperty("roomId", out var rid) ? rid.GetString() ?? "" : "";
+                    task.TaskType = el.TryGetProperty("type", out var typ) ? typ.GetString() ?? "" : "";
+                    task.Status = el.TryGetProperty("status", out var st) ? st.GetString() ?? "" : "";
+                    var room = await dbContext.Rooms.FirstOrDefaultAsync(r => r.Id == task.RoomId, stoppingToken);
+                    if (room != null)
+                    {
+                        task.RoomNumber = room.RoomNumber ?? "";
+                    }
+                }
+
+                if (housekeepingTasksArray.GetArrayLength() > 0)
+                {
+                    var stale = await dbContext.HousekeepingTasks.Where(t => !incomingIds.Contains(t.Id)).ToListAsync(stoppingToken);
+                    if (stale.Any()) dbContext.HousekeepingTasks.RemoveRange(stale);
+                }
+            }
+
+            // 12. Maintenance Tickets
+            if (root.TryGetProperty("maintenanceTickets", out var maintenanceTicketsArray))
+            {
+                var incomingIds = new HashSet<string>();
+                foreach (var el in maintenanceTicketsArray.EnumerateArray())
+                {
+                    var id = el.GetProperty("id").GetString();
+                    if (string.IsNullOrEmpty(id)) continue;
+                    incomingIds.Add(id);
+
+                    var ticket = await dbContext.MaintenanceTickets.FirstOrDefaultAsync(x => x.Id == id, stoppingToken);
+                    if (ticket == null)
+                    {
+                        ticket = new LodgeCore.Desktop.Data.Entities.LocalMaintenanceTicket { Id = id, PropertyId = propertyId };
+                        dbContext.MaintenanceTickets.Add(ticket);
+                    }
+                    
+                    ticket.RoomId = el.TryGetProperty("roomId", out var rid) ? rid.GetString() : null;
+                    ticket.Title = el.TryGetProperty("title", out var title) ? title.GetString() ?? "" : "";
+                    ticket.Description = el.TryGetProperty("description", out var desc) ? desc.GetString() ?? "" : "";
+                    ticket.Status = el.TryGetProperty("status", out var st) ? st.GetString() ?? "" : "";
+                    
+                    ticket.Priority = el.TryGetProperty("priority", out var pri) ? pri.GetString() ?? "NORMAL" : "NORMAL";
+                    
+                    ticket.RequiresRoomRestriction = ticket.Status == "IN_PROGRESS" || ticket.Status == "OPEN"; 
+                }
+
+                if (maintenanceTicketsArray.GetArrayLength() > 0)
+                {
+                    var stale = await dbContext.MaintenanceTickets.Where(t => t.PropertyId == propertyId && !incomingIds.Contains(t.Id)).ToListAsync(stoppingToken);
+                    if (stale.Any()) dbContext.MaintenanceTickets.RemoveRange(stale);
                 }
             }
 
@@ -831,11 +1076,7 @@ public class SyncEngine : BackgroundService
             meta.LastSuccessfulSyncAt = DateTime.UtcNow;
 
             await dbContext.SaveChangesAsync(stoppingToken);
-            _consecutiveFailures = 0;
-            _lastSuccess = DateTime.UtcNow;
-            _lastError = null;
-            BroadcastHealth(SyncState.UP_TO_DATE, null, "COMPLETE", 1, 1, "Sync complete");
-            _logger.LogInformation("Sync pull completed successfully.");
+            await dbContext.SaveChangesAsync(stoppingToken);
     }
     private async Task PushFrontDeskOutboxAsync(CancellationToken stoppingToken)
     {
@@ -951,9 +1192,13 @@ public class SyncEngine : BackgroundService
                 // Specific HTTP Failure Classifications
                 if (statusCode == 401 || statusCode == 403)
                 {
+                    if (await TryRefreshDeviceTokenAsync(stoppingToken))
+                    {
+                        return; // Retry on next loop
+                    }
                     // Authentication/Authorization: Pause sync loop, don't increment attempt count
                     BroadcastHealth(SyncState.ERROR, null, "AUTH_ERROR", 0, 1, $"Auth failed: {statusCode}. Please re-authenticate.");
-                    return; 
+                    throw new Exception($"Auth failed: {statusCode}. Please re-authenticate.");
                 }
 
                 foreach (var evt in pendingEvents) 
@@ -1000,6 +1245,7 @@ public class SyncEngine : BackgroundService
             _logger.LogError(ex, "Error pushing Front Desk outbox events.");
             foreach (var evt in pendingEvents) { evt.Status = "FAILED"; evt.LastError = ex.Message; }
             await dbContext.SaveChangesAsync(stoppingToken);
+            throw;
         }
     }
 
@@ -1014,6 +1260,46 @@ public class SyncEngine : BackgroundService
         public string Id { get; set; } = string.Empty;
         public string Status { get; set; } = string.Empty;
         public string IdempotencyKey { get; set; } = string.Empty;
+        public string? Error { get; set; }
+    }
+
+    private async Task<bool> TryRefreshDeviceTokenAsync(CancellationToken stoppingToken)
+    {
+        var token = _credentialStorage.LoadCredential("deviceCredential");
+        var propertyId = Preferences.Get("DevicePropertyId", "");
+        var baseUrl = Preferences.Get("CloudBaseUrl", "https://api.lodgecore.test");
+        
+        if (string.IsNullOrEmpty(token) || string.IsNullOrEmpty(propertyId)) return false;
+        
+        try
+        {
+            var request = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/api/v1/device/refresh");
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            request.Content = JsonContent.Create(new { propertyId });
+            
+            var response = await _httpClient.SendAsync(request, stoppingToken);
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<DeviceRefreshResponse>(cancellationToken: stoppingToken);
+                if (result != null && result.Success && !string.IsNullOrEmpty(result.DeviceToken))
+                {
+                    _credentialStorage.SaveCredential("deviceCredential", result.DeviceToken);
+                    _logger.LogInformation("Successfully refreshed device token.");
+                    return true;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to refresh device token.");
+        }
+        return false;
+    }
+
+    private class DeviceRefreshResponse
+    {
+        public bool Success { get; set; }
+        public string? DeviceToken { get; set; }
         public string? Error { get; set; }
     }
 }

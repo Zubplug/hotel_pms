@@ -54,7 +54,7 @@ export default function FrontDeskRoomsPage() {
     if (search) {
       const q = search.toLowerCase();
       return room.number.toLowerCase().includes(q) || 
-             room.roomType.name.toLowerCase().includes(q);
+             (room.roomType?.name ?? 'Unknown Room Type').toLowerCase().includes(q);
     }
     return true;
   });
@@ -188,9 +188,9 @@ export default function FrontDeskRoomsPage() {
                       <h3 className="text-3xl font-black text-slate-900 tracking-tight group-hover:text-blue-600 transition-colors">
                         {formatRoomNumber(room.number)}
                       </h3>
-                      <p className="text-sm font-medium text-slate-500 truncate mt-1">
-                        {room.roomType.name}
-                      </p>
+                      <div className="text-xs text-slate-500 font-medium tracking-wide">
+                        {room.roomType?.name ?? 'Unknown Room Type'}
+                      </div>
                     </div>
                   </div>
                 ))}

@@ -99,7 +99,7 @@ export function FrontDeskRoomStatusDialog({
               <Key className="w-6 h-6 text-blue-400" /> Room {formatRoomNumber(room.number)}
             </DialogTitle>
             <DialogDescription className="text-slate-300">
-              {room.roomType.name}
+              {room.roomType?.name ?? "Unknown Room Type"}
             </DialogDescription>
           </DialogHeader>
           

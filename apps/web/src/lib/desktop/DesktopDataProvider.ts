@@ -138,7 +138,7 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
       const res = await invokeDesktop('keycards.encode', { roomId, lockCode, reservationId });
       return {
         success: res.success,
-        error: res.error,
+        error: typeof res.error === 'string' ? { message: res.error } : res.error,
         data: {
           operation: {
             id: (() => { const id = 'sync_encode_' + Date.now(); syncOperations.set(id, res.data); return id; })(),
@@ -153,7 +153,7 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
       const res = await invokeDesktop('keycards.read');
       return {
         success: res.success,
-        error: res.error,
+        error: typeof res.error === 'string' ? { message: res.error } : res.error,
         data: {
           operation: {
             id: (() => { const id = 'sync_read_' + Date.now(); syncOperations.set(id, res.data); return id; })(),
@@ -168,7 +168,7 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
       const res = await invokeDesktop('keycards.cancel');
       return {
         success: res.success,
-        error: res.error,
+        error: typeof res.error === 'string' ? { message: res.error } : res.error,
         data: {
           operation: {
             id: (() => { const id = 'sync_cancel_' + Date.now(); syncOperations.set(id, res.data); return id; })(),

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -101,6 +101,20 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
   });
   const guests = (guestsRes as any)?.data || [];
 
+  const [guestSearch, setGuestSearch] = useState('');
+  const filteredGuests = useMemo(() => {
+    if (!guests) return [];
+    const search = guestSearch.toLowerCase();
+    return guests
+      .filter((g: any) => 
+        !search || 
+        `${g.firstName} ${g.lastName}`.toLowerCase().includes(search) || 
+        g.email?.toLowerCase().includes(search) || 
+        g.phone?.includes(search)
+      )
+      .slice(0, 50);
+  }, [guests, guestSearch]);
+
   const { data: roomTypesRes, isLoading: loadingRoomTypes } = useQuery({
     queryKey: ['room-types', propertyId],
     queryFn: async () => {
@@ -143,7 +157,8 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
       queryClient.invalidateQueries({ queryKey: ['frontdesk', 'dashboard'] });
       
       // Navigate to the newly created reservation in the Front Desk view
-      router.push(`/frontdesk/reservations/detail?id=${data.data.id}`);
+      const newId = data.data?.data?.id || data.data?.id;
+      router.push(`/frontdesk/reservations/detail?id=${newId}`);
     },
     onError: (error) => {
       toast.error(error.message);
@@ -211,13 +226,26 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
                             <SelectValue placeholder="Search by name or email..." />
                           </SelectTrigger>
                         </FormControl>
-                        <SelectContent className="rounded-xl shadow-2xl border-slate-100">
-                          {guests?.map((guest: any) => (
-                            <SelectItem key={guest.id} value={guest.id} className="py-3 cursor-pointer">
-                              <div className="font-semibold">{guest.firstName} {guest.lastName}</div>
-                              <div className="text-xs text-slate-400">{guest.email || guest.phone || 'No contact info'}</div>
-                            </SelectItem>
-                          ))}
+                        <SelectContent className="rounded-xl shadow-2xl border-slate-100 max-h-[300px]">
+                          <div className="p-2 border-b border-slate-100 sticky top-0 bg-white z-10">
+                            <Input 
+                              placeholder="Search by name, email or phone..." 
+                              value={guestSearch}
+                              onChange={(e) => setGuestSearch(e.target.value)}
+                              onKeyDown={(e) => e.stopPropagation()} // Prevent select from closing
+                              className="h-9"
+                            />
+                          </div>
+                          {filteredGuests.length === 0 ? (
+                            <div className="py-6 text-center text-sm text-slate-500">No matching guests found.</div>
+                          ) : (
+                            filteredGuests.map((guest: any) => (
+                              <SelectItem key={guest.id} value={guest.id} className="py-3 cursor-pointer">
+                                <div className="font-semibold">{guest.firstName} {guest.lastName}</div>
+                                <div className="text-xs text-slate-400">{guest.email || guest.phone || 'No contact info'}</div>
+                              </SelectItem>
+                            ))
+                          )}
                         </SelectContent>
                       </Select>
                       <FormMessage />

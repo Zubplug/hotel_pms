@@ -27,6 +27,19 @@ function ReservationDetailContent() {
 
   const reservation = res?.data || res;
 
+  if (!id || id === 'undefined') {
+    return (
+      <div className="p-8 max-w-5xl mx-auto mt-12">
+        <div className="bg-red-50 text-red-600 p-6 rounded-2xl border border-red-100 font-medium">
+          Reservation could not be loaded. Missing or invalid reservation ID.
+        </div>
+        <Button variant="outline" className="mt-6 rounded-xl h-12 px-6" onClick={() => router.push('/frontdesk/reservations')}>
+          <ArrowLeft className="h-4 w-4 mr-2" /> Back to Search
+        </Button>
+      </div>
+    );
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -35,7 +48,7 @@ function ReservationDetailContent() {
     );
   }
 
-  if (error || !reservation) {
+  if (error || !reservation || reservation.error) {
     return (
       <div className="p-8 max-w-5xl mx-auto mt-12">
         <div className="bg-red-50 text-red-600 p-6 rounded-2xl border border-red-100 font-medium">
@@ -48,11 +61,11 @@ function ReservationDetailContent() {
     );
   }
 
-  if (propertyId && reservation.propertyId !== propertyId) {
+  if (propertyId && reservation.propertyId && reservation.propertyId !== propertyId) {
     return (
       <div className="p-8 max-w-5xl mx-auto mt-12">
         <div className="bg-amber-50 text-amber-700 p-6 rounded-2xl border border-amber-100 font-medium">
-          This reservation belongs to a different property. Please switch your active property.
+          This reservation belongs to another property. Please switch your active property.
         </div>
       </div>
     );

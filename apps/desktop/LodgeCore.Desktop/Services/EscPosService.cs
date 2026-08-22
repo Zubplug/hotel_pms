@@ -205,6 +205,88 @@ public class EscPosService
         }
     }
 
+    // ── Cash Drawer ────────────────────────────────────────────────
+
+    public async Task<(bool success, string? error)> OpenCashDrawerAsync(string? outletId = null)
+    {
+        var printer = await GetPrinterByRoleAsync("RECEIPT", outletId) 
+                      ?? await GetPrinterByRoleAsync("FRONTDESK", outletId);
+        
+        if (printer == null)
+            return (false, "No active RECEIPT or FRONTDESK printer configured for this terminal to open cash drawer.");
+
+        var doc = new List<byte[]>();
+        doc.Add(Esc.Init);
+        doc.Add(Esc.OpenDrawer);
+        
+        return await SendToPrinterAsync(printer, BuildBytes(doc.ToArray()));
+    }
+
+    // ── Registration Card ──────────────────────────────────────────
+
+    public async Task<(bool success, string? error)> PrintRegistrationCardAsync(LocalReservation reservation, LocalGuest guest, string? outletId = null)
+    {
+        var printer = await GetPrinterByRoleAsync("FRONTDESK", outletId) 
+                      ?? await GetPrinterByRoleAsync("RECEIPT", outletId);
+        
+        if (printer == null)
+            return (false, "No active FRONTDESK or RECEIPT printer configured for this terminal.");
+
+        var doc = new List<byte[]>();
+        int w = printer.PaperWidth;
+
+        // Header
+        doc.Add(Esc.Init);
+        doc.Add(Esc.AlignCenter);
+        doc.Add(Esc.BoldOn);
+        doc.Add(Esc.DoubleSize);
+        doc.Add(Text(printer.HotelName ?? "LodgeCore PMS"));
+        doc.Add(Esc.NormalSize);
+        doc.Add(Esc.BoldOff);
+
+        if (!string.IsNullOrWhiteSpace(printer.HotelAddress))
+            doc.Add(Text(printer.HotelAddress));
+
+        doc.Add(Esc.LineFeed);
+        doc.Add(Esc.DividerLine);
+
+        // Title
+        doc.Add(Esc.AlignCenter);
+        doc.Add(Esc.BoldOn);
+        doc.Add(Text("GUEST REGISTRATION CARD"));
+        doc.Add(Esc.BoldOff);
+        doc.Add(Esc.DividerLine);
+
+        // Guest Info
+        doc.Add(Esc.AlignLeft);
+        doc.Add(Text($"Name: {guest.FirstName} {guest.LastName}"));
+        doc.Add(Text($"Email: {guest.Email ?? "N/A"}"));
+        doc.Add(Text($"Phone: {guest.Phone ?? "N/A"}"));
+        doc.Add(Esc.DividerLine);
+
+        // Reservation Info
+        doc.Add(Text($"Conf #: {reservation.Id.Substring(0, 8)}"));
+        doc.Add(Text($"Room  : {reservation.RoomNumber ?? "TBA"}"));
+        doc.Add(Text($"Arrival: {reservation.CheckIn.ToLocalTime():dd/MM/yyyy HH:mm}"));
+        doc.Add(Text($"Depart : {reservation.CheckOut.ToLocalTime():dd/MM/yyyy}"));
+        doc.Add(Text($"Guests : {reservation.Adults}A {reservation.Children}C"));
+        doc.Add(Esc.DividerLine);
+
+        // Signature area
+        doc.Add(Esc.LineFeed);
+        doc.Add(Esc.LineFeed);
+        doc.Add(Text("I agree to the hotel terms and conditions."));
+        doc.Add(Esc.LineFeed);
+        doc.Add(Esc.LineFeed);
+        doc.Add(Esc.LineFeed);
+        doc.Add(Text("Signature: _______________________"));
+        doc.Add(Esc.LineFeed);
+        doc.Add(Esc.LineFeed);
+        doc.Add(Esc.CutPartial);
+
+        return await SendToPrinterAsync(printer, BuildBytes(doc.ToArray()));
+    }
+
     // ── Test connection ────────────────────────────────────────────
 
     public async Task<(bool success, string message)> TestConnectionAsync(string ip, int port = 9100)

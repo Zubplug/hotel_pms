@@ -32,6 +32,7 @@ public class LocalPosProduct
     public decimal Price { get; set; }
     public decimal TaxRate { get; set; }
     public bool IsActive { get; set; }
+    public bool HasModifiers { get; set; }
 }
 
 public class LocalStockItem

@@ -52,17 +52,77 @@ public class LocalDbContext : DbContext
 
     public LocalDbContext(DbContextOptions<LocalDbContext> options) : base(options)
     {
-        // Automatically provisions the local SQLite schema on first launch for new edge nodes
-        Database.EnsureCreated();
+    }
+
+    public async Task ApplyRuntimeMigrationsAsync()
+    {
+        var dbPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LodgeCoreOffline.db");
+        var connection = Database.GetDbConnection();
+        var connectionOpened = false;
+        try
+        {
+            if (connection.State != System.Data.ConnectionState.Open)
+            {
+                await connection.OpenAsync();
+                connectionOpened = true;
+            }
+        }
+        catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 26 || ex.Message.Contains("file is not a database"))
+        {
+            // Database is likely unencrypted or corrupted. Delete it and recreate it.
+            if (connectionOpened) await connection.CloseAsync();
+            connection.Dispose();
+            System.IO.File.Delete(dbPath);
+            await Database.EnsureCreatedAsync();
+            return;
+        }
+        
+        await Database.EnsureCreatedAsync();
+
+        try
+        {
+            using var command = connection.CreateCommand();
+
+            var migrations = new[]
+            {
+                "ALTER TABLE Reservations ADD COLUMN DepositPaid TEXT;",
+                "ALTER TABLE Reservations ADD COLUMN DepositRequired TEXT;",
+                "ALTER TABLE Reservations ADD COLUMN ConfirmationNumber TEXT;",
+                "ALTER TABLE PosProducts ADD COLUMN HasModifiers INTEGER NOT NULL DEFAULT 0;"
+            };
+
+            foreach (var migration in migrations)
+            {
+                try
+                {
+                    command.CommandText = migration;
+                    await command.ExecuteNonQueryAsync();
+                }
+                catch
+                {
+                    // Ignore, column likely already exists
+                }
+            }
+        }
+        finally
+        {
+            if (connectionOpened)
+                await connection.CloseAsync();
+        }
     }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
         if (!optionsBuilder.IsConfigured)
         {
-            // In a production app, the connection string will include a Password=... for SQLCipher encryption
             string dbPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LodgeCoreOffline.db");
-            optionsBuilder.UseSqlite($"Data Source={dbPath}");
+            var connectionString = new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder
+            {
+                DataSource = dbPath,
+                Mode = Microsoft.Data.Sqlite.SqliteOpenMode.ReadWriteCreate,
+                Password = "lodgecore_encryption_key_2026"
+            }.ToString();
+            optionsBuilder.UseSqlite(connectionString);
         }
     }
 

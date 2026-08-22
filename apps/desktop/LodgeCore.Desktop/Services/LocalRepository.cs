@@ -21,18 +21,20 @@ public class LocalRepository
     {
         _dbContext.Reservations.Add(reservation);
         
-        // Bundle the mutation with an immutable SyncEvent
-        var syncEvent = new LocalSyncEvent
+        // Bundle the mutation with an immutable OutboxEvent
+        var outboxEvent = new LocalOutboxEvent
         {
-            EntityType = "RESERVATION",
-            EntityId = reservation.Id,
-            OperationType = "CREATE",
-            PayloadJson = JsonSerializer.Serialize(reservation),
-            UserId = userId,
-            DeviceId = deviceId
+            PropertyId = reservation.PropertyId,
+            DeviceId = deviceId,
+            OperatorId = userId,
+            AggregateType = "RESERVATION",
+            AggregateId = reservation.Id,
+            AggregateVersion = reservation.Version,
+            EventType = "CREATE",
+            PayloadJson = JsonSerializer.Serialize(reservation)
         };
         
-        _dbContext.SyncEvents.Add(syncEvent);
+        _dbContext.OutboxEvents.Add(outboxEvent);
         
         // This transaction ensures the local DB and the Sync Queue are atomically updated
         await _dbContext.SaveChangesAsync();
@@ -69,18 +71,26 @@ public class LocalRepository
         var res = await _dbContext.Reservations.FindAsync(reservationId);
         if (res == null) return false;
 
+        var oldRoomId = res.RoomId;
         res.RoomId = roomId;
         res.RoomNumber = roomNumber;
         res.UpdatedAt = DateTime.UtcNow;
+        res.IsDirty = true;
+        res.LocalSequence++;
+        int eventVersion = res.Version;
+        res.Version++;
 
-        _dbContext.SyncEvents.Add(new LocalSyncEvent
+        _dbContext.OutboxEvents.Add(new LocalOutboxEvent
         {
-            EntityType = "RESERVATION",
-            EntityId = reservationId,
-            OperationType = "ASSIGN_ROOM",
-            PayloadJson = JsonSerializer.Serialize(new { roomId, roomNumber }),
-            UserId = userId,
-            DeviceId = deviceId
+            PropertyId = res.PropertyId,
+            DeviceId = deviceId,
+            OperatorId = userId,
+            AggregateType = "RESERVATION",
+            AggregateId = reservationId,
+            AggregateVersion = eventVersion,
+            EventType = "REASSIGN_ROOM",
+            Sequence = res.LocalSequence,
+            PayloadJson = JsonSerializer.Serialize(new { newRoomId = roomId, newRoomNumber = roomNumber, oldRoomId })
         });
 
         await _dbContext.SaveChangesAsync();
@@ -89,20 +99,38 @@ public class LocalRepository
 
     public async Task<bool> CancelReservationAsync(string reservationId, string userId, string deviceId)
     {
-        var res = await _dbContext.Reservations.FindAsync(reservationId);
+        var res = await _dbContext.Reservations.Include(r => r.Folio).FirstOrDefaultAsync(r => r.Id == reservationId);
         if (res == null) return false;
+
+        // Guard: already cancelled is a no-op (idempotent)
+        if (res.Status == "CANCELLED") return true;
+
+        // Guard: cannot cancel a checked-out reservation
+        if (res.Status == "CHECKED_OUT")
+            throw new InvalidOperationException("Cannot cancel a reservation that has already been checked out.");
+
+        // Guard: cannot cancel with an unsettled folio
+        if (res.Folio != null && res.Folio.OutstandingBalance > 0)
+            throw new InvalidOperationException("Cannot cancel reservation with an outstanding balance. Settle the folio first.");
 
         res.Status = "CANCELLED";
         res.UpdatedAt = DateTime.UtcNow;
+        res.IsDirty = true;
+        res.LocalSequence++;
+        int eventVersion = res.Version;
+        res.Version++;
 
-        _dbContext.SyncEvents.Add(new LocalSyncEvent
+        _dbContext.OutboxEvents.Add(new LocalOutboxEvent
         {
-            EntityType = "RESERVATION",
-            EntityId = reservationId,
-            OperationType = "CANCEL",
-            PayloadJson = JsonSerializer.Serialize(new { status = "CANCELLED" }),
-            UserId = userId,
-            DeviceId = deviceId
+            PropertyId = res.PropertyId,
+            DeviceId = deviceId,
+            OperatorId = userId,
+            AggregateType = "RESERVATION",
+            AggregateId = reservationId,
+            AggregateVersion = eventVersion,
+            EventType = "CANCEL",
+            Sequence = res.LocalSequence,
+            PayloadJson = JsonSerializer.Serialize(new { status = "CANCELLED", roomId = res.RoomId })
         });
 
         await _dbContext.SaveChangesAsync();
@@ -118,6 +146,117 @@ public class LocalRepository
             .AnyAsync();
 
         return !overlapping;
+    }
+
+    public async Task<bool> ExtendStayAsync(string reservationId, DateTime newCheckOut, string userId, string deviceId)
+    {
+        var res = await _dbContext.Reservations.FindAsync(reservationId);
+        if (res == null) return false;
+
+        if (res.Status != "CHECKED_IN" && res.Status != "PENDING")
+            throw new InvalidOperationException($"Cannot extend a reservation with status '{res.Status}'.");
+
+        if (newCheckOut <= res.CheckInDate)
+            throw new InvalidOperationException("New checkout date must be after the check-in date.");
+
+        if (newCheckOut <= res.CheckOutDate)
+            throw new InvalidOperationException("New checkout date must be after the current checkout date.");
+
+        // Overlap check: is the room taken by another reservation during the extension window?
+        if (!string.IsNullOrEmpty(res.RoomNumber))
+        {
+            var conflict = await _dbContext.Reservations
+                .Where(r => r.Id != reservationId
+                         && r.RoomNumber == res.RoomNumber
+                         && r.Status != "CANCELLED"
+                         && r.CheckInDate < newCheckOut
+                         && r.CheckOutDate > res.CheckOutDate)
+                .AnyAsync();
+
+            if (conflict)
+                throw new InvalidOperationException("The room is not available for the extended period.");
+        }
+
+        res.CheckOutDate = newCheckOut;
+        res.UpdatedAt = DateTime.UtcNow;
+        res.IsDirty = true;
+        res.LocalSequence++;
+        int eventVersion = res.Version;
+        res.Version++;
+
+        _dbContext.OutboxEvents.Add(new LocalOutboxEvent
+        {
+            PropertyId = res.PropertyId,
+            DeviceId = deviceId,
+            OperatorId = userId,
+            AggregateType = "RESERVATION",
+            AggregateId = reservationId,
+            AggregateVersion = eventVersion,
+            EventType = "EXTEND_STAY",
+            Sequence = res.LocalSequence,
+            PayloadJson = JsonSerializer.Serialize(new
+            {
+                newCheckOutDate = newCheckOut.ToString("o"),
+                roomId = res.RoomId
+            })
+        });
+
+        await _dbContext.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> EditReservationAsync(string reservationId, LocalReservationPatch patch, string userId, string deviceId)
+    {
+        var res = await _dbContext.Reservations.FindAsync(reservationId);
+        if (res == null) return false;
+
+        if (res.Status == "CHECKED_OUT" || res.Status == "CANCELLED")
+            throw new InvalidOperationException($"Cannot edit a {res.Status} reservation.");
+
+        // Apply non-null patches
+        if (patch.GuestId        != null) res.GuestId         = patch.GuestId;
+        if (patch.CheckIn        != null) res.CheckInDate      = patch.CheckIn.Value;
+        if (patch.CheckOut       != null) res.CheckOutDate     = patch.CheckOut.Value;
+        if (patch.RoomId         != null) res.RoomId           = patch.RoomId;
+        if (patch.RoomTypeId     != null) res.RoomTypeId       = patch.RoomTypeId;
+        if (patch.Adults         != null) res.Adults           = patch.Adults.Value;
+        if (patch.Children       != null) res.Children         = patch.Children.Value;
+        if (patch.SpecialRequests != null) res.SpecialRequests = patch.SpecialRequests;
+
+        if (res.CheckOutDate <= res.CheckInDate)
+            throw new InvalidOperationException("Check-out must be after check-in.");
+
+        res.UpdatedAt = DateTime.UtcNow;
+        res.IsDirty = true;
+        res.LocalSequence++;
+        int eventVersion = res.Version;
+        res.Version++;
+
+        _dbContext.OutboxEvents.Add(new LocalOutboxEvent
+        {
+            PropertyId = res.PropertyId,
+            DeviceId = deviceId,
+            OperatorId = userId,
+            AggregateType = "RESERVATION",
+            AggregateId = reservationId,
+            AggregateVersion = eventVersion,
+            EventType = "EDIT",
+            Sequence = res.LocalSequence,
+            PayloadJson = JsonSerializer.Serialize(new
+            {
+                guestId         = patch.GuestId,
+                checkIn         = patch.CheckIn?.ToString("o"),
+                checkOut        = patch.CheckOut?.ToString("o"),
+                roomId          = patch.RoomId,
+                roomTypeId      = patch.RoomTypeId,
+                adults          = patch.Adults,
+                children        = patch.Children,
+                specialRequests = patch.SpecialRequests
+            })
+        });
+
+        await _dbContext.SaveChangesAsync();
+        return true;
     }
 
     public async Task<bool> RecordChargeAsync(string folioId, decimal amount, string description, string userId, string deviceId)
@@ -142,7 +281,7 @@ public class LocalRepository
             AggregateVersion = eventVersion,
             EventType = "ROOM_CHARGE",
             Sequence = folio.LocalSequence,
-            PayloadJson = JsonSerializer.Serialize(new { amount, description, currency = "NGN", businessDate = DateTime.UtcNow })
+            PayloadJson = JsonSerializer.Serialize(new { amount, description, currency = "NGN", businessDate = DateTime.UtcNow, originalBusinessDate = DateTime.UtcNow })
         });
 
         await _dbContext.SaveChangesAsync();
@@ -171,7 +310,7 @@ public class LocalRepository
             AggregateVersion = eventVersion,
             EventType = "POST_PAYMENT",
             Sequence = folio.LocalSequence,
-            PayloadJson = JsonSerializer.Serialize(new { amount, method })
+            PayloadJson = JsonSerializer.Serialize(new { amount, method, currency = "NGN", businessDate = DateTime.UtcNow, originalBusinessDate = DateTime.UtcNow })
         });
 
         await _dbContext.SaveChangesAsync();
@@ -240,6 +379,7 @@ public class LocalRepository
         // Also auto-generate a cleaning task upon checkout
         var cleaningTask = new LocalHousekeepingTask
         {
+            PropertyId = res.PropertyId,
             RoomId = res.RoomId ?? "",
             RoomNumber = res.RoomNumber ?? "",
             TaskType = "CLEANING",
@@ -247,14 +387,17 @@ public class LocalRepository
         };
         _dbContext.HousekeepingTasks.Add(cleaningTask);
         
-        _dbContext.SyncEvents.Add(new LocalSyncEvent
+        _dbContext.OutboxEvents.Add(new LocalOutboxEvent
         {
-            EntityType = "HOUSEKEEPING_TASK",
-            EntityId = cleaningTask.Id,
-            OperationType = "CREATE",
-            PayloadJson = JsonSerializer.Serialize(cleaningTask),
-            UserId = userId,
-            DeviceId = deviceId
+            PropertyId = cleaningTask.PropertyId,
+            DeviceId = deviceId,
+            OperatorId = userId,
+            AggregateType = "HOUSEKEEPING_TASK",
+            AggregateId = cleaningTask.Id,
+            AggregateVersion = 1,
+            EventType = "CREATE",
+            Sequence = 1,
+            PayloadJson = JsonSerializer.Serialize(cleaningTask)
         });
 
         await _dbContext.SaveChangesAsync();
@@ -268,15 +411,21 @@ public class LocalRepository
 
         task.Status = status;
         task.UpdatedAt = DateTime.UtcNow;
+        task.IsDirty = true;
+        int eventVersion = task.Version;
+        task.Version++;
 
-        _dbContext.SyncEvents.Add(new LocalSyncEvent
+        _dbContext.OutboxEvents.Add(new LocalOutboxEvent
         {
-            EntityType = "HOUSEKEEPING_TASK",
-            EntityId = taskId,
-            OperationType = "UPDATE_STATUS",
-            PayloadJson = JsonSerializer.Serialize(new { status }),
-            UserId = userId,
-            DeviceId = deviceId
+            PropertyId = task.PropertyId,
+            DeviceId = deviceId,
+            OperatorId = userId,
+            AggregateType = "HOUSEKEEPING_TASK",
+            AggregateId = taskId,
+            AggregateVersion = eventVersion,
+            EventType = "UPDATE_STATUS",
+            Sequence = task.Version,
+            PayloadJson = JsonSerializer.Serialize(new { status })
         });
 
         await _dbContext.SaveChangesAsync();
@@ -287,14 +436,17 @@ public class LocalRepository
     {
         _dbContext.MaintenanceTickets.Add(ticket);
         
-        _dbContext.SyncEvents.Add(new LocalSyncEvent
+        _dbContext.OutboxEvents.Add(new LocalOutboxEvent
         {
-            EntityType = "MAINTENANCE_TICKET",
-            EntityId = ticket.Id,
-            OperationType = "CREATE",
-            PayloadJson = JsonSerializer.Serialize(ticket),
-            UserId = userId,
-            DeviceId = deviceId
+            PropertyId = ticket.PropertyId,
+            DeviceId = deviceId,
+            OperatorId = userId,
+            AggregateType = "MAINTENANCE_TICKET",
+            AggregateId = ticket.Id,
+            AggregateVersion = 1,
+            EventType = "CREATE",
+            Sequence = 1,
+            PayloadJson = JsonSerializer.Serialize(ticket)
         });
 
         await _dbContext.SaveChangesAsync();
@@ -309,24 +461,57 @@ public class LocalRepository
         ticket.Status = "RESOLVED";
         ticket.RequiresRoomRestriction = false;
         ticket.UpdatedAt = DateTime.UtcNow;
+        ticket.IsDirty = true;
+        int eventVersion = ticket.Version;
+        ticket.Version++;
 
-        _dbContext.SyncEvents.Add(new LocalSyncEvent
+        _dbContext.OutboxEvents.Add(new LocalOutboxEvent
         {
-            EntityType = "MAINTENANCE_TICKET",
-            EntityId = ticketId,
-            OperationType = "RESOLVE",
-            PayloadJson = JsonSerializer.Serialize(new { status = "RESOLVED", requiresRoomRestriction = false }),
-            UserId = userId,
-            DeviceId = deviceId
+            PropertyId = ticket.PropertyId,
+            DeviceId = deviceId,
+            OperatorId = userId,
+            AggregateType = "MAINTENANCE_TICKET",
+            AggregateId = ticketId,
+            AggregateVersion = eventVersion,
+            EventType = "RESOLVE",
+            Sequence = ticket.Version,
+            PayloadJson = JsonSerializer.Serialize(new { status = "RESOLVED", requiresRoomRestriction = false })
         });
 
         await _dbContext.SaveChangesAsync();
         return true;
     }
 
+    public async Task<LocalFolio?> GetFolioAsync(string folioId)
+    {
+        return await _dbContext.Folios
+            .Include(f => f.Reservation)
+            .FirstOrDefaultAsync(f => f.Id == folioId);
+    }
+
+    public async Task<LocalReservation?> GetReservationByRoomNumberAsync(string roomNumber)
+    {
+        return await _dbContext.Reservations
+            .FirstOrDefaultAsync(r => r.RoomNumber == roomNumber && (r.Status == "CHECKED_IN" || r.Status == "CONFIRMED"));
+    }
+
+    public async Task<List<LocalHousekeepingTask>> GetHousekeepingTasksAsync(string propertyId)
+    {
+        return await _dbContext.HousekeepingTasks
+            .Where(t => t.PropertyId == propertyId || t.PropertyId == "") // Also include tasks without propertyId for fallback
+            .ToListAsync();
+    }
+
+    public async Task<List<LocalMaintenanceTicket>> GetMaintenanceTicketsAsync(string propertyId)
+    {
+        return await _dbContext.MaintenanceTickets
+            .Where(t => t.PropertyId == propertyId)
+            .ToListAsync();
+    }
+
     public async Task EnsureDatabaseCreatedAsync()
     {
-        await _dbContext.Database.EnsureCreatedAsync();
+        await _dbContext.ApplyRuntimeMigrationsAsync();
         
         // Seed Stanzel Grand Resort for the pilot if it doesn't exist
         if (!await _dbContext.Properties.AnyAsync())
@@ -356,6 +541,43 @@ public class LocalRepository
     public async Task<List<LocalGuest>> GetGuestsAsync()
     {
         return await _dbContext.Guests.ToListAsync();
+    }
+
+    public async Task<bool> UpdateGuestAsync(string guestId, string firstName, string lastName, string? email, string? phone, string operatorId, string deviceId)
+    {
+        var guest = await _dbContext.Guests.FindAsync(guestId);
+        if (guest == null) return false;
+
+        guest.FirstName = firstName;
+        guest.LastName = lastName;
+        guest.Email = email;
+        guest.Phone = phone;
+        guest.UpdatedAt = DateTime.UtcNow;
+        guest.Version++;
+
+        var payload = new 
+        {
+            guestId = guest.Id,
+            firstName = guest.FirstName,
+            lastName = guest.LastName,
+            email = guest.Email,
+            phone = guest.Phone
+        };
+
+        var evt = new LocalOutboxEvent
+        {
+            Id = Guid.NewGuid().ToString(),
+            AggregateType = "GUEST",
+            AggregateId = guest.Id,
+            AggregateVersion = guest.Version,
+            EventType = "EDIT_GUEST",
+            PayloadJson = JsonSerializer.Serialize(payload),
+            OperatorId = operatorId,
+            DeviceId = deviceId
+        };
+        _dbContext.OutboxEvents.Add(evt);
+        await _dbContext.SaveChangesAsync();
+        return true;
     }
 
     public async Task<List<LocalRoomType>> GetRoomTypesAsync(string propertyId)
@@ -607,14 +829,30 @@ public class LocalRepository
         return await _dbContext.PosProducts.Where(p => p.PropertyId == propertyId && p.IsActive).ToListAsync();
     }
 
-    public async Task<LocalPosSession> OpenPosSessionAsync(string propertyId, decimal openingBalance, string userId, string deviceId)
+    public async Task<LocalPosSession> OpenPosSessionAsync(string propertyId, string outletId, string bankType, string bankingModel, decimal openingBalance, string userId, string deviceId)
     {
+        // 1. Idempotency check: if there is already an active session for this specific context, return it.
+        if (bankType == "SERVER")
+        {
+            var existingServerBank = await GetActiveServerBankAsync(userId, propertyId, outletId);
+            if (existingServerBank != null) return existingServerBank;
+        }
+        else 
+        {
+            var existingDeviceBank = await GetActiveSessionForDeviceAsync(deviceId);
+            if (existingDeviceBank != null) return existingDeviceBank;
+        }
+
         var session = new LocalPosSession
         {
             Id = Guid.NewGuid().ToString(),
             PropertyId = propertyId,
+            OutletId = outletId,
             DeviceId = deviceId,
             UserId = userId,
+            PrimaryOperatorId = userId,
+            BankType = bankType,
+            BankingModel = bankingModel,
             Status = "OPEN",
             OpenedAt = DateTime.UtcNow,
             OpeningBalance = openingBalance
