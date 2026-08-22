@@ -133,11 +133,6 @@ export default function ReceptionistDashboardPage() {
                 <CreditCard className="w-6 h-6 md:w-7 md:h-7 text-indigo-600 group-hover:scale-110 transition-transform" />
                 <span className="font-bold text-sm">Read Card</span>
               </Button>
-
-              <Button onClick={() => router.push('/frontdesk/printer-settings')} variant="outline" className="h-20 md:h-24 md:w-36 rounded-2xl bg-slate-50 hover:bg-slate-100 text-slate-900 border-slate-200 shadow hover:shadow-md hover:-translate-y-1 transition-all flex flex-col gap-2 group hidden sm:flex">
-                <Printer className="w-6 h-6 md:w-7 md:h-7 text-slate-600 group-hover:scale-110 transition-transform" />
-                <span className="font-bold text-sm">Printers</span>
-              </Button>
             </div>
         </div>
 
