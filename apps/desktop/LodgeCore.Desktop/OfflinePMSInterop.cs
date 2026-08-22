@@ -1451,6 +1451,39 @@ public class OfflinePMSInterop
         }
     }
 
+    /// <summary>
+    /// Returns pending/acknowledged KOT batches for a given outlet and station.
+    /// Maps the local PosKots table (LocalPosKot) to match the cloud ProductionBatch shape.
+    /// </summary>
+    public async Task<string> GetProductionBatchesAsync(string outletId, string station)
+    {
+        try
+        {
+            var kots = await _repo.GetProductionBatchesAsync(outletId, station);
+            return JsonSerializer.Serialize(new { success = true, data = kots }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
+    /// <summary>
+    /// Updates the status of a local KOT batch (PENDING → ACKNOWLEDGED → COMPLETED).
+    /// </summary>
+    public async Task<string> UpdateBatchStatusAsync(string batchId, string status)
+    {
+        try
+        {
+            await _repo.UpdateBatchStatusAsync(batchId, status);
+            return JsonSerializer.Serialize(new { success = true }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
     public async Task<string> GetAuthorizedOutletsAsync(string propertyId, string deviceId)
     {
         try

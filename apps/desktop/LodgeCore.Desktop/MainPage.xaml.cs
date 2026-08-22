@@ -522,6 +522,16 @@ public partial class MainPage : ContentPage
                 case "pos.getProductModifiers":
                     responseData = await pmsInterop.GetProductModifiersAsync(parameters?["productId"]?.ToString() ?? "");
                     break;
+                case "pos.getProductionBatches":
+                    responseData = await pmsInterop.GetProductionBatchesAsync(
+                        parameters?["outletId"]?.ToString() ?? "",
+                        parameters?["station"]?.ToString() ?? "KITCHEN");
+                    break;
+                case "pos.updateBatchStatus":
+                    responseData = await pmsInterop.UpdateBatchStatusAsync(
+                        parameters?["batchId"]?.ToString() ?? "",
+                        parameters?["status"]?.ToString() ?? "");
+                    break;
                 case "pos.getSessionContext":
                     responseData = await pmsInterop.GetSessionContextAsync(parameters?["sessionId"]?.ToString() ?? "");
                     break;

@@ -58,7 +58,7 @@ export function PosSidebar({
       onClick={onClick}
       className={`
         relative group flex items-center gap-3 w-full px-4 py-3 rounded-xl
-        transition-all duration-150 font-medium text-sm
+        transition-all duration-150 font-medium text-sm touch-manipulation
         ${active
           ? 'bg-indigo-600 text-white shadow-md'
           : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
@@ -76,7 +76,7 @@ export function PosSidebar({
   );
 
   return (
-    <div className="w-[200px] flex flex-col py-5 px-3 shrink-0 z-20 bg-white border-r border-slate-200 h-full">
+    <div className="w-[200px] flex flex-col py-5 px-3 shrink-0 relative z-20 bg-white border-r border-slate-200 h-full">
       
       {/* Brand */}
       <div className="mb-6 flex items-center gap-3 px-2">

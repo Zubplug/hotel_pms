@@ -1973,6 +1973,55 @@ public class LocalRepository
             .ToListAsync();
     }
 
+    /// <summary>
+    /// Returns KOT records for a given outlet and station that are still PENDING or ACKNOWLEDGED.
+    /// This matches the cloud PosProductionBatch shape consumed by the KDS screen.
+    /// </summary>
+    public async Task<List<object>> GetProductionBatchesAsync(string outletId, string station)
+    {
+        var kots = await _dbContext.PosKots
+            .Where(k => k.OutletId == outletId && (k.Status == "PENDING" || k.Status == "ACKNOWLEDGED"))
+            .OrderBy(k => k.FiredAt)
+            .ToListAsync();
+
+        // Parse ItemIdsJson for each KOT and build the response
+        return kots.Select(k =>
+        {
+            List<string> itemIds;
+            try { itemIds = System.Text.Json.JsonSerializer.Deserialize<List<string>>(k.ItemIdsJson) ?? new(); }
+            catch { itemIds = new(); }
+
+            return (object)new
+            {
+                id = k.Id,
+                batchNumber = k.KotNumber,
+                station = station,
+                status = k.Status,
+                firedAt = k.FiredAt,
+                order = new
+                {
+                    id = k.OrderId,
+                    orderNumber = k.OrderNumber,
+                    tableNumber = k.TableNumber,
+                    tableName = k.TableNumber,
+                    guestCount = 0,
+                },
+                items = itemIds.Select(id => new { id, productName = (string?)null, quantity = 1 }).ToList()
+            };
+        }).ToList();
+    }
+
+    /// <summary>
+    /// Updates KOT/batch status: PENDING → ACKNOWLEDGED → COMPLETED.
+    /// </summary>
+    public async Task UpdateBatchStatusAsync(string batchId, string status)
+    {
+        var kot = await _dbContext.PosKots.FirstOrDefaultAsync(k => k.Id == batchId);
+        if (kot == null) throw new KeyNotFoundException($"KOT {batchId} not found.");
+        kot.Status = status;
+        await _dbContext.SaveChangesAsync();
+    }
+
     public async Task<List<LocalPosOrder>> GetServerOrdersAsync(string staffId, string propertyId, string range, string statusFilter, string? sessionId = null)
     {
         var query = _dbContext.PosOrders
