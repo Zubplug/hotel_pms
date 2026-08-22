@@ -141,8 +141,10 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
 
   const createReservation = useMutation({
     mutationFn: async (values: z.infer<typeof formSchema>) => {
+      const selectedRoom = availableRooms?.find((r: any) => r.id === values.roomId);
       const payload = {
         ...values,
+        roomNumber: selectedRoom?.number || undefined,
         checkIn: format(values.checkIn, 'yyyy-MM-dd'),
         checkOut: format(values.checkOut, 'yyyy-MM-dd'),
         propertyId

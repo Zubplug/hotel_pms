@@ -19,6 +19,7 @@ public class LocalRepository
 
     public async Task<LocalReservation> CreateReservationAsync(LocalReservation reservation, string userId, string deviceId)
     {
+        reservation.IsDirty = true;
         _dbContext.Reservations.Add(reservation);
         
         // Bundle the mutation with an immutable OutboxEvent
@@ -63,6 +64,9 @@ public class LocalRepository
         return await _dbContext.Reservations
             .Include(r => r.Guest)
             .Include(r => r.Folio)
+                .ThenInclude(f => f.Items)
+            .Include(r => r.Folio)
+                .ThenInclude(f => f.Payments)
             .FirstOrDefaultAsync(r => r.Id == id);
     }
     

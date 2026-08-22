@@ -120,39 +120,73 @@ export async function POST(req: NextRequest) {
 
           // Authoritative Domain Routing
           if (eventType === 'CREATE' && aggregateType === 'RESERVATION') {
+             const property = await tx.property.findUnique({ where: { id: propertyId } });
              let finalGuestId = payload.GuestId || payload.guestId;
-             if (!finalGuestId && payload.Guest) {
-               const g = payload.Guest;
-               const prop = await tx.property.findUnique({ where: { id: propertyId } });
-               const newGuest = await tx.guest.create({
+             
+             // If a GuestId is provided, check if it exists in the cloud DB
+             if (finalGuestId) {
+               const existingGuest = await tx.guest.findUnique({ where: { id: finalGuestId } });
+               if (!existingGuest && payload.Guest) {
+                 // C# generated a local GuestId, but it's not in the cloud yet.
+                 await tx.guest.create({
+                   data: {
+                     id: finalGuestId,
+                     organizationId: property?.organizationId || '',
+                     firstName: payload.Guest.FirstName || 'Unknown',
+                     lastName: payload.Guest.LastName || 'Guest',
+                     email: payload.Guest.Email,
+                     phone: payload.Guest.Phone
+                   }
+                 });
+               } else if (!existingGuest) {
+                  // No payload.Guest provided and it doesn't exist, we can't do much but fail
+                  throw new Error(`GuestId ${finalGuestId} does not exist and no Guest details provided`);
+               }
+             } else if (payload.Guest) {
+               // Fallback: create guest in cloud with auto-generated ID
+               const g = await tx.guest.create({
                  data: {
-                   id: g.Id || g.id || undefined,
-                   organizationId: prop?.organizationId || '',
-                   firstName: g.FirstName || g.firstName,
-                   lastName: g.LastName || g.lastName,
-                   email: g.Email || g.email || null,
-                   phone: g.Phone || g.phone || null,
+                   organizationId: property?.organizationId || '',
+                   firstName: payload.Guest.FirstName || 'Unknown',
+                   lastName: payload.Guest.LastName || 'Guest',
+                   email: payload.Guest.Email,
+                   phone: payload.Guest.Phone
                  }
                });
-               finalGuestId = newGuest.id;
+               finalGuestId = g.id;
              }
-
+             
              if (!finalGuestId) throw new Error("Missing GuestId for reservation");
 
-             // Lookup room + its type (RoomType.baseRate is the authoritative rate source)
-             const room = await tx.room.findFirst({
-               where: { id: payload.RoomId || payload.roomId, propertyId },
-               include: { roomType: true }
-             });
+             const reqRoomId = payload.RoomId || payload.roomId;
+             const reqRoomTypeId = payload.RoomTypeId || payload.roomTypeId;
+             
+             let room = null;
+             let roomType = null;
 
-             if (!room) throw new Error("Room not found or unauthorized");
+             if (reqRoomId) {
+               room = await tx.room.findFirst({
+                 where: { id: reqRoomId, propertyId },
+                 include: { roomType: true }
+               });
+               if (!room) throw new Error("Room not found or unauthorized");
+               roomType = room.roomType;
+             } else if (reqRoomTypeId) {
+               roomType = await tx.roomType.findFirst({
+                 where: { id: reqRoomTypeId, propertyId }
+               });
+               if (!roomType) throw new Error("RoomType not found or unauthorized");
+             } else {
+               roomType = await tx.roomType.findFirst({ where: { propertyId, isActive: true } });
+               if (!roomType) throw new Error("No room types available for property");
+             }
 
              const checkInDate = new Date(payload.CheckInDate || payload.checkInDate || payload.checkIn);
              const checkOutDate = new Date(payload.CheckOutDate || payload.checkOutDate || payload.checkOut);
              const nights = Math.max(1, Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24)));
-             const baseRate = Number(room.roomType.baseRate);
+             const baseRate = Number(roomType.baseRate);
              const amount = baseRate * nights;
-             const currency = room.roomType.currency || 'NGN';
+             const currency = roomType.currency || 'NGN';
 
              // Resolve property-level rate plan (required FK)
              const ratePlan = await tx.ratePlan.findFirst({ where: { propertyId, isActive: true } });
@@ -181,8 +215,8 @@ export async function POST(req: NextRequest) {
              await tx.reservationRoom.create({
                data: {
                  reservationId: aggregateId,
-                 roomTypeId: room.roomTypeId,
-                 roomId: room.id,
+                 roomTypeId: roomType.id,
+                 roomId: room ? room.id : null,
                  checkIn: checkInDate,
                  checkOut: checkOutDate,
                  adults: payload.Adults || payload.adults || 1,
@@ -201,6 +235,46 @@ export async function POST(req: NextRequest) {
                  isPrimary: true
                }
              });
+
+             // 7D.1: Create Folio
+             const folioNumber = 'FOL-' + Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
+             const newFolio = await tx.folio.create({
+               data: {
+                 reservationId: aggregateId,
+                 propertyId,
+                 guestId: finalGuestId,
+                 folioNumber,
+                 type: 'ROOM',
+                 status: 'OPEN',
+                 currency: currency,
+                 totalCharges: amount,
+                 totalPayments: 0,
+                 balance: amount,
+                 version: 1
+               }
+             });
+
+             // 7D.1: Create Per-Night Room Charges
+             const folioItems: any[] = [];
+             let currentDate = new Date(checkInDate);
+             for (let i = 0; i < nights; i++) {
+               folioItems.push({
+                 folioId: newFolio.id,
+                 businessDate: new Date(currentDate),
+                 type: 'CHARGE',
+                 source: 'ROOM_CHARGE',
+                 description: `Room Charge - Night ${i + 1}`,
+                 quantity: 1,
+                 unitAmount: baseRate,
+                 amount: baseRate,
+                 currency: currency,
+                 baseAmount: baseRate,
+                 postedBy: operatorId || device.id,
+               });
+               currentDate.setDate(currentDate.getDate() + 1);
+             }
+             
+             await tx.folioItem.createMany({ data: folioItems });
           }
           else if (eventType === 'CHECK_IN') {
              await tx.reservation.update({

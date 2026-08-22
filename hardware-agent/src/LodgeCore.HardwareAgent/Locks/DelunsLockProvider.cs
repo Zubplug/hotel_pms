@@ -20,17 +20,27 @@ public class DelunsLockProvider : ILockProvider
 
     private void EnsureInitialized()
     {
-        if (_initialized) return;
+        int lockType = 4; // RF57 is typical default, could be 5 for RF50
+        try
+        {
+            lockType = Microsoft.Maui.Storage.Preferences.Default.Get("DelunsLockType", 4);
+        }
+        catch { }
 
-        int result = NativeSdkBridge.TP_Configuration(_lockType);
-        if (result == (int)LockSdkError.OPR_OK)
+        // We explicitly do NOT cache initialization (i.e. we removed `if (_initialized) return;`)
+        // The Deluns SDK DLL is known to heavily cache state. Re-calling TP_Configuration 
+        // before every read/write flushes the internal buffers and forces a real hardware check,
+        // preventing the SDK from returning the previously read card when the encoder is disconnected.
+        int res = NativeSdkBridge.TP_Configuration(lockType);
+        
+        if (res == (int)LockSdkError.OPR_OK) 
         {
             _initialized = true;
-            _logger.LogInformation("Deluns LockSDK initialized successfully (LockType={Type})", _lockType);
         }
         else
         {
-            _logger.LogError("Failed to initialize LockSDK. Error code: {Code}", result);
+            _logger.LogWarning("Deluns SDK TP_Configuration failed with code {Code}", res);
+            _initialized = false;
         }
     }
 

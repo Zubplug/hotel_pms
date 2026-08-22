@@ -1,4 +1,5 @@
 using System;
+using Microsoft.Extensions.DependencyInjection;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -97,9 +98,16 @@ public partial class MainPage : ContentPage
 
             if (string.IsNullOrEmpty(method) || string.IsNullOrEmpty(id)) return;
 
-            // Lazy resolve interop services to ensure context is ready
-            var pmsInterop = Application.Current?.Windows[0]?.Page?.Handler?.MauiContext?.Services.GetService<OfflinePMSInterop>();
-            var hardwareInterop = Application.Current?.Windows[0]?.Page?.Handler?.MauiContext?.Services.GetService<HardwareInterop>();
+            // Create a dedicated service scope for this IPC request to ensure thread safety for DbContext
+            var services = Application.Current?.Windows[0]?.Page?.Handler?.MauiContext?.Services;
+            if (services == null)
+            {
+                SendError(sender, id, "Services not ready.");
+                return;
+            }
+            using var scope = services.CreateScope();
+            var pmsInterop = scope.ServiceProvider.GetService<OfflinePMSInterop>();
+            var hardwareInterop = scope.ServiceProvider.GetService<HardwareInterop>();
 
             if (pmsInterop == null || hardwareInterop == null)
             {

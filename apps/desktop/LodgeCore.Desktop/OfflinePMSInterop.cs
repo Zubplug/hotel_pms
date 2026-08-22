@@ -412,7 +412,7 @@ public class OfflinePMSInterop
                 primaryGuest = r.Guest != null 
                     ? new { id = r.Guest.Id, firstName = r.Guest.FirstName, lastName = r.Guest.LastName, phone = r.Guest.Phone } 
                     : new { id = "unknown", firstName = "Unknown", lastName = "Guest", phone = "" },
-                reservationRooms = new[] { new { room = new { number = r.RoomNumber, status = "CLEAN" }, roomType = new { name = "Standard" } } },
+                reservationRooms = new[] { new { room = new { number = r.RoomNumber, status = "CLEAN" }, roomType = new { name = "Standard" }, checkIn = r.CheckInDate, checkOut = r.CheckOutDate } },
                 folio = new { balance = r.Folio?.OutstandingBalance ?? 0 },
                 isDirty = r.IsDirty
             });
@@ -594,6 +594,8 @@ public class OfflinePMSInterop
                 reservationRooms = new[] {
                     new {
                         roomId = r.RoomId,
+                        checkIn = r.CheckInDate,
+                        checkOut = r.CheckOutDate,
                         room = new {
                             number = r.RoomNumber ?? "Unassigned"
                         }
@@ -602,7 +604,24 @@ public class OfflinePMSInterop
                 folios = new[] {
                     new {
                         id = r.Folio?.Id,
-                        balance = r.Folio != null ? r.Folio.TotalCharges - r.Folio.TotalPayments : 0
+                        status = r.Folio?.Status ?? "OPEN",
+                        balance = r.Folio != null ? r.Folio.TotalCharges - r.Folio.TotalPayments : 0,
+                        totalCharges = r.Folio?.TotalCharges ?? 0,
+                        totalPayments = r.Folio?.TotalPayments ?? 0,
+                        items = r.Folio?.Items?.Select(i => new {
+                            id = i.Id,
+                            amount = i.Amount,
+                            type = i.ItemType,
+                            description = i.Description,
+                            createdAt = i.CreatedAt
+                        }).ToArray() ?? Array.Empty<object>(),
+                        payments = r.Folio?.Payments?.Select(p => new {
+                            id = p.Id,
+                            amount = p.Amount,
+                            status = p.Status,
+                            method = p.Method,
+                            createdAt = p.CreatedAt
+                        }).ToArray() ?? Array.Empty<object>()
                     }
                 }
             };
@@ -718,6 +737,9 @@ public class OfflinePMSInterop
             res.RoomId = root.TryGetProperty("roomId", out var rId) ? rId.GetString() : null;
             if (string.IsNullOrEmpty(res.RoomId)) res.RoomId = null;
 
+            res.RoomNumber = root.TryGetProperty("roomNumber", out var rNum) ? rNum.GetString() : null;
+            if (string.IsNullOrEmpty(res.RoomNumber)) res.RoomNumber = null;
+
             res.RoomTypeId = root.TryGetProperty("roomTypeId", out var rtId) ? rtId.GetString() : null;
             if (string.IsNullOrEmpty(res.RoomTypeId)) res.RoomTypeId = null;
 
@@ -726,12 +748,19 @@ public class OfflinePMSInterop
             res.CheckInDate = DateTime.Parse(root.GetProperty("checkIn").GetString() ?? DateTime.UtcNow.ToString("O"));
             res.CheckOutDate = DateTime.Parse(root.GetProperty("checkOut").GetString() ?? DateTime.UtcNow.AddDays(1).ToString("O"));
             
-            res.Adults = root.TryGetProperty("adults", out var ad) ? ad.GetInt32() : 1;
-            res.Children = root.TryGetProperty("children", out var ch) ? ch.GetInt32() : 0;
+            if (root.TryGetProperty("adults", out var ad)) {
+                if (ad.ValueKind == System.Text.Json.JsonValueKind.String && int.TryParse(ad.GetString(), out var adVal)) res.Adults = adVal;
+                else if (ad.ValueKind == System.Text.Json.JsonValueKind.Number) res.Adults = ad.GetInt32();
+            }
+
+            if (root.TryGetProperty("children", out var ch)) {
+                if (ch.ValueKind == System.Text.Json.JsonValueKind.String && int.TryParse(ch.GetString(), out var chVal)) res.Children = chVal;
+                else if (ch.ValueKind == System.Text.Json.JsonValueKind.Number) res.Children = ch.GetInt32();
+            }
             
-            var reqStatus = root.TryGetProperty("status", out var st) ? st.GetString() : "PENDING";
-            var validStatuses = new[] { "PENDING", "CHECKED_IN", "CHECKED_OUT", "CANCELLED", "NO_SHOW" };
-            res.Status = validStatuses.Contains(reqStatus) ? (reqStatus ?? "PENDING") : "PENDING";
+            var reqStatus = root.TryGetProperty("status", out var st) ? st.GetString() : "CONFIRMED";
+            var validStatuses = new[] { "PENDING", "CONFIRMED", "CHECKED_IN", "CHECKED_OUT", "CANCELLED", "NO_SHOW" };
+            res.Status = validStatuses.Contains(reqStatus) ? (reqStatus ?? "CONFIRMED") : "CONFIRMED";
             
             var created = await _repo.CreateReservationAsync(res, "System", "Device1");
             return JsonSerializer.Serialize(new { success = true, data = new { id = created.Id } }, _jsonOptions);
