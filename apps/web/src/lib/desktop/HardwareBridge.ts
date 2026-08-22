@@ -85,8 +85,12 @@ export const HardwareBridge = {
     return invokeDesktop('hardware.printPaymentReceipt', { data });
   },
 
-  testPrinter: async () => {
-    return invokeDesktop('hardware.testPrinter');
+  testPrinter: async (printerConfig: any) => {
+    return invokeDesktop('hardware.testPrinter', { config: JSON.stringify(printerConfig) });
+  },
+
+  getAvailablePrinters: async () => {
+    return invokeDesktop('hardware.getAvailableHardwarePrinters');
   },
 
   getPrinterStatus: async () => {

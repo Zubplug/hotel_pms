@@ -46,11 +46,20 @@ public class LocalPrinterConfig
     /// <summary>RECEIPT | KITCHEN | FRONTDESK</summary>
     public string PrinterRole { get; set; } = "RECEIPT";
 
-    /// <summary>IP address of the thermal printer on the local network</summary>
+    /// <summary>NETWORK | USB | SERIAL</summary>
+    public string ConnectionType { get; set; } = "NETWORK";
+
+    /// <summary>IP address for NETWORK printers</summary>
     public string IpAddress { get; set; } = string.Empty;
 
-    /// <summary>TCP port – most ESC/POS printers default to 9100</summary>
+    /// <summary>TCP port for NETWORK printers</summary>
     public int Port { get; set; } = 9100;
+
+    /// <summary>Device path for USB/SERIAL (e.g. COM3, /dev/usb/lp0, or Windows Printer Name)</summary>
+    public string? DevicePath { get; set; }
+
+    /// <summary>Baud rate for SERIAL printers</summary>
+    public int BaudRate { get; set; } = 9600;
 
     /// <summary>Paper width in characters (58mm ≈ 32 chars, 80mm ≈ 48 chars)</summary>
     public int PaperWidth { get; set; } = 48;
@@ -92,7 +101,8 @@ public record ReceiptData(
     string Currency,
     string? PropertyName,
     string? PropertyAddress,
-    DateTime PrintedAt
+    DateTime PrintedAt,
+    bool IsReprint = false
 );
 
 public record ReceiptItem(
@@ -245,6 +255,14 @@ public class EscPosService
         if (!string.IsNullOrWhiteSpace(printer.HotelAddress ?? receipt.PropertyAddress))
             doc.Add(Text(printer.HotelAddress ?? receipt.PropertyAddress ?? ""));
 
+        if (receipt.IsReprint)
+        {
+            doc.Add(Esc.AlignCenter);
+            doc.Add(Esc.BoldOn);
+            doc.Add(Text("*** REPRINT ***"));
+            doc.Add(Esc.BoldOff);
+        }
+
         doc.Add(Esc.LineFeed);
         doc.Add(Esc.DividerLine);
 
@@ -387,26 +405,117 @@ public class EscPosService
         return await SendToPrinterAsync(printer, BuildBytes(doc.ToArray()));
     }
 
+    public async Task<(bool success, string? error)> PrintWaiterSlipAsync(KotData kot, string? outletId = null)
+    {
+        // Force the waiter slip to print on the local RECEIPT printer
+        var printer = await GetPrinterByRoleAsync("RECEIPT", outletId);
+        if (printer == null)
+            return (false, "No active RECEIPT printer configured for waiter slip.");
+
+        int w = printer.PaperWidth;
+        var doc = new List<byte[]>();
+
+        // Big Waiter Slip header
+        doc.Add(Esc.Init);
+        doc.Add(Esc.AlignCenter);
+        doc.Add(Esc.BoldOn);
+        doc.Add(Esc.DoubleSize);
+        doc.Add(Text("WAITER ORDER SLIP"));
+        doc.Add(Esc.NormalSize);
+        doc.Add(Esc.BoldOff);
+        doc.Add(Esc.DividerLine);
+
+        doc.Add(Esc.AlignLeft);
+        doc.Add(Text($"Table: {kot.TableNumber ?? "Walk-in"}   Order: {kot.OrderNumber}"));
+        doc.Add(Text($"Server: {kot.ServerName}"));
+        if (!string.IsNullOrEmpty(kot.KotNumber))
+            doc.Add(Text($"Batch: {kot.KotNumber}"));
+        doc.Add(Esc.DividerLine);
+
+        // Items
+        foreach (var item in kot.Items)
+        {
+            doc.Add(Esc.BoldOn);
+            doc.Add(Text($"{item.Quantity}x {item.Name}"));
+            doc.Add(Esc.BoldOff);
+
+            if (item.Modifiers != null)
+                foreach (var mod in item.Modifiers)
+                    doc.Add(Text($"    + {mod}"));
+
+            if (!string.IsNullOrEmpty(item.Notes))
+                doc.Add(Text($"    * {item.Notes}"));
+        }
+
+        doc.Add(Esc.DividerLine);
+        doc.Add(Esc.AlignCenter);
+        doc.Add(Text($"Printed: {DateTime.Now:dd/MM/yyyy HH:mm:ss}"));
+        doc.Add(Esc.LineFeed);
+        doc.Add(Esc.LineFeed);
+        doc.Add(Esc.LineFeed);
+        doc.Add(Esc.CutPartial);
+
+        return await SendToPrinterAsync(printer, BuildBytes(doc.ToArray()));
+    }
+
     // ── Low-level TCP send ─────────────────────────────────────────
 
     private async Task<(bool, string?)> SendToPrinterAsync(LocalPrinterConfig printer, byte[] data)
     {
         try
         {
-            using var client = new TcpClient();
-            var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            await client.ConnectAsync(printer.IpAddress, printer.Port, cts.Token);
+            if (printer.ConnectionType == "SERIAL")
+            {
+                if (string.IsNullOrWhiteSpace(printer.DevicePath))
+                    return (false, "Serial port path not configured.");
 
-            using var stream = client.GetStream();
-            await stream.WriteAsync(data, 0, data.Length, cts.Token);
-            await stream.FlushAsync(cts.Token);
+                using var serialPort = new System.IO.Ports.SerialPort(printer.DevicePath, printer.BaudRate);
+                serialPort.Open();
+                serialPort.Write(data, 0, data.Length);
+                serialPort.Close();
 
-            _logger.LogInformation("Printed to {Name} ({Ip}:{Port})", printer.Name, printer.IpAddress, printer.Port);
-            return (true, null);
+                _logger.LogInformation("Printed to {Name} (SERIAL {Path})", printer.Name, printer.DevicePath);
+                return (true, null);
+            }
+            else if (printer.ConnectionType == "USB")
+            {
+                if (string.IsNullOrWhiteSpace(printer.DevicePath))
+                    return (false, "USB device path/printer name not configured.");
+
+                bool isWindows = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows);
+
+                if (isWindows)
+                {
+                    bool ok = RawPrinterHelper.SendBytesToPrinter(printer.DevicePath, data);
+                    if (!ok) return (false, "Failed to send bytes to raw Windows printer.");
+                }
+                else
+                {
+                    using var stream = System.IO.File.OpenWrite(printer.DevicePath);
+                    await stream.WriteAsync(data, 0, data.Length);
+                    await stream.FlushAsync();
+                }
+
+                _logger.LogInformation("Printed to {Name} (USB {Path})", printer.Name, printer.DevicePath);
+                return (true, null);
+            }
+            else
+            {
+                using var client = new TcpClient();
+                var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                await client.ConnectAsync(printer.IpAddress, printer.Port, cts.Token);
+
+                using var stream = client.GetStream();
+                await stream.WriteAsync(data, 0, data.Length, cts.Token);
+                await stream.FlushAsync(cts.Token);
+
+                _logger.LogInformation("Printed to {Name} ({Ip}:{Port})", printer.Name, printer.IpAddress, printer.Port);
+                return (true, null);
+            }
         }
         catch (OperationCanceledException)
         {
-            var msg = $"Timeout sending to printer '{printer.Name}' at {printer.IpAddress}:{printer.Port}";
+            var msg = $"Timeout sending to printer '{printer.Name}'";
             _logger.LogWarning(msg);
             return (false, msg);
         }
@@ -416,6 +525,48 @@ public class EscPosService
             _logger.LogError(ex, msg);
             return (false, msg);
         }
+    }
+
+    public Task<List<string>> GetAvailablePrintersAsync()
+    {
+        var list = new List<string>();
+        try { list.AddRange(System.IO.Ports.SerialPort.GetPortNames()); } catch { }
+        if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows))
+        {
+            try { foreach (string p in System.Drawing.Printing.PrinterSettings.InstalledPrinters) { if (!list.Contains(p)) list.Add(p); } } catch { }
+        }
+        return Task.FromResult(list);
+    }
+
+    public async Task<(bool success, string? error)> TestPrintAsync(LocalPrinterConfig printer)
+    {
+        var doc = new List<byte[]>();
+        doc.Add(Esc.Init);
+        doc.Add(Esc.AlignCenter);
+        doc.Add(Esc.BoldOn);
+        doc.Add(Esc.DoubleSize);
+        doc.Add(Text("TEST PRINT"));
+        doc.Add(Esc.NormalSize);
+        doc.Add(Esc.BoldOff);
+        doc.Add(Esc.LineFeed);
+        doc.Add(Esc.DividerLine);
+        doc.Add(Esc.AlignLeft);
+        doc.Add(Text($"Printer : {printer.Name}"));
+        doc.Add(Text($"Type    : {printer.ConnectionType}"));
+        if (printer.ConnectionType == "NETWORK")
+            doc.Add(Text($"Target  : {printer.IpAddress}:{printer.Port}"));
+        else
+            doc.Add(Text($"Target  : {printer.DevicePath}"));
+        
+        doc.Add(Esc.LineFeed);
+        doc.Add(Text("If you can read this, the printer is"));
+        doc.Add(Text("successfully connected and working!"));
+        doc.Add(Esc.LineFeed);
+        doc.Add(Esc.LineFeed);
+        doc.Add(Esc.LineFeed);
+        doc.Add(Esc.CutPartial);
+
+        return await SendToPrinterAsync(printer, BuildBytes(doc.ToArray()));
     }
 
     // ── Helpers ────────────────────────────────────────────────────

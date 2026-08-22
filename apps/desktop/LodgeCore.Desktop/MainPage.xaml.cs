@@ -208,7 +208,7 @@ public partial class MainPage : ContentPage
                         parameters?["status"]?.ToString() ?? "");
                     break;
                 case "reservations.get":
-                    responseData = await pmsInterop.GetActiveReservationsAsync();
+                    responseData = await pmsInterop.GetReservationAsync(parameters?["id"]?.ToString() ?? "");
                     break;
                 case "reservations.checkIn":
                     string resId = parameters?["reservationId"]?.ToString() ?? "";
@@ -528,8 +528,10 @@ public partial class MainPage : ContentPage
                     break;
                 case "hardware.testPrinter":
                     responseData = await pmsInterop.TestPrinterAsync(
-                        parameters?["ip"]?.ToString() ?? "",
-                        parameters?["port"] != null ? int.Parse(parameters["port"]!.ToString()!) : 9100);
+                        parameters?["config"]?.ToString() ?? "{}");
+                    break;
+                case "hardware.getAvailableHardwarePrinters":
+                    responseData = await pmsInterop.GetAvailableHardwarePrintersAsync();
                     break;
 
                 default:

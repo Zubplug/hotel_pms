@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Printer, Plus, Trash2, Wifi, WifiOff, CheckCircle, XCircle, Loader2, ChevronRight, Settings2 } from 'lucide-react';
+import Link from 'next/link';
+import { Printer, Plus, Trash2, Wifi, WifiOff, CheckCircle, XCircle, Loader2, ChevronRight, Settings2, ArrowLeft } from 'lucide-react';
 import { invokeDesktop } from '@/lib/desktop/IpcBridge';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
@@ -10,6 +11,9 @@ interface PrinterConfig {
   id: string;
   name: string;
   printerRole: 'RECEIPT' | 'KITCHEN' | 'FRONTDESK';
+  connectionType: 'NETWORK' | 'USB' | 'SERIAL';
+  devicePath: string;
+  baudRate: number;
   ipAddress: string;
   port: number;
   paperWidth: number;
@@ -35,6 +39,9 @@ const PAPER_WIDTHS = [
 const BLANK_PRINTER: Omit<PrinterConfig, 'id'> = {
   name: '',
   printerRole: 'FRONTDESK',
+  connectionType: 'NETWORK',
+  devicePath: '',
+  baudRate: 9600,
   ipAddress: '',
   port: 9100,
   paperWidth: 48,
@@ -64,7 +71,7 @@ function PrinterCard({
   const handleTest = async () => {
     setTestStatus('testing');
     try {
-      const res = await invokeDesktop('hardware.testPrinter', { ip: printer.ipAddress, port: printer.port });
+      const res = await invokeDesktop('hardware.testPrinter', printer);
       if (res?.success) {
         setTestStatus('success');
         setTestMsg(res.message ?? 'Connected!');
@@ -109,8 +116,12 @@ function PrinterCard({
 
         <div className="mt-4 space-y-1.5 text-sm">
           <div className="flex justify-between text-gray-500 dark:text-gray-400">
-            <span>IP Address</span>
-            <span className="font-mono text-gray-900 dark:text-white">{printer.ipAddress}:{printer.port}</span>
+            <span>Connection</span>
+            <span className="font-mono text-gray-900 dark:text-white">
+               {printer.connectionType === 'NETWORK' 
+                  ? `${printer.ipAddress}:${printer.port}`
+                  : printer.devicePath || 'Not Set'}
+            </span>
           </div>
           <div className="flex justify-between text-gray-500 dark:text-gray-400">
             <span>Paper Width</span>
@@ -182,8 +193,27 @@ function PrinterForm({
     ...BLANK_PRINTER,
     ...initial,
   });
+  const [availablePorts, setAvailablePorts] = useState<string[]>([]);
+  const [discovering, setDiscovering] = useState(false);
 
   const set = (key: string, val: unknown) => setForm((f) => ({ ...f, [key]: val }));
+
+  const discoverPrinters = async () => {
+    setDiscovering(true);
+    try {
+      const res = await invokeDesktop('hardware.getAvailableHardwarePrinters');
+      if (res?.success && Array.isArray(res.data)) {
+        setAvailablePorts(res.data);
+      }
+    } catch (e) { console.error(e); }
+    setDiscovering(false);
+  };
+
+  useEffect(() => {
+    if (form.connectionType !== 'NETWORK') {
+       discoverPrinters();
+    }
+  }, [form.connectionType]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-4">
@@ -235,27 +265,94 @@ function PrinterForm({
             </div>
           </div>
 
-          {/* IP + Port */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="col-span-2">
-              <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">IP Address *</label>
-              <input
-                value={form.ipAddress}
-                onChange={(e) => set('ipAddress', e.target.value)}
-                placeholder="192.168.1.100"
-                className="w-full px-3 py-2.5 bg-gray-50 dark:bg-[#141414] border border-gray-200 dark:border-[#2a2a2a] rounded-xl text-sm font-mono outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Port</label>
-              <input
-                type="number"
-                value={form.port}
-                onChange={(e) => set('port', Number(e.target.value))}
-                className="w-full px-3 py-2.5 bg-gray-50 dark:bg-[#141414] border border-gray-200 dark:border-[#2a2a2a] rounded-xl text-sm font-mono outline-none focus:ring-2 focus:ring-indigo-500"
-              />
+          {/* Connection Type */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">Connection Type *</label>
+            <div className="flex gap-2">
+               {['NETWORK', 'USB', 'SERIAL'].map(type => (
+                 <button
+                    key={type}
+                    type="button"
+                    onClick={() => set('connectionType', type)}
+                    className={`flex-1 py-2.5 rounded-xl border text-xs font-medium transition-all ${
+                      form.connectionType === type
+                        ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400'
+                        : 'border-gray-200 dark:border-[#2a2a2a] text-gray-600 dark:text-gray-400'
+                    }`}
+                  >
+                    {type}
+                 </button>
+               ))}
             </div>
           </div>
+
+          {/* IP + Port */}
+          {form.connectionType === 'NETWORK' && (
+            <div className="grid grid-cols-3 gap-3">
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">IP Address *</label>
+                <input
+                  value={form.ipAddress}
+                  onChange={(e) => set('ipAddress', e.target.value)}
+                  placeholder="192.168.1.100"
+                  className="w-full px-3 py-2.5 bg-gray-50 dark:bg-[#141414] border border-gray-200 dark:border-[#2a2a2a] rounded-xl text-sm font-mono outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Port</label>
+                <input
+                  type="number"
+                  value={form.port}
+                  onChange={(e) => set('port', Number(e.target.value))}
+                  className="w-full px-3 py-2.5 bg-gray-50 dark:bg-[#141414] border border-gray-200 dark:border-[#2a2a2a] rounded-xl text-sm font-mono outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* USB / Serial Path */}
+          {form.connectionType !== 'NETWORK' && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400">Available Devices / Ports *</label>
+                <button type="button" onClick={discoverPrinters} disabled={discovering} className="text-xs text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-1">
+                   {discovering ? <Loader2 className="w-3 h-3 animate-spin"/> : null} Refresh
+                </button>
+              </div>
+              
+              {availablePorts.length > 0 ? (
+                <select
+                  value={form.devicePath}
+                  onChange={(e) => set('devicePath', e.target.value)}
+                  className="w-full px-3 py-2.5 bg-gray-50 dark:bg-[#141414] border border-gray-200 dark:border-[#2a2a2a] rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="">Select a device...</option>
+                  {availablePorts.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+              ) : (
+                <div className="text-xs text-amber-600 bg-amber-50 p-2 rounded-lg">No supported printers found. Please enter manually.</div>
+              )}
+
+              <input
+                value={form.devicePath}
+                onChange={(e) => set('devicePath', e.target.value)}
+                placeholder={form.connectionType === 'USB' ? "e.g. Receipt Printer" : "e.g. COM3 or /dev/ttyS0"}
+                className="w-full px-3 py-2.5 bg-gray-50 dark:bg-[#141414] border border-gray-200 dark:border-[#2a2a2a] rounded-xl text-sm font-mono outline-none focus:ring-2 focus:ring-indigo-500 mt-2"
+              />
+
+              {form.connectionType === 'SERIAL' && (
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mt-3 mb-1">Baud Rate</label>
+                  <input
+                    type="number"
+                    value={form.baudRate}
+                    onChange={(e) => set('baudRate', Number(e.target.value))}
+                    className="w-full px-3 py-2.5 bg-gray-50 dark:bg-[#141414] border border-gray-200 dark:border-[#2a2a2a] rounded-xl text-sm font-mono outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Paper Width */}
           <div>
@@ -340,7 +437,7 @@ function PrinterForm({
           </button>
           <button
             onClick={() => onSave(form)}
-            disabled={saving || !form.name.trim() || !form.ipAddress.trim()}
+            disabled={saving || !form.name.trim() || (form.connectionType === 'NETWORK' && !form.ipAddress.trim()) || (form.connectionType !== 'NETWORK' && !form.devicePath?.trim())}
             className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
@@ -417,6 +514,12 @@ export default function PrinterSettingsPage() {
       <div className="bg-white dark:bg-[#111] border-b border-gray-100 dark:border-[#1f1f1f] px-6 py-5">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
+            <Link
+              href="/frontdesk"
+              className="w-10 h-10 bg-gray-50 hover:bg-gray-100 dark:bg-[#1a1a1a] dark:hover:bg-[#252525] text-gray-500 dark:text-gray-400 rounded-xl flex items-center justify-center transition-colors"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </Link>
             <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-xl flex items-center justify-center">
               <Printer className="w-5 h-5 text-white" />
             </div>
@@ -440,8 +543,7 @@ export default function PrinterSettingsPage() {
         <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800/40 rounded-xl p-4 flex gap-3">
           <div className="w-5 h-5 text-indigo-500 mt-0.5 shrink-0">ℹ️</div>
           <div className="text-sm text-indigo-700 dark:text-indigo-300">
-            <strong>How it works:</strong> Printers must be connected to the <strong>same local Wi-Fi network</strong> as this PC. Most thermal printers have a built-in network port (Ethernet or Wi-Fi). 
-            Set the printer's static IP from its own menu, then enter that IP here. Default port is <code className="bg-indigo-100 dark:bg-indigo-800/40 px-1 rounded">9100</code>.
+            <strong>Supported Printers:</strong> We support both Network and Direct (USB/Serial) POS printers. For network printers, ensure it's on the same local network. For USB, select your device from the discovered list. 
           </div>
         </div>
 

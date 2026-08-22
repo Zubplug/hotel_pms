@@ -59,7 +59,7 @@ export function useLodgeCoreSession() {
       data: {
         user: {
           id: uid,
-          name: displayName ?? uid,
+          name: (displayName && displayName !== uid && displayName.trim() !== '') ? displayName : 'Staff',
           email: email ?? `${uid}@desktop.local`,
           role: role,
           staffId: staffId,

@@ -227,7 +227,9 @@ export async function GET(req: NextRequest) {
         reservationGuests: {
           include: { guest: true }
         },
-        reservationRooms: true,
+        reservationRooms: {
+          include: { room: true }
+        },
         folios: {
           include: { items: true, payments: true }
         }
@@ -249,12 +251,36 @@ export async function GET(req: NextRequest) {
       // Add folios
       r.folios.forEach(f => folios.push(f));
 
+      // Extract Room ID and Number for Desktop Offline Sync
+      const roomId = r.reservationRooms?.[0]?.roomId || null;
+      const roomNumber = r.reservationRooms?.[0]?.room?.number || null;
+
       // Return clean reservation without nested big objects
-      const { primaryGuest, reservationGuests, folios: rFolios, ...rest } = r;
-      return rest;
+      const { primaryGuest, reservationGuests, folios: rFolios, reservationRooms, ...rest } = r;
+      return { ...rest, roomId, roomNumber };
     });
 
     const guests = Array.from(guestMap.values());
+
+    // 4. POS Configuration
+    const posOutlets = await prisma.posOutlet.findMany({
+      where: { propertyId, isActive: true }
+    });
+    
+    // Using propertyId filter isn't strictly necessary if we filtered by outletId, 
+    // but the schema may not have propertyId on ProductCategory. Let's rely on outlet relation.
+    // Wait, ProductCategory might have propertyId? Or PosProduct might have it? Let's check prisma. 
+    // Wait! Let me just fetch everything related to the property's outlets.
+    const outletIds = posOutlets.map(o => o.id);
+    const posCategories = await prisma.productCategory.findMany({
+      where: { outletId: { in: outletIds }, isActive: true }
+    });
+    
+    // PosProducts usually have categoryId. Let's fetch them based on category or outlet.
+    // Assuming PosProduct has propertyId (based on LocalPosProduct.cs having PropertyId).
+    const posProducts = await prisma.posProduct.findMany({
+      where: { propertyId, isActive: true }
+    });
 
     return NextResponse.json({
       syncedAt:   new Date().toISOString(),
@@ -264,7 +290,10 @@ export async function GET(req: NextRequest) {
       roomTypes,
       reservations: plainReservations,
       guests,
-      folios
+      folios,
+      posOutlets,
+      posCategories,
+      posProducts
     });
 
   } catch (error: any) {

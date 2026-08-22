@@ -55,6 +55,14 @@ public class LocalRepository
             .Where(r => r.Status != "CANCELLED")
             .ToListAsync();
     }
+
+    public async Task<LocalReservation?> GetReservationAsync(string id)
+    {
+        return await _dbContext.Reservations
+            .Include(r => r.Guest)
+            .Include(r => r.Folio)
+            .FirstOrDefaultAsync(r => r.Id == id);
+    }
     
     public async Task<bool> AssignRoomAsync(string reservationId, string roomId, string roomNumber, string userId, string deviceId)
     {
@@ -392,7 +400,8 @@ public class LocalRepository
             .ToListAsync();
 
         var inHouse = await _dbContext.Reservations.CountAsync(r => r.PropertyId == propertyId && r.Status == "CHECKED_IN");
-        var totalRooms = await _dbContext.Rooms.CountAsync(r => r.PropertyId == propertyId);
+        var totalRooms = await _dbContext.Rooms.CountAsync(r => r.PropertyId == propertyId && r.Status != "MAINTENANCE" && r.Status != "OUT_OF_ORDER");
+        var availableRooms = await _dbContext.Rooms.CountAsync(r => r.PropertyId == propertyId && (r.Status == "AVAILABLE" || r.Status == "CLEAN"));
         
         var property = await _dbContext.Properties.FirstOrDefaultAsync(p => p.Id == propertyId);
 
@@ -402,7 +411,7 @@ public class LocalRepository
                 arrivals = arrivals.Count,
                 departures = departures.Count,
                 inHouse = inHouse,
-                roomsAvailable = totalRooms - inHouse,
+                roomsAvailable = availableRooms,
                 roomsTotal = totalRooms
             },
             arrivals,
@@ -656,7 +665,7 @@ public class LocalRepository
         return await query.OrderByDescending(o => o.CreatedAt).ToListAsync();
     }
 
-    public async Task<LocalPosOrder> FireItemsAsync(string orderId, List<LocalPosOrderItem> itemsToFire, string userId, string deviceId)
+    public async Task<(LocalPosOrder Order, LocalPosKot Kot)> FireItemsAsync(string orderId, List<LocalPosOrderItem> itemsToFire, string userId, string deviceId)
     {
         var order = await _dbContext.PosOrders
             .Include(o => o.Items)
@@ -710,7 +719,7 @@ public class LocalRepository
         AppendSyncEvent("POS_ORDER", order.Id, "ORDER_ITEMS_ADDED", new { order, kot }, deviceId, order.OutletId, order.SessionId, userId);
 
         await _dbContext.SaveChangesAsync();
-        return order;
+        return (order, kot);
     }
 
     /// <summary>
@@ -1828,11 +1837,11 @@ public class LocalRepository
             OperationId = $"op_{terminalId}_{DateTime.UtcNow.Ticks}_{Guid.NewGuid().ToString("N").Substring(0, 8)}",
             SequenceNumber = seq,
             TerminalId = terminalId,
-            OutletId = outletId,
-            SessionId = sessionId,
-            OperatorId = operatorId,
+            OutletId = outletId ?? string.Empty,
+            SessionId = sessionId ?? string.Empty,
+            OperatorId = operatorId ?? string.Empty,
             EntityType = entityType,
-            EntityId = entityId,
+            EntityId = entityId ?? string.Empty,
             OperationType = operationType,
             PayloadJson = payloadJson,
             PayloadHash = payloadHash,

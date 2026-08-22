@@ -10,6 +10,9 @@ import { Printer, X, ShieldCheck, CheckCircle2 } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { QRCodeSVG } from 'qrcode.react';
 import { toast } from 'sonner';
+import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
+import { Loader2 } from 'lucide-react';
 
 interface ReceiptVerificationModalProps {
   isOpen: boolean;
@@ -18,6 +21,34 @@ interface ReceiptVerificationModalProps {
 }
 
 export function ReceiptVerificationModal({ isOpen, onClose, order }: ReceiptVerificationModalProps) {
+  const { provider } = useLodgeCoreProvider();
+  const [isPrinting, setIsPrinting] = React.useState(false);
+
+  const handlePrint = async () => {
+    if (!HardwareBridge.isAvailable()) {
+      toast.error('Hardware bridge is not connected');
+      return;
+    }
+    
+    setIsPrinting(true);
+    try {
+      const receiptRes = await provider.pos.getReceipt(order.id);
+      const receiptData = receiptRes?.data || receiptRes;
+      
+      if (receiptData) {
+        receiptData.isReprint = true;
+        await HardwareBridge.printReceipt(receiptData);
+        toast.success('Reprint sent to hardware successfully');
+      } else {
+        throw new Error("Could not load receipt data");
+      }
+    } catch(e: any) {
+      toast.error(e.message || 'Failed to print receipt');
+    } finally {
+      setIsPrinting(false);
+    }
+  };
+
   if (!order) return null;
 
   const payment = order.payments?.[0];
@@ -144,10 +175,16 @@ export function ReceiptVerificationModal({ isOpen, onClose, order }: ReceiptVeri
           <Button variant="outline" className="flex-1" onClick={onClose}>
             Close
           </Button>
-          <Button className="flex-1 bg-slate-900 hover:bg-slate-800" onClick={() => {
-            toast.success('Receipt sent to printer');
-          }}>
-            <Printer className="w-4 h-4 mr-2" />
+          <Button 
+            className="flex-1 bg-slate-900 hover:bg-slate-800" 
+            onClick={handlePrint}
+            disabled={isPrinting}
+          >
+            {isPrinting ? (
+               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+               <Printer className="w-4 h-4 mr-2" />
+            )}
             Print Receipt
           </Button>
         </div>

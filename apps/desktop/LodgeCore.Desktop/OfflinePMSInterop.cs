@@ -406,6 +406,7 @@ public class OfflinePMSInterop
                 id = r.Id,
                 confirmationNumber = r.Id.Substring(0, 8).ToUpper(),
                 status = r.Status,
+                propertyId = r.PropertyId,
                 checkIn = r.CheckInDate,
                 checkOut = r.CheckOutDate,
                 primaryGuest = new { firstName = r.Guest?.FirstName, lastName = r.Guest?.LastName, phone = r.Guest?.Phone },
@@ -546,6 +547,52 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
+
+    public async Task<string> GetReservationAsync(string id)
+    {
+        try
+        {
+            var r = await _repo.GetReservationAsync(id);
+            if (r == null) return JsonSerializer.Serialize(new { success = false, error = "Not found" }, _jsonOptions);
+
+            var mapped = new
+            {
+                id = r.Id,
+                confirmationNumber = r.Id.Substring(0, 8).ToUpper(),
+                status = r.Status,
+                propertyId = r.PropertyId,
+                checkIn = r.CheckInDate,
+                checkOut = r.CheckOutDate,
+                primaryGuest = r.Guest != null ? new {
+                    id = r.Guest.Id,
+                    firstName = r.Guest.FirstName,
+                    lastName = r.Guest.LastName,
+                    email = r.Guest.Email,
+                    phone = r.Guest.Phone
+                } : null,
+                reservationRooms = new[] {
+                    new {
+                        roomId = r.RoomId,
+                        room = new {
+                            number = r.RoomNumber ?? "Unassigned"
+                        }
+                    }
+                },
+                folios = new[] {
+                    new {
+                        id = r.Folio?.Id,
+                        balance = r.Folio != null ? r.Folio.TotalCharges - r.Folio.TotalPayments : 0
+                    }
+                }
+            };
+            return JsonSerializer.Serialize(new { success = true, data = mapped }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
     public async Task<string> GetDashboardAsync(string propertyId)
     {
         try
@@ -574,7 +621,7 @@ public class OfflinePMSInterop
     {
         try
         {
-            var data = await _repo.GetRoomTypesAsync(propertyId);
+            var data = (await _repo.GetRoomTypesAsync(propertyId)).Select(rt => new { id = rt.Id, name = rt.Name, description = rt.Description, baseRate = rt.BasePrice, maxOccupancy = rt.MaxOccupancy, totalRooms = rt.TotalRooms });
             return JsonSerializer.Serialize(new { success = true, data }, _jsonOptions);
         }
         catch (Exception ex)
@@ -590,11 +637,38 @@ public class OfflinePMSInterop
     {
         try
         {
-            var data = JsonSerializer.Deserialize<LodgeCore.Desktop.Data.Entities.LocalReservation>(dataJson);
-            if (data == null) throw new Exception("Invalid reservation data");
+            using var doc = System.Text.Json.JsonDocument.Parse(dataJson);
+            var root = doc.RootElement;
             
-            var res = await _repo.CreateReservationAsync(data, "System", "Device1");
-            return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
+            var res = new LodgeCore.Desktop.Data.Entities.LocalReservation();
+            res.Id = Guid.NewGuid().ToString();
+            res.PropertyId = root.GetProperty("propertyId").GetString() ?? "";
+            
+            if (root.TryGetProperty("isNewGuest", out var isNewGuest) && isNewGuest.GetBoolean()) {
+                var guestDetails = root.GetProperty("guestDetails");
+                var newGuest = new LodgeCore.Desktop.Data.Entities.LocalGuest {
+                    Id = Guid.NewGuid().ToString(),
+                    PropertyId = res.PropertyId,
+                    FirstName = guestDetails.GetProperty("firstName").GetString() ?? "",
+                    LastName = guestDetails.GetProperty("lastName").GetString() ?? "",
+                    Email = guestDetails.TryGetProperty("email", out var email) ? email.GetString() : null,
+                    Phone = guestDetails.TryGetProperty("phone", out var phone) ? phone.GetString() : null,
+                };
+                res.GuestId = newGuest.Id;
+                res.Guest = newGuest;
+            } else {
+                res.GuestId = root.GetProperty("guestId").GetString() ?? "";
+            }
+            
+            res.RoomId = root.TryGetProperty("roomId", out var rId) ? rId.GetString() : null;
+            if (string.IsNullOrEmpty(res.RoomId)) res.RoomId = null;
+            
+            res.CheckInDate = DateTime.Parse(root.GetProperty("checkIn").GetString());
+            res.CheckOutDate = DateTime.Parse(root.GetProperty("checkOut").GetString());
+            res.Status = "PENDING";
+            
+            var created = await _repo.CreateReservationAsync(res, "System", "Device1");
+            return JsonSerializer.Serialize(new { success = true, data = new { id = created.Id } }, _jsonOptions);
         }
         catch (Exception ex)
         {
@@ -761,8 +835,15 @@ public class OfflinePMSInterop
             if (items == null || !items.Any()) throw new Exception("No items to fire");
 
             var posCtx = await _sessionManager.GetActiveContextAsync();
-            var res = await _repo.FireItemsAsync(orderId, items, posCtx.StaffId, posCtx.DeviceId);
-            return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
+            var (order, kot) = await _repo.FireItemsAsync(orderId, items, posCtx.StaffId, posCtx.DeviceId);
+            
+            return JsonSerializer.Serialize(new { 
+                success = true, 
+                data = new {
+                    order = order,
+                    newBatches = new[] { kot }
+                }
+            }, _jsonOptions);
         }
         catch (Exception ex)
         {
@@ -1083,6 +1164,7 @@ public class OfflinePMSInterop
                     permissions = new[] { staff.Role },
                     bankingModel = actualBankingModel,
                     posSessionId,
+                    operatorSession = posSessionId != null ? new { id = posSessionId, status = "OPEN" } : null,
                     requiresBank,
                     bankOwner
                 } 
@@ -1458,8 +1540,15 @@ public class OfflinePMSInterop
             if (kot == null)
                 return JsonSerializer.Serialize(new { success = false, error = "Invalid KOT data" }, _jsonOptions);
 
-            var (success, error) = await _escPos.PrintKotAsync(kot, ctx.OutletId);
-            return JsonSerializer.Serialize(new { success, error }, _jsonOptions);
+            var (kSuccess, kError) = await _escPos.PrintKotAsync(kot, ctx.OutletId);
+            
+            // Print Waiter Copy to RECEIPT printer
+            var (wSuccess, wError) = await _escPos.PrintWaiterSlipAsync(kot, ctx.OutletId);
+            
+            bool success = kSuccess || wSuccess;
+            string error = string.Join(" | ", new[] { kError, wError }.Where(e => !string.IsNullOrEmpty(e)));
+
+            return JsonSerializer.Serialize(new { success, error = string.IsNullOrEmpty(error) ? null : error }, _jsonOptions);
         }
         catch (Exception ex)
         {
@@ -1519,13 +1608,30 @@ public class OfflinePMSInterop
         }
     }
 
-    public async Task<string> TestPrinterAsync(string ip, int port = 9100)
+    public async Task<string> TestPrinterAsync(string printerConfigJson)
     {
         try
         {
             await GetSecureContextAsync();
-            var (success, message) = await _escPos.TestConnectionAsync(ip, port);
+            var printer = JsonSerializer.Deserialize<LocalPrinterConfig>(printerConfigJson, _jsonOptions);
+            if (printer == null) throw new Exception("Invalid printer configuration.");
+
+            var (success, message) = await _escPos.TestPrintAsync(printer);
             return JsonSerializer.Serialize(new { success, message }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
+    public async Task<string> GetAvailableHardwarePrintersAsync()
+    {
+        try
+        {
+            await GetSecureContextAsync();
+            var list = await _escPos.GetAvailablePrintersAsync();
+            return JsonSerializer.Serialize(new { success = true, data = list }, _jsonOptions);
         }
         catch (Exception ex)
         {

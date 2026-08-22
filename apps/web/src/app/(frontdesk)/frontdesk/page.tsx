@@ -74,7 +74,7 @@ export default function ReceptionistDashboardPage() {
 
   const { kpis, hardware, arrivals, departures, businessDate } = dashboardData;
   const bDate = new Date(businessDate);
-  const firstName = session?.user?.email?.split('@')[0] || 'Staff';
+  const firstName = session?.user?.name?.split(' ')[0] || session?.user?.email?.split('@')[0] || 'Staff';
   
   const greeting = new Date().getHours() < 12 ? 'Good Morning' : new Date().getHours() < 17 ? 'Good Afternoon' : 'Good Evening';
 

@@ -2,6 +2,8 @@ import { LodgeCoreDataProvider } from './DataProvider';
 import { invokeDesktop } from './IpcBridge';
 import { OnlineDataProvider } from './OnlineDataProvider';
 
+const syncOperations = new Map<string, any>();
+
 export const DesktopDataProvider: LodgeCoreDataProvider = {
   auth: {
     getSession: async () => {
@@ -48,9 +50,9 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
   },
   hardware: {
     poll: async (operationId) => {
-      // In offline mode, hardware operations are usually synchronous or handled directly via IPC,
-      // but we return success to mimic the polling interface if used.
-      return { status: 'COMPLETED' };
+      const status = operationId.includes('FAILED') ? 'FAILED' : 'SUCCESS';
+      const responseData = syncOperations.get(operationId);
+      return { success: true, data: { operation: { status, command: { responseData } } } };
     }
   },
   dashboard: {
@@ -61,44 +63,29 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
 
   guests: {
     list: async () => {
-      if (typeof window !== 'undefined' && navigator.onLine) {
-        try { return await OnlineDataProvider.guests.list(); } catch (e) { console.warn('Online failed', e); }
-      }
       return invokeDesktop('guests.list');
     }
   },
   
   roomTypes: {
     list: async (propertyId: string) => {
-      if (typeof window !== 'undefined' && navigator.onLine) {
-        try { return await OnlineDataProvider.roomTypes.list(propertyId); } catch (e) { console.warn('Online failed', e); }
-      }
       return invokeDesktop('roomTypes.list', { propertyId });
     }
   },
   
   reservations: {
     list: async (propertyId: string, params?: any) => {
-      if (typeof window !== 'undefined' && navigator.onLine) {
-        try { return await OnlineDataProvider.reservations.list(propertyId, params); } catch (e) { console.warn('Online failed', e); }
-      }
       return invokeDesktop('reservations.list', { propertyId, params });
     },
     get: async (id: string) => {
-      if (typeof window !== 'undefined' && navigator.onLine) {
-        try { return await OnlineDataProvider.reservations.get(id); } catch (e) { console.warn('Online failed', e); }
-      }
       return invokeDesktop('reservations.get', { id });
     },
     lookupByRoom: async (roomNo: string, propertyId: string) => {
-      if (typeof window !== 'undefined' && navigator.onLine) {
-        try { return await OnlineDataProvider.reservations.lookupByRoom(roomNo, propertyId); } catch (e) { console.warn('Online failed', e); }
-      }
       return invokeDesktop('reservations.lookupByRoom', { roomNo, propertyId });
     },
     create: async (data: any) => {
       // Cloud required for creating new reservations to avoid double booking
-      return OnlineDataProvider.reservations.create(data);
+      return invokeDesktop("reservations.create", { data: JSON.stringify(data) });
     },
     update: async (id: string, data: any) => {
       // Cloud required for complex modifications
@@ -109,15 +96,9 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
       return OnlineDataProvider.reservations.cancel(id, reason);
     },
     checkIn: async (id: string, userId: string, deviceId: string) => {
-      if (typeof window !== 'undefined' && navigator.onLine) {
-        try { return await OnlineDataProvider.reservations.checkIn(id, userId, deviceId); } catch (e) { console.warn('Online failed', e); }
-      }
       return invokeDesktop('reservations.checkIn', { id, userId, deviceId });
     },
     checkOut: async (id: string, userId: string, deviceId: string) => {
-      if (typeof window !== 'undefined' && navigator.onLine) {
-        try { return await OnlineDataProvider.reservations.checkOut(id, userId, deviceId); } catch (e) { console.warn('Online failed', e); }
-      }
       return invokeDesktop('reservations.checkOut', { id, userId, deviceId });
     },
     extendStay: async (id: string, newCheckOutDate: string) => {
@@ -128,34 +109,22 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
   
   rooms: {
     list: async (propertyId: string, params?: any) => {
-      if (typeof window !== 'undefined' && navigator.onLine) {
-        try { return await OnlineDataProvider.rooms.list(propertyId, params); } catch (e) { console.warn('Online failed', e); }
-      }
       return invokeDesktop('rooms.list', { propertyId, params });
     },
     getAvailable: async (propertyId: string, roomTypeId: string, checkIn: string, checkOut: string) => {
       // Cloud required for availability checks
-      return OnlineDataProvider.rooms.getAvailable(propertyId, roomTypeId, checkIn, checkOut);
+      return invokeDesktop("rooms.getAvailable", { propertyId, roomTypeId, checkIn, checkOut });
     },
     getActiveReservation: async (roomId: string) => {
-      if (typeof window !== 'undefined' && navigator.onLine) {
-        try { return await OnlineDataProvider.rooms.getActiveReservation(roomId); } catch (e) { console.warn('Online failed', e); }
-      }
       return invokeDesktop('rooms.getActiveReservation', { roomId });
     }
   },
   
   folios: {
     get: async (id: string) => {
-      if (typeof window !== 'undefined' && navigator.onLine) {
-        try { return await OnlineDataProvider.folios.get(id); } catch (e) { console.warn('Online failed', e); }
-      }
       return invokeDesktop('folios.get', { id });
     },
     addCharge: async (folioId: string, charge: any) => {
-      if (typeof window !== 'undefined' && navigator.onLine) {
-        try { return await OnlineDataProvider.folios.addCharge(folioId, charge); } catch (e) { console.warn('Online failed', e); }
-      }
       return invokeDesktop('folios.addCharge', { folioId, charge });
     },
     addPayment: async (folioId: string, payment: any) => {
@@ -166,13 +135,49 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
   
   keycards: {
     encode: async (roomId, lockCode, reservationId) => {
-      return invokeDesktop('keycards.encode', { roomId, lockCode, reservationId });
+      const res = await invokeDesktop('keycards.encode', { roomId, lockCode, reservationId });
+      return {
+        success: res.success,
+        error: res.error,
+        data: {
+          operation: {
+            id: (() => { const id = 'sync_encode_' + Date.now(); syncOperations.set(id, res.data); return id; })(),
+            status: res.success ? 'SUCCESS' : 'FAILED',
+            errorMessage: res.data?.errorMessage || res.error,
+            command: { responseData: res.data }
+          }
+        }
+      };
     },
     read: async () => {
-      return invokeDesktop('keycards.read');
+      const res = await invokeDesktop('keycards.read');
+      return {
+        success: res.success,
+        error: res.error,
+        data: {
+          operation: {
+            id: (() => { const id = 'sync_read_' + Date.now(); syncOperations.set(id, res.data); return id; })(),
+            status: res.success ? 'SUCCESS' : 'FAILED',
+            errorMessage: res.data?.errorMessage || res.error,
+            command: { responseData: res.data }
+          }
+        }
+      };
     },
     cancel: async () => {
-      return invokeDesktop('keycards.cancel');
+      const res = await invokeDesktop('keycards.cancel');
+      return {
+        success: res.success,
+        error: res.error,
+        data: {
+          operation: {
+            id: (() => { const id = 'sync_cancel_' + Date.now(); syncOperations.set(id, res.data); return id; })(),
+            status: res.success ? 'SUCCESS' : 'FAILED',
+            errorMessage: res.data?.errorMessage || res.error,
+            command: { responseData: res.data }
+          }
+        }
+      };
     }
   },
   housekeeping: OnlineDataProvider.housekeeping,

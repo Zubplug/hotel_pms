@@ -98,7 +98,7 @@ export default function CEODashboardPage() {
     return 'Good evening';
   };
 
-  const firstName = session?.user?.email?.split('@')[0] || 'Executive';
+  const firstName = session?.user?.name?.split(' ')[0] || session?.user?.email?.split('@')[0] || 'Executive';
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700 pb-10">

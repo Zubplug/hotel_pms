@@ -665,6 +665,8 @@ public class SyncEngine : BackgroundService
                     }
                     res.GuestId = el.TryGetProperty("primaryGuestId", out var pg) ? pg.GetString() ?? "" : "";
                     res.Status = el.TryGetProperty("status", out var st) ? st.GetString() ?? "" : "";
+                    res.RoomId = el.TryGetProperty("roomId", out var ri) ? ri.GetString() : null;
+                    res.RoomNumber = el.TryGetProperty("roomNumber", out var rn) ? rn.GetString() : null;
                     
                     if (el.TryGetProperty("checkIn", out var ci) && DateTime.TryParse(ci.GetString(), out var cid))
                         res.CheckInDate = cid;
@@ -722,6 +724,101 @@ public class SyncEngine : BackgroundService
                 if (staleFolios.Any())
                 {
                     dbContext.Folios.RemoveRange(staleFolios);
+                }
+            }
+
+            // 6. POS Outlets
+            if (root.TryGetProperty("posOutlets", out var posOutletsArray))
+            {
+                var incomingIds = new HashSet<string>();
+                foreach (var el in posOutletsArray.EnumerateArray())
+                {
+                    var id = el.GetProperty("id").GetString();
+                    if (string.IsNullOrEmpty(id)) continue;
+                    incomingIds.Add(id);
+                    
+                    var outlet = await dbContext.PosOutlets.FirstOrDefaultAsync(x => x.Id == id, stoppingToken);
+                    if (outlet == null)
+                    {
+                        outlet = new LodgeCore.Desktop.Data.Entities.LocalPosOutlet { Id = id };
+                        dbContext.PosOutlets.Add(outlet);
+                    }
+                    outlet.PropertyId = el.TryGetProperty("propertyId", out var pid) ? pid.GetString() ?? "" : "";
+                    outlet.Name = el.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
+                    outlet.Type = el.TryGetProperty("type", out var t) ? t.GetString() ?? "" : "";
+                    outlet.IsActive = el.TryGetProperty("isActive", out var ia) && ia.GetBoolean();
+                    outlet.AutoLockSeconds = el.TryGetProperty("autoLockSeconds", out var als) && als.ValueKind == System.Text.Json.JsonValueKind.Number ? als.GetInt32() : null;
+                }
+                
+                if (posOutletsArray.GetArrayLength() > 0)
+                {
+                    var stale = await dbContext.PosOutlets.Where(o => o.PropertyId == propertyId && !incomingIds.Contains(o.Id)).ToListAsync(stoppingToken);
+                    if (stale.Any()) dbContext.PosOutlets.RemoveRange(stale);
+                }
+            }
+
+            // 7. POS Categories
+            if (root.TryGetProperty("posCategories", out var posCategoriesArray))
+            {
+                var incomingIds = new HashSet<string>();
+                var outletIds = await dbContext.PosOutlets.Where(o => o.PropertyId == propertyId).Select(o => o.Id).ToListAsync(stoppingToken);
+
+                foreach (var el in posCategoriesArray.EnumerateArray())
+                {
+                    var id = el.GetProperty("id").GetString();
+                    var outletId = el.TryGetProperty("outletId", out var oid) ? oid.GetString() : "";
+                    
+                    if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(outletId) || !outletIds.Contains(outletId)) continue;
+                    incomingIds.Add(id);
+
+                    var cat = await dbContext.ProductCategories.FirstOrDefaultAsync(x => x.Id == id, stoppingToken);
+                    if (cat == null)
+                    {
+                        cat = new LodgeCore.Desktop.Data.Entities.LocalProductCategory { Id = id };
+                        dbContext.ProductCategories.Add(cat);
+                    }
+                    cat.OutletId = outletId;
+                    cat.Name = el.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
+                    cat.IsActive = el.TryGetProperty("isActive", out var ia) && ia.GetBoolean();
+                    cat.SortOrder = el.TryGetProperty("sortOrder", out var so) && so.ValueKind == System.Text.Json.JsonValueKind.Number ? so.GetInt32() : 0;
+                }
+                
+                if (posCategoriesArray.GetArrayLength() > 0)
+                {
+                    var stale = await dbContext.ProductCategories.Where(c => outletIds.Contains(c.OutletId) && !incomingIds.Contains(c.Id)).ToListAsync(stoppingToken);
+                    if (stale.Any()) dbContext.ProductCategories.RemoveRange(stale);
+                }
+            }
+
+            // 8. POS Products
+            if (root.TryGetProperty("posProducts", out var posProductsArray))
+            {
+                var incomingIds = new HashSet<string>();
+                foreach (var el in posProductsArray.EnumerateArray())
+                {
+                    var id = el.GetProperty("id").GetString();
+                    var elPropertyId = el.TryGetProperty("propertyId", out var pid) ? pid.GetString() : "";
+                    
+                    if (string.IsNullOrEmpty(id) || elPropertyId != propertyId) continue;
+                    incomingIds.Add(id);
+
+                    var prod = await dbContext.PosProducts.FirstOrDefaultAsync(x => x.Id == id, stoppingToken);
+                    if (prod == null)
+                    {
+                        prod = new LodgeCore.Desktop.Data.Entities.LocalPosProduct { Id = id, PropertyId = propertyId };
+                        dbContext.PosProducts.Add(prod);
+                    }
+                    prod.CategoryId = el.TryGetProperty("categoryId", out var cid) ? cid.GetString() ?? "" : "";
+                    prod.Name = el.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
+                    prod.Price = el.TryGetProperty("price", out var pr) && pr.ValueKind == System.Text.Json.JsonValueKind.Number ? pr.GetDecimal() : 0m;
+                    prod.TaxRate = el.TryGetProperty("taxRate", out var tr) && tr.ValueKind == System.Text.Json.JsonValueKind.Number ? tr.GetDecimal() : 0m;
+                    prod.IsActive = el.TryGetProperty("isActive", out var ia) && ia.GetBoolean();
+                }
+                
+                if (posProductsArray.GetArrayLength() > 0)
+                {
+                    var stale = await dbContext.PosProducts.Where(p => p.PropertyId == propertyId && !incomingIds.Contains(p.Id)).ToListAsync(stoppingToken);
+                    if (stale.Any()) dbContext.PosProducts.RemoveRange(stale);
                 }
             }
 

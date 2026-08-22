@@ -11,6 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { AppSwitcher } from '@/components/layout/AppSwitcher';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
+import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { formatCurrency } from '@/lib/utils';
 import { OperatorSelectionScreen } from '@/components/pos/OperatorSelectionScreen';
@@ -502,6 +503,19 @@ export default function PosApp() {
       setCart((prev) => prev.map((i) => ({ ...i, fired: true, firedQty: i.quantity, pendingQty: 0 })));
       setTableRefreshTrigger(Date.now());
       const batchCount = res.data?.newBatches?.length ?? 0;
+      
+      // Print the tickets asynchronously if available
+      if (HardwareBridge.isAvailable() && res.data?.newBatches) {
+        for (const batch of res.data.newBatches) {
+           try {
+             // The backend PrintKitchenTicketAsync handles both KITCHEN and RECEIPT (waiter slip) printing
+             await HardwareBridge.printKitchenTicket(batch);
+           } catch (e) {
+             console.error("Failed to print kitchen ticket", e);
+           }
+        }
+      }
+      
       toast.success(`${itemsToFire.length} item(s) fired! ${batchCount > 0 ? `${batchCount} ticket(s) sent 🔥` : ''}`);
     } catch (err: any) {
       toast.error(err.message || 'Failed to fire items');
@@ -521,6 +535,20 @@ export default function PosApp() {
       const paymentData = { method, amount: total, currency: 'NGN', checkId: activeCheckId };
       const res = await provider.pos.payOrder(currentOrderId, paymentData, operatorToken);
       if (!res.error) {
+        // Auto print receipt if on desktop
+        if (HardwareBridge.isAvailable()) {
+          try {
+             const receiptRes = await provider.pos.getReceipt(currentOrderId);
+             if (receiptRes && receiptRes.data) {
+                await HardwareBridge.printReceipt(receiptRes.data);
+             } else if (receiptRes && !receiptRes.error) {
+                await HardwareBridge.printReceipt(receiptRes as any);
+             }
+          } catch(e) {
+             console.error('Auto receipt print failed', e);
+          }
+        }
+        
         setCart([]);
         setOrderChecks([]);
         setCurrentOrderId(null);
