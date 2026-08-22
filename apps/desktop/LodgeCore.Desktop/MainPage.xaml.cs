@@ -219,11 +219,11 @@ public partial class MainPage : ContentPage
                     responseData = await pmsInterop.GetReservationAsync(parameters?["id"]?.ToString() ?? "");
                     break;
                 case "reservations.checkIn":
-                    string resId = parameters?["reservationId"]?.ToString() ?? "";
+                    string resId = parameters?["id"]?.ToString() ?? "";
                     responseData = await pmsInterop.ProcessCheckInAsync(resId);
                     break;
                 case "reservations.checkOut":
-                    string outResId = parameters?["reservationId"]?.ToString() ?? "";
+                    string outResId = parameters?["id"]?.ToString() ?? "";
                     responseData = await pmsInterop.ProcessCheckOutAsync(outResId);
                     break;
                 case "dashboard.get":
@@ -259,9 +259,6 @@ public partial class MainPage : ContentPage
                     break;
                 case "reservations.list":
                     responseData = await pmsInterop.GetActiveReservationsAsync();
-                    break;
-                case "reservations.get":
-                    responseData = await pmsInterop.GetReservationAsync(parameters?["id"]?.ToString() ?? "");
                     break;
                 case "sync.outbox":
                     responseData = await pmsInterop.GetOutboxEventsAsync();
@@ -570,6 +567,24 @@ public partial class MainPage : ContentPage
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"IPC Error: {ex.Message}");
+            // Only send error if we successfully parsed the message ID
+            if (args != null)
+            {
+                try 
+                {
+                    string messageStr = args.TryGetWebMessageAsString();
+                    if (!string.IsNullOrEmpty(messageStr))
+                    {
+                        var req = JsonSerializer.Deserialize<JsonNode>(messageStr);
+                        string? reqId = req?["id"]?.ToString();
+                        if (!string.IsNullOrEmpty(reqId))
+                        {
+                            SendError(sender, reqId, $"IPC Exception: {ex.Message}");
+                        }
+                    }
+                }
+                catch { } // Ignore secondary parsing errors
+            }
         }
     }
 

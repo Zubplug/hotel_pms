@@ -154,7 +154,7 @@ public class LocalRepository
         var res = await _dbContext.Reservations.FindAsync(reservationId);
         if (res == null) return false;
 
-        if (res.Status != "CHECKED_IN" && res.Status != "PENDING")
+        if (res.Status != "CHECKED_IN" && res.Status != "PENDING" && res.Status != "CONFIRMED")
             throw new InvalidOperationException($"Cannot extend a reservation with status '{res.Status}'.");
 
         if (newCheckOut <= res.CheckInDate)
@@ -321,7 +321,7 @@ public class LocalRepository
     public async Task<bool> ProcessCheckInAsync(string reservationId, string userId, string deviceId)
     {
         var res = await _dbContext.Reservations.FindAsync(reservationId);
-        if (res == null || res.Status != "PENDING") return false;
+        if (res == null || (res.Status != "PENDING" && res.Status != "CONFIRMED")) return false;
 
         res.Status = "CHECKED_IN";
         res.UpdatedAt = DateTime.UtcNow;
