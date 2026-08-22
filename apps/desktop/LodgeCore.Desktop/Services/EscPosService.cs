@@ -568,8 +568,8 @@ public class EscPosService
 
                 if (isWindows)
                 {
-                    bool ok = RawPrinterHelper.SendBytesToPrinter(printer.DevicePath, data);
-                    if (!ok) return (false, "Failed to send bytes to raw Windows printer.");
+                    bool ok = RawPrinterHelper.SendBytesToPrinter(printer.DevicePath, data, out string errMsg);
+                    if (!ok) return (false, "Failed to send bytes to raw Windows printer: " + errMsg);
                 }
                 else
                 {

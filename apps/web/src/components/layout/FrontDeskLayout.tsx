@@ -283,7 +283,7 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56 mt-1">
               <div className="px-2 py-2">
-                <p className="text-sm font-medium truncate">{session?.user?.email}</p>
+                <p className="text-sm font-medium truncate">{session?.user?.name || session?.user?.email}</p>
                 <p className="text-xs text-muted-foreground capitalize">{role.toLowerCase().replace('_', ' ')}</p>
               </div>
               <DropdownMenuSeparator />

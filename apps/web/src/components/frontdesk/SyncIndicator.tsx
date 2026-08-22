@@ -85,6 +85,26 @@ export function SyncIndicator() {
             <span className={conflictCount > 0 ? "text-red-600 font-bold" : "font-medium"}>{conflictCount}</span>
           </div>
         </div>
+        
+        <DropdownMenuSeparator />
+        <div className="px-3 py-2">
+          <Button 
+            className="w-full text-xs" 
+            size="sm"
+            onClick={async () => {
+              try {
+                if (provider.system?.forceSync) {
+                  await provider.system.forceSync();
+                }
+              } catch (e) {
+                console.error(e);
+              }
+            }}
+          >
+            <CloudSync className="mr-2 h-3 w-3" /> Force Sync Now
+          </Button>
+        </div>
+
         {isAuthorized && (
           <>
             <DropdownMenuSeparator />

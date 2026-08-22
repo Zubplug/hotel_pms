@@ -36,22 +36,27 @@ namespace LodgeCore.Desktop.Services
         [DllImport("winspool.Drv", EntryPoint = "WritePrinter", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
         public static extern bool WritePrinter(IntPtr hPrinter, IntPtr pBytes, int dwCount, out int dwWritten);
 
-        public static bool SendBytesToPrinter(string szPrinterName, byte[] data)
+        public static bool SendBytesToPrinter(string szPrinterName, byte[] data, out string errorMessage)
         {
+            errorMessage = string.Empty;
             if (data == null || data.Length == 0)
+            {
+                errorMessage = "No data to print.";
                 return false;
+            }
 
             IntPtr pUnmanagedBytes = Marshal.AllocCoTaskMem(data.Length);
             Marshal.Copy(data, 0, pUnmanagedBytes, data.Length);
 
-            bool success = SendBytesToPrinter(szPrinterName, pUnmanagedBytes, data.Length);
+            bool success = SendBytesToPrinter(szPrinterName, pUnmanagedBytes, data.Length, out errorMessage);
             Marshal.FreeCoTaskMem(pUnmanagedBytes);
             
             return success;
         }
 
-        public static bool SendBytesToPrinter(string szPrinterName, IntPtr pBytes, int dwCount)
+        public static bool SendBytesToPrinter(string szPrinterName, IntPtr pBytes, int dwCount, out string errorMessage)
         {
+            errorMessage = string.Empty;
             int dwWritten = 0;
             IntPtr hPrinter = new IntPtr(0);
             DOCINFOA di = new DOCINFOA();
@@ -67,11 +72,24 @@ namespace LodgeCore.Desktop.Services
                     if (StartPagePrinter(hPrinter))
                     {
                         success = WritePrinter(hPrinter, pBytes, dwCount, out dwWritten);
+                        if (!success) errorMessage = "WritePrinter failed (Win32 Error: " + Marshal.GetLastWin32Error() + ")";
                         EndPagePrinter(hPrinter);
+                    }
+                    else
+                    {
+                        errorMessage = "StartPagePrinter failed (Win32 Error: " + Marshal.GetLastWin32Error() + ")";
                     }
                     EndDocPrinter(hPrinter);
                 }
+                else
+                {
+                    errorMessage = "StartDocPrinter failed (Win32 Error: " + Marshal.GetLastWin32Error() + "). This usually means the RAW datatype is not supported by this printer driver.";
+                }
                 ClosePrinter(hPrinter);
+            }
+            else
+            {
+                errorMessage = "OpenPrinter failed (Win32 Error: " + Marshal.GetLastWin32Error() + "). Printer name might be invalid or access denied.";
             }
 
             return success;

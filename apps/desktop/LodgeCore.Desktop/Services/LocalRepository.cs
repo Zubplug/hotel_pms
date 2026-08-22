@@ -622,7 +622,7 @@ public class LocalRepository
             .ToListAsync();
 
         var inHouse = await _dbContext.Reservations.CountAsync(r => r.PropertyId == propertyId && r.Status == "CHECKED_IN");
-        var totalRooms = await _dbContext.Rooms.CountAsync(r => r.PropertyId == propertyId && r.Status != "MAINTENANCE" && r.Status != "OUT_OF_ORDER");
+        var totalRooms = await _dbContext.Rooms.CountAsync(r => r.PropertyId == propertyId);
         var availableRooms = await _dbContext.Rooms.CountAsync(r => r.PropertyId == propertyId && (r.Status == "AVAILABLE" || r.Status == "CLEAN"));
         
         var property = await _dbContext.Properties.FirstOrDefaultAsync(p => p.Id == propertyId);
