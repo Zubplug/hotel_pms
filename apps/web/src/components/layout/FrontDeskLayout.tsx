@@ -251,6 +251,17 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
                 </div>
                 <p className="text-xs text-muted-foreground ml-6 mb-2">ESC/POS Thermal Printer</p>
 
+                <div className="pt-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="w-full text-xs" 
+                    onClick={() => router.push('/frontdesk/printer-settings')}
+                  >
+                    Configure Printers
+                  </Button>
+                </div>
+
                 {cloudHardware?.message && !isDesktopApp && (
                   <div className="bg-muted p-2 rounded text-xs text-muted-foreground mt-2">
                     {cloudHardware.message}
