@@ -105,13 +105,24 @@ public class DelunsLockProvider : ILockProvider
         EnsureInitialized();
         if (!_initialized) return ReadCardResult.Fail("-999", "SDK not initialized", VendorName);
 
+        // Guard: explicitly check if hardware encoder and card are physically present
+        var pingSnr = new StringBuilder(20);
+        int pingResult = NativeSdkBridge.TP_GetCardSnr(pingSnr);
+        if (pingResult != (int)LockSdkError.OPR_OK)
+        {
+            _logger.LogWarning("Pre-read ping failed (code {Code}). Encoder disconnected or no card present.", pingResult);
+            if (pingResult == (int)LockSdkError.NO_CARD) return ReadCardResult.Blank(VendorName);
+            return ReadCardResult.Fail(pingResult.ToString(), $"Hardware ping failed: {pingResult}", VendorName);
+        }
+
         var cardSnr = new StringBuilder(20);
         var roomNo = new StringBuilder(20);
         var checkinTime = new StringBuilder(30);
         var checkoutTime = new StringBuilder(30);
         int iFlags = 0;
 
-        int result = NativeSdkBridge.TP_ReadGuestCardEx2(cardSnr, roomNo, checkinTime, checkoutTime, ref iFlags, 0);
+        // waitMs=500 to force a real hardware poll instead of reading the DLL's internal memory cache
+        int result = NativeSdkBridge.TP_ReadGuestCardEx2(cardSnr, roomNo, checkinTime, checkoutTime, ref iFlags, 500);
 
         if (result == (int)LockSdkError.OPR_OK)
         {

@@ -183,7 +183,7 @@ export function PaymentReceipt({ id, onClose, hideBack = false }: { id: string, 
               <p className="text-white font-medium text-lg mb-2">Thank you for choosing {property.name}!</p>
               <p>For any questions regarding this receipt, please contact the front desk.</p>
               <div className="mt-6 text-xs text-slate-600 font-mono">
-                System Generated • Cashier: {payment.receivedBy?.slice(0,8) || 'System'} • Folio: {folio.id.slice(0,8)}
+                System Generated • Cashier: {payment.receivedByName || payment.receivedBy?.slice(0,8) || 'System'} • Folio: {folio.id.slice(0,8)}
               </div>
             </div>
           </div>

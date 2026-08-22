@@ -48,6 +48,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       return errorResponse('BAD_REQUEST', 'Cannot generate a receipt for an incomplete payment', 400);
     }
 
+    // Fetch staff name for the cashier
+    const staff = await prisma.staff.findUnique({
+      where: { userId: payment.receivedBy }
+    });
+    const receivedByName = staff ? `${staff.firstName} ${staff.lastName}` : null;
+
     // Assemble the definitive, server-calculated receipt
     const receiptData = {
       receiptId: (payment as any).receiptNumber || `RCPT-${payment.id.split('-')[0].toUpperCase()}`,
@@ -85,7 +91,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         provider: payment.provider,
         providerReference: payment.providerRef,
         providerTransactionId: payment.providerTransactionId,
-        receivedBy: payment.receivedBy // UUID of the staff member
+        receivedBy: payment.receivedBy, // UUID of the staff member
+        receivedByName: receivedByName
       }
     };
 

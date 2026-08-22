@@ -47,7 +47,16 @@ export function DataProviderWrapper({ children }: { children: React.ReactNode })
       const handleOnline = () => {
         setIsOnline(true);
         setSyncStatus('syncing');
-        // Trigger a sync check with the desktop bridge here if needed
+        // Trigger a sync check with the desktop bridge here
+        try {
+          if ((window as any).chrome?.webview) {
+            (window as any).chrome.webview.postMessage(JSON.stringify({
+              id: `req_${Date.now()}_sync`,
+              method: 'system.forceSync',
+              params: {}
+            }));
+          }
+        } catch(e) {}
       };
       const handleOffline = () => {
         setIsOnline(false);

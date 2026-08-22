@@ -71,7 +71,7 @@ function PrinterCard({
   const handleTest = async () => {
     setTestStatus('testing');
     try {
-      const res = await invokeDesktop('hardware.testPrinter', printer);
+      const res = await invokeDesktop('hardware.testPrinter', { config: JSON.stringify(printer) });
       if (res?.success) {
         setTestStatus('success');
         setTestMsg(res.message ?? 'Connected!');

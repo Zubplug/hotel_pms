@@ -4,6 +4,7 @@ import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { getUserPropertyIds } from '@/lib/property-access';
 import { PaystackProvider } from '@/lib/payment-providers/paystack';
+import { NotificationEngine } from '@/lib/notification-engine';
 import crypto from 'crypto';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -205,6 +206,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
       return { refund, updatedFolio };
     });
+
+    if (gatewayRefundStatus === 'COMPLETED') {
+      NotificationEngine.emit({
+        type: 'REFUND_HIGH_VALUE',
+        organizationId: payment.folio.property.organizationId,
+        propertyId: payment.propertyId,
+        entityType: 'payment',
+        entityId: payment.id,
+        idempotencyKey: `refund_high_value_${result.refund.id}`,
+      }).catch(err => console.error('[NotificationEngine] Failed to emit refund notification:', err));
+    }
 
     return successResponse(result, 201);
 

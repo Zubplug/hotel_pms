@@ -201,10 +201,10 @@ export async function GET(req: NextRequest) {
     // ---- Load Front Desk Operational Cache ------------------------------
     // 1. Rooms & Room Types
     const rooms = await prisma.room.findMany({
-      where: { propertyId, isActive: true, ...(since ? { updatedAt: { gte: since } } : {}) }
+      where: { propertyId, isActive: true }
     });
     const roomTypes = await prisma.roomType.findMany({
-      where: { propertyId, isActive: true, ...(since ? { updatedAt: { gte: since } } : {}) }
+      where: { propertyId, isActive: true }
     });
 
     // 2. Target window for Reservations: In-house + 3 days out + today's departures
@@ -218,7 +218,6 @@ export async function GET(req: NextRequest) {
       where: {
         propertyId,
         deletedAt: null,
-        ...(since ? { updatedAt: { gte: since } } : {}),
         OR: [
           { status: 'CHECKED_IN' },
           { status: 'CONFIRMED', checkIn: { lte: threeDaysFromNow, gte: yesterday } },
@@ -295,11 +294,11 @@ export async function GET(req: NextRequest) {
     });
 
     const housekeepingTasks = await prisma.housekeepingTask.findMany({
-      where: { propertyId, ...(since ? { updatedAt: { gte: since } } : {}) }
+      where: { propertyId }
     });
 
     const maintenanceTickets = await prisma.maintenanceTicket.findMany({
-      where: { propertyId, ...(since ? { updatedAt: { gte: since } } : {}) }
+      where: { propertyId }
     });
 
     return NextResponse.json({

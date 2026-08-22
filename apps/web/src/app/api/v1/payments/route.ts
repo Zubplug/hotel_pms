@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { getUserPropertyIds } from '@/lib/property-access';
+import { NotificationEngine } from '@/lib/notification-engine';
 
 export async function POST(req: NextRequest) {
   try {
@@ -154,6 +155,16 @@ export async function POST(req: NextRequest) {
 
       return { payment, updatedFolio };
     });
+
+    // Fire notification for the payment (fire and forget)
+    NotificationEngine.emit({
+      type: 'PAYMENT_LARGE',
+      organizationId: folio.property.organizationId,
+      propertyId: folio.propertyId,
+      entityType: 'payment',
+      entityId: result.payment.id,
+      idempotencyKey: `payment_large_${result.payment.id}`,
+    }).catch(err => console.error('[NotificationEngine] Failed to emit payment notification:', err));
 
     return successResponse(result, 201);
   } catch (err: any) {

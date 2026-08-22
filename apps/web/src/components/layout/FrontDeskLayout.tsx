@@ -17,7 +17,8 @@ import {
   Brush,
   Wrench,
   Activity,
-  Printer
+  Printer,
+  RefreshCw
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -270,6 +271,25 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
               </div>
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {/* Manual Sync Button */}
+          {isDesktopApp && isOnline && role !== 'RECEPTIONIST' && (
+            <Button 
+              variant="outline"
+              size="sm"
+              className="hidden lg:flex gap-2 h-9 px-3 rounded-full border shadow-sm hover:bg-slate-100"
+              onClick={async () => {
+                try {
+                  if (provider.system?.forceSync) {
+                    await provider.system.forceSync();
+                  }
+                } catch(e) {}
+              }}
+            >
+              <RefreshCw className="h-4 w-4 text-slate-500" />
+              <span className="font-medium text-slate-700">Sync Now</span>
+            </Button>
+          )}
 
           {/* Offline Sync Indicator */}
           <SyncIndicator />
