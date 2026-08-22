@@ -59,11 +59,11 @@ public class OfflinePMSInterop
         try
         {
             var session = await _authManager.GetSessionAsync();
-            if (session == null) return JsonSerializer.Serialize(new { success = true, data = (object)null }, _jsonOptions);
+            if (session == null) return JsonSerializer.Serialize(new { success = true, data = (object?)null }, _jsonOptions);
 
             var staff = await _repo.GetStaffByIdAsync(session.UserId);
             var displayName = staff != null ? $"{staff.FirstName} {staff.LastName}".Trim() : session.UserId;
-            var email = staff?.Email;
+            var email = string.Empty;
 
             var enrichedSession = new
             {
@@ -192,7 +192,7 @@ public class OfflinePMSInterop
             System.Diagnostics.Debug.WriteLine($"[GetActiveStaffAsync] Retrieved {staff?.Count ?? 0} staff members from local database.");
             
             // SECURITY: Never expose PosPinHash or sensitive sync fields to the React UI
-            var safeStaff = staff.Select(s => new
+            var safeStaff = (staff ?? new List<LodgeCore.Desktop.Data.Entities.LocalStaff>()).Select(s => new
             {
                 s.Id,
                 s.FirstName,
@@ -809,10 +809,10 @@ public class OfflinePMSInterop
             var property = await _repo.GetPropertyAsync(posCtx.PropertyId);
             string fallbackCurrency = property?.Currency ?? "NGN";
 
-            string method = paymentData.ContainsKey("method") ? paymentData["method"].ToString() : "CASH";
-            decimal amount = paymentData.ContainsKey("amount") ? decimal.Parse(paymentData["amount"].ToString()) : 0;
-            string currency = paymentData.ContainsKey("currency") ? paymentData["currency"].ToString() : fallbackCurrency;
-            string checkId = paymentData.ContainsKey("checkId") ? paymentData["checkId"]?.ToString() : null;
+            string method = paymentData.ContainsKey("method") ? paymentData["method"]?.ToString() ?? "CASH" : "CASH";
+            decimal amount = paymentData.ContainsKey("amount") ? decimal.Parse(paymentData["amount"]?.ToString() ?? "0") : 0;
+            string currency = paymentData.ContainsKey("currency") ? paymentData["currency"]?.ToString() ?? fallbackCurrency : fallbackCurrency;
+            string? checkId = paymentData.ContainsKey("checkId") ? paymentData["checkId"]?.ToString() : null;
             
             // AUTHORIZATION CHECK
             if (string.IsNullOrEmpty(posCtx.SessionId))
@@ -827,7 +827,7 @@ public class OfflinePMSInterop
                 }
             }
 
-            var res = await _repo.PayOrderAsync(orderId, method, amount, currency, checkId, posCtx.StaffId, posCtx.DeviceId);
+            var res = await _repo.PayOrderAsync(orderId, method, amount, currency, checkId ?? "", posCtx.StaffId, posCtx.DeviceId);
             return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
         catch (Exception ex)
@@ -1040,6 +1040,7 @@ public class OfflinePMSInterop
             // We ignore propertyId and sessionId from React to ensure security
             var ctx = await _sessionManager.AuthenticateOperatorAsync(staffId, pin);
             var staff = await _repo.GetStaffByIdAsync(staffId);
+            if (staff == null) throw new Exception("Staff not found");
             
             var property = await _repo.GetPropertyAsync(propertyId);
             var actualBankingModel = property?.BankingModel ?? "CENTRAL_CASHIER";
@@ -1180,7 +1181,7 @@ public class OfflinePMSInterop
             };
 
             // Let's use a dictionary to ensure the exact JSON key 'operator' is used
-            var jsonDict = new Dictionary<string, object>
+            var jsonDict = new Dictionary<string, object?>
             {
                 ["terminal"] = terminal,
                 ["outlet"] = outlet,

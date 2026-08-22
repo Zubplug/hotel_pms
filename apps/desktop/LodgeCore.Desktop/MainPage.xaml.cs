@@ -91,8 +91,8 @@ public partial class MainPage : ContentPage
             var request = JsonSerializer.Deserialize<JsonNode>(messageStr);
             if (request == null) return;
 
-            string id = request["id"]?.ToString();
-            string method = request["method"]?.ToString();
+            string? id = request["id"]?.ToString();
+            string? method = request["method"]?.ToString();
             var parameters = request["params"];
 
             if (string.IsNullOrEmpty(method) || string.IsNullOrEmpty(id)) return;
@@ -108,7 +108,7 @@ public partial class MainPage : ContentPage
             }
 
             // Explicit Method Allowlist
-            string responseData = null;
+            string? responseData = null;
 
             switch (method)
             {
@@ -126,12 +126,12 @@ public partial class MainPage : ContentPage
                     break;
                 case "system.provisionTerminal":
                     responseData = await pmsInterop.ProvisionTerminalAsync(
-                        parameters?["email"]?.ToString(),
-                        parameters?["password"]?.ToString(),
-                        parameters?["propertyId"]?.ToString(),
-                        parameters?["outletId"]?.ToString(),
-                        parameters?["terminalName"]?.ToString(),
-                        parameters?["terminalType"]?.ToString()
+                        parameters?["email"]?.ToString() ?? "",
+                        parameters?["password"]?.ToString() ?? "",
+                        parameters?["propertyId"]?.ToString() ?? "",
+                        parameters?["outletId"]?.ToString() ?? "",
+                        parameters?["terminalName"]?.ToString() ?? "",
+                        parameters?["terminalType"]?.ToString() ?? ""
                     );
                     break;
                 case "auth.getSession":
@@ -139,7 +139,7 @@ public partial class MainPage : ContentPage
                     break;
                 case "auth.provisionDevice":
                     responseData = await pmsInterop.ProvisionDeviceAsync(
-                        parameters?["deviceToken"]?.ToString()
+                        parameters?["deviceToken"]?.ToString() ?? ""
                     );
                     break;
                 case "auth.getActiveStaff":
@@ -147,9 +147,9 @@ public partial class MainPage : ContentPage
                     break;
                 case "auth.login":
                     responseData = await pmsInterop.LoginAsync(
-                        parameters?["staffId"]?.ToString(),
-                        parameters?["pin"]?.ToString(),
-                        parameters?["bankingModel"]?.ToString()
+                        parameters?["staffId"]?.ToString() ?? "",
+                        parameters?["pin"]?.ToString() ?? "",
+                        parameters?["bankingModel"]?.ToString() ?? ""
                     );
                     break;
                 case "auth.clearSession":
@@ -167,9 +167,9 @@ public partial class MainPage : ContentPage
                     break;
                 case "hardware.encodeCard": // Legacy route — kept for backward compat but uses same security path
                     responseData = await hardwareInterop.EncodeCardAsync(
-                        parameters?["roomId"]?.ToString(),
-                        parameters?["lockCode"]?.ToString(),
-                        parameters?["reservationId"]?.ToString());
+                        parameters?["roomId"]?.ToString() ?? "",
+                        parameters?["lockCode"]?.ToString() ?? "",
+                        parameters?["reservationId"]?.ToString() ?? "");
                     break;
                 case "hardware.cancelCard":
                     responseData = await hardwareInterop.CancelCardAsync();
@@ -211,37 +211,37 @@ public partial class MainPage : ContentPage
                     responseData = await pmsInterop.GetActiveReservationsAsync();
                     break;
                 case "reservations.checkIn":
-                    string resId = parameters?["reservationId"]?.ToString();
+                    string resId = parameters?["reservationId"]?.ToString() ?? "";
                     responseData = await pmsInterop.ProcessCheckInAsync(resId);
                     break;
                 case "reservations.checkOut":
-                    string outResId = parameters?["reservationId"]?.ToString();
+                    string outResId = parameters?["reservationId"]?.ToString() ?? "";
                     responseData = await pmsInterop.ProcessCheckOutAsync(outResId);
                     break;
                 case "dashboard.get":
-                    responseData = await pmsInterop.GetDashboardAsync(parameters?["propertyId"]?.ToString());
+                    responseData = await pmsInterop.GetDashboardAsync(parameters?["propertyId"]?.ToString() ?? "");
                     break;
                 case "guests.list":
                     responseData = await pmsInterop.GetGuestsAsync();
                     break;
                 case "roomTypes.list":
-                    responseData = await pmsInterop.GetRoomTypesAsync(parameters?["propertyId"]?.ToString());
+                    responseData = await pmsInterop.GetRoomTypesAsync(parameters?["propertyId"]?.ToString() ?? "");
                     break;
                 case "reservations.lookupByRoom":
-                    responseData = await pmsInterop.LookupReservationByRoomAsync(parameters?["roomNo"]?.ToString(), parameters?["propertyId"]?.ToString());
+                    responseData = await pmsInterop.LookupReservationByRoomAsync(parameters?["roomNo"]?.ToString() ?? "", parameters?["propertyId"]?.ToString() ?? "");
                     break;
                 case "reservations.create":
-                    responseData = await pmsInterop.CreateReservationAsync(parameters?["data"]?.ToString());
+                    responseData = await pmsInterop.CreateReservationAsync(parameters?["data"]?.ToString() ?? "");
                     break;
                 case "rooms.list":
-                    responseData = await pmsInterop.GetRoomsAsync(parameters?["propertyId"]?.ToString());
+                    responseData = await pmsInterop.GetRoomsAsync(parameters?["propertyId"]?.ToString() ?? "");
                     break;
                 case "rooms.getAvailable":
                     responseData = await pmsInterop.GetAvailableRoomsAsync(
-                        parameters?["propertyId"]?.ToString(),
-                        parameters?["roomTypeId"]?.ToString(),
-                        parameters?["checkIn"]?.ToString(),
-                        parameters?["checkOut"]?.ToString());
+                        parameters?["propertyId"]?.ToString() ?? "",
+                        parameters?["roomTypeId"]?.ToString() ?? "",
+                        parameters?["checkIn"]?.ToString() ?? "",
+                        parameters?["checkOut"]?.ToString() ?? "");
                     break;
                 case "reservations.list":
                     responseData = await pmsInterop.GetActiveReservationsAsync();
@@ -251,29 +251,29 @@ public partial class MainPage : ContentPage
                     break;
                 case "reservations.extendStay":
                     responseData = await pmsInterop.ExtendStayAsync(
-                        parameters?["reservationId"]?.ToString(),
-                        parameters?["newCheckOutDate"]?.ToString());
+                        parameters?["reservationId"]?.ToString() ?? "",
+                        parameters?["newCheckOutDate"]?.ToString() ?? "");
                     break;
                 case "folios.get":
-                    responseData = await pmsInterop.GetFolioAsync(parameters?["id"]?.ToString());
+                    responseData = await pmsInterop.GetFolioAsync(parameters?["id"]?.ToString() ?? "");
                     break;
                 case "folios.addPayment":
                     responseData = await pmsInterop.RecordPaymentAsync(
-                        parameters?["folioId"]?.ToString(),
+                        parameters?["folioId"]?.ToString() ?? "",
                         parameters?["payment"]?["amount"]?.GetValue<decimal>() ?? 0,
                         parameters?["payment"]?["method"]?.ToString());
                     break;
                 case "folios.addCharge":
                     responseData = await pmsInterop.RecordChargeAsync(
-                        parameters?["folioId"]?.ToString(),
+                        parameters?["folioId"]?.ToString() ?? "",
                         parameters?["charge"]?["amount"]?.GetValue<decimal>() ?? 0,
                         parameters?["charge"]?["description"]?.ToString());
                     break;
                 case "keycards.encode":
                     responseData = await hardwareInterop.EncodeCardAsync(
-                        parameters?["roomId"]?.ToString(),
-                        parameters?["lockCode"]?.ToString(),
-                        parameters?["reservationId"]?.ToString());
+                        parameters?["roomId"]?.ToString() ?? "",
+                        parameters?["lockCode"]?.ToString() ?? "",
+                        parameters?["reservationId"]?.ToString() ?? "");
                     break;
                 case "keycards.read":
                     responseData = await hardwareInterop.ReadCardAsync();
@@ -282,236 +282,236 @@ public partial class MainPage : ContentPage
                     responseData = await hardwareInterop.CancelCardAsync();
                     break;
                 case "housekeeping.list":
-                    responseData = await pmsInterop.GetHousekeepingTasksAsync(parameters?["propertyId"]?.ToString());
+                    responseData = await pmsInterop.GetHousekeepingTasksAsync(parameters?["propertyId"]?.ToString() ?? "");
                     break;
                 case "housekeeping.updateTask":
                     responseData = await pmsInterop.UpdateHousekeepingTaskStatusAsync(
-                        parameters?["taskId"]?.ToString(),
-                        parameters?["status"]?.ToString());
+                        parameters?["taskId"]?.ToString() ?? "",
+                        parameters?["status"]?.ToString() ?? "");
                     break;
                 case "maintenance.list":
-                    responseData = await pmsInterop.GetMaintenanceTicketsAsync(parameters?["propertyId"]?.ToString());
+                    responseData = await pmsInterop.GetMaintenanceTicketsAsync(parameters?["propertyId"]?.ToString() ?? "");
                     break;
                 case "maintenance.createTicket":
-                    responseData = await pmsInterop.CreateReservationAsync(parameters?["data"]?.ToString()); // Temporary stub mapped to creation logic structure
+                    responseData = await pmsInterop.CreateReservationAsync(parameters?["data"]?.ToString() ?? ""); // Temporary stub mapped to creation logic structure
                     break;
                 case "maintenance.resolveTicket":
                     responseData = await pmsInterop.ResolveMaintenanceTicketAsync(
-                        parameters?["ticketId"]?.ToString());
+                        parameters?["ticketId"]?.ToString() ?? "");
                     break;
                 case "receipts.generate":
-                    responseData = await pmsInterop.GenerateReceiptAsync(parameters?["folioId"]?.ToString());
+                    responseData = await pmsInterop.GenerateReceiptAsync(parameters?["folioId"]?.ToString() ?? "");
                     break;
                 case "pos.getProducts":
-                    responseData = await pmsInterop.GetPosProductsAsync(parameters?["propertyId"]?.ToString());
+                    responseData = await pmsInterop.GetPosProductsAsync(parameters?["propertyId"]?.ToString() ?? "");
                     break;
                 case "pos.createOrder":
-                    responseData = await pmsInterop.CreatePosOrderAsync(parameters?["data"]?.ToString());
+                    responseData = await pmsInterop.CreatePosOrderAsync(parameters?["data"]?.ToString() ?? "");
                     break;
                 case "pos.splitCheck":
                     var itemIdsNode = parameters?["itemIds"] as JsonArray;
                     var itemIdsList = itemIdsNode?.Select(x => x?.ToString() ?? "").Where(x => !string.IsNullOrEmpty(x)).ToList() ?? new List<string>();
                     responseData = await pmsInterop.SplitCheckAsync(
-                        parameters?["orderId"]?.ToString(),
+                        parameters?["orderId"]?.ToString() ?? "",
                         itemIdsList);
                     break;
                 case "pos.updateOrderStatus":
                     responseData = await pmsInterop.UpdateOrderStatusAsync(
-                        parameters?["orderId"]?.ToString(),
-                        parameters?["status"]?.ToString(),
-                        parameters?["reason"]?.ToString());
+                        parameters?["orderId"]?.ToString() ?? "",
+                        parameters?["status"]?.ToString() ?? "",
+                        parameters?["reason"]?.ToString() ?? "");
                     break;
                 case "pos.payOrder":
                     responseData = await pmsInterop.PayOrderAsync(
-                        parameters?["orderId"]?.ToString(),
-                        parameters?["paymentData"]?.ToString());
+                        parameters?["orderId"]?.ToString() ?? "",
+                        parameters?["paymentData"]?.ToString() ?? "");
                     break;
                 case "pos.fireKot":
                     var kotItemIdsNode = parameters?["itemIds"] as System.Text.Json.Nodes.JsonArray;
                     var kotItemIdsList = kotItemIdsNode?.Select(x => x?.ToString() ?? "").Where(x => !string.IsNullOrEmpty(x)).ToList() ?? new List<string>();
                     responseData = await pmsInterop.FireKotAsync(
-                        parameters?["orderId"]?.ToString(),
+                        parameters?["orderId"]?.ToString() ?? "",
                         kotItemIdsList);
                     break;
                 case "pos.fireItems":
                     responseData = await pmsInterop.FireItemsAsync(
-                        parameters?["orderId"]?.ToString(),
-                        parameters?["items"]?.ToString());
+                        parameters?["orderId"]?.ToString() ?? "",
+                        parameters?["items"]?.ToString() ?? "");
                     break;
                 case "pos.getActiveOrders":
                     responseData = await pmsInterop.GetActiveOrdersAsync(
-                        parameters?["filter"]?.ToString());
+                        parameters?["filter"]?.ToString() ?? "");
                     break;
                 case "pos.getOrder":
-                    responseData = await pmsInterop.GetOrderAsync(parameters?["orderId"]?.ToString());
+                    responseData = await pmsInterop.GetOrderAsync(parameters?["orderId"]?.ToString() ?? "");
                     break;
                 case "pos.getReceipt":
-                    responseData = await pmsInterop.GetReceiptAsync(parameters?["orderId"]?.ToString());
+                    responseData = await pmsInterop.GetReceiptAsync(parameters?["orderId"]?.ToString() ?? "");
                     break;
                 case "pos.getServerOrders":
                     responseData = await pmsInterop.GetServerOrdersAsync(
                         parameters?["range"]?.ToString() ?? "today",
                         parameters?["statusFilter"]?.ToString() ?? "all",
-                        parameters?["sessionId"]?.ToString());
+                        parameters?["sessionId"]?.ToString() ?? "");
                     break;
                 case "pos.getServerSales":
                     responseData = await pmsInterop.GetServerSalesAsync(
                         parameters?["range"]?.ToString() ?? "today",
-                        parameters?["sessionId"]?.ToString());
+                        parameters?["sessionId"]?.ToString() ?? "");
                     break;
                 case "pos.getCashMovements":
-                    responseData = await pmsInterop.GetCashMovementsAsync(parameters?["sessionId"]?.ToString());
+                    responseData = await pmsInterop.GetCashMovementsAsync(parameters?["sessionId"]?.ToString() ?? "");
                     break;
                 case "pos.createCashMovement":
                     responseData = await pmsInterop.CreateCashMovementAsync(
-                        parameters?["propertyId"]?.ToString(),
-                        parameters?["sessionId"]?.ToString(),
+                        parameters?["propertyId"]?.ToString() ?? "",
+                        parameters?["sessionId"]?.ToString() ?? "",
                         parameters?["amount"]?.GetValue<decimal>() ?? 0,
-                        parameters?["type"]?.ToString(),
-                        parameters?["reasonCode"]?.ToString(),
-                        parameters?["notes"]?.ToString(),
-                        parameters?["receiptReference"]?.ToString(),
-                        parameters?["authorizerId"]?.ToString());
+                        parameters?["type"]?.ToString() ?? "",
+                        parameters?["reasonCode"]?.ToString() ?? "",
+                        parameters?["notes"]?.ToString() ?? "",
+                        parameters?["receiptReference"]?.ToString() ?? "",
+                        parameters?["authorizerId"]?.ToString() ?? "");
                     break;
                 case "pos.getSessionSettlementDetails":
-                    responseData = await pmsInterop.GetSessionSettlementDetailsAsync(parameters?["sessionId"]?.ToString());
+                    responseData = await pmsInterop.GetSessionSettlementDetailsAsync(parameters?["sessionId"]?.ToString() ?? "");
                     break;
                 case "pos.settleSession":
                     responseData = await pmsInterop.SettleSessionAsync(
-                        parameters?["sessionId"]?.ToString(),
+                        parameters?["sessionId"]?.ToString() ?? "",
                         parameters?["actualCash"]?.GetValue<decimal>() ?? 0,
-                        parameters?["operatorId"]?.ToString(),
-                        parameters?["authorizerId"]?.ToString());
+                        parameters?["operatorId"]?.ToString() ?? "",
+                        parameters?["authorizerId"]?.ToString() ?? "");
                     break;
                 case "pos.startSession":
                     responseData = await pmsInterop.OpenPosSessionAsync(
-                        parameters?["propertyId"]?.ToString(),
+                        parameters?["propertyId"]?.ToString() ?? "",
                         parameters?["openingBalance"]?.GetValue<decimal>() ?? 0);
                     break;
                 case "pos.closeSession":
                     responseData = await pmsInterop.ClosePosSessionAsync(
-                        parameters?["sessionId"]?.ToString(),
+                        parameters?["sessionId"]?.ToString() ?? "",
                         parameters?["actualCash"]?.GetValue<decimal>() ?? 0,
                         parameters?["cashPaidOut"]?.GetValue<decimal>() ?? 0);
                     break;
                 case "pos.confirmHandover":
                     responseData = await pmsInterop.ConfirmHandoverAsync(
-                        parameters?["sessionId"]?.ToString(),
-                        parameters?["managerPin"]?.ToString()
+                        parameters?["sessionId"]?.ToString() ?? "",
+                        parameters?["managerPin"]?.ToString() ?? ""
                     );
                     break;
                 case "pos.getPendingHandovers":
                     responseData = await pmsInterop.GetPendingHandoversAsync(
-                        parameters?["propertyId"]?.ToString()
+                        parameters?["propertyId"]?.ToString() ?? ""
                     );
                     break;
                 case "pos.getCashOfficeOverview":
                     responseData = await pmsInterop.GetCashOfficeOverviewAsync(
-                        parameters?["propertyId"]?.ToString()
+                        parameters?["propertyId"]?.ToString() ?? ""
                     );
                     break;
                 case "pos.openSafe":
                     responseData = await pmsInterop.OpenSafeAsync(
-                        parameters?["propertyId"]?.ToString(),
+                        parameters?["propertyId"]?.ToString() ?? "",
                         parameters?["amount"]?.GetValue<decimal>() ?? 0,
-                        parameters?["managerPin"]?.ToString()
+                        parameters?["managerPin"]?.ToString() ?? ""
                     );
                     break;
                 case "pos.getSafeLedger":
                     responseData = await pmsInterop.GetSafeLedgerAsync(
-                        parameters?["propertyId"]?.ToString()
+                        parameters?["propertyId"]?.ToString() ?? ""
                     );
                     break;
                 case "pos.recordBankDeposit":
                     responseData = await pmsInterop.RecordBankDepositAsync(
-                        parameters?["propertyId"]?.ToString(),
+                        parameters?["propertyId"]?.ToString() ?? "",
                         parameters?["amount"]?.GetValue<decimal>() ?? 0,
-                        parameters?["reference"]?.ToString(),
-                        parameters?["managerPin"]?.ToString()
+                        parameters?["reference"]?.ToString() ?? "",
+                        parameters?["managerPin"]?.ToString() ?? ""
                     );
                     break;
                 case "pos.authorizeVoid":
                     responseData = await pmsInterop.AuthorizeVoidAsync(
-                        parameters?["orderId"]?.ToString(),
-                        parameters?["orderItemId"]?.ToString(),
-                        parameters?["reason"]?.ToString(),
-                        parameters?["supervisorPin"]?.ToString());
+                        parameters?["orderId"]?.ToString() ?? "",
+                        parameters?["orderItemId"]?.ToString() ?? "",
+                        parameters?["reason"]?.ToString() ?? "",
+                        parameters?["supervisorPin"]?.ToString() ?? "");
                     break;
                 case "pos.recordRefund":
                     responseData = await pmsInterop.RecordRefundAsync(
-                        parameters?["orderId"]?.ToString(),
+                        parameters?["orderId"]?.ToString() ?? "",
                         parameters?["amount"]?.GetValue<decimal>() ?? 0,
-                        parameters?["method"]?.ToString(),
-                        parameters?["supervisorPin"]?.ToString());
+                        parameters?["method"]?.ToString() ?? "",
+                        parameters?["supervisorPin"]?.ToString() ?? "");
                     break;
                 case "pos.authorizeCashMovement":
                     responseData = await pmsInterop.AuthorizeCashMovementAsync(
-                        parameters?["propertyId"]?.ToString(),
-                        parameters?["sessionId"]?.ToString(),
+                        parameters?["propertyId"]?.ToString() ?? "",
+                        parameters?["sessionId"]?.ToString() ?? "",
                         parameters?["amount"]?.GetValue<decimal>() ?? 0,
-                        parameters?["type"]?.ToString(),
-                        parameters?["reasonCode"]?.ToString(),
-                        parameters?["notes"]?.ToString(),
-                        parameters?["supervisorPin"]?.ToString());
+                        parameters?["type"]?.ToString() ?? "",
+                        parameters?["reasonCode"]?.ToString() ?? "",
+                        parameters?["notes"]?.ToString() ?? "",
+                        parameters?["supervisorPin"]?.ToString() ?? "");
                     break;
                 case "pos.logReceipt":
                     responseData = await pmsInterop.LogReceiptPrintAsync(
-                        parameters?["propertyId"]?.ToString(),
-                        parameters?["orderId"]?.ToString(),
-                        parameters?["sessionId"]?.ToString(),
-                        parameters?["type"]?.ToString(),
-                        parameters?["reason"]?.ToString(),
+                        parameters?["propertyId"]?.ToString() ?? "",
+                        parameters?["orderId"]?.ToString() ?? "",
+                        parameters?["sessionId"]?.ToString() ?? "",
+                        parameters?["type"]?.ToString() ?? "",
+                        parameters?["reason"]?.ToString() ?? "",
                         parameters?["printCount"]?.GetValue<int>() ?? 1);
                     break;
                 case "pos.authenticateOperator":
                     responseData = await pmsInterop.AuthenticateOperatorAsync(
-                        parameters?["staffId"]?.ToString(),
-                        parameters?["pin"]?.ToString(),
-                        parameters?["propertyId"]?.ToString(),
-                        parameters?["sessionId"]?.ToString(),
-                        parameters?["outletId"]?.ToString(),
-                        parameters?["deviceId"]?.ToString());
+                        parameters?["staffId"]?.ToString() ?? "",
+                        parameters?["pin"]?.ToString() ?? "",
+                        parameters?["propertyId"]?.ToString() ?? "",
+                        parameters?["sessionId"]?.ToString() ?? "",
+                        parameters?["outletId"]?.ToString() ?? "",
+                        parameters?["deviceId"]?.ToString() ?? "");
                     break;
                 case "pos.startEmergencyBank":
                     responseData = await pmsInterop.StartEmergencyBankAsync(
-                        parameters?["pin"]?.ToString(),
-                        parameters?["reason"]?.ToString(),
-                        parameters?["operatorToken"]?.ToString());
+                        parameters?["pin"]?.ToString() ?? "",
+                        parameters?["reason"]?.ToString() ?? "",
+                        parameters?["operatorToken"]?.ToString() ?? "");
                     break;
                 case "pos.keepAlive":
                     responseData = await pmsInterop.KeepAliveAsync();
                     break;
                 case "pos.validateSupervisorPin":
                     responseData = await pmsInterop.ValidateSupervisorPinAsync(
-                        parameters?["pin"]?.ToString());
+                        parameters?["pin"]?.ToString() ?? "");
                     break;
                 case "pos.getCurrentOperator":
                     responseData = await pmsInterop.GetCurrentOperatorAsync(
-                        parameters?["sessionId"]?.ToString(),
-                        parameters?["operatorToken"]?.ToString());
+                        parameters?["sessionId"]?.ToString() ?? "",
+                        parameters?["operatorToken"]?.ToString() ?? "");
                     break;
                 case "pos.getActiveStaff":
-                    responseData = await pmsInterop.GetActiveStaffAsync(parameters?["propertyId"]?.ToString());
+                    responseData = await pmsInterop.GetActiveStaffAsync(parameters?["propertyId"]?.ToString() ?? "");
                     break;
                 case "pos.getCategories":
-                    responseData = await pmsInterop.GetCategoriesAsync(parameters?["propertyId"]?.ToString());
+                    responseData = await pmsInterop.GetCategoriesAsync(parameters?["propertyId"]?.ToString() ?? "");
                     break;
                 case "pos.getFloorPlans":
-                    responseData = await pmsInterop.GetFloorPlansAsync(parameters?["outletId"]?.ToString());
+                    responseData = await pmsInterop.GetFloorPlansAsync(parameters?["outletId"]?.ToString() ?? "");
                     break;
                 case "pos.getTables":
-                    responseData = await pmsInterop.GetTablesAsync(parameters?["floorPlanId"]?.ToString());
+                    responseData = await pmsInterop.GetTablesAsync(parameters?["floorPlanId"]?.ToString() ?? "");
                     break;
                 case "pos.getProductModifiers":
-                    responseData = await pmsInterop.GetProductModifiersAsync(parameters?["productId"]?.ToString());
+                    responseData = await pmsInterop.GetProductModifiersAsync(parameters?["productId"]?.ToString() ?? "");
                     break;
                 case "pos.getSessionContext":
-                    responseData = await pmsInterop.GetSessionContextAsync(parameters?["sessionId"]?.ToString());
+                    responseData = await pmsInterop.GetSessionContextAsync(parameters?["sessionId"]?.ToString() ?? "");
                     break;
                 case "pos.getAuthorizedOutlets":
                     responseData = await pmsInterop.GetAuthorizedOutletsAsync(
-                        parameters?["propertyId"]?.ToString(),
-                        parameters?["deviceId"]?.ToString());
+                        parameters?["propertyId"]?.ToString() ?? "",
+                        parameters?["deviceId"]?.ToString() ?? "");
                     break;
 
                 // ── Printer Management ────────────────────────────────────────
