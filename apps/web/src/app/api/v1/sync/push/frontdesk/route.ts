@@ -573,7 +573,7 @@ export async function POST(req: NextRequest) {
                          status: (payload.Status || payload.status || 'OPEN') as any,
                          title: 'Desktop Maintenance Ticket',
                          description: payload.IssueDescription || payload.issueDescription || '',
-                         reportedBy: payload.ReportedBy || payload.reportedBy || '00000000-0000-0000-0000-000000000000'
+                         reportedBy: payload.ReportedBy || payload.reportedBy || operatorId || (await tx.staff.findFirst({ where: { organization: { properties: { some: { id: propertyId } } } } }))?.id
                      }
                  });
              }
