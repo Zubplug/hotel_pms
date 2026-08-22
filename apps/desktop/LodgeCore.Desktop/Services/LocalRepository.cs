@@ -64,9 +64,6 @@ public class LocalRepository
         return await _dbContext.Reservations
             .Include(r => r.Guest)
             .Include(r => r.Folio)
-                .ThenInclude(f => f.Items)
-            .Include(r => r.Folio)
-                .ThenInclude(f => f.Payments)
             .FirstOrDefaultAsync(r => r.Id == id);
     }
     

@@ -411,7 +411,7 @@ public class OfflinePMSInterop
                 checkOut = r.CheckOutDate,
                 primaryGuest = r.Guest != null 
                     ? new { id = r.Guest.Id, firstName = r.Guest.FirstName, lastName = r.Guest.LastName, phone = r.Guest.Phone } 
-                    : new { id = "unknown", firstName = "Unknown", lastName = "Guest", phone = "" },
+                    : new { id = "unknown", firstName = "Unknown", lastName = "Guest", phone = (string?)"" },
                 reservationRooms = new[] { new { room = new { number = r.RoomNumber, status = "CLEAN" }, roomType = new { name = "Standard" }, checkIn = r.CheckInDate, checkOut = r.CheckOutDate } },
                 folio = new { balance = r.Folio?.OutstandingBalance ?? 0 },
                 isDirty = r.IsDirty
@@ -574,6 +574,11 @@ public class OfflinePMSInterop
             var r = await _repo.GetReservationAsync(id);
             if (r == null) return JsonSerializer.Serialize(new { success = false, error = "Not found" }, _jsonOptions);
 
+            var f = r.Folio;
+            var txs = f != null && !string.IsNullOrEmpty(f.TransactionsJson) 
+                ? JsonSerializer.Deserialize<List<System.Text.Json.JsonElement>>(f.TransactionsJson, _jsonOptions) ?? new List<System.Text.Json.JsonElement>()
+                : new List<System.Text.Json.JsonElement>();
+
             var mapped = new
             {
                 id = r.Id,
@@ -603,25 +608,27 @@ public class OfflinePMSInterop
                 },
                 folios = new[] {
                     new {
-                        id = r.Folio?.Id,
-                        status = r.Folio?.Status ?? "OPEN",
-                        balance = r.Folio != null ? r.Folio.TotalCharges - r.Folio.TotalPayments : 0,
-                        totalCharges = r.Folio?.TotalCharges ?? 0,
-                        totalPayments = r.Folio?.TotalPayments ?? 0,
-                        items = r.Folio?.Items?.Select(i => new {
-                            id = i.Id,
-                            amount = i.Amount,
-                            type = i.ItemType,
-                            description = i.Description,
-                            createdAt = i.CreatedAt
-                        }).ToArray() ?? Array.Empty<object>(),
-                        payments = r.Folio?.Payments?.Select(p => new {
-                            id = p.Id,
-                            amount = p.Amount,
-                            status = p.Status,
-                            method = p.Method,
-                            createdAt = p.CreatedAt
-                        }).ToArray() ?? Array.Empty<object>()
+                        id = f?.Id,
+                        status = f?.Status ?? "OPEN",
+                        balance = f != null ? f.TotalCharges - f.TotalPayments : 0,
+                        totalCharges = f?.TotalCharges ?? 0,
+                        totalPayments = f?.TotalPayments ?? 0,
+                        items = txs.Where(t => t.TryGetProperty("type", out var type) && type.GetString() == "CHARGE")
+                            .Select(i => new {
+                                id = i.TryGetProperty("id", out var iid) ? iid.GetString() : null,
+                                amount = i.TryGetProperty("amount", out var amt) ? amt.GetDecimal() : 0,
+                                type = "CHARGE",
+                                description = i.TryGetProperty("description", out var desc) ? desc.GetString() : null,
+                                createdAt = i.TryGetProperty("timestamp", out var ts) ? ts.GetDateTime() : DateTime.UtcNow
+                            }).ToArray<object>(),
+                        payments = txs.Where(t => t.TryGetProperty("type", out var type) && type.GetString() == "PAYMENT")
+                            .Select(p => new {
+                                id = p.TryGetProperty("id", out var pid) ? pid.GetString() : null,
+                                amount = p.TryGetProperty("amount", out var amt) ? amt.GetDecimal() : 0,
+                                status = p.TryGetProperty("status", out var st) ? st.GetString() : "COMPLETED",
+                                method = p.TryGetProperty("method", out var meth) ? meth.GetString() : null,
+                                createdAt = p.TryGetProperty("timestamp", out var ts) ? ts.GetDateTime() : DateTime.UtcNow
+                            }).ToArray<object>()
                     }
                 }
             };
