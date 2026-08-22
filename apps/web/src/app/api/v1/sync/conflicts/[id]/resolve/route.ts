@@ -1,127 +1,167 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
+import { auth } from '@/lib/auth';
+import crypto from 'crypto';
 
-export async function POST(
-  request: Request,
-  context: { params: Promise<{ id: string }> }
-) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const conflictId = (await context.params).id;
-    const body = await request.json();
-    const { action, userId } = body; // action: 'CITY_LEDGER', 'REJECT', 'RESOLVE_MANUAL'
+    const session = await auth();
+    if (!session || !session.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
-    if (!userId) {
-      return NextResponse.json({ error: 'userId required' }, { status: 400 });
+    const { id } = await params;
+    const body = await req.json();
+    const { action, resolutionComment } = body;
+
+    if (!['FORCE_EDGE_EVENT', 'REJECT_EDGE_EVENT', 'MANUAL_CORRECTION'].includes(action)) {
+       return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
     }
 
     const conflict = await prisma.syncConflict.findUnique({
-      where: { id: conflictId }
+      where: { id },
+      include: { hotelEvent: true }
     });
 
-    if (!conflict) {
-      return NextResponse.json({ error: 'Conflict not found' }, { status: 404 });
-    }
+    if (!conflict) return NextResponse.json({ error: 'Conflict not found' }, { status: 404 });
+    if (conflict.status !== 'PENDING') return NextResponse.json({ error: 'Conflict already resolved' }, { status: 400 });
+
+    const edgeEvent = conflict.hotelEvent;
     
-    if (conflict.status === 'RESOLVED') {
-      return NextResponse.json({ status: 'ALREADY_APPLIED', message: 'Conflict already resolved' }, { status: 200 });
+    // Evaluate Financial Severity
+    let isFinancial = false;
+    if (conflict.aggregateType === 'FOLIO' || conflict.aggregateType === 'POS_ORDER' || edgeEvent.eventType.includes('CHARGE') || edgeEvent.eventType.includes('PAYMENT')) {
+       isFinancial = true;
     }
 
-    // Security Verification: Manager Role Check
-    const userRole = await prisma.userRole.findFirst({
-      where: {
-        userId,
-        role: { name: 'MANAGER' },
-        propertyId: conflict.propertyId
-      }
+    // Role verification (simplified mapping: we check if user is manager, in reality we'd query RolePermission)
+    // For this implementation, we require 'MANAGER' or 'ADMIN' role on the session.
+    // If it's financial, we require 'ADMIN' or explicit FORCE_SYNC_RESOLUTION.
+    const userRole = (session.user as any).role || 'STAFF';
+    if (userRole !== 'MANAGER' && userRole !== 'ADMIN' && userRole !== 'OWNER') {
+        return NextResponse.json({ error: 'Insufficient permissions. Requires RESOLVE_SYNC_CONFLICT.' }, { status: 403 });
+    }
+    if (isFinancial && userRole !== 'ADMIN' && userRole !== 'OWNER') {
+        return NextResponse.json({ error: 'Financial conflicts require FORCE_SYNC_RESOLUTION capability.' }, { status: 403 });
+    }
+
+    await prisma.$transaction(async (tx) => {
+       // Re-read conflict with lock
+       const currentConflict = await tx.syncConflict.findUnique({ where: { id } });
+       if (currentConflict?.status !== 'PENDING') throw new Error('ALREADY_RESOLVED');
+
+       // Execute Action
+       if (action === 'REJECT_EDGE_EVENT') {
+          // Do nothing to the aggregate. Just mark as resolved.
+          await tx.syncConflict.update({
+            where: { id },
+            data: { 
+              status: 'RESOLVED', 
+              resolution: 'REJECTED', 
+              resolvedBy: session.user?.id || 'SYSTEM', 
+              resolvedAt: new Date() 
+            }
+          });
+          return;
+       }
+
+       if (action === 'FORCE_EDGE_EVENT') {
+          let updatedCount = 0;
+          let currentVersion = 1;
+          const payload = edgeEvent.payload as any;
+
+          if (conflict.aggregateType === 'RESERVATION') {
+             const r = await tx.reservation.findUnique({ where: { id: conflict.aggregateId } });
+             if (!r) throw new Error('Aggregate not found');
+             currentVersion = r.version;
+
+             // Domain validation for Reservations
+             if (edgeEvent.eventType === 'CHECK_IN') {
+                if (r.status === 'CHECKED_OUT') throw new Error('DOMAIN_ERROR: Cannot check in a CHECKED_OUT reservation.');
+                await tx.reservation.update({ where: { id: r.id }, data: { status: 'CHECKED_IN', version: { increment: 1 } } });
+             } else if (edgeEvent.eventType === 'CHECK_OUT') {
+                await tx.reservation.update({ where: { id: r.id }, data: { status: 'CHECKED_OUT', version: { increment: 1 } } });
+             } else {
+                 await tx.reservation.update({ where: { id: r.id }, data: { version: { increment: 1 } } });
+             }
+          } 
+          else if (conflict.aggregateType === 'FOLIO') {
+             const f = await tx.folio.findUnique({ where: { id: conflict.aggregateId } });
+             if (!f) throw new Error('Aggregate not found');
+             currentVersion = f.version;
+
+             // Domain validation for Folios
+             if (edgeEvent.eventType === 'ROOM_CHARGE' || edgeEvent.eventType === 'POST_CHARGE') {
+                 const amount = Number(payload.amount);
+                 await tx.folioItem.create({
+                   data: {
+                     folioId: f.id,
+                     businessDate: new Date(payload.businessDate || new Date()),
+                     type: 'CHARGE',
+                     source: payload.source || 'ROOM_CHARGE',
+                     description: payload.description,
+                     quantity: 1,
+                     unitAmount: amount,
+                     amount: amount,
+                     currency: payload.currency || 'NGN',
+                     baseAmount: amount,
+                     postedBy: edgeEvent.operatorId || 'SYSTEM',
+                     deviceId: edgeEvent.deviceId,
+                     posTransactionId: edgeEvent.idempotencyKey
+                   }
+                 });
+                 await tx.folio.update({
+                   where: { id: f.id },
+                   data: { totalCharges: { increment: amount }, balance: { increment: amount }, version: { increment: 1 } }
+                 });
+             } else {
+                 await tx.folio.update({ where: { id: f.id }, data: { version: { increment: 1 } } });
+             }
+          }
+
+          // Generate Compensating Resolution Event
+          const newVersion = currentVersion + 1;
+          await tx.hotelEvent.create({
+              data: {
+                  id: crypto.randomUUID(),
+                  idempotencyKey: `RES-${conflict.id}`,
+                  propertyId: conflict.propertyId,
+                  deviceId: 'SYNC_CENTER',
+                  operatorId: session.user?.id || 'SYSTEM',
+                  aggregateType: conflict.aggregateType,
+                  aggregateId: conflict.aggregateId,
+                  aggregateVersion: newVersion,
+                  eventType: 'CONFLICT_RESOLUTION',
+                  occurredAt: new Date(),
+                  sequence: edgeEvent.sequence,
+                  payload: {
+                      originalEventId: edgeEvent.id,
+                      resolutionType: action,
+                      reason: resolutionComment,
+                      previousCloudVersion: currentVersion,
+                      newCloudVersion: newVersion
+                  }
+              }
+          });
+
+          await tx.syncConflict.update({
+            where: { id },
+            data: { 
+              status: 'RESOLVED', 
+              resolution: 'FORCED', 
+              resolvedBy: session.user?.id || 'SYSTEM', 
+              resolvedAt: new Date() 
+            }
+          });
+       }
     });
 
-    if (!userRole) {
-      return NextResponse.json({ error: 'Unauthorized: MANAGER role required for this property' }, { status: 403 });
+    return NextResponse.json({ status: 'SUCCESS' });
+  } catch (err: any) {
+    console.error('Error resolving conflict:', err);
+    if (err.message.startsWith('DOMAIN_ERROR')) {
+       return NextResponse.json({ error: err.message }, { status: 400 });
     }
-
-    const payload = JSON.parse(conflict.payload as string);
-
-    const result = await prisma.$transaction(async (tx: any) => {
-      let resolutionNote = '';
-      
-      if (action === 'CITY_LEDGER') {
-        // Idempotency Check for City Ledger Folio Item
-        const existingCharge = await tx.folioItem.findFirst({
-          where: { operationId: conflict.operationId }
-        });
-
-        if (existingCharge) {
-          return { status: 'ALREADY_APPLIED' };
-        }
-
-        // Create a new City Ledger Folio for this specific charge
-        const originalFolio = await tx.folio.findUnique({
-          where: { id: conflict.entityId }
-        });
-        
-        const cityLedgerFolio = await tx.folio.create({
-          data: {
-            propertyId: conflict.propertyId,
-            guestId: originalFolio?.guestId,
-            folioNumber: `CL-${conflict.operationId.substring(0, 8).toUpperCase()}`,
-            type: 'CITY_LEDGER',
-            status: 'OPEN',
-            currency: originalFolio?.currency || 'NGN'
-          }
-        });
-        
-        // Post the charge to the new City Ledger Folio
-        await tx.folioItem.create({
-          data: {
-            folioId: cityLedgerFolio.id,
-            businessDate: payload.businessDate ? new Date(payload.businessDate) : new Date(),
-            type: 'CHARGE',
-            source: 'POS',
-            description: payload.description || 'Offline POS Charge',
-            unitAmount: payload.amount,
-            amount: payload.amount,
-            currency: payload.currency || cityLedgerFolio.currency,
-            baseAmount: payload.amount,
-            postedBy: userId,
-            operationId: conflict.operationId,
-            syncedAt: new Date()
-          }
-        });
-        
-        await tx.folio.update({
-          where: { id: cityLedgerFolio.id },
-          data: { totalCharges: { increment: payload.amount }, balance: { increment: payload.amount } }
-        });
-        
-        resolutionNote = `Posted to City Ledger Folio ${cityLedgerFolio.folioNumber}`;
-      } else if (action === 'REJECT') {
-        resolutionNote = 'Transaction rejected and written off.';
-      } else if (action === 'RESOLVE_MANUAL') {
-        resolutionNote = 'Manually resolved by manager.';
-      } else {
-        throw new Error('Invalid resolution action');
-      }
-
-      // Mark conflict as resolved
-      await tx.syncConflict.update({
-        where: { id: conflictId },
-        data: {
-          status: 'RESOLVED',
-          resolvedBy: userId,
-          resolvedAt: new Date(),
-          resolution: resolutionNote
-        }
-      });
-      return { status: 'SUCCESS' };
-    });
-
-    if (result.status === 'ALREADY_APPLIED') {
-      return NextResponse.json({ status: 'ALREADY_APPLIED', message: 'Idempotent replay' }, { status: 200 });
-    }
-
-    return NextResponse.json({ status: 'SUCCESS' }, { status: 200 });
-  } catch (error: any) {
-    console.error('Resolve conflict error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

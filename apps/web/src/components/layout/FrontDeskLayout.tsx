@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { signOut, useSession } from 'next-auth/react';
+import { useSession } from 'next-auth/react';
 import { useQuery } from '@tanstack/react-query';
+import { useLogout } from '@/hooks/useLogout';
 import { PropertySelector } from '@/components/properties/PropertySelector';
 import {
   Hotel,
@@ -15,7 +16,8 @@ import {
   MoreVertical,
   Brush,
   Wrench,
-  Activity
+  Activity,
+  Printer
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -35,11 +37,13 @@ import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { ClientOnlyDate } from '@/components/ClientOnlyDate';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { AppSwitcher } from '@/components/layout/AppSwitcher';
+import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
 
 export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useLodgeCoreSession();
   const { propertyId } = useProperty();
-  const { provider } = useLodgeCoreProvider();
+  const { provider, isOnline } = useLodgeCoreProvider();
+  const logout = useLogout();
   const router = useRouter();
   const [time, setTime] = useState<Date | null>(null);
 
@@ -47,27 +51,15 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (status === 'unauthenticated') {
-      router.replace('/login');
+      logout();
     }
-  }, [status, router]);
+  }, [status, logout]);
 
   useEffect(() => {
     setTime(new Date());
     const interval = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(interval);
   }, []);
-
-  async function handleSignOut() {
-    if (isDesktop) {
-      try {
-        const { DesktopDataProvider } = await import('@/lib/desktop/DesktopDataProvider');
-        await DesktopDataProvider.auth?.clearSession?.();
-      } catch (err) {
-        console.error('Failed to clear desktop session', err);
-      }
-    }
-    signOut({ callbackUrl: '/login' });
-  }
 
   const { data: res } = useQuery({
     queryKey: ['frontdesk', 'dashboard', propertyId],
@@ -95,8 +87,13 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
     return null;
   }
 
-  const hardware = res?.data?.hardware;
+  const cloudHardware = res?.data?.hardware;
   const businessDate = res?.data?.businessDate ? new Date(res.data.businessDate) : null;
+  const isDesktopApp = HardwareBridge.isAvailable();
+
+  const hardwareStatus = isDesktopApp ? 'ONLINE' : (cloudHardware?.status || 'OFFLINE');
+  const encoderName = isDesktopApp ? 'LodgeCore Desktop App' : (cloudHardware?.name || 'Windows Lock Agent');
+  const printerStatus = isDesktopApp ? 'ONLINE' : 'OFFLINE';
 
   const userInitials = session?.user?.email
     ? session.user.email.slice(0, 2).toUpperCase()
@@ -112,7 +109,7 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
         
         {/* Left: Logo & Property */}
         <div className="flex items-center gap-4 lg:gap-6 flex-1 min-w-0">
-          <AppSwitcher />
+          {!isDesktop && <AppSwitcher />}
           <Link href="/frontdesk" className="flex items-center gap-2 group shrink-0">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 shadow-sm transition-transform group-hover:scale-105">
               <Hotel className="h-4 w-4 text-white" />
@@ -194,63 +191,74 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
           <div className="h-6 w-px bg-border hidden lg:block" />
 
           {/* Hardware Status */}
-          {hardware ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger className="outline-none">
-                <Button 
-                  variant="outline" 
-                  className={cn(
-                    "h-9 px-3 gap-2 rounded-full border shadow-sm transition-colors cursor-pointer",
-                    hardware.status === 'ONLINE' 
-                      ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 hover:text-emerald-800" 
-                      : "bg-red-50 text-red-700 border-red-200 hover:bg-red-100 hover:text-red-800"
-                  )}
-                >
-                  {hardware.status === 'ONLINE' ? (
-                    <>
-                      <span className="relative flex h-2.5 w-2.5">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-                      </span>
-                      <span className="hidden sm:inline font-medium">Encoder Ready</span>
-                    </>
+          <DropdownMenu>
+            <DropdownMenuTrigger className="outline-none">
+              <Button 
+                variant="outline" 
+                className={cn(
+                  "h-9 px-3 gap-2 rounded-full border shadow-sm transition-colors cursor-pointer",
+                  hardwareStatus === 'ONLINE' || printerStatus === 'ONLINE'
+                    ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 hover:text-emerald-800" 
+                    : "bg-red-50 text-red-700 border-red-200 hover:bg-red-100 hover:text-red-800"
+                )}
+              >
+                {hardwareStatus === 'ONLINE' || printerStatus === 'ONLINE' ? (
+                  <>
+                    <span className="relative flex h-2.5 w-2.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                    </span>
+                    <span className="hidden sm:inline font-medium">Hardware Ready</span>
+                  </>
+                ) : (
+                  <>
+                    <AlertCircle className="h-4 w-4" />
+                    <span className="hidden sm:inline font-medium">Hardware Offline</span>
+                  </>
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-72">
+              <DropdownMenuLabel>Hardware Connections</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <div className="px-2 py-3 space-y-3">
+                
+                {/* Encoder */}
+                <div className="flex justify-between items-center text-sm">
+                  <div className="flex items-center gap-2 text-slate-700 font-medium">
+                    <Hotel className="w-4 h-4 text-slate-500" />
+                    <span>Lock Encoder</span>
+                  </div>
+                  {hardwareStatus === 'ONLINE' ? (
+                    <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">Ready</Badge>
                   ) : (
-                    <>
-                      <AlertCircle className="h-4 w-4" />
-                      <span className="hidden sm:inline font-medium">Encoder Offline</span>
-                    </>
-                  )}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-72">
-                <DropdownMenuLabel>Hardware Connections</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <div className="px-2 py-3 space-y-3">
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-muted-foreground">Windows Lock Agent</span>
-                    <Badge variant={hardware.status === 'ONLINE' ? 'default' : 'destructive'} className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
-                      Connected
-                    </Badge>
-                  </div>
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-muted-foreground">{hardware.name || 'Lock Agent SDK'}</span>
-                    {hardware.status === 'ONLINE' ? (
-                      <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">Ready</Badge>
-                    ) : (
-                      <Badge variant="destructive">Offline</Badge>
-                    )}
-                  </div>
-                  {hardware.message && (
-                    <div className="bg-muted p-2 rounded text-xs text-muted-foreground mt-2">
-                      {hardware.message}
-                    </div>
+                    <Badge variant="destructive">Offline</Badge>
                   )}
                 </div>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : (
-            <div className="h-9 w-32 bg-muted rounded-full animate-pulse" />
-          )}
+                <p className="text-xs text-muted-foreground ml-6 mb-2">{encoderName}</p>
+
+                {/* Printer */}
+                <div className="flex justify-between items-center text-sm pt-2 border-t">
+                  <div className="flex items-center gap-2 text-slate-700 font-medium">
+                    <Printer className="w-4 h-4 text-slate-500" />
+                    <span>Receipt Printer</span>
+                  </div>
+                  {printerStatus === 'ONLINE' ? (
+                    <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">Ready</Badge>
+                  ) : (
+                    <Badge variant="destructive">Offline</Badge>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground ml-6 mb-2">ESC/POS Thermal Printer</p>
+
+                {cloudHardware?.message && !isDesktopApp && (
+                  <div className="bg-muted p-2 rounded text-xs text-muted-foreground mt-2">
+                    {cloudHardware.message}
+                  </div>
+                )}
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {/* Offline Sync Indicator */}
           <SyncIndicator />
@@ -268,7 +276,7 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
                 <p className="text-xs text-muted-foreground capitalize">{role.toLowerCase().replace('_', ' ')}</p>
               </div>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => signOut({ callbackUrl: '/login' })} className="text-destructive cursor-pointer">
+              <DropdownMenuItem onClick={() => logout()} className="text-destructive cursor-pointer">
                 <LogOut className="mr-2 h-4 w-4" /> Sign Out
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -276,6 +284,14 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
 
         </div>
       </header>
+
+      {/* Offline Banner */}
+      {!isOnline && (
+        <div className="bg-amber-100 text-amber-900 px-4 py-2 text-sm font-medium flex items-center justify-center gap-2 shadow-sm border-b border-amber-200">
+          <AlertCircle className="h-4 w-4" />
+          <span>Offline Mode — Showing local operational cache. Actions will be synced when connection is restored.</span>
+        </div>
+      )}
 
       {/* Main content area */}
       <main className="flex-1 overflow-x-hidden">

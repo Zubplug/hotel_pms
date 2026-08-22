@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2, CreditCard, Banknote, Landmark, Receipt, CheckCircle2, ChevronRight, AlertCircle, ArrowUpRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
 
 export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio }: { open: boolean, onOpenChange: (open: boolean) => void, folio: any }) {
   const [method, setMethod] = useState<string>('CASH');
@@ -17,8 +18,31 @@ export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio }: { open:
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successPaymentId, setSuccessPaymentId] = useState<string | null>(null);
+  const [printStatus, setPrintStatus] = useState<'IDLE' | 'PRINTING' | 'SUCCESS' | 'FAILED'>('IDLE');
   
   const queryClient = useQueryClient();
+
+  const triggerPrint = async (paymentId: string) => {
+    if (!HardwareBridge.isAvailable()) return;
+    setPrintStatus('PRINTING');
+    try {
+      const res = await HardwareBridge.printPaymentReceipt({
+        paymentId,
+        amount: Number(amount),
+        method,
+        guestName: folio?.reservation?.primaryGuest?.firstName + ' ' + folio?.reservation?.primaryGuest?.lastName,
+        version: Date.now()
+      });
+      const parsed = typeof res === 'string' ? JSON.parse(res) : res;
+      if (parsed?.success) {
+        setPrintStatus('SUCCESS');
+      } else {
+        setPrintStatus('FAILED');
+      }
+    } catch (e) {
+      setPrintStatus('FAILED');
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,6 +91,7 @@ export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio }: { open:
 
       await queryClient.invalidateQueries({ queryKey: ['reservation', folio.reservationId] });
       setSuccessPaymentId(data.data.payment.id);
+      triggerPrint(data.data.payment.id);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -222,15 +247,31 @@ export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio }: { open:
                   The payment of <span className="font-bold text-slate-700">{folio?.currency} {Number(amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span> has been securely recorded to the folio.
                 </p>
               </div>
+
+              <div className="w-full max-w-sm mt-2 mb-4 p-4 bg-slate-50 border border-slate-100 rounded-xl flex flex-col items-center gap-2">
+                <p className="text-sm font-medium text-slate-600">
+                  {printStatus === 'PRINTING' && 'Printing Payment Receipt...'}
+                  {printStatus === 'SUCCESS' && 'Payment Receipt Printed'}
+                  {printStatus === 'FAILED' && 'Printer Unavailable'}
+                  {printStatus === 'IDLE' && 'Skipped Printing'}
+                </p>
+                {printStatus === 'FAILED' && successPaymentId && (
+                  <Button variant="outline" size="sm" onClick={() => triggerPrint(successPaymentId)} className="h-8 text-xs rounded-full">
+                    Retry Hardware Print
+                  </Button>
+                )}
+              </div>
               
               <div className="w-full max-w-sm space-y-3 pt-4">
-                <Button 
-                  onClick={() => window.open(`/frontdesk/payments/${successPaymentId}/receipt`, '_blank')} 
-                  className="w-full h-14 rounded-xl font-bold bg-slate-900 hover:bg-slate-800 text-lg flex items-center justify-between px-6"
-                >
-                  <span className="flex items-center"><Receipt className="w-5 h-5 mr-3 text-slate-400" /> Print Receipt</span>
-                  <ChevronRight className="w-5 h-5 text-slate-400" />
-                </Button>
+                {!HardwareBridge.isAvailable() && (
+                  <Button 
+                    onClick={() => window.open(`/frontdesk/payments/${successPaymentId}/receipt`, '_blank')} 
+                    className="w-full h-14 rounded-xl font-bold bg-slate-900 hover:bg-slate-800 text-lg flex items-center justify-between px-6"
+                  >
+                    <span className="flex items-center"><Receipt className="w-5 h-5 mr-3 text-slate-400" /> Print A4 Receipt</span>
+                    <ChevronRight className="w-5 h-5 text-slate-400" />
+                  </Button>
+                )}
                 <Button 
                   onClick={() => { setSuccessPaymentId(null); onOpenChange(false); }} 
                   variant="outline" 

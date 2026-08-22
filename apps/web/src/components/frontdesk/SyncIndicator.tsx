@@ -14,12 +14,17 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useRouter } from 'next/navigation';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
+import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 
 export function SyncIndicator() {
   const { isOnline, syncStatus, isDesktopMode } = useLodgeCoreProvider();
+  const { data: session } = useLodgeCoreSession();
   const [pendingCount, setPendingCount] = useState(0);
   const [conflictCount, setConflictCount] = useState(0);
   const router = useRouter();
+  
+  const role = (session?.user as any)?.role;
+  const isAuthorized = role === 'ADMIN' || role === 'MANAGER' || role === 'SYSTEM_ADMIN';
   
   // Pending counts could be polled or pushed via IPC
   useEffect(() => {
@@ -80,10 +85,14 @@ export function SyncIndicator() {
             <span className={conflictCount > 0 ? "text-red-600 font-bold" : "font-medium"}>{conflictCount}</span>
           </div>
         </div>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => router.push('/frontdesk/sync')} className="cursor-pointer">
-          Open Sync Center
-        </DropdownMenuItem>
+        {isAuthorized && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => router.push('/frontdesk/sync')} className="cursor-pointer">
+              Open Sync Center
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -82,8 +82,7 @@ public class SyncEngine : BackgroundService
             using var scope = _serviceProvider.CreateScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
 
-            // Ensure the SyncMetadata table exists, as EnsureCreated() won't add it 
-            // to existing SQLite databases (no migrations).
+            // Ensure the SyncMetadata table exists (for existing non-migrated DBs before this change)
             await dbContext.Database.ExecuteSqlRawAsync(
                 "CREATE TABLE IF NOT EXISTS SyncMetadata (Id TEXT PRIMARY KEY, LastSuccessfulSyncAt TEXT, LastSyncVersion TEXT, SchemaVersion TEXT);"
             );
@@ -94,6 +93,15 @@ public class SyncEngine : BackgroundService
                 _lastSuccess = meta.LastSuccessfulSyncAt.Value;
                 _logger.LogInformation($"Restored last successful sync timestamp: {_lastSuccess}");
             }
+
+            // Recover any crashed processing events to PENDING so they are retried
+            await dbContext.Database.ExecuteSqlRawAsync(
+                "UPDATE SyncEvents SET Status = 'PENDING' WHERE Status = 'PROCESSING';", stoppingToken
+            );
+            await dbContext.Database.ExecuteSqlRawAsync(
+                "UPDATE OutboxEvents SET Status = 'PENDING' WHERE Status = 'PROCESSING';", stoppingToken
+            );
+            _logger.LogInformation("Recovered crashed processing events (if any).");
         }
         catch (Exception ex)
         {
@@ -109,6 +117,7 @@ public class SyncEngine : BackgroundService
                 {
                     BroadcastHealth(SyncState.SYNCING, null, "PREP", 0, 1, "Preparing sync...");
                     await PushPendingEventsAsync(stoppingToken);
+                    await PushFrontDeskOutboxAsync(stoppingToken);
                     await PushKeycardAuditsAsync(stoppingToken);
                     
                     // Resolve any conflicts that emerged from the push
@@ -229,7 +238,7 @@ public class SyncEngine : BackgroundService
     /// <summary>
     /// Pushes pending operations to the cloud with retry logic.
     /// </summary>
-    private async Task PushPendingEventsAsync(CancellationToken cancellationToken)
+    private async Task PushPendingEventsAsync(CancellationToken stoppingToken)
     {
         using var scope = _serviceProvider.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
@@ -238,7 +247,7 @@ public class SyncEngine : BackgroundService
             .Where(e => e.Status == "PENDING" || e.Status == "FAILED")
             .OrderBy(e => e.SequenceNumber)
             .Take(100) // Batch push limit
-            .ToListAsync(cancellationToken);
+            .ToListAsync(stoppingToken);
 
         if (!pendingEvents.Any()) return;
 
@@ -263,18 +272,18 @@ public class SyncEngine : BackgroundService
             evt.AttemptCount++;
             evt.LastAttemptAt = DateTime.UtcNow;
         }
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await dbContext.SaveChangesAsync(stoppingToken);
 
         try
         {
             var request = new HttpRequestMessage(HttpMethod.Post, "pos/sync/push");
             request.Content = JsonContent.Create(new { events = eventsToPush });
             
-            var response = await _httpClient.SendAsync(request, cancellationToken);
+            var response = await _httpClient.SendAsync(request, stoppingToken);
             
             if (response.IsSuccessStatusCode)
             {
-                var result = await response.Content.ReadFromJsonAsync<SyncPushResponse>(cancellationToken: cancellationToken);
+                var result = await response.Content.ReadFromJsonAsync<SyncPushResponse>(stoppingToken: stoppingToken);
                 if (result != null)
                 {
                     foreach (var evt in eventsToPush)
@@ -323,7 +332,7 @@ public class SyncEngine : BackgroundService
             }
         }
 
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await dbContext.SaveChangesAsync(stoppingToken);
     }
 
     private class SyncPushResponse
@@ -335,7 +344,7 @@ public class SyncEngine : BackgroundService
         public string? ServerCursor { get; set; }
     }
 
-    private async Task PushKeycardAuditsAsync(CancellationToken cancellationToken)
+    private async Task PushKeycardAuditsAsync(CancellationToken stoppingToken)
     {
         using var scope = _serviceProvider.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
@@ -344,7 +353,7 @@ public class SyncEngine : BackgroundService
             .Where(a => a.SyncStatus == "PENDING")
             .OrderBy(a => a.Timestamp)
             .Take(50)
-            .ToListAsync(cancellationToken);
+            .ToListAsync(stoppingToken);
 
         if (!pendingAudits.Any()) return;
 
@@ -364,7 +373,7 @@ public class SyncEngine : BackgroundService
                 var request = new HttpRequestMessage(HttpMethod.Post, "hardware/keycards/audit");
                 request.Headers.Add("Idempotency-Key", audit.OperationId);
                 // request.Content = JsonContent.Create(audit);
-                // var response = await _httpClient.SendAsync(request, cancellationToken);
+                // var response = await _httpClient.SendAsync(request, stoppingToken);
                 // response.EnsureSuccessStatusCode();
 
                 audit.SyncStatus = "SYNCED";
@@ -376,7 +385,7 @@ public class SyncEngine : BackgroundService
             }
         }
 
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await dbContext.SaveChangesAsync(stoppingToken);
     }
 
     /// <summary>
@@ -386,12 +395,12 @@ public class SyncEngine : BackgroundService
     ///   - Staff POS PIN hashes and permission arrays
     /// Applies changes to SQLite so the desktop can operate offline.
     /// </summary>
-    private async Task PullUpdatesAsync(CancellationToken cancellationToken)
+    private async Task PullUpdatesAsync(CancellationToken stoppingToken)
     {
         using var scope = _serviceProvider.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
 
-        var terminal = await dbContext.PosTerminals.FirstOrDefaultAsync(cancellationToken);
+        var terminal = await dbContext.PosTerminals.FirstOrDefaultAsync(stoppingToken);
         if (terminal == null) throw new Exception("Terminal not provisioned (missing in local DB).");
 
         var session = await _authManager.GetSessionAsync();
@@ -414,14 +423,14 @@ public class SyncEngine : BackgroundService
 
         var response = await _httpClient.GetAsync(
             $"sync/pull?propertyId={Uri.EscapeDataString(propertyId)}",
-            cancellationToken);
+            stoppingToken);
 
             if (!response.IsSuccessStatusCode)
             {
                 throw new Exception($"Sync pull returned {(int)response.StatusCode}");
             }
 
-            var json = await response.Content.ReadAsStringAsync(cancellationToken);
+            var json = await response.Content.ReadAsStringAsync(stoppingToken);
             using var doc = System.Text.Json.JsonDocument.Parse(json);
             var root = doc.RootElement;
 
@@ -429,7 +438,7 @@ public class SyncEngine : BackgroundService
             if (root.TryGetProperty("property", out var propEl))
             {
                 var localProp = await dbContext.Properties
-                    .FirstOrDefaultAsync(p => p.Id == propertyId, cancellationToken);
+                    .FirstOrDefaultAsync(p => p.Id == propertyId, stoppingToken);
 
                 if (localProp != null)
                 {
@@ -493,7 +502,7 @@ public class SyncEngine : BackgroundService
                     if (string.IsNullOrEmpty(staffId)) continue;
 
                     var existing = await dbContext.Staff
-                        .FirstOrDefaultAsync(s => s.Id == staffId, cancellationToken);
+                        .FirstOrDefaultAsync(s => s.Id == staffId, stoppingToken);
 
                     if (existing != null)
                     {
@@ -541,7 +550,7 @@ public class SyncEngine : BackgroundService
                 // Failing to delete these would allow indefinitely cached PIN logins.
                 var obsoleteStaff = await dbContext.Staff
                     .Where(s => !incomingStaffIds.Contains(s.Id))
-                    .ToListAsync(cancellationToken);
+                    .ToListAsync(stoppingToken);
 
                 if (obsoleteStaff.Any())
                 {
@@ -550,7 +559,172 @@ public class SyncEngine : BackgroundService
                 }
             }
 
-            var meta = await dbContext.SyncMetadata.FirstOrDefaultAsync(cancellationToken);
+            // ---- Apply Front Desk Operational Cache -------------------------
+            
+            // 1. Room Types
+            if (root.TryGetProperty("roomTypes", out var rtArray))
+            {
+                var len = rtArray.GetArrayLength();
+                var i = 0;
+                foreach (var el in rtArray.EnumerateArray())
+                {
+                    i++;
+                    BroadcastHealth(SyncState.SYNCING, null, "ROOM_TYPES", i, len, "Syncing room types...");
+                    var id = el.GetProperty("id").GetString();
+                    if (string.IsNullOrEmpty(id)) continue;
+                    
+                    var rt = await dbContext.RoomTypes.FirstOrDefaultAsync(x => x.Id == id, stoppingToken);
+                    if (rt == null)
+                    {
+                        rt = new LodgeCore.Desktop.Data.Entities.LocalRoomType { Id = id, PropertyId = propertyId, CreatedAt = DateTime.UtcNow };
+                        dbContext.RoomTypes.Add(rt);
+                    }
+                    rt.Name = el.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
+                    rt.Description = el.TryGetProperty("description", out var d) ? d.GetString() ?? "" : "";
+                    rt.BasePrice = el.TryGetProperty("baseRate", out var br) && decimal.TryParse(br.GetString(), out var brd) ? brd : 0m;
+                    rt.MaxOccupancy = el.TryGetProperty("maxOccupancy", out var mo) ? mo.GetInt32() : 2;
+                    rt.UpdatedAt = DateTime.UtcNow;
+                }
+            }
+            
+            // 2. Rooms
+            if (root.TryGetProperty("rooms", out var roomsArray))
+            {
+                var len = roomsArray.GetArrayLength();
+                var i = 0;
+                foreach (var el in roomsArray.EnumerateArray())
+                {
+                    i++;
+                    BroadcastHealth(SyncState.SYNCING, null, "ROOMS", i, len, "Syncing rooms...");
+                    var id = el.GetProperty("id").GetString();
+                    if (string.IsNullOrEmpty(id)) continue;
+                    
+                    var room = await dbContext.Rooms.FirstOrDefaultAsync(x => x.Id == id, stoppingToken);
+                    if (room == null)
+                    {
+                        room = new LodgeCore.Desktop.Data.Entities.LocalRoom { Id = id, PropertyId = propertyId, CreatedAt = DateTime.UtcNow };
+                        dbContext.Rooms.Add(room);
+                    }
+                    room.Number = el.TryGetProperty("number", out var num) ? num.GetString() ?? "" : "";
+                    room.Status = el.TryGetProperty("status", out var st) ? st.GetString() ?? "" : "";
+                    room.RoomTypeId = el.TryGetProperty("roomTypeId", out var rti) ? rti.GetString() ?? "" : "";
+                    room.LockSystemCode = el.TryGetProperty("code", out var code) ? code.GetString() : null;
+                    room.UpdatedAt = DateTime.UtcNow;
+                }
+            }
+
+            // 3. Guests
+            if (root.TryGetProperty("guests", out var guestsArray))
+            {
+                var len = guestsArray.GetArrayLength();
+                var i = 0;
+                foreach (var el in guestsArray.EnumerateArray())
+                {
+                    i++;
+                    BroadcastHealth(SyncState.SYNCING, null, "GUESTS", i, len, "Syncing guests...");
+                    var id = el.GetProperty("id").GetString();
+                    if (string.IsNullOrEmpty(id)) continue;
+                    
+                    var guest = await dbContext.Guests.FirstOrDefaultAsync(x => x.Id == id, stoppingToken);
+                    if (guest == null)
+                    {
+                        guest = new LodgeCore.Desktop.Data.Entities.LocalGuest { Id = id, PropertyId = propertyId, CreatedAt = DateTime.UtcNow };
+                        dbContext.Guests.Add(guest);
+                    }
+                    guest.FirstName = el.TryGetProperty("firstName", out var fn) ? fn.GetString() ?? "" : "";
+                    guest.LastName = el.TryGetProperty("lastName", out var ln) ? ln.GetString() ?? "" : "";
+                    guest.Email = el.TryGetProperty("email", out var em) ? em.GetString() : null;
+                    guest.Phone = el.TryGetProperty("phone", out var ph) ? ph.GetString() : null;
+                    guest.UpdatedAt = DateTime.UtcNow;
+                }
+            }
+
+            // 4. Reservations
+            if (root.TryGetProperty("reservations", out var resArray))
+            {
+                var len = resArray.GetArrayLength();
+                var i = 0;
+                // Keep track of incoming reservation IDs to remove stale cached ones
+                var incomingResIds = new HashSet<string>();
+
+                foreach (var el in resArray.EnumerateArray())
+                {
+                    i++;
+                    BroadcastHealth(SyncState.SYNCING, null, "RESERVATIONS", i, len, "Syncing reservations...");
+                    var id = el.GetProperty("id").GetString();
+                    if (string.IsNullOrEmpty(id)) continue;
+                    
+                    incomingResIds.Add(id);
+                    
+                    var res = await dbContext.Reservations.FirstOrDefaultAsync(x => x.Id == id, stoppingToken);
+                    if (res == null)
+                    {
+                        res = new LodgeCore.Desktop.Data.Entities.LocalReservation { Id = id, PropertyId = propertyId, CreatedAt = DateTime.UtcNow };
+                        dbContext.Reservations.Add(res);
+                    }
+                    res.GuestId = el.TryGetProperty("primaryGuestId", out var pg) ? pg.GetString() ?? "" : "";
+                    res.Status = el.TryGetProperty("status", out var st) ? st.GetString() ?? "" : "";
+                    
+                    if (el.TryGetProperty("checkIn", out var ci) && DateTime.TryParse(ci.GetString(), out var cid))
+                        res.CheckInDate = cid;
+                    if (el.TryGetProperty("checkOut", out var co) && DateTime.TryParse(co.GetString(), out var cod))
+                        res.CheckOutDate = cod;
+                        
+                    res.UpdatedAt = DateTime.UtcNow;
+                }
+                
+                // Remove reservations that are no longer in the cache window
+                var staleRes = await dbContext.Reservations
+                    .Where(r => !incomingResIds.Contains(r.Id) && !r.IsDirty)
+                    .ToListAsync(stoppingToken);
+                
+                if (staleRes.Any())
+                {
+                    dbContext.Reservations.RemoveRange(staleRes);
+                }
+            }
+
+            // 5. Folios
+            if (root.TryGetProperty("folios", out var foliosArray))
+            {
+                var len = foliosArray.GetArrayLength();
+                var i = 0;
+                var incomingFolioIds = new HashSet<string>();
+
+                foreach (var el in foliosArray.EnumerateArray())
+                {
+                    i++;
+                    BroadcastHealth(SyncState.SYNCING, null, "FOLIOS", i, len, "Syncing folios...");
+                    var id = el.GetProperty("id").GetString();
+                    if (string.IsNullOrEmpty(id)) continue;
+                    
+                    incomingFolioIds.Add(id);
+                    
+                    var folio = await dbContext.Folios.FirstOrDefaultAsync(x => x.Id == id, stoppingToken);
+                    if (folio == null)
+                    {
+                        folio = new LodgeCore.Desktop.Data.Entities.LocalFolio { Id = id, PropertyId = propertyId, CreatedAt = DateTime.UtcNow };
+                        dbContext.Folios.Add(folio);
+                    }
+                    folio.ReservationId = el.TryGetProperty("reservationId", out var ri) ? ri.GetString() ?? "" : "";
+                    folio.Status = el.TryGetProperty("status", out var st) ? st.GetString() ?? "" : "";
+                    folio.TotalCharges = el.TryGetProperty("totalCharges", out var tc) && decimal.TryParse(tc.GetString(), out var tcd) ? tcd : 0m;
+                    folio.TotalPayments = el.TryGetProperty("totalPayments", out var tp) && decimal.TryParse(tp.GetString(), out var tpd) ? tpd : 0m;
+                    // Stringify the whole folio for local offline rendering without full schema
+                    folio.TransactionsJson = el.GetRawText();
+                    folio.UpdatedAt = DateTime.UtcNow;
+                }
+                
+                var staleFolios = await dbContext.Folios
+                    .Where(f => !incomingFolioIds.Contains(f.Id) && !f.IsDirty)
+                    .ToListAsync(stoppingToken);
+                if (staleFolios.Any())
+                {
+                    dbContext.Folios.RemoveRange(staleFolios);
+                }
+            }
+
+            var meta = await dbContext.SyncMetadata.FirstOrDefaultAsync(stoppingToken);
             if (meta == null)
             {
                 meta = new LodgeCore.Desktop.Data.Entities.LocalSyncMetadata { Id = "singleton", SchemaVersion = "1.0" };
@@ -558,12 +732,192 @@ public class SyncEngine : BackgroundService
             }
             meta.LastSuccessfulSyncAt = DateTime.UtcNow;
 
-            await dbContext.SaveChangesAsync(cancellationToken);
+            await dbContext.SaveChangesAsync(stoppingToken);
             _consecutiveFailures = 0;
             _lastSuccess = DateTime.UtcNow;
             _lastError = null;
             BroadcastHealth(SyncState.UP_TO_DATE, null, "COMPLETE", 1, 1, "Sync complete");
             _logger.LogInformation("Sync pull completed successfully.");
+    }
+    private async Task PushFrontDeskOutboxAsync(CancellationToken stoppingToken)
+    {
+        using var scope = _serviceProvider.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
+        
+        var deviceId = Preferences.Get("DeviceTerminalId", "");
+        var propertyId = Preferences.Get("DevicePropertyId", "");
+        var baseUrl = Preferences.Get("CloudBaseUrl", "https://api.lodgecore.test");
+        var token = await SecureStorage.GetAsync("DeviceAuthToken");
+
+        if (string.IsNullOrEmpty(deviceId) || string.IsNullOrEmpty(propertyId) || string.IsNullOrEmpty(token))
+            return;
+
+        var allPending = await dbContext.OutboxEvents
+            .Where(e => e.Status == "PENDING" || e.Status == "FAILED" || e.Status == "CONFLICT")
+            .ToListAsync(stoppingToken);
+
+        var eventsToPush = new List<LocalOutboxEvent>();
+        foreach (var group in allPending.GroupBy(e => e.AggregateId))
+        {
+             foreach (var evt in group.OrderBy(e => e.Sequence))
+             {
+                 if (evt.Status == "CONFLICT") break; // Aggregate is blocked requiring manager resolution
+                 if (evt.NextAttemptAt != null && evt.NextAttemptAt > DateTime.UtcNow) break; // Aggregate is in backoff
+                 
+                 eventsToPush.Add(evt);
+             }
+        }
+
+        var pendingEvents = eventsToPush.OrderBy(e => e.Sequence).Take(50).ToList();
+
+        if (!pendingEvents.Any()) return;
+
+        foreach (var e in pendingEvents) e.AttemptCount++;
+
+        _logger.LogInformation($"Pushing {pendingEvents.Count} Front Desk outbox events to cloud...");
+        BroadcastHealth(SyncState.SYNCING, null, "PUSH_FD", 0, pendingEvents.Count, "Pushing Front Desk events...");
+
+        var httpClient = _httpClientFactory.CreateClient();
+        httpClient.Timeout = TimeSpan.FromSeconds(30);
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/api/v1/sync/push/frontdesk");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        
+        var payload = new 
+        {
+            propertyId = propertyId,
+            events = pendingEvents.Select(e => new {
+                id = e.Id,
+                idempotencyKey = e.IdempotencyKey,
+                aggregateType = e.AggregateType,
+                aggregateId = e.AggregateId,
+                aggregateVersion = e.AggregateVersion,
+                eventType = e.EventType,
+                occurredAt = e.OccurredAt,
+                sequence = e.Sequence,
+                payloadJson = e.PayloadJson,
+                operatorId = e.OperatorId
+            }).ToList()
+        };
+        
+        request.Content = JsonContent.Create(payload);
+
+        try
+        {
+            var response = await httpClient.SendAsync(request, stoppingToken);
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<SyncPushFrontDeskResponse>(stoppingToken: stoppingToken);
+                if (result != null && result.Status == "SUCCESS" && result.Results != null)
+                {
+                    foreach (var res in result.Results)
+                    {
+                        var evt = pendingEvents.FirstOrDefault(e => e.Id == res.Id);
+                        if (evt != null)
+                        {
+                            evt.Status = res.Status; 
+                            evt.LastError = res.Error;
+                            
+                            if (res.Status == "SYNCED")
+                            {
+                                evt.SyncedAt = DateTime.UtcNow;
+                                evt.NextAttemptAt = null;
+                            }
+                            else if (res.Status == "CONFLICT")
+                            {
+                                evt.NextAttemptAt = null; // Requires manager resolution
+                            }
+                            else if (res.Status == "FAILED")
+                            {
+                                evt.LastAttemptAt = DateTime.UtcNow;
+                                if (evt.AttemptCount >= 5)
+                                {
+                                    evt.Status = "RETRY_EXHAUSTED";
+                                    evt.NextAttemptAt = null;
+                                }
+                                else
+                                {
+                                    int delaySeconds = Math.Min(3600, (int)Math.Pow(2, evt.AttemptCount) * 5);
+                                    evt.NextAttemptAt = DateTime.UtcNow.AddSeconds(delaySeconds);
+                                }
+                            }
+                        }
+                    }
+                    await dbContext.SaveChangesAsync(stoppingToken);
+                }
+            }
+            else
+            {
+                int statusCode = (int)response.StatusCode;
+                _logger.LogWarning($"Front Desk push failed with status {statusCode}");
+                
+                // Specific HTTP Failure Classifications
+                if (statusCode == 401 || statusCode == 403)
+                {
+                    // Authentication/Authorization: Pause sync loop, don't increment attempt count
+                    BroadcastHealth(SyncState.FAILED, null, "AUTH_ERROR", 0, 1, $"Auth failed: {statusCode}. Please re-authenticate.");
+                    return; 
+                }
+
+                foreach (var evt in pendingEvents) 
+                { 
+                    if (statusCode == 400)
+                    {
+                        // Malformed Event / Invalid Schema
+                        evt.Status = "DEAD_LETTER";
+                        evt.LastError = $"HTTP 400: Malformed event payload";
+                        evt.NextAttemptAt = null;
+                    }
+                    else if (statusCode == 409)
+                    {
+                        // Version Conflict / Optimistic Concurrency Failure
+                        evt.Status = "CONFLICT";
+                        evt.LastError = $"HTTP 409: Concurrency conflict";
+                        evt.NextAttemptAt = null;
+                    }
+                    else 
+                    {
+                        // 429, 500, 502, 503, 504: Transient Network or Server Error -> Retry
+                        evt.LastError = $"HTTP {statusCode}"; 
+                        evt.LastAttemptAt = DateTime.UtcNow;
+                        
+                        if (evt.AttemptCount >= 5) 
+                        {
+                            evt.Status = "RETRY_EXHAUSTED";
+                            evt.NextAttemptAt = null;
+                        } 
+                        else 
+                        {
+                            evt.Status = "FAILED";
+                            // Exponential backoff
+                            int delaySeconds = Math.Min(3600, (int)Math.Pow(2, evt.AttemptCount) * 5);
+                            evt.NextAttemptAt = DateTime.UtcNow.AddSeconds(delaySeconds);
+                        }
+                    }
+                }
+                await dbContext.SaveChangesAsync(stoppingToken);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error pushing Front Desk outbox events.");
+            foreach (var evt in pendingEvents) { evt.Status = "FAILED"; evt.LastError = ex.Message; }
+            await dbContext.SaveChangesAsync(stoppingToken);
+        }
+    }
+
+    private class SyncPushFrontDeskResponse
+    {
+        public string Status { get; set; } = string.Empty;
+        public List<SyncPushFrontDeskResult>? Results { get; set; }
+    }
+    
+    private class SyncPushFrontDeskResult
+    {
+        public string Id { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
+        public string IdempotencyKey { get; set; } = string.Empty;
+        public string? Error { get; set; }
     }
 }
 

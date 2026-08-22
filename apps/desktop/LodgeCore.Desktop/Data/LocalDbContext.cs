@@ -10,6 +10,7 @@ public class LocalDbContext : DbContext
     public DbSet<LocalGuest> Guests { get; set; } = null!;
     public DbSet<LocalFolio> Folios { get; set; } = null!;
     public DbSet<LocalSyncEvent> SyncEvents { get; set; } = null!;
+    public DbSet<LocalOutboxEvent> OutboxEvents { get; set; } = null!;
     public DbSet<LocalHousekeepingTask> HousekeepingTasks { get; set; } = null!;
     public DbSet<LocalMaintenanceTicket> MaintenanceTickets { get; set; } = null!;
     public DbSet<LocalRoom> Rooms { get; set; } = null!;
@@ -51,6 +52,7 @@ public class LocalDbContext : DbContext
 
     public LocalDbContext(DbContextOptions<LocalDbContext> options) : base(options)
     {
+        // Automatically provisions the local SQLite schema on first launch for new edge nodes
         Database.EnsureCreated();
     }
 

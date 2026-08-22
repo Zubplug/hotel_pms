@@ -1,0 +1,126 @@
+--- apps/web/src/lib/desktop/DesktopDataProvider.ts
++++ apps/web/src/lib/desktop/DesktopDataProvider.ts
+@@ -54,11 +54,124 @@
+       return invokeDesktop('dashboard.get', { propertyId });
+     }
+   },
+-  guests: OnlineDataProvider.guests,
+-  roomTypes: OnlineDataProvider.roomTypes,
+-  reservations: OnlineDataProvider.reservations,
+-  rooms: OnlineDataProvider.rooms,
+-  folios: OnlineDataProvider.folios,
++  guests: {
++    list: async () => {
++      if (typeof window !== 'undefined' && navigator.onLine) {
++        return OnlineDataProvider.guests.list().catch(() => invokeDesktop('guests.list'));
++      }
++      return invokeDesktop('guests.list');
++    }
++  },
++  roomTypes: {
++    list: async (propertyId: string) => {
++      if (typeof window !== 'undefined' && navigator.onLine) {
++        return OnlineDataProvider.roomTypes.list(propertyId).catch(() => invokeDesktop('roomTypes.list', { propertyId }));
++      }
++      return invokeDesktop('roomTypes.list', { propertyId });
++    }
++  },
++  reservations: {
++    list: async (propertyId, params) => {
++      if (typeof window !== 'undefined' && navigator.onLine) {
++        return OnlineDataProvider.reservations.list(propertyId, params).catch(() => invokeDesktop('reservations.list', { propertyId, ...params }));
++      }
++      return invokeDesktop('reservations.list', { propertyId, ...params });
++    },
++    get: async (id) => {
++      if (typeof window !== 'undefined' && navigator.onLine) {
++        return OnlineDataProvider.reservations.get(id).catch(() => invokeDesktop('reservations.get', { id }));
++      }
++      return invokeDesktop('reservations.get', { id });
++    },
++    lookupByRoom: async (roomNo, propertyId) => {
++      if (typeof window !== 'undefined' && navigator.onLine) {
++        return OnlineDataProvider.reservations.lookupByRoom(roomNo, propertyId).catch(() => invokeDesktop('reservations.lookupByRoom', { roomNo, propertyId }));
++      }
++      return invokeDesktop('reservations.lookupByRoom', { roomNo, propertyId });
++    },
++    create: async (data) => {
++      if (typeof window !== 'undefined' && navigator.onLine) {
++        return OnlineDataProvider.reservations.create(data).catch(() => invokeDesktop('reservations.create', { data }));
++      }
++      return invokeDesktop('reservations.create', { data });
++    },
++    update: async (id, data) => {
++      if (typeof window !== 'undefined' && navigator.onLine) {
++        return OnlineDataProvider.reservations.update(id, data).catch(() => invokeDesktop('reservations.update', { id, data }));
++      }
++      return invokeDesktop('reservations.update', { id, data });
++    },
++    cancel: async (id, reason) => {
++      if (typeof window !== 'undefined' && navigator.onLine) {
++        return OnlineDataProvider.reservations.cancel(id, reason).catch(() => invokeDesktop('reservations.cancel', { id, reason }));
++      }
++      return invokeDesktop('reservations.cancel', { id, reason });
++    },
++    checkIn: async (id, userId, deviceId) => {
++      if (typeof window !== 'undefined' && navigator.onLine) {
++        return OnlineDataProvider.reservations.checkIn(id, userId, deviceId).catch(() => invokeDesktop('reservations.checkIn', { reservationId: id, userId, deviceId }));
++      }
++      return invokeDesktop('reservations.checkIn', { reservationId: id, userId, deviceId });
++    },
++    checkOut: async (id, userId, deviceId) => {
++      if (typeof window !== 'undefined' && navigator.onLine) {
++        return OnlineDataProvider.reservations.checkOut(id, userId, deviceId).catch(() => invokeDesktop('reservations.checkOut', { reservationId: id, userId, deviceId }));
++      }
++      return invokeDesktop('reservations.checkOut', { reservationId: id, userId, deviceId });
++    },
++    extendStay: async (id, newCheckOutDate) => {
++      if (typeof window !== 'undefined' && navigator.onLine) {
++        return OnlineDataProvider.reservations.extendStay(id, newCheckOutDate).catch(() => invokeDesktop('reservations.extendStay', { reservationId: id, newCheckOutDate }));
++      }
++      return invokeDesktop('reservations.extendStay', { reservationId: id, newCheckOutDate });
++    }
++  },
++  rooms: {
++    list: async (propertyId, params) => {
++      if (typeof window !== 'undefined' && navigator.onLine) {
++        return OnlineDataProvider.rooms.list(propertyId, params).catch(() => invokeDesktop('rooms.list', { propertyId, ...params }));
++      }
++      return invokeDesktop('rooms.list', { propertyId, ...params });
++    },
++    getAvailable: async (propertyId, roomTypeId, checkIn, checkOut) => {
++      if (typeof window !== 'undefined' && navigator.onLine) {
++        return OnlineDataProvider.rooms.getAvailable(propertyId, roomTypeId, checkIn, checkOut).catch(() => invokeDesktop('rooms.getAvailable', { propertyId, roomTypeId, checkIn, checkOut }));
++      }
++      return invokeDesktop('rooms.getAvailable', { propertyId, roomTypeId, checkIn, checkOut });
++    },
++    getActiveReservation: async (roomId) => {
++      if (typeof window !== 'undefined' && navigator.onLine) {
++        return OnlineDataProvider.rooms.getActiveReservation(roomId).catch(() => invokeDesktop('rooms.getActiveReservation', { roomId }));
++      }
++      return invokeDesktop('rooms.getActiveReservation', { roomId });
++    }
++  },
++  folios: {
++    get: async (id) => {
++      if (typeof window !== 'undefined' && navigator.onLine) {
++        return OnlineDataProvider.folios.get(id).catch(() => invokeDesktop('folios.get', { id }));
++      }
++      return invokeDesktop('folios.get', { id });
++    },
++    addCharge: async (folioId, charge) => {
++      if (typeof window !== 'undefined' && navigator.onLine) {
++        return OnlineDataProvider.folios.addCharge(folioId, charge).catch(() => invokeDesktop('folios.addCharge', { folioId, charge }));
++      }
++      return invokeDesktop('folios.addCharge', { folioId, charge });
++    },
++    addPayment: async (folioId, payment) => {
++      if (typeof window !== 'undefined' && navigator.onLine) {
++        return OnlineDataProvider.folios.addPayment(folioId, payment).catch(() => invokeDesktop('folios.addPayment', { folioId, payment }));
++      }
++      return invokeDesktop('folios.addPayment', { folioId, payment });
++    }
++  },
+   keycards: {
+     encode: async (roomId, lockCode, reservationId) => {
+       return invokeDesktop('keycards.encode', { roomId, lockCode, reservationId });

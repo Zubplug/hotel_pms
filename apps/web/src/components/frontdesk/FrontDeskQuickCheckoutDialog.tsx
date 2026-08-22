@@ -11,6 +11,7 @@ import { CreditCard, Loader2, AlertCircle, CheckCircle2, User, Key, ArrowRight, 
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
+import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
 
 interface FrontDeskQuickCheckoutDialogProps {
   open: boolean;
@@ -114,9 +115,33 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
       setStep('SUCCESS');
       queryClient.invalidateQueries({ queryKey: ['frontdesk', 'dashboard', propertyId] });
       queryClient.invalidateQueries({ queryKey: ['reservations'] });
+      triggerPrint();
     } catch (err: any) {
       setErrorMsg(err.message);
       setStep('ERROR');
+    }
+  };
+
+  const [printStatus, setPrintStatus] = useState<'IDLE' | 'PRINTING' | 'SUCCESS' | 'FAILED'>('IDLE');
+
+  const triggerPrint = async () => {
+    if (!HardwareBridge.isAvailable() || !reservation) return;
+    setPrintStatus('PRINTING');
+    try {
+      const res = await HardwareBridge.printGuestFolio({
+        folioId: reservation.folios?.[0]?.id || reservation.id,
+        guestName: `${reservation.primaryGuest.firstName} ${reservation.primaryGuest.lastName}`,
+        version: Date.now(),
+        details: {}
+      });
+      const parsed = typeof res === 'string' ? JSON.parse(res) : res;
+      if (parsed?.success) {
+        setPrintStatus('SUCCESS');
+      } else {
+        setPrintStatus('FAILED');
+      }
+    } catch (e) {
+      setPrintStatus('FAILED');
     }
   };
 
@@ -238,9 +263,24 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
                 <CheckCircle2 className="h-10 w-10 text-emerald-600" />
               </div>
               <h3 className="text-2xl font-bold text-slate-900 mb-2">Checkout Complete</h3>
-              <p className="text-slate-500 mb-8 max-w-[280px] mx-auto">
+              <p className="text-slate-500 mb-4 max-w-[280px] mx-auto">
                 {reservation?.primaryGuest.firstName} has been checked out and the keycard is erased.
               </p>
+
+              <div className="mb-8 p-4 bg-slate-50 border border-slate-100 rounded-xl max-w-[320px] mx-auto flex flex-col items-center gap-2">
+                <p className="text-sm font-medium text-slate-600">
+                  {printStatus === 'PRINTING' && 'Printing Guest Folio...'}
+                  {printStatus === 'SUCCESS' && 'Guest Folio Printed'}
+                  {printStatus === 'FAILED' && 'Printer Unavailable'}
+                  {printStatus === 'IDLE' && 'Skipped Printing'}
+                </p>
+                {printStatus === 'FAILED' && (
+                  <Button variant="outline" size="sm" onClick={triggerPrint} className="h-8 text-xs rounded-full">
+                    Retry Print
+                  </Button>
+                )}
+              </div>
+
               <Button onClick={() => onOpenChange(false)} className="w-full h-14 rounded-2xl bg-slate-900 hover:bg-slate-800 text-lg font-bold">
                 Done
               </Button>

@@ -4,7 +4,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { Lock, Unlock, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { signOut } from 'next-auth/react';
+import { useLogout } from '@/hooks/useLogout';
 
 interface LockContextType {
   isLocked: boolean;
@@ -23,6 +23,7 @@ export function useLock() {
 export function LockProvider({ children }: { children: React.ReactNode }) {
   const [isLocked, setIsLocked] = useState(false);
   const { data: session } = useSession();
+  const logout = useLogout();
 
   // On mount, check if previously locked
   useEffect(() => {
@@ -51,15 +52,7 @@ export function LockProvider({ children }: { children: React.ReactNode }) {
   const handleSignOut = async () => {
     localStorage.removeItem('lodgecore_is_locked');
     setIsLocked(false);
-    
-    // Clear desktop session if applicable
-    if (typeof window !== 'undefined' && (window as any).LodgeCore) {
-      try {
-        const { DesktopDataProvider } = await import('@/lib/desktop/DesktopDataProvider');
-        await DesktopDataProvider.auth?.clearSession?.();
-      } catch (err) {}
-    }
-    signOut({ callbackUrl: '/login' });
+    logout();
   };
 
   return (

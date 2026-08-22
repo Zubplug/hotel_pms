@@ -7,12 +7,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
-import { signOut } from 'next-auth/react';
+import { useLogout } from '@/hooks/useLogout';
 import { ActionSuccessModal } from '@/components/pos/ActionSuccessModal';
 
 export default function StartShiftPage() {
   const router = useRouter();
   const { provider } = useLodgeCoreProvider();
+  const logout = useLogout();
+  
   const { data: session, status } = useLodgeCoreSession();
   
   const [deviceId, setDeviceId] = useState<string | null>(null);
@@ -118,7 +120,7 @@ export default function StartShiftPage() {
       
       {/* Logout Button */}
       <button 
-        onClick={() => signOut({ callbackUrl: '/login' })}
+        onClick={() => logout()}
         className="absolute top-6 right-6 flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-rose-500/20 text-slate-300 hover:text-rose-400 border border-white/10 hover:border-rose-500/30 transition-colors shadow-lg"
       >
         <LogOut className="w-4 h-4" />

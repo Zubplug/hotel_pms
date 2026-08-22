@@ -39,6 +39,13 @@ public class LocalRepository
         
         return reservation;
     }
+
+    public async Task<List<LocalOutboxEvent>> GetOutboxEventsAsync()
+    {
+        return await _dbContext.OutboxEvents
+            .OrderByDescending(e => e.CreatedAt)
+            .ToListAsync();
+    }
     
     public async Task<List<LocalReservation>> GetActiveReservationsAsync()
     {
@@ -112,15 +119,22 @@ public class LocalRepository
 
         folio.TotalCharges += amount;
         folio.UpdatedAt = DateTime.UtcNow;
+        folio.IsDirty = true;
+        folio.LocalSequence++;
+        int eventVersion = folio.Version;
+        folio.Version++;
 
-        _dbContext.SyncEvents.Add(new LocalSyncEvent
+        _dbContext.OutboxEvents.Add(new LocalOutboxEvent
         {
-            EntityType = "FOLIO",
-            EntityId = folioId,
-            OperationType = "ADD_CHARGE",
-            PayloadJson = JsonSerializer.Serialize(new { amount, description }),
-            UserId = userId,
-            DeviceId = deviceId
+            PropertyId = folio.PropertyId,
+            DeviceId = deviceId,
+            OperatorId = userId,
+            AggregateType = "FOLIO",
+            AggregateId = folioId,
+            AggregateVersion = eventVersion,
+            EventType = "ROOM_CHARGE",
+            Sequence = folio.LocalSequence,
+            PayloadJson = JsonSerializer.Serialize(new { amount, description, currency = "NGN", businessDate = DateTime.UtcNow })
         });
 
         await _dbContext.SaveChangesAsync();
@@ -134,15 +148,22 @@ public class LocalRepository
 
         folio.TotalPayments += amount;
         folio.UpdatedAt = DateTime.UtcNow;
+        folio.IsDirty = true;
+        folio.LocalSequence++;
+        int eventVersion = folio.Version;
+        folio.Version++;
 
-        _dbContext.SyncEvents.Add(new LocalSyncEvent
+        _dbContext.OutboxEvents.Add(new LocalOutboxEvent
         {
-            EntityType = "FOLIO",
-            EntityId = folioId,
-            OperationType = "ADD_PAYMENT",
-            PayloadJson = JsonSerializer.Serialize(new { amount, method }),
-            UserId = userId,
-            DeviceId = deviceId
+            PropertyId = folio.PropertyId,
+            DeviceId = deviceId,
+            OperatorId = userId,
+            AggregateType = "FOLIO",
+            AggregateId = folioId,
+            AggregateVersion = eventVersion,
+            EventType = "POST_PAYMENT",
+            Sequence = folio.LocalSequence,
+            PayloadJson = JsonSerializer.Serialize(new { amount, method })
         });
 
         await _dbContext.SaveChangesAsync();
@@ -156,15 +177,22 @@ public class LocalRepository
 
         res.Status = "CHECKED_IN";
         res.UpdatedAt = DateTime.UtcNow;
+        res.IsDirty = true;
+        res.LocalSequence++;
+        int eventVersion = res.Version;
+        res.Version++;
 
-        _dbContext.SyncEvents.Add(new LocalSyncEvent
+        _dbContext.OutboxEvents.Add(new LocalOutboxEvent
         {
-            EntityType = "RESERVATION",
-            EntityId = reservationId,
-            OperationType = "CHECK_IN",
-            PayloadJson = JsonSerializer.Serialize(new { status = "CHECKED_IN" }),
-            UserId = userId,
-            DeviceId = deviceId
+            PropertyId = res.PropertyId,
+            DeviceId = deviceId,
+            OperatorId = userId,
+            AggregateType = "RESERVATION",
+            AggregateId = reservationId,
+            AggregateVersion = eventVersion,
+            EventType = "CHECK_IN",
+            Sequence = res.LocalSequence,
+            PayloadJson = JsonSerializer.Serialize(new { roomId = res.RoomId })
         });
 
         await _dbContext.SaveChangesAsync();
@@ -183,15 +211,22 @@ public class LocalRepository
 
         res.Status = "CHECKED_OUT";
         res.UpdatedAt = DateTime.UtcNow;
+        res.IsDirty = true;
+        res.LocalSequence++;
+        int eventVersion = res.Version;
+        res.Version++;
 
-        _dbContext.SyncEvents.Add(new LocalSyncEvent
+        _dbContext.OutboxEvents.Add(new LocalOutboxEvent
         {
-            EntityType = "RESERVATION",
-            EntityId = reservationId,
-            OperationType = "CHECK_OUT",
-            PayloadJson = JsonSerializer.Serialize(new { status = "CHECKED_OUT" }),
-            UserId = userId,
-            DeviceId = deviceId
+            PropertyId = res.PropertyId,
+            DeviceId = deviceId,
+            OperatorId = userId,
+            AggregateType = "RESERVATION",
+            AggregateId = reservationId,
+            AggregateVersion = eventVersion,
+            EventType = "CHECK_OUT",
+            Sequence = res.LocalSequence,
+            PayloadJson = JsonSerializer.Serialize(new { roomId = res.RoomId })
         });
         
         // Also auto-generate a cleaning task upon checkout

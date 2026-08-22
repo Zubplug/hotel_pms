@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Search, User, LogIn, ArrowRight, Clock, ArrowLeft, CheckCircle2, UserPlus, CreditCard } from 'lucide-react';
+import { Search, User, LogIn, ArrowRight, Clock, ArrowLeft, CheckCircle2, UserPlus, CreditCard, CloudSync } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useProperty } from '@/components/PropertyProvider';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
@@ -29,6 +29,7 @@ const formatCurrency = (amount: number) => {
 export default function FrontDeskReservationsPage() {
   const { propertyId } = useProperty();
   const router = useRouter();
+  const { provider, isOnline } = useLodgeCoreProvider();
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState('ALL');
@@ -49,7 +50,16 @@ export default function FrontDeskReservationsPage() {
     }
   };
 
-  const { provider } = useLodgeCoreProvider();
+  const { data: outboxData } = useQuery({
+    queryKey: ['frontdesk', 'outboxEvents'],
+    queryFn: async () => {
+      if (provider.system?.getOutboxEvents) {
+        return provider.system.getOutboxEvents();
+      }
+      return { success: false, data: [] };
+    },
+    refetchInterval: 5000,
+  });
 
   const { data, isLoading } = useQuery({
     queryKey: ['frontdesk', 'reservations', { search: debouncedSearch, filter: activeFilter }],
@@ -98,10 +108,21 @@ export default function FrontDeskReservationsPage() {
         </div>
         
         <div className="flex gap-3">
-          <Button onClick={() => router.push('/frontdesk/reservations/walk-in')} className="rounded-full h-12 px-6 bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm">
+          <Button 
+            onClick={() => router.push('/frontdesk/reservations/walk-in')} 
+            disabled={!isOnline}
+            title={!isOnline ? "Internet Required" : ""}
+            className="rounded-full h-12 px-6 bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm disabled:opacity-50"
+          >
             <UserPlus className="mr-2 h-5 w-5" /> Walk-In
           </Button>
-          <Button onClick={() => router.push('/frontdesk/reservations/new')} variant="outline" className="rounded-full h-12 px-6 border-slate-200 font-bold shadow-sm">
+          <Button 
+            onClick={() => router.push('/frontdesk/reservations/new')} 
+            variant="outline" 
+            disabled={!isOnline}
+            title={!isOnline ? "Internet Required" : ""}
+            className="rounded-full h-12 px-6 border-slate-200 font-bold shadow-sm disabled:opacity-50"
+          >
             New Reservation
           </Button>
         </div>
@@ -198,13 +219,44 @@ export default function FrontDeskReservationsPage() {
                   </div>
 
                   <div className="mt-auto pt-4 border-t flex justify-between items-center">
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 ${
-                      res.status === 'CHECKED_IN' ? 'bg-blue-100 text-blue-800' :
-                      res.status === 'CONFIRMED' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'
-                    }`}>
-                      {res.status === 'CHECKED_IN' ? <LogIn className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-                      {res.status}
-                    </span>
+                    <div className="flex gap-2">
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 ${
+                        res.status === 'CHECKED_IN' ? 'bg-blue-100 text-blue-800' :
+                        res.status === 'CONFIRMED' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'
+                      }`}>
+                        {res.status === 'CHECKED_IN' ? <LogIn className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                        {res.status}
+                      </span>
+                      {(() => {
+                        const isDesktopMode = typeof window !== 'undefined' && !!(window as any).chrome?.webview;
+                        if (!isDesktopMode) return null; // Web mode doesn't cache locally
+
+                        const isDirty = (res as any).isDirty;
+                        const outboxEvent = outboxData?.data?.find((e: any) => e.EntityId === res.id && e.Status !== 'SYNCED');
+
+                        if (outboxEvent?.Status === 'CONFLICT') {
+                           return (
+                             <span className="px-2 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800 flex items-center gap-1" title="Sync Conflict">
+                               ⚠ Sync Conflict
+                             </span>
+                           );
+                        }
+                        
+                        if (isDirty || outboxEvent) {
+                          return (
+                            <span className="px-2 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 flex items-center gap-1" title="Pending Sync">
+                              ↑ Pending Sync
+                            </span>
+                          );
+                        }
+
+                        return (
+                          <span className="px-2 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600 flex items-center gap-1" title="Served from local SQLite cache">
+                            ☁ Cached
+                          </span>
+                        );
+                      })()}
+                    </div>
                     
                     {isUnpaid ? (
                       <span className="text-red-600 font-bold text-sm bg-red-50 px-3 py-1 rounded-full">

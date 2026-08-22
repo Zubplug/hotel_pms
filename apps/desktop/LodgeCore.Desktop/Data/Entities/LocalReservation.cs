@@ -21,5 +21,6 @@ public class LocalReservation
     
     // For sync conflict detection
     public int Version { get; set; } = 1;
+    public int LocalSequence { get; set; } = 0;
     public bool IsDirty { get; set; } = false; // Needs to be synced
 }

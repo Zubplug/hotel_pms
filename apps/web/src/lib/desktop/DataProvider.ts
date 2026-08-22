@@ -13,6 +13,7 @@ export interface LodgeCoreDataProvider {
     provisionTerminal?: (data: any) => Promise<any>;
     forceSync?: () => Promise<any>;
     getSyncHealth?: () => Promise<any>;
+    getOutboxEvents?: () => Promise<any>;
   };
   properties: {
     list(): Promise<any>;

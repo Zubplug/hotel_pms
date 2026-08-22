@@ -97,6 +97,7 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
           setPhase('SUCCESS');
           queryClient.invalidateQueries({ queryKey: ['frontdesk', 'dashboard', propertyId] });
           queryClient.invalidateQueries({ queryKey: ['reservations'] });
+          triggerPrint();
         } else if (status === 'FAILED' || status === 'ERROR') {
           setPhase('FAILED');
           setErrorMsg(data.data.operation.errorMessage || 'Hardware agent failed to encode the card.');
@@ -149,10 +150,34 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
         // Fallback if no hardware operation was returned (e.g. bypass or software-only checkin)
         setPhase('SUCCESS');
         queryClient.invalidateQueries({ queryKey: ['frontdesk', 'dashboard', propertyId] });
+        triggerPrint();
       }
     } catch (err: unknown) {
       setPhase('FAILED');
       setErrorMsg(err instanceof Error ? err.message : 'Network error occurred');
+    }
+  };
+
+  const [printStatus, setPrintStatus] = useState<'IDLE' | 'PRINTING' | 'SUCCESS' | 'FAILED'>('IDLE');
+
+  const triggerPrint = async () => {
+    if (!HardwareBridge.isAvailable()) return;
+    setPrintStatus('PRINTING');
+    try {
+      const res = await HardwareBridge.printRegistrationCard({
+        reservationId: reservationId!,
+        guestName: `${reservation?.primaryGuest?.firstName} ${reservation?.primaryGuest?.lastName}`,
+        checkInVersion: Date.now(), // Use time as simple idempotency version for this session
+        details: {}
+      });
+      const parsed = typeof res === 'string' ? JSON.parse(res) : res;
+      if (parsed?.success) {
+        setPrintStatus('SUCCESS');
+      } else {
+        setPrintStatus('FAILED');
+      }
+    } catch (e) {
+      setPrintStatus('FAILED');
     }
   };
 
@@ -291,9 +316,25 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
                     <CheckCircle2 className="h-10 w-10 text-emerald-600" />
                   </div>
                   <h3 className="text-2xl font-bold text-slate-900 mb-2">Check-In Complete</h3>
-                  <p className="text-slate-500 mb-8 max-w-[280px] mx-auto">
+                  <p className="text-slate-500 mb-4 max-w-[280px] mx-auto">
                     {guest?.firstName} has been checked in and the keycard is ready.
                   </p>
+
+                  {/* Print Status Area */}
+                  <div className="mb-8 p-4 bg-slate-50 border border-slate-100 rounded-xl max-w-[320px] mx-auto flex flex-col items-center gap-2">
+                    <p className="text-sm font-medium text-slate-600">
+                      {printStatus === 'PRINTING' && 'Printing Registration Card...'}
+                      {printStatus === 'SUCCESS' && 'Registration Card Printed'}
+                      {printStatus === 'FAILED' && 'Printer Unavailable'}
+                      {printStatus === 'IDLE' && 'Skipped Printing'}
+                    </p>
+                    {printStatus === 'FAILED' && (
+                      <Button variant="outline" size="sm" onClick={triggerPrint} className="h-8 text-xs rounded-full">
+                        Retry Print
+                      </Button>
+                    )}
+                  </div>
+
                   <div className="flex gap-3">
                     <Button onClick={() => router.push(`/frontdesk/reservations/${reservation.id}`)} variant="outline" className="flex-1 h-14 rounded-2xl font-bold border-slate-200">
                       View Folio

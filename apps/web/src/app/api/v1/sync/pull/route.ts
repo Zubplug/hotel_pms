@@ -196,10 +196,75 @@ export async function GET(req: NextRequest) {
       bankingModel: ((settings.pos as any)?.bankingModel as string) ?? 'CENTRAL_CASHIER',
     };
 
+    // ---- Load Front Desk Operational Cache ------------------------------
+    // 1. Rooms & Room Types
+    const rooms = await prisma.room.findMany({
+      where: { propertyId, isActive: true }
+    });
+    const roomTypes = await prisma.roomType.findMany({
+      where: { propertyId, isActive: true }
+    });
+
+    // 2. Target window for Reservations: In-house + 3 days out + today's departures
+    const now = new Date();
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const threeDaysFromNow = new Date(now);
+    threeDaysFromNow.setDate(threeDaysFromNow.getDate() + 3);
+
+    const reservations = await prisma.reservation.findMany({
+      where: {
+        propertyId,
+        deletedAt: null,
+        OR: [
+          { status: 'CHECKED_IN' },
+          { status: 'CONFIRMED', checkIn: { lte: threeDaysFromNow, gte: yesterday } },
+          { checkOut: { gte: yesterday, lte: threeDaysFromNow } }
+        ]
+      },
+      include: {
+        primaryGuest: true,
+        reservationGuests: {
+          include: { guest: true }
+        },
+        reservationRooms: true,
+        folios: {
+          include: { items: true, payments: true }
+        }
+      }
+    });
+
+    // 3. Flatten Guests and Folios from the reservations
+    const guestMap = new Map<string, any>();
+    const folios: any[] = [];
+    const plainReservations = reservations.map(r => {
+      // Add primary guest
+      if (r.primaryGuest) {
+        guestMap.set(r.primaryGuest.id, r.primaryGuest);
+      }
+      // Add additional guests
+      r.reservationGuests.forEach(rg => {
+        if (rg.guest) guestMap.set(rg.guest.id, rg.guest);
+      });
+      // Add folios
+      r.folios.forEach(f => folios.push(f));
+
+      // Return clean reservation without nested big objects
+      const { primaryGuest, reservationGuests, folios: rFolios, ...rest } = r;
+      return rest;
+    });
+
+    const guests = Array.from(guestMap.values());
+
     return NextResponse.json({
       syncedAt:   new Date().toISOString(),
       property:   propertyPayload,
       staff:      staffWithPermissions,
+      rooms,
+      roomTypes,
+      reservations: plainReservations,
+      guests,
+      folios
     });
 
   } catch (error: any) {

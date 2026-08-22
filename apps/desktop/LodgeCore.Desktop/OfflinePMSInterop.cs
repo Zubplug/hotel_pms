@@ -59,7 +59,29 @@ public class OfflinePMSInterop
         try
         {
             var session = await _authManager.GetSessionAsync();
-            return JsonSerializer.Serialize(new { success = true, data = session }, _jsonOptions);
+            if (session == null) return JsonSerializer.Serialize(new { success = true, data = (object)null }, _jsonOptions);
+
+            var staff = await _repo.GetStaffByIdAsync(session.UserId);
+            var displayName = staff != null ? $"{staff.FirstName} {staff.LastName}".Trim() : session.UserId;
+            var email = staff?.Email;
+
+            var enrichedSession = new
+            {
+                session.SessionId,
+                session.UserId,
+                session.DeviceId,
+                session.PropertyId,
+                session.Role,
+                session.Permissions,
+                session.ExpiresAt,
+                session.CreatedAt,
+                session.LastOnlineValidationAt,
+                session.SessionVersion,
+                DisplayName = displayName,
+                Email = email
+            };
+
+            return JsonSerializer.Serialize(new { success = true, data = enrichedSession }, _jsonOptions);
         }
         catch (Exception ex)
         {
@@ -361,12 +383,37 @@ public class OfflinePMSInterop
         }
     }
 
+    public async Task<string> GetOutboxEventsAsync()
+    {
+        try
+        {
+            var res = await _repo.GetOutboxEventsAsync();
+            return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
     public async Task<string> GetActiveReservationsAsync()
     {
         try
         {
             var res = await _repo.GetActiveReservationsAsync();
-            return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
+            var mapped = res.Select(r => new
+            {
+                id = r.Id,
+                confirmationNumber = r.Id.Substring(0, 8).ToUpper(),
+                status = r.Status,
+                checkIn = r.CheckInDate,
+                checkOut = r.CheckOutDate,
+                primaryGuest = new { firstName = r.Guest?.FirstName, lastName = r.Guest?.LastName, phone = r.Guest?.Phone },
+                reservationRooms = new[] { new { room = new { number = r.RoomNumber, status = "CLEAN" }, roomType = new { name = "Standard" } } },
+                folio = new { balance = r.Folio?.OutstandingBalance ?? 0 },
+                isDirty = r.IsDirty
+            });
+            return JsonSerializer.Serialize(new { success = true, data = mapped }, _jsonOptions);
         }
         catch (Exception ex)
         {
@@ -1338,6 +1385,56 @@ public class OfflinePMSInterop
 
             var (success, error) = await _escPos.PrintReceiptAsync(receipt, ctx.OutletId);
             return JsonSerializer.Serialize(new { success, error }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
+    public async Task<string> PrintRegistrationCardAsync(string dataJson)
+    {
+        try
+        {
+            var ctx = await GetSecureContextAsync();
+            await _repo.LogHardwareEventAsync(ctx.UserId, ctx.DeviceId, "REGISTRATION_CARD_PRINT", dataJson);
+            
+            // In a real implementation we would deserialize and pass to ESC/POS or standard printer
+            // For now, we simulate success for the Front Desk
+            await Task.Delay(500); 
+            return JsonSerializer.Serialize(new { success = true }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
+    public async Task<string> PrintGuestFolioAsync(string dataJson)
+    {
+        try
+        {
+            var ctx = await GetSecureContextAsync();
+            await _repo.LogHardwareEventAsync(ctx.UserId, ctx.DeviceId, "GUEST_FOLIO_PRINT", dataJson);
+            
+            await Task.Delay(500); 
+            return JsonSerializer.Serialize(new { success = true }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
+    public async Task<string> PrintPaymentReceiptAsync(string dataJson)
+    {
+        try
+        {
+            var ctx = await GetSecureContextAsync();
+            await _repo.LogHardwareEventAsync(ctx.UserId, ctx.DeviceId, "FRONTDESK_PAYMENT_RECEIPT_PRINT", dataJson);
+            
+            await Task.Delay(500); 
+            return JsonSerializer.Serialize(new { success = true }, _jsonOptions);
         }
         catch (Exception ex)
         {

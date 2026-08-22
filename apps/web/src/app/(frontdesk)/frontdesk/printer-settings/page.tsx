@@ -23,8 +23,8 @@ interface PrinterConfig {
 type TestStatus = 'idle' | 'testing' | 'success' | 'failed';
 
 const ROLES = [
+  { value: 'FRONTDESK', label: 'Front Desk Printer', desc: 'Prints folios and reservation documents', color: 'bg-purple-500' },
   { value: 'RECEIPT', label: 'Receipt Printer', desc: 'Prints customer receipts at checkout', color: 'bg-blue-500' },
-  { value: 'KITCHEN', label: 'Kitchen Printer', desc: 'Prints KOTs (Kitchen Order Tickets)', color: 'bg-orange-500' },
 ];
 
 const PAPER_WIDTHS = [
@@ -34,7 +34,7 @@ const PAPER_WIDTHS = [
 
 const BLANK_PRINTER: Omit<PrinterConfig, 'id'> = {
   name: '',
-  printerRole: 'RECEIPT',
+  printerRole: 'FRONTDESK',
   ipAddress: '',
   port: 9100,
   paperWidth: 48,
@@ -368,7 +368,7 @@ export default function PrinterSettingsPage() {
       const res = await invokeDesktop('hardware.getPrinters');
       if (res?.success) {
         const allPrinters: PrinterConfig[] = res.data ?? [];
-        setPrinters(allPrinters.filter(p => p.printerRole === 'RECEIPT' || p.printerRole === 'KITCHEN'));
+        setPrinters(allPrinters.filter(p => p.printerRole === 'FRONTDESK' || p.printerRole === 'RECEIPT'));
       }
     } catch { /* ignore */ }
     setLoading(false);

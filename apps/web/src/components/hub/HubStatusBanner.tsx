@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { Wifi, WifiOff, HardDrive, Bell, LogOut } from 'lucide-react';
-import { signOut } from 'next-auth/react';
+import { useSession } from 'next-auth/react';
+import { useLogout } from '@/hooks/useLogout';
 
 interface HubStatusBannerProps {
   user: { name?: string | null; role?: string; propertyId?: string };
@@ -13,6 +14,7 @@ export function HubStatusBanner({ user, businessDate }: HubStatusBannerProps) {
   const [isDesktop, setIsDesktop] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
   const [syncQueue, setSyncQueue] = useState(0);
+  const logout = useLogout();
 
   useEffect(() => {
     setIsOnline(navigator.onLine);
@@ -107,7 +109,7 @@ export function HubStatusBanner({ user, businessDate }: HubStatusBannerProps) {
         </div>
 
         <button 
-          onClick={() => signOut({ callbackUrl: '/login' })}
+          onClick={() => logout()}
           className="ml-2 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-rose-500/20 text-slate-300 hover:text-rose-400 transition-colors"
         >
           <LogOut className="w-4 h-4" />

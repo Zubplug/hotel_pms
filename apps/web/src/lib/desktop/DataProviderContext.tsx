@@ -63,6 +63,11 @@ export function DataProviderWrapper({ children }: { children: React.ReactNode })
         const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
         if (data.event === 'sync.status_changed') {
           setSyncStatus(data.status);
+          if (data.status === 'ERROR' || data.status === 'OFFLINE') {
+            setIsOnline(false);
+          } else if (data.status === 'UP_TO_DATE' || data.status === 'SYNCING') {
+            setIsOnline(navigator.onLine);
+          }
         }
       };
       (window as any).chrome.webview.addEventListener('message', handleMessage);

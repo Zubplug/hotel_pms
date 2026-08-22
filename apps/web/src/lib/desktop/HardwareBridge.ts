@@ -71,4 +71,25 @@ export const HardwareBridge = {
   updateKdsStatus: async (orderId: string, itemId: string, status: string) => {
     return invokeDesktop('hardware.updateKdsStatus', { orderId, itemId, status });
   },
+
+  // Front Desk Printing
+  printRegistrationCard: async (data: { reservationId: string, guestName: string, checkInVersion: number, details: any }) => {
+    return invokeDesktop('hardware.printRegistrationCard', { data });
+  },
+
+  printGuestFolio: async (data: { folioId: string, guestName: string, version: number, details: any }) => {
+    return invokeDesktop('hardware.printGuestFolio', { data });
+  },
+
+  printPaymentReceipt: async (data: { paymentId: string, amount: number, method: string, guestName: string, version: number }) => {
+    return invokeDesktop('hardware.printPaymentReceipt', { data });
+  },
+
+  testPrinter: async () => {
+    return invokeDesktop('hardware.testPrinter');
+  },
+
+  getPrinterStatus: async () => {
+    return invokeDesktop('hardware.getPrinterStatus');
+  },
 };

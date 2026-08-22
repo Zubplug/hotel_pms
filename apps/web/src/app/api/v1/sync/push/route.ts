@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { NotificationEngine } from '@/lib/notification-engine';
+import crypto from 'crypto';
 
 export async function POST(request: Request) {
   try {
@@ -471,14 +472,32 @@ export async function POST(request: Request) {
       
       if (!folio || folio.status === 'CLOSED') {
         // Generate SyncConflict for Manager Review
+        const dummyEvent = await prisma.hotelEvent.create({
+           data: {
+             id: crypto.randomUUID(),
+             idempotencyKey: operationId,
+             propertyId: propertyId,
+             deviceId: 'LEGACY_SYNC',
+             operatorId: payload.operatorId || 'SYSTEM',
+             aggregateType: 'FOLIO',
+             aggregateId: payload.folioId,
+             aggregateVersion: folio?.version || 1,
+             eventType: 'LEGACY_CHARGE',
+             occurredAt: new Date(),
+             sequence: 0,
+             payload: payload
+           }
+        });
+
         await prisma.syncConflict.create({
           data: {
             propertyId: propertyId,
-            operationId: operationId,
-            entityType: 'FOLIO',
-            entityId: payload.folioId,
-            payload: payloadJson,
-            conflictReason: 'Folio is closed or does not exist. MANAGER_REVIEW required.',
+            hotelEventId: dummyEvent.id,
+            aggregateType: 'FOLIO',
+            aggregateId: payload.folioId,
+            expectedVersion: folio?.version || 1,
+            receivedVersion: folio?.version || 1,
+            conflictReason: 'Folio is closed or does not exist. MANAGER_REVIEW required (Legacy Sync).',
             status: 'PENDING'
           }
         });

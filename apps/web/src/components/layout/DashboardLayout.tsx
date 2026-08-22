@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { signOut } from 'next-auth/react';
+import { useLogout } from '@/hooks/useLogout';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { cn } from '@/lib/utils';
 import {
@@ -70,6 +70,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { data: session, status } = useLodgeCoreSession();
   const router = useRouter();
+  const logout = useLogout();
 
   const isDesktop = process.env.NEXT_PUBLIC_IS_DESKTOP === 'true';
 
@@ -107,18 +108,6 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   }
 
   if (status === 'unauthenticated' || !session?.user) return null;
-
-  async function handleSignOut() {
-    if (isDesktop) {
-      try {
-        const { DesktopDataProvider } = await import('@/lib/desktop/DesktopDataProvider');
-        await DesktopDataProvider.auth?.clearSession?.();
-      } catch (err) {
-        console.error('Failed to clear desktop session', err);
-      }
-    }
-    signOut({ callbackUrl: '/login' });
-  }
 
   const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => (
     <>
@@ -208,13 +197,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" side="top" className="w-56">
             <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={handleSignOut}
-              className="text-destructive focus:text-destructive cursor-pointer"
-            >
-              <LogOut className="mr-2 h-4 w-4" />
-              Sign out
-            </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => logout()} className="text-destructive cursor-pointer">
+                <LogOut className="mr-2 h-4 w-4" /> Sign out
+              </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

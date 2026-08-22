@@ -185,6 +185,18 @@ public partial class MainPage : ContentPage
                     responseData = await pmsInterop.PrintKitchenTicketAsync(
                         System.Text.Json.JsonSerializer.Serialize(parameters?["ticket"]));
                     break;
+                case "hardware.printRegistrationCard":
+                    responseData = await pmsInterop.PrintRegistrationCardAsync(
+                        System.Text.Json.JsonSerializer.Serialize(parameters?["data"]));
+                    break;
+                case "hardware.printGuestFolio":
+                    responseData = await pmsInterop.PrintGuestFolioAsync(
+                        System.Text.Json.JsonSerializer.Serialize(parameters?["data"]));
+                    break;
+                case "hardware.printPaymentReceipt":
+                    responseData = await pmsInterop.PrintPaymentReceiptAsync(
+                        System.Text.Json.JsonSerializer.Serialize(parameters?["data"]));
+                    break;
                 case "hardware.sendToKds":
                     responseData = await pmsInterop.SendToKdsAsync(
                         System.Text.Json.JsonSerializer.Serialize(parameters?["order"]));
@@ -233,6 +245,9 @@ public partial class MainPage : ContentPage
                     break;
                 case "reservations.list":
                     responseData = await pmsInterop.GetActiveReservationsAsync();
+                    break;
+                case "sync.outbox":
+                    responseData = await pmsInterop.GetOutboxEventsAsync();
                     break;
                 case "reservations.extendStay":
                     responseData = await pmsInterop.ExtendStayAsync(

@@ -119,7 +119,6 @@ model Property {
   deletedAt   DateTime?     @db.Timestamptz
   PosSession  PosSession[]
   CashAccount CashAccount[]
-  HotelEvent  HotelEvent[]
 }
 
 model Building {
@@ -1053,44 +1052,15 @@ enum SyncConflictStatus {
   REJECTED
 }
 
-model HotelEvent {
-  id             String   @id @default(uuid()) @db.Uuid
-  idempotencyKey String   @unique
-  propertyId     String   @db.Uuid
-  property       Property @relation(fields: [propertyId], references: [id])
-  deviceId       String?
-  operatorId     String?
-
-  aggregateType    String
-  aggregateId      String @db.Uuid
-  aggregateVersion Int
-
-  eventType  String
-  occurredAt DateTime @db.Timestamptz
-  sequence   Int?
-
-  payload   Json
-  createdAt DateTime @default(now()) @db.Timestamptz
-
-  syncConflict SyncConflict?
-
-  @@index([aggregateType, aggregateId, aggregateVersion])
-  @@index([propertyId])
-  @@unique([aggregateType, aggregateId, aggregateVersion])
-}
-
 model SyncConflict {
   id         String   @id @default(uuid()) @db.Uuid
   propertyId String   @db.Uuid
   property   Property @relation(fields: [propertyId], references: [id])
 
-  hotelEventId String     @unique @db.Uuid
-  hotelEvent   HotelEvent @relation(fields: [hotelEventId], references: [id])
-
-  aggregateType   String
-  aggregateId     String @db.Uuid
-  expectedVersion Int
-  receivedVersion Int
+  operationId String @unique
+  entityType  String
+  entityId    String
+  payload     Json
 
   conflictReason String
   status         SyncConflictStatus @default(PENDING)
@@ -1994,7 +1964,6 @@ enum PosSessionStatus {
 
 model PosSession {
   id       String    @id @default(uuid()) @db.Uuid
-  version  Int       @default(1)
   outletId String    @db.Uuid
   outlet   PosOutlet @relation(fields: [outletId], references: [id])
 
@@ -2202,7 +2171,6 @@ enum PosOrderType {
 
 model PosOrder {
   id         String      @id @default(uuid()) @db.Uuid
-  version    Int         @default(1)
   propertyId String      @db.Uuid
   property   Property    @relation(fields: [propertyId], references: [id])
   outletId   String      @db.Uuid

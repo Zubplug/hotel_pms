@@ -1,5 +1,6 @@
 import { LodgeCoreDataProvider } from './DataProvider';
 import { invokeDesktop } from './IpcBridge';
+import { OnlineDataProvider } from './OnlineDataProvider';
 
 export const DesktopDataProvider: LodgeCoreDataProvider = {
   auth: {
@@ -37,6 +38,9 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     },
     getSyncHealth: async () => {
       return invokeDesktop('system.getSyncHealth');
+    },
+    getOutboxEvents: async () => {
+      return invokeDesktop('sync.outbox');
     }
   },
   properties: {
@@ -54,67 +58,112 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
       return invokeDesktop('dashboard.get', { propertyId });
     }
   },
+
   guests: {
-    async list() {
+    list: async () => {
+      if (typeof window !== 'undefined' && navigator.onLine) {
+        try { return await OnlineDataProvider.guests.list(); } catch (e) { console.warn('Online failed', e); }
+      }
       return invokeDesktop('guests.list');
     }
   },
+  
   roomTypes: {
-    async list(propertyId: string) {
+    list: async (propertyId: string) => {
+      if (typeof window !== 'undefined' && navigator.onLine) {
+        try { return await OnlineDataProvider.roomTypes.list(propertyId); } catch (e) { console.warn('Online failed', e); }
+      }
       return invokeDesktop('roomTypes.list', { propertyId });
     }
   },
+  
   reservations: {
-    list: async (propertyId, params) => {
-      return invokeDesktop('reservations.list', { propertyId, ...params });
+    list: async (propertyId: string, params?: any) => {
+      if (typeof window !== 'undefined' && navigator.onLine) {
+        try { return await OnlineDataProvider.reservations.list(propertyId, params); } catch (e) { console.warn('Online failed', e); }
+      }
+      return invokeDesktop('reservations.list', { propertyId, params });
     },
-    get: async (id) => {
+    get: async (id: string) => {
+      if (typeof window !== 'undefined' && navigator.onLine) {
+        try { return await OnlineDataProvider.reservations.get(id); } catch (e) { console.warn('Online failed', e); }
+      }
       return invokeDesktop('reservations.get', { id });
     },
-    lookupByRoom: async (roomNo, propertyId) => {
+    lookupByRoom: async (roomNo: string, propertyId: string) => {
+      if (typeof window !== 'undefined' && navigator.onLine) {
+        try { return await OnlineDataProvider.reservations.lookupByRoom(roomNo, propertyId); } catch (e) { console.warn('Online failed', e); }
+      }
       return invokeDesktop('reservations.lookupByRoom', { roomNo, propertyId });
     },
-    create: async (data) => {
-      return invokeDesktop('reservations.create', { data });
+    create: async (data: any) => {
+      // Cloud required for creating new reservations to avoid double booking
+      return OnlineDataProvider.reservations.create(data);
     },
-    update: async (id, data) => {
-      return invokeDesktop('reservations.update', { id, data });
+    update: async (id: string, data: any) => {
+      // Cloud required for complex modifications
+      return OnlineDataProvider.reservations.update(id, data);
     },
-    cancel: async (id, reason) => {
-      return invokeDesktop('reservations.cancel', { id, reason });
+    cancel: async (id: string, reason: string) => {
+      // Cloud required for cancellations to manage inventory
+      return OnlineDataProvider.reservations.cancel(id, reason);
     },
-    checkIn: async (id, userId, deviceId) => {
-      return invokeDesktop('reservations.checkIn', { reservationId: id, userId, deviceId });
+    checkIn: async (id: string, userId: string, deviceId: string) => {
+      if (typeof window !== 'undefined' && navigator.onLine) {
+        try { return await OnlineDataProvider.reservations.checkIn(id, userId, deviceId); } catch (e) { console.warn('Online failed', e); }
+      }
+      return invokeDesktop('reservations.checkIn', { id, userId, deviceId });
     },
-    checkOut: async (id, userId, deviceId) => {
-      return invokeDesktop('reservations.checkOut', { reservationId: id, userId, deviceId });
+    checkOut: async (id: string, userId: string, deviceId: string) => {
+      if (typeof window !== 'undefined' && navigator.onLine) {
+        try { return await OnlineDataProvider.reservations.checkOut(id, userId, deviceId); } catch (e) { console.warn('Online failed', e); }
+      }
+      return invokeDesktop('reservations.checkOut', { id, userId, deviceId });
     },
-    extendStay: async (id, newCheckOutDate) => {
-      return invokeDesktop('reservations.extendStay', { reservationId: id, newCheckOutDate });
+    extendStay: async (id: string, newCheckOutDate: string) => {
+      // Cloud required
+      return OnlineDataProvider.reservations.extendStay(id, newCheckOutDate);
     }
   },
+  
   rooms: {
-    list: async (propertyId, params) => {
-      return invokeDesktop('rooms.list', { propertyId, ...params });
+    list: async (propertyId: string, params?: any) => {
+      if (typeof window !== 'undefined' && navigator.onLine) {
+        try { return await OnlineDataProvider.rooms.list(propertyId, params); } catch (e) { console.warn('Online failed', e); }
+      }
+      return invokeDesktop('rooms.list', { propertyId, params });
     },
-    getAvailable: async (propertyId, roomTypeId, checkIn, checkOut) => {
-      return invokeDesktop('rooms.getAvailable', { propertyId, roomTypeId, checkIn, checkOut });
+    getAvailable: async (propertyId: string, roomTypeId: string, checkIn: string, checkOut: string) => {
+      // Cloud required for availability checks
+      return OnlineDataProvider.rooms.getAvailable(propertyId, roomTypeId, checkIn, checkOut);
     },
-    getActiveReservation: async (roomId) => {
+    getActiveReservation: async (roomId: string) => {
+      if (typeof window !== 'undefined' && navigator.onLine) {
+        try { return await OnlineDataProvider.rooms.getActiveReservation(roomId); } catch (e) { console.warn('Online failed', e); }
+      }
       return invokeDesktop('rooms.getActiveReservation', { roomId });
     }
   },
+  
   folios: {
-    get: async (id) => {
+    get: async (id: string) => {
+      if (typeof window !== 'undefined' && navigator.onLine) {
+        try { return await OnlineDataProvider.folios.get(id); } catch (e) { console.warn('Online failed', e); }
+      }
       return invokeDesktop('folios.get', { id });
     },
-    addCharge: async (folioId, charge) => {
+    addCharge: async (folioId: string, charge: any) => {
+      if (typeof window !== 'undefined' && navigator.onLine) {
+        try { return await OnlineDataProvider.folios.addCharge(folioId, charge); } catch (e) { console.warn('Online failed', e); }
+      }
       return invokeDesktop('folios.addCharge', { folioId, charge });
     },
-    addPayment: async (folioId, payment) => {
-      return invokeDesktop('folios.addPayment', { folioId, payment });
+    addPayment: async (folioId: string, payment: any) => {
+      // Payments strictly cloud for now, unless it's a known offline terminal payment (not implemented in P1)
+      return OnlineDataProvider.folios.addPayment(folioId, payment);
     }
   },
+  
   keycards: {
     encode: async (roomId, lockCode, reservationId) => {
       return invokeDesktop('keycards.encode', { roomId, lockCode, reservationId });
@@ -126,25 +175,8 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
       return invokeDesktop('keycards.cancel');
     }
   },
-  housekeeping: {
-    list: async (propertyId) => {
-      return invokeDesktop('housekeeping.list', { propertyId });
-    },
-    updateTask: async (taskId, status) => {
-      return invokeDesktop('housekeeping.updateTask', { taskId, status });
-    }
-  },
-  maintenance: {
-    list: async (propertyId) => {
-      return invokeDesktop('maintenance.list', { propertyId });
-    },
-    createTicket: async (data) => {
-      return invokeDesktop('maintenance.createTicket', { data });
-    },
-    resolveTicket: async (ticketId) => {
-      return invokeDesktop('maintenance.resolveTicket', { ticketId });
-    }
-  },
+  housekeeping: OnlineDataProvider.housekeeping,
+  maintenance: OnlineDataProvider.maintenance,
   receipts: {
     generate: async (folioId) => {
       return invokeDesktop('receipts.generate', { folioId });

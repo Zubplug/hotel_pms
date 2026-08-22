@@ -19,5 +19,6 @@ public class LocalFolio
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     public int Version { get; set; } = 1;
+    public int LocalSequence { get; set; } = 0;
     public bool IsDirty { get; set; } = false;
 }
