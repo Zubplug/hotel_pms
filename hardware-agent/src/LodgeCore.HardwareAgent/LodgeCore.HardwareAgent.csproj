@@ -11,7 +11,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="..\..\sdk\homelock\LockSDK.dll">
+    <None Include="LockSDK.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="des.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Include="..\..\sdk\hslock\HsLockSDK.dll">
