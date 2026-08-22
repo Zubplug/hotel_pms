@@ -267,13 +267,13 @@ public partial class MainPage : ContentPage
                     responseData = await pmsInterop.RecordPaymentAsync(
                         parameters?["folioId"]?.ToString() ?? "",
                         parameters?["payment"]?["amount"]?.GetValue<decimal>() ?? 0,
-                        parameters?["payment"]?["method"]?.ToString());
+                        parameters?["payment"]?["method"]?.ToString() ?? "");
                     break;
                 case "folios.addCharge":
                     responseData = await pmsInterop.RecordChargeAsync(
                         parameters?["folioId"]?.ToString() ?? "",
                         parameters?["charge"]?["amount"]?.GetValue<decimal>() ?? 0,
-                        parameters?["charge"]?["description"]?.ToString());
+                        parameters?["charge"]?["description"]?.ToString() ?? "");
                     break;
                 case "keycards.encode":
                     responseData = await hardwareInterop.EncodeCardAsync(

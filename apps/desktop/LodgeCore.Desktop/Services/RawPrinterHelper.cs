@@ -5,6 +5,7 @@ namespace LodgeCore.Desktop.Services
 {
     public static class RawPrinterHelper
     {
+#pragma warning disable CS8618
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
         public class DOCINFOA
         {
@@ -12,6 +13,7 @@ namespace LodgeCore.Desktop.Services
             [MarshalAs(UnmanagedType.LPStr)] public string pOutputFile;
             [MarshalAs(UnmanagedType.LPStr)] public string pDataType;
         }
+#pragma warning restore CS8618
 
         [DllImport("winspool.Drv", EntryPoint = "OpenPrinterA", SetLastError = true, CharSet = CharSet.Ansi, ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
         public static extern bool OpenPrinter([MarshalAs(UnmanagedType.LPStr)] string szPrinter, out IntPtr hPrinter, IntPtr pd);
@@ -50,7 +52,7 @@ namespace LodgeCore.Desktop.Services
 
         public static bool SendBytesToPrinter(string szPrinterName, IntPtr pBytes, int dwCount)
         {
-            int dwError = 0, dwWritten = 0;
+            int dwWritten = 0;
             IntPtr hPrinter = new IntPtr(0);
             DOCINFOA di = new DOCINFOA();
             bool success = false;

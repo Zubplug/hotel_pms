@@ -721,15 +721,14 @@ public class OfflinePMSInterop
 
             res.SpecialRequests = root.TryGetProperty("specialRequests", out var sr) ? sr.GetString() : null;
             
-            res.CheckInDate = DateTime.Parse(root.GetProperty("checkIn").GetString());
-            res.CheckOutDate = DateTime.Parse(root.GetProperty("checkOut").GetString());
+            res.CheckInDate = DateTime.Parse(root.GetProperty("checkIn").GetString() ?? DateTime.UtcNow.ToString("O"));
+            res.CheckOutDate = DateTime.Parse(root.GetProperty("checkOut").GetString() ?? DateTime.UtcNow.AddDays(1).ToString("O"));
             
             res.Adults = root.TryGetProperty("adults", out var ad) ? ad.GetInt32() : 1;
             res.Children = root.TryGetProperty("children", out var ch) ? ch.GetInt32() : 0;
             
             var reqStatus = root.TryGetProperty("status", out var st) ? st.GetString() : "PENDING";
-            var validStatuses = new[] { "PENDING", "CHECKED_IN", "CHECKED_OUT", "CANCELLED", "NO_SHOW" };
-            res.Status = validStatuses.Contains(reqStatus) ? reqStatus : "PENDING";
+            res.Status = validStatuses.Contains(reqStatus) ? (reqStatus ?? "PENDING") : "PENDING";
             
             var created = await _repo.CreateReservationAsync(res, "System", "Device1");
             return JsonSerializer.Serialize(new { success = true, data = new { id = created.Id } }, _jsonOptions);
@@ -753,7 +752,7 @@ public class OfflinePMSInterop
                 housekeepingStatus = r.Status,
                 floor = new { number = r.Floor },
                 roomType = types.FirstOrDefault(rt => rt.Id == r.RoomTypeId) != null 
-                           ? new { name = types.First(rt => rt.Id == r.RoomTypeId).Name, code = types.First(rt => rt.Id == r.RoomTypeId).Code } 
+                           ? new { name = types.First(rt => rt.Id == r.RoomTypeId).Name, code = types.First(rt => rt.Id == r.RoomTypeId).Name } 
                            : new { name = "Unknown", code = "UNK" }
             });
             return JsonSerializer.Serialize(new { success = true, data = mapped }, _jsonOptions);
@@ -779,7 +778,7 @@ public class OfflinePMSInterop
                 housekeepingStatus = r.Status,
                 floor = new { number = r.Floor },
                 roomType = types.FirstOrDefault(rt => rt.Id == r.RoomTypeId) != null 
-                           ? new { name = types.First(rt => rt.Id == r.RoomTypeId).Name, code = types.First(rt => rt.Id == r.RoomTypeId).Code } 
+                           ? new { name = types.First(rt => rt.Id == r.RoomTypeId).Name, code = types.First(rt => rt.Id == r.RoomTypeId).Name } 
                            : new { name = "Unknown", code = "UNK" }
             });
             return JsonSerializer.Serialize(new { success = true, data = mapped }, _jsonOptions);
@@ -815,11 +814,11 @@ public class OfflinePMSInterop
 
             var reservationId = root.GetProperty("reservationId").GetString() ?? throw new Exception("reservationId is required");
 
-            var patch = new LocalReservationPatch
+            var patch = new LodgeCore.Desktop.Data.Entities.LocalReservationPatch
             {
                 GuestId        = root.TryGetProperty("guestId",        out var gId)  ? gId.GetString()  : null,
-                CheckIn        = root.TryGetProperty("checkIn",        out var ci)   ? DateTime.Parse(ci.GetString()!) : (DateTime?)null,
-                CheckOut       = root.TryGetProperty("checkOut",       out var co)   ? DateTime.Parse(co.GetString()!) : (DateTime?)null,
+                CheckIn        = root.TryGetProperty("checkIn",        out var ci) && ci.GetString() != null  ? DateTime.Parse(ci.GetString()!) : (DateTime?)null,
+                CheckOut       = root.TryGetProperty("checkOut",       out var co) && co.GetString() != null  ? DateTime.Parse(co.GetString()!) : (DateTime?)null,
                 RoomId         = root.TryGetProperty("roomId",         out var rmId) ? rmId.GetString() : null,
                 RoomTypeId     = root.TryGetProperty("roomTypeId",     out var rtId) ? rtId.GetString() : null,
                 Adults         = root.TryGetProperty("adults",         out var ad)   ? ad.GetInt32()    : (int?)null,
@@ -885,7 +884,7 @@ public class OfflinePMSInterop
             
             data.PropertyId = session.PropertyId;
 
-            var result = await _repo.CreateMaintenanceTicketAsync(data, session.StaffId, deviceId);
+            var result = await _repo.CreateMaintenanceTicketAsync(data, session.UserId, deviceId);
             return JsonSerializer.Serialize(new { success = true, data = result }, _jsonOptions);
         }
         catch (Exception ex)

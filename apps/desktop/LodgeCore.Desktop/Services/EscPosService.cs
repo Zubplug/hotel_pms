@@ -267,8 +267,8 @@ public class EscPosService
         // Reservation Info
         doc.Add(Text($"Conf #: {reservation.Id.Substring(0, 8)}"));
         doc.Add(Text($"Room  : {reservation.RoomNumber ?? "TBA"}"));
-        doc.Add(Text($"Arrival: {reservation.CheckIn.ToLocalTime():dd/MM/yyyy HH:mm}"));
-        doc.Add(Text($"Depart : {reservation.CheckOut.ToLocalTime():dd/MM/yyyy}"));
+        doc.Add(Text($"Arrival: {reservation.CheckInDate.ToLocalTime():dd/MM/yyyy HH:mm}"));
+        doc.Add(Text($"Depart : {reservation.CheckOutDate.ToLocalTime():dd/MM/yyyy}"));
         doc.Add(Text($"Guests : {reservation.Adults}A {reservation.Children}C"));
         doc.Add(Esc.DividerLine);
 

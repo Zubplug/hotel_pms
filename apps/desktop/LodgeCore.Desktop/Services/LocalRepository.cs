@@ -2074,7 +2074,7 @@ public class LocalRepository
         {
             OperationId = $"op_{terminalId}_{DateTime.UtcNow.Ticks}_{Guid.NewGuid().ToString("N").Substring(0, 8)}",
             SequenceNumber = seq,
-            TerminalId = terminalId,
+            TerminalId = terminalId ?? string.Empty,
             OutletId = outletId ?? string.Empty,
             SessionId = sessionId ?? string.Empty,
             OperatorId = operatorId ?? string.Empty,

@@ -519,8 +519,6 @@ public class SyncEngine : BackgroundService
                     if (propEl.TryGetProperty("bankingModel", out var bm))
                         localProp.BankingModel = bm.GetString() ?? localProp.BankingModel;
 
-                    localProp.UpdatedAt = DateTime.UtcNow;
-
                     if (root.TryGetProperty("syncedAt", out var syncedAtEl))
                     {
                         Preferences.Set($"LastPull_{propertyId}", syncedAtEl.GetString());
@@ -1021,7 +1019,7 @@ public class SyncEngine : BackgroundService
                     var room = await dbContext.Rooms.FirstOrDefaultAsync(r => r.Id == task.RoomId, stoppingToken);
                     if (room != null)
                     {
-                        task.RoomNumber = room.RoomNumber ?? "";
+                        task.RoomNumber = room.Number ?? "";
                     }
                 }
 
@@ -1049,9 +1047,10 @@ public class SyncEngine : BackgroundService
                         dbContext.MaintenanceTickets.Add(ticket);
                     }
                     
-                    ticket.RoomId = el.TryGetProperty("roomId", out var rid) ? rid.GetString() : null;
-                    ticket.Title = el.TryGetProperty("title", out var title) ? title.GetString() ?? "" : "";
-                    ticket.Description = el.TryGetProperty("description", out var desc) ? desc.GetString() ?? "" : "";
+                    ticket.RoomId = el.TryGetProperty("roomId", out var rid) ? rid.GetString() ?? "" : "";
+                    var title = el.TryGetProperty("title", out var tEl) ? tEl.GetString() ?? "" : "";
+                    var desc = el.TryGetProperty("description", out var dEl) ? dEl.GetString() ?? "" : "";
+                    ticket.IssueDescription = $"{title} - {desc}".Trim();
                     ticket.Status = el.TryGetProperty("status", out var st) ? st.GetString() ?? "" : "";
                     
                     ticket.Priority = el.TryGetProperty("priority", out var pri) ? pri.GetString() ?? "NORMAL" : "NORMAL";
