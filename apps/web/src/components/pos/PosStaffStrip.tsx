@@ -32,44 +32,48 @@ export function PosStaffStrip({ orders, onSelectOrder, activeOrderId }: PosStaff
   if (orders.length === 0) return null;
 
   return (
-    <div className="flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+    <div
+      className="flex gap-2 overflow-x-auto"
+      style={{ scrollbarWidth: 'none' }}
+    >
       {orders.map(order => {
         const isActive = activeOrderId === order.id;
         const label = order.tableName
-          ? `Table ${order.tableName}`
+          ? `T${order.tableName}`
           : order.tableNumber
-          ? `Table ${order.tableNumber}`
-          : order.orderNumber;
-        const timeStr = formatOrderTime(order.updatedAt || order.createdAt);
+          ? `T${order.tableNumber}`
+          : `#${order.orderNumber?.split('-').pop() || ''}`;
 
         return (
           <button
             key={order.id}
             onClick={() => onSelectOrder(order)}
-            className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border transition-all min-w-[200px] shrink-0 ${
+            className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border transition-all shrink-0 touch-manipulation ${
               isActive
-                ? 'bg-indigo-50 border-indigo-300 shadow-sm ring-1 ring-indigo-500'
-                : 'bg-white border-slate-200 hover:bg-slate-50 hover:border-slate-300 hover:shadow-sm'
+                ? 'bg-indigo-50 border-indigo-300 ring-1 ring-indigo-400'
+                : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
             }`}
           >
-            <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
-              isActive ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'
-            }`}>
-              <Receipt className="w-4 h-4" />
+            <div
+              className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 ${
+                isActive ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'
+              }`}
+            >
+              <Receipt className="w-3 h-3" />
             </div>
-            <div className="flex flex-col flex-1 min-w-0 text-left">
-              <div className="flex justify-between items-center gap-2">
-                <span className="font-bold text-slate-800 text-sm truncate">{label}</span>
-                <span className={`font-black text-sm shrink-0 ${isActive ? 'text-indigo-600' : 'text-slate-700'}`}>
+            <div className="flex flex-col text-left">
+              <div className="flex items-center gap-1.5">
+                <span className="font-black text-slate-800 text-xs">{label}</span>
+                <span className={`font-black text-xs ${isActive ? 'text-indigo-600' : 'text-slate-600'}`}>
                   {formatCurrency(order.total)}
                 </span>
               </div>
-              <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-slate-400 font-medium">
-                <Users className="w-3 h-3" />
+              <div className="flex items-center gap-1 text-[9px] text-slate-400 font-medium">
+                <Users className="w-2.5 h-2.5" />
                 <span>{order.guestCount || 1}</span>
-                <span className="text-slate-300">•</span>
-                <Clock className="w-3 h-3" />
-                <span>{timeStr}</span>
+                <span className="text-slate-300">·</span>
+                <Clock className="w-2.5 h-2.5" />
+                <span>{formatOrderTime(order.updatedAt || order.createdAt)}</span>
               </div>
             </div>
           </button>

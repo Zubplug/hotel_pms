@@ -17,51 +17,73 @@ interface ProductCardStepperProps {
   emoji: string;
 }
 
-export function ProductCardStepper({ product, quantity, onIncrement, onDecrement, onClick, emoji }: ProductCardStepperProps) {
+export function ProductCardStepper({
+  product,
+  quantity,
+  onIncrement,
+  onDecrement,
+  onClick,
+  emoji,
+}: ProductCardStepperProps) {
   const isSelected = quantity > 0;
 
   return (
-    <div 
-      className={`relative group rounded-2xl overflow-hidden bg-white border transition-all duration-200 select-none flex flex-col ${
-        isSelected 
-          ? 'border-indigo-400 shadow-md ring-1 ring-indigo-400 ring-offset-1' 
-          : 'border-slate-200 shadow-sm hover:shadow-md hover:border-indigo-300'
+    <div
+      className={`relative group flex flex-col bg-white rounded-xl border transition-all duration-150 overflow-hidden select-none ${
+        isSelected
+          ? 'border-indigo-400 shadow-md ring-1 ring-indigo-400/50'
+          : 'border-slate-200 hover:border-indigo-300 hover:shadow-sm'
       }`}
     >
-      {/* Clickable Area for Info */}
-      <button 
+      {/* Qty badge */}
+      {isSelected && (
+        <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-indigo-600 text-white text-[10px] font-black flex items-center justify-center z-10 shadow">
+          {quantity}
+        </div>
+      )}
+
+      {/* Tap target — emoji + name + price */}
+      <button
         onClick={onClick}
-        className="flex-1 p-4 flex flex-col items-center justify-center text-center focus:outline-none"
+        className="flex-1 flex flex-col items-center justify-center text-center px-2 pt-3 pb-2 gap-1.5 focus:outline-none touch-manipulation"
       >
-        <span className="text-4xl mb-3 transition-transform group-hover:scale-110 drop-shadow-sm">{emoji}</span>
-        <p className="font-semibold text-slate-800 text-sm leading-snug line-clamp-2">{product.name}</p>
-        <p className="font-black text-indigo-600 mt-1">{formatCurrency(product.price)}</p>
+        <span className="text-3xl leading-none transition-transform group-hover:scale-110">
+          {emoji}
+        </span>
+        <p className="font-semibold text-slate-800 text-xs leading-snug line-clamp-2 px-1">
+          {product.name}
+        </p>
+        <p className="font-black text-indigo-600 text-xs">
+          {formatCurrency(product.price)}
+        </p>
       </button>
 
-      {/* Stepper Area */}
-      <div className="p-2 border-t border-slate-100 bg-slate-50/50">
-        {quantity > 0 ? (
-          <div className="flex items-center justify-between bg-white rounded-xl p-1 border border-slate-200 shadow-sm">
-            <button 
-              onClick={(e) => { e.stopPropagation(); onDecrement(); }}
-              className="w-10 h-10 flex items-center justify-center rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-800 transition-colors active:scale-95"
+      {/* Stepper */}
+      <div className="border-t border-slate-100 bg-slate-50/80 p-1.5">
+        {isSelected ? (
+          <div className="flex items-center justify-between bg-white rounded-lg px-1 py-0.5 border border-slate-200">
+            <button
+              onClick={e => { e.stopPropagation(); onDecrement(); }}
+              className="w-7 h-7 flex items-center justify-center rounded-md bg-slate-100 text-slate-600 hover:bg-rose-50 hover:text-rose-500 active:scale-95 transition-all touch-manipulation"
             >
-              <Minus className="w-5 h-5" />
+              <Minus className="w-3.5 h-3.5" />
             </button>
-            <span className="font-black text-slate-800 text-lg w-10 text-center">{quantity}</span>
-            <button 
-              onClick={(e) => { e.stopPropagation(); onIncrement(); }}
-              className="w-10 h-10 flex items-center justify-center rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 transition-colors shadow-sm active:scale-95"
+            <span className="font-black text-slate-800 text-sm w-6 text-center">
+              {quantity}
+            </span>
+            <button
+              onClick={e => { e.stopPropagation(); onIncrement(); }}
+              className="w-7 h-7 flex items-center justify-center rounded-md bg-indigo-600 text-white hover:bg-indigo-500 active:scale-95 transition-all shadow-sm touch-manipulation"
             >
-              <Plus className="w-5 h-5" />
+              <Plus className="w-3.5 h-3.5" />
             </button>
           </div>
         ) : (
-          <button 
-            onClick={(e) => { e.stopPropagation(); onIncrement(); }}
-            className="w-full py-2.5 rounded-xl bg-slate-50 text-slate-500 font-bold hover:bg-indigo-50 hover:text-indigo-700 transition-all active:scale-95 flex items-center justify-center gap-2 border border-slate-200 hover:border-indigo-200"
+          <button
+            onClick={e => { e.stopPropagation(); onIncrement(); }}
+            className="w-full py-1.5 rounded-lg bg-white text-indigo-600 font-bold text-[11px] hover:bg-indigo-600 hover:text-white active:scale-95 flex items-center justify-center gap-1 border border-slate-200 hover:border-indigo-600 transition-all touch-manipulation"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-3 h-3" />
             ADD
           </button>
         )}
