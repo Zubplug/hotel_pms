@@ -31,7 +31,7 @@ export function FolioSection({ reservation }: { reservation: any }) {
   }
 
   const formatCurrency = (amount: number | string) => {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: folio.currency }).format(Number(amount));
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: folio.currency || 'NGN' }).format(Number(amount));
   };
 
   const isClosed = folio.status === 'CLOSED';

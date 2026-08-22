@@ -83,8 +83,8 @@ export function ExtendStayDialog({ open, onOpenChange, reservation }: ExtendStay
     }
   };
 
-  const formatMoney = (amount: number, currency: string) =>
-    new Intl.NumberFormat('en-NG', { style: 'currency', currency }).format(amount);
+  const formatMoney = (amount: number, currency?: string | null) =>
+    new Intl.NumberFormat('en-NG', { style: 'currency', currency: currency || 'NGN' }).format(amount);
 
   return (
     <Dialog

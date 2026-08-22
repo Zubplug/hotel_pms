@@ -84,8 +84,8 @@ export function FrontDeskExtendStayDialog({ open, onOpenChange, reservation }: F
     }
   };
 
-  const formatMoney = (amount: number, currency: string) =>
-    new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 0 }).format(amount);
+  const formatMoney = (amount: number, currency?: string | null) =>
+    new Intl.NumberFormat('en-NG', { style: 'currency', currency: currency || 'NGN', maximumFractionDigits: 0 }).format(amount);
 
   return (
     <Dialog

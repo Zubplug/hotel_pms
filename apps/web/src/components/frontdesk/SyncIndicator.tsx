@@ -17,7 +17,7 @@ import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 
 export function SyncIndicator() {
-  const { isOnline, syncStatus, isDesktopMode } = useLodgeCoreProvider();
+  const { isOnline, syncStatus, isDesktopMode, provider } = useLodgeCoreProvider();
   const { data: session } = useLodgeCoreSession();
   const [pendingCount, setPendingCount] = useState(0);
   const [conflictCount, setConflictCount] = useState(0);

@@ -44,8 +44,8 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
   
   const latestPayment = folio?.payments?.filter((p: any) => p.status === 'COMPLETED' || p.status === 'REFUNDED').sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
 
-  const formatCurrency = (amount: number, currency: string = 'NGN') => {
-    return new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 0 }).format(amount);
+  const formatCurrency = (amount: number, currency?: string | null) => {
+    return new Intl.NumberFormat('en-NG', { style: 'currency', currency: currency || 'NGN', maximumFractionDigits: 0 }).format(amount);
   };
 
   const getStatusColor = (status: string) => {

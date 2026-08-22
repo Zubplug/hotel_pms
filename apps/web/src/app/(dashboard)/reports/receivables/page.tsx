@@ -33,8 +33,8 @@ export default function ReceivablesReportPage() {
     enabled: !!propertyId,
   });
 
-  const formatCurrency = (amount: number, currency = 'NGN') => {
-    return new Intl.NumberFormat('en-NG', { style: 'currency', currency }).format(amount);
+  const formatCurrency = (amount: number, currency?: string | null) => {
+    return new Intl.NumberFormat('en-NG', { style: 'currency', currency: currency || 'NGN' }).format(amount);
   };
 
   let filteredReceivables = receivables || [];

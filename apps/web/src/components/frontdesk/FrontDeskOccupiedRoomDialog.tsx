@@ -140,7 +140,7 @@ export function FrontDeskOccupiedRoomDialog({ room, isOpen, onClose }: FrontDesk
                     <span className="font-semibold text-slate-700">Folio Balance</span>
                   </div>
                   <span className={`font-black text-lg ${resData.folioBalance > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                    {new Intl.NumberFormat('en-NG', { style: 'currency', currency: resData.currency, maximumFractionDigits: 0 }).format(resData.folioBalance)}
+                    {new Intl.NumberFormat('en-NG', { style: 'currency', currency: resData.currency || 'NGN', maximumFractionDigits: 0 }).format(resData.folioBalance)}
                   </span>
                 </div>
 

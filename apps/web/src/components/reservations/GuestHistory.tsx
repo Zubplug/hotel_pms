@@ -19,8 +19,8 @@ export function GuestHistory({ guest }: { guest: any }) {
     );
   }
 
-  const formatCurrency = (amount: number, currency: string) => {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount);
+  const formatCurrency = (amount: number, currency?: string | null) => {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency || 'NGN' }).format(amount);
   };
 
   return (

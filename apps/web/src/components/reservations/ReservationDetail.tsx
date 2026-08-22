@@ -35,8 +35,8 @@ export function ReservationDetail({ reservation }: { reservation: any }) {
   const isCancellable = reservation.status === 'CONFIRMED';
   const canExtendStay = reservation.status === 'CHECKED_IN';
 
-  const formatCurrency = (amount: number, currency: string) => {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount);
+  const formatCurrency = (amount: number, currency?: string | null) => {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency || 'NGN' }).format(amount);
   };
 
   // Determine if key card needs extension
