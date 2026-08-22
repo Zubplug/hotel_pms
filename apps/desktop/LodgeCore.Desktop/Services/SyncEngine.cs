@@ -284,7 +284,7 @@ public class SyncEngine : BackgroundService
             
             if (response.IsSuccessStatusCode)
             {
-                var result = await response.Content.ReadFromJsonAsync<SyncPushResponse>(stoppingToken: stoppingToken);
+                var result = await response.Content.ReadFromJsonAsync<SyncPushResponse>(cancellationToken: stoppingToken);
                 if (result != null)
                 {
                     foreach (var evt in eventsToPush)
