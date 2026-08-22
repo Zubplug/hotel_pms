@@ -30,6 +30,19 @@
     <!-- Deluns SDK -->
     <None Include="LockSDK.dll" CopyToOutputDirectory="PreserveNewest" />
     <None Include="des.dll" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="DataReader.dll" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="EasyD12_500.dll" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="EasyZUSBMulti.dll" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="HOOKS_M1.dll" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="HSDApp.dll" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="LockInfo.dll" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="MF0SIM.dll" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="PubFunc.dll" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="PubFuns.dll" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="RC500USB.dll" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="RF50S.dll" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="RF57S.dll" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Rf_Rw.dll" CopyToOutputDirectory="PreserveNewest" />
     
     <!-- HS Lock SDK -->
     <Content Include="runtimes\**">
