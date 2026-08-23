@@ -224,6 +224,15 @@ export async function GET(req: NextRequest) {
       orderBy: { updatedAt: 'asc' },
     });
 
+    let allGuests: any[] = [];
+    if (!since && property.organizationId) {
+      allGuests = await prisma.guest.findMany({
+        where: { organizationId: property.organizationId },
+        take: limit,
+        orderBy: { updatedAt: 'asc' }
+      });
+    }
+
     // ---- Merge and Paginate ---------------------------------------------
     
     // We attach an entityType and extract the updatedAt to globally sort
@@ -243,6 +252,7 @@ export async function GET(req: NextRequest) {
     posOrders.forEach(s => allEntities.push({ type: 'PosOrder', updatedAt: s.updatedAt, data: s }));
     housekeepingTasks.forEach(s => allEntities.push({ type: 'HousekeepingTask', updatedAt: s.updatedAt, data: s }));
     maintenanceTickets.forEach(s => allEntities.push({ type: 'MaintenanceTicket', updatedAt: s.updatedAt, data: s }));
+    allGuests.forEach(s => allEntities.push({ type: 'Guest', updatedAt: s.updatedAt, data: s }));
 
     // Sort globally by updatedAt ascending
     allEntities.sort((a, b) => a.updatedAt.getTime() - b.updatedAt.getTime());
@@ -281,9 +291,11 @@ export async function GET(req: NextRequest) {
     const finalPosOrders = allEntities.filter(e => e.type === 'PosOrder').map(e => e.data);
     const finalHousekeepingTasks = allEntities.filter(e => e.type === 'HousekeepingTask').map(e => e.data);
     const finalMaintenanceTickets = allEntities.filter(e => e.type === 'MaintenanceTicket').map(e => e.data);
+    const finalGuests = allEntities.filter(e => e.type === 'Guest').map(e => e.data);
 
     // Flatten Guests and Folios from the resulting reservations
     const guestMap = new Map<string, any>();
+    finalGuests.forEach(g => guestMap.set(g.id, g));
     const folios: any[] = [];
     const plainReservations = finalReservations.map(r => {
       if (r.primaryGuest) guestMap.set(r.primaryGuest.id, r.primaryGuest);
