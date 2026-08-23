@@ -30,11 +30,6 @@ export async function authenticateSyncRequest(req: NextRequest, targetPropertyId
       where: {
         propertyId: targetPropertyId,
         registrationState: 'REGISTERED'
-      },
-      include: {
-        property: {
-          select: { organizationId: true }
-        }
       }
     });
 
@@ -60,7 +55,7 @@ export async function authenticateSyncRequest(req: NextRequest, targetPropertyId
       return { 
         success: true, 
         propertyId: targetPropertyId, 
-        organizationId: authorizedDevice.property.organizationId,
+        organizationId: authorizedDevice.organisationId,
         isDevice: true,
         deviceId: authorizedDevice.id
       };

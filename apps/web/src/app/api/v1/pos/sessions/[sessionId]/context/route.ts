@@ -12,7 +12,7 @@ export async function GET(
       where: { id: sessionId },
       include: {
         outlet: true,
-        operator: true,
+        primaryOperator: true,
       },
     });
 
