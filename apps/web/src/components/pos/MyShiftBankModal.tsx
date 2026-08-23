@@ -79,9 +79,9 @@ export function MyShiftBankModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="bg-indigo-600 px-6 py-5 flex items-center justify-between text-white">
+        <div className="bg-indigo-600 px-6 py-5 flex items-center justify-between text-white shrink-0">
           <div className="flex items-center gap-3">
             <div className="bg-white/20 p-2 rounded-xl">
               <Wallet className="w-6 h-6" />
@@ -97,7 +97,7 @@ export function MyShiftBankModal({
         </div>
 
         {/* Content */}
-        <div className="p-6 flex-1 overflow-y-auto">
+        <div className="p-6 flex-1 overflow-y-auto min-h-0">
           {isLoading || !sessionDetails ? (
             <div className="py-12 text-center text-slate-500">Loading details...</div>
           ) : (
@@ -197,7 +197,7 @@ export function MyShiftBankModal({
         </div>
 
         {/* Footer */}
-        <div className="p-6 pt-0 mt-4">
+        <div className="p-6 pt-0 mt-4 shrink-0">
           <Button 
             onClick={handleCloseShift} 
             disabled={isLoading || isSubmitting || !sessionDetails}
