@@ -92,7 +92,10 @@ public class LocalDbContext : DbContext
                 "ALTER TABLE Reservations ADD COLUMN DepositPaid TEXT;",
                 "ALTER TABLE Reservations ADD COLUMN DepositRequired TEXT;",
                 "ALTER TABLE Reservations ADD COLUMN ConfirmationNumber TEXT;",
-                "ALTER TABLE PosProducts ADD COLUMN HasModifiers INTEGER NOT NULL DEFAULT 0;"
+                "ALTER TABLE PosProducts ADD COLUMN HasModifiers INTEGER NOT NULL DEFAULT 0;",
+                "ALTER TABLE Rooms ADD COLUMN BuildingName TEXT;",
+                "ALTER TABLE Rooms ADD COLUMN FloorName TEXT;",
+                "ALTER TABLE Rooms ADD COLUMN FloorNumber INTEGER;"
             };
 
             foreach (var migration in migrations)

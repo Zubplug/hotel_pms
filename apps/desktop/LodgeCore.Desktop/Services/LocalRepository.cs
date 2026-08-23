@@ -647,9 +647,36 @@ public class LocalRepository
         return await _dbContext.RoomTypes.Where(rt => rt.PropertyId == propertyId).ToListAsync();
     }
 
-    public async Task<List<LocalRoom>> GetRoomsAsync(string propertyId)
+    public async Task<object> GetRoomsAsync(string propertyId)
     {
-        return await _dbContext.Rooms.Where(r => r.PropertyId == propertyId).ToListAsync();
+        var rooms = await _dbContext.Rooms.Where(r => r.PropertyId == propertyId).ToListAsync();
+        var roomTypes = await _dbContext.RoomTypes.Where(rt => rt.PropertyId == propertyId).ToDictionaryAsync(rt => rt.Id);
+        
+        return rooms.Select(r => new {
+            id = r.Id,
+            propertyId = r.PropertyId,
+            buildingId = r.BuildingId,
+            floorId = r.FloorId,
+            code = r.Code,
+            number = r.Number,
+            displayName = r.DisplayName,
+            status = r.Status,
+            housekeepingStatus = r.HousekeepingStatus,
+            maintenanceStatus = r.MaintenanceStatus,
+            roomTypeId = r.RoomTypeId,
+            maxOccupancy = r.MaxOccupancy,
+            maxAdults = r.MaxAdults,
+            maxChildren = r.MaxChildren,
+            isAccessible = r.IsAccessible,
+            isActive = r.IsActive,
+            isOccupied = r.IsOccupied,
+            lockSystemCode = r.LockSystemCode,
+            createdAt = r.CreatedAt,
+            updatedAt = r.UpdatedAt,
+            building = string.IsNullOrEmpty(r.BuildingName) ? null : new { name = r.BuildingName },
+            floor = string.IsNullOrEmpty(r.FloorName) ? null : new { name = r.FloorName, number = r.FloorNumber ?? 0 },
+            roomType = roomTypes.TryGetValue(r.RoomTypeId, out var rt) ? new { name = rt.Name, code = rt.Code } : null
+        }).ToList();
     }
 
     public async Task<object> GetDashboardAsync(string propertyId)

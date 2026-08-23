@@ -676,7 +676,10 @@ public class SyncEngine : BackgroundService
                     room.Code = el.TryGetProperty("code", out var cd) ? cd.GetString() ?? room.Number : room.Number;
                     room.DisplayName = el.TryGetProperty("displayName", out var dn) ? dn.GetString() : null;
                     room.BuildingId = el.TryGetProperty("buildingId", out var bid) ? bid.GetString() : null;
+                    room.BuildingName = el.TryGetProperty("building", out var bld) && bld.ValueKind != System.Text.Json.JsonValueKind.Null && bld.TryGetProperty("name", out var bnm) ? bnm.GetString() : null;
                     room.FloorId = el.TryGetProperty("floorId", out var fid) ? fid.GetString() : null;
+                    room.FloorName = el.TryGetProperty("floor", out var flr) && flr.ValueKind != System.Text.Json.JsonValueKind.Null && flr.TryGetProperty("name", out var fnm) ? fnm.GetString() : null;
+                    room.FloorNumber = el.TryGetProperty("floor", out var flr2) && flr2.ValueKind != System.Text.Json.JsonValueKind.Null && flr2.TryGetProperty("number", out var fnum) ? fnum.GetInt32() : (int?)null;
                     room.Status = el.TryGetProperty("status", out var st) ? st.GetString() ?? "" : "";
                     room.HousekeepingStatus = el.TryGetProperty("housekeepingStatus", out var hs) ? hs.GetString() ?? "" : "";
                     room.MaintenanceStatus = el.TryGetProperty("maintenanceStatus", out var ms) ? ms.GetString() ?? "" : "";

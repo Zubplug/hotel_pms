@@ -201,7 +201,11 @@ export async function GET(req: NextRequest) {
     // ---- Load Front Desk Operational Cache ------------------------------
     // 1. Rooms & Room Types
     const rooms = await prisma.room.findMany({
-      where: { propertyId, isActive: true }
+      where: { propertyId, isActive: true },
+      include: {
+        building: { select: { name: true } },
+        floor: { select: { name: true, number: true } }
+      }
     });
     const roomTypes = await prisma.roomType.findMany({
       where: { propertyId, isActive: true }

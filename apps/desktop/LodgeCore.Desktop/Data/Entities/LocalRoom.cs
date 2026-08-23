@@ -10,7 +10,10 @@ public class LocalRoom
 
     public string PropertyId { get; set; } = string.Empty;
     public string? BuildingId { get; set; }
+    public string? BuildingName { get; set; }
     public string? FloorId { get; set; }
+    public string? FloorName { get; set; }
+    public int? FloorNumber { get; set; }
     public string Code { get; set; } = string.Empty;
     public string Number { get; set; } = string.Empty;
     public string? DisplayName { get; set; }
