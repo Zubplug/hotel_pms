@@ -7,6 +7,7 @@ import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { PinPad } from './PinPad';
 import { Wifi, WifiOff, RefreshCw } from 'lucide-react';
+import { toast } from 'sonner';
 
 type OperatorSelectionScreenProps = {
   isOpen: boolean;
@@ -290,14 +291,27 @@ export function OperatorSelectionScreen({ isOpen, onAuthenticated, onCancel, can
                 </p>
                 {isDesktopMode && provider.system?.forceSync && (
                   <Button onClick={() => {
-                    provider.system?.forceSync?.();
-                    setIsFetchingStaff(true);
-                    setTimeout(() => {
-                      provider.auth.getActiveStaff().then(res => {
-                        if (res?.data) setStaff(res.data);
-                        setIsFetchingStaff(false);
-                      });
-                    }, 2000);
+                    if (provider.system?.forceSync) {
+                      toast.promise(
+                        provider.system.forceSync().then(() => {
+                          setIsFetchingStaff(true);
+                          return new Promise(resolve => {
+                            setTimeout(() => {
+                              provider.auth.getActiveStaff().then((res: any) => {
+                                if (res?.data) setStaff(res.data);
+                                setIsFetchingStaff(false);
+                                resolve(true);
+                              });
+                            }, 2000);
+                          });
+                        }),
+                        {
+                          loading: 'Synchronizing with cloud...',
+                          success: 'Sync completed successfully',
+                          error: 'Sync failed. Check connection.'
+                        }
+                      );
+                    }
                   }} size="lg" className="rounded-xl">
                     <RefreshCw className="w-5 h-5 mr-2" />
                     Sync Now

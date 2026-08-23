@@ -714,6 +714,20 @@ public class OfflinePMSInterop
         }
     }
 
+    public async Task<string> SearchGuestsAsync(string query)
+    {
+        try
+        {
+            var ctx = await GetSecureContextAsync();
+            var data = await _repo.SearchGuestsAsync(query);
+            return JsonSerializer.Serialize(new { success = true, data }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
     public async Task<string> UpdateGuestAsync(string guestId, string guestDataJson)
     {
         try
@@ -777,7 +791,7 @@ public class OfflinePMSInterop
                 var guestDetails = root.GetProperty("guestDetails");
                 var newGuest = new LodgeCore.Desktop.Data.Entities.LocalGuest {
                     Id = Guid.NewGuid().ToString(),
-                    PropertyId = res.PropertyId,
+                    OrganizationId = "",
                     FirstName = guestDetails.GetProperty("firstName").GetString() ?? "",
                     LastName = guestDetails.GetProperty("lastName").GetString() ?? "",
                     Email = guestDetails.TryGetProperty("email", out var email) ? email.GetString() : null,
@@ -878,7 +892,7 @@ public class OfflinePMSInterop
                 number = r.Number,
                 status = r.Status,
                 housekeepingStatus = r.Status,
-                floor = new { number = r.Floor },
+                floor = new { number = r.FloorName },
                 roomType = types.FirstOrDefault(rt => rt.Id == r.RoomTypeId) != null 
                            ? new { name = types.First(rt => rt.Id == r.RoomTypeId).Name, code = types.First(rt => rt.Id == r.RoomTypeId).Name } 
                            : new { name = "Unknown", code = "UNK" }

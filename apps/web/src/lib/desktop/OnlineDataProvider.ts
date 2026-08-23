@@ -63,6 +63,9 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
   guests: {
     async list() {
       return apiFetch(`/api/v1/guests`);
+    },
+    async search(query: string) {
+      return apiFetch(`/api/v1/guests?search=${encodeURIComponent(query)}&limit=50`);
     }
   },
   roomTypes: {

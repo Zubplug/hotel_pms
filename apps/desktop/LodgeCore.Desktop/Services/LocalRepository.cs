@@ -35,7 +35,7 @@ public class LocalRepository
             var roomType = await _dbContext.RoomTypes.FirstOrDefaultAsync(rt => rt.Id == reservation.RoomTypeId);
             if (roomType != null)
             {
-                baseRate = roomType.BaseRate;
+                baseRate = roomType.BasePrice;
                 if (!string.IsNullOrEmpty(roomType.Currency)) currency = roomType.Currency;
             }
         }
@@ -694,7 +694,69 @@ public class LocalRepository
 
     public async Task<List<LocalGuest>> GetGuestsAsync()
     {
-        return await _dbContext.Guests.ToListAsync();
+        return await _dbContext.Guests.Where(g => g.DeletedAt == null).ToListAsync();
+    }
+
+    public async Task<List<LocalGuest>> SearchGuestsAsync(string query)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return await _dbContext.Guests.Where(g => g.DeletedAt == null).Take(50).ToListAsync();
+        }
+
+        query = query.ToLower();
+        return await _dbContext.Guests
+            .Where(g => g.DeletedAt == null && 
+                        (g.FirstName.ToLower().Contains(query) || 
+                         g.LastName.ToLower().Contains(query) || 
+                         (g.Email != null && g.Email.ToLower().Contains(query)) || 
+                         (g.Phone != null && g.Phone.Contains(query))))
+            .Take(50)
+            .ToListAsync();
+    }
+
+    public async Task UpsertGuestPageTransactionAsync(List<LocalGuest> guests, string? nextCursor)
+    {
+        using var transaction = await _dbContext.Database.BeginTransactionAsync();
+        try
+        {
+            foreach (var guest in guests)
+            {
+                var existing = await _dbContext.Guests.FirstOrDefaultAsync(g => g.Id == guest.Id);
+                if (existing == null)
+                {
+                    _dbContext.Guests.Add(guest);
+                }
+                else
+                {
+                    existing.FirstName = guest.FirstName;
+                    existing.LastName = guest.LastName;
+                    existing.Email = guest.Email;
+                    existing.Phone = guest.Phone;
+                    existing.CompanyName = guest.CompanyName;
+                    existing.IsVip = guest.IsVip;
+                    existing.UpdatedAt = guest.UpdatedAt;
+                    existing.DeletedAt = guest.DeletedAt;
+                    existing.Version = guest.Version;
+                    _dbContext.Guests.Update(existing);
+                }
+            }
+
+            var meta = await _dbContext.SyncMetadata.FirstOrDefaultAsync();
+            if (meta != null)
+            {
+                meta.LastGuestSyncCursor = nextCursor;
+                _dbContext.SyncMetadata.Update(meta);
+            }
+            
+            await _dbContext.SaveChangesAsync();
+            await transaction.CommitAsync();
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync();
+            throw new Exception($"Failed to process guest page: {ex.Message}");
+        }
     }
 
     public async Task<bool> UpdateGuestAsync(string guestId, string firstName, string lastName, string? email, string? phone, string operatorId, string deviceId)
@@ -847,54 +909,104 @@ public class LocalRepository
 
     public async Task<object> GetDashboardAsync(string propertyId)
     {
-        var today = DateTime.UtcNow.Date;
-        
-        var arrivals = await _dbContext.Reservations
-            .Include(r => r.Guest)
-            .Include(r => r.Folio)
-            .Where(r => r.PropertyId == propertyId && r.Status == "CONFIRMED" && r.CheckInDate.Date == today)
-            .Select(r => new {
-                id = r.Id,
-                guestName = r.Guest != null ? r.Guest.FirstName + " " + r.Guest.LastName : "Unknown",
-                roomName = r.RoomNumber ?? "Unassigned",
-                balance = r.Folio != null ? r.Folio.TotalCharges - r.Folio.TotalPayments : 0,
-                status = r.Status,
-                roomStatus = "AVAILABLE"
-            })
-            .ToListAsync();
+        var today = DateTime.UtcNow.Date; // Ideally we use property timezone, falling back to UTC here
 
-        var departures = await _dbContext.Reservations
-            .Include(r => r.Guest)
-            .Include(r => r.Folio)
-            .Where(r => r.PropertyId == propertyId && r.Status == "CHECKED_IN" && r.CheckOutDate.Date == today)
-            .Select(r => new {
-                id = r.Id,
-                guestName = r.Guest != null ? r.Guest.FirstName + " " + r.Guest.LastName : "Unknown",
-                roomName = r.RoomNumber ?? "Unassigned",
-                balance = r.Folio != null ? r.Folio.TotalCharges - r.Folio.TotalPayments : 0,
-                status = r.Status
-            })
-            .ToListAsync();
-
-        var inHouse = await _dbContext.Reservations.CountAsync(r => r.PropertyId == propertyId && r.Status == "CHECKED_IN");
-        var totalRooms = await _dbContext.Rooms.CountAsync(r => r.PropertyId == propertyId);
-        var availableRooms = await _dbContext.Rooms.CountAsync(r => r.PropertyId == propertyId && (r.Status == "AVAILABLE" || r.Status == "CLEAN"));
-        
         var property = await _dbContext.Properties.FirstOrDefaultAsync(p => p.Id == propertyId);
+
+        var reservations = await _dbContext.Reservations
+            .Include(r => r.Guest)
+            .Include(r => r.Folio)
+            .Where(r => r.PropertyId == propertyId && r.Status != "CANCELLED" && r.Status != "NO_SHOW")
+            .ToListAsync();
+            
+        var rooms = await _dbContext.Rooms
+            .Where(r => r.PropertyId == propertyId && r.IsActive)
+            .ToListAsync();
+            
+        var roomTypes = await _dbContext.RoomTypes
+            .Where(rt => rt.PropertyId == propertyId)
+            .ToListAsync();
+
+        var roomDict = rooms.ToDictionary(r => r.Id);
+        var roomTypeDict = roomTypes.ToDictionary(rt => rt.Id);
+
+        var arrivalsRaw = reservations.Where(r => r.CheckInDate.Date == today).ToList();
+        var departuresRaw = reservations.Where(r => r.CheckOutDate.Date == today).ToList();
+        var inHouseCount = reservations.Count(r => r.Status == "CHECKED_IN");
+        var totalRooms = rooms.Count;
+        var availableRooms = rooms.Count(r => r.Status == "AVAILABLE" || r.Status == "CLEAN");
+
+        var arrivals = arrivalsRaw.Select(r => {
+            var balance = r.Folio != null ? (decimal?)(r.Folio.TotalCharges - r.Folio.TotalPayments) : null;
+            var room = r.RoomId != null && roomDict.ContainsKey(r.RoomId) ? roomDict[r.RoomId] : null;
+            var roomType = room != null && room.RoomTypeId != null && roomTypeDict.ContainsKey(room.RoomTypeId) ? roomTypeDict[room.RoomTypeId] : null;
+            var roomStatus = room?.Status ?? "UNKNOWN";
+            
+            string arrivalStatus = "Ready";
+            string arrivalColor = "green";
+            
+            if (r.Status == "CHECKED_IN") {
+                arrivalStatus = "Checked In";
+                arrivalColor = "blue";
+            } else if (balance != null && balance > 0) {
+                arrivalStatus = "Payment Due";
+                arrivalColor = "yellow";
+            } else if (room == null) {
+                arrivalStatus = "Unassigned";
+                arrivalColor = "yellow";
+            } else if (roomStatus == "OUT_OF_ORDER" || roomStatus == "MAINTENANCE") {
+                arrivalStatus = "Room Issue";
+                arrivalColor = "red";
+            }
+
+            return new {
+                id = r.Id,
+                guestName = r.Guest != null ? $"{r.Guest.FirstName} {r.Guest.LastName}" : "Unknown",
+                confirmationNumber = r.ConfirmationNumber,
+                roomName = room?.Number ?? "Unassigned",
+                roomTypeName = roomType?.Name ?? "",
+                arrivalTime = "14:00", // Fallback, would normally use property.checkInTime
+                balance = balance,
+                status = r.Status,
+                arrivalState = new { label = arrivalStatus, color = arrivalColor },
+                roomStatus = roomStatus
+            };
+        }).ToList();
+
+        var departures = departuresRaw.Select(r => {
+            var balance = r.Folio != null ? (decimal?)(r.Folio.TotalCharges - r.Folio.TotalPayments) : null;
+            var room = r.RoomId != null && roomDict.ContainsKey(r.RoomId) ? roomDict[r.RoomId] : null;
+            var roomType = room != null && room.RoomTypeId != null && roomTypeDict.ContainsKey(room.RoomTypeId) ? roomTypeDict[room.RoomTypeId] : null;
+            
+            return new {
+                id = r.Id,
+                guestName = r.Guest != null ? $"{r.Guest.FirstName} {r.Guest.LastName}" : "Unknown",
+                confirmationNumber = r.ConfirmationNumber,
+                roomName = room?.Number ?? "Unassigned",
+                roomTypeName = roomType?.Name ?? "",
+                balance = balance,
+                status = r.Status,
+                roomStatus = room?.Status ?? "UNKNOWN"
+            };
+        }).ToList();
 
         return new {
             property = property != null ? new { name = property.Name } : null,
+            businessDate = today.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
             kpis = new {
-                arrivals = arrivals.Count,
-                departures = departures.Count,
-                inHouse = inHouse,
+                arrivals = arrivalsRaw.Count,
+                departures = departuresRaw.Count,
+                inHouse = inHouseCount,
                 roomsAvailable = availableRooms,
                 roomsTotal = totalRooms
             },
-            arrivals,
-            departures,
-            hardware = new { status = "ONLINE" },
-            businessDate = today.ToString("yyyy-MM-dd")
+            hardware = new {
+                status = "ONLINE",
+                message = "Local Desktop Client",
+                name = "Desktop Agent"
+            },
+            arrivals = arrivals,
+            departures = departures
         };
     }
 
@@ -1110,7 +1222,7 @@ public class LocalRepository
             BankingModel = bankingModel,
             Status = "OPEN",
             OpenedAt = DateTime.UtcNow,
-            OpeningBalance = openingBalance
+            OpeningCash = openingBalance
         };
 
         _dbContext.PosSessions.Add(session);
@@ -1870,7 +1982,7 @@ public class LocalRepository
         var externalAccount = await EnsureCashAccountAsync(propertyId, PosConstants.CashAccountTypes.External, "External Funds");
 
         // Check if already opened (idempotency check for opening float)
-        var exists = await _dbContext.PosCashMovements.AnyAsync(m => m.DestinationAccountId == safeAccount.Id && m.Type == PosConstants.CashMovementTypes.SafeOpeningBalance);
+        var exists = await _dbContext.PosCashMovements.AnyAsync(m => m.DestinationAccountId == safeAccount.Id && m.Type == PosConstants.CashMovementTypes.SafeOpeningCash);
         if (exists) throw new Exception("The safe has already been initialized with an opening balance.");
 
         var prop = await _dbContext.Properties.FindAsync(propertyId);
@@ -1884,7 +1996,7 @@ public class LocalRepository
             UserId = authorizer.Id,
             Amount = amount,
             Currency = currency,
-            Type = PosConstants.CashMovementTypes.SafeOpeningBalance,
+            Type = PosConstants.CashMovementTypes.SafeOpeningCash,
             SourceAccountId = externalAccount.Id,
             DestinationAccountId = safeAccount.Id,
             ReasonCode = "INITIALIZATION",
@@ -2431,7 +2543,7 @@ public class LocalRepository
             BankType = bankType,
             PrimaryOperatorId = staffId,
             OpenedAt = DateTime.UtcNow,
-            OpeningBalance = 0,
+            OpeningCash = 0,
             ExpectedCash = 0,
             StaffId = staffId
         };
@@ -2480,7 +2592,7 @@ public class LocalRepository
             AuthorizedBy = managerId, // Manager Identity
             Reason = reason,
             OpenedAt = DateTime.UtcNow,
-            OpeningBalance = 0,
+            OpeningCash = 0,
             ExpectedCash = 0,
             StaffId = primaryOperatorId
         };

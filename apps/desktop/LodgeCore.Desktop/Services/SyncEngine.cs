@@ -158,6 +158,14 @@ public class SyncEngine : BackgroundService
                     await PushKeycardAuditsAsync(stoppingToken);
                     
                     // Resolve any conflicts that emerged from the push
+                    await PullSyncConflictsAsync(stoppingToken);
+
+                    // Pull updates
+                    await PullUpdatesAsync(stoppingToken);
+                    
+                    // Run incremental guest sync
+                    await SyncGuestsIncrementalAsync(stoppingToken);
+                    
                     using (var scope = _serviceProvider.CreateScope())
                     {
                         var resolver = scope.ServiceProvider.GetRequiredService<ConflictResolver>();
@@ -694,43 +702,8 @@ public class SyncEngine : BackgroundService
                 }
             }
 
-            // 3. Guests
-            if (root.TryGetProperty("guests", out var guestsArray))
-            {
-                var len = guestsArray.GetArrayLength();
-                var i = 0;
-                foreach (var el in guestsArray.EnumerateArray())
-                {
-                    i++;
-                    BroadcastHealth(SyncState.SYNCING, null, "GUESTS", i, len, "Syncing guests...");
-                    var id = el.GetProperty("id").GetString();
-                    if (string.IsNullOrEmpty(id)) continue;
-                    
-                    var guest = await dbContext.Guests.FirstOrDefaultAsync(x => x.Id == id, stoppingToken);
-                    if (guest == null)
-                    {
-                        guest = new LodgeCore.Desktop.Data.Entities.LocalGuest { Id = id, PropertyId = propertyId, CreatedAt = DateTime.UtcNow };
-                        dbContext.Guests.Add(guest);
-                    }
-                    guest.FirstName = el.TryGetProperty("firstName", out var fn) ? fn.GetString() ?? "" : "";
-                    guest.LastName = el.TryGetProperty("lastName", out var ln) ? ln.GetString() ?? "" : "";
-                    guest.Email = el.TryGetProperty("email", out var em) ? em.GetString() : null;
-                    guest.Phone = el.TryGetProperty("phone", out var ph) ? ph.GetString() : null;
-                    guest.OrganizationId = el.TryGetProperty("organizationId", out var org) ? org.GetString() ?? "" : "";
-                    if (el.TryGetProperty("dateOfBirth", out var dob) && DateTime.TryParse(dob.GetString(), out var dobd)) guest.DateOfBirth = dobd;
-                    guest.Gender = el.TryGetProperty("gender", out var gn) ? gn.GetString() : null;
-                    guest.Nationality = el.TryGetProperty("nationality", out var nat) ? nat.GetString() : null;
-                    guest.AddressLine1 = el.TryGetProperty("addressLine1", out var ad1) ? ad1.GetString() : null;
-                    guest.City = el.TryGetProperty("city", out var cy) ? cy.GetString() : null;
-                    guest.State = el.TryGetProperty("state", out var ste) ? ste.GetString() : null;
-                    guest.Country = el.TryGetProperty("country", out var cnt) ? cnt.GetString() : null;
-                    guest.IdType = el.TryGetProperty("idType", out var idt) ? idt.GetString() : null;
-                    guest.CompanyName = el.TryGetProperty("companyName", out var cn) ? cn.GetString() : null;
-                    guest.IsVip = el.TryGetProperty("isVip", out var isv) && isv.GetBoolean();
-                    guest.Notes = el.TryGetProperty("notes", out var nts) ? nts.GetString() : null;
-                    guest.UpdatedAt = DateTime.UtcNow;
-                }
-            }
+            // 3. Guests (Migrated to SyncGuestsIncrementalAsync)
+            // Removed redundant full-guest payload handling here
 
             // 4. Reservations
             if (root.TryGetProperty("reservations", out var resArray))
@@ -1430,6 +1403,107 @@ public class SyncEngine : BackgroundService
         public bool Success { get; set; }
         public string? DeviceToken { get; set; }
         public string? Error { get; set; }
+    }
+    private async Task SyncGuestsIncrementalAsync(CancellationToken stoppingToken)
+    {
+        using var scope = _serviceProvider.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
+        var localRepo = scope.ServiceProvider.GetRequiredService<LocalRepository>();
+        
+        var propertyId = Preferences.Get("DevicePropertyId", "");
+        var baseUrl = Preferences.Get("CloudBaseUrl", "https://api.lodgecore.test");
+        var token = await SecureStorage.GetAsync("DeviceAuthToken");
+
+        if (string.IsNullOrEmpty(propertyId) || string.IsNullOrEmpty(token)) return;
+
+        bool hasMore = true;
+        int pageCount = 0;
+        
+        while (hasMore && !stoppingToken.IsCancellationRequested)
+        {
+            var meta = await dbContext.SyncMetadata.FirstOrDefaultAsync(stoppingToken);
+            var cursor = meta?.LastGuestSyncCursor;
+            
+            var url = $"{baseUrl}/api/v1/sync/guests?propertyId={propertyId}&limit=500";
+            if (!string.IsNullOrEmpty(cursor))
+            {
+                url += $"&cursor={Uri.EscapeDataString(cursor)}";
+            }
+
+            var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            try
+            {
+                var response = await _httpClient.SendAsync(request, stoppingToken);
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning($"Guest sync failed with status {(int)response.StatusCode}");
+                    break;
+                }
+
+                var resultStr = await response.Content.ReadAsStringAsync(stoppingToken);
+                var resultJson = System.Text.Json.JsonDocument.Parse(resultStr);
+                
+                if (resultJson.RootElement.TryGetProperty("data", out var dataEl))
+                {
+                    if (dataEl.TryGetProperty("items", out var itemsEl) && itemsEl.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    {
+                        var guestsToUpsert = new List<LodgeCore.Desktop.Data.Entities.LocalGuest>();
+                        foreach (var el in itemsEl.EnumerateArray())
+                        {
+                            var id = el.GetProperty("id").GetString();
+                            if (string.IsNullOrEmpty(id)) continue;
+                            
+                            var g = new LodgeCore.Desktop.Data.Entities.LocalGuest
+                            {
+                                Id = id,
+                                OrganizationId = el.TryGetProperty("organizationId", out var org) ? org.GetString() ?? "" : "",
+                                FirstName = el.TryGetProperty("firstName", out var fn) ? fn.GetString() ?? "" : "",
+                                LastName = el.TryGetProperty("lastName", out var ln) ? ln.GetString() ?? "" : "",
+                                Email = el.TryGetProperty("email", out var em) ? em.GetString() : null,
+                                Phone = el.TryGetProperty("phone", out var ph) ? ph.GetString() : null,
+                                CompanyName = el.TryGetProperty("companyName", out var cn) ? cn.GetString() : null,
+                                IsVip = el.TryGetProperty("isVip", out var vip) && vip.GetBoolean(),
+                                Version = el.TryGetProperty("version", out var ver) && ver.ValueKind == System.Text.Json.JsonValueKind.Number ? ver.GetInt32() : 1
+                            };
+                            
+                            if (el.TryGetProperty("updatedAt", out var ua) && DateTime.TryParse(ua.GetString(), out var uad)) g.UpdatedAt = uad;
+                            if (el.TryGetProperty("deletedAt", out var da) && DateTime.TryParse(da.GetString(), out var dad)) g.DeletedAt = dad;
+                            
+                            guestsToUpsert.Add(g);
+                        }
+
+                        hasMore = dataEl.TryGetProperty("hasMore", out var hm) && hm.GetBoolean();
+                        var nextCursor = dataEl.TryGetProperty("nextCursor", out var nc) && nc.ValueKind != System.Text.Json.JsonValueKind.Null ? nc.GetRawText() : null;
+
+                        if (guestsToUpsert.Any())
+                        {
+                            pageCount++;
+                            BroadcastHealth(SyncState.SYNCING, null, "GUESTS_PAGED", pageCount, -1, $"Syncing guests page {pageCount}...");
+                            await localRepo.UpsertGuestPageTransactionAsync(guestsToUpsert, nextCursor);
+                        }
+                        else
+                        {
+                            hasMore = false; // No items returned
+                        }
+                    }
+                    else
+                    {
+                        hasMore = false;
+                    }
+                }
+                else
+                {
+                    hasMore = false;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error syncing guests.");
+                break;
+            }
+        }
     }
 }
 

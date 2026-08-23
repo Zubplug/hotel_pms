@@ -15,6 +15,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
+import { toast } from 'sonner';
 
 export function SyncIndicator() {
   const { isOnline, syncStatus, isDesktopMode, provider } = useLodgeCoreProvider();
@@ -94,7 +95,14 @@ export function SyncIndicator() {
             onClick={async () => {
               try {
                 if (provider.system?.forceSync) {
-                  await provider.system.forceSync();
+                  toast.promise(
+                    provider.system.forceSync(),
+                    {
+                      loading: 'Synchronizing with cloud...',
+                      success: 'Sync completed successfully',
+                      error: 'Sync failed. Check connection.'
+                    }
+                  );
                 }
               } catch (e) {
                 console.error(e);

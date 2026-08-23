@@ -95,7 +95,9 @@ public class LocalDbContext : DbContext
                 "ALTER TABLE PosProducts ADD COLUMN HasModifiers INTEGER NOT NULL DEFAULT 0;",
                 "ALTER TABLE Rooms ADD COLUMN BuildingName TEXT;",
                 "ALTER TABLE Rooms ADD COLUMN FloorName TEXT;",
-                "ALTER TABLE Rooms ADD COLUMN FloorNumber INTEGER;"
+                "ALTER TABLE Rooms ADD COLUMN FloorNumber INTEGER;",
+                "ALTER TABLE Guests ADD COLUMN DeletedAt TEXT;",
+                "ALTER TABLE SyncMetadata ADD COLUMN LastGuestSyncCursor TEXT;"
             };
 
             foreach (var migration in migrations)

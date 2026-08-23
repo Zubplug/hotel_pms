@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { createHash } from 'crypto';
 import { compare } from 'bcryptjs';
+import { NotificationEngine } from '@/lib/notification-engine';
 
 export async function POST(req: NextRequest) {
   try {
@@ -18,7 +19,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid payload format' }, { status: 400 });
     }
 
-    // Verify terminal
+    // Verify terminal and property
+    const property = await prisma.property.findUnique({ where: { id: propertyId } });
+    if (!property) {
+       return NextResponse.json({ error: 'Property not found' }, { status: 404 });
+    }
+
     const terminals = await prisma.posTerminal.findMany({
       where: { propertyId, registrationState: 'REGISTERED' }
     });
@@ -705,6 +711,50 @@ export async function POST(req: NextRequest) {
         });
         
         results.push({ id, status: 'SYNCED', idempotencyKey });
+        
+        // Post-transaction notifications for mobile hub parity
+        if (aggregateType === 'RESERVATION') {
+           try {
+             let notificationType = null;
+             if (eventType === 'CREATE' || eventType === 'WALK_IN') notificationType = 'NEW_RESERVATION';
+             else if (eventType === 'CHECK_IN') notificationType = 'CHECK_IN';
+             else if (eventType === 'CHECK_OUT') notificationType = 'CHECK_OUT';
+             else if (eventType === 'CANCEL') notificationType = 'CANCEL';
+             
+             if (notificationType && property.organizationId) {
+               await NotificationEngine.emit({
+                 type: notificationType,
+                 organizationId: property.organizationId,
+                 propertyId: property.id,
+                 entityType: 'reservation',
+                 entityId: aggregateId,
+                 idempotencyKey: `sync_${notificationType}_${aggregateId}_${Date.now()}`
+               });
+             }
+           } catch (notifErr) {
+             console.error(`[Push Sync] Failed to emit notification for ${eventType}:`, notifErr);
+           }
+        } else if (aggregateType === 'FOLIO' && eventType === 'POST_PAYMENT') {
+           try {
+             if (property.organizationId) {
+               const amount = Number(payload.amount);
+               await NotificationEngine.emit({
+                 type: 'PAYMENT_RECEIVED',
+                 organizationId: property.organizationId,
+                 propertyId: property.id,
+                 entityType: 'folio',
+                 entityId: aggregateId,
+                 metadata: {
+                   amount: amount > 0 ? amount : -amount,
+                   currency: payload.currency || 'NGN',
+                 },
+                 idempotencyKey: `sync_PAYMENT_${aggregateId}_${Date.now()}`
+               });
+             }
+           } catch (notifErr) {
+             console.error(`[Push Sync] Failed to emit notification for POST_PAYMENT:`, notifErr);
+           }
+        }
         
       } catch (err: any) {
         if (err.message === 'IDEMPOTENCY_DUPLICATE') {

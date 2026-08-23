@@ -232,6 +232,9 @@ public partial class MainPage : ContentPage
                 case "guests.list":
                     responseData = await pmsInterop.GetGuestsAsync();
                     break;
+                case "guests.search":
+                    responseData = await pmsInterop.SearchGuestsAsync(parameters?["query"]?.ToString() ?? "");
+                    break;
                 case "guests.update":
                     responseData = await pmsInterop.UpdateGuestAsync(
                         parameters?["guestId"]?.ToString() ?? "",

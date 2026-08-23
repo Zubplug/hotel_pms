@@ -39,11 +39,12 @@ import { ClientOnlyDate } from '@/components/ClientOnlyDate';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { AppSwitcher } from '@/components/layout/AppSwitcher';
 import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
+import { toast } from 'sonner';
 
 export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useLodgeCoreSession();
   const { propertyId } = useProperty();
-  const { provider, isOnline } = useLodgeCoreProvider();
+  const { provider, isOnline, isDesktopMode } = useLodgeCoreProvider();
   const logout = useLogout();
   const router = useRouter();
   const [time, setTime] = useState<Date | null>(null);
@@ -273,7 +274,7 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
           </DropdownMenu>
 
           {/* Manual Sync Button */}
-          {isDesktopApp && isOnline && role !== 'RECEPTIONIST' && (
+          {isDesktopMode && (
             <Button 
               variant="outline"
               size="sm"
@@ -281,7 +282,14 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
               onClick={async () => {
                 try {
                   if (provider.system?.forceSync) {
-                    await provider.system.forceSync();
+                    toast.promise(
+                      provider.system.forceSync(),
+                      {
+                        loading: 'Synchronizing with cloud...',
+                        success: 'Sync completed successfully',
+                        error: 'Sync failed. Check connection.'
+                      }
+                    );
                   }
                 } catch(e) {}
               }}

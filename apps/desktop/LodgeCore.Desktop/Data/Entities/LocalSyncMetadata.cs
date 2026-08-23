@@ -10,5 +10,6 @@ public class LocalSyncMetadata
     public string Id { get; set; } = "singleton";
     public DateTime? LastSuccessfulSyncAt { get; set; }
     public string? LastSyncVersion { get; set; }
+    public string? LastGuestSyncCursor { get; set; }
     public string? SchemaVersion { get; set; }
 }

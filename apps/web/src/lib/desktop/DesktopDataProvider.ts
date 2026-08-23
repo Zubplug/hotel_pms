@@ -64,6 +64,25 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
   guests: {
     list: async () => {
       return invokeDesktop('guests.list');
+    },
+    search: async (query: string) => {
+      // 1. Search locally in Desktop SQLite
+      const localRes = await invokeDesktop('guests.search', { query });
+      
+      // 2. If no local results, and we are online, fallback to Cloud
+      if ((!localRes || !localRes.data || localRes.data.length === 0) && navigator.onLine) {
+        try {
+          const res = await fetch(`/api/v1/guests?search=${encodeURIComponent(query)}&limit=50`);
+          if (res.ok) {
+            const json = await res.json();
+            return { success: true, data: json.data?.items || json.data || [] };
+          }
+        } catch (err) {
+          console.error("Cloud fallback search failed:", err);
+        }
+      }
+      
+      return localRes;
     }
   },
   

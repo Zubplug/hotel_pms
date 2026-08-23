@@ -25,7 +25,8 @@ export interface LodgeCoreDataProvider {
     get(propertyId: string): Promise<any>;
   };
   guests: {
-    list(): Promise<any[]>;
+    list(): Promise<any[]>; // Deprecated
+    search(query: string): Promise<any[]>;
   };
   roomTypes: {
     list(propertyId: string): Promise<any[]>;

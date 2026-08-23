@@ -93,27 +93,24 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
   const checkOut = form.watch('checkOut');
   const roomTypeId = form.watch('roomTypeId');
 
+  const [guestSearch, setGuestSearch] = useState('');
+  
+  // Custom simple debounce for search
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(guestSearch);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [guestSearch]);
+
   const { data: guestsRes, isLoading: loadingGuests } = useQuery({
-    queryKey: ['guests'],
+    queryKey: ['guests', debouncedSearch],
     queryFn: async () => {
-      return provider.guests.list();
+      return provider.guests.search(debouncedSearch);
     },
   });
-  const guests = (guestsRes as any)?.data || [];
-
-  const [guestSearch, setGuestSearch] = useState('');
-  const filteredGuests = useMemo(() => {
-    if (!guests) return [];
-    const search = guestSearch.toLowerCase();
-    return guests
-      .filter((g: any) => 
-        !search || 
-        `${g.firstName} ${g.lastName}`.toLowerCase().includes(search) || 
-        g.email?.toLowerCase().includes(search) || 
-        g.phone?.includes(search)
-      )
-      .slice(0, 50);
-  }, [guests, guestSearch]);
+  const filteredGuests = (guestsRes as any)?.data || [];
 
   const { data: roomTypesRes, isLoading: loadingRoomTypes } = useQuery({
     queryKey: ['room-types', propertyId],
