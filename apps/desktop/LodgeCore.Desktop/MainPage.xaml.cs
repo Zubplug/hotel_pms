@@ -125,7 +125,6 @@ public partial class MainPage : ContentPage
                     responseData = await pmsInterop.GetTerminalStatusAsync();
                     break;
                 case "system.forceSync":
-                    var syncEngine = scope.ServiceProvider.GetRequiredService<SyncEngine>();
                     var dbContext = scope.ServiceProvider.GetRequiredService<LodgeCore.Desktop.Data.LocalDbContext>();
                     var meta = dbContext.SyncMetadata.FirstOrDefault();
                     if (meta != null)
@@ -133,7 +132,10 @@ public partial class MainPage : ContentPage
                         meta.LastGuestSyncCursor = null;
                         dbContext.SaveChanges();
                     }
-                    syncEngine.TriggerManualSync();
+                    if (LodgeCore.Desktop.Services.SyncEngine.Instance != null)
+                    {
+                        LodgeCore.Desktop.Services.SyncEngine.Instance.TriggerManualSync();
+                    }
                     responseData = System.Text.Json.JsonSerializer.Serialize(new { success = true }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
                     break;
                 case "system.getSyncHealth":
