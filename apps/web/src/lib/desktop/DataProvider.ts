@@ -30,6 +30,7 @@ export interface LodgeCoreDataProvider {
   };
   roomTypes: {
     list(propertyId: string): Promise<any[]>;
+    create(data: any): Promise<any>;
   };
   reservations: {
     list(propertyId: string, params?: any): Promise<any>;
@@ -49,6 +50,7 @@ export interface LodgeCoreDataProvider {
     getAvailable(propertyId: string, roomTypeId: string, checkIn: string, checkOut: string): Promise<any>;
     getActiveReservation(roomId: string): Promise<any | null>;
     updateStatus(roomId: string, newStatus: string, source: string): Promise<any>;
+    create(data: any): Promise<any>;
   };
   folios: {
     get(id: string): Promise<any>;
