@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
                 });
                 updatedCount = res.count;
              }
-          } else if (aggregateType === 'HOUSEKEEPING_TASK' || aggregateType === 'MAINTENANCE_TICKET' || aggregateType === 'GUEST') {
+          } else if (aggregateType === 'HOUSEKEEPING_TASK' || aggregateType === 'MAINTENANCE_TICKET' || aggregateType === 'GUEST' || aggregateType === 'ROOM') {
              updatedCount = 1; // No version field on cloud for these yet
           }
 
@@ -597,6 +597,29 @@ export async function POST(req: NextRequest) {
                     phone: payload.phone
                   }
                 });
+             }
+          }
+          else if (eventType === 'ROOM_STATUS_UPDATE' && aggregateType === 'ROOM') {
+             const room = await tx.room.findUnique({ where: { id: aggregateId } });
+             if (!room) throw new Error('Room not found or unauthorized');
+
+             const newStatus = payload.newStatus;
+             if (room.status !== newStatus) {
+                 await tx.room.update({
+                     where: { id: aggregateId },
+                     data: { status: newStatus }
+                 });
+
+                 await tx.roomStatusHistory.create({
+                     data: {
+                         roomId: aggregateId,
+                         propertyId: room.propertyId,
+                         previousStatus: room.status,
+                         newStatus: newStatus,
+                         source: payload.source || 'OFFLINE_SYNC',
+                         changedBy: operatorId || device.id
+                     }
+                 });
              }
           }
           else if (aggregateType === 'HOUSEKEEPING_TASK') {

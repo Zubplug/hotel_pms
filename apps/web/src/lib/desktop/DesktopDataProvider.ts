@@ -148,6 +148,9 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     },
     getActiveReservation: async (roomId: string) => {
       return invokeDesktop('rooms.getActiveReservation', { roomId });
+    },
+    updateStatus: async (roomId: string, newStatus: string, source: string) => {
+      return invokeDesktop('rooms.updateStatus', { roomId, newStatus, source });
     }
   },
   

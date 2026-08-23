@@ -257,6 +257,15 @@ public partial class MainPage : ContentPage
                         parameters?["checkIn"]?.ToString() ?? "",
                         parameters?["checkOut"]?.ToString() ?? "");
                     break;
+                case "rooms.getActiveReservation":
+                    responseData = await pmsInterop.GetActiveReservationByRoomAsync(parameters?["roomId"]?.ToString() ?? "");
+                    break;
+                case "rooms.updateStatus":
+                    responseData = await pmsInterop.UpdateRoomStatusAsync(
+                        parameters?["roomId"]?.ToString() ?? "",
+                        parameters?["newStatus"]?.ToString() ?? "",
+                        parameters?["source"]?.ToString() ?? "");
+                    break;
                 case "reservations.list":
                     responseData = await pmsInterop.GetActiveReservationsAsync();
                     break;

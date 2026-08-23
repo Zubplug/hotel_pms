@@ -25,9 +25,12 @@ interface FrontDeskOccupiedRoomDialogProps {
   onClose: () => void;
 }
 
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
+
 export function FrontDeskOccupiedRoomDialog({ room, isOpen, onClose }: FrontDeskOccupiedRoomDialogProps) {
   const router = useRouter();
   const { propertyId } = useProperty();
+  const { provider } = useLodgeCoreProvider();
   
   const [showExtendStay, setShowExtendStay] = useState(false);
   const [showCheckOut, setShowCheckOut] = useState(false);
@@ -36,10 +39,9 @@ export function FrontDeskOccupiedRoomDialog({ room, isOpen, onClose }: FrontDesk
   const { data: resData, isLoading, isError, refetch } = useQuery({
     queryKey: ['active-reservation', room?.id],
     queryFn: async () => {
-      const res = await fetch(`/api/v1/rooms/${room?.id}/active-reservation`);
-      if (!res.ok) throw new Error('Failed to fetch active reservation');
-      const json = await res.json();
-      return json.data;
+      const res = await provider.rooms.getActiveReservation(room!.id);
+      if (res?.error) throw new Error(res.error.message || res.error || 'Failed to fetch active reservation');
+      return res.data;
     },
     enabled: !!room?.id && isOpen && room.status === 'OCCUPIED',
   });

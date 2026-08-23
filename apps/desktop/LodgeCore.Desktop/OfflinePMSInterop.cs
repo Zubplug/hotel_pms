@@ -830,25 +830,40 @@ public class OfflinePMSInterop
         try
         {
             var data = await _repo.GetRoomsAsync(propertyId);
-            var types = await _repo.GetRoomTypesAsync(propertyId);
-            var mapped = data.Select(r => new {
-                id = r.Id,
-                propertyId = r.PropertyId,
-                number = r.Number,
-                status = r.Status,
-                housekeepingStatus = r.Status,
-                floor = new { number = r.Floor },
-                roomType = types.FirstOrDefault(rt => rt.Id == r.RoomTypeId) != null 
-                           ? new { name = types.First(rt => rt.Id == r.RoomTypeId).Name, code = types.First(rt => rt.Id == r.RoomTypeId).Name } 
-                           : new { name = "Unknown", code = "UNK" }
-            });
-            return JsonSerializer.Serialize(new { success = true, data = mapped }, _jsonOptions);
+            return JsonSerializer.Serialize(new { success = true, data = data }, _jsonOptions);
         }
         catch (Exception ex)
         {
             return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
+
+    public async Task<string> GetActiveReservationByRoomAsync(string roomId)
+    {
+        try
+        {
+            var data = await _repo.GetActiveReservationByRoomAsync(roomId);
+            return JsonSerializer.Serialize(new { success = true, data = data }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
+    public async Task<string> UpdateRoomStatusAsync(string roomId, string newStatus, string source)
+    {
+        try
+        {
+            var data = await _repo.UpdateRoomStatusAsync(roomId, newStatus, source);
+            return JsonSerializer.Serialize(new { success = true, data = data }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
     public async Task<string> GetAvailableRoomsAsync(string propertyId, string roomTypeId, string checkIn, string checkOut)
     {
         try

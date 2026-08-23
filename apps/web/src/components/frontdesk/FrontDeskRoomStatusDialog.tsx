@@ -22,6 +22,8 @@ interface FrontDeskRoomStatusDialogProps {
   onSuccess?: () => void;
 }
 
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
+
 export function FrontDeskRoomStatusDialog({
   room,
   isOpen,
@@ -30,6 +32,7 @@ export function FrontDeskRoomStatusDialog({
 }: FrontDeskRoomStatusDialogProps) {
   const [selectedStatus, setSelectedStatus] = useState<RoomStatus | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { provider } = useLodgeCoreProvider();
 
   if (!room) return null;
 
@@ -65,14 +68,9 @@ export function FrontDeskRoomStatusDialog({
     if (!selectedStatus) return;
     setIsSubmitting(true);
     try {
-      const res = await fetch(`/api/v1/rooms/${room!.id}/status`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ newStatus: selectedStatus, source: 'MANUAL' }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err?.error?.message || 'Failed to update status');
+      const res = await provider.rooms.updateStatus(room!.id, selectedStatus, 'MANUAL');
+      if (res?.error) {
+        throw new Error(res.error.message || res.error || 'Failed to update status');
       }
       toast.success(`Room ${formatRoomNumber(room!.number)} status updated to ${selectedStatus}`);
       onSuccess?.();

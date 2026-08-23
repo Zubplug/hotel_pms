@@ -47,6 +47,7 @@ export interface LodgeCoreDataProvider {
     list(propertyId: string, params?: { filter?: string }): Promise<any>;
     getAvailable(propertyId: string, roomTypeId: string, checkIn: string, checkOut: string): Promise<any>;
     getActiveReservation(roomId: string): Promise<any | null>;
+    updateStatus(roomId: string, newStatus: string, source: string): Promise<any>;
   };
   folios: {
     get(id: string): Promise<any>;

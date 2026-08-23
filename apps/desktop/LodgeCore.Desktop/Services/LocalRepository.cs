@@ -679,6 +679,80 @@ public class LocalRepository
         }).ToList();
     }
 
+    public async Task<object> GetActiveReservationByRoomAsync(string roomId)
+    {
+        var room = await _dbContext.Rooms.FirstOrDefaultAsync(r => r.Id == roomId);
+        if (room == null) return null;
+
+        var reservation = await _dbContext.Reservations
+            .Include(r => r.Guest)
+            .Include(r => r.Folio)
+            .Where(r => r.RoomNumber == room.Number && r.Status == "CHECKED_IN")
+            .FirstOrDefaultAsync();
+
+        if (reservation == null) return null;
+
+        return new
+        {
+            reservationId = reservation.Id,
+            checkIn = reservation.CheckInDate,
+            checkOut = reservation.CheckOutDate,
+            folioBalance = reservation.Folio != null ? reservation.Folio.TotalCharges - reservation.Folio.TotalPayments : 0,
+            currency = "NGN", // Hardcoded for now based on UI
+            room = new { number = room.Number },
+            guest = reservation.Guest != null ? new
+            {
+                firstName = reservation.Guest.FirstName,
+                lastName = reservation.Guest.LastName,
+                isVip = reservation.Guest.IsVip,
+                email = reservation.Guest.Email,
+                phone = reservation.Guest.Phone
+            } : null,
+            lockCredentials = (string[])null
+        };
+    }
+
+    public async Task<object> UpdateRoomStatusAsync(string roomId, string newStatus, string source)
+    {
+        var room = await _dbContext.Rooms.FirstOrDefaultAsync(r => r.Id == roomId);
+        if (room == null) throw new Exception("Room not found");
+
+        room.Status = newStatus;
+        // If it's CLEAN or DIRTY, also update HousekeepingStatus to match cloud behavior if necessary.
+        if (newStatus == "CLEAN" || newStatus == "DIRTY") {
+            room.HousekeepingStatus = newStatus;
+        }
+        
+        room.UpdatedAt = DateTime.UtcNow;
+
+        var payload = JsonSerializer.Serialize(new
+        {
+            roomId = room.Id,
+            newStatus = newStatus,
+            source = source,
+            updatedAt = room.UpdatedAt
+        });
+
+        _dbContext.OutboxEvents.Add(new LocalOutboxEvent
+        {
+            Id = Guid.NewGuid().ToString(),
+            PropertyId = room.PropertyId,
+            DeviceId = "System", // Replace with real device ID if available
+            OperatorId = "System", // Replace with real operator ID if available
+            AggregateType = "ROOM",
+            AggregateId = room.Id,
+            AggregateVersion = 1,
+            EventType = "ROOM_STATUS_UPDATE",
+            Sequence = 1,
+            PayloadJson = payload,
+            CreatedAt = DateTime.UtcNow
+        });
+
+        await _dbContext.SaveChangesAsync();
+
+        return room;
+    }
+
     public async Task<object> GetDashboardAsync(string propertyId)
     {
         var today = DateTime.UtcNow.Date;

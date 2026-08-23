@@ -146,6 +146,12 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
     },
     async getActiveReservation(roomId: string) {
       return apiFetch(`/api/v1/rooms/${roomId}/active-reservation`);
+    },
+    async updateStatus(roomId: string, newStatus: string, source: string) {
+      return apiFetch(`/api/v1/rooms/${roomId}/status`, {
+        method: 'POST',
+        body: JSON.stringify({ newStatus, source })
+      });
     }
   },
   folios: {
