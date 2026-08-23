@@ -4,7 +4,7 @@ public class LocalReservation
 {
     public string Id { get; set; } = Guid.NewGuid().ToString();
     public string PropertyId { get; set; } = string.Empty;
-    public string GuestId { get; set; } = string.Empty;
+    public string? GuestId { get; set; }
     public LocalGuest? Guest { get; set; }
     
     public string? CompanyId { get; set; }

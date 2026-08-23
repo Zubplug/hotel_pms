@@ -156,22 +156,20 @@ public class SyncEngine : BackgroundService
                     await PushPendingEventsAsync(stoppingToken);
                     await PushFrontDeskOutboxAsync(stoppingToken);
                     await PushKeycardAuditsAsync(stoppingToken);
-                    
-                    // Resolve any conflicts that emerged from the push
 
-                    // Pull updates
-                    await PullUpdatesAsync(stoppingToken);
-                    
-                    // Run incremental guest sync
+                    // ── Sync guests FIRST so GuestId FK is satisfied when
+                    //    reservations are saved in PullUpdatesAsync below.
                     await SyncGuestsIncrementalAsync(stoppingToken);
-                    
+
+                    // Pull all other entities (RoomTypes, Rooms, Reservations, Folios …)
+                    await PullUpdatesAsync(stoppingToken);
+
+                    // Resolve any conflicts that emerged from the push/pull
                     using (var scope = _serviceProvider.CreateScope())
                     {
                         var resolver = scope.ServiceProvider.GetRequiredService<ConflictResolver>();
                         await resolver.ResolveConflictsAsync();
                     }
-
-                    await PullUpdatesAsync(stoppingToken);
                     
                     _consecutiveFailures = 0;
                     _lastSuccess = DateTime.UtcNow;
@@ -727,7 +725,7 @@ public class SyncEngine : BackgroundService
                         res = new LodgeCore.Desktop.Data.Entities.LocalReservation { Id = id, PropertyId = propertyId, CreatedAt = DateTime.UtcNow };
                         dbContext.Reservations.Add(res);
                     }
-                    res.GuestId = el.TryGetProperty("primaryGuestId", out var pg) ? pg.GetString() ?? "" : "";
+                    res.GuestId = el.TryGetProperty("primaryGuestId", out var pg) && pg.ValueKind != System.Text.Json.JsonValueKind.Null ? pg.GetString() : null;
                     res.Status = el.TryGetProperty("status", out var st) ? st.GetString() ?? "" : "";
                     res.RoomId = el.TryGetProperty("roomId", out var ri) ? ri.GetString() : null;
                     res.RoomNumber = el.TryGetProperty("roomNumber", out var rn) ? rn.GetString() : null;

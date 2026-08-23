@@ -139,11 +139,13 @@ public class LocalDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
         
-        // Configure relationships and constraints here
+        // GuestId is nullable — a reservation can arrive before its guest during
+        // incremental sync without causing a FK violation.
         modelBuilder.Entity<LocalReservation>()
             .HasOne(r => r.Guest)
             .WithMany(g => g.Reservations)
-            .HasForeignKey(r => r.GuestId);
+            .HasForeignKey(r => r.GuestId)
+            .IsRequired(false);
 
         modelBuilder.Entity<LocalFolio>()
             .HasOne(f => f.Reservation)
