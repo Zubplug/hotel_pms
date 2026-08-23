@@ -14,7 +14,7 @@ import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { formatCurrency } from '@/lib/utils';
-import { OperatorSelectionScreen } from '@/components/pos/OperatorSelectionScreen';
+import { TerminalAuthScreen } from '@/components/pos/TerminalAuthScreen';
 import { MyShiftBankModal } from '@/components/pos/MyShiftBankModal';
 import { EmergencyCashBankModal } from '@/components/pos/EmergencyCashBankModal';
 import { AutoLockScreen } from '@/components/pos/AutoLockScreen';
@@ -31,7 +31,7 @@ import { ModifierSelectionModal } from '@/components/pos/ModifierSelectionModal'
 import { CheckSplitModal } from '@/components/pos/CheckSplitModal';
 import { KotPanel } from '@/components/pos/KotPanel';
 import { PosSidebar } from '@/components/pos/PosSidebar';
-import { StaffSwitchPad } from '@/components/pos/StaffSwitchPad';
+
 import { usePosOnlineStatus } from '@/lib/pos/usePosOnlineStatus';
 import { useLicenseGuard } from '@/lib/pos/useLicenseGuard';
 import { OfflineSyncQueue } from '@/lib/pos/OfflineSyncQueue';
@@ -1077,14 +1077,15 @@ export default function PosApp() {
       {/* ══ Modals & Overlays ════════════════════════════════════════ */}
 
       {/* Staff Switch */}
-      <StaffSwitchPad
+      <TerminalAuthScreen
+        authMode="POS_OPERATOR"
         isOpen={!activeOperator || showSwitchPad}
         cancellable={!!activeOperator && showSwitchPad}
         outletId={sessionContext?.outlet?.id}
         onCancel={() => setShowSwitchPad(false)}
-        onAuthenticated={(operator: any, token?: string) => {
+        onAuthenticated={(operator: any, token: string) => {
           if (!activeOperator || activeOperator.id !== operator.id) {
-            // A different (or new) operator is logging in — clear the entire cart context
+            // Different operator logging in — clear cart context
             setCart([]);
             setCurrentOrderId(null);
             setActiveTableId(null);

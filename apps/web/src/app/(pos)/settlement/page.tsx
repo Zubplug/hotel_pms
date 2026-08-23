@@ -6,7 +6,7 @@ import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { CheckCircle2, Calculator, AlertTriangle, UserCheck, Scale } from 'lucide-react';
-import { StaffSwitchPad } from '@/components/pos/StaffSwitchPad';
+import { TerminalAuthScreen } from '@/components/pos/TerminalAuthScreen';
 
 export default function SettlementPage() {
   const { provider } = useLodgeCoreProvider();
@@ -178,13 +178,14 @@ export default function SettlementPage() {
         </form>
       </div>
 
-      <StaffSwitchPad 
-        isOpen={showAuthPad} 
+      <TerminalAuthScreen
+        authMode="POS_OPERATOR"
+        isOpen={showAuthPad}
         cancellable={true}
         onCancel={() => setShowAuthPad(false)}
-        onAuthenticated={(operator) => {
+        onAuthenticated={(operator: any) => {
           executeSettlement(operator.id);
-        }} 
+        }}
       />
     </div>
   );

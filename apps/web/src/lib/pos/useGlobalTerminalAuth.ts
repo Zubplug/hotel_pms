@@ -1,0 +1,184 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
+import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
+
+export type GlobalAuthStep = 'select' | 'pin' | 'success' | 'error';
+export type GlobalAuthError = string | null;
+
+export interface StaffProfile {
+  id: string;
+  firstName: string;
+  lastName: string;
+  role?: string;
+  position?: string;
+}
+
+export interface UseGlobalTerminalAuthResult {
+  // Data
+  staff: StaffProfile[];
+  staffLoading: boolean;
+  selectedStaff: StaffProfile | null;
+  pin: string;
+  step: GlobalAuthStep;
+  error: GlobalAuthError;
+  isLoading: boolean;
+
+  // Actions
+  selectStaff: (s: StaffProfile) => void;
+  pressKey: (key: string) => void;
+  pressBackspace: () => void;
+  goBack: () => void;
+  reloadStaff: () => Promise<void>;
+}
+
+/**
+ * Manages GLOBAL terminal authentication.
+ *
+ * This calls provider.auth.login() to establish the master/global session for
+ * the terminal. It does NOT touch POS sessions, operator tokens, or shift state.
+ *
+ * On success, it calls onAuthenticated(desktopMode) where desktopMode is
+ * 'FRONT_DESK' | 'POS' — the caller is responsible for routing.
+ */
+export function useGlobalTerminalAuth({
+  isOpen,
+  onAuthenticated,
+}: {
+  isOpen: boolean;
+  onAuthenticated: (desktopMode: string) => void;
+}): UseGlobalTerminalAuthResult {
+  const { provider, isDesktopMode } = useLodgeCoreProvider();
+  const { data: session } = useLodgeCoreSession();
+  const propertyId = (session?.user as any)?.propertyId || '';
+
+  const [staff, setStaff] = useState<StaffProfile[]>([]);
+  const [staffLoading, setStaffLoading] = useState(false);
+  const [selectedStaff, setSelectedStaff] = useState<StaffProfile | null>(null);
+  const [pin, setPin] = useState('');
+  const [step, setStep] = useState<GlobalAuthStep>('select');
+  const [error, setError] = useState<GlobalAuthError>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const loadStaff = async () => {
+    setStaffLoading(true);
+    try {
+      let res: any;
+      if (isDesktopMode) {
+        res = await provider.auth.getActiveStaff();
+      } else if (propertyId) {
+        res = await provider.pos.getActiveStaff(propertyId);
+      }
+      if (res?.data) setStaff(res.data);
+    } catch (e) {
+      console.error('[GlobalAuth] Failed to load staff', e);
+    } finally {
+      setStaffLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+    // Reset on open
+    setSelectedStaff(null);
+    setPin('');
+    setStep('select');
+    setError(null);
+    loadStaff();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
+  const selectStaff = (s: StaffProfile) => {
+    setSelectedStaff(s);
+    setPin('');
+    setError(null);
+    setStep('pin');
+  };
+
+  const goBack = () => {
+    if (step === 'pin') {
+      setStep('select');
+      setPin('');
+      setError(null);
+    }
+  };
+
+  const submitPin = async (pinValue: string) => {
+    if (!selectedStaff) return;
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      if (isDesktopMode) {
+        // Desktop: authenticate against the local SQLite / C# auth layer
+        const authRes = await provider.auth.login(selectedStaff.id, pinValue);
+
+        if (!authRes.error && authRes.success) {
+          // Read back the terminal configuration to decide routing
+          const statusRes = await provider.system?.getTerminalStatus?.();
+          const mode = statusRes?.desktopMode || 'UNKNOWN';
+          setStep('success');
+          onAuthenticated(mode);
+        } else {
+          setError(authRes.error || 'Incorrect PIN. Please try again.');
+          setPin('');
+        }
+      } else {
+        // Web preview: use POS operator auth for demo purposes only
+        const sessionId = localStorage.getItem('lodgecore_pos_session_id') || '';
+        const deviceId = localStorage.getItem('lodgecore_pos_device_id') || '';
+        const res = await provider.pos.authenticateOperator(
+          selectedStaff.id,
+          pinValue,
+          propertyId,
+          sessionId,
+          '',
+          deviceId,
+        );
+
+        if (!res.error && res.data?.success) {
+          setStep('success');
+          onAuthenticated('POS');
+        } else {
+          setError(res.error || res.data?.error || 'Incorrect PIN. Please try again.');
+          setPin('');
+        }
+      }
+    } catch (e: any) {
+      setError(e.message || 'Authentication failed. Check your connection.');
+      setPin('');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const pressKey = (key: string) => {
+    if (isLoading || step !== 'pin') return;
+    const next = pin + key;
+    if (next.length > 4) return;
+    setPin(next);
+    setError(null);
+    if (next.length === 4) submitPin(next);
+  };
+
+  const pressBackspace = () => {
+    setPin((p) => p.slice(0, -1));
+    setError(null);
+  };
+
+  return {
+    staff,
+    staffLoading,
+    selectedStaff,
+    pin,
+    step,
+    error,
+    isLoading,
+    selectStaff,
+    pressKey,
+    pressBackspace,
+    goBack,
+    reloadStaff: loadStaff,
+  };
+}

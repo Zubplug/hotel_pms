@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowDownToLine, ArrowUpFromLine, Receipt, RefreshCcw, HandCoins, AlertCircle, Check } from 'lucide-react';
-import { StaffSwitchPad } from '@/components/pos/StaffSwitchPad';
+import { TerminalAuthScreen } from '@/components/pos/TerminalAuthScreen';
 
 type CashMovement = {
   id: string;
@@ -284,16 +284,17 @@ export default function CashManagementPage() {
         </div>
       </div>
 
-      <StaffSwitchPad 
-        isOpen={showAuthPad} 
+      <TerminalAuthScreen
+        authMode="POS_OPERATOR"
+        isOpen={showAuthPad}
         cancellable={true}
         onCancel={() => {
           setShowAuthPad(false);
           setPendingMovement(null);
         }}
-        onAuthenticated={(operator) => {
+        onAuthenticated={(operator: any) => {
           executeMovement(pendingMovement, operator.id);
-        }} 
+        }}
       />
     </div>
   );

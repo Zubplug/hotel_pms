@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArrowDownToLine, ArrowUpFromLine, HandCoins, AlertCircle, Check, RefreshCcw, Banknote, ShieldAlert, History } from 'lucide-react';
-import { StaffSwitchPad } from '@/components/pos/StaffSwitchPad';
+import { TerminalAuthScreen } from '@/components/pos/TerminalAuthScreen';
 import { ActionSuccessModal } from '@/components/pos/ActionSuccessModal';
 import { useProperty } from '@/components/PropertyProvider';
 
@@ -335,14 +335,15 @@ export default function CashOfficePage() {
         </div>
       </Tabs>
 
-      <StaffSwitchPad 
-        isOpen={showAuthPad} 
+      <TerminalAuthScreen
+        authMode="POS_OPERATOR"
+        isOpen={showAuthPad}
         cancellable={true}
         onCancel={() => {
           setShowAuthPad(false);
           setPendingAction(null);
         }}
-        onAuthenticated={(operator) => handleAction(pendingAction, operator)} 
+        onAuthenticated={(operator: any) => handleAction(pendingAction, operator)}
       />
       
       {successDialog && (

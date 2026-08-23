@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLodgeCoreProvider as useLodgeCore } from '@/lib/desktop/DataProviderContext';
 import { Button } from '@/components/ui/button';
-import { OperatorSelectionScreen } from '@/components/pos/OperatorSelectionScreen';
+import { TerminalAuthScreen } from '@/components/pos/TerminalAuthScreen';
 import { AlertTriangle, ServerOff, ShieldAlert, Loader2 } from 'lucide-react';
 
 type TerminalState = {
@@ -19,43 +19,35 @@ export default function DesktopEntryPage() {
   const router = useRouter();
   const { provider } = useLodgeCore();
   const [terminalState, setTerminalState] = useState<TerminalState | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     async function checkTerminal() {
       try {
-        // getTerminalStatus goes through IPC to C# — has a 30s timeout.
-        // If the method doesn't exist (web-only preview mode), treat as UNREGISTERED.
         const res = await provider.system?.getTerminalStatus?.();
-
         if (!res) {
-          // provider.system is not available (running in browser, not MAUI)
           setTerminalState({ registrationState: 'UNREGISTERED' });
           return;
         }
-
         setTerminalState(res as TerminalState);
       } catch (e: any) {
         console.error('[Desktop] Failed to get terminal status:', e);
-        // IPC error = bridge not ready or timed out = treat as unregistered
         setTerminalState({ registrationState: 'UNREGISTERED', error: e?.message });
       }
     }
-
     checkTerminal();
   }, [provider]);
 
-  // ── Loading ────────────────────────────────────────────────────────────────
+  // ── Loading ──────────────────────────────────────────────────────────────
   if (!terminalState) {
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-4 bg-slate-50">
-        <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
+        <Loader2 className="h-10 w-10 animate-spin text-indigo-600" />
         <p className="text-slate-500 text-sm font-medium">Starting LodgeCore…</p>
       </div>
     );
   }
 
-  // ── Not yet provisioned → send to setup wizard ────────────────────────────
+  // ── Not yet provisioned ──────────────────────────────────────────────────
   if (
     terminalState.registrationState === 'UNREGISTERED' ||
     terminalState.registrationState === 'UNKNOWN'
@@ -77,18 +69,14 @@ export default function DesktopEntryPage() {
             </p>
           )}
         </div>
-        <Button
-          onClick={() => router.push('/desktop/provision')}
-          size="lg"
-          className="min-w-[200px]"
-        >
+        <Button onClick={() => router.push('/desktop/provision')} size="lg" className="min-w-[200px]">
           Set Up This Terminal
         </Button>
       </div>
     );
   }
 
-  // ── Corrupted state → credential wiped, need to re-provision ──────────────
+  // ── Corrupted credentials ────────────────────────────────────────────────
   if (terminalState.registrationState === 'CORRUPTED') {
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-6 p-8 bg-slate-50">
@@ -103,17 +91,10 @@ export default function DesktopEntryPage() {
           </p>
         </div>
         <div className="flex flex-col gap-3 min-w-[200px]">
-          <Button
-            onClick={() => router.push('/desktop/provision')}
-            size="lg"
-          >
+          <Button onClick={() => router.push('/desktop/provision')} size="lg">
             Re-Provision Terminal
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setTerminalState(null)}
-          >
+          <Button variant="outline" size="sm" onClick={() => setTerminalState(null)}>
             Retry
           </Button>
         </div>
@@ -121,7 +102,7 @@ export default function DesktopEntryPage() {
     );
   }
 
-  // ── Outlet not configured correctly ───────────────────────────────────────
+  // ── Outlet not configured ────────────────────────────────────────────────
   if (terminalState.desktopMode === 'UNKNOWN') {
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-6 p-8 bg-slate-50">
@@ -135,32 +116,34 @@ export default function DesktopEntryPage() {
             Contact your LodgeCore administrator to assign the correct outlet.
           </p>
         </div>
-        <Button
-          variant="outline"
-          onClick={() => router.push('/desktop/provision')}
-          size="lg"
-        >
+        <Button variant="outline" onClick={() => router.push('/desktop/provision')} size="lg">
           Re-Provision
         </Button>
       </div>
     );
   }
 
-  // ── Active & configured → show operator login ─────────────────────────────
+  // ── Active & configured → unified GLOBAL auth screen ────────────────────
   return (
-    <div className="flex h-screen bg-slate-50">
-      <OperatorSelectionScreen
+    <div className="flex h-screen bg-slate-900">
+      <TerminalAuthScreen
+        authMode="GLOBAL"
         isOpen={true}
-        onAuthenticated={() => {
-          if (terminalState.desktopMode === 'FRONT_DESK') {
+        cancellable={false}
+        onAuthenticated={(desktopMode) => {
+          if (desktopMode === 'FRONT_DESK') {
             router.push('/frontdesk');
-          } else if (terminalState.desktopMode === 'POS') {
+          } else if (desktopMode === 'POS') {
             router.push('/pos');
           } else {
-            router.push('/desktop');
+            // Fallback: use the terminalState config we already have
+            if (terminalState.desktopMode === 'FRONT_DESK') {
+              router.push('/frontdesk');
+            } else {
+              router.push('/pos');
+            }
           }
         }}
-        cancellable={false}
       />
     </div>
   );
