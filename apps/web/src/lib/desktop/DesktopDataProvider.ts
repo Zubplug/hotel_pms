@@ -91,6 +91,9 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
       return invokeDesktop('roomTypes.list', { propertyId });
     },
     create: async (data: any) => {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        throw new Error("Internet connection is required to create a new room type.");
+      }
       const res = await fetch('/api/v1/room-types', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -195,6 +198,9 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
       return invokeDesktop('rooms.updateStatus', { roomId, newStatus, source });
     },
     create: async (data: any) => {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        throw new Error("Internet connection is required to create a new physical room.");
+      }
       const res = await fetch('/api/v1/rooms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
