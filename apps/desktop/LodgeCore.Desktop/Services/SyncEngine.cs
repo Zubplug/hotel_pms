@@ -538,7 +538,7 @@ public class SyncEngine : BackgroundService
                     }
 
                     if (propEl.TryGetProperty("businessDate", out var bd) &&
-                        DateTime.TryParse(bd.GetString(), out var parsedDate))
+                        bd.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(bd.GetString(), out var parsedDate))
                         localProp.BusinessDate = parsedDate;
                 }
                 else
@@ -554,7 +554,7 @@ public class SyncEngine : BackgroundService
                         IsActive = true,
                         EarlyCheckinWindowHours = propEl.TryGetProperty("earlyCheckinWindowHours", out var eciw2) ? eciw2.GetInt32() : 2,
                         BankingModel = propEl.TryGetProperty("bankingModel", out var bm2) && bm2.ValueKind != System.Text.Json.JsonValueKind.Null ? bm2.GetString() ?? "SERVER_BANKING" : "SERVER_BANKING",
-                        BusinessDate = propEl.TryGetProperty("businessDate", out var bd2) && DateTime.TryParse(bd2.GetString(), out var parsedDate2) ? parsedDate2 : DateTime.UtcNow.Date
+                        BusinessDate = propEl.TryGetProperty("businessDate", out var bd2) && bd2.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(bd2.GetString(), out var parsedDate2) ? parsedDate2 : DateTime.UtcNow.Date
                     };
                     dbContext.Properties.Add(localProp);
                 }
@@ -652,7 +652,7 @@ public class SyncEngine : BackgroundService
                     rt.Name = el.TryGetProperty("name", out var n) && n.ValueKind != System.Text.Json.JsonValueKind.Null ? n.GetString() ?? "" : "";
                     rt.Code = el.TryGetProperty("code", out var cd) && cd.ValueKind != System.Text.Json.JsonValueKind.Null ? cd.GetString() ?? "" : "";
                     rt.Description = el.TryGetProperty("description", out var d) && d.ValueKind != System.Text.Json.JsonValueKind.Null ? d.GetString() : null;
-                    rt.BasePrice = el.TryGetProperty("baseRate", out var br) && decimal.TryParse(br.GetString(), out var brd) ? brd : 0m;
+                    rt.BasePrice = el.TryGetProperty("baseRate", out var br) && br.ValueKind != System.Text.Json.JsonValueKind.Null && decimal.TryParse(br.GetString(), out var brd) ? brd : 0m;
                     rt.Currency = el.TryGetProperty("currency", out var curr) && curr.ValueKind != System.Text.Json.JsonValueKind.Null ? curr.GetString() ?? "NGN" : "NGN";
                     rt.MaxOccupancy = el.TryGetProperty("maxOccupancy", out var mo) ? mo.GetInt32() : 2;
                     rt.MaxAdults = el.TryGetProperty("maxAdults", out var ma) ? ma.GetInt32() : 2;
@@ -758,9 +758,9 @@ public class SyncEngine : BackgroundService
                     res.RoomId = el.TryGetProperty("roomId", out var ri) && ri.ValueKind != System.Text.Json.JsonValueKind.Null ? ri.GetString() : null;
                     res.RoomNumber = el.TryGetProperty("roomNumber", out var rn) && rn.ValueKind != System.Text.Json.JsonValueKind.Null ? rn.GetString() : null;
                     
-                    if (el.TryGetProperty("checkIn", out var ci) && DateTime.TryParse(ci.GetString(), out var cid))
+                    if (el.TryGetProperty("checkIn", out var ci) && ci.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(ci.GetString(), out var cid))
                         res.CheckInDate = cid;
-                    if (el.TryGetProperty("checkOut", out var co) && DateTime.TryParse(co.GetString(), out var cod))
+                    if (el.TryGetProperty("checkOut", out var co) && co.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(co.GetString(), out var cod))
                         res.CheckOutDate = cod;
                     
                     res.Adults = el.TryGetProperty("adults", out var adl) ? adl.GetInt32() : res.Adults;
@@ -768,9 +768,9 @@ public class SyncEngine : BackgroundService
                     res.RoomTypeId = el.TryGetProperty("roomTypeId", out var rti2) && rti2.ValueKind != System.Text.Json.JsonValueKind.Null ? rti2.GetString() : res.RoomTypeId;
                     res.SpecialRequests = el.TryGetProperty("specialRequests", out var sr) && sr.ValueKind != System.Text.Json.JsonValueKind.Null ? sr.GetString() : res.SpecialRequests;
                     res.ConfirmationNumber = el.TryGetProperty("confirmationNumber", out var cn) && cn.ValueKind != System.Text.Json.JsonValueKind.Null ? cn.GetString() : res.ConfirmationNumber;
-                    if (el.TryGetProperty("depositRequired", out var dr) && decimal.TryParse(dr.GetString() ?? dr.GetRawText(), out var drv))
+                    if (el.TryGetProperty("depositRequired", out var dr) && dr.ValueKind != System.Text.Json.JsonValueKind.Null && decimal.TryParse(dr.GetString() ?? dr.GetRawText(), out var drv))
                         res.DepositRequired = drv;
-                    if (el.TryGetProperty("depositPaid", out var dp2) && decimal.TryParse(dp2.GetString() ?? dp2.GetRawText(), out var dpv))
+                    if (el.TryGetProperty("depositPaid", out var dp2) && dp2.ValueKind != System.Text.Json.JsonValueKind.Null && decimal.TryParse(dp2.GetString() ?? dp2.GetRawText(), out var dpv))
                         res.DepositPaid = dpv;
                         
                     res.CompanyId = el.TryGetProperty("companyId", out var comp) && comp.ValueKind != System.Text.Json.JsonValueKind.Null ? comp.GetString() : null;
@@ -782,11 +782,11 @@ public class SyncEngine : BackgroundService
                     res.EarlyCheckIn = el.TryGetProperty("earlyCheckIn", out var eci) && eci.GetBoolean();
                     res.LateCheckOut = el.TryGetProperty("lateCheckOut", out var lco) && lco.GetBoolean();
                     
-                    if (el.TryGetProperty("cancelledAt", out var canAt) && DateTime.TryParse(canAt.GetString(), out var canAtD)) res.CancelledAt = canAtD;
+                    if (el.TryGetProperty("cancelledAt", out var canAt) && canAt.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(canAt.GetString(), out var canAtD)) res.CancelledAt = canAtD;
                     res.CancelledBy = el.TryGetProperty("cancelledBy", out var canBy) && canBy.ValueKind != System.Text.Json.JsonValueKind.Null ? canBy.GetString() : null;
                     res.CancellationReason = el.TryGetProperty("cancellationReason", out var canRe) && canRe.ValueKind != System.Text.Json.JsonValueKind.Null ? canRe.GetString() : null;
                     
-                    if (el.TryGetProperty("noShowAt", out var nsAt) && DateTime.TryParse(nsAt.GetString(), out var nsAtD)) res.NoShowAt = nsAtD;
+                    if (el.TryGetProperty("noShowAt", out var nsAt) && nsAt.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(nsAt.GetString(), out var nsAtD)) res.NoShowAt = nsAtD;
                     res.NoShowBy = el.TryGetProperty("noShowBy", out var nsBy) && nsBy.ValueKind != System.Text.Json.JsonValueKind.Null ? nsBy.GetString() : null;
                     res.CreatedBy = el.TryGetProperty("createdBy", out var cb) && cb.ValueKind != System.Text.Json.JsonValueKind.Null ? cb.GetString() : null;
 
@@ -813,12 +813,12 @@ public class SyncEngine : BackgroundService
                             cred.LockId = credEl.TryGetProperty("lockId", out var cli) && cli.ValueKind != System.Text.Json.JsonValueKind.Null ? cli.GetString() ?? "" : "";
                             cred.CredentialType = credEl.TryGetProperty("credentialType", out var cct) && cct.ValueKind != System.Text.Json.JsonValueKind.Null ? cct.GetString() ?? "rfid" : "rfid";
                             cred.Status = credEl.TryGetProperty("status", out var cst) && cst.ValueKind != System.Text.Json.JsonValueKind.Null ? cst.GetString() ?? "PENDING" : "PENDING";
-                            if (credEl.TryGetProperty("validFrom", out var cvf) && DateTime.TryParse(cvf.GetString(), out var cvfd)) cred.ValidFrom = cvfd;
-                            if (credEl.TryGetProperty("validUntil", out var cvu) && DateTime.TryParse(cvu.GetString(), out var cvud)) cred.ValidUntil = cvud;
+                            if (credEl.TryGetProperty("validFrom", out var cvf) && cvf.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(cvf.GetString(), out var cvfd)) cred.ValidFrom = cvfd;
+                            if (credEl.TryGetProperty("validUntil", out var cvu) && cvu.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(cvu.GetString(), out var cvud)) cred.ValidUntil = cvud;
                             cred.CardSerialNumber = credEl.TryGetProperty("cardSerialNumber", out var csn) && csn.ValueKind != System.Text.Json.JsonValueKind.Null ? csn.GetString() : null;
                             cred.IssueOperationId = credEl.TryGetProperty("issueOperationId", out var cio) && cio.ValueKind != System.Text.Json.JsonValueKind.Null ? cio.GetString() : null;
-                            if (credEl.TryGetProperty("issuedAt", out var cia) && DateTime.TryParse(cia.GetString(), out var ciad)) cred.IssuedAt = ciad;
-                            if (credEl.TryGetProperty("revokedAt", out var cra) && DateTime.TryParse(cra.GetString(), out var crad)) cred.RevokedAt = crad;
+                            if (credEl.TryGetProperty("issuedAt", out var cia) && cia.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(cia.GetString(), out var ciad)) cred.IssuedAt = ciad;
+                            if (credEl.TryGetProperty("revokedAt", out var cra) && cra.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(cra.GetString(), out var crad)) cred.RevokedAt = crad;
                             cred.MetadataJson = credEl.TryGetProperty("metadata", out var csm) ? csm.GetRawText() : null;
                             cred.UpdatedAt = DateTime.UtcNow;
                         }
@@ -856,9 +856,9 @@ public class SyncEngine : BackgroundService
                             op.ErrorMessage = opEl.TryGetProperty("errorMessage", out var oem) && oem.ValueKind != System.Text.Json.JsonValueKind.Null ? oem.GetString() : null;
                             op.PayloadHash = opEl.TryGetProperty("payloadHash", out var oph) && oph.ValueKind != System.Text.Json.JsonValueKind.Null ? oph.GetString() : null;
                             op.AttemptCount = opEl.TryGetProperty("attemptCount", out var oac) ? oac.GetInt32() : 0;
-                            if (opEl.TryGetProperty("requestedAt", out var orq) && DateTime.TryParse(orq.GetString(), out var orqd)) op.RequestedAt = orqd;
-                            if (opEl.TryGetProperty("startedAt", out var osa) && DateTime.TryParse(osa.GetString(), out var osad)) op.StartedAt = osad;
-                            if (opEl.TryGetProperty("completedAt", out var oca) && DateTime.TryParse(oca.GetString(), out var ocad)) op.CompletedAt = ocad;
+                            if (opEl.TryGetProperty("requestedAt", out var orq) && orq.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(orq.GetString(), out var orqd)) op.RequestedAt = orqd;
+                            if (opEl.TryGetProperty("startedAt", out var osa) && osa.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(osa.GetString(), out var osad)) op.StartedAt = osad;
+                            if (opEl.TryGetProperty("completedAt", out var oca) && oca.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(oca.GetString(), out var ocad)) op.CompletedAt = ocad;
                             op.AgentId = opEl.TryGetProperty("agentId", out var oai) && oai.ValueKind != System.Text.Json.JsonValueKind.Null ? oai.GetString() : null;
                             op.DeviceId = opEl.TryGetProperty("deviceId", out var odi) && odi.ValueKind != System.Text.Json.JsonValueKind.Null ? odi.GetString() : null;
                             op.MetadataJson = opEl.TryGetProperty("metadata", out var ometa) ? ometa.GetRawText() : null;
@@ -914,8 +914,8 @@ public class SyncEngine : BackgroundService
                     }
                     folio.ReservationId = el.TryGetProperty("reservationId", out var ri) && ri.ValueKind != System.Text.Json.JsonValueKind.Null ? ri.GetString() ?? "" : "";
                     folio.Status = el.TryGetProperty("status", out var st) && st.ValueKind != System.Text.Json.JsonValueKind.Null ? st.GetString() ?? "" : "";
-                    folio.TotalCharges = el.TryGetProperty("totalCharges", out var tc) && decimal.TryParse(tc.GetString(), out var tcd) ? tcd : 0m;
-                    folio.TotalPayments = el.TryGetProperty("totalPayments", out var tp) && decimal.TryParse(tp.GetString(), out var tpd) ? tpd : 0m;
+                    folio.TotalCharges = el.TryGetProperty("totalCharges", out var tc) && tc.ValueKind != System.Text.Json.JsonValueKind.Null && decimal.TryParse(tc.GetString(), out var tcd) ? tcd : 0m;
+                    folio.TotalPayments = el.TryGetProperty("totalPayments", out var tp) && tp.ValueKind != System.Text.Json.JsonValueKind.Null && decimal.TryParse(tp.GetString(), out var tpd) ? tpd : 0m;
                     // Stringify the whole folio for local offline rendering without full schema
                     folio.TransactionsJson = el.GetRawText();
                     folio.UpdatedAt = DateTime.UtcNow;
@@ -1801,8 +1801,8 @@ public class SyncEngine : BackgroundService
                                 Version = el.TryGetProperty("version", out var ver) && ver.ValueKind == System.Text.Json.JsonValueKind.Number ? ver.GetInt32() : 1
                             };
                             
-                            if (el.TryGetProperty("updatedAt", out var ua) && DateTime.TryParse(ua.GetString(), out var uad)) g.UpdatedAt = uad;
-                            if (el.TryGetProperty("deletedAt", out var da) && DateTime.TryParse(da.GetString(), out var dad)) g.DeletedAt = dad;
+                            if (el.TryGetProperty("updatedAt", out var ua) && ua.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(ua.GetString(), out var uad)) g.UpdatedAt = uad;
+                            if (el.TryGetProperty("deletedAt", out var da) && da.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(da.GetString(), out var dad)) g.DeletedAt = dad;
                             
                             guestsToUpsert.Add(g);
                         }
