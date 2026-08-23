@@ -20,7 +20,73 @@ public class LocalRepository
     public async Task<LocalReservation> CreateReservationAsync(LocalReservation reservation, string userId, string deviceId)
     {
         reservation.IsDirty = true;
+
+        // Ensure a confirmation number exists
+        if (string.IsNullOrEmpty(reservation.ConfirmationNumber))
+        {
+            reservation.ConfirmationNumber = "RES-" + DateTime.UtcNow.Ticks.ToString().Substring(10) + "-" + new Random().Next(100, 999);
+        }
+
+        // Calculate Pricing if RoomType is provided
+        decimal baseRate = 0;
+        string currency = "NGN";
+        if (!string.IsNullOrEmpty(reservation.RoomTypeId))
+        {
+            var roomType = await _dbContext.RoomTypes.FirstOrDefaultAsync(rt => rt.Id == reservation.RoomTypeId);
+            if (roomType != null)
+            {
+                baseRate = roomType.BaseRate;
+                if (!string.IsNullOrEmpty(roomType.Currency)) currency = roomType.Currency;
+            }
+        }
+        
+        int nights = (int)Math.Max(1, Math.Ceiling((reservation.CheckOutDate - reservation.CheckInDate).TotalDays));
+        decimal totalAmount = baseRate * nights;
+
+        reservation.Currency = currency;
+        
         _dbContext.Reservations.Add(reservation);
+
+        // Create Folio
+        var folioId = Guid.NewGuid().ToString();
+        var folio = new LocalFolio
+        {
+            Id = folioId,
+            PropertyId = reservation.PropertyId,
+            ReservationId = reservation.Id,
+            Reservation = reservation,
+            Status = "OPEN",
+            TotalCharges = totalAmount,
+            TotalPayments = 0,
+            IsDirty = true, // Force sync down to grab real ID later, or cloud matches by reservation? Actually, cloud API creates the folio, so this local one will get overwritten/merged on next pull. We just need it for UI.
+        };
+
+        // Create Transactions JSON
+        var transactions = new List<object>();
+        DateTime currentDate = reservation.CheckInDate;
+        for (int i = 0; i < nights; i++)
+        {
+            transactions.Add(new
+            {
+                id = Guid.NewGuid().ToString(),
+                folioId = folio.Id,
+                businessDate = currentDate,
+                type = "CHARGE",
+                source = "ROOM_CHARGE",
+                description = $"Room Charge - Night {i + 1}",
+                quantity = 1,
+                unitAmount = baseRate,
+                amount = baseRate,
+                currency = currency,
+                baseAmount = baseRate,
+                postedBy = userId
+            });
+            currentDate = currentDate.AddDays(1);
+        }
+        folio.TransactionsJson = JsonSerializer.Serialize(transactions);
+        
+        _dbContext.Folios.Add(folio);
+        reservation.Folio = folio;
         
         // Bundle the mutation with an immutable OutboxEvent
         var outboxEvent = new LocalOutboxEvent
@@ -32,10 +98,36 @@ public class LocalRepository
             AggregateId = reservation.Id,
             AggregateVersion = reservation.Version,
             EventType = "CREATE",
-            PayloadJson = JsonSerializer.Serialize(reservation)
+            PayloadJson = JsonSerializer.Serialize(new
+            {
+                PropertyId = reservation.PropertyId,
+                GuestId = reservation.GuestId,
+                Guest = reservation.Guest,
+                RoomId = reservation.RoomId,
+                RoomNumber = reservation.RoomNumber,
+                RoomTypeId = reservation.RoomTypeId,
+                CheckInDate = reservation.CheckInDate,
+                CheckOutDate = reservation.CheckOutDate,
+                Adults = reservation.Adults,
+                Children = reservation.Children,
+                SpecialRequests = reservation.SpecialRequests,
+                Status = reservation.Status,
+                Source = reservation.Source
+            })
         };
         
         _dbContext.OutboxEvents.Add(outboxEvent);
+        
+        // If room is specified and status implies occupancy, update room status
+        if (!string.IsNullOrEmpty(reservation.RoomId) && reservation.Status == "CHECKED_IN")
+        {
+            var room = await _dbContext.Rooms.FirstOrDefaultAsync(r => r.Id == reservation.RoomId);
+            if (room != null && room.Status != "OCCUPIED")
+            {
+                room.Status = "OCCUPIED";
+                room.UpdatedAt = DateTime.UtcNow;
+            }
+        }
         
         // This transaction ensures the local DB and the Sync Queue are atomically updated
         await _dbContext.SaveChangesAsync();
