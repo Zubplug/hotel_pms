@@ -236,7 +236,8 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
       return apiFetchResult(`/api/v1/pos/staff?propertyId=${propertyId}`);
     },
     getCurrentOperator: async (sessionId: string, operatorToken?: string | null) => {
-      const headers: Record<string, string> = operatorToken ? { Authorization: `Bearer ${operatorToken}` } : {};
+      if (!sessionId) return { success: false, data: null, error: 'No active session' };
+      const headers = operatorToken ? { Authorization: `Bearer ${operatorToken}` } : undefined;
       return apiFetchResult(`/api/v1/pos/operator?sessionId=${sessionId}`, { headers });
     },
     authenticateOperator: async (staffId: string, pin: string, propertyId: string, sessionId: string, outletId?: string, deviceId?: string) => {
@@ -271,6 +272,7 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
       });
     },
     getSessionContext: async (sessionId: string) => {
+      if (!sessionId) return { success: false, data: null, error: 'No active session' };
       return apiFetchResult(`/api/v1/pos/sessions/${sessionId}/context`);
     },
     getFloorPlans: async (outletId: string, operatorToken?: string | null) => {
@@ -332,6 +334,7 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
       return apiFetchResult(`/api/v1/pos/reports/server-sales?range=${range}${sessionId ? `&sessionId=${sessionId}` : ''}`, { headers });
     },
     getCashMovements: async (sessionId: string) => {
+      if (!sessionId) return { success: false, data: [], error: 'No active session' };
       return apiFetchResult(`/api/v1/pos/sessions/${sessionId}/cash-movements`);
     },
     createCashMovement: async (propertyId: string, sessionId: string, amount: number, type: string, reasonCode: string, notes?: string, receiptReference?: string, authorizerId?: string) => {
@@ -341,6 +344,7 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
       });
     },
     getSessionSettlementDetails: async (sessionId: string) => {
+      if (!sessionId) return { success: false, data: null, error: 'No active session' };
       return apiFetchResult(`/api/v1/pos/sessions/${sessionId}/settlement-details`);
     },
     settleSession: async (sessionId: string, actualCash: number, operatorId: string, authorizerId?: string) => {
@@ -385,6 +389,7 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
       });
     },
     getActiveOrders: async (sessionId: string, operatorToken: string, filter?: string) => {
+      if (!sessionId) return { success: false, data: [], error: 'No active session' };
       return apiFetchResult(`/api/v1/pos/sessions/${sessionId}/active-orders${filter ? `?filter=${filter}` : ''}`, {
         headers: { 'Authorization': `Bearer ${operatorToken}` }
       });
