@@ -94,6 +94,19 @@ public class CommandProcessor
             ?? cmd.Payload.GetProperty("lockCode").GetString() 
             ?? "";
 
+        DateTime checkIn = DateTime.Now;
+        if (cmd.Payload.TryGetProperty("validFrom", out var vf) && vf.ValueKind != System.Text.Json.JsonValueKind.Null) 
+            checkIn = vf.GetDateTime();
+        else if (cmd.Payload.TryGetProperty("checkInDate", out var ci) && ci.ValueKind != System.Text.Json.JsonValueKind.Null)
+            checkIn = ci.GetDateTime();
+
+        DateTime checkOut = DateTime.Now.AddDays(1);
+        if (cmd.Payload.TryGetProperty("validTo", out var vt) && vt.ValueKind != System.Text.Json.JsonValueKind.Null) 
+            checkOut = vt.GetDateTime();
+        else if (cmd.Payload.TryGetProperty("checkOutDate", out var co) && co.ValueKind != System.Text.Json.JsonValueKind.Null)
+            checkOut = co.GetDateTime();
+
+
         await _apiClient.UpdateCommandStatusAsync(cmd.Id, "WAITING_FOR_CARD");
         
         bool cardDetected = await _lockProvider.WaitForCardAsync(TimeSpan.FromSeconds(30), cancellationToken);
@@ -106,7 +119,7 @@ public class CommandProcessor
         await _apiClient.UpdateCommandStatusAsync(cmd.Id, "CARD_DETECTED");
         await _apiClient.UpdateCommandStatusAsync(cmd.Id, "ENCODING");
 
-        var result = await _lockProvider.EncodeCardAsync(lockCode, cancellationToken);
+        var result = await _lockProvider.EncodeCardAsync(lockCode, checkIn, checkOut, cancellationToken);
         if (result.Success)
         {
             await _apiClient.UpdateCommandStatusAsync(cmd.Id, "VERIFYING");
@@ -150,8 +163,8 @@ public class CommandProcessor
             isBlank  = result.IsBlank,
             roomNo   = result.RoomNo,
             cardSnr  = result.CardSnr,
-            validFrom = result.ValidFrom,
-            validTo  = result.ValidTo,
+            validFrom = result.CheckIn,
+            validTo  = result.CheckOut,
         };
 
         _logger.LogInformation(
