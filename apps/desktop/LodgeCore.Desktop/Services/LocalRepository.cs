@@ -479,6 +479,17 @@ public class LocalRepository
 
         UpdateFolioTransactionsJson(folio, "payments", newPayment);
 
+        var newItem = new
+        {
+            id = Guid.NewGuid().ToString(),
+            amount = -amount,
+            description = $"{method} payment",
+            type = "PAYMENT",
+            createdAt = DateTime.UtcNow
+        };
+
+        UpdateFolioTransactionsJson(folio, "items", newItem);
+
         _dbContext.OutboxEvents.Add(new LocalOutboxEvent
         {
             PropertyId = folio.PropertyId,
@@ -805,11 +816,14 @@ public class LocalRepository
             }
 
             var meta = await _dbContext.SyncMetadata.FirstOrDefaultAsync();
-            if (meta != null)
+            if (meta == null)
             {
-                meta.LastGuestSyncCursor = nextCursor;
-                _dbContext.SyncMetadata.Update(meta);
+                meta = new LodgeCore.Desktop.Data.Entities.LocalSyncMetadata { Id = "1" };
+                _dbContext.SyncMetadata.Add(meta);
             }
+            
+            meta.LastGuestSyncCursor = nextCursor;
+            _dbContext.SyncMetadata.Update(meta);
             
             await _dbContext.SaveChangesAsync();
             await transaction.CommitAsync();
@@ -1344,7 +1358,7 @@ public class LocalRepository
         return order;
     }
 
-    public async Task<List<LocalPosOrder>> GetActiveOrdersAsync(string sessionId, string filter = "my_orders", string? staffId = null)
+    public async Task<List<object>> GetActiveOrdersAsync(string sessionId, string filter = "my_orders", string? staffId = null)
     {
         var query = _dbContext.PosOrders
             .Include(o => o.Items)
@@ -1356,7 +1370,29 @@ public class LocalRepository
             query = query.Where(o => o.ServerStaffId == staffId);
         }
 
-        return await query.OrderByDescending(o => o.CreatedAt).ToListAsync();
+        var orders = await query.OrderByDescending(o => o.CreatedAt).ToListAsync();
+        var staffIds = orders.Select(o => o.ServerStaffId).Distinct().ToList();
+        var staffDict = await _dbContext.Staff.Where(s => staffIds.Contains(s.Id)).ToDictionaryAsync(s => s.Id, s => s.FirstName + " " + s.LastName);
+
+        var result = new List<object>();
+        foreach (var o in orders)
+        {
+            result.Add(new {
+                id = o.Id,
+                orderNumber = o.OrderNumber,
+                orderType = o.OrderType,
+                tableName = o.TableNumber,
+                displayName = o.DisplayName,
+                status = o.Status,
+                paymentStatus = o.PaymentStatus,
+                itemCount = o.Items?.Count ?? 0,
+                total = o.Total,
+                waiterName = staffDict.ContainsKey(o.ServerStaffId) ? staffDict[o.ServerStaffId] : "Unknown",
+                createdAt = o.CreatedAt
+            });
+        }
+        
+        return result;
     }
 
     public async Task<List<object>> GetWaiterTicketsAsync(string outletId, string staffId, string sessionId)
@@ -2616,7 +2652,46 @@ public class LocalRepository
             query = query.Where(o => o.BusinessDate >= start);
         }
 
-        return await query.OrderByDescending(o => o.BusinessDate).ToListAsync();
+        var orders = await query.OrderByDescending(o => o.BusinessDate).ToListAsync();
+        
+        var sessions = await _dbContext.PosSessions
+            .Where(s => orders.Select(o => o.SessionId).Contains(s.Id))
+            .ToDictionaryAsync(s => s.Id, s => s.OpenedBy);
+            
+        var staffIds = orders.Select(o => o.ServerStaffId).Distinct().ToList();
+        var staffDict = await _dbContext.Staff.Where(s => staffIds.Contains(s.Id)).ToDictionaryAsync(s => s.Id, s => s.FirstName + " " + s.LastName);
+
+        var result = new List<object>();
+        var random = new Random();
+        foreach(var o in orders)
+        {
+            var sessionOwnerId = sessions.ContainsKey(o.SessionId) ? sessions[o.SessionId] : null;
+            var sessionOwnerName = sessionOwnerId != null && staffDict.ContainsKey(sessionOwnerId) ? staffDict[sessionOwnerId] : "Unknown";
+
+            result.Add(new {
+                id = o.Id,
+                propertyId = o.PropertyId,
+                outletId = o.OutletId,
+                sessionId = o.SessionId,
+                orderNumber = o.OrderNumber,
+                orderType = o.OrderType,
+                tableNumber = o.TableNumber,
+                serverStaffId = o.ServerStaffId,
+                status = o.Status,
+                paymentStatus = o.PaymentStatus,
+                guestName = o.GuestName,
+                displayName = o.DisplayName,
+                guestsCount = o.GuestsCount,
+                total = o.Total,
+                createdAt = o.CreatedAt,
+                businessDate = o.BusinessDate,
+                items = o.Items,
+                sessionOwnerName = sessionOwnerName,
+                verificationToken = $"{o.OrderNumber}-OFFLINE"
+            });
+        }
+        
+        return result;
     }
 
     public async Task<object> GetServerSalesAsync(string staffId, string propertyId, string range, string? sessionId = null)
@@ -2640,21 +2715,20 @@ public class LocalRepository
         var orders = await query.ToListAsync();
 
         var payments = await _dbContext.PosPayments
-            .Where(p => orders.Select(o => o.Id).Contains(p.OrderId))
+            .Where(p => orders.Select(o => o.Id).Contains(p.OrderId) && p.Status == "CONFIRMED")
             .ToListAsync();
 
-        var totalSales = orders.Where(o => o.Status != "VOIDED").Sum(o => o.Total);
-        // Assuming tip is collected differently, for now we sum 0 or a hypothetical field
-        var totalTips = orders.Sum(o => o.TipAmount); 
-        var totalVoids = orders.Where(o => o.Status == "VOIDED").Sum(o => o.Total);
-        var orderCount = orders.Count;
-
+        var grossSales = orders.Where(o => o.Status != "VOIDED").Sum(o => o.Total);
+        
         return new
         {
-            sales = totalSales,
-            tips = totalTips,
-            voids = totalVoids,
-            orderCount = orderCount
+            grossSales = grossSales,
+            netSales = grossSales, // Simplified for now
+            ordersCount = orders.Count,
+            cashSales = payments.Where(p => p.Method == "CASH").Sum(p => p.Amount),
+            cardSales = payments.Where(p => p.Method == "CARD").Sum(p => p.Amount),
+            roomChargeSales = payments.Where(p => p.Method == "ROOM_CHARGE").Sum(p => p.Amount),
+            cityLedger = payments.Where(p => p.Method == "CITY_LEDGER").Sum(p => p.Amount)
         };
     }
     public async Task LogHardwareEventAsync(string userId, string deviceId, string eventType, string? payload)

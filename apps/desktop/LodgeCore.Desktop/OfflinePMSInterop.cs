@@ -590,8 +590,10 @@ public class OfflinePMSInterop
             var items = folioJson.ValueKind == System.Text.Json.JsonValueKind.Object && folioJson.TryGetProperty("items", out var itemsProp) && itemsProp.ValueKind == System.Text.Json.JsonValueKind.Array
                 ? itemsProp.EnumerateArray().Select(i => new {
                     id = i.TryGetProperty("id", out var iid) ? iid.GetString() : null,
-                    amount = i.TryGetProperty("amount", out var amt) ? amt.GetDecimal() : 0,
-                    type = "CHARGE",
+                    amount = i.TryGetProperty("amount", out var amt) ? 
+                        (amt.ValueKind == System.Text.Json.JsonValueKind.String && decimal.TryParse(amt.GetString(), out var d) ? d : 
+                        (amt.ValueKind == System.Text.Json.JsonValueKind.Number ? amt.GetDecimal() : 0)) : 0m,
+                    type = i.TryGetProperty("type", out var typ) && typ.ValueKind != System.Text.Json.JsonValueKind.Null ? typ.GetString() : "CHARGE",
                     description = i.TryGetProperty("description", out var desc) ? desc.GetString() : null,
                     createdAt = i.TryGetProperty("createdAt", out var ts) ? ts.GetDateTime() : DateTime.UtcNow
                 }).ToArray<object>()
@@ -600,7 +602,9 @@ public class OfflinePMSInterop
             var payments = folioJson.ValueKind == System.Text.Json.JsonValueKind.Object && folioJson.TryGetProperty("payments", out var payProp) && payProp.ValueKind == System.Text.Json.JsonValueKind.Array
                 ? payProp.EnumerateArray().Select(p => new {
                     id = p.TryGetProperty("id", out var pid) ? pid.GetString() : null,
-                    amount = p.TryGetProperty("amount", out var amt) ? amt.GetDecimal() : 0,
+                    amount = p.TryGetProperty("amount", out var pAmt) ? 
+                        (pAmt.ValueKind == System.Text.Json.JsonValueKind.String && decimal.TryParse(pAmt.GetString(), out var pd) ? pd : 
+                        (pAmt.ValueKind == System.Text.Json.JsonValueKind.Number ? pAmt.GetDecimal() : 0)) : 0m,
                     status = p.TryGetProperty("status", out var st) ? st.GetString() : "COMPLETED",
                     method = p.TryGetProperty("method", out var meth) ? meth.GetString() : null,
                     createdAt = p.TryGetProperty("createdAt", out var ts) ? ts.GetDateTime() : DateTime.UtcNow
@@ -1719,31 +1723,49 @@ public class OfflinePMSInterop
             var terminal = await _repo.GetTerminalAsync(desktopSession.DeviceId);
             var outlet = terminal != null ? await _repo.GetOutletAsync(terminal.OutletId) : null;
             var posSession = await _repo.GetSessionContextAsync(sessionId);
-
-            var context = new
+            
+            // Fallback outlet to the session's outlet if terminal doesn't provide it
+            if (outlet == null && posSession != null && !string.IsNullOrEmpty(posSession.OutletId))
             {
-                terminal = terminal,
-                outlet = outlet,
-                operatorInfo = staff, // Avoid reserved word 'operator' in C# if needed, but in JSON it maps to operator
-                permissions = desktopSession.Permissions,
-                businessDate = property?.BusinessDate.ToString("yyyy-MM-dd") ?? DateTime.UtcNow.ToString("yyyy-MM-dd"),
-                taxConfiguration = new { }, // Placeholder for now
-                currency = property?.Currency ?? "USD",
-                posSession = posSession
-            };
+                outlet = await _repo.GetOutletAsync(posSession.OutletId);
+            }
 
-            // Let's use a dictionary to ensure the exact JSON key 'operator' is used
+            var settlementDetails = await _repo.GetSessionSettlementDetailsAsync(sessionId);
+
             var jsonDict = new Dictionary<string, object?>
             {
                 ["terminal"] = terminal,
                 ["outlet"] = outlet,
                 ["operator"] = staff,
+                ["primaryOperator"] = staff, // Important for shift bank mapping
                 ["permissions"] = desktopSession.Permissions,
                 ["businessDate"] = property?.BusinessDate.ToString("yyyy-MM-dd") ?? DateTime.UtcNow.ToString("yyyy-MM-dd"),
                 ["taxConfiguration"] = new { },
                 ["currency"] = property?.Currency ?? "USD",
-                ["posSession"] = posSession
+                
+                // Settlement properties
+                ["expectedCash"] = settlementDetails.ExpectedCash,
+                ["variance"] = settlementDetails.Variance,
+                ["openingBalance"] = settlementDetails.OpeningFloat,
+                ["cashSales"] = settlementDetails.CashSales,
+                ["cardSales"] = settlementDetails.CardSales,
+                ["totalSales"] = settlementDetails.TotalSales,
+                ["cashIn"] = settlementDetails.CashIn,
+                ["cashDrops"] = settlementDetails.CashDrops,
+                ["paidOuts"] = settlementDetails.PaidOuts,
+                ["cashPaidOut"] = settlementDetails.CashDrops + settlementDetails.PaidOuts + settlementDetails.TransfersOut,
+                ["cashRefunds"] = settlementDetails.CashRefunds
             };
+
+            // Merge posSession properties into root of JSON dictionary
+            if (posSession != null)
+            {
+                var sessionProps = typeof(LodgeCore.Desktop.Data.Entities.LocalPosSession).GetProperties();
+                foreach (var prop in sessionProps)
+                {
+                    jsonDict[JsonNamingPolicy.CamelCase.ConvertName(prop.Name)] = prop.GetValue(posSession);
+                }
+            }
 
             return JsonSerializer.Serialize(new { success = true, data = jsonDict }, _jsonOptions);
         }

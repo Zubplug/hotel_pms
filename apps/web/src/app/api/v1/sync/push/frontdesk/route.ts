@@ -346,7 +346,7 @@ export async function POST(req: NextRequest) {
              const folio = await tx.folio.findUnique({ where: { id: aggregateId, propertyId } });
              if (!folio) throw new Error('Folio not found or unauthorized');
 
-             // Idempotency: if a FolioItem already exists with this event's idempotencyKey, skip
+              // Idempotency: if a FolioItem already exists with this event's idempotencyKey, skip
              const existing = await tx.folioItem.findFirst({
                where: { posTransactionId: idempotencyKey }
              });
@@ -367,6 +367,26 @@ export async function POST(req: NextRequest) {
                    deviceId: device.id,
                    isLatePosting: true,
                    posTransactionId: idempotencyKey,
+                 }
+               });
+
+               // Also create the corresponding Payment record so the web UI can display payment method and receipts
+               let methodStr = (payload.method || 'CASH').toUpperCase();
+               const validMethods = ['CASH','BANK_TRANSFER','POS','CARD','CARD_OFFLINE','PAYMENT_GATEWAY','MOBILE_PAYMENT','CHEQUE','ROOM_CHARGE','OTHER'];
+               if (!validMethods.includes(methodStr)) methodStr = 'OTHER';
+
+               await tx.payment.create({
+                 data: {
+                   folioId: aggregateId,
+                   propertyId,
+                   reservationId: folio.reservationId,
+                   method: methodStr as any,
+                   amount: amount,
+                   currency: payload.currency || 'NGN',
+                   baseAmount: amount,
+                   status: 'COMPLETED',
+                   idempotencyKey: `pay_${idempotencyKey}`,
+                   receivedBy: operatorId || device.id
                  }
                });
 

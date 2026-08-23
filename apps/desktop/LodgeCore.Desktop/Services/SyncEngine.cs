@@ -1534,7 +1534,7 @@ public class SyncEngine : BackgroundService
         
         var deviceId = Preferences.Get("DeviceTerminalId", "");
         var propertyId = Preferences.Get("DevicePropertyId", "");
-        var token = await SecureStorage.GetAsync("DeviceAuthToken");
+        var token = _credentialStorage.LoadCredential("deviceCredential");
 
         if (string.IsNullOrEmpty(deviceId) || string.IsNullOrEmpty(propertyId) || string.IsNullOrEmpty(token))
             return;
@@ -1757,7 +1757,7 @@ public class SyncEngine : BackgroundService
         var localRepo = scope.ServiceProvider.GetRequiredService<LocalRepository>();
         
         var propertyId = Preferences.Get("DevicePropertyId", "");
-        var token = await SecureStorage.GetAsync("DeviceAuthToken");
+        var token = _credentialStorage.LoadCredential("deviceCredential");
 
         if (string.IsNullOrEmpty(propertyId) || string.IsNullOrEmpty(token)) return;
 
