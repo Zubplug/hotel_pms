@@ -1750,6 +1750,8 @@ public class SyncEngine : BackgroundService
         public string? DeviceToken { get; set; }
         public string? Error { get; set; }
     }
+    static bool _forceGuestSyncOnce = true;
+
     private async Task SyncGuestsIncrementalAsync(CancellationToken stoppingToken)
     {
         using var scope = _serviceProvider.CreateScope();
@@ -1768,6 +1770,12 @@ public class SyncEngine : BackgroundService
         {
             var meta = await dbContext.SyncMetadata.FirstOrDefaultAsync(stoppingToken);
             var cursor = meta?.LastGuestSyncCursor;
+            
+            if (_forceGuestSyncOnce)
+            {
+                cursor = null;
+                _forceGuestSyncOnce = false;
+            }
             
             var url = $"sync/guests?propertyId={propertyId}&limit=500";
             if (!string.IsNullOrEmpty(cursor))
