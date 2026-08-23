@@ -1,14 +1,10 @@
 import { NextRequest } from 'next/server';
-import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
-import { getUserPropertyIds } from '@/lib/property-access';
+import { authenticateSyncRequest } from '@/lib/sync-auth';
 
 export async function GET(req: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
-
     const { searchParams } = req.nextUrl;
     const propertyId = searchParams.get('propertyId');
     const limit = Math.min(500, parseInt(searchParams.get('limit') || '500', 10));
@@ -18,9 +14,9 @@ export async function GET(req: NextRequest) {
       return errorResponse('BAD_REQUEST', 'Missing propertyId', 400);
     }
 
-    const allowedPropertyIds = await getUserPropertyIds(session.user.id);
-    if (!allowedPropertyIds.includes(propertyId)) {
-      return errorResponse('FORBIDDEN', 'No access to this property', 403);
+    const authResult = await authenticateSyncRequest(req, propertyId);
+    if (!authResult.success) {
+      return errorResponse('UNAUTHORIZED', authResult.error, authResult.status);
     }
 
     // Parse cursor if provided
@@ -39,13 +35,9 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Determine the organization ID for this property to fetch organization-wide guests
-    const property = await prisma.property.findUnique({ where: { id: propertyId } });
-    if (!property) return errorResponse('NOT_FOUND', 'Property not found', 404);
-    
-    // Build compound cursor where clause
+    // Build compound cursor where clause using the authenticated organization ID
     let whereClause: any = {
-      organizationId: property.organizationId
+      organizationId: authResult.organizationId
     };
 
     if (cursorUpdatedAt && cursorId) {

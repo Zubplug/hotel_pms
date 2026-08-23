@@ -729,6 +729,8 @@ public class LocalRepository
                 }
                 else
                 {
+                    if (existing.IsDirty) continue; // Race-safe: skip overwriting local dirty state
+
                     existing.FirstName = guest.FirstName;
                     existing.LastName = guest.LastName;
                     existing.Email = guest.Email;

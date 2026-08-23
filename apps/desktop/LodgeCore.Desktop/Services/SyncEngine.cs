@@ -720,6 +720,8 @@ public class SyncEngine : BackgroundService
                     incomingResIds.Add(id);
                     
                     var res = await dbContext.Reservations.FirstOrDefaultAsync(x => x.Id == id, stoppingToken);
+                    if (res != null && res.IsDirty) continue;
+
                     if (res == null)
                     {
                         res = new LodgeCore.Desktop.Data.Entities.LocalReservation { Id = id, PropertyId = propertyId, CreatedAt = DateTime.UtcNow };
@@ -899,6 +901,8 @@ public class SyncEngine : BackgroundService
                     incomingFolioIds.Add(id);
                     
                     var folio = await dbContext.Folios.FirstOrDefaultAsync(x => x.Id == id, stoppingToken);
+                    if (folio != null && folio.IsDirty) continue;
+
                     if (folio == null)
                     {
                         folio = new LodgeCore.Desktop.Data.Entities.LocalFolio { Id = id, PropertyId = propertyId, CreatedAt = DateTime.UtcNow };
@@ -1140,6 +1144,8 @@ public class SyncEngine : BackgroundService
                     incomingIds.Add(id);
 
                     var task = await dbContext.HousekeepingTasks.FirstOrDefaultAsync(x => x.Id == id, stoppingToken);
+                    if (task != null && task.IsDirty) continue;
+
                     if (task == null)
                     {
                         task = new LodgeCore.Desktop.Data.Entities.LocalHousekeepingTask { Id = id };
@@ -1174,6 +1180,8 @@ public class SyncEngine : BackgroundService
                     incomingIds.Add(id);
 
                     var ticket = await dbContext.MaintenanceTickets.FirstOrDefaultAsync(x => x.Id == id, stoppingToken);
+                    if (ticket != null && ticket.IsDirty) continue;
+
                     if (ticket == null)
                     {
                         ticket = new LodgeCore.Desktop.Data.Entities.LocalMaintenanceTicket { Id = id, PropertyId = propertyId };
@@ -1291,6 +1299,7 @@ public class SyncEngine : BackgroundService
                             {
                                 evt.SyncedAt = DateTime.UtcNow;
                                 evt.NextAttemptAt = null;
+                                ClearIsDirtyIfSafe(dbContext, evt);
                             }
                             else if (res.Status == "CONFLICT")
                             {
@@ -1532,6 +1541,40 @@ public class SyncEngine : BackgroundService
                 _logger.LogError(ex, "Error syncing guests.");
                 break;
             }
+        }
+    }
+
+    private void ClearIsDirtyIfSafe(LocalDbContext dbContext, LodgeCore.Desktop.Data.Entities.LocalOutboxEvent evt)
+    {
+        if (evt.AggregateType == "RESERVATION")
+        {
+            var res = dbContext.Reservations.Local.FirstOrDefault(x => x.Id == evt.AggregateId)
+                      ?? dbContext.Reservations.FirstOrDefault(x => x.Id == evt.AggregateId);
+            if (res != null && res.LocalSequence == evt.Sequence) res.IsDirty = false;
+        }
+        else if (evt.AggregateType == "FOLIO")
+        {
+            var folio = dbContext.Folios.Local.FirstOrDefault(x => x.Id == evt.AggregateId)
+                        ?? dbContext.Folios.FirstOrDefault(x => x.Id == evt.AggregateId);
+            if (folio != null && folio.LocalSequence == evt.Sequence) folio.IsDirty = false;
+        }
+        else if (evt.AggregateType == "HOUSEKEEPING_TASK")
+        {
+            var task = dbContext.HousekeepingTasks.Local.FirstOrDefault(x => x.Id == evt.AggregateId)
+                       ?? dbContext.HousekeepingTasks.FirstOrDefault(x => x.Id == evt.AggregateId);
+            if (task != null && task.Version == evt.Sequence) task.IsDirty = false;
+        }
+        else if (evt.AggregateType == "MAINTENANCE_TICKET")
+        {
+            var ticket = dbContext.MaintenanceTickets.Local.FirstOrDefault(x => x.Id == evt.AggregateId)
+                         ?? dbContext.MaintenanceTickets.FirstOrDefault(x => x.Id == evt.AggregateId);
+            if (ticket != null && ticket.Version == evt.Sequence) ticket.IsDirty = false;
+        }
+        else if (evt.AggregateType == "GUEST")
+        {
+            var guest = dbContext.Guests.Local.FirstOrDefault(x => x.Id == evt.AggregateId)
+                        ?? dbContext.Guests.FirstOrDefault(x => x.Id == evt.AggregateId);
+            if (guest != null && guest.Version == evt.Sequence) guest.IsDirty = false;
         }
     }
 }

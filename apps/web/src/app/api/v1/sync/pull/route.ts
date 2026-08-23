@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
-import { compare } from 'bcryptjs';
-import { createHash } from 'crypto';
+import { authenticateSyncRequest } from '@/lib/sync-auth';
 
 /**
  * GET /api/v1/sync/pull
@@ -18,15 +17,6 @@ import { createHash } from 'crypto';
  */
 export async function GET(req: NextRequest) {
   try {
-    // ---- Device authentication ------------------------------------------
-    // Desktop devices authenticate with the device token issued at registration,
-    // not with a user session cookie. This is a machine-to-machine call.
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Missing device token' }, { status: 401 });
-    }
-
-    const deviceToken = authHeader.substring(7);
     const propertyId  = req.nextUrl.searchParams.get('propertyId');
     const sinceParam  = req.nextUrl.searchParams.get('since');
     const since = sinceParam ? new Date(sinceParam) : undefined;
@@ -35,34 +25,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'propertyId is required' }, { status: 400 });
     }
 
-    // Verify the device token against the registered POS terminals
-    const terminals = await prisma.posTerminal.findMany({
-      where: {
-        propertyId,
-        registrationState: 'REGISTERED' // or whatever active state is
-      }
-    });
-
-    let device = null;
-    const sha256Hash = createHash('sha256').update(deviceToken).digest('hex');
-
-    for (const t of terminals) {
-      if (t.deviceCredentialHash) {
-        if (t.deviceCredentialHash === sha256Hash) {
-           device = t;
-           break;
-        }
-        if (t.deviceCredentialHash.length === 60) {
-           if (await compare(deviceToken, t.deviceCredentialHash)) {
-             device = t;
-             break;
-           }
-        }
-      }
-    }
-
-    if (!device) {
-      return NextResponse.json({ error: 'Terminal not authorized' }, { status: 403 });
+    const authResult = await authenticateSyncRequest(req, propertyId);
+    if (!authResult.success) {
+      return NextResponse.json({ error: authResult.error }, { status: authResult.status });
     }
 
     // ---- Load property config -------------------------------------------
