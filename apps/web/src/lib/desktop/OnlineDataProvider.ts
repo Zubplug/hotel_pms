@@ -71,6 +71,12 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
   roomTypes: {
     async list(propertyId: string) {
       return apiFetch(`/api/v1/room-types?propertyId=${propertyId}`);
+    },
+    async create(data: any) {
+      return apiFetch(`/api/v1/room-types`, {
+        method: 'POST',
+        body: JSON.stringify(data)
+      });
     }
   },
   reservations: {
@@ -154,6 +160,12 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
       return apiFetch(`/api/v1/rooms/${roomId}/status`, {
         method: 'POST',
         body: JSON.stringify({ newStatus, source })
+      });
+    },
+    async create(data: any) {
+      return apiFetch(`/api/v1/rooms`, {
+        method: 'POST',
+        body: JSON.stringify(data)
       });
     }
   },
