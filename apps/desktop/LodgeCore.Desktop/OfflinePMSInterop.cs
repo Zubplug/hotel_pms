@@ -1226,7 +1226,7 @@ public class OfflinePMSInterop
             var posCtx = await _sessionManager.GetActiveContextAsync();
             
             // Fetch tickets using context session ID and staff ID to ensure secure scoping
-            var tickets = await _repo.GetWaiterTicketsAsync(outletId, posCtx.StaffId, posCtx.BusinessDate);
+            var tickets = await _repo.GetWaiterTicketsAsync(outletId, posCtx.StaffId, posCtx.SessionId);
             return JsonSerializer.Serialize(new { success = true, data = tickets }, _jsonOptions);
         }
         catch (Exception ex)

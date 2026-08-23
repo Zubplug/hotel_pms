@@ -1359,10 +1359,13 @@ public class LocalRepository
         return await query.OrderByDescending(o => o.CreatedAt).ToListAsync();
     }
 
-    public async Task<List<object>> GetWaiterTicketsAsync(string outletId, string staffId, DateTime businessDate)
+    public async Task<List<object>> GetWaiterTicketsAsync(string outletId, string staffId, string sessionId)
     {
+        var session = await _dbContext.PosSessions.FindAsync(sessionId);
+        var businessDate = session?.OpenedAt.Date ?? DateTime.UtcNow.Date;
+
         var kots = await _dbContext.PosKots
-            .Where(k => k.OutletId == outletId && k.CreatedBy == staffId && k.BusinessDate.Date == businessDate.Date)
+            .Where(k => k.OutletId == outletId && k.CreatedBy == staffId && k.BusinessDate.Date == businessDate)
             .OrderByDescending(k => k.CreatedAt)
             .ToListAsync();
 
