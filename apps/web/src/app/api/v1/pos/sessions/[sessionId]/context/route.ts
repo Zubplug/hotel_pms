@@ -20,7 +20,47 @@ export async function GET(
       return NextResponse.json({ error: 'Session not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ data: session });
+    const movements = await prisma.posCashMovement.findMany({
+      where: { posSessionId: sessionId }
+    });
+
+    const payments = await prisma.posPayment.findMany({
+      where: { sessionId: sessionId, status: 'CONFIRMED' }
+    });
+
+    const openingFloat = movements.filter(m => m.type === 'OPENING_FLOAT').reduce((sum, m) => sum + Number(m.amount), 0);
+    
+    // Sales breakdown
+    const cashSales = payments.filter(p => p.method === 'CASH').reduce((sum, p) => sum + Number(p.amount), 0);
+    const cardSales = payments.filter(p => p.method === 'CARD').reduce((sum, p) => sum + Number(p.amount), 0);
+    const bankTransferSales = payments.filter(p => p.method === 'BANK_TRANSFER').reduce((sum, p) => sum + Number(p.amount), 0);
+    const roomChargeSales = payments.filter(p => p.method === 'ROOM_CHARGE').reduce((sum, p) => sum + Number(p.amount), 0);
+    const otherSales = payments.filter(p => !['CASH', 'CARD', 'BANK_TRANSFER', 'ROOM_CHARGE'].includes(p.method)).reduce((sum, p) => sum + Number(p.amount), 0);
+    const totalSales = payments.reduce((sum, p) => sum + Number(p.amount), 0);
+
+    const cashIn = movements.filter(m => m.type === 'CASH_IN' || m.type === 'CASH_TRANSFER_IN').reduce((sum, m) => sum + Number(m.amount), 0);
+    const cashDrops = movements.filter(m => m.type === 'CASH_DROP').reduce((sum, m) => sum + Number(m.amount), 0);
+    const paidOuts = movements.filter(m => m.type === 'PAID_OUT').reduce((sum, m) => sum + Number(m.amount), 0);
+    const transfersOut = movements.filter(m => m.type === 'CASH_TRANSFER_OUT').reduce((sum, m) => sum + Number(m.amount), 0);
+    const refunds = movements.filter(m => m.type === 'REFUND_CASH').reduce((sum, m) => sum + Number(m.amount), 0);
+
+    const expectedCash = openingFloat + cashSales + cashIn - cashDrops - paidOuts - transfersOut - refunds;
+
+    return NextResponse.json({ 
+      data: {
+        ...session,
+        cashSales,
+        cardSales,
+        bankTransferSales,
+        roomChargeSales,
+        otherSales,
+        totalSales,
+        openingBalance: openingFloat,
+        expectedCash,
+        cashPaidOut: cashDrops + paidOuts + transfersOut,
+        cashRefunds: refunds,
+      } 
+    });
   } catch (error) {
     console.error('Fetch POS Session Context Error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

@@ -173,8 +173,30 @@ export async function POST(req: NextRequest) {
 
           // 3. Apply Business Mutations
           if (event.eventType === 'POS_SESSION_STARTED') {
-             const existingSession = await tx.posOperatorSession.findUnique({ where: { id: event.aggregateId }});
+             const existingSession = await tx.posSession.findUnique({ where: { id: event.aggregateId }});
              if (!existingSession) {
+                 await tx.posSession.create({
+                     data: {
+                         id: event.aggregateId,
+                         propertyId: payload.PropertyId || terminal.propertyId,
+                         outletId: payload.OutletId || terminal.outletId,
+                         deviceId: payload.DeviceId || event.deviceId,
+                         bankingModel: payload.BankingModel || 'SERVER_BANKING',
+                         bankType: payload.BankType || 'SERVER',
+                         primaryOperatorId: payload.PrimaryOperatorId || event.operatorId,
+                         openedBy: payload.UserId || event.operatorId,
+                         status: payload.Status || 'OPEN',
+                         businessDate: new Date(payload.OpenedAt || event.occurredAt),
+                         openingCash: payload.OpeningCash || 0,
+                         expectedCash: payload.OpeningCash || 0,
+                         openedAt: new Date(payload.OpenedAt || event.occurredAt)
+                     }
+                 });
+             }
+             
+             // Also create the Operator Session
+             const existingOpSession = await tx.posOperatorSession.findUnique({ where: { id: event.aggregateId }});
+             if (!existingOpSession) {
                  await tx.posOperatorSession.create({
                      data: {
                          id: event.aggregateId,
