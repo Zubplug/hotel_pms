@@ -703,8 +703,36 @@ public class SyncEngine : BackgroundService
                 }
             }
 
-            // 3. Guests (Migrated to SyncGuestsIncrementalAsync)
-            // Removed redundant full-guest payload handling here
+            // 3. Guests (from pull payload to ensure FKs)
+            if (root.TryGetProperty("guests", out var pullGuests) && pullGuests.ValueKind == System.Text.Json.JsonValueKind.Array)
+            {
+                foreach (var el in pullGuests.EnumerateArray())
+                {
+                    var id = el.GetProperty("id").GetString();
+                    if (string.IsNullOrEmpty(id)) continue;
+                    
+                    var existing = await dbContext.Guests.FirstOrDefaultAsync(g => g.Id == id, stoppingToken);
+                    if (existing != null && existing.IsDirty) continue;
+
+                    var g = existing ?? new LodgeCore.Desktop.Data.Entities.LocalGuest { Id = id };
+                    g.OrganizationId = el.TryGetProperty("organizationId", out var org) && org.ValueKind != System.Text.Json.JsonValueKind.Null ? org.GetString() ?? "" : "";
+                    g.FirstName = el.TryGetProperty("firstName", out var fn) && fn.ValueKind != System.Text.Json.JsonValueKind.Null ? fn.GetString() ?? "" : "";
+                    g.LastName = el.TryGetProperty("lastName", out var ln) && ln.ValueKind != System.Text.Json.JsonValueKind.Null ? ln.GetString() ?? "" : "";
+                    g.Email = el.TryGetProperty("email", out var em) && em.ValueKind != System.Text.Json.JsonValueKind.Null ? em.GetString() : null;
+                    g.Phone = el.TryGetProperty("phone", out var ph) && ph.ValueKind != System.Text.Json.JsonValueKind.Null ? ph.GetString() : null;
+                    g.CompanyName = el.TryGetProperty("companyName", out var cn) && cn.ValueKind != System.Text.Json.JsonValueKind.Null ? cn.GetString() : null;
+                    g.IsVip = el.TryGetProperty("isVip", out var vip) && vip.ValueKind != System.Text.Json.JsonValueKind.Null && vip.GetBoolean();
+                    g.Version = el.TryGetProperty("version", out var ver) && ver.ValueKind == System.Text.Json.JsonValueKind.Number ? ver.GetInt32() : 1;
+                    
+                    if (el.TryGetProperty("updatedAt", out var ua) && ua.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(ua.GetString(), out var uad)) g.UpdatedAt = uad;
+                    if (el.TryGetProperty("deletedAt", out var da) && da.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(da.GetString(), out var dad)) g.DeletedAt = dad;
+
+                    if (existing == null)
+                    {
+                        dbContext.Guests.Add(g);
+                    }
+                }
+            }
 
             // 4. Reservations
             if (root.TryGetProperty("reservations", out var resArray))
