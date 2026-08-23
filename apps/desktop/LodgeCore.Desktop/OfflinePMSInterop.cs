@@ -1868,15 +1868,26 @@ public class OfflinePMSInterop
             var reservationId = doc.RootElement.TryGetProperty("reservationId", out var idProp) ? idProp.GetString() : null;
             if (string.IsNullOrEmpty(reservationId)) throw new Exception("reservationId required");
 
-            // Assuming GetFolioAsync logic isn't strictly necessary here, but we can query reservation directly
-            // For now let's just parse the full reservation if it was passed in, or fetch it.
-            // Since we need LocalGuest, we fetch it
             var reservation = await _repo.GetReservationAsync(reservationId);
             if (reservation == null) throw new Exception("Reservation not found");
             var guest = reservation.Guest;
             if (guest == null) throw new Exception("Guest not found");
 
-            var (success, error) = await _escPos.PrintRegistrationCardAsync(reservation, guest, ctx.OutletId);
+            var cardData = new RegistrationCardData(
+                GuestName: $"{guest.FirstName} {guest.LastName}",
+                Email: guest.Email,
+                Phone: guest.Phone,
+                ConfirmationNumber: reservation.Id.Substring(0, 8).ToUpper(),
+                RoomNumber: reservation.RoomNumber,
+                ArrivalDate: reservation.CheckInDate.ToLocalTime(),
+                DepartureDate: reservation.CheckOutDate.ToLocalTime(),
+                Adults: reservation.Adults,
+                Children: reservation.Children,
+                PropertyName: null,
+                PropertyAddress: null
+            );
+
+            var (success, error) = await _escPos.PrintRegistrationCardAsync(cardData, ctx.OutletId);
             return JsonSerializer.Serialize(new { success, error }, _jsonOptions);
         }
         catch (Exception ex)
@@ -1892,8 +1903,16 @@ public class OfflinePMSInterop
             var ctx = await GetSecureContextAsync();
             await _repo.LogHardwareEventAsync(ctx.UserId, ctx.DeviceId, "GUEST_FOLIO_PRINT", dataJson);
             
-            await Task.Delay(500); 
-            return JsonSerializer.Serialize(new { success = true }, _jsonOptions);
+            var folio = JsonSerializer.Deserialize<GuestFolioData>(
+                dataJson,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+            );
+
+            if (folio == null)
+                return JsonSerializer.Serialize(new { success = false, error = "Invalid folio data" }, _jsonOptions);
+
+            var (success, error) = await _escPos.PrintGuestFolioAsync(folio, ctx.OutletId);
+            return JsonSerializer.Serialize(new { success, error }, _jsonOptions);
         }
         catch (Exception ex)
         {
@@ -1908,8 +1927,16 @@ public class OfflinePMSInterop
             var ctx = await GetSecureContextAsync();
             await _repo.LogHardwareEventAsync(ctx.UserId, ctx.DeviceId, "FRONTDESK_PAYMENT_RECEIPT_PRINT", dataJson);
             
-            await Task.Delay(500); 
-            return JsonSerializer.Serialize(new { success = true }, _jsonOptions);
+            var payment = JsonSerializer.Deserialize<PaymentReceiptData>(
+                dataJson,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+            );
+
+            if (payment == null)
+                return JsonSerializer.Serialize(new { success = false, error = "Invalid payment data" }, _jsonOptions);
+
+            var (success, error) = await _escPos.PrintPaymentReceiptAsync(payment, ctx.OutletId);
+            return JsonSerializer.Serialize(new { success, error }, _jsonOptions);
         }
         catch (Exception ex)
         {

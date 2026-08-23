@@ -1982,7 +1982,7 @@ public class LocalRepository
         var externalAccount = await EnsureCashAccountAsync(propertyId, PosConstants.CashAccountTypes.External, "External Funds");
 
         // Check if already opened (idempotency check for opening float)
-        var exists = await _dbContext.PosCashMovements.AnyAsync(m => m.DestinationAccountId == safeAccount.Id && m.Type == PosConstants.CashMovementTypes.SafeOpeningCash);
+        var exists = await _dbContext.PosCashMovements.AnyAsync(m => m.DestinationAccountId == safeAccount.Id && m.Type == PosConstants.CashMovementTypes.SafeOpeningBalance);
         if (exists) throw new Exception("The safe has already been initialized with an opening balance.");
 
         var prop = await _dbContext.Properties.FindAsync(propertyId);
@@ -1996,7 +1996,7 @@ public class LocalRepository
             UserId = authorizer.Id,
             Amount = amount,
             Currency = currency,
-            Type = PosConstants.CashMovementTypes.SafeOpeningCash,
+            Type = PosConstants.CashMovementTypes.SafeOpeningBalance,
             SourceAccountId = externalAccount.Id,
             DestinationAccountId = safeAccount.Id,
             ReasonCode = "INITIALIZATION",

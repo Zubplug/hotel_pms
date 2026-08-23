@@ -158,7 +158,6 @@ public class SyncEngine : BackgroundService
                     await PushKeycardAuditsAsync(stoppingToken);
                     
                     // Resolve any conflicts that emerged from the push
-                    await PullSyncConflictsAsync(stoppingToken);
 
                     // Pull updates
                     await PullUpdatesAsync(stoppingToken);

@@ -1,4 +1,12 @@
-using System;
+import re
+
+with open('apps/desktop/LodgeCore.Desktop/Services/EscPosService.cs', 'r') as f:
+    content = f.read()
+
+# Remove old models and Esc constants which are now in EscPosModels and EscPosBuilder
+# We'll just replace the whole file since we are doing a major rewrite of the printing methods.
+
+new_content = """using System;
 using System.Collections.Generic;
 using System.Net.Sockets;
 using System.Text;
@@ -613,3 +621,9 @@ public class EscPosService
         }
     }
 }
+"""
+
+with open('apps/desktop/LodgeCore.Desktop/Services/EscPosService.cs', 'w') as f:
+    f.write(new_content)
+
+print("Rewrote EscPosService.cs successfully.")
