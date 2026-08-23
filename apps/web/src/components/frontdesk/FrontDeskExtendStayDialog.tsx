@@ -11,6 +11,7 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { format, addDays, startOfDay } from 'date-fns';
 import { Loader2, CheckCircle2, AlertCircle, CalendarClock, ArrowRight, CreditCard } from 'lucide-react';
 import { Card } from '@/components/ui/card';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
 interface FrontDeskExtendStayDialogProps {
   open: boolean;
@@ -41,19 +42,16 @@ export function FrontDeskExtendStayDialog({ open, onOpenChange, reservation }: F
     }
   }, [open]);
 
+  const { provider } = useLodgeCoreProvider();
+
   const handlePreview = async () => {
     if (!newCheckoutDate) return;
     setPhase('PROCESSING');
     setErrorMsg(null);
     try {
-      const res = await fetch(`/api/v1/reservations/${reservation.id}/extend/preview`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ newCheckoutDate: newCheckoutDate.toISOString() }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setPhase('FAILED'); setErrorMsg(data.error?.message || 'Preview failed'); return; }
-      setPreviewData(data.data);
+      const res = await provider.reservations.previewExtendStay(reservation.id, newCheckoutDate.toISOString());
+      if (!res.success) { setPhase('FAILED'); setErrorMsg(res.error?.message || res.error || 'Preview failed'); return; }
+      setPreviewData(res.data);
       setPhase('PREVIEW');
     } catch (err: unknown) {
       setPhase('FAILED');
@@ -66,16 +64,8 @@ export function FrontDeskExtendStayDialog({ open, onOpenChange, reservation }: F
     setPhase('PROCESSING');
     setErrorMsg(null);
     try {
-      const res = await fetch(`/api/v1/reservations/${reservation.id}/extend`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          newCheckoutDate: newCheckoutDate.toISOString(),
-          idempotencyKey: `EXTEND:${reservation.id}:${newCheckoutDate.toISOString()}`,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setPhase('FAILED'); setErrorMsg(data.error?.message || 'Extension failed'); return; }
+      const res = await provider.reservations.extendStay(reservation.id, newCheckoutDate.toISOString());
+      if (!res.success) { setPhase('FAILED'); setErrorMsg(res.error?.message || res.error || 'Extension failed'); return; }
       setPhase('SUCCESS');
       router.refresh();
     } catch (err: unknown) {

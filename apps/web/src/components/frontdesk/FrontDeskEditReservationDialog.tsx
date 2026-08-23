@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -31,22 +32,23 @@ export function FrontDeskEditReservationDialog({ reservation, open, onOpenChange
   const [specialRequests, setSpecialRequests] = useState(reservation.specialRequests || '');
   const [error, setError] = useState('');
 
+  const { provider } = useLodgeCoreProvider();
+
   const editMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`/api/v1/reservations/${reservation.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          checkIn: new Date(checkIn).toISOString(),
-          checkOut: new Date(checkOut).toISOString(),
-          adults: parseInt(adults),
-          children: parseInt(children),
-          specialRequests
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error?.message || 'Failed to update reservation');
-      return data;
+      const payload = { 
+        checkIn: new Date(checkIn).toISOString(),
+        checkOut: new Date(checkOut).toISOString(),
+        adults: parseInt(adults),
+        children: parseInt(children),
+        specialRequests
+      };
+      
+      const res = await provider.reservations.update(reservation.id, payload);
+      if (!res.success) {
+        throw new Error(res.error?.message || res.error || 'Failed to update reservation');
+      }
+      return res.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reservation', reservation.id] });

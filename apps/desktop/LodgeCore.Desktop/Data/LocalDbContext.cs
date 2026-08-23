@@ -13,6 +13,8 @@ public class LocalDbContext : DbContext
     public DbSet<LocalOutboxEvent> OutboxEvents { get; set; } = null!;
     public DbSet<LocalHousekeepingTask> HousekeepingTasks { get; set; } = null!;
     public DbSet<LocalMaintenanceTicket> MaintenanceTickets { get; set; } = null!;
+    public DbSet<LocalLockCredential> LockCredentials { get; set; } = null!;
+    public DbSet<LocalLockOperation> LockOperations { get; set; } = null!;
     public DbSet<LocalRoom> Rooms { get; set; } = null!;
     public DbSet<LocalRoomType> RoomTypes { get; set; } = null!;
     public DbSet<LocalProperty> Properties { get; set; } = null!;
@@ -49,6 +51,8 @@ public class LocalDbContext : DbContext
     public DbSet<LocalHardwareAuditLog> HardwareAuditLogs { get; set; } = null!;
     public DbSet<LocalPrinterConfig> PrinterConfigs { get; set; } = null!;
     public DbSet<LocalSyncMetadata> SyncMetadata { get; set; } = null!;
+    public DbSet<LocalPosProductionBatch> PosProductionBatches { get; set; } = null!;
+    public DbSet<LocalPosProductionBatchItem> PosProductionBatchItems { get; set; } = null!;
 
     public LocalDbContext(DbContextOptions<LocalDbContext> options) : base(options)
     {
@@ -141,6 +145,16 @@ public class LocalDbContext : DbContext
             .WithOne(r => r.Folio)
             .HasForeignKey<LocalFolio>(f => f.ReservationId);
 
+        modelBuilder.Entity<LocalLockCredential>()
+            .HasOne(c => c.Reservation)
+            .WithMany(r => r.LockCredentials)
+            .HasForeignKey(c => c.ReservationId);
+            
+        modelBuilder.Entity<LocalLockOperation>()
+            .HasOne(o => o.Reservation)
+            .WithMany(r => r.LockOperations)
+            .HasForeignKey(o => o.ReservationId);
+
         modelBuilder.Entity<LocalPosOrder>()
             .HasMany(o => o.Items)
             .WithOne()
@@ -183,5 +197,10 @@ public class LocalDbContext : DbContext
         modelBuilder.Entity<LocalSyncEvent>()
             .HasIndex(e => new { e.TerminalId, e.SequenceNumber })
             .IsUnique();
+
+        modelBuilder.Entity<LocalPosProductionBatch>()
+            .HasMany(b => b.Items)
+            .WithOne()
+            .HasForeignKey(i => i.BatchId);
     }
 }

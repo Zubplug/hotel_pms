@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,6 +22,7 @@ export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio }: { open:
   const [printStatus, setPrintStatus] = useState<'IDLE' | 'PRINTING' | 'SUCCESS' | 'FAILED'>('IDLE');
   
   const queryClient = useQueryClient();
+  const { provider } = useLodgeCoreProvider();
 
   const triggerPrint = async (paymentId: string) => {
     if (!HardwareBridge.isAvailable()) return;
@@ -60,38 +62,50 @@ export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio }: { open:
       }
 
       const isGateway = method === 'PAYMENT_GATEWAY';
-      const endpoint = isGateway ? '/api/v1/payments/online/initialize' : '/api/v1/payments';
       
-      const payload = isGateway ? {
-        folioId: folio.id,
-        amount: numAmount,
-        currency: folio.currency
-      } : {
-        folioId: folio.id,
-        amount: numAmount,
-        currency: folio.currency,
-        method,
-        notes,
-        idempotencyKey: globalThis.crypto.randomUUID()
-      };
+      let paymentId = null;
 
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+      if (isGateway) {
+        const endpoint = '/api/v1/payments/online/initialize';
+        const payload = {
+          folioId: folio.id,
+          amount: numAmount,
+          currency: folio.currency
+        };
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error?.message || data.error || 'Failed to process payment');
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
 
-      if (isGateway && data.data?.authorizationUrl) {
-        window.location.href = data.data.authorizationUrl;
-        return;
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error?.message || data.error || 'Failed to process payment gateway');
+
+        if (data.data?.authorizationUrl) {
+          window.location.href = data.data.authorizationUrl;
+          return;
+        }
+        paymentId = data.data?.payment?.id;
+      } else {
+        const payload = {
+          amount: numAmount,
+          currency: folio.currency,
+          method,
+          notes,
+          idempotencyKey: globalThis.crypto.randomUUID()
+        };
+
+        const res = await provider.folios.addPayment(folio.id, payload);
+        if (!res.success) {
+           throw new Error(res.error?.message || res.error || 'Failed to record payment');
+        }
+        paymentId = res.data?.payment?.id || 'pending-sync';
       }
 
       await queryClient.invalidateQueries({ queryKey: ['reservation', folio.reservationId] });
-      setSuccessPaymentId(data.data.payment.id);
-      triggerPrint(data.data.payment.id);
+      setSuccessPaymentId(paymentId);
+      triggerPrint(paymentId);
     } catch (err: any) {
       setError(err.message);
     } finally {

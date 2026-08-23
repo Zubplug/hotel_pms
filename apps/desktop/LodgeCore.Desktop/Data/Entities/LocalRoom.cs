@@ -9,12 +9,22 @@ public class LocalRoom
     public string Id { get; set; } = string.Empty;
 
     public string PropertyId { get; set; } = string.Empty;
+    public string? BuildingId { get; set; }
+    public string? FloorId { get; set; }
+    public string Code { get; set; } = string.Empty;
     public string Number { get; set; } = string.Empty;
+    public string? DisplayName { get; set; }
+    
     public string Status { get; set; } = string.Empty; // CLEAN, DIRTY, OUT_OF_ORDER, MAINTENANCE
     public string HousekeepingStatus { get; set; } = string.Empty;
     public string MaintenanceStatus { get; set; } = string.Empty;
     public string RoomTypeId { get; set; } = string.Empty;
-    public int Floor { get; set; }
+    
+    public int MaxOccupancy { get; set; } = 2;
+    public int MaxAdults { get; set; } = 2;
+    public int MaxChildren { get; set; } = 0;
+    public bool IsAccessible { get; set; }
+    public bool IsActive { get; set; } = true;
     
     // Derived states (updated during sync or local mutations)
     public bool IsOccupied { get; set; }

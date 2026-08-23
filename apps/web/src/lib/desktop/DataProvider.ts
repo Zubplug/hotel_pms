@@ -40,16 +40,18 @@ export interface LodgeCoreDataProvider {
     checkIn(id: string, userId: string, deviceId: string): Promise<any>;
     checkOut(id: string, userId: string, deviceId: string): Promise<any>;
     extendStay(id: string, newCheckOutDate: string): Promise<any>;
+    previewExtendStay(id: string, newCheckOutDate: string): Promise<any>;
+    reassignRoom(id: string, data: any): Promise<any>;
   };
   rooms: {
     list(propertyId: string, params?: { filter?: string }): Promise<any>;
-    getAvailable(propertyId: string, roomTypeId: string, checkIn: string, checkOut: string): Promise<any[]>;
+    getAvailable(propertyId: string, roomTypeId: string, checkIn: string, checkOut: string): Promise<any>;
     getActiveReservation(roomId: string): Promise<any | null>;
   };
   folios: {
     get(id: string): Promise<any>;
-    addCharge(folioId: string, charge: any): Promise<void>;
-    addPayment(folioId: string, payment: any): Promise<void>;
+    addCharge(folioId: string, charge: any): Promise<any>;
+    addPayment(folioId: string, payment: any): Promise<any>;
   };
   keycards: {
     encode(roomId: string, lockCode: string, reservationId: string): Promise<any>;

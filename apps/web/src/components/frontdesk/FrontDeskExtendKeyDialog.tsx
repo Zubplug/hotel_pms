@@ -9,6 +9,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Loader2, AlertCircle, CheckCircle2, Key, ArrowRight, KeySquare } from 'lucide-react';
 import { format } from 'date-fns';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
 interface FrontDeskExtendKeyDialogProps {
   open: boolean;
@@ -19,6 +20,7 @@ interface FrontDeskExtendKeyDialogProps {
 
 export function FrontDeskExtendKeyDialog({ open, onOpenChange, reservation }: FrontDeskExtendKeyDialogProps) {
   const router = useRouter();
+  const { provider } = useLodgeCoreProvider();
   
   const [phase, setPhase] = useState<'IDLE' | 'READING' | 'ENCODING' | 'SUCCESS' | 'FAILED'>('IDLE');
   const [readOperationId, setReadOperationId] = useState<string | null>(null);
@@ -43,10 +45,9 @@ export function FrontDeskExtendKeyDialog({ open, onOpenChange, reservation }: Fr
 
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`/api/v1/hardware/operations/${readOperationId}`);
-        if (!res.ok) throw new Error('Failed to poll operation status');
+        const data = await provider.hardware.poll(readOperationId);
+        if (!data || data.error) throw new Error('Failed to poll operation status');
         
-        const data = await res.json();
         const op = data.data.operation;
         const status = op.status;
         
@@ -73,10 +74,9 @@ export function FrontDeskExtendKeyDialog({ open, onOpenChange, reservation }: Fr
 
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`/api/v1/hardware/operations/${encodeOperationId}`);
-        if (!res.ok) throw new Error('Failed to poll operation status');
+        const data = await provider.hardware.poll(encodeOperationId);
+        if (!data || data.error) throw new Error('Failed to poll operation status');
         
-        const data = await res.json();
         const status = data.data.operation.status;
         
         setHardwareStatus(status);
@@ -102,17 +102,11 @@ export function FrontDeskExtendKeyDialog({ open, onOpenChange, reservation }: Fr
       setHardwareStatus('STARTING');
       setErrorMsg(null);
 
-      const res = await fetch('/api/v1/hardware/locks/read-card', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ propertyId: reservation.propertyId }),
-      });
-      
-      const data = await res.json();
+      const data = await provider.keycards.read();
 
-      if (!res.ok) {
+      if (!data || data.error) {
         setPhase('FAILED');
-        setErrorMsg(data.error?.message || 'Failed to initiate read card');
+        setErrorMsg(data?.error?.message || 'Failed to initiate read card');
         return;
       }
 
@@ -130,21 +124,18 @@ export function FrontDeskExtendKeyDialog({ open, onOpenChange, reservation }: Fr
       setHardwareStatus('VERIFYING_CARD');
       setErrorMsg(null);
 
-      const res = await fetch(`/api/v1/hardware/locks/extend-card`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          propertyId: reservation.propertyId,
-          reservationId: reservation.id,
-          readOperationId: readOpId
-        }),
-      });
-      
-      const data = await res.json();
-
-      if (!res.ok) {
+      const roomId = reservation?.reservationRooms?.[0]?.room?.id;
+      if (!roomId) {
         setPhase('FAILED');
-        setErrorMsg(data.error?.message || 'Failed to initiate encode. Card mismatch?');
+        setErrorMsg('Reservation has no assigned room.');
+        return;
+      }
+
+      const data = await provider.keycards.encode(roomId, '', reservation.id);
+
+      if (!data || data.error) {
+        setPhase('FAILED');
+        setErrorMsg(data?.error?.message || 'Failed to initiate encode.');
         return;
       }
 

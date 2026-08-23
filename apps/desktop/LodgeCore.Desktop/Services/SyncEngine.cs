@@ -641,9 +641,15 @@ public class SyncEngine : BackgroundService
                         dbContext.RoomTypes.Add(rt);
                     }
                     rt.Name = el.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
-                    rt.Description = el.TryGetProperty("description", out var d) ? d.GetString() ?? "" : "";
+                    rt.Code = el.TryGetProperty("code", out var cd) ? cd.GetString() ?? "" : "";
+                    rt.Description = el.TryGetProperty("description", out var d) ? d.GetString() : null;
                     rt.BasePrice = el.TryGetProperty("baseRate", out var br) && decimal.TryParse(br.GetString(), out var brd) ? brd : 0m;
+                    rt.Currency = el.TryGetProperty("currency", out var curr) ? curr.GetString() ?? "NGN" : "NGN";
                     rt.MaxOccupancy = el.TryGetProperty("maxOccupancy", out var mo) ? mo.GetInt32() : 2;
+                    rt.MaxAdults = el.TryGetProperty("maxAdults", out var ma) ? ma.GetInt32() : 2;
+                    rt.MaxChildren = el.TryGetProperty("maxChildren", out var mc) ? mc.GetInt32() : 0;
+                    rt.DefaultBedConfig = el.TryGetProperty("defaultBedConfig", out var dbc) ? dbc.GetString() : null;
+                    rt.IsActive = el.TryGetProperty("isActive", out var ia) ? ia.GetBoolean() : true;
                     rt.UpdatedAt = DateTime.UtcNow;
                 }
             }
@@ -667,11 +673,20 @@ public class SyncEngine : BackgroundService
                         dbContext.Rooms.Add(room);
                     }
                     room.Number = el.TryGetProperty("number", out var num) ? num.GetString() ?? "" : "";
+                    room.Code = el.TryGetProperty("code", out var cd) ? cd.GetString() ?? room.Number : room.Number;
+                    room.DisplayName = el.TryGetProperty("displayName", out var dn) ? dn.GetString() : null;
+                    room.BuildingId = el.TryGetProperty("buildingId", out var bid) ? bid.GetString() : null;
+                    room.FloorId = el.TryGetProperty("floorId", out var fid) ? fid.GetString() : null;
                     room.Status = el.TryGetProperty("status", out var st) ? st.GetString() ?? "" : "";
                     room.HousekeepingStatus = el.TryGetProperty("housekeepingStatus", out var hs) ? hs.GetString() ?? "" : "";
                     room.MaintenanceStatus = el.TryGetProperty("maintenanceStatus", out var ms) ? ms.GetString() ?? "" : "";
                     room.RoomTypeId = el.TryGetProperty("roomTypeId", out var rti) ? rti.GetString() ?? "" : "";
-                    room.LockSystemCode = el.TryGetProperty("code", out var code) ? code.GetString() : null;
+                    room.LockSystemCode = el.TryGetProperty("lockSystemCode", out var lsc) ? lsc.GetString() : (el.TryGetProperty("code", out var loldc) ? loldc.GetString() : null);
+                    room.MaxOccupancy = el.TryGetProperty("maxOccupancy", out var mo) ? mo.GetInt32() : 2;
+                    room.MaxAdults = el.TryGetProperty("maxAdults", out var ma) ? ma.GetInt32() : 2;
+                    room.MaxChildren = el.TryGetProperty("maxChildren", out var mc) ? mc.GetInt32() : 0;
+                    room.IsAccessible = el.TryGetProperty("isAccessible", out var isa) && isa.GetBoolean();
+                    room.IsActive = el.TryGetProperty("isActive", out var ia) ? ia.GetBoolean() : true;
                     room.UpdatedAt = DateTime.UtcNow;
                 }
             }
@@ -698,6 +713,18 @@ public class SyncEngine : BackgroundService
                     guest.LastName = el.TryGetProperty("lastName", out var ln) ? ln.GetString() ?? "" : "";
                     guest.Email = el.TryGetProperty("email", out var em) ? em.GetString() : null;
                     guest.Phone = el.TryGetProperty("phone", out var ph) ? ph.GetString() : null;
+                    guest.OrganizationId = el.TryGetProperty("organizationId", out var org) ? org.GetString() ?? "" : "";
+                    if (el.TryGetProperty("dateOfBirth", out var dob) && DateTime.TryParse(dob.GetString(), out var dobd)) guest.DateOfBirth = dobd;
+                    guest.Gender = el.TryGetProperty("gender", out var gn) ? gn.GetString() : null;
+                    guest.Nationality = el.TryGetProperty("nationality", out var nat) ? nat.GetString() : null;
+                    guest.AddressLine1 = el.TryGetProperty("addressLine1", out var ad1) ? ad1.GetString() : null;
+                    guest.City = el.TryGetProperty("city", out var cy) ? cy.GetString() : null;
+                    guest.State = el.TryGetProperty("state", out var ste) ? ste.GetString() : null;
+                    guest.Country = el.TryGetProperty("country", out var cnt) ? cnt.GetString() : null;
+                    guest.IdType = el.TryGetProperty("idType", out var idt) ? idt.GetString() : null;
+                    guest.CompanyName = el.TryGetProperty("companyName", out var cn) ? cn.GetString() : null;
+                    guest.IsVip = el.TryGetProperty("isVip", out var isv) && isv.GetBoolean();
+                    guest.Notes = el.TryGetProperty("notes", out var nts) ? nts.GetString() : null;
                     guest.UpdatedAt = DateTime.UtcNow;
                 }
             }
@@ -745,7 +772,108 @@ public class SyncEngine : BackgroundService
                     if (el.TryGetProperty("depositPaid", out var dp2) && decimal.TryParse(dp2.GetString() ?? dp2.GetRawText(), out var dpv))
                         res.DepositPaid = dpv;
                         
+                    res.CompanyId = el.TryGetProperty("companyId", out var comp) ? comp.GetString() : null;
+                    res.Source = el.TryGetProperty("source", out var src) ? src.GetString() : null;
+                    res.ChannelRef = el.TryGetProperty("channelRef", out var cref) ? cref.GetString() : null;
+                    res.RatePlanId = el.TryGetProperty("ratePlanId", out var rpi) ? rpi.GetString() : null;
+                    res.Currency = el.TryGetProperty("currency", out var cur) ? cur.GetString() : null;
+                    res.InternalNotes = el.TryGetProperty("internalNotes", out var inn) ? inn.GetString() : null;
+                    res.EarlyCheckIn = el.TryGetProperty("earlyCheckIn", out var eci) && eci.GetBoolean();
+                    res.LateCheckOut = el.TryGetProperty("lateCheckOut", out var lco) && lco.GetBoolean();
+                    
+                    if (el.TryGetProperty("cancelledAt", out var canAt) && DateTime.TryParse(canAt.GetString(), out var canAtD)) res.CancelledAt = canAtD;
+                    res.CancelledBy = el.TryGetProperty("cancelledBy", out var canBy) ? canBy.GetString() : null;
+                    res.CancellationReason = el.TryGetProperty("cancellationReason", out var canRe) ? canRe.GetString() : null;
+                    
+                    if (el.TryGetProperty("noShowAt", out var nsAt) && DateTime.TryParse(nsAt.GetString(), out var nsAtD)) res.NoShowAt = nsAtD;
+                    res.NoShowBy = el.TryGetProperty("noShowBy", out var nsBy) ? nsBy.GetString() : null;
+                    res.CreatedBy = el.TryGetProperty("createdBy", out var cb) ? cb.GetString() : null;
+
                     res.UpdatedAt = DateTime.UtcNow;
+
+                    // Parse LockCredentials
+                    if (el.TryGetProperty("lockCredentials", out var credsArray) && credsArray.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    {
+                        var incomingCredIds = new HashSet<string>();
+                        foreach (var credEl in credsArray.EnumerateArray())
+                        {
+                            var credId = credEl.GetProperty("id").GetString();
+                            if (string.IsNullOrEmpty(credId)) continue;
+                            incomingCredIds.Add(credId);
+
+                            var cred = await dbContext.LockCredentials.FirstOrDefaultAsync(c => c.Id == credId, stoppingToken);
+                            if (cred == null)
+                            {
+                                cred = new LodgeCore.Desktop.Data.Entities.LocalLockCredential { Id = credId, ReservationId = id, CreatedAt = DateTime.UtcNow };
+                                dbContext.LockCredentials.Add(cred);
+                            }
+                            cred.GuestId = credEl.TryGetProperty("guestId", out var cg) ? cg.GetString() : null;
+                            cred.RoomId = credEl.TryGetProperty("roomId", out var cri) ? cri.GetString() ?? "" : "";
+                            cred.LockId = credEl.TryGetProperty("lockId", out var cli) ? cli.GetString() ?? "" : "";
+                            cred.CredentialType = credEl.TryGetProperty("credentialType", out var cct) ? cct.GetString() ?? "rfid" : "rfid";
+                            cred.Status = credEl.TryGetProperty("status", out var cst) ? cst.GetString() ?? "PENDING" : "PENDING";
+                            if (credEl.TryGetProperty("validFrom", out var cvf) && DateTime.TryParse(cvf.GetString(), out var cvfd)) cred.ValidFrom = cvfd;
+                            if (credEl.TryGetProperty("validUntil", out var cvu) && DateTime.TryParse(cvu.GetString(), out var cvud)) cred.ValidUntil = cvud;
+                            cred.CardSerialNumber = credEl.TryGetProperty("cardSerialNumber", out var csn) ? csn.GetString() : null;
+                            cred.IssueOperationId = credEl.TryGetProperty("issueOperationId", out var cio) ? cio.GetString() : null;
+                            if (credEl.TryGetProperty("issuedAt", out var cia) && DateTime.TryParse(cia.GetString(), out var ciad)) cred.IssuedAt = ciad;
+                            if (credEl.TryGetProperty("revokedAt", out var cra) && DateTime.TryParse(cra.GetString(), out var crad)) cred.RevokedAt = crad;
+                            cred.MetadataJson = credEl.TryGetProperty("metadata", out var csm) ? csm.GetRawText() : null;
+                            cred.UpdatedAt = DateTime.UtcNow;
+                        }
+                        
+                        var staleCreds = await dbContext.LockCredentials
+                            .Where(c => c.ReservationId == id && !incomingCredIds.Contains(c.Id))
+                            .ToListAsync(stoppingToken);
+                        if (staleCreds.Any()) dbContext.LockCredentials.RemoveRange(staleCreds);
+                    }
+
+                    // Parse LockOperations
+                    if (el.TryGetProperty("lockOperations", out var opsArray) && opsArray.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    {
+                        var incomingOpIds = new HashSet<string>();
+                        foreach (var opEl in opsArray.EnumerateArray())
+                        {
+                            var opId = opEl.GetProperty("id").GetString();
+                            if (string.IsNullOrEmpty(opId)) continue;
+                            incomingOpIds.Add(opId);
+
+                            var op = await dbContext.LockOperations.FirstOrDefaultAsync(o => o.Id == opId, stoppingToken);
+                            if (op == null)
+                            {
+                                op = new LodgeCore.Desktop.Data.Entities.LocalLockOperation { Id = opId, PropertyId = propertyId, ReservationId = id };
+                                dbContext.LockOperations.Add(op);
+                            }
+                            op.LockId = opEl.TryGetProperty("lockId", out var oli) ? oli.GetString() : null;
+                            op.RoomId = opEl.TryGetProperty("roomId", out var ori) ? ori.GetString() : null;
+                            op.CredentialId = opEl.TryGetProperty("credentialId", out var oci) ? oci.GetString() : null;
+                            op.CommandId = opEl.TryGetProperty("commandId", out var ocmd) ? ocmd.GetString() : null;
+                            op.IdempotencyKey = opEl.TryGetProperty("idempotencyKey", out var oik) ? oik.GetString() : null;
+                            op.Operation = opEl.TryGetProperty("operation", out var oop) ? oop.GetString() ?? "" : "";
+                            op.Status = opEl.TryGetProperty("status", out var ost) ? ost.GetString() ?? "QUEUED" : "QUEUED";
+                            op.ErrorCode = opEl.TryGetProperty("errorCode", out var oec) ? oec.GetString() : null;
+                            op.ErrorMessage = opEl.TryGetProperty("errorMessage", out var oem) ? oem.GetString() : null;
+                            op.PayloadHash = opEl.TryGetProperty("payloadHash", out var oph) ? oph.GetString() : null;
+                            op.AttemptCount = opEl.TryGetProperty("attemptCount", out var oac) ? oac.GetInt32() : 0;
+                            if (opEl.TryGetProperty("requestedAt", out var orq) && DateTime.TryParse(orq.GetString(), out var orqd)) op.RequestedAt = orqd;
+                            if (opEl.TryGetProperty("startedAt", out var osa) && DateTime.TryParse(osa.GetString(), out var osad)) op.StartedAt = osad;
+                            if (opEl.TryGetProperty("completedAt", out var oca) && DateTime.TryParse(oca.GetString(), out var ocad)) op.CompletedAt = ocad;
+                            op.AgentId = opEl.TryGetProperty("agentId", out var oai) ? oai.GetString() : null;
+                            op.DeviceId = opEl.TryGetProperty("deviceId", out var odi) ? odi.GetString() : null;
+                            op.MetadataJson = opEl.TryGetProperty("metadata", out var ometa) ? ometa.GetRawText() : null;
+                            
+                            // To mimic standard GraphQL/Prisma include format we need the command populated
+                            if (opEl.TryGetProperty("command", out var opCmd))
+                            {
+                                op.CommandJson = opCmd.GetRawText();
+                            }
+                        }
+                        
+                        var staleOps = await dbContext.LockOperations
+                            .Where(o => o.ReservationId == id && !incomingOpIds.Contains(o.Id))
+                            .ToListAsync(stoppingToken);
+                        if (staleOps.Any()) dbContext.LockOperations.RemoveRange(staleOps);
+                    }
                 }
                 
                 // Remove reservations that are no longer in the cache window

@@ -58,7 +58,7 @@ public class LocalPosSession
     [Key] public string Id { get; set; } = string.Empty;
     public string PropertyId { get; set; } = string.Empty;
     public string OutletId { get; set; } = string.Empty;
-    public string DeviceId { get; set; } = string.Empty;
+    public string? DeviceId { get; set; }
     public string UserId { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
 
@@ -71,17 +71,25 @@ public class LocalPosSession
     public DateTime OpenedAt { get; set; }
     public DateTime? ClosedAt { get; set; }
 
-    public decimal OpeningBalance { get; set; }
+    public decimal OpeningCash { get; set; }
     public decimal CashSales { get; set; }
     public decimal CashRefunds { get; set; }
-    public decimal CashPaidOut { get; set; }
+    public decimal CashIn { get; set; }
+    public decimal CashOut { get; set; }
     public decimal ExpectedCash { get; set; }
-    public decimal ActualCash { get; set; }
-    public decimal Variance { get; set; }
+    public decimal? ActualCash { get; set; }
+    public decimal? Variance { get; set; }
 
     public string? ApprovedBy { get; set; }
     public DateTime? ApprovedAt { get; set; }
     public string StaffId { get; set; } = string.Empty;
+
+    public int Version { get; set; } = 1;
+    public DateTime BusinessDate { get; set; }
+    public string? OpenedBy { get; set; }
+    public string? ClosedBy { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
 
     public ICollection<LocalPosCashMovement> CashMovements { get; set; } = new List<LocalPosCashMovement>();
 }
@@ -113,6 +121,15 @@ public class LocalPosOrder
     public DateTime UpdatedAt { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+    public int Version { get; set; } = 1;
+    public string OrderType { get; set; } = "DINE_IN";
+    public string PaymentStatus { get; set; } = "UNPAID";
+    public decimal Discount { get; set; } = 0;
+    public string DisplayName { get; set; } = string.Empty;
+    public string? RoomId { get; set; }
+    public string? ReservationId { get; set; }
+    public DateTime? ClosedAt { get; set; }
+
     public ICollection<LocalPosOrderItem> Items { get; set; } = new List<LocalPosOrderItem>();
     public List<LocalPosPayment> Payments { get; set; } = new();
     public List<LocalPosVoid> Voids { get; set; } = new();
@@ -140,6 +157,9 @@ public class LocalPosOrderItem
     public string? KotId { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+    public decimal Subtotal { get; set; }
+    public decimal Discount { get; set; }
+
     public List<LocalPosOrderItemModifier> Modifiers { get; set; } = new();
 }
 
@@ -161,6 +181,9 @@ public class LocalPosPayment
     public string? SessionId { get; set; }
     public string? ProcessedById { get; set; }
     public DateTime CreatedAt { get; set; }
+
+    public string? Reference { get; set; }
+    public DateTime UpdatedAt { get; set; }
 }
 
 public class LocalStockTransaction

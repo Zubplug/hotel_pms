@@ -268,6 +268,20 @@ public partial class MainPage : ContentPage
                         parameters?["reservationId"]?.ToString() ?? "",
                         parameters?["newCheckOutDate"]?.ToString() ?? "");
                     break;
+                case "reservations.previewExtendStay":
+                    responseData = await pmsInterop.PreviewExtendStayAsync(
+                        parameters?["reservationId"]?.ToString() ?? "",
+                        parameters?["newCheckOutDate"]?.ToString() ?? "");
+                    break;
+                case "reservations.update":
+                    responseData = await pmsInterop.EditReservationAsync(parameters?.ToString() ?? "{}");
+                    break;
+                case "reservations.cancel":
+                    responseData = await pmsInterop.CancelReservationAsync(parameters?["id"]?.ToString() ?? "");
+                    break;
+                case "reservations.reassignRoom":
+                    responseData = await pmsInterop.ReassignRoomAsync(parameters?.ToString() ?? "{}");
+                    break;
                 case "folios.get":
                     responseData = await pmsInterop.GetFolioAsync(parameters?["id"]?.ToString() ?? "");
                     break;

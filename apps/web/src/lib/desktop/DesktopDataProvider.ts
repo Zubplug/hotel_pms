@@ -88,22 +88,53 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
       return invokeDesktop("reservations.create", { data: JSON.stringify(data) });
     },
     update: async (id: string, data: any) => {
-      // Cloud required for complex modifications
-      return OnlineDataProvider.reservations.update(id, data);
+      return invokeDesktop('reservations.update', { reservationId: id, ...data });
     },
     cancel: async (id: string, reason: string) => {
-      // Cloud required for cancellations to manage inventory
-      return OnlineDataProvider.reservations.cancel(id, reason);
+      return invokeDesktop('reservations.cancel', { id, reason });
     },
     checkIn: async (id: string, userId: string, deviceId: string) => {
-      return invokeDesktop('reservations.checkIn', { id, userId, deviceId });
+      // 1. Process Check-In in Local DB
+      const res = await invokeDesktop('reservations.checkIn', { id, userId, deviceId });
+      
+      // 2. Fetch reservation to get Room ID for encoder
+      const resDetailsRaw = await invokeDesktop('reservations.get', { id });
+      const resDetails = typeof resDetailsRaw === 'string' ? JSON.parse(resDetailsRaw) : resDetailsRaw;
+      
+      const roomId = resDetails?.data?.reservationRooms?.[0]?.roomId;
+      
+      if (res.success && roomId) {
+         // 3. Trigger Hardware Encode
+         const encodeRes = await invokeDesktop('keycards.encode', { roomId, lockCode: '', reservationId: id });
+         
+         // 4. Return in the identical format as Web API (with operation ID for polling)
+         return {
+           success: encodeRes.success,
+           error: typeof encodeRes.error === 'string' ? { message: encodeRes.error } : encodeRes.error,
+           data: {
+             operation: {
+               id: (() => { const opId = 'sync_encode_' + Date.now(); syncOperations.set(opId, encodeRes.data); return opId; })(),
+               status: encodeRes.success ? 'SUCCESS' : 'FAILED',
+               errorMessage: encodeRes.data?.errorMessage || encodeRes.error,
+               command: { responseData: encodeRes.data }
+             }
+           }
+         };
+      }
+      
+      return res;
     },
     checkOut: async (id: string, userId: string, deviceId: string) => {
       return invokeDesktop('reservations.checkOut', { id, userId, deviceId });
     },
     extendStay: async (id: string, newCheckOutDate: string) => {
-      // Cloud required
-      return OnlineDataProvider.reservations.extendStay(id, newCheckOutDate);
+      return invokeDesktop('reservations.extendStay', { reservationId: id, newCheckOutDate });
+    },
+    previewExtendStay: async (id: string, newCheckOutDate: string) => {
+      return invokeDesktop('reservations.previewExtendStay', { reservationId: id, newCheckOutDate });
+    },
+    reassignRoom: async (id: string, data: any) => {
+      return invokeDesktop('reservations.reassignRoom', { reservationId: id, ...data });
     }
   },
   
@@ -128,8 +159,7 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
       return invokeDesktop('folios.addCharge', { folioId, charge });
     },
     addPayment: async (folioId: string, payment: any) => {
-      // Payments strictly cloud for now, unless it's a known offline terminal payment (not implemented in P1)
-      return OnlineDataProvider.folios.addPayment(folioId, payment);
+      return invokeDesktop('folios.addPayment', { folioId, payment });
     }
   },
   

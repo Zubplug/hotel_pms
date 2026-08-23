@@ -45,7 +45,10 @@ export function FrontDeskReadCardDialog({ open, onOpenChange, propertyId }: Fron
       let readData = null;
 
       if (HardwareBridge.isAvailable()) {
-        readData = await HardwareBridge.readCard();
+        const bridgeRes: any = await HardwareBridge.readCard();
+        const parsedRes = typeof bridgeRes === 'string' ? JSON.parse(bridgeRes) : bridgeRes;
+        if (!parsedRes?.success) throw new Error(parsedRes?.error || 'Hardware agent failed to read the card');
+        readData = parsedRes.data;
       } else {
         // Fallback for Cloud/Browser
         const res = await fetch('/api/v1/hardware/locks/read-card', {

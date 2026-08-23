@@ -122,6 +122,18 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
         method: 'POST',
         body: JSON.stringify({ newCheckOutDate })
       });
+    },
+    previewExtendStay: async (id: string, newCheckOutDate: string) => {
+      return apiFetch(`/api/v1/reservations/${id}/extend/preview`, {
+        method: 'POST',
+        body: JSON.stringify({ newCheckoutDate: newCheckOutDate })
+      });
+    },
+    reassignRoom: async (id: string, data: any) => {
+      return apiFetch(`/api/v1/reservations/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data)
+      });
     }
   },
   rooms: {

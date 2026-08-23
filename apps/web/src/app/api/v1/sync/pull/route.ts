@@ -234,6 +234,11 @@ export async function GET(req: NextRequest) {
         },
         folios: {
           include: { items: true, payments: true }
+        },
+        lockCredentials: true,
+        lockOperations: {
+          orderBy: { requestedAt: 'desc' },
+          take: 20
         }
       }
     });

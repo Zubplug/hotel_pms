@@ -251,34 +251,33 @@ public class OfflinePMSInterop
             bool requiresBank = false;
             string? bankOwner = null;
 
-            if (session != null)
+            var terminal = session != null ? await _repo.GetTerminalAsync(session.DeviceId) : await _repo.GetLocalTerminalAsync();
+
+            if (terminal != null)
             {
-                var terminal = await _repo.GetTerminalAsync(session.DeviceId);
-                if (terminal != null)
+                if (actualBankingModel == "SERVER_BANKING")
                 {
-                    if (actualBankingModel == "SERVER_BANKING")
+                    var openSession = await _repo.GetActiveServerBankAsync(staff.Id, propertyId, terminal.OutletId);
+                    if (openSession != null)
                     {
-                        var openSession = await _repo.GetActiveServerBankAsync(staff.Id, propertyId, terminal.OutletId);
-                        if (openSession != null)
-                        {
-                            posSessionId = openSession.Id;
-                        }
+                        posSessionId = openSession.Id;
+                    }
+                }
+                else
+                {
+                    var openSession = await _repo.GetActiveSessionForDeviceAsync(terminal.Id);
+                    if (openSession != null)
+                    {
+                        posSessionId = openSession.Id;
                     }
                     else
                     {
-                        var openSession = await _repo.GetActiveSessionForDeviceAsync(session.DeviceId);
-                        if (openSession != null)
-                        {
-                            posSessionId = openSession.Id;
-                        }
-                        else
-                        {
-                            requiresBank = true;
-                            bankOwner = "MANAGER";
-                        }
+                        requiresBank = true;
+                        bankOwner = "MANAGER";
                     }
                 }
             }
+
 
             return JsonSerializer.Serialize(new { 
                 success = true, 
@@ -404,7 +403,7 @@ public class OfflinePMSInterop
             var mapped = res.Select(r => new
             {
                 id = r.Id,
-                confirmationNumber = !string.IsNullOrEmpty(r.ConfirmationNumber) ? r.ConfirmationNumber : r.Id.Substring(0, 8).ToUpper(),
+                confirmationNumber = !string.IsNullOrEmpty(r.ConfirmationNumber) ? r.ConfirmationNumber : (r.Id.Length >= 8 ? r.Id.Substring(0, 8).ToUpper() : r.Id.ToUpper()),
                 status = r.Status,
                 propertyId = r.PropertyId,
                 checkIn = r.CheckInDate,
@@ -507,7 +506,11 @@ public class OfflinePMSInterop
         {
             var ctx = await GetSecureContextAsync();
             var success = await _repo.RecordPaymentAsync(folioId, amount, method, ctx.UserId, ctx.DeviceId);
-            return JsonSerializer.Serialize(new { success }, _jsonOptions);
+            var paymentId = "off-" + Guid.NewGuid().ToString();
+            return JsonSerializer.Serialize(new { 
+                success, 
+                data = new { payment = new { id = paymentId } }
+            }, _jsonOptions);
         }
         catch (Exception ex)
         {
@@ -575,14 +578,34 @@ public class OfflinePMSInterop
             if (r == null) return JsonSerializer.Serialize(new { success = false, error = "Not found" }, _jsonOptions);
 
             var f = r.Folio;
-            var txs = f != null && !string.IsNullOrEmpty(f.TransactionsJson) 
-                ? JsonSerializer.Deserialize<List<System.Text.Json.JsonElement>>(f.TransactionsJson, _jsonOptions) ?? new List<System.Text.Json.JsonElement>()
-                : new List<System.Text.Json.JsonElement>();
+            var folioJson = f != null && !string.IsNullOrEmpty(f.TransactionsJson) 
+                ? JsonSerializer.Deserialize<System.Text.Json.JsonElement>(f.TransactionsJson, _jsonOptions)
+                : default;
+
+            var items = folioJson.ValueKind == System.Text.Json.JsonValueKind.Object && folioJson.TryGetProperty("items", out var itemsProp) && itemsProp.ValueKind == System.Text.Json.JsonValueKind.Array
+                ? itemsProp.EnumerateArray().Select(i => new {
+                    id = i.TryGetProperty("id", out var iid) ? iid.GetString() : null,
+                    amount = i.TryGetProperty("amount", out var amt) ? amt.GetDecimal() : 0,
+                    type = "CHARGE",
+                    description = i.TryGetProperty("description", out var desc) ? desc.GetString() : null,
+                    createdAt = i.TryGetProperty("createdAt", out var ts) ? ts.GetDateTime() : DateTime.UtcNow
+                }).ToArray<object>()
+                : Array.Empty<object>();
+
+            var payments = folioJson.ValueKind == System.Text.Json.JsonValueKind.Object && folioJson.TryGetProperty("payments", out var payProp) && payProp.ValueKind == System.Text.Json.JsonValueKind.Array
+                ? payProp.EnumerateArray().Select(p => new {
+                    id = p.TryGetProperty("id", out var pid) ? pid.GetString() : null,
+                    amount = p.TryGetProperty("amount", out var amt) ? amt.GetDecimal() : 0,
+                    status = p.TryGetProperty("status", out var st) ? st.GetString() : "COMPLETED",
+                    method = p.TryGetProperty("method", out var meth) ? meth.GetString() : null,
+                    createdAt = p.TryGetProperty("createdAt", out var ts) ? ts.GetDateTime() : DateTime.UtcNow
+                }).ToArray<object>()
+                : Array.Empty<object>();
 
             var mapped = new
             {
                 id = r.Id,
-                confirmationNumber = r.Id.Substring(0, 8).ToUpper(),
+                confirmationNumber = r.Id.Length >= 8 ? r.Id.Substring(0, 8).ToUpper() : r.Id.ToUpper(),
                 status = r.Status,
                 propertyId = r.PropertyId,
                 checkIn = r.CheckInDate,
@@ -613,24 +636,49 @@ public class OfflinePMSInterop
                         balance = f != null ? f.TotalCharges - f.TotalPayments : 0,
                         totalCharges = f?.TotalCharges ?? 0,
                         totalPayments = f?.TotalPayments ?? 0,
-                        items = txs.Where(t => t.TryGetProperty("type", out var type) && type.GetString() == "CHARGE")
-                            .Select(i => new {
-                                id = i.TryGetProperty("id", out var iid) ? iid.GetString() : null,
-                                amount = i.TryGetProperty("amount", out var amt) ? amt.GetDecimal() : 0,
-                                type = "CHARGE",
-                                description = i.TryGetProperty("description", out var desc) ? desc.GetString() : null,
-                                createdAt = i.TryGetProperty("timestamp", out var ts) ? ts.GetDateTime() : DateTime.UtcNow
-                            }).ToArray<object>(),
-                        payments = txs.Where(t => t.TryGetProperty("type", out var type) && type.GetString() == "PAYMENT")
-                            .Select(p => new {
-                                id = p.TryGetProperty("id", out var pid) ? pid.GetString() : null,
-                                amount = p.TryGetProperty("amount", out var amt) ? amt.GetDecimal() : 0,
-                                status = p.TryGetProperty("status", out var st) ? st.GetString() : "COMPLETED",
-                                method = p.TryGetProperty("method", out var meth) ? meth.GetString() : null,
-                                createdAt = p.TryGetProperty("timestamp", out var ts) ? ts.GetDateTime() : DateTime.UtcNow
-                            }).ToArray<object>()
+                        items = items,
+                        payments = payments
                     }
-                }
+                },
+                lockCredentials = r.LockCredentials.Select(c => new {
+                    id = c.Id,
+                    reservationId = c.ReservationId,
+                    guestId = c.GuestId,
+                    roomId = c.RoomId,
+                    lockId = c.LockId,
+                    credentialType = c.CredentialType,
+                    status = c.Status,
+                    validFrom = c.ValidFrom,
+                    validUntil = c.ValidUntil,
+                    cardSerialNumber = c.CardSerialNumber,
+                    issueOperationId = c.IssueOperationId,
+                    issuedAt = c.IssuedAt,
+                    revokedAt = c.RevokedAt,
+                    metadata = !string.IsNullOrEmpty(c.MetadataJson) ? JsonSerializer.Deserialize<System.Text.Json.JsonElement>(c.MetadataJson, _jsonOptions) : default(System.Text.Json.JsonElement?)
+                }).ToList(),
+                lockOperations = r.LockOperations.OrderByDescending(o => o.RequestedAt).Select(o => new {
+                    id = o.Id,
+                    propertyId = o.PropertyId,
+                    reservationId = o.ReservationId,
+                    lockId = o.LockId,
+                    roomId = o.RoomId,
+                    credentialId = o.CredentialId,
+                    commandId = o.CommandId,
+                    idempotencyKey = o.IdempotencyKey,
+                    operation = o.Operation,
+                    status = o.Status,
+                    errorCode = o.ErrorCode,
+                    errorMessage = o.ErrorMessage,
+                    payloadHash = o.PayloadHash,
+                    attemptCount = o.AttemptCount,
+                    requestedAt = o.RequestedAt,
+                    startedAt = o.StartedAt,
+                    completedAt = o.CompletedAt,
+                    agentId = o.AgentId,
+                    deviceId = o.DeviceId,
+                    metadata = !string.IsNullOrEmpty(o.MetadataJson) ? JsonSerializer.Deserialize<System.Text.Json.JsonElement>(o.MetadataJson, _jsonOptions) : default(System.Text.Json.JsonElement?),
+                    command = !string.IsNullOrEmpty(o.CommandJson) ? JsonSerializer.Deserialize<System.Text.Json.JsonElement>(o.CommandJson, _jsonOptions) : default(System.Text.Json.JsonElement?)
+                }).ToList()
             };
             return JsonSerializer.Serialize(new { success = true, data = mapped }, _jsonOptions);
         }
@@ -831,12 +879,28 @@ public class OfflinePMSInterop
     {
         try
         {
-            if (!DateTime.TryParse(newCheckOutDate, null, System.Globalization.DateTimeStyles.RoundtripKind, out var newCheckOut))
-                return JsonSerializer.Serialize(new { success = false, error = "Invalid date format" }, _jsonOptions);
+            if (!DateTime.TryParse(newCheckOutDate, out var newCheckOut))
+                return JsonSerializer.Serialize(new { success = false, error = "Invalid date" }, _jsonOptions);
 
             var ctx = await GetSecureContextAsync();
             var success = await _repo.ExtendStayAsync(reservationId, newCheckOut, ctx.UserId, ctx.DeviceId);
             return JsonSerializer.Serialize(new { success }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
+    public async Task<string> PreviewExtendStayAsync(string reservationId, string newCheckOutDate)
+    {
+        try
+        {
+            if (!DateTime.TryParse(newCheckOutDate, out var newCheckOut))
+                return JsonSerializer.Serialize(new { success = false, error = "Invalid date" }, _jsonOptions);
+
+            var data = await _repo.PreviewExtendStayAsync(reservationId, newCheckOut);
+            return JsonSerializer.Serialize(new { success = true, data }, _jsonOptions);
         }
         catch (Exception ex)
         {
@@ -867,6 +931,26 @@ public class OfflinePMSInterop
 
             var ctx = await GetSecureContextAsync();
             var success = await _repo.EditReservationAsync(reservationId, patch, ctx.UserId, ctx.DeviceId);
+            return JsonSerializer.Serialize(new { success }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
+    public async Task<string> ReassignRoomAsync(string dataJson)
+    {
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(dataJson);
+            var root = doc.RootElement;
+            var reservationId = root.GetProperty("reservationId").GetString() ?? throw new Exception("reservationId is required");
+            var roomId = root.GetProperty("roomId").GetString() ?? throw new Exception("roomId is required");
+            var roomTypeId = root.TryGetProperty("roomTypeId", out var rtId) ? rtId.GetString() : null;
+
+            var ctx = await GetSecureContextAsync();
+            var success = await _repo.ReassignRoomAsync(reservationId, roomId, roomTypeId, ctx.UserId, ctx.DeviceId);
             return JsonSerializer.Serialize(new { success }, _jsonOptions);
         }
         catch (Exception ex)
@@ -1356,6 +1440,16 @@ public class OfflinePMSInterop
             string? posSessionId = null;
             bool requiresBank = false;
             string? bankOwner = null;
+
+            if (string.IsNullOrEmpty(deviceId) || string.IsNullOrEmpty(outletId))
+            {
+                var terminal = await _repo.GetLocalTerminalAsync();
+                if (terminal != null)
+                {
+                    deviceId = terminal.Id;
+                    outletId = terminal.OutletId;
+                }
+            }
 
             if (!string.IsNullOrEmpty(deviceId) && !string.IsNullOrEmpty(outletId))
             {

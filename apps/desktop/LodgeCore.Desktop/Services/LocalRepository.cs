@@ -64,6 +64,8 @@ public class LocalRepository
         return await _dbContext.Reservations
             .Include(r => r.Guest)
             .Include(r => r.Folio)
+            .Include(r => r.LockCredentials)
+            .Include(r => r.LockOperations)
             .FirstOrDefaultAsync(r => r.Id == id);
     }
     
@@ -138,6 +140,45 @@ public class LocalRepository
         return true;
     }
 
+    public async Task<bool> ReassignRoomAsync(string reservationId, string roomId, string? roomTypeId, string userId, string deviceId)
+    {
+        var res = await _dbContext.Reservations.FindAsync(reservationId);
+        if (res == null) return false;
+
+        var room = await _dbContext.Rooms.FindAsync(roomId);
+        if (room == null) throw new InvalidOperationException("Target room not found locally.");
+
+        res.RoomId = roomId;
+        res.RoomNumber = room.Number;
+        if (roomTypeId != null) res.RoomTypeId = roomTypeId;
+
+        res.UpdatedAt = DateTime.UtcNow;
+        res.IsDirty = true;
+        res.LocalSequence++;
+        int eventVersion = res.Version;
+        res.Version++;
+
+        _dbContext.OutboxEvents.Add(new LocalOutboxEvent
+        {
+            PropertyId = res.PropertyId,
+            DeviceId = deviceId,
+            OperatorId = userId,
+            AggregateType = "RESERVATION",
+            AggregateId = reservationId,
+            AggregateVersion = eventVersion,
+            EventType = "REASSIGN_ROOM",
+            Sequence = res.LocalSequence,
+            PayloadJson = JsonSerializer.Serialize(new
+            {
+                roomId = roomId,
+                roomTypeId = roomTypeId ?? room.RoomTypeId
+            })
+        });
+
+        await _dbContext.SaveChangesAsync();
+        return true;
+    }
+
     public async Task<bool> IsRoomAvailableAsync(string roomNumber, DateTime checkIn, DateTime checkOut)
     {
         // Simple overlap check
@@ -204,6 +245,26 @@ public class LocalRepository
 
         await _dbContext.SaveChangesAsync();
         return true;
+    }
+
+    public async Task<object> PreviewExtendStayAsync(string reservationId, DateTime newCheckOut)
+    {
+        var res = await _dbContext.Reservations.FindAsync(reservationId);
+        if (res == null) throw new InvalidOperationException("Reservation not found");
+
+        if (newCheckOut <= res.CheckOutDate)
+            throw new InvalidOperationException("New checkout date must be after the current checkout date.");
+
+        var additionalNights = (int)(newCheckOut.Date - res.CheckOutDate.Date).TotalDays;
+        var ratePerNight = 15000m; // Default offline fallback rate
+
+        return new
+        {
+            additionalNights,
+            ratePerNight,
+            additionalCharge = additionalNights * ratePerNight,
+            currency = res.Currency ?? "NGN"
+        };
     }
 
     public async Task<bool> EditReservationAsync(string reservationId, LocalReservationPatch patch, string userId, string deviceId)
@@ -1939,6 +2000,11 @@ public class LocalRepository
     public async Task<LocalPosTerminal?> GetTerminalAsync(string deviceId)
     {
         return await _dbContext.PosTerminals.FirstOrDefaultAsync(t => t.Id == deviceId);
+    }
+
+    public async Task<LocalPosTerminal?> GetLocalTerminalAsync()
+    {
+        return await _dbContext.PosTerminals.FirstOrDefaultAsync();
     }
 
     public async Task<LocalPosOutlet?> GetOutletAsync(string outletId)

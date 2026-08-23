@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -26,16 +27,15 @@ export function FrontDeskCancelReservationDialog({ reservation, open, onOpenChan
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
 
+  const { provider } = useLodgeCoreProvider();
+
   const cancelMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`/api/v1/reservations/${reservation.id}/cancel`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error?.message || 'Failed to cancel reservation');
-      return data;
+      const res = await provider.reservations.cancel(reservation.id, reason);
+      if (!res.success) {
+        throw new Error(res.error?.message || res.error || 'Failed to cancel reservation');
+      }
+      return res.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reservation', reservation.id] });

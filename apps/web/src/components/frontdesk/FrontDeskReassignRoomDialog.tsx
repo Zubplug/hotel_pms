@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -29,13 +30,14 @@ export function FrontDeskReassignRoomDialog({ reservation, open, onOpenChange }:
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [error, setError] = useState('');
 
+  const { provider } = useLodgeCoreProvider();
+
   const { data: availableRooms, isLoading: isLoadingRooms } = useQuery({
     queryKey: ['available-rooms', reservation.propertyId, checkIn, checkOut],
     queryFn: async () => {
-      const res = await fetch(`/api/v1/rooms/available?propertyId=${reservation.propertyId}&checkIn=${checkIn}&checkOut=${checkOut}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error('Failed to fetch rooms');
-      return data.data;
+      const res = await provider.rooms.getAvailable(reservation.propertyId, '', checkIn, checkOut);
+      if (!res.success) throw new Error(res.error?.message || res.error || 'Failed to fetch rooms');
+      return res.data;
     },
     enabled: open && !!checkIn && !!checkOut,
   });
@@ -46,17 +48,12 @@ export function FrontDeskReassignRoomDialog({ reservation, open, onOpenChange }:
       const selectedRoom = availableRooms?.find((r: any) => r.id === selectedRoomId);
       if (!selectedRoom) throw new Error('Invalid room selected');
 
-      const res = await fetch(`/api/v1/reservations/${reservation.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          roomId: selectedRoom.id,
-          roomTypeId: selectedRoom.roomTypeId
-        }),
+      const res = await provider.reservations.reassignRoom(reservation.id, { 
+        roomId: selectedRoom.id,
+        roomTypeId: selectedRoom.roomTypeId
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error?.message || 'Failed to reassign room');
-      return data;
+      if (!res.success) throw new Error(res.error?.message || res.error || 'Failed to reassign room');
+      return res.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reservation', reservation.id] });
