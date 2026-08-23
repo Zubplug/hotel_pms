@@ -1094,6 +1094,16 @@ export default function PosApp() {
             setActiveDisplayName('');
             setTableRefreshTrigger(Date.now());
           }
+          
+          // Ensure session ID is up to date in state
+          const newSessionId = localStorage.getItem('lodgecore_pos_session_id');
+          if (newSessionId && newSessionId !== posSessionId) {
+            setPosSessionId(newSessionId);
+            provider.pos.getSessionContext(newSessionId).then(res => {
+              if (res.data) setSessionContext(res.data);
+            });
+          }
+
           setActiveOperator(operator);
           if (token) {
             setOperatorToken(token);
