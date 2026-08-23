@@ -51,7 +51,7 @@ export function MyShiftBankModal({
   };
 
   const actualCash = parseFloat(actualCashStr) || 0;
-  const expectedCash = sessionDetails?.expectedCash || 0;
+  const expectedCash = Number(sessionDetails?.expectedCash || 0);
   const variance = actualCash - expectedCash;
 
   const handleCloseShift = async () => {
