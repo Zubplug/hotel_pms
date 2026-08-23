@@ -56,7 +56,7 @@ type TerminalAuthScreenPosProps = {
   authMode: 'POS_OPERATOR';
   isOpen: boolean;
   cancellable?: boolean;
-  onAuthenticated: (operator: StaffProfile, token: string) => void;
+  onAuthenticated: (operator: StaffProfile, token: string, authData?: any) => void;
   onCancel?: () => void;
   outletId?: string;
 };

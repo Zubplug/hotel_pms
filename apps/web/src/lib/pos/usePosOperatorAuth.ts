@@ -51,7 +51,7 @@ export function usePosOperatorAuth({
 }: {
   isOpen: boolean;
   outletId?: string;
-  onAuthenticated: (operator: StaffProfile, token: string) => void;
+  onAuthenticated: (operator: StaffProfile, token: string, authData?: any) => void;
 }): UsePosOperatorAuthResult {
   const { provider, isDesktopMode } = useLodgeCoreProvider();
   const { data: session } = useLodgeCoreSession();
@@ -161,9 +161,8 @@ export function usePosOperatorAuth({
 
       // Central cashier model — the central till hasn't been opened yet
       if (auth.requiresBank) {
-        setVerifiedOperator(operator);
-        setPendingToken(token);
-        setStep('error_central');
+        if (token) localStorage.setItem('lodgecore_pos_operator_token', token);
+        onAuthenticated(operator, token, auth);
         return;
       }
 
@@ -172,7 +171,7 @@ export function usePosOperatorAuth({
         const sessionId = auth.posSessionId || auth.sessionId || existingSessionId;
         localStorage.setItem('lodgecore_pos_session_id', sessionId);
         if (token) localStorage.setItem('lodgecore_pos_operator_token', token);
-        onAuthenticated(operator, token);
+        onAuthenticated(operator, token, auth);
         return;
       }
 
@@ -186,7 +185,7 @@ export function usePosOperatorAuth({
 
       // All other models — directly in
       if (token) localStorage.setItem('lodgecore_pos_operator_token', token);
-      onAuthenticated(operator, token);
+      onAuthenticated(operator, token, auth);
     } catch (e: any) {
       setError(e.message || 'Authentication failed. Check your connection.');
       setPin('');
@@ -231,7 +230,7 @@ export function usePosOperatorAuth({
         if (res?.data?.sessionId) {
           localStorage.setItem('lodgecore_pos_session_id', res.data.sessionId);
           localStorage.setItem('lodgecore_pos_operator_token', pendingToken);
-          onAuthenticated(verifiedOperator, pendingToken);
+          onAuthenticated(verifiedOperator, pendingToken, { bankingModel: 'SERVER_BANKING', sessionId: res.data.sessionId });
         } else {
           setError(res?.error || 'Failed to open shift. Try again.');
         }
@@ -254,7 +253,7 @@ export function usePosOperatorAuth({
         if (res.ok && data.data?.sessionId) {
           localStorage.setItem('lodgecore_pos_session_id', data.data.sessionId);
           localStorage.setItem('lodgecore_pos_operator_token', pendingToken);
-          onAuthenticated(verifiedOperator, pendingToken);
+          onAuthenticated(verifiedOperator, pendingToken, { bankingModel: 'SERVER_BANKING', sessionId: data.data.sessionId });
         } else {
           setError(data.error || 'Failed to open shift. Try again.');
         }

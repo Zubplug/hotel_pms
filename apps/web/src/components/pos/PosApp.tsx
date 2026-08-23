@@ -83,6 +83,7 @@ export default function PosApp() {
   const [guestCount, setGuestCount] = useState(2);
   const [sessionContext, setSessionContext] = useState<any | null>(null);
   const [posSessionId, setPosSessionId] = useState<string>('');
+  const [bankingModel, setBankingModel] = useState<string>('CENTRAL_CASHIER');
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
   const [activeCheckId, setActiveCheckId] = useState<string | null>(null);
   const [orderChecks, setOrderChecks] = useState<any[]>([]);
@@ -712,7 +713,11 @@ export default function PosApp() {
             localStorage.removeItem('lodgecore_pos_operator_token');
             setShowSwitchPad(true); 
           }}
-          onEmergencyOverride={() => setShowEmergencyModal(true)}
+          onEmergencyOverride={
+            (bankingModel === 'CENTRAL_CASHIER' && !posSessionId)
+              ? () => setShowEmergencyModal(true)
+              : undefined
+          }
           isOnline={isOnline}
           syncPending={syncPending}
           activeOperator={activeOperator}
@@ -1087,7 +1092,8 @@ export default function PosApp() {
         cancellable={!!activeOperator && showSwitchPad}
         outletId={sessionContext?.outlet?.id}
         onCancel={() => setShowSwitchPad(false)}
-        onAuthenticated={(operator: any, token: string) => {
+        onAuthenticated={(operator: any, token: string, authData?: any) => {
+          if (authData?.bankingModel) setBankingModel(authData.bankingModel);
           if (!activeOperator || activeOperator.id !== operator.id) {
             // Different operator logging in — clear cart context
             setCart([]);
@@ -1188,6 +1194,9 @@ export default function PosApp() {
         total={total}
         onCharge={handleCharge}
         isProcessing={isProcessing}
+        posSessionId={posSessionId}
+        bankingModel={bankingModel}
+        currentOperatorId={activeOperator?.id}
       />
 
       {/* My Sales */}
