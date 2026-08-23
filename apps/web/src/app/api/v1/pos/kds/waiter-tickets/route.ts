@@ -31,12 +31,14 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Invalid session' }, { status: 400 });
     }
 
-    // Fetch KOTs created by this operator in this session's business date
-    const kots = await prisma.posKot.findMany({
+    // Fetch Production Batches (KOTs) created by this operator in this session's business date
+    const batches = await prisma.posProductionBatch.findMany({
       where: {
-        createdBy: payload.staffId,
-        outletId: outletId,
-        businessDate: session.businessDate,
+        firedByStaffId: payload.staffId,
+        order: {
+          outletId: outletId,
+          businessDate: session.businessDate,
+        }
       },
       include: {
         order: {
@@ -46,16 +48,41 @@ export async function GET(req: Request) {
             orderType: true
           }
         },
-        items: {
-          include: {
-            modifiers: true
-          }
-        }
+        items: true // Includes productName, quantity, modifiers
       },
       orderBy: {
         createdAt: 'desc'
       }
     });
+
+    // Map PosProductionBatch to the KOT format expected by the frontend
+    const kots = batches.map(batch => ({
+      id: batch.id,
+      kotNumber: `${batch.order.orderNumber}-${batch.batchNumber}`,
+      status: batch.status,
+      createdAt: batch.createdAt,
+      order: {
+        tableNumber: batch.order.tableNumber,
+        orderNumber: batch.order.orderNumber,
+        orderType: batch.order.orderType
+      },
+      items: batch.items.map(item => {
+        let modifiersList: { name: string }[] = [];
+        if (Array.isArray(item.modifiers)) {
+          modifiersList = item.modifiers.map((m: any) => ({ name: m.name || String(m) }));
+        } else if (item.modifiers && typeof item.modifiers === 'object') {
+          // Fallback if modifiers is stored as a JSON object instead of an array
+          modifiersList = Object.values(item.modifiers).map((m: any) => ({ name: m.name || String(m) }));
+        }
+        
+        return {
+          id: item.id,
+          productName: item.productName,
+          quantity: item.quantity,
+          modifiers: modifiersList
+        };
+      })
+    }));
 
     return NextResponse.json({ data: kots });
   } catch (error: any) {
