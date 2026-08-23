@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
         data: {
           propertyId,
           outletId: outlet.id,
-          deviceId: bankingModel === 'SERVER_BANKING' ? null : device.id,
+          deviceId: device.id, // Satisfy DB NOT NULL constraint; servers can still roam
           businessDate: new Date(),
           openingCash: openingCash || 0,
           expectedCash: openingCash || 0,

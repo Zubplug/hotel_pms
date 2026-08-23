@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
           data: {
             propertyId,
             outletId,
-            deviceId: null, // SERVER_BANKING sessions roam with the server, they don't own the device's till
+            deviceId: dbDeviceId, // Satisfy DB NOT NULL constraint; servers can still roam
             businessDate: new Date(),
             status: 'OPEN',
             bankType,
