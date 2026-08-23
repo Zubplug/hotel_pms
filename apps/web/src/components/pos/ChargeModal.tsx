@@ -81,6 +81,7 @@ export function ChargeModal({ isOpen, onClose, total, onCharge, isProcessing, po
               </div>
               <span className="font-bold text-sm">Transfer</span>
             </button>
+            {/* 
             <button
               onClick={() => handleCharge('ROOM_CHARGE')}
               disabled={isProcessing}
@@ -91,6 +92,7 @@ export function ChargeModal({ isOpen, onClose, total, onCharge, isProcessing, po
               </div>
               <span className="font-bold text-sm">Room</span>
             </button>
+            */}
           </div>
           
           {errorMsg && (
