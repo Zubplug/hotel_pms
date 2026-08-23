@@ -1272,6 +1272,43 @@ public class LocalRepository
         return await query.OrderByDescending(o => o.CreatedAt).ToListAsync();
     }
 
+    public async Task<List<object>> GetWaiterTicketsAsync(string outletId, string staffId, DateTime businessDate)
+    {
+        var kots = await _dbContext.PosKots
+            .Where(k => k.OutletId == outletId && k.CreatedBy == staffId && k.BusinessDate.Date == businessDate.Date)
+            .OrderByDescending(k => k.CreatedAt)
+            .ToListAsync();
+
+        var result = new List<object>();
+        foreach (var kot in kots)
+        {
+            var itemIds = System.Text.Json.JsonSerializer.Deserialize<List<string>>(kot.ItemIdsJson) ?? new List<string>();
+            var items = await _dbContext.PosOrderItems
+                .Include(i => i.Modifiers)
+                .Where(i => itemIds.Contains(i.Id))
+                .ToListAsync();
+
+            result.Add(new {
+                id = kot.Id,
+                kotNumber = kot.KotNumber,
+                status = kot.Status,
+                createdAt = kot.CreatedAt,
+                order = new {
+                    tableNumber = kot.TableNumber,
+                    orderNumber = kot.OrderNumber,
+                    orderType = "DINE_IN"
+                },
+                items = items.Select(i => new {
+                    id = i.Id,
+                    productName = i.ProductName,
+                    quantity = i.Quantity,
+                    modifiers = i.Modifiers.Select(m => new { name = m.Name })
+                })
+            });
+        }
+        return result;
+    }
+
     public async Task<(LocalPosOrder Order, LocalPosKot Kot)> FireItemsAsync(string orderId, List<LocalPosOrderItem> itemsToFire, string userId, string deviceId)
     {
         var order = await _dbContext.PosOrders

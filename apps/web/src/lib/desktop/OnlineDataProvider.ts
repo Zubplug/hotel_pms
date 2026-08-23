@@ -292,6 +292,12 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
         body: JSON.stringify({ itemIds, userId })
       });
     },
+    getWaiterTickets: async (outletId: string, operatorToken: string, sessionId: string) => {
+      const res = await fetch(`/api/v1/pos/kds/waiter-tickets?outletId=${outletId}&sessionId=${sessionId}`, {
+        headers: { 'Authorization': `Bearer ${operatorToken}` }
+      });
+      return await res.json();
+    },
     fireKot: async (orderId: string, itemIds: string[], operatorToken: string) => {
       return apiFetchResult(`/api/v1/pos/orders/${orderId}/fire`, {
         method: 'POST',

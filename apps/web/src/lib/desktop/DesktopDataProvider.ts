@@ -281,6 +281,9 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     splitCheck: async (orderId: string, itemIds: string[], userId: string) => {
       return invokeDesktop('pos.splitCheck', { orderId, itemIds, userId });
     },
+    getWaiterTickets: async (outletId: string, operatorToken: string, sessionId: string) => {
+      return invokeDesktop('pos.getWaiterTickets', { outletId, operatorToken, sessionId });
+    },
     fireKot: async (orderId: string, itemIds: string[], operatorToken: string) => {
       return invokeDesktop('pos.fireKot', { orderId, itemIds, operatorToken });
     },

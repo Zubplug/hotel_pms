@@ -23,6 +23,7 @@ import { ProductCardStepper } from '@/components/pos/ProductCardStepper';
 import { PosStaffStrip } from '@/components/pos/PosStaffStrip';
 import { ChargeModal } from '@/components/pos/ChargeModal';
 import { ActionSuccessModal } from '@/components/pos/ActionSuccessModal';
+import { WaiterTicketsModal } from '@/components/pos/WaiterTicketsModal';
 import { MySalesModal } from '@/components/pos/MySalesModal';
 import { MyOrdersModal } from '@/components/pos/MyOrdersModal';
 import { ActiveOrdersModal } from '@/components/pos/ActiveOrdersModal';
@@ -98,6 +99,8 @@ export default function PosApp() {
   const [showChargeModal, setShowChargeModal] = useState(false);
   const [activeOrderType, setActiveOrderType] = useState<string>('TABLE');
   const [activeDisplayName, setActiveDisplayName] = useState<string>('');
+  const [showShiftBankModal, setShowShiftBankModal] = useState(false);
+  const [showKitchenModal, setShowKitchenModal] = useState(false);
 
   // ── Modals ────────────────────────────────────────────────────────
   const [modifierTarget, setModifierTarget] = useState<any | null>(null);
@@ -701,8 +704,8 @@ export default function PosApp() {
           setViewMode={setViewMode}
           onOpenMyOrders={() => setShowActiveOrders(true)}
           onOpenMySales={() => setShowMySales(true)}
-          onOpenShiftBank={() => setShowShiftBank(true)}
-          onOpenKitchen={() => {}}
+          onOpenShiftBank={() => setShowShiftBankModal(true)}
+          onOpenKitchen={() => setShowKitchenModal(true)}
           onLock={() => { 
             setActiveOperator(null); 
             setOperatorToken(null);
@@ -713,6 +716,7 @@ export default function PosApp() {
           isOnline={isOnline}
           syncPending={syncPending}
           activeOperator={activeOperator}
+          isDesktop={isDesktopMode}
         />
 
         {/* Restricted mode overlay */}
@@ -1223,6 +1227,17 @@ export default function PosApp() {
           message={successDialog.message}
           onClose={() => setSuccessDialog(null)}
           autoCloseMs={3500}
+        />
+      )}
+
+      {activeOperator && operatorToken && sessionContext?.outlet?.id && posSessionId && (
+        <WaiterTicketsModal
+          isOpen={showKitchenModal}
+          onClose={() => setShowKitchenModal(false)}
+          dataProvider={provider.pos}
+          outletId={sessionContext.outlet.id}
+          operatorToken={operatorToken}
+          sessionId={posSessionId}
         />
       )}
     </div>

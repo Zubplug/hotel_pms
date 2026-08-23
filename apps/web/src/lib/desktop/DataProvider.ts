@@ -88,6 +88,7 @@ export interface LodgeCoreDataProvider {
     getTables(floorPlanId: string, operatorToken?: string | null): Promise<{ data: any[], error: string | null }>;
     getProductModifiers(productId: string): Promise<{ data: any[], error: string | null }>;
     splitCheck(orderId: string, itemIds: string[], userId: string): Promise<{ data: any, error: string | null }>;
+    getWaiterTickets(outletId: string, operatorToken: string, sessionId: string): Promise<{ data: any, error: string | null }>;
     fireKot(orderId: string, itemIds: string[], operatorToken: string): Promise<{ data: any, error: string | null }>;
     createOrder(data: any, operatorToken: string): Promise<{ data: any, error: string | null }>;
     updateOrderStatus(orderId: string, status: string, reason?: string): Promise<{ data: any, error: string | null }>;

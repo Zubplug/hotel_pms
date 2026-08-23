@@ -366,6 +366,12 @@ public partial class MainPage : ContentPage
                         parameters?["orderId"]?.ToString() ?? "",
                         parameters?["paymentData"]?.ToString() ?? "");
                     break;
+                case "pos.getWaiterTickets":
+                    responseData = await pmsInterop.GetWaiterTicketsAsync(
+                        parameters?["outletId"]?.ToString() ?? "",
+                        parameters?["operatorToken"]?.ToString() ?? "",
+                        parameters?["sessionId"]?.ToString() ?? "");
+                    break;
                 case "pos.fireKot":
                     var kotItemIdsNode = parameters?["itemIds"] as System.Text.Json.Nodes.JsonArray;
                     var kotItemIdsList = kotItemIdsNode?.Select(x => x?.ToString() ?? "").Where(x => !string.IsNullOrEmpty(x)).ToList() ?? new List<string>();

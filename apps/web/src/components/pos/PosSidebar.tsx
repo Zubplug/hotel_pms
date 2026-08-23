@@ -21,6 +21,7 @@ interface PosSidebarProps {
   isOnline: boolean;
   syncPending: number;
   activeOperator: any | null;
+  isDesktop?: boolean;
 }
 
 export function PosSidebar({
@@ -35,6 +36,7 @@ export function PosSidebar({
   isOnline,
   syncPending,
   activeOperator,
+  isDesktop = false,
 }: PosSidebarProps) {
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
@@ -149,8 +151,9 @@ export function PosSidebar({
         <NavItem icon={TrendingUp} label="My Sales"     onClick={onOpenMySales} />
         <NavItem icon={Wallet}     label="Shift Bank"   onClick={onOpenShiftBank} />
         <NavItem icon={ChefHat}    label="Kitchen"      onClick={onOpenKitchen} />
-        <NavItem icon={Monitor}    label="KDS Display"  onClick={() => window.open('/pos/kds', '_blank')} />
-        <NavItem icon={Printer}    label="Printers"     onClick={() => router.push('/pos/printer-settings')} />
+        {isDesktop && (
+          <NavItem icon={Printer}    label="Printers"     onClick={() => router.push('/pos/printer-settings')} />
+        )}
       </div>
 
       {/* ── Spacer ───────────────────────────────────────── */}
