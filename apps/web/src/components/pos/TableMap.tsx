@@ -83,7 +83,10 @@ export function TableMap({ outletId, onTableSelect, activeTableId, refreshTrigge
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (!outletId) return;
+    if (!outletId) {
+      setIsLoading(false);
+      return;
+    }
     const fetchFloorPlans = async () => {
       setIsLoading(true);
       try {
