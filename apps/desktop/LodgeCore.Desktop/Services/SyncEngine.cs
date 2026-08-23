@@ -498,7 +498,7 @@ public class SyncEngine : BackgroundService
 
             pageCount++;
             hasMore = root.TryGetProperty("hasMore", out var hm) && hm.GetBoolean();
-            var nextCursor = root.TryGetProperty("syncedAt", out var sa) ? sa.GetString() : null;
+            var nextCursor = root.TryGetProperty("syncedAt", out var sa) && sa.ValueKind != System.Text.Json.JsonValueKind.Null ? sa.GetString() : null;
 
             using var transaction = await dbContext.Database.BeginTransactionAsync(stoppingToken);
             try
@@ -546,14 +546,14 @@ public class SyncEngine : BackgroundService
                     localProp = new LodgeCore.Desktop.Data.Entities.LocalProperty
                     {
                         Id = propertyId,
-                        Name = propEl.TryGetProperty("name", out var n) ? n.GetString() ?? "Unknown" : "Unknown",
-                        Code = propEl.TryGetProperty("code", out var c) ? c.GetString() ?? "" : "",
-                        City = propEl.TryGetProperty("city", out var cy) ? cy.GetString() ?? "" : "",
-                        Currency = propEl.TryGetProperty("currency", out var cur) ? cur.GetString() ?? "NGN" : "NGN",
-                        Timezone = propEl.TryGetProperty("timezone", out var tz2) ? tz2.GetString() ?? "UTC" : "UTC",
+                        Name = propEl.TryGetProperty("name", out var n) && n.ValueKind != System.Text.Json.JsonValueKind.Null ? n.GetString() ?? "Unknown" : "Unknown",
+                        Code = propEl.TryGetProperty("code", out var c) && c.ValueKind != System.Text.Json.JsonValueKind.Null ? c.GetString() ?? "" : "",
+                        City = propEl.TryGetProperty("city", out var cy) && cy.ValueKind != System.Text.Json.JsonValueKind.Null ? cy.GetString() ?? "" : "",
+                        Currency = propEl.TryGetProperty("currency", out var cur) && cur.ValueKind != System.Text.Json.JsonValueKind.Null ? cur.GetString() ?? "NGN" : "NGN",
+                        Timezone = propEl.TryGetProperty("timezone", out var tz2) && tz2.ValueKind != System.Text.Json.JsonValueKind.Null ? tz2.GetString() ?? "UTC" : "UTC",
                         IsActive = true,
                         EarlyCheckinWindowHours = propEl.TryGetProperty("earlyCheckinWindowHours", out var eciw2) ? eciw2.GetInt32() : 2,
-                        BankingModel = propEl.TryGetProperty("bankingModel", out var bm2) ? bm2.GetString() ?? "SERVER_BANKING" : "SERVER_BANKING",
+                        BankingModel = propEl.TryGetProperty("bankingModel", out var bm2) && bm2.ValueKind != System.Text.Json.JsonValueKind.Null ? bm2.GetString() ?? "SERVER_BANKING" : "SERVER_BANKING",
                         BusinessDate = propEl.TryGetProperty("businessDate", out var bd2) && DateTime.TryParse(bd2.GetString(), out var parsedDate2) ? parsedDate2 : DateTime.UtcNow.Date
                     };
                     dbContext.Properties.Add(localProp);
@@ -581,12 +581,9 @@ public class SyncEngine : BackgroundService
                     if (existing != null)
                     {
                         // Update mutable fields — never overwrite Id
-                        existing.FirstName = staffEl.TryGetProperty("firstName", out var fn)
-                            ? fn.GetString() ?? existing.FirstName : existing.FirstName;
-                        existing.LastName = staffEl.TryGetProperty("lastName", out var ln)
-                            ? ln.GetString() ?? existing.LastName : existing.LastName;
-                        existing.Role = staffEl.TryGetProperty("role", out var role)
-                            ? role.GetString() ?? existing.Role : existing.Role;
+                        existing.FirstName = staffEl.TryGetProperty("firstName", out var fn) && fn.ValueKind != System.Text.Json.JsonValueKind.Null ? fn.GetString() ?? existing.FirstName : existing.FirstName;
+                        existing.LastName = staffEl.TryGetProperty("lastName", out var ln) && ln.ValueKind != System.Text.Json.JsonValueKind.Null ? ln.GetString() ?? existing.LastName : existing.LastName;
+                        existing.Role = staffEl.TryGetProperty("role", out var role) && role.ValueKind != System.Text.Json.JsonValueKind.Null ? role.GetString() ?? existing.Role : existing.Role;
                         existing.PosPinHash = staffEl.TryGetProperty("posPinHash", out var pin)
                             ? (pin.GetString() ?? "") : existing.PosPinHash;
                         existing.PosTokenVersion = staffEl.TryGetProperty("posTokenVersion", out var tv)
@@ -595,8 +592,7 @@ public class SyncEngine : BackgroundService
                             ? ia.GetBoolean() : existing.IsActive;
                         existing.HasPosAccess = staffEl.TryGetProperty("hasPosAccess", out var hpa)
                             ? hpa.GetBoolean() : existing.HasPosAccess;
-                        existing.PermissionsJson = staffEl.TryGetProperty("permissionsJson", out var pj)
-                            ? pj.GetString() ?? existing.PermissionsJson : existing.PermissionsJson;
+                        existing.PermissionsJson = staffEl.TryGetProperty("permissionsJson", out var pj) && pj.ValueKind != System.Text.Json.JsonValueKind.Null ? pj.GetString() ?? existing.PermissionsJson : existing.PermissionsJson;
                     }
                     else
                     {
@@ -605,14 +601,14 @@ public class SyncEngine : BackgroundService
                         {
                             Id              = staffId,
                             PropertyId      = propertyId,
-                            FirstName       = staffEl.TryGetProperty("firstName", out var fn2) ? fn2.GetString() ?? "" : "",
+                            FirstName       = staffEl.TryGetProperty("firstName", out var fn2) && fn2.ValueKind != System.Text.Json.JsonValueKind.Null ? fn2.GetString() ?? "" : "",
                             LastName        = staffEl.TryGetProperty("lastName",  out var ln2) ? ln2.GetString() ?? "" : "",
                             Role            = staffEl.TryGetProperty("role",      out var role2) ? role2.GetString() ?? "" : "",
                             PosPinHash      = staffEl.TryGetProperty("posPinHash", out var pin2) ? (pin2.GetString() ?? "") : "",
                             PosTokenVersion = staffEl.TryGetProperty("posTokenVersion", out var tv2) ? tv2.GetInt32() : 1,
                             IsActive        = staffEl.TryGetProperty("isActive",   out var ia2) && ia2.GetBoolean(),
                             HasPosAccess    = staffEl.TryGetProperty("hasPosAccess", out var hpa2) && hpa2.GetBoolean(),
-                            PermissionsJson = staffEl.TryGetProperty("permissionsJson", out var pj2) ? pj2.GetString() ?? "[]" : "[]",
+                            PermissionsJson = staffEl.TryGetProperty("permissionsJson", out var pj2) && pj2.ValueKind != System.Text.Json.JsonValueKind.Null ? pj2.GetString() ?? "[]" : "[]",
                         });
                     }
                     
@@ -653,15 +649,15 @@ public class SyncEngine : BackgroundService
                         rt = new LodgeCore.Desktop.Data.Entities.LocalRoomType { Id = id, PropertyId = propertyId, CreatedAt = DateTime.UtcNow };
                         dbContext.RoomTypes.Add(rt);
                     }
-                    rt.Name = el.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
-                    rt.Code = el.TryGetProperty("code", out var cd) ? cd.GetString() ?? "" : "";
-                    rt.Description = el.TryGetProperty("description", out var d) ? d.GetString() : null;
+                    rt.Name = el.TryGetProperty("name", out var n) && n.ValueKind != System.Text.Json.JsonValueKind.Null ? n.GetString() ?? "" : "";
+                    rt.Code = el.TryGetProperty("code", out var cd) && cd.ValueKind != System.Text.Json.JsonValueKind.Null ? cd.GetString() ?? "" : "";
+                    rt.Description = el.TryGetProperty("description", out var d) && d.ValueKind != System.Text.Json.JsonValueKind.Null ? d.GetString() : null;
                     rt.BasePrice = el.TryGetProperty("baseRate", out var br) && decimal.TryParse(br.GetString(), out var brd) ? brd : 0m;
-                    rt.Currency = el.TryGetProperty("currency", out var curr) ? curr.GetString() ?? "NGN" : "NGN";
+                    rt.Currency = el.TryGetProperty("currency", out var curr) && curr.ValueKind != System.Text.Json.JsonValueKind.Null ? curr.GetString() ?? "NGN" : "NGN";
                     rt.MaxOccupancy = el.TryGetProperty("maxOccupancy", out var mo) ? mo.GetInt32() : 2;
                     rt.MaxAdults = el.TryGetProperty("maxAdults", out var ma) ? ma.GetInt32() : 2;
                     rt.MaxChildren = el.TryGetProperty("maxChildren", out var mc) ? mc.GetInt32() : 0;
-                    rt.DefaultBedConfig = el.TryGetProperty("defaultBedConfig", out var dbc) ? dbc.GetString() : null;
+                    rt.DefaultBedConfig = el.TryGetProperty("defaultBedConfig", out var dbc) && dbc.ValueKind != System.Text.Json.JsonValueKind.Null ? dbc.GetString() : null;
                     rt.IsActive = el.TryGetProperty("isActive", out var ia) ? ia.GetBoolean() : true;
                     rt.UpdatedAt = DateTime.UtcNow;
                 }
@@ -685,19 +681,19 @@ public class SyncEngine : BackgroundService
                         room = new LodgeCore.Desktop.Data.Entities.LocalRoom { Id = id, PropertyId = propertyId, CreatedAt = DateTime.UtcNow };
                         dbContext.Rooms.Add(room);
                     }
-                    room.Number = el.TryGetProperty("number", out var num) ? num.GetString() ?? "" : "";
-                    room.Code = el.TryGetProperty("code", out var cd) ? cd.GetString() ?? room.Number : room.Number;
-                    room.DisplayName = el.TryGetProperty("displayName", out var dn) ? dn.GetString() : null;
-                    room.BuildingId = el.TryGetProperty("buildingId", out var bid) ? bid.GetString() : null;
-                    room.BuildingName = el.TryGetProperty("building", out var bld) && bld.ValueKind != System.Text.Json.JsonValueKind.Null && bld.TryGetProperty("name", out var bnm) ? bnm.GetString() : null;
-                    room.FloorId = el.TryGetProperty("floorId", out var fid) ? fid.GetString() : null;
-                    room.FloorName = el.TryGetProperty("floor", out var flr) && flr.ValueKind != System.Text.Json.JsonValueKind.Null && flr.TryGetProperty("name", out var fnm) ? fnm.GetString() : null;
+                    room.Number = el.TryGetProperty("number", out var num) && num.ValueKind != System.Text.Json.JsonValueKind.Null ? num.GetString() ?? "" : "";
+                    room.Code = el.TryGetProperty("code", out var cd) && cd.ValueKind != System.Text.Json.JsonValueKind.Null ? cd.GetString() ?? room.Number : room.Number;
+                    room.DisplayName = el.TryGetProperty("displayName", out var dn) && dn.ValueKind != System.Text.Json.JsonValueKind.Null ? dn.GetString() : null;
+                    room.BuildingId = el.TryGetProperty("buildingId", out var bid) && bid.ValueKind != System.Text.Json.JsonValueKind.Null ? bid.GetString() : null;
+                    room.BuildingName = el.TryGetProperty("building", out var bld) && bld.ValueKind != System.Text.Json.JsonValueKind.Null && bld.TryGetProperty("name", out var bnm) && bnm.ValueKind != System.Text.Json.JsonValueKind.Null ? bnm.GetString() : null;
+                    room.FloorId = el.TryGetProperty("floorId", out var fid) && fid.ValueKind != System.Text.Json.JsonValueKind.Null ? fid.GetString() : null;
+                    room.FloorName = el.TryGetProperty("floor", out var flr) && flr.ValueKind != System.Text.Json.JsonValueKind.Null && flr.TryGetProperty("name", out var fnm) && fnm.ValueKind != System.Text.Json.JsonValueKind.Null ? fnm.GetString() : null;
                     room.FloorNumber = el.TryGetProperty("floor", out var flr2) && flr2.ValueKind != System.Text.Json.JsonValueKind.Null && flr2.TryGetProperty("number", out var fnum) ? fnum.GetInt32() : (int?)null;
-                    room.Status = el.TryGetProperty("status", out var st) ? st.GetString() ?? "" : "";
-                    room.HousekeepingStatus = el.TryGetProperty("housekeepingStatus", out var hs) ? hs.GetString() ?? "" : "";
-                    room.MaintenanceStatus = el.TryGetProperty("maintenanceStatus", out var ms) ? ms.GetString() ?? "" : "";
-                    room.RoomTypeId = el.TryGetProperty("roomTypeId", out var rti) ? rti.GetString() ?? "" : "";
-                    room.LockSystemCode = el.TryGetProperty("lockSystemCode", out var lsc) ? lsc.GetString() : (el.TryGetProperty("code", out var loldc) ? loldc.GetString() : null);
+                    room.Status = el.TryGetProperty("status", out var st) && st.ValueKind != System.Text.Json.JsonValueKind.Null ? st.GetString() ?? "" : "";
+                    room.HousekeepingStatus = el.TryGetProperty("housekeepingStatus", out var hs) && hs.ValueKind != System.Text.Json.JsonValueKind.Null ? hs.GetString() ?? "" : "";
+                    room.MaintenanceStatus = el.TryGetProperty("maintenanceStatus", out var ms) && ms.ValueKind != System.Text.Json.JsonValueKind.Null ? ms.GetString() ?? "" : "";
+                    room.RoomTypeId = el.TryGetProperty("roomTypeId", out var rti) && rti.ValueKind != System.Text.Json.JsonValueKind.Null ? rti.GetString() ?? "" : "";
+                    room.LockSystemCode = el.TryGetProperty("lockSystemCode", out var lsc) && lsc.ValueKind != System.Text.Json.JsonValueKind.Null ? lsc.GetString() : (el.TryGetProperty("code", out var loldc) && loldc.ValueKind != System.Text.Json.JsonValueKind.Null ? loldc.GetString() : null);
                     room.MaxOccupancy = el.TryGetProperty("maxOccupancy", out var mo) ? mo.GetInt32() : 2;
                     room.MaxAdults = el.TryGetProperty("maxAdults", out var ma) ? ma.GetInt32() : 2;
                     room.MaxChildren = el.TryGetProperty("maxChildren", out var mc) ? mc.GetInt32() : 0;
@@ -758,9 +754,9 @@ public class SyncEngine : BackgroundService
                         }
                     }
 
-                    res.Status = el.TryGetProperty("status", out var st) ? st.GetString() ?? "" : "";
-                    res.RoomId = el.TryGetProperty("roomId", out var ri) ? ri.GetString() : null;
-                    res.RoomNumber = el.TryGetProperty("roomNumber", out var rn) ? rn.GetString() : null;
+                    res.Status = el.TryGetProperty("status", out var st) && st.ValueKind != System.Text.Json.JsonValueKind.Null ? st.GetString() ?? "" : "";
+                    res.RoomId = el.TryGetProperty("roomId", out var ri) && ri.ValueKind != System.Text.Json.JsonValueKind.Null ? ri.GetString() : null;
+                    res.RoomNumber = el.TryGetProperty("roomNumber", out var rn) && rn.ValueKind != System.Text.Json.JsonValueKind.Null ? rn.GetString() : null;
                     
                     if (el.TryGetProperty("checkIn", out var ci) && DateTime.TryParse(ci.GetString(), out var cid))
                         res.CheckInDate = cid;
@@ -769,30 +765,30 @@ public class SyncEngine : BackgroundService
                     
                     res.Adults = el.TryGetProperty("adults", out var adl) ? adl.GetInt32() : res.Adults;
                     res.Children = el.TryGetProperty("children", out var chl) ? chl.GetInt32() : res.Children;
-                    res.RoomTypeId = el.TryGetProperty("roomTypeId", out var rti2) ? rti2.GetString() : res.RoomTypeId;
-                    res.SpecialRequests = el.TryGetProperty("specialRequests", out var sr) ? sr.GetString() : res.SpecialRequests;
-                    res.ConfirmationNumber = el.TryGetProperty("confirmationNumber", out var cn) ? cn.GetString() : res.ConfirmationNumber;
+                    res.RoomTypeId = el.TryGetProperty("roomTypeId", out var rti2) && rti2.ValueKind != System.Text.Json.JsonValueKind.Null ? rti2.GetString() : res.RoomTypeId;
+                    res.SpecialRequests = el.TryGetProperty("specialRequests", out var sr) && sr.ValueKind != System.Text.Json.JsonValueKind.Null ? sr.GetString() : res.SpecialRequests;
+                    res.ConfirmationNumber = el.TryGetProperty("confirmationNumber", out var cn) && cn.ValueKind != System.Text.Json.JsonValueKind.Null ? cn.GetString() : res.ConfirmationNumber;
                     if (el.TryGetProperty("depositRequired", out var dr) && decimal.TryParse(dr.GetString() ?? dr.GetRawText(), out var drv))
                         res.DepositRequired = drv;
                     if (el.TryGetProperty("depositPaid", out var dp2) && decimal.TryParse(dp2.GetString() ?? dp2.GetRawText(), out var dpv))
                         res.DepositPaid = dpv;
                         
-                    res.CompanyId = el.TryGetProperty("companyId", out var comp) ? comp.GetString() : null;
-                    res.Source = el.TryGetProperty("source", out var src) ? src.GetString() : null;
-                    res.ChannelRef = el.TryGetProperty("channelRef", out var cref) ? cref.GetString() : null;
-                    res.RatePlanId = el.TryGetProperty("ratePlanId", out var rpi) ? rpi.GetString() : null;
-                    res.Currency = el.TryGetProperty("currency", out var cur) ? cur.GetString() : null;
-                    res.InternalNotes = el.TryGetProperty("internalNotes", out var inn) ? inn.GetString() : null;
+                    res.CompanyId = el.TryGetProperty("companyId", out var comp) && comp.ValueKind != System.Text.Json.JsonValueKind.Null ? comp.GetString() : null;
+                    res.Source = el.TryGetProperty("source", out var src) && src.ValueKind != System.Text.Json.JsonValueKind.Null ? src.GetString() : null;
+                    res.ChannelRef = el.TryGetProperty("channelRef", out var cref) && cref.ValueKind != System.Text.Json.JsonValueKind.Null ? cref.GetString() : null;
+                    res.RatePlanId = el.TryGetProperty("ratePlanId", out var rpi) && rpi.ValueKind != System.Text.Json.JsonValueKind.Null ? rpi.GetString() : null;
+                    res.Currency = el.TryGetProperty("currency", out var cur) && cur.ValueKind != System.Text.Json.JsonValueKind.Null ? cur.GetString() : null;
+                    res.InternalNotes = el.TryGetProperty("internalNotes", out var inn) && inn.ValueKind != System.Text.Json.JsonValueKind.Null ? inn.GetString() : null;
                     res.EarlyCheckIn = el.TryGetProperty("earlyCheckIn", out var eci) && eci.GetBoolean();
                     res.LateCheckOut = el.TryGetProperty("lateCheckOut", out var lco) && lco.GetBoolean();
                     
                     if (el.TryGetProperty("cancelledAt", out var canAt) && DateTime.TryParse(canAt.GetString(), out var canAtD)) res.CancelledAt = canAtD;
-                    res.CancelledBy = el.TryGetProperty("cancelledBy", out var canBy) ? canBy.GetString() : null;
-                    res.CancellationReason = el.TryGetProperty("cancellationReason", out var canRe) ? canRe.GetString() : null;
+                    res.CancelledBy = el.TryGetProperty("cancelledBy", out var canBy) && canBy.ValueKind != System.Text.Json.JsonValueKind.Null ? canBy.GetString() : null;
+                    res.CancellationReason = el.TryGetProperty("cancellationReason", out var canRe) && canRe.ValueKind != System.Text.Json.JsonValueKind.Null ? canRe.GetString() : null;
                     
                     if (el.TryGetProperty("noShowAt", out var nsAt) && DateTime.TryParse(nsAt.GetString(), out var nsAtD)) res.NoShowAt = nsAtD;
-                    res.NoShowBy = el.TryGetProperty("noShowBy", out var nsBy) ? nsBy.GetString() : null;
-                    res.CreatedBy = el.TryGetProperty("createdBy", out var cb) ? cb.GetString() : null;
+                    res.NoShowBy = el.TryGetProperty("noShowBy", out var nsBy) && nsBy.ValueKind != System.Text.Json.JsonValueKind.Null ? nsBy.GetString() : null;
+                    res.CreatedBy = el.TryGetProperty("createdBy", out var cb) && cb.ValueKind != System.Text.Json.JsonValueKind.Null ? cb.GetString() : null;
 
                     res.UpdatedAt = DateTime.UtcNow;
 
@@ -812,15 +808,15 @@ public class SyncEngine : BackgroundService
                                 cred = new LodgeCore.Desktop.Data.Entities.LocalLockCredential { Id = credId, ReservationId = id, CreatedAt = DateTime.UtcNow };
                                 dbContext.LockCredentials.Add(cred);
                             }
-                            cred.GuestId = credEl.TryGetProperty("guestId", out var cg) ? cg.GetString() : null;
-                            cred.RoomId = credEl.TryGetProperty("roomId", out var cri) ? cri.GetString() ?? "" : "";
-                            cred.LockId = credEl.TryGetProperty("lockId", out var cli) ? cli.GetString() ?? "" : "";
-                            cred.CredentialType = credEl.TryGetProperty("credentialType", out var cct) ? cct.GetString() ?? "rfid" : "rfid";
-                            cred.Status = credEl.TryGetProperty("status", out var cst) ? cst.GetString() ?? "PENDING" : "PENDING";
+                            cred.GuestId = credEl.TryGetProperty("guestId", out var cg) && cg.ValueKind != System.Text.Json.JsonValueKind.Null ? cg.GetString() : null;
+                            cred.RoomId = credEl.TryGetProperty("roomId", out var cri) && cri.ValueKind != System.Text.Json.JsonValueKind.Null ? cri.GetString() ?? "" : "";
+                            cred.LockId = credEl.TryGetProperty("lockId", out var cli) && cli.ValueKind != System.Text.Json.JsonValueKind.Null ? cli.GetString() ?? "" : "";
+                            cred.CredentialType = credEl.TryGetProperty("credentialType", out var cct) && cct.ValueKind != System.Text.Json.JsonValueKind.Null ? cct.GetString() ?? "rfid" : "rfid";
+                            cred.Status = credEl.TryGetProperty("status", out var cst) && cst.ValueKind != System.Text.Json.JsonValueKind.Null ? cst.GetString() ?? "PENDING" : "PENDING";
                             if (credEl.TryGetProperty("validFrom", out var cvf) && DateTime.TryParse(cvf.GetString(), out var cvfd)) cred.ValidFrom = cvfd;
                             if (credEl.TryGetProperty("validUntil", out var cvu) && DateTime.TryParse(cvu.GetString(), out var cvud)) cred.ValidUntil = cvud;
-                            cred.CardSerialNumber = credEl.TryGetProperty("cardSerialNumber", out var csn) ? csn.GetString() : null;
-                            cred.IssueOperationId = credEl.TryGetProperty("issueOperationId", out var cio) ? cio.GetString() : null;
+                            cred.CardSerialNumber = credEl.TryGetProperty("cardSerialNumber", out var csn) && csn.ValueKind != System.Text.Json.JsonValueKind.Null ? csn.GetString() : null;
+                            cred.IssueOperationId = credEl.TryGetProperty("issueOperationId", out var cio) && cio.ValueKind != System.Text.Json.JsonValueKind.Null ? cio.GetString() : null;
                             if (credEl.TryGetProperty("issuedAt", out var cia) && DateTime.TryParse(cia.GetString(), out var ciad)) cred.IssuedAt = ciad;
                             if (credEl.TryGetProperty("revokedAt", out var cra) && DateTime.TryParse(cra.GetString(), out var crad)) cred.RevokedAt = crad;
                             cred.MetadataJson = credEl.TryGetProperty("metadata", out var csm) ? csm.GetRawText() : null;
@@ -849,22 +845,22 @@ public class SyncEngine : BackgroundService
                                 op = new LodgeCore.Desktop.Data.Entities.LocalLockOperation { Id = opId, PropertyId = propertyId, ReservationId = id };
                                 dbContext.LockOperations.Add(op);
                             }
-                            op.LockId = opEl.TryGetProperty("lockId", out var oli) ? oli.GetString() : null;
-                            op.RoomId = opEl.TryGetProperty("roomId", out var ori) ? ori.GetString() : null;
-                            op.CredentialId = opEl.TryGetProperty("credentialId", out var oci) ? oci.GetString() : null;
-                            op.CommandId = opEl.TryGetProperty("commandId", out var ocmd) ? ocmd.GetString() : null;
-                            op.IdempotencyKey = opEl.TryGetProperty("idempotencyKey", out var oik) ? oik.GetString() : null;
-                            op.Operation = opEl.TryGetProperty("operation", out var oop) ? oop.GetString() ?? "" : "";
-                            op.Status = opEl.TryGetProperty("status", out var ost) ? ost.GetString() ?? "QUEUED" : "QUEUED";
-                            op.ErrorCode = opEl.TryGetProperty("errorCode", out var oec) ? oec.GetString() : null;
-                            op.ErrorMessage = opEl.TryGetProperty("errorMessage", out var oem) ? oem.GetString() : null;
-                            op.PayloadHash = opEl.TryGetProperty("payloadHash", out var oph) ? oph.GetString() : null;
+                            op.LockId = opEl.TryGetProperty("lockId", out var oli) && oli.ValueKind != System.Text.Json.JsonValueKind.Null ? oli.GetString() : null;
+                            op.RoomId = opEl.TryGetProperty("roomId", out var ori) && ori.ValueKind != System.Text.Json.JsonValueKind.Null ? ori.GetString() : null;
+                            op.CredentialId = opEl.TryGetProperty("credentialId", out var oci) && oci.ValueKind != System.Text.Json.JsonValueKind.Null ? oci.GetString() : null;
+                            op.CommandId = opEl.TryGetProperty("commandId", out var ocmd) && ocmd.ValueKind != System.Text.Json.JsonValueKind.Null ? ocmd.GetString() : null;
+                            op.IdempotencyKey = opEl.TryGetProperty("idempotencyKey", out var oik) && oik.ValueKind != System.Text.Json.JsonValueKind.Null ? oik.GetString() : null;
+                            op.Operation = opEl.TryGetProperty("operation", out var oop) && oop.ValueKind != System.Text.Json.JsonValueKind.Null ? oop.GetString() ?? "" : "";
+                            op.Status = opEl.TryGetProperty("status", out var ost) && ost.ValueKind != System.Text.Json.JsonValueKind.Null ? ost.GetString() ?? "QUEUED" : "QUEUED";
+                            op.ErrorCode = opEl.TryGetProperty("errorCode", out var oec) && oec.ValueKind != System.Text.Json.JsonValueKind.Null ? oec.GetString() : null;
+                            op.ErrorMessage = opEl.TryGetProperty("errorMessage", out var oem) && oem.ValueKind != System.Text.Json.JsonValueKind.Null ? oem.GetString() : null;
+                            op.PayloadHash = opEl.TryGetProperty("payloadHash", out var oph) && oph.ValueKind != System.Text.Json.JsonValueKind.Null ? oph.GetString() : null;
                             op.AttemptCount = opEl.TryGetProperty("attemptCount", out var oac) ? oac.GetInt32() : 0;
                             if (opEl.TryGetProperty("requestedAt", out var orq) && DateTime.TryParse(orq.GetString(), out var orqd)) op.RequestedAt = orqd;
                             if (opEl.TryGetProperty("startedAt", out var osa) && DateTime.TryParse(osa.GetString(), out var osad)) op.StartedAt = osad;
                             if (opEl.TryGetProperty("completedAt", out var oca) && DateTime.TryParse(oca.GetString(), out var ocad)) op.CompletedAt = ocad;
-                            op.AgentId = opEl.TryGetProperty("agentId", out var oai) ? oai.GetString() : null;
-                            op.DeviceId = opEl.TryGetProperty("deviceId", out var odi) ? odi.GetString() : null;
+                            op.AgentId = opEl.TryGetProperty("agentId", out var oai) && oai.ValueKind != System.Text.Json.JsonValueKind.Null ? oai.GetString() : null;
+                            op.DeviceId = opEl.TryGetProperty("deviceId", out var odi) && odi.ValueKind != System.Text.Json.JsonValueKind.Null ? odi.GetString() : null;
                             op.MetadataJson = opEl.TryGetProperty("metadata", out var ometa) ? ometa.GetRawText() : null;
                             
                             // To mimic standard GraphQL/Prisma include format we need the command populated
@@ -916,8 +912,8 @@ public class SyncEngine : BackgroundService
                         folio = new LodgeCore.Desktop.Data.Entities.LocalFolio { Id = id, PropertyId = propertyId, CreatedAt = DateTime.UtcNow };
                         dbContext.Folios.Add(folio);
                     }
-                    folio.ReservationId = el.TryGetProperty("reservationId", out var ri) ? ri.GetString() ?? "" : "";
-                    folio.Status = el.TryGetProperty("status", out var st) ? st.GetString() ?? "" : "";
+                    folio.ReservationId = el.TryGetProperty("reservationId", out var ri) && ri.ValueKind != System.Text.Json.JsonValueKind.Null ? ri.GetString() ?? "" : "";
+                    folio.Status = el.TryGetProperty("status", out var st) && st.ValueKind != System.Text.Json.JsonValueKind.Null ? st.GetString() ?? "" : "";
                     folio.TotalCharges = el.TryGetProperty("totalCharges", out var tc) && decimal.TryParse(tc.GetString(), out var tcd) ? tcd : 0m;
                     folio.TotalPayments = el.TryGetProperty("totalPayments", out var tp) && decimal.TryParse(tp.GetString(), out var tpd) ? tpd : 0m;
                     // Stringify the whole folio for local offline rendering without full schema
@@ -950,9 +946,9 @@ public class SyncEngine : BackgroundService
                         outlet = new LodgeCore.Desktop.Data.Entities.LocalPosOutlet { Id = id };
                         dbContext.PosOutlets.Add(outlet);
                     }
-                    outlet.PropertyId = el.TryGetProperty("propertyId", out var pid) ? pid.GetString() ?? "" : "";
-                    outlet.Name = el.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
-                    outlet.Type = el.TryGetProperty("type", out var t) ? t.GetString() ?? "" : "";
+                    outlet.PropertyId = el.TryGetProperty("propertyId", out var pid) && pid.ValueKind != System.Text.Json.JsonValueKind.Null ? pid.GetString() ?? "" : "";
+                    outlet.Name = el.TryGetProperty("name", out var n) && n.ValueKind != System.Text.Json.JsonValueKind.Null ? n.GetString() ?? "" : "";
+                    outlet.Type = el.TryGetProperty("type", out var t) && t.ValueKind != System.Text.Json.JsonValueKind.Null ? t.GetString() ?? "" : "";
                     outlet.IsActive = el.TryGetProperty("isActive", out var ia) && ia.GetBoolean();
                     outlet.AutoLockSeconds = el.TryGetProperty("autoLockSeconds", out var als) && als.ValueKind == System.Text.Json.JsonValueKind.Number ? als.GetInt32() : null;
                 }
@@ -973,7 +969,7 @@ public class SyncEngine : BackgroundService
                 foreach (var el in posCategoriesArray.EnumerateArray())
                 {
                     var id = el.GetProperty("id").GetString();
-                    var outletId = el.TryGetProperty("outletId", out var oid) ? oid.GetString() : "";
+                    var outletId = el.TryGetProperty("outletId", out var oid) && oid.ValueKind != System.Text.Json.JsonValueKind.Null ? oid.GetString() : "";
                     
                     if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(outletId) || !outletIds.Contains(outletId)) continue;
                     incomingIds.Add(id);
@@ -985,7 +981,7 @@ public class SyncEngine : BackgroundService
                         dbContext.ProductCategories.Add(cat);
                     }
                     cat.OutletId = outletId;
-                    cat.Name = el.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
+                    cat.Name = el.TryGetProperty("name", out var n) && n.ValueKind != System.Text.Json.JsonValueKind.Null ? n.GetString() ?? "" : "";
                     cat.IsActive = el.TryGetProperty("isActive", out var ia) && ia.GetBoolean();
                     cat.SortOrder = el.TryGetProperty("sortOrder", out var so) && so.ValueKind == System.Text.Json.JsonValueKind.Number ? so.GetInt32() : 0;
                     // KOT routing — default KITCHEN if cloud field is missing (rolling deployment safety)
@@ -1007,7 +1003,7 @@ public class SyncEngine : BackgroundService
                 foreach (var el in posProductsArray.EnumerateArray())
                 {
                     var id = el.GetProperty("id").GetString();
-                    var elPropertyId = el.TryGetProperty("propertyId", out var pid) ? pid.GetString() : "";
+                    var elPropertyId = el.TryGetProperty("propertyId", out var pid) && pid.ValueKind != System.Text.Json.JsonValueKind.Null ? pid.GetString() : "";
                     
                     if (string.IsNullOrEmpty(id) || elPropertyId != propertyId) continue;
                     incomingIds.Add(id);
@@ -1018,8 +1014,8 @@ public class SyncEngine : BackgroundService
                         prod = new LodgeCore.Desktop.Data.Entities.LocalPosProduct { Id = id, PropertyId = propertyId };
                         dbContext.PosProducts.Add(prod);
                     }
-                    prod.CategoryId = el.TryGetProperty("categoryId", out var cid) ? cid.GetString() ?? "" : "";
-                    prod.Name = el.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
+                    prod.CategoryId = el.TryGetProperty("categoryId", out var cid) && cid.ValueKind != System.Text.Json.JsonValueKind.Null ? cid.GetString() ?? "" : "";
+                    prod.Name = el.TryGetProperty("name", out var n) && n.ValueKind != System.Text.Json.JsonValueKind.Null ? n.GetString() ?? "" : "";
                     prod.Description = el.TryGetProperty("description", out var desc) && desc.ValueKind != System.Text.Json.JsonValueKind.Null
                         ? desc.GetString() : null;
                     prod.Image = el.TryGetProperty("image", out var img) && img.ValueKind != System.Text.Json.JsonValueKind.Null
@@ -1041,7 +1037,7 @@ public class SyncEngine : BackgroundService
                         var modIds = new HashSet<string>();
                         foreach (var m in mods.EnumerateArray())
                         {
-                            var mId = m.TryGetProperty("id", out var mid) ? mid.GetString() : null;
+                            var mId = m.TryGetProperty("id", out var mid) && mid.ValueKind != System.Text.Json.JsonValueKind.Null ? mid.GetString() : null;
                             if (string.IsNullOrEmpty(mId)) continue;
                             modIds.Add(mId);
 
@@ -1051,7 +1047,7 @@ public class SyncEngine : BackgroundService
                                 localMod = new LodgeCore.Desktop.Data.Entities.LocalPosProductModifier { Id = mId, ProductId = id };
                                 dbContext.PosProductModifiers.Add(localMod);
                             }
-                            localMod.Name = m.TryGetProperty("name", out var mn) ? mn.GetString() ?? "" : "";
+                            localMod.Name = m.TryGetProperty("name", out var mn) && mn.ValueKind != System.Text.Json.JsonValueKind.Null ? mn.GetString() ?? "" : "";
                             localMod.Price = m.TryGetProperty("price", out var mpr) 
                                 ? (mpr.ValueKind == System.Text.Json.JsonValueKind.Number ? mpr.GetDecimal() : (mpr.ValueKind == System.Text.Json.JsonValueKind.String && decimal.TryParse(mpr.GetString(), out var mdp) ? mdp : 0m)) 
                                 : 0m;
@@ -1084,7 +1080,7 @@ public class SyncEngine : BackgroundService
                 foreach (var el in posFloorPlansArray.EnumerateArray())
                 {
                     var id = el.GetProperty("id").GetString();
-                    var outletId = el.TryGetProperty("outletId", out var oid) ? oid.GetString() : "";
+                    var outletId = el.TryGetProperty("outletId", out var oid) && oid.ValueKind != System.Text.Json.JsonValueKind.Null ? oid.GetString() : "";
 
                     if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(outletId) || !outletIds.Contains(outletId)) continue;
                     incomingIds.Add(id);
@@ -1095,7 +1091,7 @@ public class SyncEngine : BackgroundService
                         fp = new LodgeCore.Desktop.Data.Entities.LocalPosFloorPlan { Id = id, OutletId = outletId };
                         dbContext.PosFloorPlans.Add(fp);
                     }
-                    fp.Name = el.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
+                    fp.Name = el.TryGetProperty("name", out var n) && n.ValueKind != System.Text.Json.JsonValueKind.Null ? n.GetString() ?? "" : "";
                     fp.IsActive = el.TryGetProperty("isActive", out var ia) ? ia.GetBoolean() : true;
                 }
 
@@ -1116,7 +1112,7 @@ public class SyncEngine : BackgroundService
                 foreach (var el in posTablesArray.EnumerateArray())
                 {
                     var id = el.GetProperty("id").GetString();
-                    var fpId = el.TryGetProperty("floorPlanId", out var fpid) ? fpid.GetString() : "";
+                    var fpId = el.TryGetProperty("floorPlanId", out var fpid) && fpid.ValueKind != System.Text.Json.JsonValueKind.Null ? fpid.GetString() : "";
 
                     if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(fpId) || !validFloorPlanIds.Contains(fpId)) continue;
                     incomingIds.Add(id);
@@ -1127,7 +1123,7 @@ public class SyncEngine : BackgroundService
                         table = new LodgeCore.Desktop.Data.Entities.LocalPosTable { Id = id, FloorPlanId = fpId };
                         dbContext.PosTables.Add(table);
                     }
-                    table.Name = el.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
+                    table.Name = el.TryGetProperty("name", out var n) && n.ValueKind != System.Text.Json.JsonValueKind.Null ? n.GetString() ?? "" : "";
                     table.Capacity = el.TryGetProperty("capacity", out var cap) && cap.ValueKind == System.Text.Json.JsonValueKind.Number ? cap.GetInt32() : 4;
                     table.PositionX = el.TryGetProperty("positionX", out var px) && px.ValueKind == System.Text.Json.JsonValueKind.Number ? px.GetInt32() : 0;
                     table.PositionY = el.TryGetProperty("positionY", out var py) && py.ValueKind == System.Text.Json.JsonValueKind.Number ? py.GetInt32() : 0;
@@ -1163,12 +1159,12 @@ public class SyncEngine : BackgroundService
                         dbContext.PosSessions.Add(posSession);
                     }
                     posSession.PropertyId = propertyId;
-                    posSession.OutletId = el.TryGetProperty("outletId", out var oid) ? oid.GetString() ?? "" : "";
+                    posSession.OutletId = el.TryGetProperty("outletId", out var oid) && oid.ValueKind != System.Text.Json.JsonValueKind.Null ? oid.GetString() ?? "" : "";
                     posSession.DeviceId = el.TryGetProperty("deviceId", out var did) && did.ValueKind != System.Text.Json.JsonValueKind.Null ? did.GetString() : null;
                     posSession.UserId = el.TryGetProperty("userId", out var uid) && uid.ValueKind != System.Text.Json.JsonValueKind.Null ? uid.GetString() ?? "" : "";
-                    posSession.Status = el.TryGetProperty("status", out var st) ? st.GetString() ?? "" : "";
-                    posSession.BankingModel = el.TryGetProperty("bankingModel", out var bm) ? bm.GetString() ?? "CENTRAL_CASHIER" : "CENTRAL_CASHIER";
-                    posSession.BankType = el.TryGetProperty("bankType", out var bt) ? bt.GetString() ?? "CENTRAL" : "CENTRAL";
+                    posSession.Status = el.TryGetProperty("status", out var st) && st.ValueKind != System.Text.Json.JsonValueKind.Null ? st.GetString() ?? "" : "";
+                    posSession.BankingModel = el.TryGetProperty("bankingModel", out var bm) && bm.ValueKind != System.Text.Json.JsonValueKind.Null ? bm.GetString() ?? "CENTRAL_CASHIER" : "CENTRAL_CASHIER";
+                    posSession.BankType = el.TryGetProperty("bankType", out var bt) && bt.ValueKind != System.Text.Json.JsonValueKind.Null ? bt.GetString() ?? "CENTRAL" : "CENTRAL";
                     posSession.PrimaryOperatorId = el.TryGetProperty("primaryOperatorId", out var poi) && poi.ValueKind != System.Text.Json.JsonValueKind.Null ? poi.GetString() : null;
                     posSession.AuthorizedBy = el.TryGetProperty("authorizedBy", out var auth) && auth.ValueKind != System.Text.Json.JsonValueKind.Null ? auth.GetString() : null;
                     posSession.Reason = el.TryGetProperty("reason", out var rs) && rs.ValueKind != System.Text.Json.JsonValueKind.Null ? rs.GetString() : null;
@@ -1226,11 +1222,11 @@ public class SyncEngine : BackgroundService
                         dbContext.PosOrders.Add(order);
                     }
                     order.PropertyId = propertyId;
-                    order.OutletId = el.TryGetProperty("outletId", out var oid) ? oid.GetString() ?? "" : "";
+                    order.OutletId = el.TryGetProperty("outletId", out var oid) && oid.ValueKind != System.Text.Json.JsonValueKind.Null ? oid.GetString() ?? "" : "";
                     order.SessionId = el.TryGetProperty("sessionId", out var sid) && sid.ValueKind != System.Text.Json.JsonValueKind.Null ? sid.GetString() : null;
                     order.FolioId = el.TryGetProperty("folioId", out var fid) && fid.ValueKind != System.Text.Json.JsonValueKind.Null ? fid.GetString() : null;
-                    order.OrderNumber = el.TryGetProperty("orderNumber", out var on) ? on.GetString() ?? "" : "";
-                    order.Status = el.TryGetProperty("status", out var st) ? st.GetString() ?? "" : "";
+                    order.OrderNumber = el.TryGetProperty("orderNumber", out var on) && on.ValueKind != System.Text.Json.JsonValueKind.Null ? on.GetString() ?? "" : "";
+                    order.Status = el.TryGetProperty("status", out var st) && st.ValueKind != System.Text.Json.JsonValueKind.Null ? st.GetString() ?? "" : "";
                     if (el.TryGetProperty("businessDate", out var bd) && bd.ValueKind != System.Text.Json.JsonValueKind.Null) order.BusinessDate = bd.GetDateTime();
                     order.Subtotal = el.TryGetProperty("subtotal", out var sub) && sub.ValueKind == System.Text.Json.JsonValueKind.Number ? sub.GetDecimal() : 0m;
                     order.TaxAmount = el.TryGetProperty("taxAmount", out var tax) && tax.ValueKind == System.Text.Json.JsonValueKind.Number ? tax.GetDecimal() : 0m;
@@ -1243,10 +1239,10 @@ public class SyncEngine : BackgroundService
                     order.TipAmount = el.TryGetProperty("tipAmount", out var tip) && tip.ValueKind == System.Text.Json.JsonValueKind.Number ? tip.GetDecimal() : 0m;
                     order.ServerStaffId = el.TryGetProperty("serverStaffId", out var ssi) && ssi.ValueKind != System.Text.Json.JsonValueKind.Null ? ssi.GetString() : null;
                     order.Version = el.TryGetProperty("version", out var v) && v.ValueKind == System.Text.Json.JsonValueKind.Number ? v.GetInt32() : 1;
-                    order.OrderType = el.TryGetProperty("orderType", out var ot) ? ot.GetString() ?? "TABLE" : "TABLE";
-                    order.PaymentStatus = el.TryGetProperty("paymentStatus", out var ps) ? ps.GetString() ?? "UNPAID" : "UNPAID";
+                    order.OrderType = el.TryGetProperty("orderType", out var ot) && ot.ValueKind != System.Text.Json.JsonValueKind.Null ? ot.GetString() ?? "TABLE" : "TABLE";
+                    order.PaymentStatus = el.TryGetProperty("paymentStatus", out var ps) && ps.ValueKind != System.Text.Json.JsonValueKind.Null ? ps.GetString() ?? "UNPAID" : "UNPAID";
                     order.Discount = el.TryGetProperty("discount", out var dis) && dis.ValueKind == System.Text.Json.JsonValueKind.Number ? dis.GetDecimal() : 0m;
-                    order.DisplayName = el.TryGetProperty("displayName", out var dn) ? dn.GetString() ?? "" : "";
+                    order.DisplayName = el.TryGetProperty("displayName", out var dn) && dn.ValueKind != System.Text.Json.JsonValueKind.Null ? dn.GetString() ?? "" : "";
                     if (el.TryGetProperty("closedAt", out var ca) && ca.ValueKind != System.Text.Json.JsonValueKind.Null) order.ClosedAt = ca.GetDateTime();
                     if (el.TryGetProperty("createdAt", out var crt) && crt.ValueKind != System.Text.Json.JsonValueKind.Null) order.CreatedAt = crt.GetDateTime();
                     order.UpdatedAt = incomingUpdatedAt;
@@ -1268,7 +1264,7 @@ public class SyncEngine : BackgroundService
                                 order.Items.Add(item);
                             }
                             item.ProductId = itemEl.TryGetProperty("productId", out var pid) && pid.ValueKind != System.Text.Json.JsonValueKind.Null ? pid.GetString() : null;
-                            item.ProductName = itemEl.TryGetProperty("productName", out var pn) ? pn.GetString() ?? "" : "";
+                            item.ProductName = itemEl.TryGetProperty("productName", out var pn) && pn.ValueKind != System.Text.Json.JsonValueKind.Null ? pn.GetString() ?? "" : "";
                             item.Quantity = itemEl.TryGetProperty("quantity", out var iq) && iq.ValueKind == System.Text.Json.JsonValueKind.Number ? iq.GetDecimal() : 1m;
                             item.UnitPrice = itemEl.TryGetProperty("unitPrice", out var up) && up.ValueKind == System.Text.Json.JsonValueKind.Number ? up.GetDecimal() : 0m;
                             item.TaxRate = itemEl.TryGetProperty("taxRate", out var itr) && itr.ValueKind == System.Text.Json.JsonValueKind.Number ? itr.GetDecimal() : 0m;
@@ -1299,7 +1295,7 @@ public class SyncEngine : BackgroundService
                                         mod = new LodgeCore.Desktop.Data.Entities.LocalPosOrderItemModifier { Id = mId, OrderItemId = itemId };
                                         item.Modifiers.Add(mod);
                                     }
-                                    mod.Name = mEl.TryGetProperty("name", out var mmn) ? mmn.GetString() ?? "" : "";
+                                    mod.Name = mEl.TryGetProperty("name", out var mmn) && mmn.ValueKind != System.Text.Json.JsonValueKind.Null ? mmn.GetString() ?? "" : "";
                                     mod.Price = mEl.TryGetProperty("price", out var mmpr) && mmpr.ValueKind == System.Text.Json.JsonValueKind.Number ? mmpr.GetDecimal() : 0m;
                                 }
                                 var modsToRemove = item.Modifiers.Where(m => !incomingModIds.Contains(m.Id)).ToList();
@@ -1326,9 +1322,9 @@ public class SyncEngine : BackgroundService
                                 check = new LodgeCore.Desktop.Data.Entities.LocalPosCheck { Id = checkId, OrderId = id };
                                 order.Checks.Add(check);
                             }
-                            check.CheckNumber = checkEl.TryGetProperty("checkNumber", out var cn) ? cn.GetString() ?? "" : "";
+                            check.CheckNumber = checkEl.TryGetProperty("checkNumber", out var cn) && cn.ValueKind != System.Text.Json.JsonValueKind.Null ? cn.GetString() ?? "" : "";
                             check.Total = checkEl.TryGetProperty("total", out var ct) && ct.ValueKind == System.Text.Json.JsonValueKind.Number ? ct.GetDecimal() : 0m;
-                            check.Status = checkEl.TryGetProperty("status", out var cs) ? cs.GetString() ?? "OPEN" : "OPEN";
+                            check.Status = checkEl.TryGetProperty("status", out var cs) && cs.ValueKind != System.Text.Json.JsonValueKind.Null ? cs.GetString() ?? "OPEN" : "OPEN";
                             if (checkEl.TryGetProperty("businessDate", out var cbd) && cbd.ValueKind != System.Text.Json.JsonValueKind.Null) check.BusinessDate = cbd.GetDateTime();
                             if (checkEl.TryGetProperty("createdAt", out var ccrt) && ccrt.ValueKind != System.Text.Json.JsonValueKind.Null) check.CreatedAt = ccrt.GetDateTime();
                             if (checkEl.TryGetProperty("updatedAt", out var cupd) && cupd.ValueKind != System.Text.Json.JsonValueKind.Null) check.UpdatedAt = cupd.GetDateTime();
@@ -1357,10 +1353,10 @@ public class SyncEngine : BackgroundService
                                         payment = new LodgeCore.Desktop.Data.Entities.LocalPosPayment { Id = payId, OrderId = id };
                                         order.Payments.Add(payment);
                                     }
-                                    payment.Method = payEl.TryGetProperty("method", out var pm) ? pm.GetString() ?? "" : "";
-                                    payment.Status = payEl.TryGetProperty("status", out var pst) ? pst.GetString() ?? "" : "";
+                                    payment.Method = payEl.TryGetProperty("method", out var pm) && pm.ValueKind != System.Text.Json.JsonValueKind.Null ? pm.GetString() ?? "" : "";
+                                    payment.Status = payEl.TryGetProperty("status", out var pst) && pst.ValueKind != System.Text.Json.JsonValueKind.Null ? pst.GetString() ?? "" : "";
                                     payment.Amount = payEl.TryGetProperty("amount", out var pa) && pa.ValueKind == System.Text.Json.JsonValueKind.Number ? pa.GetDecimal() : 0m;
-                                    payment.Currency = payEl.TryGetProperty("currency", out var pcu) ? pcu.GetString() ?? "NGN" : "NGN";
+                                    payment.Currency = payEl.TryGetProperty("currency", out var pcu) && pcu.ValueKind != System.Text.Json.JsonValueKind.Null ? pcu.GetString() ?? "NGN" : "NGN";
                                     payment.CheckId = payEl.TryGetProperty("checkId", out var pci) && pci.ValueKind != System.Text.Json.JsonValueKind.Null ? pci.GetString() : null;
                                     payment.SessionId = payEl.TryGetProperty("sessionId", out var psi) && psi.ValueKind != System.Text.Json.JsonValueKind.Null ? psi.GetString() : null;
                                     if (payEl.TryGetProperty("businessDate", out var pbd) && pbd.ValueKind != System.Text.Json.JsonValueKind.Null) payment.BusinessDate = pbd.GetDateTime();
@@ -1389,11 +1385,11 @@ public class SyncEngine : BackgroundService
                                 kot = new LodgeCore.Desktop.Data.Entities.LocalPosKot { Id = kotId, OrderId = id };
                                 order.Kots.Add(kot);
                             }
-                            kot.OutletId = kotEl.TryGetProperty("outletId", out var koid) ? koid.GetString() ?? "" : "";
-                            kot.CreatedBy = kotEl.TryGetProperty("createdBy", out var kcb) ? kcb.GetString() ?? "" : "";
-                            kot.KotNumber = kotEl.TryGetProperty("kotNumber", out var kkn) ? kkn.GetString() ?? "" : "";
-                            kot.Status = kotEl.TryGetProperty("status", out var ks) ? ks.GetString() ?? "PENDING" : "PENDING";
-                            kot.PrintStatus = kotEl.TryGetProperty("printStatus", out var kps) ? kps.GetString() ?? "QUEUED" : "QUEUED";
+                            kot.OutletId = kotEl.TryGetProperty("outletId", out var koid) && koid.ValueKind != System.Text.Json.JsonValueKind.Null ? koid.GetString() ?? "" : "";
+                            kot.CreatedBy = kotEl.TryGetProperty("createdBy", out var kcb) && kcb.ValueKind != System.Text.Json.JsonValueKind.Null ? kcb.GetString() ?? "" : "";
+                            kot.KotNumber = kotEl.TryGetProperty("kotNumber", out var kkn) && kkn.ValueKind != System.Text.Json.JsonValueKind.Null ? kkn.GetString() ?? "" : "";
+                            kot.Status = kotEl.TryGetProperty("status", out var ks) && ks.ValueKind != System.Text.Json.JsonValueKind.Null ? ks.GetString() ?? "PENDING" : "PENDING";
+                            kot.PrintStatus = kotEl.TryGetProperty("printStatus", out var kps) && kps.ValueKind != System.Text.Json.JsonValueKind.Null ? kps.GetString() ?? "QUEUED" : "QUEUED";
                             if (kotEl.TryGetProperty("businessDate", out var kbd) && kbd.ValueKind != System.Text.Json.JsonValueKind.Null) kot.BusinessDate = kbd.GetDateTime();
                             if (kotEl.TryGetProperty("createdAt", out var kcrt) && kcrt.ValueKind != System.Text.Json.JsonValueKind.Null) kot.CreatedAt = kcrt.GetDateTime();
                             
@@ -1429,9 +1425,9 @@ public class SyncEngine : BackgroundService
                         dbContext.HousekeepingTasks.Add(task);
                     }
                     
-                    task.RoomId = el.TryGetProperty("roomId", out var rid) ? rid.GetString() ?? "" : "";
-                    task.TaskType = el.TryGetProperty("type", out var typ) ? typ.GetString() ?? "" : "";
-                    task.Status = el.TryGetProperty("status", out var st) ? st.GetString() ?? "" : "";
+                    task.RoomId = el.TryGetProperty("roomId", out var rid) && rid.ValueKind != System.Text.Json.JsonValueKind.Null ? rid.GetString() ?? "" : "";
+                    task.TaskType = el.TryGetProperty("type", out var typ) && typ.ValueKind != System.Text.Json.JsonValueKind.Null ? typ.GetString() ?? "" : "";
+                    task.Status = el.TryGetProperty("status", out var st) && st.ValueKind != System.Text.Json.JsonValueKind.Null ? st.GetString() ?? "" : "";
                     var room = await dbContext.Rooms.FirstOrDefaultAsync(r => r.Id == task.RoomId, stoppingToken);
                     if (room != null)
                     {
@@ -1465,13 +1461,13 @@ public class SyncEngine : BackgroundService
                         dbContext.MaintenanceTickets.Add(ticket);
                     }
                     
-                    ticket.RoomId = el.TryGetProperty("roomId", out var rid) ? rid.GetString() ?? "" : "";
-                    var title = el.TryGetProperty("title", out var tEl) ? tEl.GetString() ?? "" : "";
-                    var desc = el.TryGetProperty("description", out var dEl) ? dEl.GetString() ?? "" : "";
+                    ticket.RoomId = el.TryGetProperty("roomId", out var rid) && rid.ValueKind != System.Text.Json.JsonValueKind.Null ? rid.GetString() ?? "" : "";
+                    var title = el.TryGetProperty("title", out var tEl) && tEl.ValueKind != System.Text.Json.JsonValueKind.Null ? tEl.GetString() ?? "" : "";
+                    var desc = el.TryGetProperty("description", out var dEl) && dEl.ValueKind != System.Text.Json.JsonValueKind.Null ? dEl.GetString() ?? "" : "";
                     ticket.IssueDescription = $"{title} - {desc}".Trim();
-                    ticket.Status = el.TryGetProperty("status", out var st) ? st.GetString() ?? "" : "";
+                    ticket.Status = el.TryGetProperty("status", out var st) && st.ValueKind != System.Text.Json.JsonValueKind.Null ? st.GetString() ?? "" : "";
                     
-                    ticket.Priority = el.TryGetProperty("priority", out var pri) ? pri.GetString() ?? "NORMAL" : "NORMAL";
+                    ticket.Priority = el.TryGetProperty("priority", out var pri) && pri.ValueKind != System.Text.Json.JsonValueKind.Null ? pri.GetString() ?? "NORMAL" : "NORMAL";
                     
                     ticket.RequiresRoomRestriction = ticket.Status == "IN_PROGRESS" || ticket.Status == "OPEN"; 
                 }
@@ -1795,13 +1791,13 @@ public class SyncEngine : BackgroundService
                             var g = new LodgeCore.Desktop.Data.Entities.LocalGuest
                             {
                                 Id = id,
-                                OrganizationId = el.TryGetProperty("organizationId", out var org) ? org.GetString() ?? "" : "",
-                                FirstName = el.TryGetProperty("firstName", out var fn) ? fn.GetString() ?? "" : "",
-                                LastName = el.TryGetProperty("lastName", out var ln) ? ln.GetString() ?? "" : "",
-                                Email = el.TryGetProperty("email", out var em) ? em.GetString() : null,
-                                Phone = el.TryGetProperty("phone", out var ph) ? ph.GetString() : null,
-                                CompanyName = el.TryGetProperty("companyName", out var cn) ? cn.GetString() : null,
-                                IsVip = el.TryGetProperty("isVip", out var vip) && vip.GetBoolean(),
+                                OrganizationId = el.TryGetProperty("organizationId", out var org) && org.ValueKind != System.Text.Json.JsonValueKind.Null ? org.GetString() ?? "" : "",
+                                FirstName = el.TryGetProperty("firstName", out var fn) && fn.ValueKind != System.Text.Json.JsonValueKind.Null ? fn.GetString() ?? "" : "",
+                                LastName = el.TryGetProperty("lastName", out var ln) && ln.ValueKind != System.Text.Json.JsonValueKind.Null ? ln.GetString() ?? "" : "",
+                                Email = el.TryGetProperty("email", out var em) && em.ValueKind != System.Text.Json.JsonValueKind.Null ? em.GetString() : null,
+                                Phone = el.TryGetProperty("phone", out var ph) && ph.ValueKind != System.Text.Json.JsonValueKind.Null ? ph.GetString() : null,
+                                CompanyName = el.TryGetProperty("companyName", out var cn) && cn.ValueKind != System.Text.Json.JsonValueKind.Null ? cn.GetString() : null,
+                                IsVip = el.TryGetProperty("isVip", out var vip) && vip.ValueKind != System.Text.Json.JsonValueKind.Null && vip.GetBoolean(),
                                 Version = el.TryGetProperty("version", out var ver) && ver.ValueKind == System.Text.Json.JsonValueKind.Number ? ver.GetInt32() : 1
                             };
                             
