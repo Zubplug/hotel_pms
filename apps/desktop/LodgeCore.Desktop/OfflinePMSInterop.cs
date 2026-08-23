@@ -27,7 +27,11 @@ public class OfflinePMSInterop
         _serviceManager = serviceManager;
     }
 
-    private readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+    private readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions 
+    { 
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles
+    };
 
     public async Task<string> GetTerminalStatusAsync()
     {

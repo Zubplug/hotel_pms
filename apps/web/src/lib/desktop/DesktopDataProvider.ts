@@ -89,6 +89,15 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
   roomTypes: {
     list: async (propertyId: string) => {
       return invokeDesktop('roomTypes.list', { propertyId });
+    },
+    create: async (data: any) => {
+      const res = await fetch('/api/v1/room-types', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
     }
   },
   
@@ -184,6 +193,15 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     },
     updateStatus: async (roomId: string, newStatus: string, source: string) => {
       return invokeDesktop('rooms.updateStatus', { roomId, newStatus, source });
+    },
+    create: async (data: any) => {
+      const res = await fetch('/api/v1/rooms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
     }
   },
   

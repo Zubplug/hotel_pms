@@ -8,6 +8,7 @@ public class DelunsLockProvider : ILockProvider
 {
     private readonly ILogger<DelunsLockProvider> _logger;
     private bool _initialized = false;
+    private int _lastInitError = 0;
     private const string DateFormat = "yyyy-MM-dd HH:mm";
 
     public DelunsLockProvider(ILogger<DelunsLockProvider> logger)
@@ -39,11 +40,13 @@ public class DelunsLockProvider : ILockProvider
         if (res == (int)LockSdkError.OPR_OK) 
         {
             _initialized = true;
+            _lastInitError = 0;
         }
         else
         {
             _logger.LogWarning("Deluns SDK TP_Configuration failed with code {Code}", res);
             _initialized = false;
+            _lastInitError = res;
         }
     }
 
@@ -74,7 +77,7 @@ public class DelunsLockProvider : ILockProvider
     {
         _logger.LogInformation("Encoding Deluns card for lock {LockCode}...", lockCode);
         EnsureInitialized();
-        if (!_initialized) return LockResult.Fail("-999", "SDK not initialized", VendorName);
+        if (!_initialized) return LockResult.Fail("-999", $"SDK not initialized (Config error: {_lastInitError})", VendorName);
 
         var cardSnr = new StringBuilder(20);
         string checkinStr = checkInDate.ToString(DateFormat);
@@ -99,7 +102,7 @@ public class DelunsLockProvider : ILockProvider
     {
         _logger.LogInformation("Running Deluns Diagnostic Read...");
         EnsureInitialized();
-        if (!_initialized) return new DiagnosticResult { Success = false, ErrorMessage = "SDK not initialized", Vendor = VendorName };
+        if (!_initialized) return new DiagnosticResult { Success = false, ErrorMessage = $"SDK not initialized (Config error: {_lastInitError})", Vendor = VendorName };
 
         var cardSnr = new StringBuilder(20);
         int result = NativeSdkBridge.TP_GetCardSnr(cardSnr);
@@ -116,7 +119,7 @@ public class DelunsLockProvider : ILockProvider
     {
         _logger.LogInformation("Reading card data from Deluns encoder...");
         EnsureInitialized();
-        if (!_initialized) return ReadCardResult.Fail("-999", "SDK not initialized", VendorName);
+        if (!_initialized) return ReadCardResult.Fail("-999", $"SDK not initialized (Config error: {_lastInitError})", VendorName);
 
         // Guard: explicitly check if hardware encoder and card are physically present
         var pingSnr = new StringBuilder(20);
@@ -169,7 +172,7 @@ public class DelunsLockProvider : ILockProvider
     {
         _logger.LogInformation("Cancelling (erasing) card on Deluns encoder...");
         EnsureInitialized();
-        if (!_initialized) return LockResult.Fail("-999", "SDK not initialized", VendorName);
+        if (!_initialized) return LockResult.Fail("-999", $"SDK not initialized (Config error: {_lastInitError})", VendorName);
 
         var cardSnr = new StringBuilder(20);
         int result = NativeSdkBridge.TP_CancelCardEx2(cardSnr, 0);
