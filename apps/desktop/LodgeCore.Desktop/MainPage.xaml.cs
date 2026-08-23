@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using LodgeCore.Desktop.Services;
 
 namespace LodgeCore.Desktop;
 
@@ -124,19 +125,16 @@ public partial class MainPage : ContentPage
                     responseData = await pmsInterop.GetTerminalStatusAsync();
                     break;
                 case "system.forceSync":
-                    var syncEngine = App.ServiceProvider.GetRequiredService<SyncEngine>();
-                    using (var scope = App.ServiceProvider.CreateScope())
+                    var syncEngine = scope.ServiceProvider.GetRequiredService<SyncEngine>();
+                    var dbContext = scope.ServiceProvider.GetRequiredService<LodgeCore.Desktop.Data.LocalDbContext>();
+                    var meta = dbContext.SyncMetadata.FirstOrDefault();
+                    if (meta != null)
                     {
-                        var dbContext = scope.ServiceProvider.GetRequiredService<LodgeCore.Desktop.Data.LocalDbContext>();
-                        var meta = dbContext.SyncMetadata.FirstOrDefault();
-                        if (meta != null)
-                        {
-                            meta.LastGuestSyncCursor = null;
-                            dbContext.SaveChanges();
-                        }
+                        meta.LastGuestSyncCursor = null;
+                        dbContext.SaveChanges();
                     }
                     syncEngine.TriggerManualSync();
-                    responseData = System.Text.Json.JsonSerializer.Serialize(new { success = true }, _jsonOptions);
+                    responseData = System.Text.Json.JsonSerializer.Serialize(new { success = true }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
                     break;
                 case "system.getSyncHealth":
                     responseData = await pmsInterop.GetSyncHealthAsync();

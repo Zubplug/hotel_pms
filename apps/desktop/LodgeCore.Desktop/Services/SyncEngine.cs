@@ -1241,7 +1241,7 @@ public class SyncEngine : BackgroundService
         // Clean up stale reservations locally (that fell out of the active window)
         var threeDaysAgo = DateTime.UtcNow.AddDays(-3);
         var oldReservations = await dbContext.Reservations
-            .Where(r => !r.IsDirty && (r.CheckOutDate < threeDaysAgo || r.DeletedAt != null))
+            .Where(r => !r.IsDirty && (r.CheckOutDate < threeDaysAgo || r.Status == "CANCELLED" || r.Status == "NO_SHOW"))
             .ToListAsync(stoppingToken);
         if (oldReservations.Any())
         {

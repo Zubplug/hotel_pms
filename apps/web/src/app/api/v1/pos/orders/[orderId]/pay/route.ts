@@ -27,6 +27,8 @@ export async function POST(
     const { method, amount, currency, checkId } = parsed.data;
 
     // Optional: verify token
+    let sessionId = null;
+    let staffId = null;
     const authHeader = req.headers.get('Authorization');
     if (authHeader) {
       const token = authHeader.replace('Bearer ', '');
@@ -34,6 +36,8 @@ export async function POST(
       if (!payload) {
         return NextResponse.json({ error: 'Invalid operator token' }, { status: 401 });
       }
+      sessionId = payload.sessionId;
+      staffId = payload.staffId;
     }
 
     const order = await prisma.posOrder.findUnique({
@@ -55,6 +59,8 @@ export async function POST(
           status: 'CONFIRMED',
           businessDate: order.businessDate,
           operationId: `op_pay_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+          sessionId: sessionId || undefined,
+          processedById: staffId || undefined,
         }
       });
 

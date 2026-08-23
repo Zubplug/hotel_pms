@@ -895,7 +895,7 @@ public class LocalRepository
         }).ToList();
     }
 
-    public async Task<object> GetActiveReservationByRoomAsync(string roomId)
+    public async Task<object?> GetActiveReservationByRoomAsync(string roomId)
     {
         var room = await _dbContext.Rooms.FirstOrDefaultAsync(r => r.Id == roomId);
         if (room == null) return null;
@@ -924,7 +924,7 @@ public class LocalRepository
                 email = reservation.Guest.Email,
                 phone = reservation.Guest.Phone
             } : null,
-            lockCredentials = (string[])null
+            lockCredentials = (string[]?)null
         };
     }
 

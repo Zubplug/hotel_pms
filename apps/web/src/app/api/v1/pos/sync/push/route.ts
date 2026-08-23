@@ -259,17 +259,19 @@ export async function POST(req: NextRequest) {
               }
           }
           else if (event.eventType === 'PAYMENT_RECORDED') {
-              const method = payload.Method || 'CASH';
+              const method = payload.Method || payload.method || 'CASH';
               await tx.posPayment.create({
                   data: {
-                      id: payload.Id || crypto.randomUUID(), // If entityId was the order, payment needs its own ID
-                      orderId: payload.OrderId || event.aggregateId,
-                      amount: payload.Amount,
+                      id: payload.Id || payload.id || crypto.randomUUID(), // If entityId was the order, payment needs its own ID
+                      orderId: payload.OrderId || payload.orderId || event.aggregateId,
+                      amount: payload.Amount ?? payload.amount,
                       method: method,
-                      currency: payload.Currency || 'NGN',
+                      currency: payload.Currency || payload.currency || 'NGN',
                       status: "CONFIRMED",
                       operationId: event.idempotencyKey,
-                      businessDate: new Date(payload.BusinessDate || new Date()),
+                      businessDate: new Date(payload.BusinessDate || payload.businessDate || new Date()),
+                      sessionId: payload.SessionId || payload.sessionId || null,
+                      processedById: event.operatorId || payload.processedById || null,
                       createdAt: new Date(event.occurredAt)
                   }
               });
