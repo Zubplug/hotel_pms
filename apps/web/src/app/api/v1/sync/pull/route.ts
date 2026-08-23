@@ -164,7 +164,7 @@ export async function GET(req: NextRequest) {
             updatedAt: { lte: watermark },
             OR: [
               { status: 'OPEN' },
-              { status: 'PENDING_HANDOVER' },
+              { status: 'RECONCILIATION_REQUIRED' },
               { closedAt: { gte: twoDaysAgo } }
             ]
         };
@@ -189,7 +189,7 @@ export async function GET(req: NextRequest) {
             ...baseWhere,
             updatedAt: { lte: watermark },
             OR: [
-              { status: { in: ['OPEN', 'PENDING'] } },
+              { status: { in: ['SUBMITTED', 'IN_SERVICE'] } },
               { closedAt: { gte: twoDaysAgo } }
             ]
         };
