@@ -735,23 +735,7 @@ public class SyncEngine : BackgroundService
                     
                     if (!string.IsNullOrEmpty(res.GuestId))
                     {
-                        // Prevent SQLite Error 19 (FOREIGN KEY constraint failed) if the guest hasn't synced yet
-                        var guestExists = await dbContext.Guests.AnyAsync(g => g.Id == res.GuestId, stoppingToken);
-                        if (!guestExists)
-                        {
-                            var stubGuest = new LodgeCore.Desktop.Data.Entities.LocalGuest 
-                            { 
-                                Id = res.GuestId,
-                                OrganizationId = "",
-                                FirstName = "Unknown", 
-                                LastName = "Guest (Pending Sync)",
-                                CreatedAt = DateTime.UtcNow,
-                                UpdatedAt = DateTime.UtcNow
-                            };
-                            dbContext.Guests.Add(stubGuest);
-                            // We do NOT save changes immediately; the stub is added to the DbContext 
-                            // and will be committed alongside the reservation, satisfying the FK constraint.
-                        }
+                        // Removed stub guest logic per user request to allow SQLite constraint to fail
                     }
 
                     res.Status = el.TryGetProperty("status", out var st) && st.ValueKind != System.Text.Json.JsonValueKind.Null ? st.GetString() ?? "" : "";
