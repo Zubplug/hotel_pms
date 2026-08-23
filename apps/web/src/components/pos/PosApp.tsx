@@ -1211,6 +1211,7 @@ export default function PosApp() {
         operatorToken={operatorToken || ''}
         sessionId={posSessionId}
         staffName={activeOperator ? `${activeOperator.firstName || ''} ${activeOperator.lastName || ''}`.trim() : ''}
+        operatorRole={activeOperator?.role || ''}
         onOrderSelect={handleOrderResume}
         onViewHistory={() => setShowMyOrders(true)}
       />
