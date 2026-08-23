@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { CreditCard, Loader2, AlertCircle, Info, BedDouble, CalendarDays, User } from 'lucide-react';
 import { format } from 'date-fns';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
 interface ReadCardInfoDialogProps {
   open: boolean;
@@ -35,28 +36,25 @@ export function ReadCardInfoDialog({ open, onOpenChange, propertyId }: ReadCardI
     }
   }, [open]);
 
+  const { provider } = useLodgeCoreProvider();
+
   const handleReadCard = async () => {
     setStep('READING');
     setErrorMsg('');
     try {
       // 1. Dispatch READ_CARD
-      const res = await fetch('/api/v1/hardware/locks/read-card', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ propertyId }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error?.message || 'Failed to trigger read');
-
+      const data = await provider.keycards.read();
+      if (!data.success) throw new Error(data.error?.message || 'Failed to initiate read card');
       const opId = data.data.operation.id;
 
       // 2. Poll for completion
       let readData = null;
       for (let i = 0; i < 20; i++) {
         await new Promise(r => setTimeout(r, 1000));
-        const pRes = await fetch(`/api/v1/hardware/operations/${opId}`);
-        const pData = await pRes.json();
-        const op = pData.data?.operation;
+        const pRes = await provider.hardware.poll(opId);
+        if (!pRes.success) throw new Error(pRes.error?.message || 'Failed to poll hardware status');
+        
+        const op = pRes.data?.operation;
         if (op?.status === 'SUCCESS' || op?.status === 'COMPLETED') {
           readData = op.command?.responseData;
           break;
@@ -71,10 +69,9 @@ export function ReadCardInfoDialog({ open, onOpenChange, propertyId }: ReadCardI
       // 3. Lookup reservation by roomNo if present
       if (readData.roomNo) {
         try {
-          const lRes = await fetch(`/api/v1/reservations/lookup?roomNo=${readData.roomNo}&propertyId=${propertyId}`);
-          const lData = await lRes.json();
-          if (lRes.ok && lData.data.reservation) {
-            setReservation(lData.data.reservation);
+          const lRes = await provider.reservations.lookupByRoom(readData.roomNo, propertyId);
+          if (lRes) {
+            setReservation(lRes);
           }
         } catch (e) {
           console.error('Failed to lookup reservation', e);

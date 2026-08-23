@@ -58,70 +58,33 @@ public class LocalDbContext : DbContext
     {
     }
 
-    public async Task ApplyRuntimeMigrationsAsync()
+    public async Task ApplyMigrationsSafelyAsync()
     {
         var dbPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LodgeCoreOffline.db");
-        var connection = Database.GetDbConnection();
-        var connectionOpened = false;
-        try
-        {
-            if (connection.State != System.Data.ConnectionState.Open)
-            {
-                await connection.OpenAsync();
-                connectionOpened = true;
-            }
-        }
-        catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 26 || ex.Message.Contains("file is not a database"))
-        {
-            // Database is likely unencrypted or corrupted. Delete it and recreate it.
-            if (connectionOpened) await connection.CloseAsync();
-            connection.Dispose();
-            System.IO.File.Delete(dbPath);
-            await Database.EnsureCreatedAsync();
-            return;
-        }
         
-        await Database.EnsureCreatedAsync();
-
-        try
+        if (System.IO.File.Exists(dbPath))
         {
-            using var command = connection.CreateCommand();
+            var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd-HHmmss");
+            var backupPath = $"{dbPath}.backup-{timestamp}";
+            
+            // Ensure connection is closed before backing up/migrating
+            await Database.CloseConnectionAsync();
+            System.IO.File.Copy(dbPath, backupPath, true);
 
-            var migrations = new[]
+            try
             {
-                "ALTER TABLE Reservations ADD COLUMN DepositPaid TEXT;",
-                "ALTER TABLE Reservations ADD COLUMN DepositRequired TEXT;",
-                "ALTER TABLE Reservations ADD COLUMN ConfirmationNumber TEXT;",
-                "ALTER TABLE PosProducts ADD COLUMN HasModifiers INTEGER NOT NULL DEFAULT 0;",
-                "ALTER TABLE Rooms ADD COLUMN BuildingName TEXT;",
-                "ALTER TABLE Rooms ADD COLUMN FloorName TEXT;",
-                "ALTER TABLE Rooms ADD COLUMN FloorNumber INTEGER;",
-                "ALTER TABLE Guests ADD COLUMN DeletedAt TEXT;",
-                "ALTER TABLE SyncMetadata ADD COLUMN LastGuestSyncCursor TEXT;",
-                // Catalog parity: KOT routing + product display fields
-                "ALTER TABLE ProductCategories ADD COLUMN ProductionStation TEXT NOT NULL DEFAULT 'KITCHEN';",
-                "ALTER TABLE PosProducts ADD COLUMN Description TEXT;",
-                "ALTER TABLE PosProducts ADD COLUMN Image TEXT;",
-                "ALTER TABLE PosProducts ADD COLUMN ProductionStation TEXT;"
-            };
-
-            foreach (var migration in migrations)
+                await Database.MigrateAsync();
+            }
+            catch (Exception ex)
             {
-                try
-                {
-                    command.CommandText = migration;
-                    await command.ExecuteNonQueryAsync();
-                }
-                catch
-                {
-                    // Ignore, column likely already exists
-                }
+                await Database.CloseConnectionAsync();
+                System.IO.File.Copy(backupPath, dbPath, true);
+                throw new Exception($"Database migration failed. Rolled back safely to {backupPath}.", ex);
             }
         }
-        finally
+        else
         {
-            if (connectionOpened)
-                await connection.CloseAsync();
+            await Database.MigrateAsync();
         }
     }
 
@@ -130,11 +93,12 @@ public class LocalDbContext : DbContext
         if (!optionsBuilder.IsConfigured)
         {
             string dbPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LodgeCoreOffline.db");
+            var secureKey = SecureKeyStorage.GetOrGenerateDatabaseKey();
             var connectionString = new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder
             {
                 DataSource = dbPath,
                 Mode = Microsoft.Data.Sqlite.SqliteOpenMode.ReadWriteCreate,
-                Password = "lodgecore_encryption_key_2026"
+                Password = secureKey
             }.ToString();
             optionsBuilder.UseSqlite(connectionString);
         }

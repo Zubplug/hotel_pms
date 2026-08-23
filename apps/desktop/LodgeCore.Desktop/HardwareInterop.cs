@@ -359,8 +359,20 @@ public class HardwareInterop
                 return Fail("No lock code is configured for this room.");
             }
 
-            // ---- 8. Physical encode ----------------------------------------
-            var encodeResult = await _lockProvider.EncodeCardAsync(lockCode, CancellationToken.None);
+            // ---- 8. Calculate physical validity dates ----------------------
+            // Check-in time is right now.
+            var encodeNowUtc = DateTimeOffset.UtcNow;
+            var nowLocal = TimeZoneInfo.ConvertTime(encodeNowUtc, hotelTz).DateTime;
+
+            // Check-out time defaults to 12:00 PM on the check-out date in local time
+            var checkOutLocal = new DateTime(
+                reservation.CheckOutDate.Year,
+                reservation.CheckOutDate.Month,
+                reservation.CheckOutDate.Day,
+                12, 0, 0);
+
+            // ---- 9. Physical encode ----------------------------------------
+            var encodeResult = await _lockProvider.EncodeCardAsync(lockCode, nowLocal, checkOutLocal, CancellationToken.None);
 
             // LockResult does not carry CardSnr — only ReadCardResult does.
             // CardSnr is captured on read, not on write, by the hardware SDK.

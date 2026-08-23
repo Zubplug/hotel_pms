@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { CreditCard, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
 interface EraseCardDialogProps {
   open: boolean;
@@ -32,29 +33,26 @@ export function EraseCardDialog({ open, onOpenChange, propertyId }: EraseCardDia
     }
   }, [open]);
 
+  const { provider } = useLodgeCoreProvider();
+
   const handleEraseCard = async () => {
     setStep('ERASING');
     setErrorMsg('');
     try {
       // 1. Dispatch CANCEL_CARD
-      const cRes = await fetch('/api/v1/hardware/locks/cancel-card', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ propertyId }),
-      });
-      const cData = await cRes.json();
-      if (!cRes.ok) throw new Error(cData.error?.message || 'Failed to trigger cancel card');
-      
+      const cData = await provider.keycards.cancel();
+      if (!cData.success) throw new Error(cData.error?.message || 'Failed to initiate erase card');
       const opId = cData.data.operation.id;
 
       // 2. Poll for Erase completion
       let erased = false;
       for (let i = 0; i < 20; i++) {
         await new Promise(r => setTimeout(r, 1000));
-        const pRes = await fetch(`/api/v1/hardware/operations/${opId}`);
-        const pData = await pRes.json();
-        const op = pData.data?.operation;
-        if (op?.status === 'SUCCESS') {
+        const pRes = await provider.hardware.poll(opId);
+        if (!pRes.success) throw new Error(pRes.error?.message || 'Failed to poll hardware status');
+        
+        const op = pRes.data?.operation;
+        if (op?.status === 'SUCCESS' || op?.status === 'COMPLETED') {
           erased = true;
           break;
         } else if (op?.status === 'FAILED' || op?.status === 'ERROR') {

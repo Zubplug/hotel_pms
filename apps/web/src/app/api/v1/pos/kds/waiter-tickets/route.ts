@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
+import { verifyOperatorToken } from '@/lib/pos/operatorAuth';
 
 export async function GET(req: Request) {
   try {
@@ -15,14 +16,9 @@ export async function GET(req: Request) {
     const token = authHeader.split(' ')[1];
 
     // Validate operator token
-    const operator = await prisma.staff.findFirst({
-      where: {
-        posPinHash: token,
-        isActive: true
-      }
-    });
+    const payload = await verifyOperatorToken(token);
 
-    if (!operator) {
+    if (!payload) {
       return NextResponse.json({ error: 'Invalid operator' }, { status: 401 });
     }
 
@@ -38,7 +34,7 @@ export async function GET(req: Request) {
     // Fetch KOTs created by this operator in this session's business date
     const kots = await prisma.posKot.findMany({
       where: {
-        createdBy: operator.id,
+        createdBy: payload.staffId,
         outletId: outletId,
         businessDate: session.businessDate,
       },

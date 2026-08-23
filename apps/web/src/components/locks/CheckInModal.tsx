@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Loader2, CheckCircle2, XCircle, CreditCard, KeyRound } from 'lucide-react';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
 interface CheckInModalProps {
   reservationId: string;
@@ -25,19 +26,20 @@ export function CheckInModal({ reservationId, isOpen, onClose, onSuccess }: Chec
     }
   }, [isOpen]);
 
+  const { provider } = useLodgeCoreProvider();
+
   const initiateCheckIn = async () => {
     setStatus('INITIATING');
     setErrorMsg(null);
     try {
-      const res = await fetch(`/api/v1/reservations/${reservationId}/check-in`, { method: 'POST' });
-      const json = await res.json();
+      const res = await provider.reservations.checkIn(reservationId, '', '');
       
-      if (!res.ok) {
-        throw new Error(json.error?.message || 'Failed to initiate check-in');
+      if (!res.success) {
+        throw new Error(res.error?.message || 'Failed to initiate check-in');
       }
 
-      setOperationId(json.data.operationId);
-      setStatus(json.data.operationStatus || 'QUEUED');
+      setOperationId(res.data.operationId);
+      setStatus(res.data.status || 'QUEUED');
     } catch (err: any) {
       setStatus('FAILED');
       setErrorMsg(err.message);
@@ -46,17 +48,18 @@ export function CheckInModal({ reservationId, isOpen, onClose, onSuccess }: Chec
 
   // Poll for hardware status
   useEffect(() => {
-    if (!isOpen || !operationId || status === 'ACTIVE' || status === 'FAILED') return;
+    if (!isOpen || !operationId || status === 'ACTIVE' || status === 'FAILED' || !provider) return;
 
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`/api/v1/hardware/operations/${operationId}`);
-        if (res.ok) {
-          const json = await res.json();
-          setStatus(json.data.status);
-          if (json.data.status === 'FAILED') {
-             setErrorMsg(json.data.errorMessage);
-          } else if (json.data.status === 'ACTIVE') {
+        const res = await provider.hardware.poll(operationId);
+        if (res.success) {
+          const opStatus = res.data?.operation?.status;
+          setStatus(opStatus || '');
+          if (opStatus === 'FAILED' || opStatus === 'ERROR') {
+             setErrorMsg(res.data?.operation?.errorMessage || 'Hardware Error');
+          } else if (opStatus === 'SUCCESS' || opStatus === 'COMPLETED') {
+             setStatus('ACTIVE');
              if (onSuccess) onSuccess();
           }
         }
@@ -66,7 +69,7 @@ export function CheckInModal({ reservationId, isOpen, onClose, onSuccess }: Chec
     }, 1500); // Check every 1.5s
 
     return () => clearInterval(interval);
-  }, [isOpen, operationId, status, onSuccess]);
+  }, [isOpen, operationId, status, onSuccess, provider]);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>

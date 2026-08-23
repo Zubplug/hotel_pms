@@ -5,21 +5,23 @@ import { authenticateSyncRequest } from '@/lib/sync-auth';
 /**
  * GET /api/v1/sync/pull
  *
- * Secure desktop sync pull endpoint.
- * Called by the C# SyncEngine on connected desktop terminals to refresh:
- *   - Staff with POS PIN hashes, permissions, and access flags
- *   - Property configuration (timezone, business date, early check-in window)
- *
- * Authentication: Bearer device token (issued at device registration)
- * 
- * The response intentionally omits web session tokens, payment credentials,
- * and anything not needed for offline desktop operation.
+ * Secure desktop sync pull endpoint for Incremental Synchronization.
  */
 export async function GET(req: NextRequest) {
   try {
     const propertyId  = req.nextUrl.searchParams.get('propertyId');
+    const cursorParam = req.nextUrl.searchParams.get('cursor');
     const sinceParam  = req.nextUrl.searchParams.get('since');
-    const since = sinceParam ? new Date(sinceParam) : undefined;
+    const limitParam  = req.nextUrl.searchParams.get('limit') || '500';
+    
+    // Support both ?since= (legacy) and ?cursor=
+    const rawCursor = cursorParam || sinceParam;
+    const since = rawCursor ? new Date(rawCursor) : undefined;
+    const limit = parseInt(limitParam, 10);
+
+    // 1. Establish Server Watermark
+    // This protects against race conditions where records are modified during the query.
+    const watermark = new Date();
 
     if (!propertyId) {
       return NextResponse.json({ error: 'propertyId is required' }, { status: 400 });
@@ -30,274 +32,282 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: authResult.error }, { status: authResult.status });
     }
 
+    // Helper to build queries that respect the watermark and incremental cursor
+    const buildWhere = (baseWhere: any) => {
+      if (!since) {
+        // Initial sync: fetch all valid records up to watermark
+        return { ...baseWhere, updatedAt: { lte: watermark } };
+      }
+      // Incremental sync: fetch ANY record (including inactive/deleted) changed in the window
+      return { 
+        propertyId: baseWhere.propertyId, // keep scope (e.g. propertyId or outletId)
+        updatedAt: { gt: since, lte: watermark }
+      };
+    };
+
+    const buildOutletWhere = (baseWhere: any) => {
+      if (!since) {
+        return { ...baseWhere, updatedAt: { lte: watermark } };
+      }
+      return { 
+        outletId: baseWhere.outletId, 
+        updatedAt: { gt: since, lte: watermark }
+      };
+    };
+
     // ---- Load property config -------------------------------------------
     const property = await prisma.property.findUnique({
       where: { id: propertyId },
-      select: {
-        id:           true,
-        name:         true,
-        code:         true,
-        city:         true,
-        baseCurrency: true,
-        timezone:     true,
-        businessDate: true,
-        isActive:     true,
-        settings:     true, // includes earlyCheckinWindowHours
-        checkInTime:  true,
-        checkOutTime: true,
-      }
     });
 
     if (!property) {
       return NextResponse.json({ error: 'Property not found' }, { status: 404 });
     }
 
-    // ---- Load staff with permissions ------------------------------------
-    // We resolve each staff member's permissions through their User → Role chain.
-    // Only staff with propertyAccess containing this propertyId are included.
+    // ---- Fetch Data -----------------------------------------------------
+    // To support pagination across multiple tables, we fetch up to `limit` from EACH table,
+    // then merge, sort by updatedAt, and slice the overall list to `limit`.
+
     const staffList = await prisma.staff.findMany({
-      where: {
-        propertyAccess: { has: propertyId },
-        isActive: true,
-        deletedAt: null,
-      },
-      select: {
-        id:              true,
-        firstName:       true,
-        lastName:        true,
-        department:      true,
-        position:        true,
-        posPinHash:      true,   // Needed for offline PIN auth
-        posTokenVersion: true,
-        isActive:        true,
-        // Resolve User → UserRole → Role → RolePermission → Permission
-        userId: true,
-      }
+      where: buildWhere({ propertyAccess: { has: propertyId }, isActive: true, deletedAt: null }),
+      take: limit,
+      orderBy: { updatedAt: 'asc' },
     });
 
-    // For each staff member, resolve their permission names via their User roles
-    const staffWithPermissions = await Promise.all(
-      staffList.map(async (staff: any) => {
-        let permissions: string[] = [];
-        let roleName = '';
-        let hasPosAccess = false;
-
-        if (staff.userId) {
-          const userRoles = await prisma.userRole.findMany({
-            where: {
-              userId: staff.userId,
-              OR: [
-                { propertyId },
-                { propertyId: null } // org-wide roles
-              ]
-            },
-            include: {
-              role: {
-                include: {
-                  permissions: {
-                    include: { permission: true }
-                  }
-                }
-              }
-            }
-          });
-
-          // Flatten all permission names across all roles
-          permissions = Array.from(new Set<string>(
-            userRoles.flatMap((ur: any) =>
-              ur.role.permissions.map((rp: any) => rp.permission.name)
-            )
-          ));
-
-          // Use the most privileged role name for the session
-          roleName = userRoles[0]?.role?.name ?? staff.position;
-
-          // POS access = has any POS-related permission or explicit department
-          hasPosAccess = permissions.some(p =>
-            p === 'ACCESS_POS' ||
-            p === 'ACCESS_FRONT_DESK' ||
-            p === 'ACCESS_CASH_MANAGEMENT' ||
-            p === 'USE_EMERGENCY_CASHIER' ||
-            p.startsWith('ACCESS_KEYCARD')
-          ) || ['RECEPTIONIST', 'CASHIER', 'WAITER', 'BARTENDER', 'FRONT_OFFICE_MANAGER', 'MANAGER', 'GENERAL MANAGER', 'GENERAL_MANAGER', 'ADMIN', 'DIRECTOR', 'EXECUTIVE', 'SUPER_ADMIN'].includes(
-            staff.position?.toUpperCase()
-          ) || ['RECEPTIONIST', 'CASHIER', 'WAITER', 'BARTENDER', 'FRONT_OFFICE_MANAGER', 'MANAGER', 'GENERAL MANAGER', 'GENERAL_MANAGER', 'ADMIN', 'DIRECTOR', 'EXECUTIVE', 'SUPER_ADMIN'].includes(
-            roleName?.toUpperCase()
-          );
-
-        }
-
-        return {
-          id:              staff.id,
-          firstName:       staff.firstName,
-          lastName:        staff.lastName,
-          department:      staff.department,
-          position:        staff.position,
-          role:            roleName || staff.position,
-          posPinHash:      staff.posPinHash ?? null,
-          posTokenVersion: staff.posTokenVersion,
-          isActive:        staff.isActive,
-          hasPosAccess,
-          // Serialized as JSON array for the LocalStaff.PermissionsJson field
-          permissionsJson: JSON.stringify(permissions),
-        };
-      })
-    );
-
-    // ---- Build property payload -----------------------------------------
-    const settings = (property.settings as Record<string, unknown>) ?? {};
-    const propertyPayload = {
-      id:                     property.id,
-      name:                   property.name,
-      code:                   property.code,
-      city:                   property.city,
-      currency:               property.baseCurrency,
-      timezone:               property.timezone,
-      businessDate:           property.businessDate,
-      isActive:               property.isActive,
-      checkInTime:            property.checkInTime,
-      checkOutTime:           property.checkOutTime,
-      // earlyCheckinWindowHours lives in the property settings JSON blob.
-      // Default to 2 if not yet configured.
-      earlyCheckinWindowHours: (settings.earlyCheckinWindowHours as number) ?? 2,
-      bankingModel: ((settings.pos as any)?.bankingModel as string) ?? 'CENTRAL_CASHIER',
-    };
-
-    // ---- Load Front Desk Operational Cache ------------------------------
-    // 1. Rooms & Room Types
     const rooms = await prisma.room.findMany({
-      where: { propertyId, isActive: true },
+      where: buildWhere({ propertyId, isActive: true }),
       include: {
         building: { select: { name: true } },
         floor: { select: { name: true, number: true } }
-      }
-    });
-    const roomTypes = await prisma.roomType.findMany({
-      where: { propertyId, isActive: true }
+      },
+      take: limit,
+      orderBy: { updatedAt: 'asc' },
     });
 
-    // 2. Target window for Reservations: In-house + 3 days out + today's departures
+    const roomTypes = await prisma.roomType.findMany({
+      where: buildWhere({ propertyId, isActive: true }),
+      take: limit,
+      orderBy: { updatedAt: 'asc' },
+    });
+
+    // Target window for Reservations: In-house + 3 days out + today's departures
     const now = new Date();
     const yesterday = new Date(now);
     yesterday.setDate(yesterday.getDate() - 1);
     const threeDaysFromNow = new Date(now);
     threeDaysFromNow.setDate(threeDaysFromNow.getDate() + 3);
 
+    const resBaseWhere = {
+      propertyId,
+      deletedAt: null,
+      OR: [
+        { status: 'CHECKED_IN' },
+        { status: 'CONFIRMED', checkIn: { lte: threeDaysFromNow, gte: yesterday } },
+        { checkOut: { gte: yesterday, lte: threeDaysFromNow } }
+      ]
+    };
+
     const reservations = await prisma.reservation.findMany({
-      where: {
-        propertyId,
-        deletedAt: null,
-        OR: [
-          { status: 'CHECKED_IN' },
-          { status: 'CONFIRMED', checkIn: { lte: threeDaysFromNow, gte: yesterday } },
-          { checkOut: { gte: yesterday, lte: threeDaysFromNow } }
-        ]
-      },
+      where: buildWhere(resBaseWhere),
       include: {
         primaryGuest: true,
-        reservationGuests: {
-          include: { guest: true }
-        },
-        reservationRooms: {
-          include: { room: true }
-        },
-        folios: {
-          include: { items: true, payments: true }
-        },
+        reservationGuests: { include: { guest: true } },
+        reservationRooms: { include: { room: true } },
+        folios: { include: { items: true, payments: true } },
         lockCredentials: true,
-        lockOperations: {
-          orderBy: { requestedAt: 'desc' },
-          take: 20
-        }
-      }
+        lockOperations: { orderBy: { requestedAt: 'desc' }, take: 20 }
+      },
+      take: limit,
+      orderBy: { updatedAt: 'asc' },
     });
 
-    // 3. Flatten Guests and Folios from the reservations
+    // POS Configuration
+    const posOutlets = await prisma.posOutlet.findMany({
+      where: buildWhere({ propertyId, isActive: true }),
+      take: limit,
+      orderBy: { updatedAt: 'asc' },
+    });
+    
+    const outletIds = posOutlets.map(o => o.id);
+    const posCategories = await prisma.productCategory.findMany({
+      where: buildOutletWhere({ outletId: { in: outletIds }, isActive: true }),
+      take: limit,
+      orderBy: { updatedAt: 'asc' },
+    });
+    
+    const posProducts = await prisma.posProduct.findMany({
+      where: buildWhere({ propertyId, isActive: true }),
+      include: { modifiers: true },
+      take: limit,
+      orderBy: { updatedAt: 'asc' },
+    });
+
+    const posFloorPlans = await prisma.posFloorPlan.findMany({
+      where: buildOutletWhere({ outletId: { in: outletIds }, isActive: true }),
+      take: limit,
+      orderBy: { updatedAt: 'asc' },
+    });
+
+    const posTables = await prisma.posTable.findMany({
+      where: { floorPlanId: { in: posFloorPlans.map((fp: any) => fp.id) }, ...(!since ? { isActive: true, updatedAt: { lte: watermark } } : { updatedAt: { gt: since, lte: watermark } }) },
+      take: limit,
+      orderBy: { updatedAt: 'asc' },
+    });
+
+    const housekeepingTasks = await prisma.housekeepingTask.findMany({
+      where: buildWhere({ propertyId }),
+      take: limit,
+      orderBy: { updatedAt: 'asc' },
+    });
+
+    const maintenanceTickets = await prisma.maintenanceTicket.findMany({
+      where: buildWhere({ propertyId }),
+      take: limit,
+      orderBy: { updatedAt: 'asc' },
+    });
+
+    // ---- Merge and Paginate ---------------------------------------------
+    
+    // We attach an entityType and extract the updatedAt to globally sort
+    type SyncEntity = { type: string, updatedAt: Date, data: any };
+    let allEntities: SyncEntity[] = [];
+
+    staffList.forEach(s => allEntities.push({ type: 'Staff', updatedAt: s.updatedAt, data: s }));
+    rooms.forEach(s => allEntities.push({ type: 'Room', updatedAt: s.updatedAt, data: s }));
+    roomTypes.forEach(s => allEntities.push({ type: 'RoomType', updatedAt: s.updatedAt, data: s }));
+    reservations.forEach(s => allEntities.push({ type: 'Reservation', updatedAt: s.updatedAt, data: s }));
+    posOutlets.forEach(s => allEntities.push({ type: 'PosOutlet', updatedAt: s.updatedAt, data: s }));
+    posCategories.forEach(s => allEntities.push({ type: 'ProductCategory', updatedAt: s.updatedAt, data: s }));
+    posProducts.forEach(s => allEntities.push({ type: 'PosProduct', updatedAt: s.updatedAt, data: s }));
+    posFloorPlans.forEach(s => allEntities.push({ type: 'PosFloorPlan', updatedAt: s.updatedAt, data: s }));
+    posTables.forEach(s => allEntities.push({ type: 'PosTable', updatedAt: s.updatedAt, data: s }));
+    housekeepingTasks.forEach(s => allEntities.push({ type: 'HousekeepingTask', updatedAt: s.updatedAt, data: s }));
+    maintenanceTickets.forEach(s => allEntities.push({ type: 'MaintenanceTicket', updatedAt: s.updatedAt, data: s }));
+
+    // Sort globally by updatedAt ascending
+    allEntities.sort((a, b) => a.updatedAt.getTime() - b.updatedAt.getTime());
+
+    let hasMore = false;
+    let nextCursor = watermark.toISOString();
+
+    if (allEntities.length > limit) {
+      // Find the safe cutoff timestamp
+      const cutoffEntity = allEntities[limit - 1];
+      const cutoffTime = cutoffEntity.updatedAt.getTime();
+      
+      // To prevent skipping records with identical timestamps, we must include ALL records 
+      // up to the exact cutoffTime, even if it slightly exceeds the limit.
+      const safeEntities = allEntities.filter(e => e.updatedAt.getTime() <= cutoffTime);
+      
+      if (safeEntities.length < allEntities.length) {
+        hasMore = true;
+      }
+      
+      allEntities = safeEntities;
+      nextCursor = new Date(cutoffTime).toISOString();
+    }
+
+    // Now re-group back into arrays
+    const finalStaff = allEntities.filter(e => e.type === 'Staff').map(e => e.data);
+    const finalRooms = allEntities.filter(e => e.type === 'Room').map(e => e.data);
+    const finalRoomTypes = allEntities.filter(e => e.type === 'RoomType').map(e => e.data);
+    const finalReservations = allEntities.filter(e => e.type === 'Reservation').map(e => e.data);
+    const finalOutlets = allEntities.filter(e => e.type === 'PosOutlet').map(e => e.data);
+    const finalCategories = allEntities.filter(e => e.type === 'ProductCategory').map(e => e.data);
+    const finalProducts = allEntities.filter(e => e.type === 'PosProduct').map(e => e.data);
+    const finalFloorPlans = allEntities.filter(e => e.type === 'PosFloorPlan').map(e => e.data);
+    const finalTables = allEntities.filter(e => e.type === 'PosTable').map(e => e.data);
+    const finalHousekeepingTasks = allEntities.filter(e => e.type === 'HousekeepingTask').map(e => e.data);
+    const finalMaintenanceTickets = allEntities.filter(e => e.type === 'MaintenanceTicket').map(e => e.data);
+
+    // Flatten Guests and Folios from the resulting reservations
     const guestMap = new Map<string, any>();
     const folios: any[] = [];
-    const plainReservations = reservations.map(r => {
-      // Add primary guest
-      if (r.primaryGuest) {
-        guestMap.set(r.primaryGuest.id, r.primaryGuest);
-      }
-      // Add additional guests
-      r.reservationGuests.forEach(rg => {
-        if (rg.guest) guestMap.set(rg.guest.id, rg.guest);
-      });
-      // Add folios
-      r.folios.forEach(f => folios.push(f));
+    const plainReservations = finalReservations.map(r => {
+      if (r.primaryGuest) guestMap.set(r.primaryGuest.id, r.primaryGuest);
+      r.reservationGuests.forEach((rg: any) => { if (rg.guest) guestMap.set(rg.guest.id, rg.guest); });
+      r.folios.forEach((f: any) => folios.push(f));
 
-      // Extract Room ID and Number for Desktop Offline Sync
       const roomId = r.reservationRooms?.[0]?.roomId || null;
       const roomNumber = r.reservationRooms?.[0]?.room?.number || null;
       const roomTypeId = r.reservationRooms?.[0]?.room?.roomTypeId || null;
 
-      // Return clean reservation without nested big objects
       const { primaryGuest, reservationGuests, folios: rFolios, reservationRooms, ...rest } = r;
       return { ...rest, roomId, roomNumber, roomTypeId };
     });
-
-    const guests = Array.from(guestMap.values());
-
-    // 4. POS Configuration
-    const posOutlets = await prisma.posOutlet.findMany({
-      where: { propertyId, isActive: true }
-    });
     
-    // Using propertyId filter isn't strictly necessary if we filtered by outletId, 
-    // but the schema may not have propertyId on ProductCategory. Let's rely on outlet relation.
-    // Wait, ProductCategory might have propertyId? Or PosProduct might have it? Let's check prisma. 
-    // Wait! Let me just fetch everything related to the property's outlets.
-    const outletIds = posOutlets.map(o => o.id);
-    const posCategories = await prisma.productCategory.findMany({
-      where: { outletId: { in: outletIds }, isActive: true }
-    });
-    
-    // PosProducts usually have categoryId. Let's fetch them based on category or outlet.
-    const posProducts = await prisma.posProduct.findMany({
-      where: { propertyId, isActive: true },
-      include: { modifiers: true }
-    });
+    // Resolve permissions for staff
+    const staffWithPermissions = await Promise.all(
+      finalStaff.map(async (staff: any) => {
+        let permissions: string[] = [];
+        let roleName = '';
+        let hasPosAccess = false;
+        
+        if (staff.userId) {
+          const userRoles = await prisma.userRole.findMany({
+            where: { userId: staff.userId, OR: [{ propertyId }, { propertyId: null }] },
+            include: { role: { include: { permissions: { include: { permission: true } } } } }
+          });
 
-    const posFloorPlans = await prisma.posFloorPlan.findMany({
-      where: { outletId: { in: outletIds }, isActive: true }
-    });
+          permissions = Array.from(new Set<string>(
+            userRoles.flatMap((ur: any) => ur.role.permissions.map((rp: any) => rp.permission.name))
+          ));
+          roleName = userRoles[0]?.role?.name ?? staff.position;
 
-    const posTables = await prisma.posTable.findMany({
-      where: { floorPlanId: { in: posFloorPlans.map((fp: any) => fp.id) }, isActive: true }
-    });
+          hasPosAccess = permissions.some(p =>
+            p === 'ACCESS_POS' || p === 'ACCESS_FRONT_DESK' || p.startsWith('ACCESS_KEYCARD')
+          ) || ['RECEPTIONIST', 'MANAGER', 'ADMIN', 'WAITER'].includes(staff.position?.toUpperCase() ?? '');
+        }
 
-    const housekeepingTasks = await prisma.housekeepingTask.findMany({
-      where: { propertyId }
-    });
+        return {
+          id:              staff.id,
+          firstName:       staff.firstName,
+          lastName:        staff.lastName,
+          role:            roleName || staff.position,
+          posPinHash:      staff.posPinHash ?? null,
+          posTokenVersion: staff.posTokenVersion,
+          isActive:        staff.isActive,
+          hasPosAccess,
+          permissionsJson: JSON.stringify(permissions),
+        };
+      })
+    );
 
-    const maintenanceTickets = await prisma.maintenanceTicket.findMany({
-      where: { propertyId }
-    });
+    const settings = (property.settings as Record<string, unknown>) ?? {};
+    const propertyPayload = {
+      id: property.id,
+      name: property.name,
+      currency: property.baseCurrency,
+      timezone: property.timezone,
+      businessDate: property.businessDate,
+      isActive: property.isActive,
+      earlyCheckinWindowHours: (settings.earlyCheckinWindowHours as number) ?? 2,
+      bankingModel: ((settings.pos as any)?.bankingModel as string) ?? 'CENTRAL_CASHIER',
+    };
 
     return NextResponse.json({
-      syncedAt:   new Date().toISOString(),
+      // Pagination metadata
+      syncedAt:   nextCursor,
+      hasMore:    hasMore,
+      
       property:   propertyPayload,
       staff:      staffWithPermissions,
-      rooms,
-      roomTypes,
+      rooms:      finalRooms,
+      roomTypes:  finalRoomTypes,
       reservations: plainReservations,
-      guests,
+      guests:     Array.from(guestMap.values()),
       folios,
-      posOutlets,
-      posCategories,
-      posProducts,
-      posFloorPlans,
-      posTables,
-      housekeepingTasks,
-      maintenanceTickets
+      posOutlets: finalOutlets,
+      posCategories: finalCategories,
+      posProducts: finalProducts,
+      posFloorPlans: finalFloorPlans,
+      posTables:  finalTables,
+      housekeepingTasks: finalHousekeepingTasks,
+      maintenanceTickets: finalMaintenanceTickets,
     });
 
   } catch (error: any) {
     console.error('[sync/pull] Error:', error);
-    return NextResponse.json(
-      { error: 'Internal Server Error', details: error.message },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

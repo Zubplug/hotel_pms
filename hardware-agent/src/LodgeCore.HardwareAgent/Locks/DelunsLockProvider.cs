@@ -70,15 +70,15 @@ public class DelunsLockProvider : ILockProvider
         return false;
     }
 
-    public async Task<LockResult> EncodeCardAsync(string lockCode, CancellationToken cancellationToken)
+    public async Task<LockResult> EncodeCardAsync(string lockCode, DateTime checkInDate, DateTime checkOutDate, CancellationToken cancellationToken)
     {
         _logger.LogInformation("Encoding Deluns card for lock {LockCode}...", lockCode);
         EnsureInitialized();
         if (!_initialized) return LockResult.Fail("-999", "SDK not initialized", VendorName);
 
         var cardSnr = new StringBuilder(20);
-        string checkinStr = DateTime.Now.ToString(DateFormat);
-        string checkoutStr = DateTime.Now.AddDays(1).ToString(DateFormat);
+        string checkinStr = checkInDate.ToString(DateFormat);
+        string checkoutStr = checkOutDate.ToString(DateFormat);
         int flags = 1; // 1 = allow open deadbolt
 
         int result = NativeSdkBridge.TP_MakeGuestCardEx2(cardSnr, lockCode, checkinStr, checkoutStr, flags, 0);
@@ -151,8 +151,8 @@ public class DelunsLockProvider : ILockProvider
 
             DateTime? cin = DateTime.TryParse(cinStr, out var c1) ? c1 : null;
             DateTime? cout = DateTime.TryParse(coutStr, out var c2) ? c2 : null;
-            string? vFrom = cin?.ToString("yyyy-MM-dd");
-            string? vTo = cout?.ToString("yyyy-MM-dd");
+            string? vFrom = cin?.ToString("yyyy-MM-dd HH:mm:ss");
+            string? vTo = cout?.ToString("yyyy-MM-dd HH:mm:ss");
 
             return ReadCardResult.WithData(room, snr, vFrom, vTo, VendorName);
         }

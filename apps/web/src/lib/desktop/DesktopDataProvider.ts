@@ -100,7 +100,15 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
       return invokeDesktop('reservations.get', { id });
     },
     lookupByRoom: async (roomNo: string, propertyId: string) => {
-      return invokeDesktop('reservations.lookupByRoom', { roomNo, propertyId });
+      try {
+        const res = await invokeDesktop('reservations.lookupByRoom', { roomNo, propertyId });
+        if (res && res.success && res.data) {
+          return res.data;
+        }
+        return null;
+      } catch (err) {
+        return null;
+      }
     },
     create: async (data: any) => {
       // Cloud required for creating new reservations to avoid double booking
@@ -126,13 +134,19 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
          // 3. Trigger Hardware Encode
          const encodeRes = await invokeDesktop('keycards.encode', { roomId, lockCode: '', reservationId: id });
          
-         // 4. Return in the identical format as Web API (with operation ID for polling)
+         const opId = 'sync_encode_' + Date.now();
+         syncOperations.set(opId, encodeRes.data);
+         
+         // 4. Return in the identical format as Web API
          return {
            success: encodeRes.success,
            error: typeof encodeRes.error === 'string' ? { message: encodeRes.error } : encodeRes.error,
            data: {
+             operationId: opId,
+             status: encodeRes.success ? 'SUCCESS' : 'FAILED',
+             errorMessage: encodeRes.data?.errorMessage || encodeRes.error,
              operation: {
-               id: (() => { const opId = 'sync_encode_' + Date.now(); syncOperations.set(opId, encodeRes.data); return opId; })(),
+               id: opId,
                status: encodeRes.success ? 'SUCCESS' : 'FAILED',
                errorMessage: encodeRes.data?.errorMessage || encodeRes.error,
                command: { responseData: encodeRes.data }
@@ -232,8 +246,28 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
       };
     }
   },
-  housekeeping: OnlineDataProvider.housekeeping,
-  maintenance: OnlineDataProvider.maintenance,
+  housekeeping: {
+    list: async (propertyId: string) => {
+      const res = await invokeDesktop('housekeeping.list', { propertyId });
+      return res?.data || [];
+    },
+    updateTask: async (taskId: string, status: string) => {
+      await invokeDesktop('housekeeping.updateTask', { taskId, status });
+    }
+  },
+  maintenance: {
+    list: async (propertyId: string) => {
+      const res = await invokeDesktop('maintenance.list', { propertyId });
+      return res?.data || [];
+    },
+    createTicket: async (ticket: any) => {
+      const res = await invokeDesktop('maintenance.createTicket', { data: JSON.stringify(ticket) });
+      return res?.data;
+    },
+    resolveTicket: async (ticketId: string, resolution?: any) => {
+      await invokeDesktop('maintenance.resolveTicket', { ticketId, resolution: JSON.stringify(resolution || {}) });
+    }
+  },
   receipts: {
     generate: async (folioId) => {
       return invokeDesktop('receipts.generate', { folioId });

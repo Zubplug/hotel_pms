@@ -99,7 +99,7 @@ export default function PosApp() {
   const [showChargeModal, setShowChargeModal] = useState(false);
   const [activeOrderType, setActiveOrderType] = useState<string>('TABLE');
   const [activeDisplayName, setActiveDisplayName] = useState<string>('');
-  const [showShiftBankModal, setShowShiftBankModal] = useState(false);
+
   const [showKitchenModal, setShowKitchenModal] = useState(false);
 
   // ── Modals ────────────────────────────────────────────────────────
@@ -704,7 +704,7 @@ export default function PosApp() {
           setViewMode={setViewMode}
           onOpenMyOrders={() => setShowActiveOrders(true)}
           onOpenMySales={() => setShowMySales(true)}
-          onOpenShiftBank={() => setShowShiftBankModal(true)}
+          onOpenShiftBank={() => setShowShiftBank(true)}
           onOpenKitchen={() => setShowKitchenModal(true)}
           onLock={() => { 
             setActiveOperator(null); 

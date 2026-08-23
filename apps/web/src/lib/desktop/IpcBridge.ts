@@ -19,7 +19,11 @@ if (typeof window !== 'undefined' && (window as any).chrome?.webview) {
         if (data.error) {
           reject(new Error(data.error));
         } else {
-          resolve(result);
+          if (result && typeof result === 'object' && result.success === false) {
+             reject(new Error(result.error || result.data?.errorMessage || 'Desktop application returned an error'));
+          } else {
+             resolve(result);
+          }
         }
       }
     } catch (e) {

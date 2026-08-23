@@ -112,7 +112,9 @@ public class LocalRepository
                 Children = reservation.Children,
                 SpecialRequests = reservation.SpecialRequests,
                 Status = reservation.Status,
-                Source = reservation.Source
+                Source = reservation.Source,
+                DepositRequired = reservation.DepositRequired,
+                DepositPaid = reservation.DepositPaid
             })
         };
         
@@ -425,6 +427,17 @@ public class LocalRepository
         int eventVersion = folio.Version;
         folio.Version++;
 
+        var newItem = new
+        {
+            id = Guid.NewGuid().ToString(),
+            amount = amount,
+            description = description,
+            type = "CHARGE",
+            createdAt = DateTime.UtcNow
+        };
+
+        UpdateFolioTransactionsJson(folio, "items", newItem);
+
         _dbContext.OutboxEvents.Add(new LocalOutboxEvent
         {
             PropertyId = folio.PropertyId,
@@ -454,6 +467,18 @@ public class LocalRepository
         int eventVersion = folio.Version;
         folio.Version++;
 
+        var newPayment = new
+        {
+            id = Guid.NewGuid().ToString(),
+            amount = amount,
+            method = method,
+            type = "PAYMENT",
+            status = "COMPLETED",
+            createdAt = DateTime.UtcNow
+        };
+
+        UpdateFolioTransactionsJson(folio, "payments", newPayment);
+
         _dbContext.OutboxEvents.Add(new LocalOutboxEvent
         {
             PropertyId = folio.PropertyId,
@@ -469,6 +494,41 @@ public class LocalRepository
 
         await _dbContext.SaveChangesAsync();
         return true;
+    }
+
+    private void UpdateFolioTransactionsJson(LocalFolio folio, string arrayName, object newItem)
+    {
+        System.Text.Json.Nodes.JsonObject rootObj;
+        if (string.IsNullOrEmpty(folio.TransactionsJson))
+        {
+            rootObj = new System.Text.Json.Nodes.JsonObject();
+        }
+        else
+        {
+            try
+            {
+                var node = System.Text.Json.Nodes.JsonNode.Parse(folio.TransactionsJson);
+                rootObj = node as System.Text.Json.Nodes.JsonObject ?? new System.Text.Json.Nodes.JsonObject();
+            }
+            catch
+            {
+                rootObj = new System.Text.Json.Nodes.JsonObject();
+            }
+        }
+
+        if (!rootObj.TryGetPropertyValue(arrayName, out var arrayNode) || arrayNode is not System.Text.Json.Nodes.JsonArray array)
+        {
+            array = new System.Text.Json.Nodes.JsonArray();
+            rootObj[arrayName] = array;
+        }
+
+        var serializedNewItem = JsonSerializer.SerializeToNode(newItem);
+        if (serializedNewItem != null)
+        {
+            array.Add(serializedNewItem);
+        }
+
+        folio.TransactionsJson = rootObj.ToJsonString();
     }
 
     public async Task<bool> ProcessCheckInAsync(string reservationId, string userId, string deviceId)
@@ -665,7 +725,7 @@ public class LocalRepository
 
     public async Task EnsureDatabaseCreatedAsync()
     {
-        await _dbContext.ApplyRuntimeMigrationsAsync();
+        await _dbContext.ApplyMigrationsSafelyAsync();
         
         // Seed Stanzel Grand Resort for the pilot if it doesn't exist
         if (!await _dbContext.Properties.AnyAsync())
@@ -1077,6 +1137,22 @@ public class LocalRepository
         _dbContext.PosOrders.Add(order);
         
         AppendSyncEvent("POS_ORDER", order.Id, "ORDER_CREATED", order, deviceId, order.OutletId, order.SessionId, userId);
+
+        if (!string.IsNullOrEmpty(order.TableId))
+        {
+            var table = await _dbContext.PosTables.FirstOrDefaultAsync(t => t.Id == order.TableId);
+            if (table != null)
+            {
+                if (!string.IsNullOrEmpty(table.CurrentOrderId) && table.CurrentOrderId != order.Id)
+                {
+                    throw new Exception("Table is already occupied by another order");
+                }
+                table.CurrentOrderId = order.Id;
+                table.UpdatedAt = DateTime.UtcNow;
+                // Note: we don't need a separate sync event for table update since cloud ORDER_CREATED takes care of it
+            }
+        }
+
         
         if (!string.IsNullOrEmpty(order.FolioId))
         {
@@ -1107,6 +1183,17 @@ public class LocalRepository
         order.UpdatedAt = DateTime.UtcNow;
 
         AppendSyncEvent("POS_ORDER", order.Id, status == "CLOSED" ? "ORDER_CLOSED" : "ORDER_UPDATED", new { status = order.Status, notes = order.Notes, updatedAt = order.UpdatedAt }, deviceId, order.OutletId, order.SessionId, userId);
+
+        if (status == "CLOSED" || status == "CANCELLED" || status == "VOIDED")
+        {
+            var table = await _dbContext.PosTables.FirstOrDefaultAsync(t => t.CurrentOrderId == order.Id);
+            if (table != null)
+            {
+                table.CurrentOrderId = null;
+                table.UpdatedAt = DateTime.UtcNow;
+            }
+        }
+
         await _dbContext.SaveChangesAsync();
 
         return order;
@@ -1596,6 +1683,17 @@ public class LocalRepository
         };
         _dbContext.PosCashMovements.Add(movement);
 
+        _dbContext.SyncEvents.Add(new LocalSyncEvent
+        {
+            OperationId = movement.OperationId,
+            EntityType = "POS_CASH_MOVEMENT",
+            EntityId = movement.Id,
+            OperationType = "CREATE",
+            PayloadJson = JsonSerializer.Serialize(movement),
+            UserId = operatorId,
+            DeviceId = deviceId
+        });
+
         if (settlement.Variance != 0)
         {
             var varMovement = new LocalPosCashMovement
@@ -1613,6 +1711,17 @@ public class LocalRepository
                 CreatedAt = DateTime.UtcNow
             };
             _dbContext.PosCashMovements.Add(varMovement);
+
+            _dbContext.SyncEvents.Add(new LocalSyncEvent
+            {
+                OperationId = varMovement.OperationId,
+                EntityType = "POS_CASH_MOVEMENT",
+                EntityId = varMovement.Id,
+                OperationType = "CREATE",
+                PayloadJson = JsonSerializer.Serialize(varMovement),
+                UserId = operatorId,
+                DeviceId = deviceId
+            });
         }
 
         session.Status = session.BankType == "SERVER" ? "RECONCILIATION_REQUIRED" : "CLOSED";
@@ -2369,11 +2478,48 @@ public class LocalRepository
             .ToListAsync();
     }
 
-    public async Task<List<LocalPosTable>> GetTablesAsync(string floorPlanId)
+    public async Task<List<object>> GetTablesAsync(string floorPlanId)
     {
-        return await _dbContext.PosTables
+        var tables = await _dbContext.PosTables
             .Where(t => t.FloorPlanId == floorPlanId)
             .ToListAsync();
+            
+        var orderIds = tables.Where(t => !string.IsNullOrEmpty(t.CurrentOrderId)).Select(t => t.CurrentOrderId).Distinct().ToList();
+        var activeOrders = new List<LocalPosOrder>();
+        
+        if (orderIds.Any())
+        {
+            activeOrders = await _dbContext.PosOrders
+                .Where(o => orderIds.Contains(o.Id))
+                .ToListAsync();
+        }
+
+        var result = new List<object>();
+        foreach (var t in tables)
+        {
+            var o = activeOrders.FirstOrDefault(ord => ord.Id == t.CurrentOrderId);
+            result.Add(new
+            {
+                id = t.Id,
+                floorPlanId = t.FloorPlanId,
+                name = t.Name,
+                capacity = t.Capacity,
+                positionX = t.PositionX,
+                positionY = t.PositionY,
+                currentOrderId = t.CurrentOrderId,
+                isActive = t.IsActive,
+                currentOrder = o == null ? null : new
+                {
+                    id = o.Id,
+                    orderNumber = o.OrderNumber,
+                    status = o.Status,
+                    total = o.Total,
+                    guestCount = o.GuestCount,
+                    serverStaff = new { firstName = "Offline", lastName = "Operator" } // Ideally join with Staff, but this matches UI expectations
+                }
+            });
+        }
+        return result;
     }
 
     public async Task<List<LocalPosProductModifier>> GetProductModifiersAsync(string productId)

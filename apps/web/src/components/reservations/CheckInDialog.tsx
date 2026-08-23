@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Loader2, CheckCircle2, AlertCircle, KeySquare } from 'lucide-react';
+import { Loader2, CheckCircle2, AlertCircle, KeyRound, Save, KeySquare } from 'lucide-react';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
 interface CheckInDialogProps {
   open: boolean;
@@ -20,12 +21,14 @@ export function CheckInDialog({ open, onOpenChange, reservation }: CheckInDialog
   const [operationId, setOperationId] = useState<string | null>(null);
   const [hardwareStatus, setHardwareStatus] = useState<string>('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [existingCardData, setExistingCardData] = useState<any>(null);
+
+  const { provider } = useLodgeCoreProvider();
 
   // Reset state when opened
   useEffect(() => {
     if (open) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPhase('CONFIRM');
       setOperationId(null);
       setErrorMsg(null);
@@ -36,18 +39,17 @@ export function CheckInDialog({ open, onOpenChange, reservation }: CheckInDialog
 
   // Polling Effect for Reading
   useEffect(() => {
-    if (phase !== 'READING' || !operationId) return;
+    if (phase !== 'READING' || !operationId || !provider) return;
 
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`/api/v1/hardware/operations/${operationId}`);
-        if (!res.ok) throw new Error('Failed to poll operation status');
+        const res = await provider.hardware.poll(operationId);
+        if (!res.success) throw new Error(res.error?.message || 'Failed to poll operation status');
         
-        const data = await res.json();
-        const op = data.data.operation;
-        const status = op.status;
+        const op = res.data?.operation;
+        const status = op?.status;
         
-        setHardwareStatus(status);
+        setHardwareStatus(status || '');
 
         if (status === 'SUCCESS' || status === 'COMPLETED') {
           const cardData = op.command?.responseData;
@@ -60,7 +62,7 @@ export function CheckInDialog({ open, onOpenChange, reservation }: CheckInDialog
             // Blank or expired card, proceed to encode
             executeCheckInEncoding();
           }
-        } else if (status === 'FAILED') {
+        } else if (status === 'FAILED' || status === 'ERROR') {
           setPhase('FAILED');
           setErrorMsg(op.errorMessage || 'Hardware agent failed to read the card.');
         }
@@ -70,28 +72,28 @@ export function CheckInDialog({ open, onOpenChange, reservation }: CheckInDialog
     }, 1500);
 
     return () => clearInterval(interval);
-  }, [phase, operationId]);
+  }, [phase, operationId, provider]);
 
   // Polling Effect for Encoding
   useEffect(() => {
-    if (phase !== 'ENCODING' || !operationId) return;
+    if (phase !== 'ENCODING' || !operationId || !provider) return;
 
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`/api/v1/hardware/operations/${operationId}`);
-        if (!res.ok) throw new Error('Failed to poll operation status');
+        const res = await provider.hardware.poll(operationId);
+        if (!res.success) throw new Error(res.error?.message || 'Failed to poll operation status');
         
-        const data = await res.json();
-        const status = data.data.operation.status;
+        const op = res.data?.operation;
+        const status = op?.status;
         
-        setHardwareStatus(status);
+        setHardwareStatus(status || '');
 
         if (status === 'SUCCESS' || status === 'COMPLETED') {
           setPhase('SUCCESS');
           router.refresh();
-        } else if (status === 'FAILED') {
+        } else if (status === 'FAILED' || status === 'ERROR') {
           setPhase('FAILED');
-          setErrorMsg(data.data.operation.errorMessage || 'Hardware agent failed to encode the card.');
+          setErrorMsg(op.errorMessage || 'Hardware agent failed to encode the card.');
         }
       } catch (err) {
         console.error(err);
@@ -107,22 +109,11 @@ export function CheckInDialog({ open, onOpenChange, reservation }: CheckInDialog
       setHardwareStatus('STARTING');
       setErrorMsg(null);
 
-      const res = await fetch('/api/v1/hardware/locks/read-card', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ propertyId: reservation.propertyId }),
-      });
-      
-      const data = await res.json();
+      const res = await provider.keycards.read();
+      if (!res.success) throw new Error(res.error?.message || 'Failed to initiate read card');
 
-      if (!res.ok) {
-        setPhase('FAILED');
-        setErrorMsg(data.error?.message || 'Failed to initiate read card');
-        return;
-      }
-
-      setOperationId(data.data.operation.id);
-      setHardwareStatus(data.data.operation.status);
+      setOperationId(res.data.operation.id);
+      setHardwareStatus(res.data.operation.status);
     } catch (err: unknown) {
       setPhase('FAILED');
       setErrorMsg(err instanceof Error ? err.message : 'Network error occurred');
@@ -136,20 +127,12 @@ export function CheckInDialog({ open, onOpenChange, reservation }: CheckInDialog
       setErrorMsg(null);
       setOperationId(null); // Reset operation ID for the new encoding task
 
-      const res = await fetch(`/api/v1/reservations/${reservation.id}/check-in`, {
-        method: 'POST',
-      });
-      
-      const data = await res.json();
+      // Cloud logic checks in and triggers encode; Desktop checkIn does the same locally
+      const res = await provider.reservations.checkIn(reservation.id, '', '');
+      if (!res.success) throw new Error(res.error?.message || 'Failed to initiate check-in');
 
-      if (!res.ok) {
-        setPhase('FAILED');
-        setErrorMsg(data.error?.message || 'Failed to initiate check-in');
-        return;
-      }
-
-      setOperationId(data.data.operationId);
-      setHardwareStatus(data.data.status);
+      setOperationId(res.data.operationId);
+      setHardwareStatus(res.data.status);
     } catch (err: unknown) {
       setPhase('FAILED');
       setErrorMsg(err instanceof Error ? err.message : 'Network error occurred');

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Loader2, CheckCircle2, AlertCircle, KeySquare } from 'lucide-react';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
 interface ExtendKeyCardDialogProps {
   open: boolean;
@@ -33,25 +34,26 @@ export function ExtendKeyCardDialog({ open, onOpenChange, reservation }: ExtendK
     }
   }, [open]);
 
+  const { provider } = useLodgeCoreProvider();
+
   // Polling Effect for Reading
   useEffect(() => {
-    if (phase !== 'READING' || !readOperationId) return;
+    if (phase !== 'READING' || !readOperationId || !provider) return;
 
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`/api/v1/hardware/operations/${readOperationId}`);
-        if (!res.ok) throw new Error('Failed to poll operation status');
+        const res = await provider.hardware.poll(readOperationId);
+        if (!res.success) throw new Error(res.error?.message || 'Failed to poll operation status');
         
-        const data = await res.json();
-        const op = data.data.operation;
-        const status = op.status;
+        const op = res.data?.operation;
+        const status = op?.status;
         
-        setHardwareStatus(status);
+        setHardwareStatus(status || '');
 
         if (status === 'SUCCESS' || status === 'COMPLETED') {
           // Card read successfully. Proceed to Encode.
           executeEncodeCard(readOperationId);
-        } else if (status === 'FAILED') {
+        } else if (status === 'FAILED' || status === 'ERROR') {
           setPhase('FAILED');
           setErrorMsg(op.errorMessage || 'Hardware agent failed to read the card.');
         }
@@ -61,28 +63,28 @@ export function ExtendKeyCardDialog({ open, onOpenChange, reservation }: ExtendK
     }, 1500);
 
     return () => clearInterval(interval);
-  }, [phase, readOperationId]);
+  }, [phase, readOperationId, provider]);
 
   // Polling Effect for Encoding
   useEffect(() => {
-    if (phase !== 'ENCODING' || !encodeOperationId) return;
+    if (phase !== 'ENCODING' || !encodeOperationId || !provider) return;
 
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`/api/v1/hardware/operations/${encodeOperationId}`);
-        if (!res.ok) throw new Error('Failed to poll operation status');
+        const res = await provider.hardware.poll(encodeOperationId);
+        if (!res.success) throw new Error(res.error?.message || 'Failed to poll operation status');
         
-        const data = await res.json();
-        const status = data.data.operation.status;
+        const op = res.data?.operation;
+        const status = op?.status;
         
-        setHardwareStatus(status);
+        setHardwareStatus(status || '');
 
         if (status === 'SUCCESS' || status === 'COMPLETED') {
           setPhase('SUCCESS');
           router.refresh();
-        } else if (status === 'FAILED') {
+        } else if (status === 'FAILED' || status === 'ERROR') {
           setPhase('FAILED');
-          setErrorMsg(data.data.operation.errorMessage || 'Hardware agent failed to encode the card.');
+          setErrorMsg(op.errorMessage || 'Hardware agent failed to encode the card.');
         }
       } catch (err) {
         console.error(err);
@@ -90,7 +92,7 @@ export function ExtendKeyCardDialog({ open, onOpenChange, reservation }: ExtendK
     }, 1500);
 
     return () => clearInterval(interval);
-  }, [phase, encodeOperationId, router]);
+  }, [phase, encodeOperationId, router, provider]);
 
   const handleStartExtension = async () => {
     try {
@@ -98,22 +100,16 @@ export function ExtendKeyCardDialog({ open, onOpenChange, reservation }: ExtendK
       setHardwareStatus('STARTING');
       setErrorMsg(null);
 
-      const res = await fetch('/api/v1/hardware/locks/read-card', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ propertyId: reservation.propertyId }),
-      });
-      
-      const data = await res.json();
+      const res = await provider.keycards.read();
 
-      if (!res.ok) {
+      if (!res.success) {
         setPhase('FAILED');
-        setErrorMsg(data.error?.message || 'Failed to initiate read card');
+        setErrorMsg(res.error?.message || 'Failed to initiate read card');
         return;
       }
 
-      setReadOperationId(data.data.operation.id);
-      setHardwareStatus(data.data.operation.status);
+      setReadOperationId(res.data.operation.id);
+      setHardwareStatus(res.data.operation.status);
     } catch (err: unknown) {
       setPhase('FAILED');
       setErrorMsg(err instanceof Error ? err.message : 'Network error occurred');
@@ -126,26 +122,20 @@ export function ExtendKeyCardDialog({ open, onOpenChange, reservation }: ExtendK
       setHardwareStatus('VERIFYING_CARD');
       setErrorMsg(null);
 
-      const res = await fetch(`/api/v1/hardware/locks/extend-card`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          propertyId: reservation.propertyId,
-          reservationId: reservation.id,
-          readOperationId: readOpId
-        }),
-      });
-      
-      const data = await res.json();
+      // We just call encode with the reservation details directly on Desktop!
+      // The Cloud API used extend-card which read the check-out date from the DB.
+      // We can just call provider.keycards.encode which looks up the reservation internally.
+      const res = await provider.keycards.encode(reservation.reservationRooms?.[0]?.roomId, '', reservation.id);
 
-      if (!res.ok) {
+      if (!res.success) {
         setPhase('FAILED');
-        setErrorMsg(data.error?.message || 'Failed to initiate encode. Card mismatch?');
+        setErrorMsg(res.error?.message || 'Failed to initiate encode. Card mismatch?');
         return;
       }
 
-      setEncodeOperationId(data.data.operation.id);
-      setHardwareStatus(data.data.operation.status);
+      // Encode returns operation payload matching the cloud endpoint format
+      setEncodeOperationId(res.data.operationId || res.data.operation?.id);
+      setHardwareStatus(res.data.status || res.data.operation?.status);
     } catch (err: unknown) {
       setPhase('FAILED');
       setErrorMsg(err instanceof Error ? err.message : 'Network error occurred');

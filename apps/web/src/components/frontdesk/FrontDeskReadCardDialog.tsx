@@ -42,36 +42,24 @@ export function FrontDeskReadCardDialog({ open, onOpenChange, propertyId }: Fron
     setStep('READING');
     setErrorMsg('');
     try {
+      const data = await provider.keycards.read();
+      
+      const opId = data.data.operation.id;
+      
       let readData = null;
-
-      if (HardwareBridge.isAvailable()) {
-        const bridgeRes: any = await HardwareBridge.readCard();
-        const parsedRes = typeof bridgeRes === 'string' ? JSON.parse(bridgeRes) : bridgeRes;
-        if (!parsedRes?.success) throw new Error(parsedRes?.error || 'Hardware agent failed to read the card');
-        readData = parsedRes.data;
-      } else {
-        // Fallback for Cloud/Browser
-        const res = await fetch('/api/v1/hardware/locks/read-card', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ propertyId }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error?.message || 'Failed to trigger read');
-
-        const opId = data.data.operation.id;
-
-        for (let i = 0; i < 20; i++) {
-          await new Promise(r => setTimeout(r, 1000));
-          const pRes = await fetch(`/api/v1/hardware/operations/${opId}`);
-          const pData = await pRes.json();
-          const op = pData.data?.operation;
-          if (op?.status === 'SUCCESS' || op?.status === 'COMPLETED') {
-            readData = op.command?.responseData;
-            break;
-          } else if (op?.status === 'FAILED' || op?.status === 'ERROR') {
-            throw new Error(op.errorMessage || 'Failed to read card');
-          }
+      // We still poll just in case the provider uses polling (like in a cloud fallback scenario).
+      // On desktop, the first poll will instantly return the result from memory.
+      for (let i = 0; i < 20; i++) {
+        await new Promise(r => setTimeout(r, 1000));
+        const pRes = await provider.hardware.poll(opId);
+        if (!pRes.success) throw new Error(pRes.error?.message || 'Failed to poll hardware status');
+        
+        const op = pRes.data?.operation;
+        if (op?.status === 'SUCCESS' || op?.status === 'COMPLETED') {
+          readData = op.command?.responseData;
+          break;
+        } else if (op?.status === 'FAILED' || op?.status === 'ERROR') {
+          throw new Error(op.errorMessage || 'Failed to read card');
         }
       }
 

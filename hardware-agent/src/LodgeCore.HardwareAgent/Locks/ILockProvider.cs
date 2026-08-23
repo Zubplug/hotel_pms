@@ -5,7 +5,7 @@ public interface ILockProvider
     string VendorName { get; }
 
     Task<bool> WaitForCardAsync(TimeSpan timeout, CancellationToken cancellationToken);
-    Task<LockResult> EncodeCardAsync(string lockCode, CancellationToken cancellationToken);
+    Task<LockResult> EncodeCardAsync(string lockCode, DateTime checkInDate, DateTime checkOutDate, CancellationToken cancellationToken);
     Task<DiagnosticResult> ReadDiagnosticAsync(CancellationToken cancellationToken);
 
     /// <summary>
@@ -52,18 +52,18 @@ public class ReadCardResult
     public string? CardSnr { get; set; }
 
     /// <summary>Raw validity start date string from card</summary>
-    public string? ValidFrom { get; set; }
+    public string? CheckIn { get; set; }
 
     /// <summary>Raw validity end date string from card</summary>
-    public string? ValidTo { get; set; }
+    public string? CheckOut { get; set; }
 
     public string? ErrorCode { get; set; }
     public string? ErrorMessage { get; set; }
     public string? Vendor { get; set; }
 
     public static ReadCardResult Blank(string vendor) => new ReadCardResult { Success = true, IsBlank = true, Vendor = vendor };
-    public static ReadCardResult WithData(string roomNo, string cardSnr, string? validFrom, string? validTo, string vendor) 
-        => new ReadCardResult { Success = true, IsBlank = false, RoomNo = roomNo, CardSnr = cardSnr, ValidFrom = validFrom, ValidTo = validTo, Vendor = vendor };
+    public static ReadCardResult WithData(string roomNo, string cardSnr, string? checkIn, string? checkOut, string vendor) 
+        => new ReadCardResult { Success = true, IsBlank = false, RoomNo = roomNo, CardSnr = cardSnr, CheckIn = checkIn, CheckOut = checkOut, Vendor = vendor };
     public static ReadCardResult Fail(string code, string msg, string vendor) 
         => new ReadCardResult { Success = false, ErrorCode = code, ErrorMessage = msg, Vendor = vendor };
 }

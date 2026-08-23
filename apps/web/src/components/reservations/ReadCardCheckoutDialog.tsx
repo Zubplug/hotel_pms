@@ -13,6 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { formatCurrency } from '@/lib/utils';
 import { CreditCard, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
 interface ReadCardCheckoutDialogProps {
   open: boolean;
@@ -35,28 +36,25 @@ export function ReadCardCheckoutDialog({ open, onOpenChange, propertyId }: ReadC
     }
   }, [open]);
 
+  const { provider } = useLodgeCoreProvider();
+
   const handleReadCard = async () => {
     setStep('READING');
     setErrorMsg('');
     try {
       // 1. Dispatch READ_CARD
-      const res = await fetch('/api/v1/hardware/locks/read-card', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ propertyId }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error?.message || 'Failed to trigger read');
-
+      const data = await provider.keycards.read();
+      if (!data.success) throw new Error(data.error?.message || 'Failed to read card');
       const opId = data.data.operation.id;
 
       // 2. Poll for completion
       let readData = null;
       for (let i = 0; i < 20; i++) {
         await new Promise(r => setTimeout(r, 1000));
-        const pRes = await fetch(`/api/v1/hardware/operations/${opId}`);
-        const pData = await pRes.json();
-        const op = pData.data?.operation;
+        const pRes = await provider.hardware.poll(opId);
+        if (!pRes.success) throw new Error(pRes.error?.message || 'Failed to poll hardware status');
+        
+        const op = pRes.data?.operation;
         if (op?.status === 'SUCCESS' || op?.status === 'COMPLETED') {
           readData = op.command?.responseData;
           break;
@@ -69,15 +67,13 @@ export function ReadCardCheckoutDialog({ open, onOpenChange, propertyId }: ReadC
       if (!readData.roomNo) throw new Error('Card does not contain a room number');
 
       // 3. Lookup reservation by roomNo
-      const lRes = await fetch(`/api/v1/reservations/lookup?roomNo=${readData.roomNo}&propertyId=${propertyId}`);
-      const lData = await lRes.json();
-      if (!lRes.ok) throw new Error(lData.error?.message || 'Failed to lookup reservation');
-
-      if (!lData.data.reservation) {
+      const resData = await provider.reservations.lookupByRoom(readData.roomNo, propertyId);
+      
+      if (!resData) {
         throw new Error(`No active reservation found for room ${readData.roomNo}`);
       }
 
-      setReservation(lData.data.reservation);
+      setReservation(resData);
       setStep('CONFIRMING');
 
     } catch (err: any) {
@@ -91,29 +87,23 @@ export function ReadCardCheckoutDialog({ open, onOpenChange, propertyId }: ReadC
     setStep('CHECKING_OUT');
     try {
       // 1. Process Checkout
-      const res = await fetch(`/api/v1/reservations/${reservation.id}/check-out`, { method: 'POST' });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error?.message || 'Checkout failed');
+      const res = await provider.reservations.checkOut(reservation.id, '', '');
+      if (!res.success) throw new Error(res.error?.message || 'Checkout failed');
 
       // 2. Dispatch CANCEL_CARD to physically erase the card
       setStep('ERASING');
-      const cRes = await fetch('/api/v1/hardware/locks/cancel-card', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ propertyId }),
-      });
-      const cData = await cRes.json();
-      if (!cRes.ok) throw new Error(cData.error?.message || 'Failed to trigger cancel card');
-      
+      const cData = await provider.keycards.cancel();
+      if (!cData.success) throw new Error(cData.error?.message || 'Failed to initiate erase card');
       const opId = cData.data.operation.id;
 
       // 3. Poll for Erase completion
       let erased = false;
       for (let i = 0; i < 20; i++) {
         await new Promise(r => setTimeout(r, 1000));
-        const pRes = await fetch(`/api/v1/hardware/operations/${opId}`);
-        const pData = await pRes.json();
-        const op = pData.data?.operation;
+        const pRes = await provider.hardware.poll(opId);
+        if (!pRes.success) throw new Error(pRes.error?.message || 'Failed to poll hardware status');
+        
+        const op = pRes.data?.operation;
         if (op?.status === 'SUCCESS' || op?.status === 'COMPLETED') {
           erased = true;
           break;

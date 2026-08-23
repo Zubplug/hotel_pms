@@ -118,6 +118,17 @@ export async function POST(req: NextRequest) {
                data: { version: { increment: 1 } }
              });
              updatedCount = res.count;
+          } else if (event.aggregateType === 'POS_SETTLEMENT' || event.aggregateType === 'POS_CASH_MOVEMENT' || event.aggregateType === 'CASH_MOVEMENT') {
+             const sId = payload.SessionId || payload.sessionId || payload.PosSessionId || payload.posSessionId;
+             if (sId) {
+                const res = await tx.posOperatorSession.updateMany({
+                  where: { id: sId, version: event.aggregateVersion },
+                  data: { version: { increment: 1 } }
+                });
+                updatedCount = res.count;
+             } else {
+                updatedCount = 1;
+             }
           } else {
              // For POS_PAYMENT, POS_ORDER_ITEM, POS_KOT the aggregate is usually the PosOrder. 
              // We map those to update the Order version.
@@ -145,6 +156,12 @@ export async function POST(req: NextRequest) {
              } else if (event.aggregateType === 'POS_CHECK') {
                 const c = await tx.posCheck.findUnique({ where: { id: event.aggregateId }});
                 if (c) currentVersion = c.version;
+             } else if (event.aggregateType === 'POS_SETTLEMENT' || event.aggregateType === 'POS_CASH_MOVEMENT' || event.aggregateType === 'CASH_MOVEMENT') {
+                const sId = payload.SessionId || payload.sessionId || payload.PosSessionId || payload.posSessionId;
+                if (sId) {
+                   const s = await tx.posOperatorSession.findUnique({ where: { id: sId }});
+                   if (s) currentVersion = s.version;
+                }
              } else if (payload.OrderId || payload.orderId) {
                 const o = await tx.posOrder.findUnique({ where: { id: (payload.OrderId || payload.orderId) }});
                 if (o) currentVersion = o.version;
@@ -170,9 +187,44 @@ export async function POST(req: NextRequest) {
                  });
              }
           }
-          else if (event.eventType === 'ORDER_CREATED') {
+                    else if (event.eventType === 'ORDER_CREATED') {
              const existingOrder = await tx.posOrder.findUnique({ where: { id: event.aggregateId }});
              if (!existingOrder) {
+                 const tableId = payload.TableId || null;
+                 
+                 // If the order has a table, try to occupy it atomically
+                 if (tableId) {
+                     const updateResult = await tx.posTable.updateMany({
+                         where: {
+                             id: tableId,
+                             OR: [
+                                 { currentOrderId: null },
+                                 { currentOrderId: event.aggregateId }
+                             ]
+                         },
+                         data: { currentOrderId: event.aggregateId }
+                     });
+                     
+                     if (updateResult.count === 0) {
+                         // Table is already occupied by someone else! Conflict.
+                         await tx.syncConflict.create({
+                             data: {
+                                 propertyId,
+                                 aggregateType: 'POS_ORDER',
+                                 aggregateId: event.aggregateId,
+                                 conflictReason: `Table ${tableId} is already occupied by another order.`,
+                                 localData: payload,
+                                 cloudData: {},
+                                 status: 'PENDING'
+                             }
+                         });
+                         // We must throw to trigger the CONFLICT state in the desktop's sync engine
+                         const e = new Error('CONCURRENCY_CONFLICT');
+                         (e as any).currentVersion = event.aggregateVersion;
+                         throw e;
+                     }
+                 }
+                 
                  await tx.posOrder.create({
                      data: {
                          id: event.aggregateId,
@@ -184,12 +236,27 @@ export async function POST(req: NextRequest) {
                          subtotal: payload.Subtotal || 0,
                          taxAmount: payload.TaxAmount || 0,
                          total: payload.Total || 0,
+                         tableId: tableId,
                          businessDate: new Date(payload.BusinessDate || new Date()),
                          serverStaffId: event.operatorId,
                          createdAt: new Date(event.occurredAt)
                      }
                  });
              }
+          }
+          else if (event.eventType === 'ORDER_UPDATED') {
+              await tx.posOrder.update({
+                  where: { id: event.aggregateId },
+                  data: { status: payload.status || payload.Status, notes: payload.notes || payload.Notes, updatedAt: new Date() }
+              });
+              
+              const newStatus = payload.status || payload.Status;
+              if (newStatus === 'CLOSED' || newStatus === 'CANCELLED' || newStatus === 'VOIDED') {
+                  await tx.posTable.updateMany({
+                      where: { currentOrderId: event.aggregateId },
+                      data: { currentOrderId: null }
+                  });
+              }
           }
           else if (event.eventType === 'PAYMENT_RECORDED') {
               const method = payload.Method || 'CASH';
@@ -213,6 +280,10 @@ export async function POST(req: NextRequest) {
               await tx.posOrder.update({
                   where: { id: event.aggregateId },
                   data: { status: "CLOSED", updatedAt: new Date() }
+              });
+              await tx.posTable.updateMany({
+                  where: { currentOrderId: event.aggregateId },
+                  data: { currentOrderId: null }
               });
           }
           else if (event.eventType === 'ORDER_ITEMS_ADDED') {

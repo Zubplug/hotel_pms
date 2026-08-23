@@ -460,41 +460,49 @@ public class SyncEngine : BackgroundService
         var token = _credentialStorage.LoadCredential("deviceCredential");
         if (string.IsNullOrEmpty(token))
         {
-            // Fallback to AuthManager in case it was stored there
             token = await _authManager.GetAuthTokenAsync();
-            if (string.IsNullOrEmpty(token))
-            {
-                throw new Exception("No auth token available; skipping pull.");
-            }
+            if (string.IsNullOrEmpty(token)) throw new Exception("No auth token available; skipping pull.");
         }
 
-        _httpClient.DefaultRequestHeaders.Authorization =
-            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
-        var lastPullStr = Preferences.Get($"LastPull_{propertyId}", "");
-        var sinceParam = string.IsNullOrEmpty(lastPullStr) ? "" : $"&since={Uri.EscapeDataString(lastPullStr)}";
+        bool hasMore = true;
+        int pageCount = 0;
 
-        var response = await _httpClient.GetAsync(
-            $"sync/pull?propertyId={Uri.EscapeDataString(propertyId)}{sinceParam}",
-            stoppingToken);
-
-        if (!response.IsSuccessStatusCode)
+        while (hasMore && !stoppingToken.IsCancellationRequested)
         {
-            if ((int)response.StatusCode == 401 || (int)response.StatusCode == 403)
-            {
-                if (await TryRefreshDeviceTokenAsync(stoppingToken))
-                {
-                    throw new Exception("Refreshed device token. Will retry pull in next cycle.");
-                }
-                BroadcastHealth(SyncState.ERROR, null, "AUTH_ERROR", 0, 1, $"Auth failed: {response.StatusCode}. Please re-authenticate.");
-            }
-            throw new Exception($"Sync pull returned {(int)response.StatusCode}");
-        }
+            var lastPullStr = Preferences.Get($"LastPull_{propertyId}", "");
+            var isIncremental = !string.IsNullOrEmpty(lastPullStr);
+            var cursorParam = isIncremental ? $"&cursor={Uri.EscapeDataString(lastPullStr)}" : "";
 
-        var json = await response.Content.ReadAsStringAsync(stoppingToken);
+            var response = await _httpClient.GetAsync(
+                $"sync/pull?propertyId={Uri.EscapeDataString(propertyId)}{cursorParam}&limit=500",
+                stoppingToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                if ((int)response.StatusCode == 401 || (int)response.StatusCode == 403)
+                {
+                    if (await TryRefreshDeviceTokenAsync(stoppingToken))
+                    {
+                        throw new Exception("Refreshed device token. Will retry pull in next cycle.");
+                    }
+                    BroadcastHealth(SyncState.ERROR, null, "AUTH_ERROR", 0, 1, $"Auth failed: {response.StatusCode}. Please re-authenticate.");
+                }
+                throw new Exception($"Sync pull returned {(int)response.StatusCode}");
+            }
+
+            var json = await response.Content.ReadAsStringAsync(stoppingToken);
             using var doc = System.Text.Json.JsonDocument.Parse(json);
             var root = doc.RootElement;
 
+            pageCount++;
+            hasMore = root.TryGetProperty("hasMore", out var hm) && hm.GetBoolean();
+            var nextCursor = root.TryGetProperty("syncedAt", out var sa) ? sa.GetString() : null;
+
+            using var transaction = await dbContext.Database.BeginTransactionAsync(stoppingToken);
+            try
+            {
             // ---- Apply property config ------------------------------------
             if (root.TryGetProperty("property", out var propEl))
             {
@@ -618,7 +626,7 @@ public class SyncEngine : BackgroundService
                     .Where(s => !incomingStaffIds.Contains(s.Id))
                     .ToListAsync(stoppingToken);
 
-                if (obsoleteStaff.Any())
+                if (obsoleteStaff.Any() && !isIncremental)
                 {
                     dbContext.Staff.RemoveRange(obsoleteStaff);
                     _logger.LogInformation($"Removed {obsoleteStaff.Count} revoked staff members.");
@@ -822,7 +830,7 @@ public class SyncEngine : BackgroundService
                         var staleCreds = await dbContext.LockCredentials
                             .Where(c => c.ReservationId == id && !incomingCredIds.Contains(c.Id))
                             .ToListAsync(stoppingToken);
-                        if (staleCreds.Any()) dbContext.LockCredentials.RemoveRange(staleCreds);
+                        if (staleCreds.Any() && !isIncremental) dbContext.LockCredentials.RemoveRange(staleCreds);
                     }
 
                     // Parse LockOperations
@@ -869,7 +877,7 @@ public class SyncEngine : BackgroundService
                         var staleOps = await dbContext.LockOperations
                             .Where(o => o.ReservationId == id && !incomingOpIds.Contains(o.Id))
                             .ToListAsync(stoppingToken);
-                        if (staleOps.Any()) dbContext.LockOperations.RemoveRange(staleOps);
+                        if (staleOps.Any() && !isIncremental) dbContext.LockOperations.RemoveRange(staleOps);
                     }
                 }
                 
@@ -878,7 +886,7 @@ public class SyncEngine : BackgroundService
                     .Where(r => !incomingResIds.Contains(r.Id) && !r.IsDirty)
                     .ToListAsync(stoppingToken);
                 
-                if (staleRes.Any())
+                if (staleRes.Any() && !isIncremental)
                 {
                     dbContext.Reservations.RemoveRange(staleRes);
                 }
@@ -920,7 +928,7 @@ public class SyncEngine : BackgroundService
                 var staleFolios = await dbContext.Folios
                     .Where(f => !incomingFolioIds.Contains(f.Id) && !f.IsDirty)
                     .ToListAsync(stoppingToken);
-                if (staleFolios.Any())
+                if (staleFolios.Any() && !isIncremental)
                 {
                     dbContext.Folios.RemoveRange(staleFolios);
                 }
@@ -952,7 +960,7 @@ public class SyncEngine : BackgroundService
                 if (posOutletsArray.GetArrayLength() > 0)
                 {
                     var stale = await dbContext.PosOutlets.Where(o => o.PropertyId == propertyId && !incomingIds.Contains(o.Id)).ToListAsync(stoppingToken);
-                    if (stale.Any()) dbContext.PosOutlets.RemoveRange(stale);
+                    if (stale.Any() && !isIncremental) dbContext.PosOutlets.RemoveRange(stale);
                 }
             }
 
@@ -988,7 +996,7 @@ public class SyncEngine : BackgroundService
                 if (posCategoriesArray.GetArrayLength() > 0)
                 {
                     var stale = await dbContext.ProductCategories.Where(c => outletIds.Contains(c.OutletId) && !incomingIds.Contains(c.Id)).ToListAsync(stoppingToken);
-                    if (stale.Any()) dbContext.ProductCategories.RemoveRange(stale);
+                    if (stale.Any() && !isIncremental) dbContext.ProductCategories.RemoveRange(stale);
                 }
             }
 
@@ -1052,7 +1060,7 @@ public class SyncEngine : BackgroundService
 
                         // Remove stale modifiers for THIS product
                         var staleMods = await dbContext.PosProductModifiers.Where(m => m.ProductId == id && !modIds.Contains(m.Id)).ToListAsync(stoppingToken);
-                        if (staleMods.Any()) dbContext.PosProductModifiers.RemoveRange(staleMods);
+                        if (staleMods.Any() && !isIncremental) dbContext.PosProductModifiers.RemoveRange(staleMods);
                     }
                     else
                     {
@@ -1063,7 +1071,7 @@ public class SyncEngine : BackgroundService
                 if (posProductsArray.GetArrayLength() > 0)
                 {
                     var stale = await dbContext.PosProducts.Where(p => p.PropertyId == propertyId && !incomingIds.Contains(p.Id)).ToListAsync(stoppingToken);
-                    if (stale.Any()) dbContext.PosProducts.RemoveRange(stale);
+                    if (stale.Any() && !isIncremental) dbContext.PosProducts.RemoveRange(stale);
                 }
             }
 
@@ -1094,7 +1102,7 @@ public class SyncEngine : BackgroundService
                 if (posFloorPlansArray.GetArrayLength() > 0)
                 {
                     var stale = await dbContext.PosFloorPlans.Where(f => outletIds.Contains(f.OutletId) && !incomingIds.Contains(f.Id)).ToListAsync(stoppingToken);
-                    if (stale.Any()) dbContext.PosFloorPlans.RemoveRange(stale);
+                    if (stale.Any() && !isIncremental) dbContext.PosFloorPlans.RemoveRange(stale);
                 }
             }
 
@@ -1129,7 +1137,7 @@ public class SyncEngine : BackgroundService
                 if (posTablesArray.GetArrayLength() > 0)
                 {
                     var stale = await dbContext.PosTables.Where(t => validFloorPlanIds.Contains(t.FloorPlanId) && !incomingIds.Contains(t.Id)).ToListAsync(stoppingToken);
-                    if (stale.Any()) dbContext.PosTables.RemoveRange(stale);
+                    if (stale.Any() && !isIncremental) dbContext.PosTables.RemoveRange(stale);
                 }
             }
 
@@ -1165,7 +1173,7 @@ public class SyncEngine : BackgroundService
                 if (housekeepingTasksArray.GetArrayLength() > 0)
                 {
                     var stale = await dbContext.HousekeepingTasks.Where(t => !incomingIds.Contains(t.Id)).ToListAsync(stoppingToken);
-                    if (stale.Any()) dbContext.HousekeepingTasks.RemoveRange(stale);
+                    if (stale.Any() && !isIncremental) dbContext.HousekeepingTasks.RemoveRange(stale);
                 }
             }
 
@@ -1202,7 +1210,7 @@ public class SyncEngine : BackgroundService
                 if (maintenanceTicketsArray.GetArrayLength() > 0)
                 {
                     var stale = await dbContext.MaintenanceTickets.Where(t => t.PropertyId == propertyId && !incomingIds.Contains(t.Id)).ToListAsync(stoppingToken);
-                    if (stale.Any()) dbContext.MaintenanceTickets.RemoveRange(stale);
+                    if (stale.Any() && !isIncremental) dbContext.MaintenanceTickets.RemoveRange(stale);
                 }
             }
 
@@ -1214,9 +1222,34 @@ public class SyncEngine : BackgroundService
             }
             meta.LastSuccessfulSyncAt = DateTime.UtcNow;
 
+
+                await dbContext.SaveChangesAsync(stoppingToken);
+                await transaction.CommitAsync(stoppingToken);
+
+                if (!string.IsNullOrEmpty(nextCursor))
+                {
+                    Preferences.Set($"LastPull_{propertyId}", nextCursor);
+                }
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync(stoppingToken);
+                throw new Exception($"Failed to apply sync page {pageCount}: {ex.Message}", ex);
+            }
+        }
+        
+        // Clean up stale reservations locally (that fell out of the active window)
+        var threeDaysAgo = DateTime.UtcNow.AddDays(-3);
+        var oldReservations = await dbContext.Reservations
+            .Where(r => !r.IsDirty && (r.CheckOutDate < threeDaysAgo || r.DeletedAt != null))
+            .ToListAsync(stoppingToken);
+        if (oldReservations.Any())
+        {
+            dbContext.Reservations.RemoveRange(oldReservations);
             await dbContext.SaveChangesAsync(stoppingToken);
-            await dbContext.SaveChangesAsync(stoppingToken);
+        }
     }
+
     private async Task PushFrontDeskOutboxAsync(CancellationToken stoppingToken)
     {
         using var scope = _serviceProvider.CreateScope();

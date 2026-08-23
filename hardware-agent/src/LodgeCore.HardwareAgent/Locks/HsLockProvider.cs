@@ -64,19 +64,18 @@ public class HsLockProvider : ILockProvider
         return false;
     }
 
-    public async Task<LockResult> EncodeCardAsync(string lockCode, CancellationToken cancellationToken)
+    public async Task<LockResult> EncodeCardAsync(string lockCode, DateTime checkInDate, DateTime checkOutDate, CancellationToken cancellationToken)
     {
         _logger.LogInformation("Encoding HS Lock card for lock {LockCode}...", lockCode);
         EnsureInitialized();
 
-        // Desktop encode generates dates inline.
-        string bDate = DateTime.Now.ToString(DateFormat);
-        string eDate = DateTime.Now.AddDays(1).ToString(DateFormat);
+        string checkinStr = checkInDate.ToString(DateFormat);
+        string checkoutStr = checkOutDate.ToString(DateFormat);
         
         var cardSnr = new StringBuilder(20);
         int flags = 8; // Assuming 8 = override/new guest card
 
-        int res = HsLockSdkNative.TP_MakeGuestCardEx(cardSnr, lockCode, bDate, eDate, flags);
+        int res = HsLockSdkNative.TP_MakeGuestCardEx(cardSnr, lockCode, checkinStr, checkoutStr, flags);
 
         if (res == (int)HsLockSdkNative.HsLockError.OPR_OK)
         {
@@ -150,21 +149,25 @@ public class HsLockProvider : ILockProvider
 
         string rn = roomNo.ToString().TrimEnd('\0');
         string snr = cardSnr.ToString().TrimEnd('\0');
-        string cin = checkinTime.ToString().TrimEnd('\0');
-        string cout = checkoutTime.ToString().TrimEnd('\0');
+        string cinStr = checkinTime.ToString().TrimEnd('\0');
+        string coutStr = checkoutTime.ToString().TrimEnd('\0');
 
         if (string.IsNullOrWhiteSpace(rn))
         {
             return ReadCardResult.Blank(VendorName);
         }
 
+        DateTime? cin = DateTime.TryParse(cinStr, out var c1) ? c1 : null;
+        DateTime? cout = DateTime.TryParse(coutStr, out var c2) ? c2 : null;
+        string? vFrom = cin?.ToString("yyyy-MM-dd HH:mm:ss");
+        string? vTo = cout?.ToString("yyyy-MM-dd HH:mm:ss");
+
         _logger.LogInformation(
             "Card read: Room={RoomNo}, SNR={Snr}, ValidFrom={VF}, ValidTo={VT}",
-            rn, snr, cin, cout);
+            rn, snr, vFrom, vTo);
 
-        // Parse from "yyyy-MM-dd HH:mm:ss" to "yyyy-MM-dd" for the desktop UI standard if needed,
-        // but we'll return raw for now.
-        return ReadCardResult.WithData(rn, snr, cin, cout, VendorName);
+        // Return the formatted string dates
+        return ReadCardResult.WithData(rn, snr, vFrom, vTo, VendorName);
     }
 
     public async Task<LockResult> CancelCardAsync(CancellationToken cancellationToken)

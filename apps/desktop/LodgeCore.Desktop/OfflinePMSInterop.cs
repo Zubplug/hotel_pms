@@ -621,11 +621,13 @@ public class OfflinePMSInterop
                 } : null,
                 reservationRooms = new[] {
                     new {
+                        id = r.Id,
                         roomId = r.RoomId,
                         checkIn = r.CheckInDate,
                         checkOut = r.CheckOutDate,
                         room = new {
-                            number = r.RoomNumber ?? "Unassigned"
+                            number = r.RoomNumber ?? "Unassigned",
+                            roomType = new { name = r.RoomTypeId ?? "Unknown Type" }
                         }
                     }
                 },
@@ -640,6 +642,7 @@ public class OfflinePMSInterop
                         payments = payments
                     }
                 },
+                auditLogs = Array.Empty<object>(),
                 lockCredentials = r.LockCredentials.Select(c => new {
                     id = c.Id,
                     reservationId = c.ReservationId,
@@ -826,7 +829,17 @@ public class OfflinePMSInterop
                 if (ch.ValueKind == System.Text.Json.JsonValueKind.String && int.TryParse(ch.GetString(), out var chVal)) res.Children = chVal;
                 else if (ch.ValueKind == System.Text.Json.JsonValueKind.Number) res.Children = ch.GetInt32();
             }
-            
+
+            if (root.TryGetProperty("depositRequired", out var dr)) {
+                if (dr.ValueKind == System.Text.Json.JsonValueKind.String && decimal.TryParse(dr.GetString(), out var drVal)) res.DepositRequired = drVal;
+                else if (dr.ValueKind == System.Text.Json.JsonValueKind.Number) res.DepositRequired = dr.GetDecimal();
+            }
+
+            if (root.TryGetProperty("depositPaid", out var dp)) {
+                if (dp.ValueKind == System.Text.Json.JsonValueKind.String && decimal.TryParse(dp.GetString(), out var dpVal)) res.DepositPaid = dpVal;
+                else if (dp.ValueKind == System.Text.Json.JsonValueKind.Number) res.DepositPaid = dp.GetDecimal();
+            }
+
             var reqStatus = root.TryGetProperty("status", out var st) ? st.GetString() : "CONFIRMED";
             var validStatuses = new[] { "PENDING", "CONFIRMED", "CHECKED_IN", "CHECKED_OUT", "CANCELLED", "NO_SHOW" };
             res.Status = validStatuses.Contains(reqStatus) ? (reqStatus ?? "CONFIRMED") : "CONFIRMED";
@@ -992,7 +1005,60 @@ public class OfflinePMSInterop
         try
         {
             var data = await _repo.GetFolioAsync(folioId);
-            return JsonSerializer.Serialize(new { success = true, data }, _jsonOptions);
+            if (data == null) 
+                return JsonSerializer.Serialize(new { success = false, error = "Folio not found" }, _jsonOptions);
+
+            var resultObj = new Dictionary<string, object>
+            {
+                { "id", data.Id },
+                { "propertyId", data.PropertyId },
+                { "reservationId", data.ReservationId },
+                { "reservation", data.Reservation! },
+                { "status", data.Status },
+                { "totalCharges", data.TotalCharges },
+                { "totalPayments", data.TotalPayments },
+                { "balance", data.OutstandingBalance },
+                { "createdAt", data.CreatedAt },
+                { "updatedAt", data.UpdatedAt },
+                { "version", data.Version }
+            };
+
+            if (!string.IsNullOrEmpty(data.TransactionsJson))
+            {
+                try
+                {
+                    using var doc = JsonDocument.Parse(data.TransactionsJson);
+                    if (doc.RootElement.ValueKind == JsonValueKind.Object)
+                    {
+                        if (doc.RootElement.TryGetProperty("items", out var items))
+                            resultObj["items"] = items;
+                        else
+                            resultObj["items"] = new JsonArray();
+
+                        if (doc.RootElement.TryGetProperty("payments", out var payments))
+                            resultObj["payments"] = payments;
+                        else
+                            resultObj["payments"] = new JsonArray();
+                    }
+                    else if (doc.RootElement.ValueKind == JsonValueKind.Array)
+                    {
+                        resultObj["items"] = doc.RootElement;
+                        resultObj["payments"] = new JsonArray();
+                    }
+                }
+                catch
+                {
+                    resultObj["items"] = new JsonArray();
+                    resultObj["payments"] = new JsonArray();
+                }
+            }
+            else
+            {
+                resultObj["items"] = new JsonArray();
+                resultObj["payments"] = new JsonArray();
+            }
+
+            return JsonSerializer.Serialize(new { success = true, data = resultObj }, _jsonOptions);
         }
         catch (Exception ex)
         {
