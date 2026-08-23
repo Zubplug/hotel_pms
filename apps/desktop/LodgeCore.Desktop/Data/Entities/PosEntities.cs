@@ -21,6 +21,8 @@ public class LocalProductCategory
     public string Name { get; set; } = string.Empty;
     public bool IsActive { get; set; }
     public int SortOrder { get; set; }
+    // KOT routing: KITCHEN | BAR | DIRECT | NONE (default KITCHEN)
+    public string ProductionStation { get; set; } = "KITCHEN";
 }
 
 public class LocalPosProduct
@@ -29,10 +31,14 @@ public class LocalPosProduct
     public string PropertyId { get; set; } = string.Empty;
     public string CategoryId { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public string? Image { get; set; }  // URL only — offline image caching is deferred
     public decimal Price { get; set; }
     public decimal TaxRate { get; set; }
     public bool IsActive { get; set; }
     public bool HasModifiers { get; set; }
+    // Product-level station override; null means inherit from Category.ProductionStation
+    public string? ProductionStation { get; set; }
 }
 
 public class LocalStockItem

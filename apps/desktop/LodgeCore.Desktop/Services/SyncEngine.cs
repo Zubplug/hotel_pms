@@ -954,6 +954,9 @@ public class SyncEngine : BackgroundService
                     cat.Name = el.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
                     cat.IsActive = el.TryGetProperty("isActive", out var ia) && ia.GetBoolean();
                     cat.SortOrder = el.TryGetProperty("sortOrder", out var so) && so.ValueKind == System.Text.Json.JsonValueKind.Number ? so.GetInt32() : 0;
+                    // KOT routing — default KITCHEN if cloud field is missing (rolling deployment safety)
+                    cat.ProductionStation = el.TryGetProperty("productionStation", out var ps) && ps.ValueKind != System.Text.Json.JsonValueKind.Null
+                        ? ps.GetString() ?? "KITCHEN" : "KITCHEN";
                 }
                 
                 if (posCategoriesArray.GetArrayLength() > 0)
@@ -983,6 +986,10 @@ public class SyncEngine : BackgroundService
                     }
                     prod.CategoryId = el.TryGetProperty("categoryId", out var cid) ? cid.GetString() ?? "" : "";
                     prod.Name = el.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
+                    prod.Description = el.TryGetProperty("description", out var desc) && desc.ValueKind != System.Text.Json.JsonValueKind.Null
+                        ? desc.GetString() : null;
+                    prod.Image = el.TryGetProperty("image", out var img) && img.ValueKind != System.Text.Json.JsonValueKind.Null
+                        ? img.GetString() : null;
                     prod.Price = el.TryGetProperty("price", out var pr) 
                         ? (pr.ValueKind == System.Text.Json.JsonValueKind.Number ? pr.GetDecimal() : (pr.ValueKind == System.Text.Json.JsonValueKind.String && decimal.TryParse(pr.GetString(), out var dp) ? dp : 0m)) 
                         : 0m;
@@ -990,6 +997,9 @@ public class SyncEngine : BackgroundService
                         ? (tr.ValueKind == System.Text.Json.JsonValueKind.Number ? tr.GetDecimal() : (tr.ValueKind == System.Text.Json.JsonValueKind.String && decimal.TryParse(tr.GetString(), out var dt) ? dt : 0m)) 
                         : 0m;
                     prod.IsActive = el.TryGetProperty("isActive", out var ia) && ia.GetBoolean();
+                    // Product-level station override (null = inherit from category)
+                    prod.ProductionStation = el.TryGetProperty("productionStation", out var pps) && pps.ValueKind != System.Text.Json.JsonValueKind.Null
+                        ? pps.GetString() : null;
                     
                     if (el.TryGetProperty("modifiers", out var mods) && mods.ValueKind == System.Text.Json.JsonValueKind.Array)
                     {

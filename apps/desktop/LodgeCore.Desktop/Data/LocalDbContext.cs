@@ -97,7 +97,12 @@ public class LocalDbContext : DbContext
                 "ALTER TABLE Rooms ADD COLUMN FloorName TEXT;",
                 "ALTER TABLE Rooms ADD COLUMN FloorNumber INTEGER;",
                 "ALTER TABLE Guests ADD COLUMN DeletedAt TEXT;",
-                "ALTER TABLE SyncMetadata ADD COLUMN LastGuestSyncCursor TEXT;"
+                "ALTER TABLE SyncMetadata ADD COLUMN LastGuestSyncCursor TEXT;",
+                // Catalog parity: KOT routing + product display fields
+                "ALTER TABLE ProductCategories ADD COLUMN ProductionStation TEXT NOT NULL DEFAULT 'KITCHEN';",
+                "ALTER TABLE PosProducts ADD COLUMN Description TEXT;",
+                "ALTER TABLE PosProducts ADD COLUMN Image TEXT;",
+                "ALTER TABLE PosProducts ADD COLUMN ProductionStation TEXT;"
             };
 
             foreach (var migration in migrations)
