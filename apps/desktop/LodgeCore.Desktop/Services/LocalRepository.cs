@@ -1387,7 +1387,7 @@ public class LocalRepository
                 paymentStatus = o.PaymentStatus,
                 itemCount = o.Items?.Count ?? 0,
                 total = o.Total,
-                waiterName = staffDict.ContainsKey(o.ServerStaffId) ? staffDict[o.ServerStaffId] : "Unknown",
+                waiterName = !string.IsNullOrEmpty(o.ServerStaffId) && staffDict.ContainsKey(o.ServerStaffId) ? staffDict[o.ServerStaffId] : "Unknown",
                 createdAt = o.CreatedAt
             });
         }
@@ -2617,7 +2617,7 @@ public class LocalRepository
         await _dbContext.SaveChangesAsync();
     }
 
-    public async Task<List<LocalPosOrder>> GetServerOrdersAsync(string staffId, string propertyId, string range, string statusFilter, string? sessionId = null)
+    public async Task<List<object>> GetServerOrdersAsync(string staffId, string propertyId, string range, string statusFilter, string? sessionId = null)
     {
         var query = _dbContext.PosOrders
             .Include(o => o.Items)
@@ -2665,8 +2665,8 @@ public class LocalRepository
         var random = new Random();
         foreach(var o in orders)
         {
-            var sessionOwnerId = sessions.ContainsKey(o.SessionId) ? sessions[o.SessionId] : null;
-            var sessionOwnerName = sessionOwnerId != null && staffDict.ContainsKey(sessionOwnerId) ? staffDict[sessionOwnerId] : "Unknown";
+            var sessionOwnerId = !string.IsNullOrEmpty(o.SessionId) && sessions.ContainsKey(o.SessionId) ? sessions[o.SessionId] : null;
+            var sessionOwnerName = !string.IsNullOrEmpty(sessionOwnerId) && staffDict.ContainsKey(sessionOwnerId) ? staffDict[sessionOwnerId] : "Unknown";
 
             result.Add(new {
                 id = o.Id,
@@ -2679,9 +2679,7 @@ public class LocalRepository
                 serverStaffId = o.ServerStaffId,
                 status = o.Status,
                 paymentStatus = o.PaymentStatus,
-                guestName = o.GuestName,
                 displayName = o.DisplayName,
-                guestsCount = o.GuestsCount,
                 total = o.Total,
                 createdAt = o.CreatedAt,
                 businessDate = o.BusinessDate,
