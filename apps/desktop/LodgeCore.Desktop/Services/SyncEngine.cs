@@ -1752,10 +1752,17 @@ public class SyncEngine : BackgroundService
         bool hasMore = true;
         int pageCount = 0;
         
+        var forceFullSync = await dbContext.Guests.AnyAsync(g => g.FirstName == "Unknown" && g.LastName == "Guest", stoppingToken);
+        
         while (hasMore && !stoppingToken.IsCancellationRequested)
         {
             var meta = await dbContext.SyncMetadata.FirstOrDefaultAsync(stoppingToken);
             var cursor = meta?.LastGuestSyncCursor;
+            
+            if (forceFullSync && pageCount == 0)
+            {
+                cursor = null;
+            }
             
             var url = $"sync/guests?propertyId={propertyId}&limit=500";
             if (!string.IsNullOrEmpty(cursor))
