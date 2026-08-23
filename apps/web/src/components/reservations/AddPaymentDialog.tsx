@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2 } from 'lucide-react';
+import { generateUUID } from '@/lib/utils';
 
 export function AddPaymentDialog({ open, onOpenChange, folio }: { open: boolean, onOpenChange: (open: boolean) => void, folio: any }) {
   const [method, setMethod] = useState<string>('CASH');
@@ -48,7 +49,7 @@ export function AddPaymentDialog({ open, onOpenChange, folio }: { open: boolean,
         currency: folio.currency,
         method,
         notes,
-        idempotencyKey: globalThis.crypto.randomUUID()
+        idempotencyKey: generateUUID()
       };
 
       const res = await fetch(endpoint, {

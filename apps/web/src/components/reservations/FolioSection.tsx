@@ -8,6 +8,8 @@ import { format } from 'date-fns';
 import { PlusCircle, Wallet, ArrowRightLeft, CornerDownRight, Printer } from 'lucide-react';
 import { AddPaymentDialog } from './AddPaymentDialog';
 import { RefundDialog } from './RefundDialog';
+import { FrontDeskAddPaymentDialog } from '../frontdesk/FrontDeskAddPaymentDialog';
+import { FrontDeskRefundDialog } from '../frontdesk/FrontDeskRefundDialog';
 import { CheckOutDialog } from './CheckOutDialog';
 import { usePathname } from 'next/navigation';
 
@@ -171,18 +173,36 @@ export function FolioSection({ reservation }: { reservation: any }) {
       </Card>
 
       {/* Dialogs */}
-      <AddPaymentDialog 
-        open={isAddPaymentOpen} 
-        onOpenChange={setIsAddPaymentOpen} 
-        folio={folio} 
-      />
-      {refundPaymentId && (
-        <RefundDialog
-          open={!!refundPaymentId}
-          onOpenChange={(open) => !open && setRefundPaymentId(null)}
-          paymentId={refundPaymentId}
-          folio={folio}
+      {pathname.startsWith('/frontdesk') ? (
+        <FrontDeskAddPaymentDialog 
+          open={isAddPaymentOpen} 
+          onOpenChange={setIsAddPaymentOpen} 
+          folio={folio} 
         />
+      ) : (
+        <AddPaymentDialog 
+          open={isAddPaymentOpen} 
+          onOpenChange={setIsAddPaymentOpen} 
+          folio={folio} 
+        />
+      )}
+      
+      {refundPaymentId && (
+        pathname.startsWith('/frontdesk') ? (
+          <FrontDeskRefundDialog
+            open={!!refundPaymentId}
+            onOpenChange={(open) => !open && setRefundPaymentId(null)}
+            paymentId={refundPaymentId}
+            folio={folio}
+          />
+        ) : (
+          <RefundDialog
+            open={!!refundPaymentId}
+            onOpenChange={(open) => !open && setRefundPaymentId(null)}
+            paymentId={refundPaymentId}
+            folio={folio}
+          />
+        )
       )}
       <CheckOutDialog
         open={isCheckOutOpen}

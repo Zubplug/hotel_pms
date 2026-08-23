@@ -322,7 +322,25 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
       return invokeDesktop('pos.startEmergencyBank', { pin, reason, operatorToken });
     },
     getSessionContext: async (sessionId: string) => {
-      return invokeDesktop('pos.getSessionContext', { sessionId });
+      const res = await invokeDesktop('pos.getSessionContext', { sessionId });
+      if (!res?.success || !res.data) return res;
+      
+      const settlementRes = await invokeDesktop('pos.getSessionSettlementDetails', { sessionId });
+      
+      if (settlementRes?.success && settlementRes.data && res.data.posSession) {
+        return {
+          success: true,
+          data: {
+            ...res.data.posSession,
+            outlet: res.data.outlet,
+            terminal: res.data.terminal,
+            primaryOperator: res.data.operator, // Map operator to primaryOperator for Cloud parity
+            ...settlementRes.data
+          }
+        };
+      }
+      
+      return res;
     },
     getAuthorizedOutlets: async (propertyId: string, deviceId: string) => {
       return invokeDesktop('pos.getAuthorizedOutlets', { propertyId, deviceId });

@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2 } from 'lucide-react';
+import { generateUUID } from '@/lib/utils';
 
 export function RefundDialog({ open, onOpenChange, folio, paymentId }: { open: boolean, onOpenChange: (open: boolean) => void, folio: any, paymentId: string }) {
   const [amount, setAmount] = useState<string>('');
@@ -41,7 +42,7 @@ export function RefundDialog({ open, onOpenChange, folio, paymentId }: { open: b
         body: JSON.stringify({
           amount: numAmount,
           reason,
-          idempotencyKey: globalThis.crypto.randomUUID()
+          idempotencyKey: generateUUID()
         })
       });
 

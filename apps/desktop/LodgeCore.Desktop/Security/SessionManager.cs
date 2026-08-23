@@ -48,7 +48,7 @@ public class SessionManager
         // Find if there's an active POS session for this specific operator or terminal
         var activeSession = await _dbContext.PosSessions
             .Where(s => s.PropertyId == property.Id && s.Status == PosConstants.SessionStatus.Open && 
-                        (s.UserId == staff.Id || s.DeviceId == deviceId))
+                        (s.UserId == staff.Id || s.PrimaryOperatorId == staff.Id || s.DeviceId == deviceId))
             .OrderByDescending(s => s.OpenedAt)
             .FirstOrDefaultAsync();
 
@@ -97,7 +97,7 @@ public class SessionManager
         // Check if POS Session changed
         var activePosSession = await _dbContext.PosSessions
             .Where(s => s.PropertyId == context.PropertyId && s.Status == PosConstants.SessionStatus.Open &&
-                        (s.UserId == context.StaffId || s.DeviceId == context.DeviceId))
+                        (s.UserId == context.StaffId || s.PrimaryOperatorId == context.StaffId || s.DeviceId == context.DeviceId))
             .OrderByDescending(s => s.OpenedAt)
             .FirstOrDefaultAsync();
             

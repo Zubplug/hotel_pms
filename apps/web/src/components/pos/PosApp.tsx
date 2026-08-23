@@ -442,7 +442,7 @@ export default function PosApp() {
       const sessionId = (session as any)?.sessionId || localStorage.getItem('lodgecore_pos_session_id');
       const orderData = {
         propertyId,
-        outletId: sessionContext?.outlet?.id,
+        outletId: sessionContext?.outlet?.id || sessionContext?.outletId,
         sessionId,
         orderType: activeOrderType,
         displayName: activeDisplayName,
@@ -834,7 +834,7 @@ export default function PosApp() {
               ) : (
                 <div className="h-full rounded-xl overflow-hidden shadow-sm border border-slate-200 bg-white">
                   <TableMap 
-                    outletId={sessionContext?.outlet?.id || ''} 
+                    outletId={sessionContext?.outlet?.id || sessionContext?.outletId || ''} 
                     onTableSelect={handleTableSelect}
                     activeTableId={activeTableId}
                     refreshTrigger={cart.length}
@@ -1090,7 +1090,7 @@ export default function PosApp() {
         authMode="POS_OPERATOR"
         isOpen={!activeOperator || showSwitchPad}
         cancellable={!!activeOperator && showSwitchPad}
-        outletId={sessionContext?.outlet?.id}
+        outletId={sessionContext?.outlet?.id || sessionContext?.outletId}
         onCancel={() => setShowSwitchPad(false)}
         onAuthenticated={(operator: any, token: string, authData?: any) => {
           if (authData?.bankingModel) setBankingModel(authData.bankingModel);
@@ -1239,12 +1239,12 @@ export default function PosApp() {
         />
       )}
 
-      {activeOperator && operatorToken && sessionContext?.outlet?.id && posSessionId && (
+      {activeOperator && operatorToken && (sessionContext?.outlet?.id || sessionContext?.outletId) && posSessionId && (
         <WaiterTicketsModal
           isOpen={showKitchenModal}
           onClose={() => setShowKitchenModal(false)}
           dataProvider={provider.pos}
-          outletId={sessionContext.outlet.id}
+          outletId={sessionContext?.outlet?.id || sessionContext?.outletId}
           operatorToken={operatorToken}
           sessionId={posSessionId}
         />

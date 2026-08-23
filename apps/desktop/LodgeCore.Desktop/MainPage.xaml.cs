@@ -83,7 +83,7 @@ public partial class MainPage : ContentPage
         }
     }
 
-    private async void CoreWebView2_WebMessageReceived(Microsoft.Web.WebView2.Core.CoreWebView2 sender, Microsoft.Web.WebView2.Core.CoreWebView2WebMessageReceivedEventArgs args)
+    private void CoreWebView2_WebMessageReceived(Microsoft.Web.WebView2.Core.CoreWebView2 sender, Microsoft.Web.WebView2.Core.CoreWebView2WebMessageReceivedEventArgs args)
     {
         try
         {
@@ -95,32 +95,40 @@ public partial class MainPage : ContentPage
 
             string? id = request["id"]?.ToString();
             string? method = request["method"]?.ToString();
-            var parameters = request["params"];
 
             if (string.IsNullOrEmpty(method) || string.IsNullOrEmpty(id)) return;
 
-            // Create a dedicated service scope for this IPC request to ensure thread safety for DbContext
-            var services = Application.Current?.Windows[0]?.Page?.Handler?.MauiContext?.Services;
-            if (services == null)
+            // Dispatch immediately to a background thread to prevent UI freezing
+            Task.Run(async () =>
             {
-                SendError(sender, id, "Services not ready.");
-                return;
-            }
-            using var scope = services.CreateScope();
-            var pmsInterop = scope.ServiceProvider.GetService<OfflinePMSInterop>();
-            var hardwareInterop = scope.ServiceProvider.GetService<HardwareInterop>();
+                try
+                {
+                    // Create a dedicated service scope for this IPC request to ensure thread safety for DbContext
+                    var services = Application.Current?.Windows[0]?.Page?.Handler?.MauiContext?.Services;
+                    if (services == null)
+                    {
+                        MainThread.BeginInvokeOnMainThread(() => SendError(sender, id, "Services not ready."));
+                        return;
+                    }
+                    using var scope = services.CreateScope();
+                    var pmsInterop = scope.ServiceProvider.GetService<OfflinePMSInterop>();
+                    var hardwareInterop = scope.ServiceProvider.GetService<HardwareInterop>();
 
-            if (pmsInterop == null || hardwareInterop == null)
-            {
-                SendError(sender, id, "Interop services not ready.");
-                return;
-            }
+                    if (pmsInterop == null || hardwareInterop == null)
+                    {
+                        MainThread.BeginInvokeOnMainThread(() => SendError(sender, id, "Interop services not ready."));
+                        return;
+                    }
 
-            // Explicit Method Allowlist
-            string? responseData = null;
+                    // Re-parse params safely on background thread
+                    var requestNode = JsonSerializer.Deserialize<JsonNode>(messageStr);
+                    var parameters = requestNode?["params"];
 
-            switch (method)
-            {
+                    // Explicit Method Allowlist
+                    string? responseData = null;
+
+                    switch (method)
+                    {
                 case "system.getTerminalStatus":
                     responseData = await pmsInterop.GetTerminalStatusAsync();
                     break;
@@ -606,39 +614,31 @@ public partial class MainPage : ContentPage
                     break;
 
                 default:
-                    SendError(sender, id, $"Method {method} not found in allowlist.");
-                    return;
-            }
+                            MainThread.BeginInvokeOnMainThread(() => SendError(sender, id, $"Method {method} not found in allowlist."));
+                            return;
+                    }
 
-            // Send success response back to React
-            var responseJson = JsonSerializer.Serialize(new 
-            { 
-                id, 
-                result = JsonNode.Parse(responseData) 
+                    // Send success response back to React
+                    var responseJson = JsonSerializer.Serialize(new 
+                    { 
+                        id, 
+                        result = responseData != null ? JsonNode.Parse(responseData) : null 
+                    });
+                    MainThread.BeginInvokeOnMainThread(() => 
+                    {
+                        sender.PostWebMessageAsString(responseJson);
+                    });
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"IPC Task Error: {ex.Message}");
+                    MainThread.BeginInvokeOnMainThread(() => SendError(sender, id, $"IPC Exception: {ex.Message}"));
+                }
             });
-            sender.PostWebMessageAsString(responseJson);
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"IPC Error: {ex.Message}");
-            // Only send error if we successfully parsed the message ID
-            if (args != null)
-            {
-                try 
-                {
-                    string messageStr = args.TryGetWebMessageAsString();
-                    if (!string.IsNullOrEmpty(messageStr))
-                    {
-                        var req = JsonSerializer.Deserialize<JsonNode>(messageStr);
-                        string? reqId = req?["id"]?.ToString();
-                        if (!string.IsNullOrEmpty(reqId))
-                        {
-                            SendError(sender, reqId, $"IPC Exception: {ex.Message}");
-                        }
-                    }
-                }
-                catch { } // Ignore secondary parsing errors
-            }
         }
     }
 

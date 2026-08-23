@@ -588,22 +588,27 @@ public class EscPosService
             else
             {
                 using var client = new TcpClient();
-                var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-                await client.ConnectAsync(printer.IpAddress, printer.Port, cts.Token);
+                var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+                try
+                {
+                    await client.ConnectAsync(printer.IpAddress, printer.Port, cts.Token);
 
-                using var stream = client.GetStream();
-                await stream.WriteAsync(data, 0, data.Length, cts.Token);
-                await stream.FlushAsync(cts.Token);
+                    using var stream = client.GetStream();
+                    await stream.WriteAsync(data, 0, data.Length, cts.Token);
+                    await stream.FlushAsync(cts.Token);
 
-                _logger.LogInformation("Printed to {Name} ({Ip}:{Port})", printer.Name, printer.IpAddress, printer.Port);
-                return (true, null);
+                    _logger.LogInformation("Printed to {Name} ({Ip}:{Port})", printer.Name, printer.IpAddress, printer.Port);
+                    return (true, null);
+                }
+                catch (OperationCanceledException)
+                {
+                    return (false, $"Printer connection timed out ({printer.IpAddress}:{printer.Port}).");
+                }
+                catch (System.Net.Sockets.SocketException ex)
+                {
+                    return (false, $"Printer connection failed ({printer.IpAddress}:{printer.Port}): {ex.Message}");
+                }
             }
-        }
-        catch (OperationCanceledException)
-        {
-            var msg = $"Timeout sending to printer '{printer.Name}'";
-            _logger.LogWarning(msg);
-            return (false, msg);
         }
         catch (Exception ex)
         {

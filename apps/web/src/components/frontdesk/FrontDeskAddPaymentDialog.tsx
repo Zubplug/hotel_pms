@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2, CreditCard, Banknote, Landmark, Receipt, CheckCircle2, ChevronRight, AlertCircle, ArrowUpRight } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, generateUUID } from '@/lib/utils';
 import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
 
 export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio }: { open: boolean, onOpenChange: (open: boolean) => void, folio: any }) {
@@ -93,7 +93,7 @@ export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio }: { open:
           currency: folio.currency,
           method,
           notes,
-          idempotencyKey: globalThis.crypto.randomUUID()
+          idempotencyKey: generateUUID()
         };
 
         const res = await provider.folios.addPayment(folio.id, payload);

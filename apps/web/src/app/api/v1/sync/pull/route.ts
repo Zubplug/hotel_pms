@@ -154,6 +154,64 @@ export async function GET(req: NextRequest) {
       orderBy: { updatedAt: 'asc' },
     });
 
+    // ── POS Transactions (Sessions, Orders, KOTs, Payments) ──
+    const buildPosSessionWhere = (baseWhere: any) => {
+      if (!since) {
+        const twoDaysAgo = new Date(watermark);
+        twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+        return { 
+            ...baseWhere, 
+            updatedAt: { lte: watermark },
+            OR: [
+              { status: 'OPEN' },
+              { status: 'PENDING_HANDOVER' },
+              { closedAt: { gte: twoDaysAgo } }
+            ]
+        };
+      }
+      return {
+        ...baseWhere,
+        updatedAt: { gt: since, lte: watermark }
+      };
+    };
+
+    const posSessions = await prisma.posSession.findMany({
+      where: buildOutletWhere(buildPosSessionWhere({ outletId: { in: outletIds } })),
+      take: limit,
+      orderBy: { updatedAt: 'asc' },
+    });
+
+    const buildPosOrderWhere = (baseWhere: any) => {
+      if (!since) {
+        const twoDaysAgo = new Date(watermark);
+        twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+        return {
+            ...baseWhere,
+            updatedAt: { lte: watermark },
+            OR: [
+              { status: { in: ['OPEN', 'PENDING'] } },
+              { closedAt: { gte: twoDaysAgo } }
+            ]
+        };
+      }
+      return {
+        ...baseWhere,
+        updatedAt: { gt: since, lte: watermark }
+      };
+    };
+
+    const posOrders = await prisma.posOrder.findMany({
+      where: buildPosOrderWhere({ propertyId }),
+      include: {
+        items: { include: { modifiers: true } },
+        checks: true,
+        kots: { include: { items: true } },
+        payments: true
+      },
+      take: limit,
+      orderBy: { updatedAt: 'asc' },
+    });
+
     const housekeepingTasks = await prisma.housekeepingTask.findMany({
       where: buildWhere({ propertyId }),
       take: limit,
@@ -181,6 +239,8 @@ export async function GET(req: NextRequest) {
     posProducts.forEach(s => allEntities.push({ type: 'PosProduct', updatedAt: s.updatedAt, data: s }));
     posFloorPlans.forEach(s => allEntities.push({ type: 'PosFloorPlan', updatedAt: s.updatedAt, data: s }));
     posTables.forEach(s => allEntities.push({ type: 'PosTable', updatedAt: s.updatedAt, data: s }));
+    posSessions.forEach(s => allEntities.push({ type: 'PosSession', updatedAt: s.updatedAt, data: s }));
+    posOrders.forEach(s => allEntities.push({ type: 'PosOrder', updatedAt: s.updatedAt, data: s }));
     housekeepingTasks.forEach(s => allEntities.push({ type: 'HousekeepingTask', updatedAt: s.updatedAt, data: s }));
     maintenanceTickets.forEach(s => allEntities.push({ type: 'MaintenanceTicket', updatedAt: s.updatedAt, data: s }));
 
@@ -217,6 +277,8 @@ export async function GET(req: NextRequest) {
     const finalProducts = allEntities.filter(e => e.type === 'PosProduct').map(e => e.data);
     const finalFloorPlans = allEntities.filter(e => e.type === 'PosFloorPlan').map(e => e.data);
     const finalTables = allEntities.filter(e => e.type === 'PosTable').map(e => e.data);
+    const finalPosSessions = allEntities.filter(e => e.type === 'PosSession').map(e => e.data);
+    const finalPosOrders = allEntities.filter(e => e.type === 'PosOrder').map(e => e.data);
     const finalHousekeepingTasks = allEntities.filter(e => e.type === 'HousekeepingTask').map(e => e.data);
     const finalMaintenanceTickets = allEntities.filter(e => e.type === 'MaintenanceTicket').map(e => e.data);
 
@@ -302,6 +364,8 @@ export async function GET(req: NextRequest) {
       posProducts: finalProducts,
       posFloorPlans: finalFloorPlans,
       posTables:  finalTables,
+      posSessions: finalPosSessions,
+      posOrders: finalPosOrders,
       housekeepingTasks: finalHousekeepingTasks,
       maintenanceTickets: finalMaintenanceTickets,
     });

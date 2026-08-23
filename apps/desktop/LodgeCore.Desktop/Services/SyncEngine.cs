@@ -1141,6 +1141,278 @@ public class SyncEngine : BackgroundService
                 }
             }
 
+            
+            // 10.5 POS Sessions
+            if (root.TryGetProperty("posSessions", out var posSessionsArray))
+            {
+                var incomingIds = new HashSet<string>();
+                foreach (var el in posSessionsArray.EnumerateArray())
+                {
+                    var id = el.GetProperty("id").GetString();
+                    if (string.IsNullOrEmpty(id)) continue;
+                    incomingIds.Add(id);
+
+                    var session = await dbContext.PosSessions.FirstOrDefaultAsync(x => x.Id == id, stoppingToken);
+                    
+                    var incomingUpdatedAt = el.TryGetProperty("updatedAt", out var u) ? u.GetDateTime() : DateTime.MinValue;
+                    if (session != null && session.UpdatedAt >= incomingUpdatedAt) continue;
+
+                    if (session == null)
+                    {
+                        session = new LodgeCore.Desktop.Data.Entities.LocalPosSession { Id = id };
+                        dbContext.PosSessions.Add(session);
+                    }
+                    session.PropertyId = propertyId;
+                    session.OutletId = el.TryGetProperty("outletId", out var oid) ? oid.GetString() ?? "" : "";
+                    session.DeviceId = el.TryGetProperty("deviceId", out var did) && did.ValueKind != System.Text.Json.JsonValueKind.Null ? did.GetString() : null;
+                    session.UserId = el.TryGetProperty("userId", out var uid) && uid.ValueKind != System.Text.Json.JsonValueKind.Null ? uid.GetString() ?? "" : "";
+                    session.Status = el.TryGetProperty("status", out var st) ? st.GetString() ?? "" : "";
+                    session.BankingModel = el.TryGetProperty("bankingModel", out var bm) ? bm.GetString() ?? "CENTRAL_CASHIER" : "CENTRAL_CASHIER";
+                    session.BankType = el.TryGetProperty("bankType", out var bt) ? bt.GetString() ?? "CENTRAL" : "CENTRAL";
+                    session.PrimaryOperatorId = el.TryGetProperty("primaryOperatorId", out var poi) && poi.ValueKind != System.Text.Json.JsonValueKind.Null ? poi.GetString() : null;
+                    session.AuthorizedBy = el.TryGetProperty("authorizedBy", out var auth) && auth.ValueKind != System.Text.Json.JsonValueKind.Null ? auth.GetString() : null;
+                    session.Reason = el.TryGetProperty("reason", out var rs) && rs.ValueKind != System.Text.Json.JsonValueKind.Null ? rs.GetString() : null;
+                    
+                    if (el.TryGetProperty("openedAt", out var oa) && oa.ValueKind != System.Text.Json.JsonValueKind.Null) session.OpenedAt = oa.GetDateTime();
+                    if (el.TryGetProperty("closedAt", out var ca) && ca.ValueKind != System.Text.Json.JsonValueKind.Null) session.ClosedAt = ca.GetDateTime();
+                    
+                    session.OpeningCash = el.TryGetProperty("openingCash", out var oc) ? (oc.ValueKind == System.Text.Json.JsonValueKind.Number ? oc.GetDecimal() : 0m) : 0m;
+                    session.CashSales = el.TryGetProperty("cashSales", out var cs) ? (cs.ValueKind == System.Text.Json.JsonValueKind.Number ? cs.GetDecimal() : 0m) : 0m;
+                    session.CashRefunds = el.TryGetProperty("cashRefunds", out var cr) ? (cr.ValueKind == System.Text.Json.JsonValueKind.Number ? cr.GetDecimal() : 0m) : 0m;
+                    session.CashIn = el.TryGetProperty("cashIn", out var ci) ? (ci.ValueKind == System.Text.Json.JsonValueKind.Number ? ci.GetDecimal() : 0m) : 0m;
+                    session.CashOut = el.TryGetProperty("cashOut", out var co) ? (co.ValueKind == System.Text.Json.JsonValueKind.Number ? co.GetDecimal() : 0m) : 0m;
+                    session.ExpectedCash = el.TryGetProperty("expectedCash", out var ec) ? (ec.ValueKind == System.Text.Json.JsonValueKind.Number ? ec.GetDecimal() : 0m) : 0m;
+                    if (el.TryGetProperty("actualCash", out var ac) && ac.ValueKind == System.Text.Json.JsonValueKind.Number) session.ActualCash = ac.GetDecimal();
+                    if (el.TryGetProperty("variance", out var va) && va.ValueKind == System.Text.Json.JsonValueKind.Number) session.Variance = va.GetDecimal();
+                    
+                    session.ApprovedBy = el.TryGetProperty("approvedBy", out var ap) && ap.ValueKind != System.Text.Json.JsonValueKind.Null ? ap.GetString() : null;
+                    if (el.TryGetProperty("approvedAt", out var apa) && apa.ValueKind != System.Text.Json.JsonValueKind.Null) session.ApprovedAt = apa.GetDateTime();
+                    
+                    if (el.TryGetProperty("businessDate", out var bd) && bd.ValueKind != System.Text.Json.JsonValueKind.Null) session.BusinessDate = bd.GetDateTime();
+                    session.OpenedBy = el.TryGetProperty("openedBy", out var ob) && ob.ValueKind != System.Text.Json.JsonValueKind.Null ? ob.GetString() : null;
+                    session.ClosedBy = el.TryGetProperty("closedBy", out var cb) && cb.ValueKind != System.Text.Json.JsonValueKind.Null ? cb.GetString() : null;
+                    
+                    session.Version = el.TryGetProperty("version", out var v) && v.ValueKind == System.Text.Json.JsonValueKind.Number ? v.GetInt32() : 1;
+                    if (el.TryGetProperty("createdAt", out var crt) && crt.ValueKind != System.Text.Json.JsonValueKind.Null) session.CreatedAt = crt.GetDateTime();
+                    session.UpdatedAt = incomingUpdatedAt;
+                }
+            }
+
+            // 10.6 POS Orders
+            if (root.TryGetProperty("posOrders", out var posOrdersArray))
+            {
+                foreach (var el in posOrdersArray.EnumerateArray())
+                {
+                    var id = el.GetProperty("id").GetString();
+                    if (string.IsNullOrEmpty(id)) continue;
+
+                    var order = await dbContext.PosOrders
+                        .Include(o => o.Items).ThenInclude(i => i.Modifiers)
+                        .Include(o => o.Payments)
+                        .Include(o => o.Checks)
+                        .Include(o => o.Kots)
+                        .FirstOrDefaultAsync(x => x.Id == id, stoppingToken);
+
+                    var incomingUpdatedAt = el.TryGetProperty("updatedAt", out var u) && u.ValueKind != System.Text.Json.JsonValueKind.Null ? u.GetDateTime() : DateTime.MinValue;
+                    
+                    // Dirty protection! Check if local has been updated more recently or has changes pending sync
+                    // Wait, we don't have IsDirty on PosOrders yet? LocalPosOrder does not have IsDirty.
+                    // But if it was updated locally, its UpdatedAt might be > incomingUpdatedAt
+                    if (order != null && order.UpdatedAt >= incomingUpdatedAt) continue;
+
+                    if (order == null)
+                    {
+                        order = new LodgeCore.Desktop.Data.Entities.LocalPosOrder { Id = id };
+                        dbContext.PosOrders.Add(order);
+                    }
+                    order.PropertyId = propertyId;
+                    order.OutletId = el.TryGetProperty("outletId", out var oid) ? oid.GetString() ?? "" : "";
+                    order.SessionId = el.TryGetProperty("sessionId", out var sid) && sid.ValueKind != System.Text.Json.JsonValueKind.Null ? sid.GetString() : null;
+                    order.FolioId = el.TryGetProperty("folioId", out var fid) && fid.ValueKind != System.Text.Json.JsonValueKind.Null ? fid.GetString() : null;
+                    order.OrderNumber = el.TryGetProperty("orderNumber", out var on) ? on.GetString() ?? "" : "";
+                    order.Status = el.TryGetProperty("status", out var st) ? st.GetString() ?? "" : "";
+                    if (el.TryGetProperty("businessDate", out var bd) && bd.ValueKind != System.Text.Json.JsonValueKind.Null) order.BusinessDate = bd.GetDateTime();
+                    order.Subtotal = el.TryGetProperty("subtotal", out var sub) && sub.ValueKind == System.Text.Json.JsonValueKind.Number ? sub.GetDecimal() : 0m;
+                    order.TaxAmount = el.TryGetProperty("taxAmount", out var tax) && tax.ValueKind == System.Text.Json.JsonValueKind.Number ? tax.GetDecimal() : 0m;
+                    order.Total = el.TryGetProperty("total", out var tot) && tot.ValueKind == System.Text.Json.JsonValueKind.Number ? tot.GetDecimal() : 0m;
+                    order.Notes = el.TryGetProperty("notes", out var no) && no.ValueKind != System.Text.Json.JsonValueKind.Null ? no.GetString() : null;
+                    order.TableNumber = el.TryGetProperty("tableNumber", out var tn) && tn.ValueKind != System.Text.Json.JsonValueKind.Null ? tn.GetString() : null;
+                    order.TableId = el.TryGetProperty("tableId", out var ti) && ti.ValueKind != System.Text.Json.JsonValueKind.Null ? ti.GetString() : null;
+                    order.GuestCount = el.TryGetProperty("guestCount", out var gc) && gc.ValueKind == System.Text.Json.JsonValueKind.Number ? gc.GetInt32() : 1;
+                    order.ServiceCharge = el.TryGetProperty("serviceCharge", out var sc) && sc.ValueKind == System.Text.Json.JsonValueKind.Number ? sc.GetDecimal() : 0m;
+                    order.TipAmount = el.TryGetProperty("tipAmount", out var tip) && tip.ValueKind == System.Text.Json.JsonValueKind.Number ? tip.GetDecimal() : 0m;
+                    order.ServerStaffId = el.TryGetProperty("serverStaffId", out var ssi) && ssi.ValueKind != System.Text.Json.JsonValueKind.Null ? ssi.GetString() : null;
+                    order.Version = el.TryGetProperty("version", out var v) && v.ValueKind == System.Text.Json.JsonValueKind.Number ? v.GetInt32() : 1;
+                    order.OrderType = el.TryGetProperty("orderType", out var ot) ? ot.GetString() ?? "TABLE" : "TABLE";
+                    order.PaymentStatus = el.TryGetProperty("paymentStatus", out var ps) ? ps.GetString() ?? "UNPAID" : "UNPAID";
+                    order.Discount = el.TryGetProperty("discount", out var dis) && dis.ValueKind == System.Text.Json.JsonValueKind.Number ? dis.GetDecimal() : 0m;
+                    order.DisplayName = el.TryGetProperty("displayName", out var dn) ? dn.GetString() ?? "" : "";
+                    if (el.TryGetProperty("closedAt", out var ca) && ca.ValueKind != System.Text.Json.JsonValueKind.Null) order.ClosedAt = ca.GetDateTime();
+                    if (el.TryGetProperty("createdAt", out var crt) && crt.ValueKind != System.Text.Json.JsonValueKind.Null) order.CreatedAt = crt.GetDateTime();
+                    order.UpdatedAt = incomingUpdatedAt;
+
+                    // Items
+                    if (el.TryGetProperty("items", out var items) && items.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    {
+                        var incomingItemIds = new HashSet<string>();
+                        foreach (var itemEl in items.EnumerateArray())
+                        {
+                            var itemId = itemEl.GetProperty("id").GetString();
+                            if (string.IsNullOrEmpty(itemId)) continue;
+                            incomingItemIds.Add(itemId);
+                            
+                            var item = order.Items.FirstOrDefault(i => i.Id == itemId);
+                            if (item == null)
+                            {
+                                item = new LodgeCore.Desktop.Data.Entities.LocalPosOrderItem { Id = itemId, OrderId = id };
+                                order.Items.Add(item);
+                            }
+                            item.ProductId = itemEl.TryGetProperty("productId", out var pid) && pid.ValueKind != System.Text.Json.JsonValueKind.Null ? pid.GetString() : null;
+                            item.ProductName = itemEl.TryGetProperty("productName", out var pn) ? pn.GetString() ?? "" : "";
+                            item.Quantity = itemEl.TryGetProperty("quantity", out var iq) && iq.ValueKind == System.Text.Json.JsonValueKind.Number ? iq.GetDecimal() : 1m;
+                            item.UnitPrice = itemEl.TryGetProperty("unitPrice", out var up) && up.ValueKind == System.Text.Json.JsonValueKind.Number ? up.GetDecimal() : 0m;
+                            item.TaxRate = itemEl.TryGetProperty("taxRate", out var itr) && itr.ValueKind == System.Text.Json.JsonValueKind.Number ? itr.GetDecimal() : 0m;
+                            item.TaxAmount = itemEl.TryGetProperty("taxAmount", out var ita) && ita.ValueKind == System.Text.Json.JsonValueKind.Number ? ita.GetDecimal() : 0m;
+                            item.Total = itemEl.TryGetProperty("total", out var itot) && itot.ValueKind == System.Text.Json.JsonValueKind.Number ? itot.GetDecimal() : 0m;
+                            item.Subtotal = itemEl.TryGetProperty("subtotal", out var isub) && isub.ValueKind == System.Text.Json.JsonValueKind.Number ? isub.GetDecimal() : 0m;
+                            item.Discount = itemEl.TryGetProperty("discount", out var idis) && idis.ValueKind == System.Text.Json.JsonValueKind.Number ? idis.GetDecimal() : 0m;
+                            item.Course = itemEl.TryGetProperty("course", out var ico) && ico.ValueKind == System.Text.Json.JsonValueKind.Number ? ico.GetInt32() : null;
+                            item.KitchenStatus = itemEl.TryGetProperty("kitchenStatus", out var iks) && iks.ValueKind != System.Text.Json.JsonValueKind.Null ? iks.GetString() : null;
+                            if (itemEl.TryGetProperty("sentToKitchenAt", out var iska) && iska.ValueKind != System.Text.Json.JsonValueKind.Null) item.SentToKitchenAt = iska.GetDateTime();
+                            item.VoidReason = itemEl.TryGetProperty("voidReason", out var ivr) && ivr.ValueKind != System.Text.Json.JsonValueKind.Null ? ivr.GetString() : null;
+                            item.CheckId = itemEl.TryGetProperty("checkId", out var icid) && icid.ValueKind != System.Text.Json.JsonValueKind.Null ? icid.GetString() : null;
+                            item.KotId = itemEl.TryGetProperty("kotId", out var ikot) && ikot.ValueKind != System.Text.Json.JsonValueKind.Null ? ikot.GetString() : null;
+                            if (itemEl.TryGetProperty("createdAt", out var icrt) && icrt.ValueKind != System.Text.Json.JsonValueKind.Null) item.CreatedAt = icrt.GetDateTime();
+
+                            if (itemEl.TryGetProperty("modifiers", out var mods) && mods.ValueKind == System.Text.Json.JsonValueKind.Array)
+                            {
+                                var incomingModIds = new HashSet<string>();
+                                foreach (var mEl in mods.EnumerateArray())
+                                {
+                                    var mId = mEl.GetProperty("id").GetString();
+                                    if (string.IsNullOrEmpty(mId)) continue;
+                                    incomingModIds.Add(mId);
+
+                                    var mod = item.Modifiers.FirstOrDefault(m => m.Id == mId);
+                                    if (mod == null)
+                                    {
+                                        mod = new LodgeCore.Desktop.Data.Entities.LocalPosOrderItemModifier { Id = mId, OrderItemId = itemId };
+                                        item.Modifiers.Add(mod);
+                                    }
+                                    mod.ModifierId = mEl.TryGetProperty("modifierId", out var mmid) ? mmid.GetString() ?? "" : "";
+                                    mod.Name = mEl.TryGetProperty("name", out var mmn) ? mmn.GetString() ?? "" : "";
+                                    mod.Price = mEl.TryGetProperty("price", out var mmpr) && mmpr.ValueKind == System.Text.Json.JsonValueKind.Number ? mmpr.GetDecimal() : 0m;
+                                    mod.Quantity = mEl.TryGetProperty("quantity", out var mmq) && mmq.ValueKind == System.Text.Json.JsonValueKind.Number ? mmq.GetDecimal() : 1m;
+                                    mod.Total = mEl.TryGetProperty("total", out var mmtot) && mmtot.ValueKind == System.Text.Json.JsonValueKind.Number ? mmtot.GetDecimal() : 0m;
+                                }
+                                var modsToRemove = item.Modifiers.Where(m => !incomingModIds.Contains(m.Id)).ToList();
+                                foreach (var m in modsToRemove) item.Modifiers.Remove(m);
+                            }
+                        }
+                        var itemsToRemove = order.Items.Where(i => !incomingItemIds.Contains(i.Id)).ToList();
+                        foreach(var i in itemsToRemove) order.Items.Remove(i);
+                    }
+
+                    // Checks
+                    if (el.TryGetProperty("checks", out var checks) && checks.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    {
+                        var incomingCheckIds = new HashSet<string>();
+                        foreach (var checkEl in checks.EnumerateArray())
+                        {
+                            var checkId = checkEl.GetProperty("id").GetString();
+                            if (string.IsNullOrEmpty(checkId)) continue;
+                            incomingCheckIds.Add(checkId);
+
+                            var check = order.Checks.FirstOrDefault(c => c.Id == checkId);
+                            if (check == null)
+                            {
+                                check = new LodgeCore.Desktop.Data.Entities.LocalPosCheck { Id = checkId, OrderId = id };
+                                order.Checks.Add(check);
+                            }
+                            check.CheckNumber = checkEl.TryGetProperty("checkNumber", out var cn) ? cn.GetString() ?? "" : "";
+                            check.Total = checkEl.TryGetProperty("total", out var ct) && ct.ValueKind == System.Text.Json.JsonValueKind.Number ? ct.GetDecimal() : 0m;
+                            check.Status = checkEl.TryGetProperty("status", out var cs) ? cs.GetString() ?? "OPEN" : "OPEN";
+                            if (checkEl.TryGetProperty("businessDate", out var cbd) && cbd.ValueKind != System.Text.Json.JsonValueKind.Null) check.BusinessDate = cbd.GetDateTime();
+                            if (checkEl.TryGetProperty("createdAt", out var ccrt) && ccrt.ValueKind != System.Text.Json.JsonValueKind.Null) check.CreatedAt = ccrt.GetDateTime();
+                            if (checkEl.TryGetProperty("updatedAt", out var cupd) && cupd.ValueKind != System.Text.Json.JsonValueKind.Null) check.UpdatedAt = cupd.GetDateTime();
+                        }
+                        var checksToRemove = order.Checks.Where(c => !incomingCheckIds.Contains(c.Id)).ToList();
+                        foreach(var c in checksToRemove) order.Checks.Remove(c);
+                    }
+
+                    // Payments
+                    if (el.TryGetProperty("checks", out var checksPayments) && checksPayments.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    {
+                        var incomingPaymentIds = new HashSet<string>();
+                        foreach (var checkEl in checksPayments.EnumerateArray())
+                        {
+                            if (checkEl.TryGetProperty("payments", out var payments) && payments.ValueKind == System.Text.Json.JsonValueKind.Array)
+                            {
+                                foreach (var payEl in payments.EnumerateArray())
+                                {
+                                    var payId = payEl.GetProperty("id").GetString();
+                                    if (string.IsNullOrEmpty(payId)) continue;
+                                    incomingPaymentIds.Add(payId);
+
+                                    var payment = order.Payments.FirstOrDefault(p => p.Id == payId);
+                                    if (payment == null)
+                                    {
+                                        payment = new LodgeCore.Desktop.Data.Entities.LocalPosPayment { Id = payId, OrderId = id };
+                                        order.Payments.Add(payment);
+                                    }
+                                    payment.Method = payEl.TryGetProperty("method", out var pm) ? pm.GetString() ?? "" : "";
+                                    payment.Status = payEl.TryGetProperty("status", out var pst) ? pst.GetString() ?? "" : "";
+                                    payment.Amount = payEl.TryGetProperty("amount", out var pa) && pa.ValueKind == System.Text.Json.JsonValueKind.Number ? pa.GetDecimal() : 0m;
+                                    payment.Currency = payEl.TryGetProperty("currency", out var pcu) ? pcu.GetString() ?? "NGN" : "NGN";
+                                    payment.CheckId = payEl.TryGetProperty("checkId", out var pci) && pci.ValueKind != System.Text.Json.JsonValueKind.Null ? pci.GetString() : null;
+                                    payment.SessionId = payEl.TryGetProperty("sessionId", out var psi) && psi.ValueKind != System.Text.Json.JsonValueKind.Null ? psi.GetString() : null;
+                                    if (payEl.TryGetProperty("businessDate", out var pbd) && pbd.ValueKind != System.Text.Json.JsonValueKind.Null) payment.BusinessDate = pbd.GetDateTime();
+                                    if (payEl.TryGetProperty("createdAt", out var pcrt) && pcrt.ValueKind != System.Text.Json.JsonValueKind.Null) payment.CreatedAt = pcrt.GetDateTime();
+                                    if (payEl.TryGetProperty("updatedAt", out var pupd) && pupd.ValueKind != System.Text.Json.JsonValueKind.Null) payment.UpdatedAt = pupd.GetDateTime();
+                                }
+                            }
+                        }
+                        var paysToRemove = order.Payments.Where(p => !incomingPaymentIds.Contains(p.Id)).ToList();
+                        foreach (var p in paysToRemove) order.Payments.Remove(p);
+                    }
+
+                    // Kots
+                    if (el.TryGetProperty("kots", out var kots) && kots.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    {
+                        var incomingKotIds = new HashSet<string>();
+                        foreach (var kotEl in kots.EnumerateArray())
+                        {
+                            var kotId = kotEl.GetProperty("id").GetString();
+                            if (string.IsNullOrEmpty(kotId)) continue;
+                            incomingKotIds.Add(kotId);
+
+                            var kot = order.Kots.FirstOrDefault(k => k.Id == kotId);
+                            if (kot == null)
+                            {
+                                kot = new LodgeCore.Desktop.Data.Entities.LocalPosKot { Id = kotId, OrderId = id };
+                                order.Kots.Add(kot);
+                            }
+                            kot.OutletId = kotEl.TryGetProperty("outletId", out var koid) ? koid.GetString() ?? "" : "";
+                            kot.CreatedBy = kotEl.TryGetProperty("createdBy", out var kcb) ? kcb.GetString() ?? "" : "";
+                            kot.KotNumber = kotEl.TryGetProperty("kotNumber", out var kkn) ? kkn.GetString() ?? "" : "";
+                            kot.Status = kotEl.TryGetProperty("status", out var ks) ? ks.GetString() ?? "PENDING" : "PENDING";
+                            kot.PrintStatus = kotEl.TryGetProperty("printStatus", out var kps) ? kps.GetString() ?? "QUEUED" : "QUEUED";
+                            if (kotEl.TryGetProperty("businessDate", out var kbd) && kbd.ValueKind != System.Text.Json.JsonValueKind.Null) kot.BusinessDate = kbd.GetDateTime();
+                            if (kotEl.TryGetProperty("createdAt", out var kcrt) && kcrt.ValueKind != System.Text.Json.JsonValueKind.Null) kot.CreatedAt = kcrt.GetDateTime();
+                            
+                            // Prevent duplicate prints for KOTs that sync down by forcing print status to completed
+                            // if they are already printed on the server, unless they were just fired
+                            if (kot.PrintStatus == "QUEUED" && kot.Status != "PENDING") {
+                                kot.PrintStatus = "COMPLETED";
+                            }
+                        }
+                        var kotsToRemove = order.Kots.Where(k => !incomingKotIds.Contains(k.Id)).ToList();
+                        foreach(var k in kotsToRemove) order.Kots.Remove(k);
+                    }
+                }
+            }
+
+
             // 11. Housekeeping Tasks
             if (root.TryGetProperty("housekeepingTasks", out var housekeepingTasksArray))
             {
@@ -1257,7 +1529,6 @@ public class SyncEngine : BackgroundService
         
         var deviceId = Preferences.Get("DeviceTerminalId", "");
         var propertyId = Preferences.Get("DevicePropertyId", "");
-        var baseUrl = Preferences.Get("CloudBaseUrl", "https://api.lodgecore.test");
         var token = await SecureStorage.GetAsync("DeviceAuthToken");
 
         if (string.IsNullOrEmpty(deviceId) || string.IsNullOrEmpty(propertyId) || string.IsNullOrEmpty(token))
@@ -1290,7 +1561,7 @@ public class SyncEngine : BackgroundService
 
         _httpClient.Timeout = TimeSpan.FromSeconds(30);
 
-        var request = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/api/v1/sync/push/frontdesk");
+        var request = new HttpRequestMessage(HttpMethod.Post, "sync/push/frontdesk");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         
         var payload = new 
@@ -1440,13 +1711,12 @@ public class SyncEngine : BackgroundService
     {
         var token = _credentialStorage.LoadCredential("deviceCredential");
         var propertyId = Preferences.Get("DevicePropertyId", "");
-        var baseUrl = Preferences.Get("CloudBaseUrl", "https://api.lodgecore.test");
-        
-        if (string.IsNullOrEmpty(token) || string.IsNullOrEmpty(propertyId)) return false;
-        
+
+        if (string.IsNullOrEmpty(propertyId) || string.IsNullOrEmpty(token)) return false;
+
         try
         {
-            var request = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/api/v1/device/refresh");
+            var request = new HttpRequestMessage(HttpMethod.Post, "device/refresh");
             request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
             request.Content = JsonContent.Create(new { propertyId });
             
@@ -1482,7 +1752,6 @@ public class SyncEngine : BackgroundService
         var localRepo = scope.ServiceProvider.GetRequiredService<LocalRepository>();
         
         var propertyId = Preferences.Get("DevicePropertyId", "");
-        var baseUrl = Preferences.Get("CloudBaseUrl", "https://api.lodgecore.test");
         var token = await SecureStorage.GetAsync("DeviceAuthToken");
 
         if (string.IsNullOrEmpty(propertyId) || string.IsNullOrEmpty(token)) return;
@@ -1495,7 +1764,7 @@ public class SyncEngine : BackgroundService
             var meta = await dbContext.SyncMetadata.FirstOrDefaultAsync(stoppingToken);
             var cursor = meta?.LastGuestSyncCursor;
             
-            var url = $"{baseUrl}/api/v1/sync/guests?propertyId={propertyId}&limit=500";
+            var url = $"sync/guests?propertyId={propertyId}&limit=500";
             if (!string.IsNullOrEmpty(cursor))
             {
                 url += $"&cursor={Uri.EscapeDataString(cursor)}";
