@@ -81,7 +81,7 @@ export default function LaundryOrdersPage() {
                   <td className="px-6 py-5">{renderStatus(order.status)}</td>
                   <td className="px-6 py-5 font-bold text-slate-900">{formatCurrency(Number(order.totalAmount), order.currency)}</td>
                   <td className="px-6 py-5 text-right">
-                    <Button variant="secondary" size="sm" className="rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200" onClick={() => router.push(`/laundry/orders/${order.id}`)}>
+                    <Button variant="secondary" size="sm" className="rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200" onClick={() => router.push(`/laundry/orders/detail?id=${order.id}`)}>
                       Manage
                     </Button>
                   </td>

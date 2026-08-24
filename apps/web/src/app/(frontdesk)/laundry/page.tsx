@@ -161,7 +161,7 @@ export default function LaundryDashboard() {
                     </div>
 
                     <div className="shrink-0 pl-2 border-l border-slate-100">
-                      <Button size="sm" variant="secondary" className="rounded-xl px-4 bg-slate-100 text-slate-600 hover:bg-slate-200" onClick={() => router.push(`/laundry/orders/${order.id}`)}>
+                      <Button size="sm" variant="secondary" className="rounded-xl px-4 bg-slate-100 text-slate-600 hover:bg-slate-200" onClick={() => router.push(`/laundry/orders/detail?id=${order.id}`)}>
                         Manage
                       </Button>
                     </div>

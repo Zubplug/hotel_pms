@@ -3,14 +3,14 @@
 import { useState, useEffect } from 'react';
 import { useProperty } from '@/components/PropertyProvider';
 import { Button } from '@/components/ui/button';
-import { useRouter } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Loader2, Shirt, CheckCircle2, Clock, Truck } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
-import { use } from 'react';
 
-export default function ManageLaundryOrderPage({ params }: { params: Promise<{ id: string }> }) {
-  const resolvedParams = use(params);
+export default function ManageLaundryOrderPage() {
+  const searchParams = useSearchParams();
+  const orderId = searchParams.get('id');
   const { propertyId } = useProperty();
   const { provider } = useLodgeCoreProvider();
   const router = useRouter();
@@ -25,7 +25,7 @@ export default function ManageLaundryOrderPage({ params }: { params: Promise<{ i
     // Fetch all and filter, since we don't have a single-order endpoint in the provider interface yet
     const res = await provider.laundry.getOrders(propertyId);
     if (res.data) {
-      const found = res.data.find((o: any) => o.id === resolvedParams.id);
+      const found = res.data.find((o: any) => o.id === orderId);
       setOrder(found || null);
     }
     setLoading(false);
@@ -33,7 +33,7 @@ export default function ManageLaundryOrderPage({ params }: { params: Promise<{ i
 
   useEffect(() => {
     fetchOrder();
-  }, [propertyId, resolvedParams.id]);
+  }, [propertyId, orderId]);
 
   const handleUpdateStatus = async (status: string) => {
     if (!order) return;

@@ -327,10 +327,17 @@ public class SyncEngine : BackgroundService
 
         if (!pendingEvents.Any()) return;
 
+        // Apply exponential backoff in memory
+        var now = DateTime.UtcNow;
+        var backoffEvents = pendingEvents.Where(e => e.LastAttemptAt != null && e.LastAttemptAt.Value.AddSeconds(Math.Min(3600, Math.Pow(2, e.AttemptCount) * 5)) > now).ToList();
+        var eligibleEvents = pendingEvents.Except(backoffEvents).ToList();
+
+        if (!eligibleEvents.Any()) return;
+
         var deviceId = await _authManager.GetOrCreateDeviceIdAsync();
         
         // Ensure we only push events for THIS terminal (or group by terminal if mixed)
-        var eventsToPush = pendingEvents.Where(e => e.TerminalId == deviceId).ToList();
+        var eventsToPush = eligibleEvents.Where(e => e.TerminalId == deviceId).ToList();
         if (!eventsToPush.Any()) return;
 
         _logger.LogInformation($"Pushing {eventsToPush.Count} pending operations to cloud...");
@@ -797,23 +804,24 @@ public class SyncEngine : BackgroundService
                     var existingRooms = await dbContext.ReservationRooms.Where(rr => rr.ReservationId == id).ToListAsync(stoppingToken);
                     if (existingRooms.Any()) dbContext.ReservationRooms.RemoveRange(existingRooms);
 
-                    if (el.TryGetProperty("reservationRooms", out var roomsArr) && roomsArr.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    var flattenedRoomId = el.TryGetProperty("roomId", out var rid) && rid.ValueKind != System.Text.Json.JsonValueKind.Null ? rid.GetString() : null;
+                    if (!string.IsNullOrEmpty(flattenedRoomId))
                     {
-                        foreach (var roomEl in roomsArr.EnumerateArray())
+                        var rr = new LodgeCore.Desktop.Data.Entities.LocalReservationRoom
                         {
-                            var rr = new LodgeCore.Desktop.Data.Entities.LocalReservationRoom
-                            {
-                                ReservationId = id,
-                                RoomTypeId = roomEl.TryGetProperty("roomTypeId", out var rtid) && rtid.ValueKind != System.Text.Json.JsonValueKind.Null ? rtid.GetString() ?? "" : "",
-                                RoomId = roomEl.TryGetProperty("roomId", out var rid) && rid.ValueKind != System.Text.Json.JsonValueKind.Null ? rid.GetString() : null,
-                                Status = roomEl.TryGetProperty("status", out var rst) && rst.ValueKind != System.Text.Json.JsonValueKind.Null ? rst.GetString() ?? "PENDING" : "PENDING"
-                            };
-                            if (roomEl.TryGetProperty("checkIn", out var rci) && rci.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(rci.GetString(), out var rcid)) rr.CheckInDate = rcid;
-                            if (roomEl.TryGetProperty("checkOut", out var rco) && rco.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(rco.GetString(), out var rcod)) rr.CheckOutDate = rcod;
-                            rr.Adults = roomEl.TryGetProperty("adults", out var radl) ? radl.GetInt32() : 1;
-                            rr.Children = roomEl.TryGetProperty("children", out var rchl) ? rchl.GetInt32() : 0;
-                            dbContext.ReservationRooms.Add(rr);
-                        }
+                            Id = Guid.NewGuid().ToString(),
+                            ReservationId = id,
+                            RoomId = flattenedRoomId,
+                            RoomTypeId = el.TryGetProperty("roomTypeId", out var rtid) && rtid.ValueKind != System.Text.Json.JsonValueKind.Null ? rtid.GetString() ?? "" : "",
+                            Status = "PENDING"
+                        };
+                        
+                        if (el.TryGetProperty("checkIn", out var rci) && rci.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(rci.GetString(), out var rcid)) rr.CheckInDate = rcid;
+                        if (el.TryGetProperty("checkOut", out var rco) && rco.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(rco.GetString(), out var rcod)) rr.CheckOutDate = rcod;
+                        rr.Adults = el.TryGetProperty("adults", out var radl) ? radl.GetInt32() : 1;
+                        rr.Children = el.TryGetProperty("children", out var rchl) ? rchl.GetInt32() : 0;
+                        
+                        dbContext.ReservationRooms.Add(rr);
                     }
                     
                     if (el.TryGetProperty("checkIn", out var ci) && ci.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(ci.GetString(), out var cid))
@@ -1735,7 +1743,23 @@ public class SyncEngine : BackgroundService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error pushing Front Desk outbox events.");
-            foreach (var evt in pendingEvents) { evt.Status = "FAILED"; evt.LastError = ex.Message; }
+            foreach (var evt in pendingEvents) 
+            { 
+                evt.Status = "FAILED"; 
+                evt.LastError = ex.Message;
+                evt.LastAttemptAt = DateTime.UtcNow;
+                
+                if (evt.AttemptCount >= 5) 
+                {
+                    evt.Status = "RETRY_EXHAUSTED";
+                    evt.NextAttemptAt = null;
+                } 
+                else 
+                {
+                    int delaySeconds = Math.Min(3600, (int)Math.Pow(2, evt.AttemptCount) * 5);
+                    evt.NextAttemptAt = DateTime.UtcNow.AddSeconds(delaySeconds);
+                }
+            }
             await dbContext.SaveChangesAsync(stoppingToken);
             throw;
         }
