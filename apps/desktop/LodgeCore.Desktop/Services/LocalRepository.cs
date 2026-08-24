@@ -838,28 +838,32 @@ public class LocalRepository
         });
         
         // Also auto-generate a cleaning task upon checkout
-        var cleaningTask = new LocalHousekeepingTask
+        var checkoutRoomId = res.RoomId;
+        if (!string.IsNullOrWhiteSpace(checkoutRoomId))
         {
-            PropertyId = res.PropertyId,
-            RoomId = res.RoomId ?? "",
-            RoomNumber = res.RoomNumber ?? "",
-            TaskType = "CLEANING",
-            Status = "PENDING"
-        };
-        _dbContext.HousekeepingTasks.Add(cleaningTask);
-        
-        _dbContext.OutboxEvents.Add(new LocalOutboxEvent
-        {
-            PropertyId = cleaningTask.PropertyId,
-            DeviceId = deviceId,
-            OperatorId = userId,
-            AggregateType = "HOUSEKEEPING_TASK",
-            AggregateId = cleaningTask.Id,
-            AggregateVersion = 1,
-            EventType = "CREATE",
-            Sequence = 1,
-            PayloadJson = JsonSerializer.Serialize(cleaningTask)
-        });
+            var cleaningTask = new LocalHousekeepingTask
+            {
+                PropertyId = res.PropertyId,
+                RoomId = checkoutRoomId,
+                RoomNumber = res.RoomNumber ?? "",
+                TaskType = "CLEANING",
+                Status = "PENDING"
+            };
+            _dbContext.HousekeepingTasks.Add(cleaningTask);
+
+            _dbContext.OutboxEvents.Add(new LocalOutboxEvent
+            {
+                PropertyId = cleaningTask.PropertyId,
+                DeviceId = deviceId,
+                OperatorId = userId,
+                AggregateType = "HOUSEKEEPING_TASK",
+                AggregateId = cleaningTask.Id,
+                AggregateVersion = 1,
+                EventType = "CREATE",
+                Sequence = 1,
+                PayloadJson = JsonSerializer.Serialize(cleaningTask)
+            });
+        }
 
         await _dbContext.SaveChangesAsync();
         return true;
@@ -3026,7 +3030,7 @@ public class LocalRepository
     public async Task<int> RetryDeadLetterEventsAsync()
     {
         var deadLetters = await _dbContext.OutboxEvents
-            .Where(e => e.Status == "DEAD_LETTER")
+            .Where(e => e.Status == "DEAD_LETTER" || e.Status == "RETRY_EXHAUSTED")
             .ToListAsync();
         var deadSyncEvents = await _dbContext.SyncEvents
             .Where(e => e.Status == "DEAD_LETTER")

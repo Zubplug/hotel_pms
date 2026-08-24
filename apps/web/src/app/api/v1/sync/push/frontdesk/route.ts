@@ -4,6 +4,9 @@ import { createHash, randomUUID } from 'crypto';
 import { compare } from 'bcryptjs';
 import { NotificationEngine } from '@/lib/notification-engine';
 
+const isUuid = (value: unknown): value is string =>
+  typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+
 export async function POST(req: NextRequest) {
   const requestId = randomUUID();
   try {
@@ -75,6 +78,7 @@ export async function POST(req: NextRequest) {
       
       try {
         const payload = JSON.parse(payloadJson || '{}');
+        const actorId = isUuid(operatorId) ? operatorId : device.id;
 
         // 1 & 2. Atomic Concurrency Control & Execution within a Single Transaction
         await prisma.$transaction(async (tx) => {
@@ -114,6 +118,11 @@ export async function POST(req: NextRequest) {
           }
 
           if (updatedCount === 0) {
+             if (aggregateType === 'RESERVATION' && eventType !== 'CREATE') {
+                const reservation = await tx.reservation.findUnique({ where: { id: aggregateId } });
+                if (!reservation) throw new Error(`DEPENDENCY_NOT_READY: Reservation ${aggregateId} has not been created yet`);
+             }
+
              // Retrieve actual version to report in the conflict
              let currentVersion = 1;
              if (aggregateType === 'FOLIO') {
@@ -218,7 +227,7 @@ export async function POST(req: NextRequest) {
                  ratePlanSnapshot: { baseRate, currency, nights, total: amount },
                  confirmationNumber: `RES-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 1000)}`,
                  currency,
-                 createdBy: operatorId || device.id,
+                 createdBy: actorId,
                  version: aggregateVersion,
                }
              });
@@ -280,7 +289,7 @@ export async function POST(req: NextRequest) {
                  amount: baseRate,
                  currency: currency,
                  baseAmount: baseRate,
-                 postedBy: operatorId || device.id,
+                 postedBy: actorId,
                });
                currentDate.setDate(currentDate.getDate() + 1);
              }
@@ -344,7 +353,7 @@ export async function POST(req: NextRequest) {
                          requestedAt: new Date(),
                          startedAt: new Date(),
                          completedAt: new Date(),
-                         metadata: { initiatedBy: operatorId || device.id, responseData: payload.encodeData }
+                         metadata: { initiatedBy: actorId, responseData: payload.encodeData }
                      }
                  });
              }
@@ -381,7 +390,7 @@ export async function POST(req: NextRequest) {
                  amount: amount,
                  currency: payload.currency || 'NGN',
                  baseAmount: amount,
-                 postedBy: operatorId || device.id, // Fallback
+                 postedBy: actorId,
                  deviceId: device.id,
                  isLatePosting: true,
                  posTransactionId: idempotencyKey
@@ -418,7 +427,7 @@ export async function POST(req: NextRequest) {
                    amount: -amount,
                    currency: payload.currency || 'NGN',
                    baseAmount: amount,
-                   postedBy: operatorId || device.id,
+                   postedBy: actorId,
                    deviceId: device.id,
                    isLatePosting: true,
                    posTransactionId: idempotencyKey,
@@ -441,7 +450,7 @@ export async function POST(req: NextRequest) {
                    baseAmount: amount,
                    status: 'COMPLETED',
                    idempotencyKey: `pay_${idempotencyKey}`,
-                   receivedBy: operatorId || device.id
+                   receivedBy: actorId
                  }
                });
 
@@ -646,7 +655,7 @@ export async function POST(req: NextRequest) {
                  requestedAt: new Date(),
                  startedAt: new Date(),
                  completedAt: new Date(),
-                 metadata: { initiatedBy: operatorId || device.id, responseData: encodeData }
+                         metadata: { initiatedBy: actorId, responseData: encodeData }
                }
              });
           }
@@ -753,23 +762,29 @@ export async function POST(req: NextRequest) {
                          previousStatus: room.status,
                          newStatus: newStatus,
                          source: payload.source || 'OFFLINE_SYNC',
-                         changedBy: operatorId || device.id
+                         changedBy: actorId
                      }
                  });
              }
           }
           else if (aggregateType === 'HOUSEKEEPING_TASK') {
              if (eventType === 'CREATE') {
+                 const roomId = payload.RoomId || payload.roomId;
+                 if (!isUuid(roomId)) throw new Error('Housekeeping task is missing a valid roomId');
+                 const room = await tx.room.findFirst({ where: { id: roomId, propertyId } });
+                 if (!room) throw new Error('Housekeeping task room not found or unauthorized');
                  await tx.housekeepingTask.create({
                      data: {
                          id: aggregateId,
                          propertyId,
-                         roomId: payload.RoomId || payload.roomId,
+                         roomId,
                          type: payload.TaskType || payload.taskType || 'CLEANING',
                          priority: payload.Priority || payload.priority || 'NORMAL',
                          status: (payload.Status || payload.status || 'PENDING') as any,
                          businessDate: new Date(),
-                         assignedTo: payload.AssignedToUserId || payload.assignedToUserId
+                         assignedTo: isUuid(payload.AssignedToUserId || payload.assignedToUserId)
+                           ? payload.AssignedToUserId || payload.assignedToUserId
+                           : null
                      }
                  });
              }
@@ -806,7 +821,9 @@ export async function POST(req: NextRequest) {
                          status: (payload.Status || payload.status || 'OPEN') as any,
                          title: 'Desktop Maintenance Ticket',
                          description: payload.IssueDescription || payload.issueDescription || '',
-                         reportedBy: payload.ReportedBy || payload.reportedBy || operatorId || (await tx.staff.findFirst({ where: { organization: { properties: { some: { id: propertyId } } } } }))?.id
+                         reportedBy: isUuid(payload.ReportedBy || payload.reportedBy)
+                           ? payload.ReportedBy || payload.reportedBy
+                           : actorId
                      }
                  });
              }
@@ -880,7 +897,7 @@ export async function POST(req: NextRequest) {
                      data: {
                          laundryOrderId: aggregateId,
                          newStatus: payload.status || 'PENDING',
-                         changedBy: operatorId || device.id,
+                         changedBy: actorId,
                          notes: 'Order placed offline'
                      }
                  });
@@ -897,12 +914,12 @@ export async function POST(req: NextRequest) {
                      const updateData: any = { status: newStatus };
                      if (newStatus === 'COLLECTED') {
                          updateData.collectedAt = new Date();
-                         updateData.collectedBy = operatorId || device.id;
+                         updateData.collectedBy = actorId;
                      } else if (newStatus === 'READY') {
                          updateData.readyAt = new Date();
                      } else if (newStatus === 'DELIVERED') {
                          updateData.deliveredAt = new Date();
-                         updateData.deliveredBy = operatorId || device.id;
+                         updateData.deliveredBy = actorId;
                          
                          // ATOMIC FOLIO POSTING for DELIVERED
                          if (!order.folioItemId) {
@@ -956,7 +973,7 @@ export async function POST(req: NextRequest) {
                                              amount: order.totalAmount,
                                              currency: order.currency,
                                              baseAmount: order.totalAmount,
-                                             postedBy: operatorId || device.id,
+                                             postedBy: actorId,
                                              posTransactionId: idempotencyKey
                                          }
                                      });
@@ -983,7 +1000,7 @@ export async function POST(req: NextRequest) {
                              laundryOrderId: aggregateId,
                              previousStatus: order.status,
                              newStatus: newStatus,
-                             changedBy: operatorId || device.id,
+                             changedBy: actorId,
                              notes: `Status updated to ${newStatus} via offline sync`
                          }
                      });
@@ -1001,7 +1018,7 @@ export async function POST(req: NextRequest) {
               idempotencyKey,
               propertyId,
               deviceId: device.id,
-              operatorId,
+              operatorId: actorId,
               aggregateType,
               aggregateId,
               aggregateVersion,
@@ -1092,7 +1109,7 @@ export async function POST(req: NextRequest) {
                     idempotencyKey,
                     propertyId,
                     deviceId: device.id,
-                    operatorId,
+                    operatorId: actorId,
                     aggregateType,
                     aggregateId,
                     aggregateVersion,

@@ -124,7 +124,7 @@ public class SyncEngine : BackgroundService
         var db = scope.ServiceProvider.GetRequiredService<LodgeCore.Desktop.Data.LocalDbContext>();
         
         var evt = await db.OutboxEvents.FindAsync(eventId);
-        if (evt == null || evt.Status != "DEAD_LETTER") return false;
+        if (evt == null || (evt.Status != "DEAD_LETTER" && evt.Status != "RETRY_EXHAUSTED")) return false;
         
         evt.Status = "PENDING";
         evt.AttemptCount = 0;
@@ -1897,7 +1897,7 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
         }
 
         var allPending = await dbContext.OutboxEvents
-            .Where(e => e.Status == "PENDING" || e.Status == "FAILED" || e.Status == "CONFLICT")
+            .Where(e => e.Status == "PENDING" || e.Status == "FAILED" || e.Status == "RETRY_EXHAUSTED" || e.Status == "CONFLICT")
             .ToListAsync(stoppingToken);
 
         _logger.LogInformation("[PUSH-FD] Queue inspection found {PendingCount} pending/failed/conflict event(s).", allPending.Count);
