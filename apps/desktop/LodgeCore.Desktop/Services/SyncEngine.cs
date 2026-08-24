@@ -128,6 +128,38 @@ public class SyncEngine : BackgroundService
         return true;
     }
 
+    private record SyncIdentity(string DeviceId, string PropertyId, string? TerminalId);
+
+    private async Task<SyncIdentity?> GetSyncIdentityAsync(CancellationToken stoppingToken)
+    {
+        using var scope = _serviceProvider.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
+        
+        var deviceId = await _authManager.GetOrCreateDeviceIdAsync();
+
+        var terminal = await dbContext.PosTerminals.FirstOrDefaultAsync(stoppingToken);
+        var session = await _authManager.GetSessionAsync();
+        var propertyId = session?.PropertyId ?? terminal?.PropertyId;
+        
+        if (string.IsNullOrEmpty(propertyId)) 
+        {
+            _logger.LogWarning("GetSyncIdentityAsync: PropertyId is missing. Cannot proceed with sync.");
+            return null;
+        }
+
+        return new SyncIdentity(deviceId, propertyId, terminal?.Id);
+    }
+    
+    private async Task<string?> GetActiveTokenAsync()
+    {
+        var token = _credentialStorage.LoadCredential("deviceCredential");
+        if (string.IsNullOrEmpty(token))
+        {
+            token = await _authManager.GetAuthTokenAsync();
+        }
+        return token;
+    }
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _logger.LogInformation("SyncEngine is starting.");
@@ -203,6 +235,7 @@ public class SyncEngine : BackgroundService
                 }
                 finally
                 {
+                    await LogSyncDiagnosticSummary(stoppingToken);
                     _isSyncing = false;
                 }
             }
@@ -228,6 +261,60 @@ public class SyncEngine : BackgroundService
         // Temporarily expose the raw inner message so we can debug this crash!
         var msg = ex.InnerException != null ? ex.InnerException.Message : ex.Message;
         return string.IsNullOrEmpty(msg) ? "Unknown error occurred" : msg;
+    }
+
+    private async Task LogSyncDiagnosticSummary(CancellationToken stoppingToken)
+    {
+        try
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
+            var identity = await GetSyncIdentityAsync(stoppingToken);
+            
+            var connectionState = _isOnline ? "ONLINE" : "OFFLINE";
+            var deviceId = identity?.DeviceId ?? "UNKNOWN";
+            var propertyId = identity?.PropertyId ?? "UNKNOWN";
+
+            var lastPull = Preferences.Get($"LastPull_{propertyId}", "Never");
+            var lastPush = _lastSuccess > DateTime.MinValue ? _lastSuccess.ToString("o") : "Never";
+
+            var pendingOutbox = await dbContext.OutboxEvents.CountAsync(e => e.Status == "PENDING" || e.Status == "FAILED" || e.Status == "CONFLICT", stoppingToken);
+            var processing = await dbContext.OutboxEvents.CountAsync(e => e.Status == "PROCESSING", stoppingToken) + await dbContext.SyncEvents.CountAsync(e => e.Status == "PROCESSING", stoppingToken);
+            var failedRetryableOutbox = await dbContext.OutboxEvents.CountAsync(e => e.Status == "FAILED", stoppingToken);
+            var deadLetterOutbox = await dbContext.OutboxEvents.CountAsync(e => e.Status == "DEAD_LETTER", stoppingToken);
+
+            var posPending = await dbContext.SyncEvents.CountAsync(e => e.Status == "PENDING" || e.Status == "FAILED", stoppingToken);
+            var keycardsPending = await dbContext.KeycardAudits.CountAsync(a => a.SyncStatus == "PENDING", stoppingToken);
+
+            var errorStr = string.IsNullOrEmpty(_lastError) ? "None" : _lastError;
+
+            var summary = $@"
+=== SYNC STATUS ===
+Connection:       {connectionState}
+Device:           {deviceId}
+Property:         {propertyId}
+
+Last Pull:        {lastPull}
+Last Push:        {lastPush}
+
+Pending Outbox:   {pendingOutbox}
+Processing:       {processing}
+Failed Retryable: {failedRetryableOutbox}
+Dead Letter:      {deadLetterOutbox}
+
+POS Pending:      {posPending}
+FrontDesk:        {pendingOutbox}
+Keycards:         {keycardsPending}
+
+Last Error:       {errorStr}
+===================";
+            
+            _logger.LogInformation(summary);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning($"Failed to write sync diagnostic summary: {ex.Message}");
+        }
     }
 
     private void BroadcastHealth(SyncState state, string? error = null, string? phase = null, int current = 0, int total = 0, string? message = null)
@@ -341,15 +428,16 @@ public class SyncEngine : BackgroundService
 
         if (!eligibleEvents.Any()) return;
 
-        var deviceId = await _authManager.GetOrCreateDeviceIdAsync();
+        var identity = await GetSyncIdentityAsync(stoppingToken);
+        if (identity == null) return;
         
-        // Ensure we only push events for THIS terminal (or group by terminal if mixed)
-        var eventsToPush = eligibleEvents.Where(e => e.TerminalId == deviceId).ToList();
+        // Ensure we only push events for THIS terminal/device
+        var eventsToPush = eligibleEvents.Where(e => e.TerminalId == identity.DeviceId || e.TerminalId == identity.TerminalId).ToList();
         if (!eventsToPush.Any()) return;
 
         _logger.LogInformation($"Pushing {eventsToPush.Count} pending operations to cloud...");
 
-        var token = await _authManager.GetAuthTokenAsync();
+        var token = await GetActiveTokenAsync();
         if (!string.IsNullOrEmpty(token))
         {
             _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
@@ -367,7 +455,7 @@ public class SyncEngine : BackgroundService
         try
         {
             var request = new HttpRequestMessage(HttpMethod.Post, "pos/sync/push");
-            request.Content = JsonContent.Create(new { events = eventsToPush });
+            request.Content = JsonContent.Create(new { propertyId = identity.PropertyId, events = eventsToPush });
             
             var response = await _httpClient.SendAsync(request, stoppingToken);
             
@@ -448,9 +536,12 @@ public class SyncEngine : BackgroundService
 
         if (!pendingAudits.Any()) return;
 
+        var identity = await GetSyncIdentityAsync(stoppingToken);
+        if (identity == null) return;
+
         _logger.LogInformation($"Pushing {pendingAudits.Count} keycard audits to cloud...");
         
-        var token = await _authManager.GetAuthTokenAsync();
+        var token = await GetActiveTokenAsync();
         if (!string.IsNullOrEmpty(token))
         {
             _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
@@ -463,16 +554,24 @@ public class SyncEngine : BackgroundService
                 // In production, this pushes to the cloud /api/v1/hardware/keycards/audit endpoint
                 var request = new HttpRequestMessage(HttpMethod.Post, "hardware/keycards/audit");
                 request.Headers.Add("Idempotency-Key", audit.OperationId);
-                // request.Content = JsonContent.Create(audit);
-                // var response = await _httpClient.SendAsync(request, stoppingToken);
-                // response.EnsureSuccessStatusCode();
-
-                audit.SyncStatus = "SYNCED";
+                request.Content = JsonContent.Create(new { propertyId = identity.PropertyId, audit = audit });
+                
+                var response = await _httpClient.SendAsync(request, stoppingToken);
+                
+                if (response.IsSuccessStatusCode)
+                {
+                    audit.SyncStatus = "SYNCED";
+                }
+                else
+                {
+                    _logger.LogWarning($"Failed to push keycard audit {audit.OperationId}. HTTP Status: {response.StatusCode}");
+                    // Do not mark SYNCED. Leaves it in PENDING to retry on next cycle.
+                }
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Failed to push keycard audit {audit.OperationId}");
-                break;
+                break; // Stop loop to retry later
             }
         }
 
@@ -491,19 +590,11 @@ public class SyncEngine : BackgroundService
         using var scope = _serviceProvider.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
 
-        var terminal = await dbContext.PosTerminals.FirstOrDefaultAsync(stoppingToken);
-        if (terminal == null) throw new Exception("Terminal not provisioned (missing in local DB).");
-
-        var session = await _authManager.GetSessionAsync();
-        var propertyId = session?.PropertyId ?? terminal.PropertyId;
-        if (string.IsNullOrEmpty(propertyId)) throw new Exception("Property ID not found.");
-
-        var token = _credentialStorage.LoadCredential("deviceCredential");
-        if (string.IsNullOrEmpty(token))
-        {
-            token = await _authManager.GetAuthTokenAsync();
-            if (string.IsNullOrEmpty(token)) throw new Exception("No auth token available; skipping pull.");
-        }
+        var identity = await GetSyncIdentityAsync(stoppingToken);
+        if (identity == null) throw new Exception("Terminal identity not provisioned or property ID missing.");
+        
+        var token = await GetActiveTokenAsync();
+        if (string.IsNullOrEmpty(token)) throw new Exception("No auth token available; skipping pull.");
 
         _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
@@ -512,12 +603,12 @@ public class SyncEngine : BackgroundService
 
         while (hasMore && !stoppingToken.IsCancellationRequested)
         {
-            var lastPullStr = Preferences.Get($"LastPull_{propertyId}", "");
+            var lastPullStr = Preferences.Get($"LastPull_{identity.PropertyId}", "");
             var isIncremental = !string.IsNullOrEmpty(lastPullStr);
             var cursorParam = isIncremental ? $"&cursor={Uri.EscapeDataString(lastPullStr)}" : "";
 
             var response = await _httpClient.GetAsync(
-                $"sync/pull?propertyId={Uri.EscapeDataString(propertyId)}{cursorParam}&limit=500",
+                $"sync/pull?propertyId={Uri.EscapeDataString(identity.PropertyId)}{cursorParam}&limit=500",
                 stoppingToken);
 
             if (!response.IsSuccessStatusCode)
@@ -1176,6 +1267,8 @@ public class SyncEngine : BackgroundService
                     {
                         prod.ServicePricingRules = rules.GetRawText();
                     }
+                    if (el.TryGetProperty("createdAt", out var crt) && crt.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(crt.GetString(), out var crtd)) prod.CreatedAt = crtd;
+                    if (el.TryGetProperty("updatedAt", out var upd) && upd.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(upd.GetString(), out var updd)) prod.UpdatedAt = updd;
                 }
                 
                 if (laundryItemsArray.GetArrayLength() > 0)
@@ -1209,13 +1302,18 @@ public class SyncEngine : BackgroundService
                     order.GuestId = el.TryGetProperty("guestId", out var gid) && gid.ValueKind != System.Text.Json.JsonValueKind.Null ? gid.GetString() ?? "" : "";
                     order.FolioItemId = el.TryGetProperty("folioItemId", out var fid) && fid.ValueKind != System.Text.Json.JsonValueKind.Null ? fid.GetString() ?? "" : "";
                     order.Status = el.TryGetProperty("status", out var st) && st.ValueKind != System.Text.Json.JsonValueKind.Null ? st.GetString() ?? "PENDING" : "PENDING";
-                    order.TotalAmount = el.TryGetProperty("totalAmount", out var ta) ? (ta.ValueKind == System.Text.Json.JsonValueKind.Number ? ta.GetDecimal() : (ta.ValueKind == System.Text.Json.JsonValueKind.String && decimal.TryParse(ta.GetString(), out var dta) ? dta : 0m)) : 0m;
                     order.ServiceType = el.TryGetProperty("serviceType", out var svt) && svt.ValueKind != System.Text.Json.JsonValueKind.Null ? svt.GetString() ?? "STANDARD" : "STANDARD";
+                    order.TotalAmount = el.TryGetProperty("totalAmount", out var ta) ? (ta.ValueKind == System.Text.Json.JsonValueKind.Number ? ta.GetDecimal() : (ta.ValueKind == System.Text.Json.JsonValueKind.String && decimal.TryParse(ta.GetString(), out var dta) ? dta : 0m)) : 0m;
+                    order.Currency = el.TryGetProperty("currency", out var curr) && curr.ValueKind != System.Text.Json.JsonValueKind.Null ? curr.GetString() ?? "NGN" : "NGN";
+                    order.SpecialNotes = el.TryGetProperty("specialNotes", out var sn) && sn.ValueKind != System.Text.Json.JsonValueKind.Null ? sn.GetString() ?? "" : "";
                     
                     if (el.TryGetProperty("requestedAt", out var ra) && ra.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(ra.GetString(), out var rad)) order.RequestedAt = rad;
+                    if (el.TryGetProperty("expectedReadyAt", out var era) && era.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(era.GetString(), out var erad)) order.ExpectedReadyAt = erad;
                     if (el.TryGetProperty("collectedAt", out var ca) && ca.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(ca.GetString(), out var cad)) order.CollectedAt = cad;
+                    order.CollectedBy = el.TryGetProperty("collectedBy", out var cb) && cb.ValueKind != System.Text.Json.JsonValueKind.Null ? cb.GetString() ?? "" : "";
                     if (el.TryGetProperty("readyAt", out var rda) && rda.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(rda.GetString(), out var rdad)) order.ReadyAt = rdad;
                     if (el.TryGetProperty("deliveredAt", out var dla) && dla.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(dla.GetString(), out var dlad)) order.DeliveredAt = dlad;
+                    order.DeliveredBy = el.TryGetProperty("deliveredBy", out var db) && db.ValueKind != System.Text.Json.JsonValueKind.Null ? db.GetString() ?? "" : "";
                     
                     order.Version = el.TryGetProperty("version", out var ver) && ver.ValueKind == System.Text.Json.JsonValueKind.Number ? ver.GetInt32() : 1;
                     if (el.TryGetProperty("createdAt", out var crt) && crt.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(crt.GetString(), out var crtd)) order.CreatedAt = crtd;
@@ -1259,10 +1357,12 @@ public class SyncEngine : BackgroundService
                                 localHist = new LodgeCore.Desktop.Data.Entities.LocalLaundryOrderStatusHistory { Id = histId, LaundryOrderId = id };
                                 dbContext.LaundryOrderStatusHistory.Add(localHist);
                                 
-                                localHist.Status = histEl.TryGetProperty("status", out var hst) && hst.ValueKind != System.Text.Json.JsonValueKind.Null ? hst.GetString() ?? "" : "";
-                                localHist.OperatorId = histEl.TryGetProperty("operatorId", out var opid) && opid.ValueKind != System.Text.Json.JsonValueKind.Null ? opid.GetString() : null;
-                                localHist.Notes = histEl.TryGetProperty("notes", out var hn) && hn.ValueKind != System.Text.Json.JsonValueKind.Null ? hn.GetString() : null;
-                                if (histEl.TryGetProperty("createdAt", out var hcrt) && hcrt.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(hcrt.GetString(), out var hcrtd)) localHist.CreatedAt = hcrtd;
+                                localHist.PreviousStatus = histEl.TryGetProperty("previousStatus", out var phst) && phst.ValueKind != System.Text.Json.JsonValueKind.Null ? phst.GetString() ?? "" : "";
+                                localHist.NewStatus = histEl.TryGetProperty("newStatus", out var nhst) && nhst.ValueKind != System.Text.Json.JsonValueKind.Null ? nhst.GetString() ?? "" : "";
+                                localHist.ChangedBy = histEl.TryGetProperty("changedBy", out var opid) && opid.ValueKind != System.Text.Json.JsonValueKind.Null ? opid.GetString() ?? "" : "";
+                                localHist.DeviceId = histEl.TryGetProperty("deviceId", out var did) && did.ValueKind != System.Text.Json.JsonValueKind.Null ? did.GetString() ?? "" : "";
+                                localHist.Notes = histEl.TryGetProperty("notes", out var hn) && hn.ValueKind != System.Text.Json.JsonValueKind.Null ? hn.GetString() ?? "" : "";
+                                if (histEl.TryGetProperty("changedAt", out var hcrt) && hcrt.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(hcrt.GetString(), out var hcrtd)) localHist.ChangedAt = hcrtd;
                             }
                         }
                     }
@@ -1722,12 +1822,11 @@ public class SyncEngine : BackgroundService
         using var scope = _serviceProvider.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
         
-        var deviceId = Preferences.Get("DeviceTerminalId", "");
-        var propertyId = Preferences.Get("DevicePropertyId", "");
-        var token = _credentialStorage.LoadCredential("deviceCredential");
-
-        if (string.IsNullOrEmpty(deviceId) || string.IsNullOrEmpty(propertyId) || string.IsNullOrEmpty(token))
-            return;
+        var identity = await GetSyncIdentityAsync(stoppingToken);
+        if (identity == null) return;
+        
+        var token = await GetActiveTokenAsync();
+        if (string.IsNullOrEmpty(token)) return;
 
         var allPending = await dbContext.OutboxEvents
             .Where(e => e.Status == "PENDING" || e.Status == "FAILED" || e.Status == "CONFLICT")
@@ -1758,10 +1857,13 @@ public class SyncEngine : BackgroundService
 
         var request = new HttpRequestMessage(HttpMethod.Post, "sync/push/frontdesk");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        // Idempotency for batch endpoints is usually handled per-item, but we add a batch header just in case
+        request.Headers.Add("Idempotency-Key", $"batch_{Guid.NewGuid()}");
         
         var payload = new 
         {
-            propertyId = propertyId,
+            propertyId = identity.PropertyId,
+            deviceId = identity.DeviceId,
             events = pendingEvents.Select(e => new {
                 id = e.Id,
                 idempotencyKey = e.IdempotencyKey,
@@ -1920,16 +2022,17 @@ public class SyncEngine : BackgroundService
 
     private async Task<bool> TryRefreshDeviceTokenAsync(CancellationToken stoppingToken)
     {
+        var identity = await GetSyncIdentityAsync(stoppingToken);
+        if (identity == null) return false;
+        
         var token = _credentialStorage.LoadCredential("deviceCredential");
-        var propertyId = Preferences.Get("DevicePropertyId", "");
-
-        if (string.IsNullOrEmpty(propertyId) || string.IsNullOrEmpty(token)) return false;
+        if (string.IsNullOrEmpty(token)) return false;
 
         try
         {
             var request = new HttpRequestMessage(HttpMethod.Post, "device/refresh");
             request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-            request.Content = JsonContent.Create(new { propertyId });
+            request.Content = JsonContent.Create(new { propertyId = identity.PropertyId });
             
             var response = await _httpClient.SendAsync(request, stoppingToken);
             if (response.IsSuccessStatusCode)
@@ -1962,10 +2065,11 @@ public class SyncEngine : BackgroundService
         var dbContext = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
         var localRepo = scope.ServiceProvider.GetRequiredService<LocalRepository>();
         
-        var propertyId = Preferences.Get("DevicePropertyId", "");
-        var token = _credentialStorage.LoadCredential("deviceCredential");
-
-        if (string.IsNullOrEmpty(propertyId) || string.IsNullOrEmpty(token)) return;
+        var identity = await GetSyncIdentityAsync(stoppingToken);
+        if (identity == null) return;
+        
+        var token = await GetActiveTokenAsync();
+        if (string.IsNullOrEmpty(token)) return;
 
         bool hasMore = true;
         int pageCount = 0;
@@ -1975,7 +2079,7 @@ public class SyncEngine : BackgroundService
             var meta = await dbContext.SyncMetadata.FirstOrDefaultAsync(stoppingToken);
             var cursor = meta?.LastGuestSyncCursor;
             
-            var url = $"sync/guests?propertyId={propertyId}&limit=500";
+            var url = $"sync/guests?propertyId={identity.PropertyId}&limit=500";
             if (!string.IsNullOrEmpty(cursor))
             {
                 url += $"&cursor={Uri.EscapeDataString(cursor)}";

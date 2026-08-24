@@ -55,6 +55,16 @@ export async function GET(req: NextRequest) {
       };
     };
 
+    const buildOrganizationWhere = (baseWhere: any) => {
+      if (!since) {
+        return { ...baseWhere, updatedAt: { lte: watermark } };
+      }
+      return { 
+        organizationId: baseWhere.organizationId, 
+        updatedAt: { gt: since, lte: watermark }
+      };
+    };
+
     // ---- Load property config -------------------------------------------
     const property = await prisma.property.findUnique({
       where: { id: propertyId },
@@ -241,9 +251,9 @@ export async function GET(req: NextRequest) {
     });
 
     let allGuests: any[] = [];
-    if (!since && property.organizationId) {
+    if (property.organizationId) {
       allGuests = await prisma.guest.findMany({
-        where: { organizationId: property.organizationId },
+        where: buildOrganizationWhere({ organizationId: property.organizationId }),
         take: limit,
         orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }]
       });

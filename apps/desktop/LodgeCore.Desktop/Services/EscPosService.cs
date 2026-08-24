@@ -167,7 +167,6 @@ public class EscPosService
         builder.AddLine("I agree to the hotel terms and conditions.");
         builder.AddLineFeed(3);
         builder.AddLine("Signature: _______________________");
-        builder.AddLineFeed(3);
         builder.AddCommand(EscPosBuilder.CutPartial);
 
         return await SendToPrinterAsync(printer, builder.Build());
@@ -245,7 +244,6 @@ public class EscPosService
         builder.AddDivider('=');
         builder.AddCommand(EscPosBuilder.AlignCenter);
         builder.AddLine("Thank you for staying with us!");
-        builder.AddLineFeed(3);
         builder.AddCommand(EscPosBuilder.CutPartial);
 
         return await SendToPrinterAsync(printer, builder.Build());
@@ -299,7 +297,6 @@ public class EscPosService
         builder.AddDivider('=');
         builder.AddCommand(EscPosBuilder.AlignCenter);
         builder.AddLine("Thank you!");
-        builder.AddLineFeed(3);
         builder.AddCommand(EscPosBuilder.CutPartial);
 
         if (printer.OpenCashDrawer)
@@ -341,7 +338,6 @@ public class EscPosService
         builder.AddRow("Card", $"{cur} {report.CardSales:N2}");
         builder.AddRow("Room Charges", $"{cur} {report.RoomCharges:N2}");
         
-        builder.AddLineFeed(3);
         builder.AddCommand(EscPosBuilder.CutPartial);
 
         return await SendToPrinterAsync(printer, builder.Build());
@@ -406,7 +402,6 @@ public class EscPosService
 
         builder.AddCommand(EscPosBuilder.AlignCenter);
         builder.AddLine("Thank you for your patronage!");
-        builder.AddLineFeed(3);
 
         if (printer.OpenCashDrawer)
             builder.AddCommand(EscPosBuilder.OpenDrawer);
@@ -486,7 +481,6 @@ public class EscPosService
         }
 
         builder.AddDivider('=');
-        builder.AddLineFeed(3);
         builder.AddCommand(EscPosBuilder.CutPartial);
 
         return await SendToPrinterAsync(printer, builder.Build());
@@ -530,7 +524,6 @@ public class EscPosService
                 builder.AddLine($"    * {item.Notes}");
         }
 
-        builder.AddLineFeed(3);
         builder.AddCommand(EscPosBuilder.CutPartial);
 
         return await SendToPrinterAsync(printer, builder.Build());
@@ -546,7 +539,6 @@ public class EscPosService
 
             using var stream = client.GetStream();
             var b = new EscPosBuilder(new PrinterProfile());
-            b.AddLineFeed(3);
             b.AddCommand(EscPosBuilder.CutPartial);
             await stream.WriteAsync(b.Build());
 
@@ -579,7 +571,6 @@ public class EscPosService
         builder.AddCommand(EscPosBuilder.AlignCenter);
         builder.AddLine("If you can read this, the printer is");
         builder.AddLine("successfully connected and working!");
-        builder.AddLineFeed(3);
         builder.AddCommand(EscPosBuilder.CutPartial);
 
         return await SendToPrinterAsync(printer, builder.Build());

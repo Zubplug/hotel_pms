@@ -17,7 +17,10 @@ export async function GET(req: NextRequest) {
     const resRoom = await prisma.reservationRoom.findFirst({
       where: {
         room: {
-          number: roomNo,
+          OR: [
+            { number: roomNo },
+            { code: roomNo }
+          ],
           propertyId,
         },
         reservation: {

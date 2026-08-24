@@ -214,22 +214,43 @@ export function PaymentReceipt({ id, onClose, hideBack = false }: { id: string, 
       {/* Global CSS for printing */}
       <style dangerouslySetInnerHTML={{__html: `
         @media print {
-          body * {
-            visibility: hidden;
+          @page {
+            margin: 0.5cm;
           }
-          .print-receipt, .print-receipt * {
-            visibility: visible;
+          body {
+            background-color: white !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+          /* Hide elements that don't contain the receipt and aren't inside it */
+          body *:not(:has(.print-receipt)):not(.print-receipt):not(.print-receipt *) {
+            display: none !important;
+          }
+          /* Strip layout constraints from all ancestors */
+          body *:has(.print-receipt) {
+            display: block !important;
+            position: static !important;
+            transform: none !important;
+            overflow: visible !important;
+            height: auto !important;
+            max-height: none !important;
+            width: auto !important;
+            max-width: none !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            box-shadow: none !important;
+            border: none !important;
+            background: transparent !important;
           }
           .print-receipt {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: auto;
-            margin: 0;
-            padding: 0;
+            display: block !important;
+            position: relative !important;
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
             box-shadow: none !important;
           }
+          /* Custom styles for the receipt itself */
           .print-receipt .bg-slate-900 {
             background-color: white !important;
             color: black !important;

@@ -58,6 +58,7 @@ public class LocalRepository
             Status = "OPEN",
             TotalCharges = totalAmount,
             TotalPayments = 0,
+            Currency = currency,
             IsDirty = true, // Force sync down to grab real ID later, or cloud matches by reservation? Actually, cloud API creates the folio, so this local one will get overwritten/merged on next pull. We just need it for UI.
         };
 
@@ -83,7 +84,7 @@ public class LocalRepository
             });
             currentDate = currentDate.AddDays(1);
         }
-        folio.TransactionsJson = JsonSerializer.Serialize(transactions);
+        folio.TransactionsJson = JsonSerializer.Serialize(new { items = transactions, payments = new List<object>() });
         
         _dbContext.Folios.Add(folio);
         reservation.Folio = folio;
@@ -602,6 +603,54 @@ public class LocalRepository
         int eventVersion = res.Version;
         res.Version++;
 
+        if (!string.IsNullOrEmpty(encodeData))
+        {
+            var parsed = JsonSerializer.Deserialize<JsonElement>(encodeData);
+            var cardSnr = parsed.ValueKind == JsonValueKind.Object && parsed.TryGetProperty("cardSnr", out var snrProp) ? snrProp.GetString() : null;
+            var now = DateTime.UtcNow;
+
+            var credential = new Data.Entities.LocalLockCredential
+            {
+                Id = Guid.NewGuid().ToString(),
+                ReservationId = res.Id,
+                RoomId = res.RoomId ?? string.Empty,
+                LockId = $"ENCODER-{res.RoomId}",
+                CredentialType = "RFID",
+                Status = "ACTIVE",
+                ValidFrom = res.CheckInDate,
+                ValidUntil = res.CheckOutDate,
+                CardSerialNumber = cardSnr,
+                IssuedAt = now,
+                MetadataJson = encodeData,
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+
+            var op = new Data.Entities.LocalLockOperation
+            {
+                Id = Guid.NewGuid().ToString(),
+                PropertyId = res.PropertyId,
+                ReservationId = res.Id,
+                LockId = credential.LockId,
+                RoomId = credential.RoomId,
+                CredentialId = credential.Id,
+                Operation = "ENCODE_CARD",
+                Status = "COMPLETED",
+                RequestedAt = now,
+                StartedAt = now,
+                CompletedAt = now,
+                AgentId = "DESKTOP",
+                DeviceId = deviceId,
+                MetadataJson = JsonSerializer.Serialize(new { initiatedBy = userId }),
+                CommandJson = JsonSerializer.Serialize(new { responseData = parsed }),
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+
+            _dbContext.LockCredentials.Add(credential);
+            _dbContext.LockOperations.Add(op);
+        }
+
         _dbContext.OutboxEvents.Add(new LocalOutboxEvent
         {
             PropertyId = res.PropertyId,
@@ -772,7 +821,7 @@ public class LocalRepository
             .Include(r => r.Guest)
             .Include(r => r.Folio)
             .Include(r => r.Rooms).ThenInclude(rr => rr.Room)
-            .FirstOrDefaultAsync(r => r.Rooms.Any(rr => rr.Room != null && rr.Room.Number == roomNumber) && (r.Status == "CHECKED_IN" || r.Status == "CONFIRMED"));
+            .FirstOrDefaultAsync(r => r.Rooms.Any(rr => rr.Room != null && (rr.Room.Number == roomNumber || rr.Room.Code == roomNumber)) && (r.Status == "CHECKED_IN" || r.Status == "CONFIRMED"));
     }
 
     public async Task<List<LocalHousekeepingTask>> GetHousekeepingTasksAsync(string propertyId)

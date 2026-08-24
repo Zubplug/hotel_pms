@@ -17,8 +17,8 @@ public class EscPosBuilder
     public static readonly byte[] InvertOn    = { 0x1D, 0x42, 0x01 };   // GS B 1 - invert colors
     public static readonly byte[] InvertOff   = { 0x1D, 0x42, 0x00 };   // GS B 0
     public static readonly byte[] LineFeed    = { 0x0A };
-    public static readonly byte[] CutFull     = { 0x1D, 0x56, 0x00 };   // GS V 0
-    public static readonly byte[] CutPartial  = { 0x1D, 0x56, 0x01 };   // GS V 1
+    public static readonly byte[] CutFull     = { 0x1D, 0x56, 0x41, 0x00 };   // GS V 65 0: Feed and Full Cut
+    public static readonly byte[] CutPartial  = { 0x1D, 0x56, 0x42, 0x00 };   // GS V 66 0: Feed and Partial Cut
     public static readonly byte[] OpenDrawer  = { 0x1B, 0x70, 0x00, 0x19, 0xFA }; // Cash drawer kick
 
     private readonly List<byte[]> _doc = new();

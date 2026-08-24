@@ -11,6 +11,7 @@ public class LocalFolio
     public decimal TotalCharges { get; set; }
     public decimal TotalPayments { get; set; }
     public decimal OutstandingBalance => TotalCharges - TotalPayments;
+    public string? Currency { get; set; }
 
     // Storing transactions as JSON string for simplicity offline, or we could make a separate table
     public string TransactionsJson { get; set; } = "[]";

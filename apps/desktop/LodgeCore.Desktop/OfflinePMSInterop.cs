@@ -446,7 +446,7 @@ public class OfflinePMSInterop
                     ? new { id = r.Guest.Id, firstName = r.Guest.FirstName, lastName = r.Guest.LastName, phone = r.Guest.Phone } 
                     : new { id = "unknown", firstName = "Unknown", lastName = "Guest", phone = (string?)"" },
                 reservationRooms = new[] { new { room = new { number = r.RoomNumber, status = "CLEAN" }, roomType = new { name = "Standard" }, checkIn = r.CheckInDate, checkOut = r.CheckOutDate } },
-                folio = new { balance = r.Folio?.OutstandingBalance ?? 0 },
+                folio = new { balance = r.Folio?.OutstandingBalance ?? 0, currency = r.Folio?.Currency ?? r.Currency ?? "NGN" },
                 isDirty = r.IsDirty
             });
             return JsonSerializer.Serialize(new { success = true, data = mapped }, _jsonOptions);
@@ -722,6 +722,7 @@ public class OfflinePMSInterop
                         balance = f != null ? f.TotalCharges - f.TotalPayments : 0,
                         totalCharges = f?.TotalCharges ?? 0,
                         totalPayments = f?.TotalPayments ?? 0,
+                        currency = f?.Currency ?? r.Currency ?? "NGN",
                         items = items,
                         payments = payments
                     }

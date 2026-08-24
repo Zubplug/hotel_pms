@@ -313,7 +313,7 @@ export async function POST(req: NextRequest) {
                     });
                  }
                  
-                 await tx.lockCredential.create({
+                 const credential = await tx.lockCredential.create({
                      data: {
                          reservationId: aggregateId,
                          roomId: payload.roomId,
@@ -324,6 +324,22 @@ export async function POST(req: NextRequest) {
                          validUntil: new Date(reservation.checkOut),
                          cardSerialNumber: payload.encodeData.cardSnr,
                          metadata: payload.encodeData
+                     }
+                 });
+                 
+                 await tx.lockOperation.create({
+                     data: {
+                         propertyId: payload.propertyId || reservation.propertyId,
+                         reservationId: aggregateId,
+                         roomId: payload.roomId,
+                         lockId: doorLock.id,
+                         credentialId: credential.id,
+                         operation: 'ENCODE_CARD',
+                         status: 'COMPLETED',
+                         requestedAt: new Date(),
+                         startedAt: new Date(),
+                         completedAt: new Date(),
+                         metadata: { initiatedBy: operatorId || device.id, responseData: payload.encodeData }
                      }
                  });
              }
