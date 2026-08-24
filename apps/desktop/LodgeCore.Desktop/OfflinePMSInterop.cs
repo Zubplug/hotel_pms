@@ -176,7 +176,7 @@ public class OfflinePMSInterop
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error printing shift report");
+            System.Diagnostics.Debug.WriteLine($"Error printing shift report: {ex.Message}");
             return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
@@ -558,8 +558,7 @@ public class OfflinePMSInterop
             var ctx = await GetSecureContextAsync();
             var res = await _repo.GetReservationAsync(reservationId);
             if (res == null) throw new Exception("Reservation not found");
-            var activeRoom = res.ReservationRooms?.FirstOrDefault(r => r.Status == "ACTIVE");
-            var roomId = activeRoom?.RoomId ?? res.RoomId;
+            var roomId = res.RoomId;
 
             if (!bypassKeycard)
             {
@@ -642,9 +641,6 @@ public class OfflinePMSInterop
         {
             await GetSecureContextAsync(); // Ensure auth
             int count = await _repo.RetryDeadLetterEventsAsync();
-            
-            // Fire sync in background
-            _ = Task.Run(() => _syncEngine.TriggerSyncAsync());
             
             return JsonSerializer.Serialize(new { success = true, data = new { requeuedCount = count } }, _jsonOptions);
         }

@@ -247,7 +247,7 @@ public partial class MainPage : ContentPage
                 case "reservations.checkIn":
                     string resId = parameters?["id"]?.ToString() ?? "";
                     bool bypassKeycard = false;
-                    if (parameters != null && parameters.ContainsKey("bypassKeycard") && parameters["bypassKeycard"] != null)
+                    if (parameters != null && parameters["bypassKeycard"] != null)
                     {
                         bool.TryParse(parameters["bypassKeycard"].ToString(), out bypassKeycard);
                     }
