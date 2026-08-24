@@ -1,217 +1,84 @@
 import { NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
-import crypto from 'crypto';
+import { executeNightAudit } from '@/lib/night-audit';
+import { getPropertyBusinessDate } from '@/lib/date-utils';
 
-export async function POST(request: Request) {
-  try {
-    // Optional: allow passing a specific propertyId to force audit
-    const body = await request.text();
-    const parsed = body ? JSON.parse(body) : {};
-    const targetPropertyId = parsed.propertyId;
+const AUDIT_CUTOFF_HOUR = 4;
 
-    // Fetch properties to audit
-    const properties = targetPropertyId 
-      ? await prisma.property.findMany({ where: { id: targetPropertyId, isActive: true } })
-      : await prisma.property.findMany({ where: { isActive: true } });
+function isAuthorized(request: Request) {
+  const secret = process.env.CRON_SECRET;
+  const authorization = request.headers.get('authorization');
+  return Boolean(secret && authorization === `Bearer ${secret}`);
+}
 
-    const results = [];
+function isPastCutoff(timezone: string, now: Date) {
+  const hour = Number(new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    hour: '2-digit',
+    hour12: false
+  }).format(now));
+  return hour >= AUDIT_CUTOFF_HOUR;
+}
 
-    for (const property of properties) {
-      if (!property.businessDate) continue;
+async function runScheduledAudits(request: Request) {
+  if (!isAuthorized(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
-      const businessDate = new Date(property.businessDate);
-      businessDate.setUTCHours(0,0,0,0);
+  const now = new Date();
+  const properties = await prisma.property.findMany({
+    where: { isActive: true },
+    select: { id: true, timezone: true, businessDate: true }
+  });
+  const results = [];
 
-      // Check if audit for this date is already complete or in progress (Idempotency lock)
-      const existingAudit = await prisma.nightAudit.findUnique({
-        where: {
-          propertyId_businessDate: {
+  for (const property of properties) {
+    if (!property.businessDate || !isPastCutoff(property.timezone, now)) {
+      results.push({ propertyId: property.id, status: 'NOT_DUE' });
+      continue;
+    }
+
+    const localToday = getPropertyBusinessDate(property.timezone, now);
+    if (property.businessDate >= localToday) {
+      results.push({ propertyId: property.id, status: 'NOT_DUE' });
+      continue;
+    }
+
+    try {
+      const result = await executeNightAudit(property.id, null, 'system@lodgecore.local');
+      results.push({ propertyId: property.id, status: 'COMPLETED', ...result });
+    } catch (error: any) {
+      console.error(`[Night Audit Cron] Property ${property.id} failed:`, error);
+      if (!error.message?.includes('already in progress')) {
+        await prisma.nightAudit.updateMany({
+          where: {
             propertyId: property.id,
-            businessDate: businessDate
-          }
-        }
-      });
-
-      if (existingAudit && existingAudit.status === 'COMPLETED') {
-        results.push({ propertyId: property.id, status: 'ALREADY_COMPLETED' });
-        continue;
-      }
-      
-      if (existingAudit && existingAudit.status === 'IN_PROGRESS') {
-        results.push({ propertyId: property.id, status: 'ALREADY_IN_PROGRESS' });
-        continue;
-      }
-
-      // Step 1: Acquire lock / Create NightAuditRun
-      const auditRun = await prisma.nightAudit.upsert({
-        where: {
-          propertyId_businessDate: {
-            propertyId: property.id,
-            businessDate: businessDate
-          }
-        },
-        create: {
-          propertyId: property.id,
-          businessDate: businessDate,
-          status: 'IN_PROGRESS',
-          startedAt: new Date()
-        },
-        update: {
-          status: 'IN_PROGRESS',
-          startedAt: new Date()
-        }
-      });
-
-      try {
-        let totalRoomRevenue = 0;
-        let chargesPosted = 0;
-
-        // Execute Audit in a Transaction
-        await prisma.$transaction(async (tx: any) => {
-          // Step 2: Post eligible room charges
-          // Find all CHECKED_IN reservations
-          const activeReservations = await tx.reservation.findMany({
-            where: { propertyId: property.id, status: 'CHECKED_IN' },
-            include: { reservationRooms: true, folios: true }
-          });
-
-          for (const res of activeReservations) {
-            // Find the main folio
-            let mainFolio = res.folios.find((f: any) => f.type === 'ROOM');
-            if (!mainFolio) {
-              mainFolio = await tx.folio.create({
-                data: {
-                  reservationId: res.id,
-                  propertyId: property.id,
-                  guestId: res.primaryGuestId,
-                  folioNumber: `FOL-${Date.now()}-${res.id.substring(0, 4)}`,
-                  type: 'ROOM',
-                  status: 'OPEN',
-                  currency: res.currency
-                }
-              });
-            }
-
-            // Post room charge for each assigned room
-            for (const resRoom of res.reservationRooms) {
-              if (resRoom.status !== 'CANCELLED' && resRoom.status !== 'NO_SHOW') {
-                const amount = resRoom.rateAmount;
-                totalRoomRevenue += Number(amount);
-                chargesPosted++;
-
-                const charge = await tx.folioItem.create({
-                  data: {
-                    folioId: mainFolio.id,
-                    businessDate: businessDate,
-                    type: 'CHARGE',
-                    source: 'ROOM_CHARGE',
-                    description: `Room Charge - ${businessDate.toISOString().split('T')[0]}`,
-                    unitAmount: amount,
-                    amount: amount,
-                    baseAmount: amount,
-                    currency: resRoom.currency,
-                    postedBy: 'SYSTEM', // System user
-                  }
-                });
-
-                await tx.folio.update({
-                  where: { id: mainFolio.id },
-                  data: { totalCharges: { increment: amount } }
-                });
-              }
-            }
-          }
-
-          // Step 3: Process No-Shows
-          const noShows = await tx.reservation.findMany({
-            where: {
-              propertyId: property.id,
-              status: 'CONFIRMED',
-              checkIn: { lte: businessDate }
-            }
-          });
-
-          for (const ns of noShows) {
-            await tx.reservation.update({
-              where: { id: ns.id },
-              data: {
-                status: 'NO_SHOW',
-                noShowAt: new Date(),
-                noShowBy: 'SYSTEM'
-              }
-            });
-            // Ideally, apply no-show penalty rules here
-          }
-
-          // Step 4: Generate OccupancySnapshot
-          const totalRooms = await tx.room.count({ where: { propertyId: property.id, isActive: true } });
-          const outOfOrderRooms = await tx.room.count({ where: { propertyId: property.id, status: 'OUT_OF_ORDER' } });
-          const occupiedRooms = activeReservations.reduce((acc: any, r: any) => acc + r.reservationRooms.length, 0);
-          const availableRooms = totalRooms - outOfOrderRooms - occupiedRooms;
-          const occupancyPct = totalRooms > 0 ? (occupiedRooms / (totalRooms - outOfOrderRooms)) * 100 : 0;
-          const adr = occupiedRooms > 0 ? totalRoomRevenue / occupiedRooms : 0;
-
-          await tx.occupancySnapshot.create({
-            data: {
-              propertyId: property.id,
-              businessDate: businessDate,
-              totalRooms,
-              occupiedRooms,
-              availableRooms,
-              outOfOrderRooms,
-              blockedRooms: 0,
-              occupancyPct,
-              adr,
-              revpar: adr * (occupancyPct / 100),
-              currency: property.baseCurrency
-            }
-          });
-
-          // Step 5: Advance Property.businessDate
-          const nextBusinessDate = new Date(businessDate);
-          nextBusinessDate.setUTCDate(nextBusinessDate.getUTCDate() + 1);
-
-          await tx.property.update({
-            where: { id: property.id },
-            data: { businessDate: nextBusinessDate }
-          });
-        });
-
-        // Step 6: Finalize NightAuditRun
-        await prisma.nightAudit.update({
-          where: { id: auditRun.id },
-          data: {
-            status: 'COMPLETED',
-            completedAt: new Date(),
-            roomChargesPosted: chargesPosted,
-            totalRoomRevenue: totalRoomRevenue,
-            totalRevenue: totalRoomRevenue // simplistic for now
-          }
-        });
-
-        results.push({ propertyId: property.id, status: 'COMPLETED' });
-
-      } catch (err: any) {
-        // Rollback caught automatically by prisma.$transaction
-        console.error(`Night Audit failed for Property ${property.id}:`, err);
-        
-        await prisma.nightAudit.update({
-          where: { id: auditRun.id },
+            businessDate: property.businessDate,
+            status: 'IN_PROGRESS'
+          },
           data: {
             status: 'FAILED',
             completedAt: new Date(),
-            exceptions: { error: err.message }
+            exceptions: { error: error.message }
           }
         });
-
-        results.push({ propertyId: property.id, status: 'FAILED', error: err.message });
       }
+      results.push({ propertyId: property.id, status: 'BLOCKED', error: error.message });
     }
+  }
 
-    return NextResponse.json({ results }, { status: 200 });
+  return NextResponse.json({ results, executedAt: now.toISOString() });
+}
 
+export async function GET(request: Request) {
+  try {
+    return await runScheduledAudits(request);
   } catch (error: any) {
-    console.error('Night Audit Cron Error:', error);
+    console.error('[Night Audit Cron] Unexpected error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+}
+
+export async function POST(request: Request) {
+  return GET(request);
 }

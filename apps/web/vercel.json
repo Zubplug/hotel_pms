@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/night-audit",
+      "schedule": "*/15 * * * *"
+    }
+  ]
+}

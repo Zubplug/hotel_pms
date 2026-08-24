@@ -35,7 +35,7 @@ async function main() {
       starRating: 4,
       baseCurrency: 'NGN',
       supportedCurrencies: ['NGN', 'USD'],
-      businessDate: new Date('2026-08-13T00:00:00.000Z'), // align with current test date
+      businessDate: new Date(),
     },
   })
 

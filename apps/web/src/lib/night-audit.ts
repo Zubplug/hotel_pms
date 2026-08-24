@@ -5,15 +5,42 @@ import { NotificationEngine } from '@/lib/notification-engine';
 
 const BATCH_SIZE = 50;
 
-export async function executeNightAudit(propertyId: string, userId: string, userEmail: string | null | undefined, userRole: string = 'SYSTEM', reqIp: string = '127.0.0.1', reqUserAgent: string = 'SYSTEM') {
+export async function executeNightAudit(propertyId: string, userId: string | null, userEmail: string | null | undefined, userRole: string = 'SYSTEM', reqIp: string = '127.0.0.1', reqUserAgent: string = 'SYSTEM') {
   const property = await prisma.property.findUnique({
     where: { id: propertyId }
   });
   
   if (!property) throw new Error('NOT_FOUND:Property not found');
 
-  const businessDate = getPropertyBusinessDate(property.timezone, new Date());
+  const businessDate = property.businessDate ?? getPropertyBusinessDate(property.timezone, new Date());
   const nextBusinessDate = getNextBusinessDate(businessDate);
+
+  const existingAudit = await prisma.nightAudit.findUnique({
+    where: { propertyId_businessDate: { propertyId, businessDate } }
+  });
+
+  if (existingAudit?.status === 'COMPLETED') {
+    throw new Error(`CONFLICT:Night Audit for ${businessDate.toISOString().split('T')[0]} has already been completed.`);
+  }
+
+  if (existingAudit?.status === 'IN_PROGRESS') {
+    throw new Error(`CONFLICT:Night Audit for ${businessDate.toISOString().split('T')[0]} is already in progress.`);
+  }
+
+  const [openSessions, pendingConflicts] = await Promise.all([
+    prisma.posSession.count({
+      where: {
+        propertyId,
+        businessDate,
+        status: { in: ['OPEN', 'RECONCILIATION_REQUIRED'] }
+      }
+    }),
+    prisma.syncConflict.count({ where: { propertyId, status: 'PENDING' } })
+  ]);
+
+  if (openSessions > 0 || pendingConflicts > 0) {
+    throw new Error(`POS_CONFLICTS_EXIST:Night Audit blocked: ${openSessions} open POS session(s), ${pendingConflicts} pending sync conflict(s).`);
+  }
 
   // 1. Idempotently initialize the Night Audit Run for this businessDate
   const auditRun = await prisma.nightAudit.upsert({
@@ -163,6 +190,15 @@ export async function executeNightAudit(propertyId: string, userId: string, user
     }
   });
 
+  const dateRollover = await prisma.property.updateMany({
+    where: { id: propertyId, businessDate },
+    data: { businessDate: nextBusinessDate, lastAuditAt: new Date() }
+  });
+
+  if (dateRollover.count !== 1) {
+    throw new Error('CONFLICT:Business date changed while Night Audit was running.');
+  }
+
   await prisma.auditLog.create({
     data: {
       organizationId: property.organizationId,
@@ -214,7 +250,7 @@ export async function getNightAuditPreview(propertyId: string) {
   const property = await prisma.property.findUnique({ where: { id: propertyId }});
   if (!property) throw new Error('NOT_FOUND:Property not found');
 
-  const businessDate = getPropertyBusinessDate(property.timezone, new Date());
+  const businessDate = property.businessDate ?? getPropertyBusinessDate(property.timezone, new Date());
   const nextBusinessDate = getNextBusinessDate(businessDate);
 
   const currentAudit = await prisma.nightAudit.findUnique({

@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { resolveUser } from '@/lib/resolve-user';
-import { getExecutiveKPISnapshot } from '@/lib/kpi';
+import { getExecutiveKPISnapshot, getPropertyBusinessDate } from '@/lib/kpi';
 import { evaluatePropertyAlerts } from '@/lib/attention-engine';
 import { fetchHotelPulse } from '@/lib/executive/hotel-pulse';
 import { fetchPendingApprovals } from '@/lib/executive/approvals';
@@ -39,8 +39,10 @@ export async function GET(req: NextRequest) {
       return errorResponse('NOT_FOUND', 'Property not found', 404);
     }
 
+    const businessDate = await getPropertyBusinessDate(primaryPropertyId);
+
     const [snapshot, activeAlerts, hotelPulse, approvals] = await Promise.all([
-      getExecutiveKPISnapshot(primaryPropertyId),
+      getExecutiveKPISnapshot(primaryPropertyId, businessDate),
       evaluatePropertyAlerts(primaryPropertyId),
       fetchHotelPulse(primaryPropertyId),
       fetchPendingApprovals(primaryPropertyId)
@@ -54,7 +56,7 @@ export async function GET(req: NextRequest) {
         name: property.name,
         timezone: property.timezone
       },
-      businessDate: now.toISOString().split('T')[0], // Typically derived from Property.businessDate in PMS
+      businessDate: businessDate.toISOString().split('T')[0],
       generatedAt: now.toISOString(),
       
       performance: snapshot,
