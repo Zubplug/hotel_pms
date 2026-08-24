@@ -41,6 +41,10 @@ public class SyncEngine : BackgroundService
         public int Total { get; set; }
         public string? Message { get; set; }
         public int PendingOperations { get; set; }
+        public DateTime? LastPushAttemptAt { get; set; }
+        public string? LastPushEndpoint { get; set; }
+        public int LastPushBatchSize { get; set; }
+        public int? LastPushHttpStatus { get; set; }
     }
 
     public static event Action<SyncHealthInfo>? OnSyncHealthChanged;
@@ -54,6 +58,10 @@ public class SyncEngine : BackgroundService
     private int _lastCurrent = 0;
     private int _lastTotal = 0;
     private string? _lastMessage = null;
+    private DateTime? _lastPushAttemptAt = null;
+    private string? _lastPushEndpoint = null;
+    private int _lastPushBatchSize = 0;
+    private int? _lastPushHttpStatus = null;
 
     public SyncEngine(IServiceProvider serviceProvider, ILogger<SyncEngine> logger, AuthManager authManager, HttpClient httpClient, ICredentialStorageService credentialStorage)
     {
@@ -309,6 +317,10 @@ FrontDesk:        {pendingOutbox}
 Keycards:         {keycardsPending}
 
 Last Error:       {errorStr}
+Last Push Attempt: {_lastPushAttemptAt?.ToString("o") ?? "Never"}
+Push Endpoint:     {_lastPushEndpoint ?? "Never"}
+Push Batch:        {_lastPushBatchSize}
+Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
 ===================";
             
             _logger.LogInformation(summary);
@@ -337,8 +349,8 @@ Last Error:       {errorStr}
         var pendingCount = 0;
         try 
         {
-            pendingCount = dbContext.SyncEvents.Count(e => e.Status == "PENDING" || e.Status == "FAILED")
-                         + dbContext.OutboxEvents.Count(e => e.Status == "PENDING" || e.Status == "FAILED");
+            pendingCount = dbContext.SyncEvents.Count(e => e.Status == "PENDING" || e.Status == "PROCESSING" || e.Status == "FAILED")
+                         + dbContext.OutboxEvents.Count(e => e.Status == "PENDING" || e.Status == "PROCESSING" || e.Status == "FAILED");
         } 
         catch (Exception ex) { _logger.LogWarning($"Failed to count pending events: {ex.Message}"); }
 
@@ -363,7 +375,11 @@ Last Error:       {errorStr}
                 Phase = phase,
                 Current = current,
                 Total = total,
-                Message = message
+                Message = message,
+                LastPushAttemptAt = _lastPushAttemptAt,
+                LastPushEndpoint = _lastPushEndpoint,
+                LastPushBatchSize = _lastPushBatchSize,
+                LastPushHttpStatus = _lastPushHttpStatus
             });
         }
         catch (Exception ex)
@@ -379,8 +395,8 @@ Last Error:       {errorStr}
         {
             using var scope = _serviceProvider.CreateScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
-            pendingCount = dbContext.SyncEvents.Count(e => e.Status == "PENDING" || e.Status == "FAILED")
-                         + dbContext.OutboxEvents.Count(e => e.Status == "PENDING" || e.Status == "FAILED");
+            pendingCount = dbContext.SyncEvents.Count(e => e.Status == "PENDING" || e.Status == "PROCESSING" || e.Status == "FAILED")
+                         + dbContext.OutboxEvents.Count(e => e.Status == "PENDING" || e.Status == "PROCESSING" || e.Status == "FAILED");
         } 
         catch (Exception ex) { _logger.LogWarning($"Failed to count pending events: {ex.Message}"); }
 
@@ -394,7 +410,11 @@ Last Error:       {errorStr}
             Phase = _lastPhase,
             Current = _lastCurrent,
             Total = _lastTotal,
-            Message = _lastMessage
+            Message = _lastMessage,
+            LastPushAttemptAt = _lastPushAttemptAt,
+            LastPushEndpoint = _lastPushEndpoint,
+            LastPushBatchSize = _lastPushBatchSize,
+            LastPushHttpStatus = _lastPushHttpStatus
         };
     }
 
@@ -1911,7 +1931,19 @@ Last Error:       {errorStr}
             _logger.LogDebug($"[PUSH-FD-EVENT] id={e.Id} idempotencyKey={e.IdempotencyKey} type={e.AggregateType}/{e.EventType} aggregateId={e.AggregateId} attempts={e.AttemptCount} status={e.Status} lastError={e.LastError}");
         }
 
-        foreach (var e in pendingEvents) e.AttemptCount++;
+        _lastPushAttemptAt = DateTime.UtcNow;
+        _lastPushEndpoint = $"{_httpClient.BaseAddress}sync/push/frontdesk";
+        _lastPushBatchSize = pendingEvents.Count;
+        _lastPushHttpStatus = null;
+        foreach (var e in pendingEvents)
+        {
+            e.Status = "PROCESSING";
+            e.AttemptCount++;
+            e.LastAttemptAt = _lastPushAttemptAt;
+            e.LastError = null;
+        }
+        // Persist before network I/O so a crash or timeout cannot appear as Attempts: 0.
+        await dbContext.SaveChangesAsync(stoppingToken);
 
         _logger.LogInformation($"Pushing {pendingEvents.Count} Front Desk outbox events to cloud...");
         BroadcastHealth(SyncState.SYNCING, null, "PUSH_FD", 0, pendingEvents.Count, "Pushing Front Desk events...");
@@ -1949,6 +1981,7 @@ Last Error:       {errorStr}
         try
         {
             var response = await _httpClient.SendAsync(request, stoppingToken);
+            _lastPushHttpStatus = (int)response.StatusCode;
             _logger.LogInformation($"[PUSH-FD] Server responded: HTTP {(int)response.StatusCode} {response.StatusCode}");
             
             if (response.IsSuccessStatusCode)

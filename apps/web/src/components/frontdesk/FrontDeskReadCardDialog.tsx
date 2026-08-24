@@ -70,7 +70,11 @@ export function FrontDeskReadCardDialog({ open, onOpenChange, propertyId }: Fron
         try {
           const lData = await provider.reservations.lookupByRoom(readData.roomNo, propertyId);
           if (lData) {
-            setReservation(lData);
+            setReservation({
+              ...lData,
+              id: lData.id || lData.reservationId,
+              primaryGuest: lData.primaryGuest || lData.guest || null,
+            });
           }
         } catch (e) {
           console.error('Failed to lookup reservation', e);
@@ -182,7 +186,7 @@ export function FrontDeskReadCardDialog({ open, onOpenChange, propertyId }: Fron
                       reservation.status === 'CHECKED_OUT' ? "bg-slate-200 text-slate-700" :
                       "bg-blue-200 text-blue-800"
                     )}>
-                      {reservation.status.replace('_', ' ')}
+                      {(reservation.status || 'ACTIVE').replace('_', ' ')}
                     </span>
                   </div>
                   <div className="p-5 flex justify-between items-center">
@@ -190,13 +194,13 @@ export function FrontDeskReadCardDialog({ open, onOpenChange, propertyId }: Fron
                       <span className="text-xs font-bold text-blue-800/60 uppercase tracking-wider">Primary Guest</span>
                       <p className="font-bold text-blue-950 text-lg flex items-center gap-2">
                         <User className="w-5 h-5" />
-                        {reservation.primaryGuest.firstName} {reservation.primaryGuest.lastName}
+                        {reservation.primaryGuest?.firstName || reservation.guest?.firstName || 'Guest'} {reservation.primaryGuest?.lastName || reservation.guest?.lastName || ''}
                       </p>
                     </div>
                     <Button 
                       onClick={() => {
                         onOpenChange(false);
-                        router.push(`/frontdesk/reservations/detail?id=${reservation.id}`);
+                        router.push(`/frontdesk/reservations/detail?id=${reservation.id || reservation.reservationId}`);
                       }}
                       className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-sm"
                     >

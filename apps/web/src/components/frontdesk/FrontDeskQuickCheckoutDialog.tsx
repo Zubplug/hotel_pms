@@ -108,7 +108,14 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
         throw new Error(`No active reservation found for room ${readData.roomNo}`);
       }
 
-      setReservation(resolvedReservation);
+      setReservation({
+        ...resolvedReservation,
+        id: resolvedReservation.id || resolvedReservation.reservationId,
+        primaryGuest: resolvedReservation.primaryGuest || resolvedReservation.guest || null,
+        reservationRooms: resolvedReservation.reservationRooms || resolvedReservation.rooms || [],
+        folios: resolvedReservation.folios || (resolvedReservation.folio ? [resolvedReservation.folio] : []),
+        balance: resolvedReservation.balance ?? resolvedReservation.folioBalance ?? 0,
+      });
       setStep('CONFIRMING');
 
     } catch (err: any) {
@@ -163,7 +170,7 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
     try {
       const res = await HardwareBridge.printGuestFolio({
         folioId: reservation.folios?.[0]?.id || reservation.id,
-        guestName: `${reservation.primaryGuest.firstName} ${reservation.primaryGuest.lastName}`,
+        guestName: `${reservation.primaryGuest?.firstName || reservation.guest?.firstName || 'Guest'} ${reservation.primaryGuest?.lastName || reservation.guest?.lastName || ''}`.trim(),
         version: Date.now(),
         details: {}
       });
@@ -250,11 +257,11 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
               <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm mb-6">
                 <div className="flex items-center gap-4 mb-6 pb-6 border-b border-slate-100">
                   <div className="w-14 h-14 bg-slate-100 rounded-full flex items-center justify-center text-xl font-bold text-slate-600">
-                    {reservation.primaryGuest.firstName[0]}{reservation.primaryGuest.lastName[0]}
+                    {reservation.primaryGuest?.firstName?.[0] || reservation.guest?.firstName?.[0] || 'G'}{reservation.primaryGuest?.lastName?.[0] || reservation.guest?.lastName?.[0] || ''}
                   </div>
                   <div>
                     <h3 className="text-lg font-bold text-slate-900">
-                      {reservation.primaryGuest.firstName} {reservation.primaryGuest.lastName}
+                      {reservation.primaryGuest?.firstName || reservation.guest?.firstName || 'Guest'} {reservation.primaryGuest?.lastName || reservation.guest?.lastName || ''}
                     </h3>
                     <p className="text-slate-500 font-medium">Room {reservation.reservationRooms[0]?.room?.number}</p>
                   </div>
@@ -305,7 +312,7 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
               </div>
               <h3 className="text-2xl font-bold text-slate-900 mb-2">Checkout Complete</h3>
               <p className="text-slate-500 mb-4 max-w-[280px] mx-auto">
-                {reservation?.primaryGuest.firstName} has been checked out and the keycard is erased.
+                {reservation?.primaryGuest?.firstName || reservation?.guest?.firstName || 'Guest'} has been checked out and the keycard is erased.
               </p>
 
               <div className="mb-8 p-4 bg-slate-50 border border-slate-100 rounded-xl max-w-[320px] mx-auto flex flex-col items-center gap-2">

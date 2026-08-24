@@ -45,13 +45,15 @@ export default function SyncCenterPage() {
   const { data, refetch } = useQuery({
     queryKey: ['desktop', 'sync-queues'],
     queryFn: async () => {
-      const [frontDesk, pos] = await Promise.all([
+      const [frontDesk, pos, health] = await Promise.all([
         provider.system?.getOutboxEvents?.() || { success: false, data: [] },
         provider.system?.getSyncEvents?.() || { success: false, data: [] },
+        provider.system?.getSyncHealth?.() || { success: false, data: null },
       ]);
       return {
         frontDesk: (Array.isArray(frontDesk?.data) ? frontDesk.data as RawEvent[] : []).map(event => normalizeEvent(event, 'FRONT_DESK')),
         pos: (Array.isArray(pos?.data) ? pos.data as RawEvent[] : []).map(event => normalizeEvent(event, 'POS')),
+        health: health?.data || null,
       };
     },
     refetchInterval: 5000,
@@ -113,6 +115,18 @@ export default function SyncCenterPage() {
             <Button onClick={forceSync} disabled={busy || !isOnline}><RefreshCw className={busy ? 'mr-2 h-4 w-4 animate-spin' : 'mr-2 h-4 w-4'} />Sync Now</Button>
           </div>
         </div>
+
+        {data?.health && (
+          <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm shadow-sm">
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+              <span className="font-bold text-slate-800">Push engine: <span className={data.health.network === 'ONLINE' ? 'text-emerald-600' : 'text-amber-600'}>{data.health.network || 'UNKNOWN'}</span></span>
+              <span className="text-slate-500">Last attempt: <strong className="text-slate-700">{data.health.lastPushAttemptAt ? new Date(data.health.lastPushAttemptAt).toLocaleString() : 'Never'}</strong></span>
+              <span className="text-slate-500">Batch: <strong className="text-slate-700">{data.health.lastPushBatchSize ?? 0}</strong></span>
+              <span className="text-slate-500">HTTP: <strong className="text-slate-700">{data.health.lastPushHttpStatus ?? '—'}</strong></span>
+            </div>
+            {data.health.lastPushEndpoint && <p className="mt-2 truncate font-mono text-xs text-slate-400">{data.health.lastPushEndpoint}</p>}
+          </div>
+        )}
 
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           {[

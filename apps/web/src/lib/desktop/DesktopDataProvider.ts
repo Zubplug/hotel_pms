@@ -4,6 +4,19 @@ import { OnlineDataProvider } from './OnlineDataProvider';
 
 const syncOperations = new Map<string, any>();
 
+const normalizeRoomLookupReservation = (raw: any) => {
+  if (!raw) return null;
+  const rooms = raw.reservationRooms || raw.rooms || [];
+  return {
+    ...raw,
+    id: raw.id || raw.reservationId,
+    primaryGuest: raw.primaryGuest || raw.guest || null,
+    reservationRooms: rooms,
+    folios: raw.folios || (raw.folio ? [raw.folio] : []),
+    balance: raw.balance ?? raw.folioBalance ?? raw.folio?.outstandingBalance ?? 0,
+  };
+};
+
 export const DesktopDataProvider: LodgeCoreDataProvider = {
   auth: {
     getSession: async () => {
@@ -121,7 +134,7 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
       try {
         const res = await invokeDesktop('reservations.lookupByRoom', { roomNo, propertyId });
         if (res && res.success && res.data) {
-          return res.data;
+          return normalizeRoomLookupReservation(res.data);
         }
         return null;
       } catch (err) {
