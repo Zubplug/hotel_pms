@@ -10,20 +10,20 @@ import { DataProviderWrapper } from '@/lib/desktop/DataProviderContext';
 import { LockProvider } from '@/components/auth/LockProvider';
 
 export function Providers({ children }: { children: React.ReactNode }) {
+  const isDesktop = process.env.NEXT_PUBLIC_IS_DESKTOP === "true";
   const [queryClient] = useState(
     () =>
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 60 * 1000, // 1 minute
-            refetchOnWindowFocus: false,
+            staleTime: isDesktop ? 5 * 1000 : 60 * 1000,
+            refetchOnWindowFocus: true,
+            refetchOnReconnect: true,
             retry: 1,
           },
         },
       })
   );
-
-  const isDesktop = process.env.NEXT_PUBLIC_IS_DESKTOP === "true";
 
   return (
     <SessionProvider session={isDesktop ? null : undefined}>

@@ -23,6 +23,9 @@ function ReservationDetailContent() {
       return provider.reservations.get(id);
     },
     enabled: !!id,
+    refetchInterval: 3000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
   });
 
   const reservation = res?.data || res;

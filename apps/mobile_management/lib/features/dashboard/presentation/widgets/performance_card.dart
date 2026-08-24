@@ -12,7 +12,7 @@ class PerformanceCard extends StatelessWidget {
     const surfaceNavy = Color(0xFF1E293B);
     const textSecondary = Color(0xFF94A3B8);
 
-    final currencyFormat = NumberFormat.compactCurrency(symbol: '₦', decimalDigits: 2);
+    final currencyFormat = NumberFormat.currency(symbol: '₦', decimalDigits: 0);
 
     return Container(
       width: double.infinity,

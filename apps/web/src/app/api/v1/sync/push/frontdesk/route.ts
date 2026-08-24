@@ -1109,7 +1109,7 @@ export async function POST(req: NextRequest) {
                     idempotencyKey,
                     propertyId,
                     deviceId: device.id,
-                    operatorId: actorId,
+                    operatorId: isUuid(operatorId) ? operatorId : device.id,
                     aggregateType,
                     aggregateId,
                     aggregateVersion,

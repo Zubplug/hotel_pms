@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { LodgeCoreDataProvider } from './DataProvider';
 import { OnlineDataProvider } from './OnlineDataProvider';
 import { DesktopDataProvider } from './DesktopDataProvider';
@@ -30,6 +31,7 @@ const DataProviderContext = createContext<DataProviderContextValue>({
 });
 
 export function DataProviderWrapper({ children }: { children: React.ReactNode }) {
+  const queryClient = useQueryClient();
   const [isDesktopMode, setIsDesktopMode] = useState(process.env.NEXT_PUBLIC_IS_DESKTOP === "true");
   const [isOnline, setIsOnline] = useState(true);
   const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'offline' | 'error'>('synced');
@@ -47,6 +49,7 @@ export function DataProviderWrapper({ children }: { children: React.ReactNode })
       const handleOnline = () => {
         setIsOnline(true);
         setSyncStatus('syncing');
+        void queryClient.invalidateQueries({ refetchType: 'active' });
         // Trigger a sync check with the desktop bridge here
         try {
           if ((window as any).chrome?.webview) {
@@ -76,6 +79,7 @@ export function DataProviderWrapper({ children }: { children: React.ReactNode })
             setIsOnline(false);
           } else if (data.status === 'UP_TO_DATE' || data.status === 'SYNCING') {
             setIsOnline(navigator.onLine);
+            void queryClient.invalidateQueries({ refetchType: 'active' });
           }
         }
       };
@@ -89,7 +93,7 @@ export function DataProviderWrapper({ children }: { children: React.ReactNode })
         }
       };
     }
-  }, []);
+  }, [queryClient]);
 
   const provider = (isDesktopMode ? DesktopDataProvider : OnlineDataProvider) as unknown as LodgeCoreDataProvider;
 
