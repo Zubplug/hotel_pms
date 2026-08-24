@@ -134,7 +134,7 @@ export default function SyncCenterPage() {
                     </span>
                     <span className="text-sm font-bold text-slate-700">Entity: {evt.EntityId.substring(0, 8)}...</span>
                   </div>
-                  <p className="text-red-700 font-medium">{evt.ErrorMessage || 'Conflict occurred during synchronization.'}</p>
+                  <p className="text-red-700 font-medium">{evt.LastError || 'Conflict occurred during synchronization.'}</p>
                 </div>
                 <div className="text-right text-xs text-slate-500">
                   <p>ID: {evt.Id.substring(0, 8)}</p>
@@ -169,8 +169,8 @@ export default function SyncCenterPage() {
                     </span>
                     <span className="text-sm font-bold text-slate-700">Entity: {evt.EntityId.substring(0, 8)}...</span>
                   </div>
-                  {evt.Status === 'FAILED' && evt.ErrorMessage && (
-                    <p className="text-amber-600 text-sm font-medium mt-1">Failed (Retry {evt.AttemptCount}): {evt.ErrorMessage}</p>
+                  {evt.Status === 'FAILED' && evt.LastError && (
+                    <p className="text-amber-600 text-sm font-medium mt-1">Failed (Retry {evt.AttemptCount}): {evt.LastError}</p>
                   )}
                 </div>
                 <div className="text-right text-xs text-slate-500">

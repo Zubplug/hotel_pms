@@ -32,7 +32,8 @@ import {
   ArrowRight,
   Info,
   Printer,
-  Shirt
+  Shirt,
+  RefreshCw
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -138,6 +139,11 @@ export default function ReceptionistDashboardPage() {
               <Button onClick={() => router.push('/laundry')} variant="outline" className="h-20 md:h-24 md:w-36 rounded-2xl bg-cyan-50 hover:bg-cyan-100 text-cyan-900 border-cyan-100 shadow hover:shadow-md hover:-translate-y-1 transition-all flex flex-col gap-2 group">
                 <Shirt className="w-6 h-6 md:w-7 md:h-7 text-cyan-600 group-hover:scale-110 transition-transform" />
                 <span className="font-bold text-sm">Laundry</span>
+              </Button>
+
+              <Button onClick={() => router.push('/frontdesk/sync')} variant="outline" className="h-20 md:h-24 md:w-36 rounded-2xl bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-100 shadow hover:shadow-md hover:-translate-y-1 transition-all flex flex-col gap-2 group">
+                <RefreshCw className="w-6 h-6 md:w-7 md:h-7 text-amber-600 group-hover:scale-110 transition-transform" />
+                <span className="font-bold text-sm">Sync Center</span>
               </Button>
             </div>
         </div>
