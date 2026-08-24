@@ -59,11 +59,6 @@ export default function LaundryDashboard() {
         {/* Header Section */}
         <div className="flex flex-col xl:flex-row justify-between items-start xl:items-end gap-6 w-full">
           <div className="flex-1 min-w-0 pr-4">
-            <div className="flex items-center gap-4 mb-2">
-              <Button onClick={() => router.push('/frontdesk')} variant="ghost" size="sm" className="rounded-full bg-slate-200/50 hover:bg-slate-200 text-slate-600 px-4 h-8 flex items-center gap-2">
-                <ArrowLeft className="w-4 h-4" /> Back to Front Desk
-              </Button>
-            </div>
             <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-slate-900 truncate">
               Laundry Operations
             </h1>
@@ -85,9 +80,9 @@ export default function LaundryDashboard() {
               <span className="font-bold text-sm">Catalog</span>
             </Button>
 
-            <Button onClick={fetchOrders} disabled={loading} variant="outline" className="h-20 md:h-24 md:w-36 rounded-2xl bg-white/80 hover:bg-white text-slate-700 border-white/50 shadow hover:shadow-md hover:-translate-y-1 transition-all flex flex-col gap-2 group">
-              {loading ? <Loader2 className="w-6 h-6 md:w-7 md:h-7 text-slate-400 animate-spin" /> : <RefreshCcw className="w-6 h-6 md:w-7 md:h-7 text-slate-400 group-hover:rotate-180 transition-transform duration-500" />}
-              <span className="font-bold text-sm">Refresh</span>
+            <Button onClick={() => router.push('/frontdesk')} variant="outline" className="h-20 md:h-24 md:w-36 rounded-2xl bg-white/80 hover:bg-white text-slate-700 border-white/50 shadow hover:shadow-md hover:-translate-y-1 transition-all flex flex-col gap-2 group">
+              <ArrowLeft className="w-6 h-6 md:w-7 md:h-7 text-slate-400 group-hover:-translate-x-1 transition-transform" />
+              <span className="font-bold text-sm">Front Desk</span>
             </Button>
           </div>
         </div>
