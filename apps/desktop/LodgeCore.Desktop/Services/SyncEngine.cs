@@ -1922,6 +1922,8 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
         _logger.LogInformation($"[PUSH-FD] Token acquired. Length={token.Length}, Prefix={token.Substring(0, Math.Min(8, token.Length))}...");
 
         var eventsToPush = new List<LocalOutboxEvent>();
+        await RefreshResolvedFrontDeskConflictsAsync(dbContext, identity, token, allPending, stoppingToken);
+        allPending.RemoveAll(e => e.Status == "RESOLVED");
         foreach (var group in allPending.GroupBy(e => e.AggregateId))
         {
              foreach (var evt in group.OrderBy(e => e.Sequence))
@@ -2161,6 +2163,43 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
             }
             await dbContext.SaveChangesAsync(stoppingToken);
             throw;
+        }
+    }
+
+    private async Task RefreshResolvedFrontDeskConflictsAsync(
+        LocalDbContext dbContext,
+        SyncIdentity identity,
+        string token,
+        List<LocalOutboxEvent> events,
+        CancellationToken stoppingToken)
+    {
+        var conflictedEvents = events.Where(e => e.Status == "CONFLICT").ToList();
+        if (!conflictedEvents.Any()) return;
+
+        var eventIds = string.Join(",", conflictedEvents.Select(e => Uri.EscapeDataString(e.Id)));
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"sync/conflicts/status?propertyId={Uri.EscapeDataString(identity.PropertyId)}&eventIds={eventIds}");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        using var response = await _httpClient.SendAsync(request, stoppingToken);
+        if (!response.IsSuccessStatusCode) return;
+
+        var body = await response.Content.ReadAsStringAsync(stoppingToken);
+        using var document = JsonDocument.Parse(body);
+        if (!document.RootElement.TryGetProperty("resolutions", out var resolutions)) return;
+
+        foreach (var resolution in resolutions.EnumerateArray())
+        {
+            var eventId = resolution.GetProperty("eventId").GetString();
+            var evt = conflictedEvents.FirstOrDefault(e => e.Id == eventId);
+            if (evt == null) continue;
+
+            evt.Status = "RESOLVED";
+            evt.NextAttemptAt = null;
+            evt.SyncedAt = DateTime.UtcNow;
+            evt.LastError = $"Resolved on server: {resolution.GetProperty("resolution").GetString() ?? "MANAGER_REVIEW"}";
+            ClearIsDirtyIfSafe(dbContext, evt);
         }
     }
 

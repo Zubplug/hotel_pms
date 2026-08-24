@@ -65,6 +65,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           return;
        }
 
+       if (action === 'MANUAL_CORRECTION') {
+          if (!resolutionComment?.trim()) throw new Error('MANUAL_CORRECTION requires a resolution comment');
+          await tx.syncConflict.update({
+            where: { id },
+            data: {
+              status: 'RESOLVED',
+              resolution: `MANUAL_CORRECTION: ${resolutionComment.trim()}`,
+              resolvedBy: session.user?.id || 'SYSTEM',
+              resolvedAt: new Date()
+            }
+          });
+          return;
+       }
+
        if (action === 'FORCE_EDGE_EVENT') {
           let updatedCount = 0;
           let currentVersion = 1;
@@ -81,6 +95,52 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                 await tx.reservation.update({ where: { id: r.id }, data: { status: 'CHECKED_IN', version: { increment: 1 } } });
              } else if (edgeEvent.eventType === 'CHECK_OUT') {
                 await tx.reservation.update({ where: { id: r.id }, data: { status: 'CHECKED_OUT', version: { increment: 1 } } });
+             } else if (edgeEvent.eventType === 'KEYCARD_ENCODE') {
+                const roomId = payload.roomId || undefined;
+                if (!roomId) throw new Error('DOMAIN_ERROR: Keycard event has no room assignment.');
+                let doorLock = await tx.doorLock.findFirst({ where: { roomId } });
+                if (!doorLock) {
+                  doorLock = await tx.doorLock.create({
+                    data: {
+                      propertyId: conflict.propertyId,
+                      roomId,
+                      lockCode: `ENCODER-${roomId}`,
+                      provider: 'DELUNS_ENCODER',
+                      status: 'ONLINE'
+                    }
+                  });
+                }
+                const encodeData = payload.encodeData || {};
+                const credential = await tx.lockCredential.create({
+                  data: {
+                    reservationId: r.id,
+                    roomId,
+                    lockId: doorLock.id,
+                    credentialType: 'rfid',
+                    status: 'ACTIVE',
+                    validFrom: new Date(),
+                    validUntil: new Date(r.checkOut),
+                    cardSerialNumber: encodeData.cardSnr || null,
+                    metadata: encodeData
+                  }
+                });
+                await tx.lockOperation.create({
+                  data: {
+                    propertyId: conflict.propertyId,
+                    reservationId: r.id,
+                    roomId,
+                    lockId: doorLock.id,
+                    credentialId: credential.id,
+                    idempotencyKey: `RESOLVE_KEYCARD:${conflict.id}`,
+                    operation: 'ENCODE_CARD',
+                    status: 'COMPLETED',
+                    requestedAt: new Date(),
+                    startedAt: new Date(),
+                    completedAt: new Date(),
+                    metadata: { initiatedBy: session.user?.id || 'SYSTEM', responseData: encodeData }
+                  }
+                });
+                await tx.reservation.update({ where: { id: r.id }, data: { version: { increment: 1 } } });
              } else {
                  await tx.reservation.update({ where: { id: r.id }, data: { version: { increment: 1 } } });
              }
@@ -114,6 +174,58 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                    where: { id: f.id },
                    data: { totalCharges: { increment: amount }, balance: { increment: amount }, version: { increment: 1 } }
                  });
+             } else if (edgeEvent.eventType === 'POST_PAYMENT') {
+                 const amount = Number(payload.amount);
+                 if (!Number.isFinite(amount) || amount <= 0) throw new Error('DOMAIN_ERROR: Payment amount must be positive.');
+
+                 const paymentIdempotencyKey = `pay_${edgeEvent.idempotencyKey}`;
+                 const existingPayment = await tx.payment.findUnique({ where: { idempotencyKey: paymentIdempotencyKey } });
+                 if (!existingPayment) {
+                   const existingItem = await tx.folioItem.findFirst({ where: { posTransactionId: edgeEvent.idempotencyKey } });
+                   if (!existingItem) {
+                     await tx.folioItem.create({
+                       data: {
+                         folioId: f.id,
+                         businessDate: new Date(payload.businessDate || new Date()),
+                         type: 'PAYMENT',
+                         source: 'MANUAL',
+                         description: payload.description || `${payload.method || 'PAYMENT'} payment`,
+                         quantity: 1,
+                         unitAmount: -amount,
+                         amount: -amount,
+                         currency: payload.currency || f.currency,
+                         baseAmount: amount,
+                         postedBy: edgeEvent.operatorId || 'SYSTEM',
+                         deviceId: edgeEvent.deviceId,
+                         isLatePosting: true,
+                         posTransactionId: edgeEvent.idempotencyKey
+                       }
+                     });
+                   }
+
+                   await tx.payment.create({
+                     data: {
+                       folioId: f.id,
+                       propertyId: conflict.propertyId,
+                       reservationId: f.reservationId,
+                       method: (['CASH', 'BANK_TRANSFER', 'POS', 'CARD', 'CARD_OFFLINE', 'PAYMENT_GATEWAY', 'MOBILE_PAYMENT', 'CHEQUE', 'ROOM_CHARGE', 'OTHER'].includes(String(payload.method || '').toUpperCase())
+                         ? String(payload.method || 'OTHER').toUpperCase()
+                         : 'OTHER') as any,
+                       amount,
+                       currency: payload.currency || f.currency,
+                       baseAmount: amount,
+                       status: 'COMPLETED',
+                       idempotencyKey: paymentIdempotencyKey,
+                       receivedBy: edgeEvent.operatorId || 'SYSTEM',
+                       deviceId: edgeEvent.deviceId
+                     }
+                   });
+
+                   await tx.folio.update({
+                     where: { id: f.id },
+                     data: { totalPayments: { increment: amount }, balance: { decrement: amount }, version: { increment: 1 } }
+                   });
+                 }
              } else {
                  await tx.folio.update({ where: { id: f.id }, data: { version: { increment: 1 } } });
              }
