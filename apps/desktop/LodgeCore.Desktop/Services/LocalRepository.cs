@@ -615,7 +615,7 @@ public class LocalRepository
             PayloadJson = JsonSerializer.Serialize(new 
             { 
                 roomId = res.RoomId,
-                encodeData = encodeData != null ? JsonSerializer.Deserialize<JsonElement>(encodeData) : null
+                encodeData = encodeData != null ? JsonSerializer.Deserialize<JsonElement>(encodeData) : (JsonElement?)null
             })
         });
 
