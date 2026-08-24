@@ -1185,6 +1185,96 @@ public class SyncEngine : BackgroundService
                 }
             }
 
+            // 8c. Laundry Orders
+            if (root.TryGetProperty("laundryOrders", out var laundryOrdersArray))
+            {
+                var incomingIds = new HashSet<string>();
+                foreach (var el in laundryOrdersArray.EnumerateArray())
+                {
+                    var id = el.GetProperty("id").GetString();
+                    var elPropertyId = el.TryGetProperty("propertyId", out var pid) && pid.ValueKind != System.Text.Json.JsonValueKind.Null ? pid.GetString() : "";
+                    
+                    if (string.IsNullOrEmpty(id) || elPropertyId != propertyId) continue;
+                    incomingIds.Add(id);
+
+                    var order = await dbContext.LaundryOrders.FirstOrDefaultAsync(x => x.Id == id, stoppingToken);
+                    if (order == null)
+                    {
+                        order = new LodgeCore.Desktop.Data.Entities.LocalLaundryOrder { Id = id, PropertyId = propertyId };
+                        dbContext.LaundryOrders.Add(order);
+                    }
+                    order.CustomerType = el.TryGetProperty("customerType", out var ct) && ct.ValueKind != System.Text.Json.JsonValueKind.Null ? ct.GetString() ?? "IN_HOUSE" : "IN_HOUSE";
+                    order.ReservationId = el.TryGetProperty("reservationId", out var rid) && rid.ValueKind != System.Text.Json.JsonValueKind.Null ? rid.GetString() : null;
+                    order.RoomId = el.TryGetProperty("roomId", out var rmId) && rmId.ValueKind != System.Text.Json.JsonValueKind.Null ? rmId.GetString() : null;
+                    order.GuestId = el.TryGetProperty("guestId", out var gid) && gid.ValueKind != System.Text.Json.JsonValueKind.Null ? gid.GetString() ?? "" : "";
+                    order.FolioItemId = el.TryGetProperty("folioItemId", out var fid) && fid.ValueKind != System.Text.Json.JsonValueKind.Null ? fid.GetString() ?? "" : "";
+                    order.Status = el.TryGetProperty("status", out var st) && st.ValueKind != System.Text.Json.JsonValueKind.Null ? st.GetString() ?? "PENDING" : "PENDING";
+                    order.TotalAmount = el.TryGetProperty("totalAmount", out var ta) ? (ta.ValueKind == System.Text.Json.JsonValueKind.Number ? ta.GetDecimal() : (ta.ValueKind == System.Text.Json.JsonValueKind.String && decimal.TryParse(ta.GetString(), out var dta) ? dta : 0m)) : 0m;
+                    order.ServiceType = el.TryGetProperty("serviceType", out var svt) && svt.ValueKind != System.Text.Json.JsonValueKind.Null ? svt.GetString() ?? "STANDARD" : "STANDARD";
+                    
+                    if (el.TryGetProperty("requestedAt", out var ra) && ra.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(ra.GetString(), out var rad)) order.RequestedAt = rad;
+                    if (el.TryGetProperty("collectedAt", out var ca) && ca.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(ca.GetString(), out var cad)) order.CollectedAt = cad;
+                    if (el.TryGetProperty("readyAt", out var rda) && rda.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(rda.GetString(), out var rdad)) order.ReadyAt = rdad;
+                    if (el.TryGetProperty("deliveredAt", out var dla) && dla.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(dla.GetString(), out var dlad)) order.DeliveredAt = dlad;
+                    
+                    order.Version = el.TryGetProperty("version", out var ver) && ver.ValueKind == System.Text.Json.JsonValueKind.Number ? ver.GetInt32() : 1;
+                    if (el.TryGetProperty("createdAt", out var crt) && crt.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(crt.GetString(), out var crtd)) order.CreatedAt = crtd;
+                    if (el.TryGetProperty("updatedAt", out var upd) && upd.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(upd.GetString(), out var updd)) order.UpdatedAt = updd;
+
+                    if (el.TryGetProperty("items", out var itemsArray) && itemsArray.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    {
+                        var itemIds = new HashSet<string>();
+                        foreach (var itemEl in itemsArray.EnumerateArray())
+                        {
+                            var itemId = itemEl.GetProperty("id").GetString();
+                            if (string.IsNullOrEmpty(itemId)) continue;
+                            itemIds.Add(itemId);
+
+                            var localItem = await dbContext.LaundryOrderItems.FirstOrDefaultAsync(x => x.Id == itemId, stoppingToken);
+                            if (localItem == null)
+                            {
+                                localItem = new LodgeCore.Desktop.Data.Entities.LocalLaundryOrderItem { Id = itemId, LaundryOrderId = id };
+                                dbContext.LaundryOrderItems.Add(localItem);
+                            }
+                            localItem.ItemId = itemEl.TryGetProperty("itemId", out var lIid) && lIid.ValueKind != System.Text.Json.JsonValueKind.Null ? lIid.GetString() ?? "" : "";
+                            localItem.Quantity = itemEl.TryGetProperty("quantity", out var qty) ? qty.GetInt32() : 0;
+                            localItem.UnitPrice = itemEl.TryGetProperty("unitPrice", out var upr) ? (upr.ValueKind == System.Text.Json.JsonValueKind.Number ? upr.GetDecimal() : (upr.ValueKind == System.Text.Json.JsonValueKind.String && decimal.TryParse(upr.GetString(), out var dupr) ? dupr : 0m)) : 0m;
+                            localItem.TotalPrice = itemEl.TryGetProperty("totalPrice", out var tpr) ? (tpr.ValueKind == System.Text.Json.JsonValueKind.Number ? tpr.GetDecimal() : (tpr.ValueKind == System.Text.Json.JsonValueKind.String && decimal.TryParse(tpr.GetString(), out var dtpr) ? dtpr : 0m)) : 0m;
+                        }
+                        
+                        var staleItems = await dbContext.LaundryOrderItems.Where(i => i.LaundryOrderId == id && !itemIds.Contains(i.Id)).ToListAsync(stoppingToken);
+                        if (staleItems.Any() && !isIncremental) dbContext.LaundryOrderItems.RemoveRange(staleItems);
+                    }
+
+                    if (el.TryGetProperty("statusHistory", out var historyArray) && historyArray.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    {
+                        foreach (var histEl in historyArray.EnumerateArray())
+                        {
+                            var histId = histEl.GetProperty("id").GetString();
+                            if (string.IsNullOrEmpty(histId)) continue;
+                            
+                            var localHist = await dbContext.LaundryOrderStatusHistory.FirstOrDefaultAsync(x => x.Id == histId, stoppingToken);
+                            if (localHist == null)
+                            {
+                                localHist = new LodgeCore.Desktop.Data.Entities.LocalLaundryOrderStatusHistory { Id = histId, LaundryOrderId = id };
+                                dbContext.LaundryOrderStatusHistory.Add(localHist);
+                                
+                                localHist.Status = histEl.TryGetProperty("status", out var hst) && hst.ValueKind != System.Text.Json.JsonValueKind.Null ? hst.GetString() ?? "" : "";
+                                localHist.OperatorId = histEl.TryGetProperty("operatorId", out var opid) && opid.ValueKind != System.Text.Json.JsonValueKind.Null ? opid.GetString() : null;
+                                localHist.Notes = histEl.TryGetProperty("notes", out var hn) && hn.ValueKind != System.Text.Json.JsonValueKind.Null ? hn.GetString() : null;
+                                if (histEl.TryGetProperty("createdAt", out var hcrt) && hcrt.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(hcrt.GetString(), out var hcrtd)) localHist.CreatedAt = hcrtd;
+                            }
+                        }
+                    }
+                }
+                
+                if (laundryOrdersArray.GetArrayLength() > 0)
+                {
+                    var stale = await dbContext.LaundryOrders.Where(o => o.PropertyId == propertyId && !incomingIds.Contains(o.Id)).ToListAsync(stoppingToken);
+                    if (stale.Any() && !isIncremental) dbContext.LaundryOrders.RemoveRange(stale);
+                }
+            }
+
             // 9. POS Floor Plans
             if (root.TryGetProperty("posFloorPlans", out var posFloorPlansArray))
             {

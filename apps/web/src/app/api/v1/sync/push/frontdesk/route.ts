@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
                 });
                 updatedCount = res.count;
              }
-          } else if (aggregateType === 'HOUSEKEEPING_TASK' || aggregateType === 'MAINTENANCE_TICKET' || aggregateType === 'GUEST' || aggregateType === 'ROOM') {
+          } else if (aggregateType === 'HOUSEKEEPING_TASK' || aggregateType === 'MAINTENANCE_TICKET' || aggregateType === 'GUEST' || aggregateType === 'ROOM' || aggregateType === 'LAUNDRY_ORDER') {
              updatedCount = 1; // No version field on cloud for these yet
           }
 
@@ -739,6 +739,179 @@ export async function POST(req: NextRequest) {
                      where: { id: aggregateId },
                      data: { status: 'RESOLVED' }
                  });
+             }
+          }
+          else if (aggregateType === 'LAUNDRY_ORDER') {
+             if (eventType === 'LAUNDRY_ORDER_CREATED') {
+                 let finalGuestId = payload.guestId;
+                 const cType = payload.customerType || 'IN_HOUSE';
+
+                 if (cType === 'WALK_IN' && payload.guest) {
+                     const phone = payload.guest.Phone || payload.guest.phone;
+                     if (phone) {
+                         const existingGuest = await tx.guest.findFirst({
+                             where: {
+                                 phone: phone,
+                                 organizationId: property?.organizationId || ''
+                             }
+                         });
+                         if (existingGuest) {
+                             finalGuestId = existingGuest.id;
+                         } else {
+                             const newGuest = await tx.guest.create({
+                                 data: {
+                                     id: finalGuestId,
+                                     organizationId: property?.organizationId || '',
+                                     firstName: payload.guest.FirstName || payload.guest.firstName || 'Walk-In',
+                                     lastName: payload.guest.LastName || payload.guest.lastName || 'Guest',
+                                     phone: phone,
+                                     email: payload.guest.Email || payload.guest.email || null,
+                                 }
+                             });
+                             finalGuestId = newGuest.id;
+                         }
+                     }
+                 }
+
+                 const orderItemsData = (payload.items || []).map((i: any) => ({
+                     itemId: i.itemId,
+                     quantity: i.quantity,
+                     unitPrice: i.unitPrice || 0,
+                     totalPrice: i.totalPrice || 0
+                 }));
+
+                 await tx.laundryOrder.create({
+                     data: {
+                         id: aggregateId,
+                         propertyId,
+                         customerType: cType,
+                         reservationId: cType === 'IN_HOUSE' ? payload.reservationId : null,
+                         roomId: cType === 'IN_HOUSE' ? payload.roomId : null,
+                         guestId: finalGuestId,
+                         serviceType: payload.serviceType || 'STANDARD',
+                         specialNotes: payload.specialNotes || null,
+                         totalAmount: payload.totalAmount || 0,
+                         currency: 'NGN', // Hardcoded currency for sync safety as per LodgeCore standard
+                         status: payload.status || 'PENDING',
+                         createdAt: payload.requestedAt ? new Date(payload.requestedAt) : new Date(),
+                         items: {
+                             create: orderItemsData
+                         }
+                     }
+                 });
+                 
+                 await tx.laundryOrderStatusHistory.create({
+                     data: {
+                         laundryOrderId: aggregateId,
+                         newStatus: payload.status || 'PENDING',
+                         changedBy: operatorId || device.id,
+                         notes: 'Order placed offline'
+                     }
+                 });
+             }
+             else if (eventType === 'LAUNDRY_STATUS_UPDATED') {
+                 const order = await tx.laundryOrder.findUnique({
+                     where: { id: aggregateId },
+                     include: { reservation: { include: { folios: { where: { type: 'ROOM', status: 'OPEN' } } } } }
+                 });
+                 if (!order) throw new Error('Laundry order not found');
+
+                 const newStatus = payload.status;
+                 if (order.status !== newStatus) {
+                     const updateData: any = { status: newStatus };
+                     if (newStatus === 'COLLECTED') {
+                         updateData.collectedAt = new Date();
+                         updateData.collectedBy = operatorId || device.id;
+                     } else if (newStatus === 'READY') {
+                         updateData.readyAt = new Date();
+                     } else if (newStatus === 'DELIVERED') {
+                         updateData.deliveredAt = new Date();
+                         updateData.deliveredBy = operatorId || device.id;
+                         
+                         // ATOMIC FOLIO POSTING for DELIVERED
+                         if (!order.folioItemId) {
+                             let activeFolio;
+                             if (order.customerType === 'IN_HOUSE') {
+                                 const reservation = order.reservation;
+                                 if (!reservation) throw new Error('IN_HOUSE order has no reservation');
+                                 activeFolio = reservation.folios.length > 0 ? reservation.folios[0] : await tx.folio.create({
+                                     data: {
+                                         reservationId: reservation.id,
+                                         propertyId: order.propertyId,
+                                         guestId: order.guestId,
+                                         folioNumber: `FOL-${Date.now()}`,
+                                         type: 'ROOM',
+                                         status: 'OPEN',
+                                         currency: order.currency
+                                     }
+                                 });
+                             } else if (order.customerType === 'WALK_IN') {
+                                 const existingFolios = await tx.folio.findMany({
+                                     where: { propertyId: order.propertyId, guestId: order.guestId, type: 'WALK_IN', status: 'OPEN' },
+                                     take: 1
+                                 });
+                                 activeFolio = existingFolios.length > 0 ? existingFolios[0] : await tx.folio.create({
+                                     data: {
+                                         propertyId: order.propertyId,
+                                         guestId: order.guestId,
+                                         folioNumber: `FOL-${Date.now()}`,
+                                         type: 'WALK_IN',
+                                         status: 'OPEN',
+                                         currency: order.currency
+                                     }
+                                 });
+                             }
+                             
+                             if (activeFolio && Number(order.totalAmount) > 0) {
+                                 const idempotencyKey = `${order.id}_DELIVERY_FOLIO_CHARGE`;
+                                 const existingCharge = await tx.folioItem.findFirst({ where: { posTransactionId: idempotencyKey } });
+                                 
+                                 let folioItem;
+                                 if (!existingCharge) {
+                                     folioItem = await tx.folioItem.create({
+                                         data: {
+                                             folioId: activeFolio.id,
+                                             businessDate: new Date(),
+                                             type: 'CHARGE',
+                                             source: 'LAUNDRY',
+                                             description: `Laundry Service - ${order.serviceType}`,
+                                             quantity: 1,
+                                             unitAmount: order.totalAmount,
+                                             amount: order.totalAmount,
+                                             currency: order.currency,
+                                             baseAmount: order.totalAmount,
+                                             postedBy: operatorId || device.id,
+                                             posTransactionId: idempotencyKey
+                                         }
+                                     });
+                                     
+                                     await tx.folio.update({
+                                         where: { id: activeFolio.id },
+                                         data: { totalCharges: { increment: order.totalAmount }, balance: { increment: order.totalAmount } }
+                                     });
+                                 } else {
+                                     folioItem = existingCharge;
+                                 }
+                                 updateData.folioItemId = folioItem.id;
+                             }
+                         }
+                     }
+
+                     await tx.laundryOrder.update({
+                         where: { id: aggregateId },
+                         data: updateData
+                     });
+                     
+                     await tx.laundryOrderStatusHistory.create({
+                         data: {
+                             laundryOrderId: aggregateId,
+                             previousStatus: order.status,
+                             newStatus: newStatus,
+                             changedBy: operatorId || device.id,
+                             notes: `Status updated to ${newStatus} via offline sync`
+                         }
+                     });
+                 }
              }
           }
           else {

@@ -25,8 +25,9 @@ public class LocalLaundryOrder
     [Key]
     public string Id { get; set; } = string.Empty;
     public string PropertyId { get; set; } = string.Empty;
-    public string ReservationId { get; set; } = string.Empty;
-    public string RoomId { get; set; } = string.Empty;
+    public string CustomerType { get; set; } = "IN_HOUSE";
+    public string? ReservationId { get; set; }
+    public string? RoomId { get; set; }
     public string GuestId { get; set; } = string.Empty;
     public string FolioItemId { get; set; } = string.Empty;
     public string Status { get; set; } = "PENDING";

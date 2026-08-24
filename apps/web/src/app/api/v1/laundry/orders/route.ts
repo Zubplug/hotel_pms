@@ -204,7 +204,6 @@ export async function POST(req: NextRequest) {
           specialNotes,
           totalAmount,
           currency: dbItems[0].currency,
-          placedBy: session.user.id,
           items: {
             create: orderItemsData
           }

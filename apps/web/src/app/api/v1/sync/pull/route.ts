@@ -71,7 +71,7 @@ export async function GET(req: NextRequest) {
     const staffList = await prisma.staff.findMany({
       where: buildWhere({ propertyAccess: { has: propertyId }, isActive: true, deletedAt: null }),
       take: limit,
-      orderBy: { updatedAt: 'asc' },
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     });
 
     const rooms = await prisma.room.findMany({
@@ -81,13 +81,13 @@ export async function GET(req: NextRequest) {
         floor: { select: { name: true, number: true } }
       },
       take: limit,
-      orderBy: { updatedAt: 'asc' },
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     });
 
     const roomTypes = await prisma.roomType.findMany({
       where: buildWhere({ propertyId, isActive: true }),
       take: limit,
-      orderBy: { updatedAt: 'asc' },
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     });
 
     // Target window for Reservations: In-house + 3 days out + today's departures
@@ -118,40 +118,40 @@ export async function GET(req: NextRequest) {
         lockOperations: { orderBy: { requestedAt: 'desc' }, take: 20 }
       },
       take: limit,
-      orderBy: { updatedAt: 'asc' },
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     });
 
     // POS Configuration
     const posOutlets = await prisma.posOutlet.findMany({
       where: buildWhere({ propertyId, isActive: true }),
       take: limit,
-      orderBy: { updatedAt: 'asc' },
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     });
     
     const outletIds = posOutlets.map(o => o.id);
     const posCategories = await prisma.productCategory.findMany({
       where: buildOutletWhere({ outletId: { in: outletIds }, isActive: true }),
       take: limit,
-      orderBy: { updatedAt: 'asc' },
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     });
     
     const posProducts = await prisma.posProduct.findMany({
       where: buildWhere({ propertyId, isActive: true }),
       include: { modifiers: true },
       take: limit,
-      orderBy: { updatedAt: 'asc' },
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     });
 
     const posFloorPlans = await prisma.posFloorPlan.findMany({
       where: buildOutletWhere({ outletId: { in: outletIds }, isActive: true }),
       take: limit,
-      orderBy: { updatedAt: 'asc' },
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     });
 
     const posTables = await prisma.posTable.findMany({
       where: { floorPlanId: { in: posFloorPlans.map((fp: any) => fp.id) }, ...(!since ? { isActive: true, updatedAt: { lte: watermark } } : { updatedAt: { gt: since, lte: watermark } }) },
       take: limit,
-      orderBy: { updatedAt: 'asc' },
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     });
 
     // ── POS Transactions (Sessions, Orders, KOTs, Payments) ──
@@ -178,7 +178,7 @@ export async function GET(req: NextRequest) {
     const posSessions = await prisma.posSession.findMany({
       where: buildOutletWhere(buildPosSessionWhere({ outletId: { in: outletIds } })),
       take: limit,
-      orderBy: { updatedAt: 'asc' },
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     });
 
     const buildPosOrderWhere = (baseWhere: any) => {
@@ -209,25 +209,35 @@ export async function GET(req: NextRequest) {
         payments: true
       },
       take: limit,
-      orderBy: { updatedAt: 'asc' },
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     });
 
     const housekeepingTasks = await prisma.housekeepingTask.findMany({
       where: buildWhere({ propertyId }),
       take: limit,
-      orderBy: { updatedAt: 'asc' },
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     });
 
     const maintenanceTickets = await prisma.maintenanceTicket.findMany({
       where: buildWhere({ propertyId }),
       take: limit,
-      orderBy: { updatedAt: 'asc' },
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     });
 
     const laundryItems = await prisma.laundryItem.findMany({
       where: buildWhere({ propertyId }),
       take: limit,
-      orderBy: { updatedAt: 'asc' },
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+    });
+
+    const laundryOrders = await prisma.laundryOrder.findMany({
+      where: buildWhere({ propertyId }),
+      include: {
+        items: true,
+        statusHistory: true,
+      },
+      take: limit,
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     });
 
     let allGuests: any[] = [];
@@ -235,7 +245,7 @@ export async function GET(req: NextRequest) {
       allGuests = await prisma.guest.findMany({
         where: { organizationId: property.organizationId },
         take: limit,
-        orderBy: { updatedAt: 'asc' }
+        orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }]
       });
     }
 
@@ -259,6 +269,7 @@ export async function GET(req: NextRequest) {
     housekeepingTasks.forEach(s => allEntities.push({ type: 'HousekeepingTask', updatedAt: s.updatedAt, data: s }));
     maintenanceTickets.forEach(s => allEntities.push({ type: 'MaintenanceTicket', updatedAt: s.updatedAt, data: s }));
     laundryItems.forEach(s => allEntities.push({ type: 'LaundryItem', updatedAt: s.updatedAt, data: s }));
+    laundryOrders.forEach(s => allEntities.push({ type: 'LaundryOrder', updatedAt: s.updatedAt, data: s }));
     allGuests.forEach(s => allEntities.push({ type: 'Guest', updatedAt: s.updatedAt, data: s }));
 
     // Sort globally by updatedAt ascending
@@ -299,6 +310,7 @@ export async function GET(req: NextRequest) {
     const finalHousekeepingTasks = allEntities.filter(e => e.type === 'HousekeepingTask').map(e => e.data);
     const finalMaintenanceTickets = allEntities.filter(e => e.type === 'MaintenanceTicket').map(e => e.data);
     const finalLaundryItems = allEntities.filter(e => e.type === 'LaundryItem').map(e => e.data);
+    const finalLaundryOrders = allEntities.filter(e => e.type === 'LaundryOrder').map(e => e.data);
     const finalGuests = allEntities.filter(e => e.type === 'Guest').map(e => e.data);
 
     // Flatten Guests and Folios from the resulting reservations
@@ -388,7 +400,8 @@ export async function GET(req: NextRequest) {
       posOrders: finalPosOrders,
       housekeepingTasks: finalHousekeepingTasks,
       maintenanceTickets: finalMaintenanceTickets,
-      laundryItems: finalLaundryItems
+      laundryItems: finalLaundryItems,
+      laundryOrders: finalLaundryOrders
     });
 
   } catch (error: any) {

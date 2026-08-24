@@ -3046,10 +3046,16 @@ public class LocalRepository
         
         var orderId = Guid.NewGuid().ToString();
         var propertyId = root.GetProperty("propertyId").GetString() ?? "";
-        var reservationId = root.GetProperty("reservationId").GetString() ?? "";
+        var customerType = root.TryGetProperty("customerType", out var ctElem) && ctElem.ValueKind != JsonValueKind.Null ? ctElem.GetString() ?? "IN_HOUSE" : "IN_HOUSE";
+        var reservationId = root.TryGetProperty("reservationId", out var rElem) && rElem.ValueKind != JsonValueKind.Null ? rElem.GetString() : null;
         var guestId = root.GetProperty("guestId").GetString() ?? "";
         var roomId = root.TryGetProperty("roomId", out var roomElem) && roomElem.ValueKind != JsonValueKind.Null ? roomElem.GetString() : null;
         var serviceType = root.TryGetProperty("serviceType", out var svcElem) ? svcElem.GetString() ?? "STANDARD" : "STANDARD";
+        
+        if (customerType == "IN_HOUSE" && string.IsNullOrEmpty(reservationId))
+        {
+            throw new Exception("IN_HOUSE laundry orders require a valid reservationId.");
+        }
         
         decimal total = 0;
         var orderItems = new List<LocalLaundryOrderItem>();
@@ -3091,9 +3097,10 @@ public class LocalRepository
         {
             Id = orderId,
             PropertyId = propertyId,
+            CustomerType = customerType,
             ReservationId = reservationId,
             GuestId = guestId,
-            RoomId = roomId ?? "",
+            RoomId = roomId,
             ServiceType = serviceType,
             Status = "PENDING",
             TotalAmount = total,
@@ -3106,16 +3113,20 @@ public class LocalRepository
         
         _dbContext.LaundryOrders.Add(order);
         
+        var guest = await _dbContext.Guests.FindAsync(guestId);
+        
         var payloadObj = new {
             propertyId = order.PropertyId,
+            customerType = order.CustomerType,
             reservationId = order.ReservationId,
             guestId = order.GuestId,
+            guest = guest,
             roomId = order.RoomId,
             serviceType = order.ServiceType,
             status = order.Status,
             totalAmount = order.TotalAmount,
             requestedAt = order.RequestedAt,
-            items = orderItems.Select(i => new { itemId = i.ItemId, quantity = i.Quantity }).ToList()
+            items = orderItems.Select(i => new { itemId = i.ItemId, quantity = i.Quantity, unitPrice = i.UnitPrice, totalPrice = i.TotalPrice }).ToList()
         };
         
         _dbContext.OutboxEvents.Add(new LocalOutboxEvent
