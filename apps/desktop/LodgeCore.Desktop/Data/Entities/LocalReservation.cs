@@ -17,33 +17,34 @@ public class LocalReservation
     
     public ICollection<LocalReservationRoom> Rooms { get; set; } = new List<LocalReservationRoom>();
     
+    private string? _tempRoomId;
     [System.ComponentModel.DataAnnotations.Schema.NotMapped]
     public string? RoomId 
     { 
-        get => Rooms.FirstOrDefault()?.RoomId; 
+        get => _tempRoomId ?? Rooms.FirstOrDefault()?.RoomId; 
         set {
+            _tempRoomId = value;
             var room = Rooms.FirstOrDefault();
             if (room != null) room.RoomId = value ?? string.Empty;
             else Rooms.Add(new LocalReservationRoom { Id = Guid.NewGuid().ToString(), ReservationId = this.Id, RoomId = value ?? string.Empty });
         }
     }
     
+    private string? _tempRoomNumber;
     [System.ComponentModel.DataAnnotations.Schema.NotMapped]
     public string? RoomNumber 
     { 
-        get => Rooms.FirstOrDefault()?.RoomNumber; 
-        set {
-            var room = Rooms.FirstOrDefault();
-            if (room != null) room.RoomNumber = value;
-            else Rooms.Add(new LocalReservationRoom { Id = Guid.NewGuid().ToString(), ReservationId = this.Id, RoomNumber = value });
-        }
+        get => _tempRoomNumber ?? Rooms.FirstOrDefault()?.Room?.Number; 
+        set => _tempRoomNumber = value;
     }
 
+    private string? _tempRoomTypeId;
     [System.ComponentModel.DataAnnotations.Schema.NotMapped]
     public string? RoomTypeId 
     { 
-        get => Rooms.FirstOrDefault()?.RoomTypeId; 
+        get => _tempRoomTypeId ?? Rooms.FirstOrDefault()?.RoomTypeId; 
         set {
+            _tempRoomTypeId = value;
             var room = Rooms.FirstOrDefault();
             if (room != null) room.RoomTypeId = value ?? string.Empty;
             else Rooms.Add(new LocalReservationRoom { Id = Guid.NewGuid().ToString(), ReservationId = this.Id, RoomTypeId = value ?? string.Empty });
