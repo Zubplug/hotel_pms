@@ -6,12 +6,10 @@ import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, CheckCircle2, Shirt, Loader2, Search } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
-import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
 export default function NewLaundryOrderPage() {
   const { propertyId } = useProperty();
   const router = useRouter();
-  const { provider } = useLodgeCoreProvider();
   
   const [items, setItems] = useState<any[]>([]);
   const [selectedItems, setSelectedItems] = useState<Record<string, number>>({});
@@ -27,18 +25,18 @@ export default function NewLaundryOrderPage() {
   
   useEffect(() => {
     if (!propertyId) return;
-    provider.api.fetch(`/api/v1/laundry/items?propertyId=${propertyId}`)
+    fetch(`/api/v1/laundry/items?propertyId=${propertyId}`)
       .then(res => res.json())
       .then(data => setItems(data.data || []));
       
     setFetchingGuests(true);
-    provider.api.fetch(`/api/v1/reservations?propertyId=${propertyId}&status=IN_HOUSE&pageSize=100`)
+    fetch(`/api/v1/reservations?propertyId=${propertyId}&status=IN_HOUSE&pageSize=100`)
       .then(res => res.json())
       .then(data => {
          setReservations(data.data || []);
       })
       .finally(() => setFetchingGuests(false));
-  }, [propertyId, provider]);
+  }, [propertyId]);
 
   const filteredReservations = useMemo(() => {
     if (!searchQuery) return reservations;
@@ -91,7 +89,7 @@ export default function NewLaundryOrderPage() {
 
     const roomId = selectedReservation.reservationRooms?.[0]?.roomId;
 
-    const res = await provider.api.fetch('/api/v1/laundry/orders', {
+    const res = await fetch('/api/v1/laundry/orders', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
