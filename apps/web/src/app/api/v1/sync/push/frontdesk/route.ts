@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
         id,
         idempotencyKey,
         aggregateType,
-        aggregateId,
+        aggregateId: rawAggregateId,
         aggregateVersion,
         eventType,
         occurredAt,
@@ -78,6 +78,20 @@ export async function POST(req: NextRequest) {
       
       try {
         const payload = JSON.parse(payloadJson || '{}');
+        let aggregateId = rawAggregateId;
+        if (aggregateType === 'FOLIO' && eventType === 'POST_PAYMENT' && payload.reservationId) {
+          const targetFolio = await prisma.folio.findFirst({
+            where: { id: aggregateId, propertyId },
+            select: { id: true }
+          });
+          if (!targetFolio) {
+            const reservationFolio = await prisma.folio.findFirst({
+              where: { reservationId: payload.reservationId, propertyId, status: 'OPEN' },
+              select: { id: true }
+            });
+            if (reservationFolio) aggregateId = reservationFolio.id;
+          }
+        }
         const actorId = isUuid(operatorId) ? operatorId : device.id;
 
         // 1 & 2. Atomic Concurrency Control & Execution within a Single Transaction
@@ -260,6 +274,7 @@ export async function POST(req: NextRequest) {
              const folioNumber = 'FOL-' + Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
              const newFolio = await tx.folio.create({
                data: {
+                 id: isUuid(payload.FolioId || payload.folioId) ? (payload.FolioId || payload.folioId) : undefined,
                  reservationId: aggregateId,
                  propertyId,
                  guestId: finalGuestId,
@@ -357,7 +372,7 @@ export async function POST(req: NextRequest) {
                      }
                  });
              }
-          } 
+          }
           else if (eventType === 'CHECK_OUT') {
              await tx.reservation.update({
                where: { id: aggregateId },

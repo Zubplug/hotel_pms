@@ -102,6 +102,7 @@ public class LocalRepository
             PayloadJson = JsonSerializer.Serialize(new
             {
                 PropertyId = reservation.PropertyId,
+                FolioId = folio.Id,
                 GuestId = reservation.GuestId,
                 Guest = reservation.Guest,
                 RoomId = reservation.RoomId,
@@ -657,7 +658,7 @@ public class LocalRepository
             EventType = "POST_PAYMENT",
             Sequence = folio.LocalSequence,
             IdempotencyKey = idempotencyKey ?? Guid.NewGuid().ToString(),
-            PayloadJson = JsonSerializer.Serialize(new { amount, method, currency = "NGN", businessDate = DateTime.UtcNow, originalBusinessDate = DateTime.UtcNow, idempotencyKey })
+            PayloadJson = JsonSerializer.Serialize(new { amount, method, reservationId = folio.ReservationId, currency = "NGN", businessDate = DateTime.UtcNow, originalBusinessDate = DateTime.UtcNow, idempotencyKey })
         });
 
         await _dbContext.SaveChangesAsync();

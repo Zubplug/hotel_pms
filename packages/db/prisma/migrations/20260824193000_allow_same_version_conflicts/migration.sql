@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS "HotelEvent_aggregateType_aggregateId_aggregateVersion_key";
