@@ -160,7 +160,12 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
         // 1. Fetch reservation to get Room ID for encoder
         const resDetailsRaw = await invokeDesktop('reservations.get', { id });
         const resDetails = typeof resDetailsRaw === 'string' ? JSON.parse(resDetailsRaw) : resDetailsRaw;
-        const roomId = resDetails?.data?.reservationRooms?.[0]?.roomId || resDetails?.data?.roomId;
+        const reservation = resDetails?.data?.reservation || resDetails?.data || resDetails?.reservation || resDetails;
+        const roomId = reservation?.reservationRooms?.find((room: any) => room?.status === 'ACTIVE')?.roomId
+          || reservation?.reservationRooms?.[0]?.roomId
+          || reservation?.roomId
+          || reservation?.rooms?.find((room: any) => room?.status === 'ACTIVE')?.roomId
+          || reservation?.rooms?.[0]?.roomId;
         
         if (!roomId) {
             return { success: false, error: 'No room assigned for check-in encoding.' };
@@ -169,7 +174,8 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
         // 2. Trigger Hardware Encode FIRST
         encodeRes = await invokeDesktop('keycards.encode', { roomId, lockCode: '', reservationId: id });
         if (!encodeRes.success) {
-            return { success: false, error: 'Hardware Error: ' + (encodeRes.error || 'Failed to encode keycard.') };
+            const errorMessage = typeof encodeRes.error === 'string' ? encodeRes.error : encodeRes.error?.message;
+            return { success: false, error: 'Hardware Error: ' + (errorMessage || encodeRes.data?.errorMessage || 'Failed to encode keycard.') };
         }
         encodedRoomId = roomId;
       }

@@ -577,7 +577,8 @@ public class OfflinePMSInterop
             var ctx = await GetSecureContextAsync();
             var res = await _repo.GetReservationAsync(reservationId);
             if (res == null) throw new Exception("Reservation not found");
-            var roomId = res.RoomId;
+            var activeRoom = res.Rooms?.FirstOrDefault(room => room.Status == "ACTIVE");
+            var roomId = activeRoom?.RoomId ?? res.RoomId;
 
             if (!bypassKeycard)
             {

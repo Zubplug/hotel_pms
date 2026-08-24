@@ -1880,6 +1880,22 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
         using var scope = _serviceProvider.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
 
+        var staleProcessingCutoff = DateTime.UtcNow.AddMinutes(-2);
+        var staleProcessing = await dbContext.OutboxEvents
+            .Where(e => e.Status == "PROCESSING" && (e.LastAttemptAt == null || e.LastAttemptAt < staleProcessingCutoff))
+            .ToListAsync(stoppingToken);
+        if (staleProcessing.Any())
+        {
+            foreach (var evt in staleProcessing)
+            {
+                evt.Status = "FAILED";
+                evt.LastError = "Recovered a stale processing attempt; retry scheduled.";
+                evt.NextAttemptAt = DateTime.UtcNow;
+            }
+            await dbContext.SaveChangesAsync(stoppingToken);
+            _logger.LogWarning("[PUSH-FD] Recovered {StaleCount} stale PROCESSING event(s).", staleProcessing.Count);
+        }
+
         var allPending = await dbContext.OutboxEvents
             .Where(e => e.Status == "PENDING" || e.Status == "FAILED" || e.Status == "CONFLICT")
             .ToListAsync(stoppingToken);
@@ -1948,38 +1964,37 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
         _logger.LogInformation($"Pushing {pendingEvents.Count} Front Desk outbox events to cloud...");
         BroadcastHealth(SyncState.SYNCING, null, "PUSH_FD", 0, pendingEvents.Count, "Pushing Front Desk events...");
 
-        _httpClient.Timeout = TimeSpan.FromSeconds(30);
-
-        var requestUrl = "sync/push/frontdesk";
-        var request = new HttpRequestMessage(HttpMethod.Post, requestUrl);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        // Idempotency for batch endpoints is usually handled per-item, but we add a batch header just in case
-        request.Headers.Add("Idempotency-Key", $"batch_{Guid.NewGuid()}");
-        
-        _logger.LogInformation($"[PUSH-FD] Sending POST to {_httpClient.BaseAddress}{requestUrl} with {pendingEvents.Count} events");
-        
-        var payload = new 
-        {
-            propertyId = identity.PropertyId,
-            deviceId = identity.DeviceId,
-            events = pendingEvents.Select(e => new {
-                id = e.Id,
-                idempotencyKey = e.IdempotencyKey,
-                aggregateType = e.AggregateType,
-                aggregateId = e.AggregateId,
-                aggregateVersion = e.AggregateVersion,
-                eventType = e.EventType,
-                occurredAt = e.OccurredAt,
-                sequence = e.Sequence,
-                payloadJson = e.PayloadJson,
-                operatorId = e.OperatorId
-            }).ToList()
-        };
-        
-        request.Content = JsonContent.Create(payload);
-
         try
         {
+            _httpClient.Timeout = TimeSpan.FromSeconds(30);
+
+            var requestUrl = "sync/push/frontdesk";
+            using var request = new HttpRequestMessage(HttpMethod.Post, requestUrl);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            request.Headers.Add("Idempotency-Key", $"batch_{Guid.NewGuid()}");
+
+            _logger.LogInformation($"[PUSH-FD] Sending POST to {_httpClient.BaseAddress}{requestUrl} with {pendingEvents.Count} events");
+
+            var payload = new
+            {
+                propertyId = identity.PropertyId,
+                deviceId = identity.DeviceId,
+                events = pendingEvents.Select(e => new
+                {
+                    id = e.Id,
+                    idempotencyKey = e.IdempotencyKey,
+                    aggregateType = e.AggregateType,
+                    aggregateId = e.AggregateId,
+                    aggregateVersion = e.AggregateVersion,
+                    eventType = e.EventType,
+                    occurredAt = e.OccurredAt,
+                    sequence = e.Sequence,
+                    payloadJson = e.PayloadJson,
+                    operatorId = e.OperatorId
+                }).ToList()
+            };
+
+            request.Content = JsonContent.Create(payload);
             var response = await _httpClient.SendAsync(request, stoppingToken);
             _lastPushHttpStatus = (int)response.StatusCode;
             _logger.LogInformation($"[PUSH-FD] Server responded: HTTP {(int)response.StatusCode} {response.StatusCode}");
