@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { compare } from 'bcryptjs';
 import { NotificationEngine } from '@/lib/notification-engine';
 
 export async function POST(req: NextRequest) {
+  const requestId = randomUUID();
   try {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
@@ -14,6 +15,7 @@ export async function POST(req: NextRequest) {
     const deviceToken = authHeader.substring(7);
     const body = await req.json();
     const { propertyId, events } = body;
+    console.info(`[sync/frontdesk-push] request=${requestId} received propertyId=${propertyId ?? 'missing'} events=${Array.isArray(events) ? events.length : 'invalid'}`);
 
     if (!propertyId || !events || !Array.isArray(events)) {
       return NextResponse.json({ error: 'Invalid payload format' }, { status: 400 });
@@ -48,8 +50,11 @@ export async function POST(req: NextRequest) {
     }
 
     if (!device) {
+      console.warn(`[sync/frontdesk-push] request=${requestId} rejected terminal credential propertyId=${propertyId}`);
       return NextResponse.json({ error: 'Terminal not authorized' }, { status: 403 });
     }
+
+    console.info(`[sync/frontdesk-push] request=${requestId} authorized terminalId=${device.id} propertyId=${propertyId} events=${events.length}`);
 
     const results = [];
 
@@ -1073,7 +1078,7 @@ export async function POST(req: NextRequest) {
     }, { status: 200 });
 
   } catch (error: any) {
-    console.error('FrontDesk Sync Push Error:', error);
+    console.error(`[sync/frontdesk-push] request=${requestId} failed`, error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

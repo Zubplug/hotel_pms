@@ -1,17 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@hotel-pms/db";
+import { randomUUID } from "crypto";
 
 // Handle POS Sync Push supporting both Legacy SyncEvents and new HotelEvents
 export async function POST(req: NextRequest) {
+  const requestId = randomUUID();
   try {
     const authHeader = req.headers.get("authorization");
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      console.warn(`[sync/pos-push] request=${requestId} rejected missing bearer token`);
       return NextResponse.json({ error: "Missing or invalid authorization" }, { status: 401 });
     }
     const token = authHeader.substring(7);
     const body = await req.json();
+    console.info(`[sync/pos-push] request=${requestId} received propertyId=${body.propertyId ?? "missing"} events=${Array.isArray(body.events) ? body.events.length : "invalid"}`);
 
     if (!body.events || !Array.isArray(body.events)) {
+      console.warn(`[sync/pos-push] request=${requestId} rejected invalid events array`);
       return NextResponse.json({ error: "Invalid payload format" }, { status: 400 });
     }
 
@@ -25,6 +30,7 @@ export async function POST(req: NextRequest) {
     const terminalId = firstEvent.terminalId || firstEvent.deviceId;
     
     if (!terminalId) {
+       console.warn(`[sync/pos-push] request=${requestId} rejected missing terminal identity firstEvent=${firstEvent.operationId ?? firstEvent.id ?? "unknown"}`);
        return NextResponse.json({ error: "Missing terminal identity" }, { status: 400 });
     }
 
@@ -34,13 +40,17 @@ export async function POST(req: NextRequest) {
     });
 
     if (!terminal || terminal.registrationState !== 'REGISTERED') {
+      console.warn(`[sync/pos-push] request=${requestId} rejected terminalId=${terminalId} found=${!!terminal} state=${terminal?.registrationState ?? "missing"}`);
       return NextResponse.json({ error: "Terminal inactive or unauthorized" }, { status: 403 });
     }
     
     const propertyId = terminal.outlet?.propertyId;
     if (!propertyId) {
+      console.warn(`[sync/pos-push] request=${requestId} rejected terminalId=${terminalId} has no property`);
       return NextResponse.json({ error: "Terminal not associated with a property" }, { status: 400 });
     }
+
+    console.info(`[sync/pos-push] request=${requestId} authorized terminalId=${terminal.id} propertyId=${propertyId} events=${body.events.length}`);
 
     const results: any[] = [];
     const accepted: string[] = [];
@@ -537,6 +547,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    console.info(`[sync/pos-push] request=${requestId} completed accepted=${accepted.length} alreadyProcessed=${alreadyProcessed.length} rejected=${rejected.length} conflicts=${conflicts.length}`);
     return NextResponse.json({
       accepted,
       alreadyProcessed,
@@ -547,7 +558,7 @@ export async function POST(req: NextRequest) {
     }, { status: 200 });
 
   } catch (error) {
-    console.error("POS Sync push error:", error);
+    console.error(`[sync/pos-push] request=${requestId} failed`, error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

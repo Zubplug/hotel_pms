@@ -430,18 +430,32 @@ Last Error:       {errorStr}
 
         var identity = await GetSyncIdentityAsync(stoppingToken);
         if (identity == null) return;
+
+        if (string.IsNullOrEmpty(identity.TerminalId))
+        {
+            _logger.LogWarning("[PUSH-POS] Skipping push: no registered terminal UUID is available. DeviceId={DeviceId} PropertyId={PropertyId}", identity.DeviceId, identity.PropertyId);
+            return;
+        }
         
         // Ensure we only push events for THIS terminal/device
         var eventsToPush = eligibleEvents.Where(e => e.TerminalId == identity.DeviceId || e.TerminalId == identity.TerminalId).ToList();
         if (!eventsToPush.Any()) return;
 
-        _logger.LogInformation($"Pushing {eventsToPush.Count} pending operations to cloud...");
+        _logger.LogInformation("[PUSH-POS] Preparing {EventCount} events. PropertyId={PropertyId} TerminalId={TerminalId} DeviceId={DeviceId}", eventsToPush.Count, identity.PropertyId, identity.TerminalId, identity.DeviceId);
 
         var token = await GetActiveTokenAsync();
-        if (!string.IsNullOrEmpty(token))
+        if (string.IsNullOrEmpty(token))
         {
-            _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            _logger.LogWarning("[PUSH-POS] Skipping push: no device credential token is available. TerminalId={TerminalId}", identity.TerminalId);
+            foreach (var evt in eventsToPush)
+            {
+                evt.Status = "FAILED";
+                evt.ErrorMessage = "No device credential token available";
+            }
+            await dbContext.SaveChangesAsync(stoppingToken);
+            return;
         }
+        _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
         // Mark as PROCESSING in-memory so they don't get double-pushed if loop overlaps
         foreach (var evt in eventsToPush)
@@ -455,13 +469,33 @@ Last Error:       {errorStr}
         try
         {
             var request = new HttpRequestMessage(HttpMethod.Post, "pos/sync/push");
-            request.Content = JsonContent.Create(new { propertyId = identity.PropertyId, events = eventsToPush });
+            request.Content = JsonContent.Create(new
+            {
+                propertyId = identity.PropertyId,
+                events = eventsToPush.Select(evt => new
+                {
+                    operationId = evt.OperationId,
+                    sequenceNumber = evt.SequenceNumber,
+                    terminalId = identity.TerminalId,
+                    outletId = evt.OutletId,
+                    sessionId = evt.SessionId,
+                    operatorId = evt.OperatorId,
+                    entityType = evt.EntityType,
+                    entityId = evt.EntityId,
+                    operationType = evt.OperationType,
+                    payloadJson = evt.PayloadJson,
+                    createdAt = evt.CreatedAt
+                }).ToList()
+            });
+            _logger.LogInformation("[PUSH-POS] Sending POST to {BaseAddress}pos/sync/push. EventIds={EventIds}", _httpClient.BaseAddress, string.Join(",", eventsToPush.Select(evt => evt.OperationId)));
             
             var response = await _httpClient.SendAsync(request, stoppingToken);
+            var responseBody = await response.Content.ReadAsStringAsync(stoppingToken);
+            _logger.LogInformation("[PUSH-POS] Server response HTTP {StatusCode}. Body={ResponseBody}", (int)response.StatusCode, responseBody.Length > 1000 ? responseBody[..1000] : responseBody);
             
             if (response.IsSuccessStatusCode)
             {
-                var result = await response.Content.ReadFromJsonAsync<SyncPushResponse>(cancellationToken: stoppingToken);
+                var result = System.Text.Json.JsonSerializer.Deserialize<SyncPushResponse>(responseBody, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
                 if (result != null)
                 {
                     foreach (var evt in eventsToPush)
@@ -493,7 +527,7 @@ Last Error:       {errorStr}
             }
             else
             {
-                _logger.LogWarning($"Network error pushing events. Status: {response.StatusCode}");
+                _logger.LogWarning("[PUSH-POS] Push failed. HTTP {StatusCode} Body={ResponseBody}", (int)response.StatusCode, responseBody);
                 foreach (var evt in eventsToPush) evt.Status = "FAILED";
                 await dbContext.SaveChangesAsync(stoppingToken);
                 throw new Exception($"Network error pushing POS events. Status: {response.StatusCode}");
@@ -2233,4 +2267,3 @@ Last Error:       {errorStr}
         }
     }
 }
-
