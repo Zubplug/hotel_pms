@@ -7,13 +7,19 @@ import { Input } from '@/components/ui/input';
 import { ArrowLeft, Plus, Shirt, CheckCircle2, XCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { formatCurrency } from '@/lib/utils';
+import { useSession } from 'next-auth/react';
 
 export default function LaundryCatalogPage() {
   const { propertyId } = useProperty();
   const router = useRouter();
+  const { data: session } = useSession();
   const [items, setItems] = useState<any[]>([]);
   const [newItemName, setNewItemName] = useState('');
   const [newItemPrice, setNewItemPrice] = useState('');
+
+  const role = (session?.user as any)?.role || 'STAFF';
+  const isSuperAdmin = (session?.user as any)?.isSuperAdmin;
+  const canManageCatalog = isSuperAdmin || role === 'CEO' || role === 'MANAGER';
 
   const fetchItems = async () => {
     if (!propertyId) return;
@@ -61,19 +67,21 @@ export default function LaundryCatalogPage() {
           </div>
         </div>
 
-        <form onSubmit={handleAddItem} className="flex gap-4 items-end bg-white p-6 rounded-3xl border border-slate-200/60 shadow-xl shadow-slate-200/40">
-          <div className="flex-1 space-y-2">
-            <label className="block text-sm font-bold text-slate-700">Item Name</label>
-            <Input required value={newItemName} onChange={e => setNewItemName(e.target.value)} placeholder="e.g. Silk Shirt" className="h-12 rounded-xl bg-slate-50 border-slate-200" />
-          </div>
-          <div className="w-32 space-y-2">
-            <label className="block text-sm font-bold text-slate-700">Base Price</label>
-            <Input required type="number" min="0" step="0.01" value={newItemPrice} onChange={e => setNewItemPrice(e.target.value)} placeholder="0.00" className="h-12 rounded-xl bg-slate-50 border-slate-200" />
-          </div>
-          <Button type="submit" className="h-12 px-6 rounded-xl bg-cyan-600 hover:bg-cyan-700 text-white font-bold shadow-md">
-            <Plus className="w-5 h-5 mr-2" /> Add
-          </Button>
-        </form>
+        {canManageCatalog && (
+          <form onSubmit={handleAddItem} className="flex gap-4 items-end bg-white p-6 rounded-3xl border border-slate-200/60 shadow-xl shadow-slate-200/40">
+            <div className="flex-1 space-y-2">
+              <label className="block text-sm font-bold text-slate-700">Item Name</label>
+              <Input required value={newItemName} onChange={e => setNewItemName(e.target.value)} placeholder="e.g. Silk Shirt" className="h-12 rounded-xl bg-slate-50 border-slate-200" />
+            </div>
+            <div className="w-32 space-y-2">
+              <label className="block text-sm font-bold text-slate-700">Base Price</label>
+              <Input required type="number" min="0" step="0.01" value={newItemPrice} onChange={e => setNewItemPrice(e.target.value)} placeholder="0.00" className="h-12 rounded-xl bg-slate-50 border-slate-200" />
+            </div>
+            <Button type="submit" className="h-12 px-6 rounded-xl bg-cyan-600 hover:bg-cyan-700 text-white font-bold shadow-md">
+              <Plus className="w-5 h-5 mr-2" /> Add
+            </Button>
+          </form>
+        )}
 
         <div className="bg-white rounded-3xl border border-slate-200/60 shadow-xl shadow-slate-200/40 overflow-hidden">
           <table className="w-full text-sm text-left">
