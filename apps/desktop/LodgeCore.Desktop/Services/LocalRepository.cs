@@ -149,6 +149,7 @@ public class LocalRepository
         return await _dbContext.Reservations
             .Include(r => r.Guest)
             .Include(r => r.Folio)
+            .Include(r => r.Rooms).ThenInclude(rr => rr.Room)
             .Where(r => r.Status != "CANCELLED")
             .ToListAsync();
     }
@@ -160,6 +161,7 @@ public class LocalRepository
             .Include(r => r.Folio)
             .Include(r => r.LockCredentials)
             .Include(r => r.LockOperations)
+            .Include(r => r.Rooms).ThenInclude(rr => rr.Room)
             .FirstOrDefaultAsync(r => r.Id == id);
     }
     
@@ -755,7 +757,10 @@ public class LocalRepository
     public async Task<LocalReservation?> GetReservationByRoomNumberAsync(string roomNumber)
     {
         return await _dbContext.Reservations
-            .FirstOrDefaultAsync(r => r.RoomNumber == roomNumber && (r.Status == "CHECKED_IN" || r.Status == "CONFIRMED"));
+            .Include(r => r.Guest)
+            .Include(r => r.Folio)
+            .Include(r => r.Rooms).ThenInclude(rr => rr.Room)
+            .FirstOrDefaultAsync(r => r.Rooms.Any(rr => rr.Room != null && rr.Room.Number == roomNumber) && (r.Status == "CHECKED_IN" || r.Status == "CONFIRMED"));
     }
 
     public async Task<List<LocalHousekeepingTask>> GetHousekeepingTasksAsync(string propertyId)
