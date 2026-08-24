@@ -276,7 +276,7 @@ public class SyncEngine : BackgroundService
             var propertyId = identity?.PropertyId ?? "UNKNOWN";
 
             var lastPull = Preferences.Get($"LastPull_{propertyId}", "Never");
-            var lastPush = _lastSuccess > DateTime.MinValue ? _lastSuccess.ToString("o") : "Never";
+            var lastPush = _lastSuccess.HasValue ? _lastSuccess.Value.ToString("o") : "Never";
 
             var pendingOutbox = await dbContext.OutboxEvents.CountAsync(e => e.Status == "PENDING" || e.Status == "FAILED" || e.Status == "CONFLICT", stoppingToken);
             var processing = await dbContext.OutboxEvents.CountAsync(e => e.Status == "PROCESSING", stoppingToken) + await dbContext.SyncEvents.CountAsync(e => e.Status == "PROCESSING", stoppingToken);
@@ -592,6 +592,8 @@ Last Error:       {errorStr}
 
         var identity = await GetSyncIdentityAsync(stoppingToken);
         if (identity == null) throw new Exception("Terminal identity not provisioned or property ID missing.");
+        
+        var propertyId = identity.PropertyId;
         
         var token = await GetActiveTokenAsync();
         if (string.IsNullOrEmpty(token)) throw new Exception("No auth token available; skipping pull.");

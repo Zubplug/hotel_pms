@@ -642,9 +642,7 @@ public class LocalRepository
                 AgentId = "DESKTOP",
                 DeviceId = deviceId,
                 MetadataJson = JsonSerializer.Serialize(new { initiatedBy = userId }),
-                CommandJson = JsonSerializer.Serialize(new { responseData = parsed }),
-                CreatedAt = now,
-                UpdatedAt = now
+                CommandJson = JsonSerializer.Serialize(new { responseData = parsed })
             };
 
             _dbContext.LockCredentials.Add(credential);
