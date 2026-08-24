@@ -114,12 +114,14 @@ model Property {
   inventoryAlerts      InventoryAlert[]
   approvalRequests     ApprovalRequest[]
 
-  createdAt   DateTime      @default(now()) @db.Timestamptz
-  updatedAt   DateTime      @updatedAt @db.Timestamptz
-  deletedAt   DateTime?     @db.Timestamptz
-  PosSession  PosSession[]
-  CashAccount CashAccount[]
-  HotelEvent  HotelEvent[]
+  createdAt     DateTime       @default(now()) @db.Timestamptz
+  updatedAt     DateTime       @updatedAt @db.Timestamptz
+  deletedAt     DateTime?      @db.Timestamptz
+  PosSession    PosSession[]
+  CashAccount   CashAccount[]
+  HotelEvent    HotelEvent[]
+  laundryItems  LaundryItem[]
+  laundryOrders LaundryOrder[]
 }
 
 model Building {
@@ -266,9 +268,10 @@ model Room {
   lockOperations    LockOperation[]
   statusHistory     RoomStatusHistory[]
 
-  createdAt DateTime  @default(now()) @db.Timestamptz
-  updatedAt DateTime  @updatedAt @db.Timestamptz
-  deletedAt DateTime? @db.Timestamptz
+  createdAt     DateTime       @default(now()) @db.Timestamptz
+  updatedAt     DateTime       @updatedAt @db.Timestamptz
+  deletedAt     DateTime?      @db.Timestamptz
+  laundryOrders LaundryOrder[]
 
   @@unique([propertyId, number])
 }
@@ -510,9 +513,10 @@ model Guest {
   reservationGuests ReservationGuest[]
   lockCredentials   LockCredential[]
 
-  createdAt DateTime  @default(now()) @db.Timestamptz
-  updatedAt DateTime  @updatedAt @db.Timestamptz
-  deletedAt DateTime? @db.Timestamptz
+  createdAt     DateTime       @default(now()) @db.Timestamptz
+  updatedAt     DateTime       @updatedAt @db.Timestamptz
+  deletedAt     DateTime?      @db.Timestamptz
+  laundryOrders LaundryOrder[]
 }
 
 model GuestDocument {
@@ -607,9 +611,10 @@ model Reservation {
   lockOperations    LockOperation[]
   priorities        ReservationPriority[]
 
-  createdAt DateTime  @default(now()) @db.Timestamptz
-  updatedAt DateTime  @updatedAt @db.Timestamptz
-  deletedAt DateTime? @db.Timestamptz
+  createdAt     DateTime       @default(now()) @db.Timestamptz
+  updatedAt     DateTime       @updatedAt @db.Timestamptz
+  deletedAt     DateTime?      @db.Timestamptz
+  laundryOrders LaundryOrder[]
 }
 
 model ReservationGuest {
@@ -1074,9 +1079,9 @@ model HotelEvent {
 
   syncConflict SyncConflict?
 
+  @@unique([aggregateType, aggregateId, aggregateVersion])
   @@index([aggregateType, aggregateId, aggregateVersion])
   @@index([propertyId])
-  @@unique([aggregateType, aggregateId, aggregateVersion])
 }
 
 model SyncConflict {
@@ -2598,4 +2603,114 @@ model ApprovalMutation {
   completedAt DateTime? @db.Timestamptz
 
   @@index([idempotencyKey])
+}
+
+// -----------------------------------------------------------------------------
+// LAUNDRY MANAGEMENT
+// -----------------------------------------------------------------------------
+
+enum LaundryOrderStatus {
+  PENDING
+  COLLECTED
+  WASHING
+  READY
+  DELIVERED
+  CANCELLED
+}
+
+enum LaundryServiceType {
+  STANDARD
+  EXPRESS
+  SAME_DAY
+  DRY_CLEAN
+  IRON_ONLY
+  WASH_AND_FOLD
+}
+
+model LaundryItem {
+  id         String   @id @default(uuid()) @db.Uuid
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id])
+
+  name        String
+  category    String?
+  description String?
+  basePrice   Decimal @db.Decimal(18, 4)
+  currency    String  @default("NGN")
+  isActive    Boolean @default(true)
+
+  servicePricingRules Json?
+
+  orderItems LaundryOrderItem[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+}
+
+model LaundryOrder {
+  id         String   @id @default(uuid()) @db.Uuid
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id])
+
+  reservationId String      @db.Uuid
+  reservation   Reservation @relation(fields: [reservationId], references: [id])
+
+  roomId  String? @db.Uuid
+  room    Room?   @relation(fields: [roomId], references: [id])
+  guestId String? @db.Uuid
+  guest   Guest?  @relation(fields: [guestId], references: [id])
+
+  folioItemId String? @unique @db.Uuid
+
+  status      LaundryOrderStatus @default(PENDING)
+  serviceType LaundryServiceType @default(STANDARD)
+
+  totalAmount Decimal @db.Decimal(18, 4)
+  currency    String  @default("NGN")
+
+  specialNotes String?
+
+  requestedAt     DateTime  @default(now()) @db.Timestamptz
+  expectedReadyAt DateTime? @db.Timestamptz
+  collectedAt     DateTime? @db.Timestamptz
+  collectedBy     String?   @db.Uuid
+  readyAt         DateTime? @db.Timestamptz
+  deliveredAt     DateTime? @db.Timestamptz
+  deliveredBy     String?   @db.Uuid
+
+  version Int @default(1)
+
+  items         LaundryOrderItem[]
+  statusHistory LaundryOrderStatusHistory[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+}
+
+model LaundryOrderItem {
+  id             String       @id @default(uuid()) @db.Uuid
+  laundryOrderId String       @db.Uuid
+  order          LaundryOrder @relation(fields: [laundryOrderId], references: [id], onDelete: Cascade)
+
+  itemId String      @db.Uuid
+  item   LaundryItem @relation(fields: [itemId], references: [id])
+
+  quantity Int
+
+  unitPrice  Decimal @db.Decimal(18, 4)
+  totalPrice Decimal @db.Decimal(18, 4)
+}
+
+model LaundryOrderStatusHistory {
+  id             String       @id @default(uuid()) @db.Uuid
+  laundryOrderId String       @db.Uuid
+  order          LaundryOrder @relation(fields: [laundryOrderId], references: [id], onDelete: Cascade)
+
+  previousStatus LaundryOrderStatus?
+  newStatus      LaundryOrderStatus
+
+  changedBy String?  @db.Uuid
+  changedAt DateTime @default(now()) @db.Timestamptz
+  notes     String?
+  deviceId  String?
 }

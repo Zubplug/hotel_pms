@@ -415,10 +415,13 @@ public class LocalRepository
         return true;
     }
 
-    public async Task<bool> RecordChargeAsync(string folioId, decimal amount, string description, string userId, string deviceId)
+    public async Task<bool> RecordChargeAsync(string folioId, decimal amount, string description, string userId, string deviceId, string? idempotencyKey = null)
     {
         var folio = await _dbContext.Folios.FindAsync(folioId);
         if (folio == null) return false;
+
+        if (!string.IsNullOrEmpty(idempotencyKey) && CheckFolioIdempotency(folio, idempotencyKey))
+            return true;
 
         folio.TotalCharges += amount;
         folio.UpdatedAt = DateTime.UtcNow;
@@ -433,6 +436,7 @@ public class LocalRepository
             amount = amount,
             description = description,
             type = "CHARGE",
+            idempotencyKey = idempotencyKey,
             createdAt = DateTime.UtcNow
         };
 
@@ -448,17 +452,21 @@ public class LocalRepository
             AggregateVersion = eventVersion,
             EventType = "ROOM_CHARGE",
             Sequence = folio.LocalSequence,
-            PayloadJson = JsonSerializer.Serialize(new { amount, description, currency = "NGN", businessDate = DateTime.UtcNow, originalBusinessDate = DateTime.UtcNow })
+            IdempotencyKey = idempotencyKey ?? Guid.NewGuid().ToString(),
+            PayloadJson = JsonSerializer.Serialize(new { amount, description, currency = "NGN", businessDate = DateTime.UtcNow, originalBusinessDate = DateTime.UtcNow, idempotencyKey })
         });
 
         await _dbContext.SaveChangesAsync();
         return true;
     }
 
-    public async Task<bool> RecordPaymentAsync(string folioId, decimal amount, string method, string userId, string deviceId)
+    public async Task<bool> RecordPaymentAsync(string folioId, decimal amount, string method, string userId, string deviceId, string? idempotencyKey = null)
     {
         var folio = await _dbContext.Folios.FindAsync(folioId);
         if (folio == null) return false;
+
+        if (!string.IsNullOrEmpty(idempotencyKey) && CheckFolioIdempotency(folio, idempotencyKey))
+            return true;
 
         folio.TotalPayments += amount;
         folio.UpdatedAt = DateTime.UtcNow;
@@ -474,6 +482,7 @@ public class LocalRepository
             method = method,
             type = "PAYMENT",
             status = "COMPLETED",
+            idempotencyKey = idempotencyKey,
             createdAt = DateTime.UtcNow
         };
 
@@ -485,6 +494,7 @@ public class LocalRepository
             amount = -amount,
             description = $"{method} payment",
             type = "PAYMENT",
+            idempotencyKey = idempotencyKey,
             createdAt = DateTime.UtcNow
         };
 
@@ -500,11 +510,39 @@ public class LocalRepository
             AggregateVersion = eventVersion,
             EventType = "POST_PAYMENT",
             Sequence = folio.LocalSequence,
-            PayloadJson = JsonSerializer.Serialize(new { amount, method, currency = "NGN", businessDate = DateTime.UtcNow, originalBusinessDate = DateTime.UtcNow })
+            IdempotencyKey = idempotencyKey ?? Guid.NewGuid().ToString(),
+            PayloadJson = JsonSerializer.Serialize(new { amount, method, currency = "NGN", businessDate = DateTime.UtcNow, originalBusinessDate = DateTime.UtcNow, idempotencyKey })
         });
 
         await _dbContext.SaveChangesAsync();
         return true;
+    }
+
+    private bool CheckFolioIdempotency(LocalFolio folio, string idempotencyKey)
+    {
+        if (string.IsNullOrEmpty(folio.TransactionsJson) || string.IsNullOrEmpty(idempotencyKey)) return false;
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(folio.TransactionsJson);
+            if (doc.RootElement.TryGetProperty("items", out var items) && items.ValueKind == System.Text.Json.JsonValueKind.Array)
+            {
+                foreach (var item in items.EnumerateArray())
+                {
+                    if (item.TryGetProperty("idempotencyKey", out var keyProp) && keyProp.ValueKind == System.Text.Json.JsonValueKind.String && keyProp.GetString() == idempotencyKey)
+                        return true;
+                }
+            }
+            if (doc.RootElement.TryGetProperty("payments", out var payments) && payments.ValueKind == System.Text.Json.JsonValueKind.Array)
+            {
+                foreach (var payment in payments.EnumerateArray())
+                {
+                    if (payment.TryGetProperty("idempotencyKey", out var keyProp) && keyProp.ValueKind == System.Text.Json.JsonValueKind.String && keyProp.GetString() == idempotencyKey)
+                        return true;
+                }
+            }
+        }
+        catch { }
+        return false;
     }
 
     private void UpdateFolioTransactionsJson(LocalFolio folio, string arrayName, object newItem)

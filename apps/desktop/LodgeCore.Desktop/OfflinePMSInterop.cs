@@ -238,7 +238,10 @@ public class OfflinePMSInterop
                     permissions = JsonSerializer.Deserialize<string[]>(staff.PermissionsJson) ?? Array.Empty<string>();
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to parse permissions: {ex.Message}");
+            }
 
             // Generate trusted session from the database
             await _authManager.CreateDesktopSessionAsync(
@@ -492,12 +495,12 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
-    public async Task<string> RecordChargeAsync(string folioId, decimal amount, string description)
+    public async Task<string> RecordChargeAsync(string folioId, decimal amount, string description, string? idempotencyKey = null)
     {
         try
         {
             var ctx = await GetSecureContextAsync();
-            var success = await _repo.RecordChargeAsync(folioId, amount, description, ctx.UserId, ctx.DeviceId);
+            var success = await _repo.RecordChargeAsync(folioId, amount, description, ctx.UserId, ctx.DeviceId, idempotencyKey);
             return JsonSerializer.Serialize(new { success }, _jsonOptions);
         }
         catch (Exception ex)
@@ -505,12 +508,12 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
-    public async Task<string> RecordPaymentAsync(string folioId, decimal amount, string method)
+    public async Task<string> RecordPaymentAsync(string folioId, decimal amount, string method, string? idempotencyKey = null)
     {
         try
         {
             var ctx = await GetSecureContextAsync();
-            var success = await _repo.RecordPaymentAsync(folioId, amount, method, ctx.UserId, ctx.DeviceId);
+            var success = await _repo.RecordPaymentAsync(folioId, amount, method, ctx.UserId, ctx.DeviceId, idempotencyKey);
             var paymentId = "off-" + Guid.NewGuid().ToString();
             return JsonSerializer.Serialize(new { 
                 success, 
@@ -1055,8 +1058,9 @@ public class OfflinePMSInterop
                         resultObj["payments"] = new JsonArray();
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
+                    System.Diagnostics.Debug.WriteLine($"Failed to parse folio transactions: {ex.Message}");
                     resultObj["items"] = new JsonArray();
                     resultObj["payments"] = new JsonArray();
                 }

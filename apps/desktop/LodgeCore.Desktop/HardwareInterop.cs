@@ -81,7 +81,10 @@ public class HardwareInterop
             if (TimeZoneInfo.TryConvertIanaIdToWindowsId(ianaOrWindowsId, out var windowsId))
                 return TimeZoneInfo.FindSystemTimeZoneById(windowsId);
         }
-        catch { }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[HardwareInterop] Timezone conversion failed: {ex.Message}");
+        }
 
         System.Diagnostics.Debug.WriteLine(
             $"[HardwareInterop] Unknown timezone '{ianaOrWindowsId}', falling back to UTC.");

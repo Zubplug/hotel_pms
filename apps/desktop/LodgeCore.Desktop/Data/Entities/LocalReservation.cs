@@ -13,9 +13,7 @@ public class LocalReservation
     public string? RatePlanId { get; set; }
     public string? Currency { get; set; }
     
-    public string? RoomTypeId { get; set; }
-    public string? RoomId { get; set; }
-    public string? RoomNumber { get; set; }
+    public ICollection<LocalReservationRoom> Rooms { get; set; } = new List<LocalReservationRoom>();
     public string? SpecialRequests { get; set; }
     public string? InternalNotes { get; set; }
     

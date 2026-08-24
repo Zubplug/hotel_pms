@@ -31,7 +31,8 @@ import {
   Briefcase,
   ArrowRight,
   Info,
-  Printer
+  Printer,
+  Shirt
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -132,6 +133,11 @@ export default function ReceptionistDashboardPage() {
               <Button onClick={() => setReadCardOpen(true)} variant="outline" className="h-20 md:h-24 md:w-36 rounded-2xl bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border-indigo-100 shadow hover:shadow-md hover:-translate-y-1 transition-all flex flex-col gap-2 group">
                 <CreditCard className="w-6 h-6 md:w-7 md:h-7 text-indigo-600 group-hover:scale-110 transition-transform" />
                 <span className="font-bold text-sm">Read Card</span>
+              </Button>
+
+              <Button onClick={() => router.push('/laundry')} variant="outline" className="h-20 md:h-24 md:w-36 rounded-2xl bg-cyan-50 hover:bg-cyan-100 text-cyan-900 border-cyan-100 shadow hover:shadow-md hover:-translate-y-1 transition-all flex flex-col gap-2 group">
+                <Shirt className="w-6 h-6 md:w-7 md:h-7 text-cyan-600 group-hover:scale-110 transition-transform" />
+                <span className="font-bold text-sm">Laundry</span>
               </Button>
             </div>
         </div>

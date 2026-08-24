@@ -24,6 +24,7 @@ import {
   Brush,
   Wrench,
   HandCoins,
+  Shirt,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -45,6 +46,7 @@ const ALL_NAV = [
   { name: 'Amenities', href: '/amenities', icon: Star, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER'] },
   { name: 'Reservations', href: '/reservations', icon: CalendarDays }, // Available to all staff
   { name: 'Housekeeping', href: '/housekeeping', icon: Brush }, // Available to all staff
+  { name: 'Laundry', href: '/laundry', icon: Shirt }, // Available to all staff
   { name: 'Maintenance', href: '/maintenance', icon: Wrench }, // Available to all staff
   { name: 'Night Audit', href: '/night-audit', icon: MoonStar, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'NIGHT_AUDITOR'] },
   { name: 'Staff', href: '/staff', icon: Users, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER'] },

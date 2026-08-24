@@ -1,0 +1,163 @@
+import { NextRequest } from 'next/server';
+import { auth } from '@/lib/auth';
+import prisma from '@hotel-pms/db';
+import { successResponse, errorResponse } from '@/lib/api-response';
+import { hasPermission } from '@/lib/rbac';
+import { getUserPropertyIds } from '@/lib/property-access';
+
+const TRANSITIONS: Record<string, string[]> = {
+  'PENDING': ['COLLECTED', 'CANCELLED'],
+  'COLLECTED': ['WASHING', 'CANCELLED'],
+  'WASHING': ['READY', 'CANCELLED'],
+  'READY': ['DELIVERED', 'CANCELLED'],
+  'DELIVERED': [], // Cancelled requires formal refund
+  'CANCELLED': []
+};
+
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const session = await auth();
+    if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
+
+    const { id } = await params;
+    const body = await req.json();
+    const { status, notes, deviceId, version } = body;
+
+    if (!status) return errorResponse('BAD_REQUEST', 'Missing status', 400);
+
+    const order = await prisma.laundryOrder.findUnique({
+      where: { id },
+      include: { reservation: { include: { folios: { where: { type: 'ROOM', status: 'OPEN' } } } } }
+    });
+
+    if (!order) return errorResponse('NOT_FOUND', 'Laundry order not found', 404);
+
+    const allowedProperties = await getUserPropertyIds(session.user.id);
+    if (!allowedProperties.includes(order.propertyId)) {
+      return errorResponse('FORBIDDEN', 'Access denied to property', 403);
+    }
+
+    const canManage = await hasPermission(session.user.id, 'laundry', 'update', order.propertyId);
+    if (!canManage) return errorResponse('FORBIDDEN', 'Insufficient permissions', 403);
+
+    // Optimistic locking
+    if (version !== undefined && order.version !== version) {
+        return errorResponse('CONFLICT', 'Order has been modified by someone else', 409);
+    }
+
+    // State machine check
+    const allowedNextStates = TRANSITIONS[order.status];
+    if (!allowedNextStates || !allowedNextStates.includes(status)) {
+        return errorResponse('BAD_REQUEST', `Invalid transition from ${order.status} to ${status}`, 400);
+    }
+
+    // Cancellation from WASHING or READY requires special permissions
+    if (status === 'CANCELLED' && ['WASHING', 'READY'].includes(order.status)) {
+        const canCancelLate = await hasPermission(session.user.id, 'laundry', 'delete', order.propertyId);
+        if (!canCancelLate) {
+            return errorResponse('FORBIDDEN', 'Requires management permission to cancel active laundry', 403);
+        }
+    }
+
+    const updateData: any = {
+      status,
+      version: { increment: 1 }
+    };
+
+    // Timestamp updates
+    if (status === 'COLLECTED') {
+      updateData.collectedAt = new Date();
+      updateData.collectedBy = session.user.id;
+    } else if (status === 'READY') {
+      updateData.readyAt = new Date();
+    } else if (status === 'DELIVERED') {
+      updateData.deliveredAt = new Date();
+      updateData.deliveredBy = session.user.id;
+    }
+
+    const updatedOrder = await prisma.$transaction(async (tx: any) => {
+      // If DELIVERED, we must post to Folio idempotently
+      if (status === 'DELIVERED') {
+        if (order.folioItemId) {
+            throw new Error('Order is already billed');
+        }
+
+        // Find active folio for the reservation
+        const activeFolio = order.reservation.folios.length > 0 
+            ? order.reservation.folios[0] 
+            : await tx.folio.create({
+                data: {
+                    reservationId: order.reservation.id,
+                    propertyId: order.propertyId,
+                    guestId: order.guestId,
+                    folioNumber: `FOL-${Date.now()}`,
+                    type: 'ROOM',
+                    status: 'OPEN',
+                    currency: order.currency
+                }
+            });
+
+        const folioItem = await tx.folioItem.create({
+            data: {
+                folioId: activeFolio.id,
+                businessDate: new Date(),
+                type: 'CHARGE',
+                source: 'LAUNDRY',
+                description: `Laundry Service - ${order.serviceType}`,
+                quantity: 1,
+                unitAmount: order.totalAmount,
+                amount: order.totalAmount,
+                currency: order.currency,
+                baseAmount: order.totalAmount,
+                postedBy: session.user.id,
+                deviceId
+            }
+        });
+        
+        updateData.folioItemId = folioItem.id;
+        
+        // Update folio totals
+        await tx.folio.update({
+            where: { id: activeFolio.id },
+            data: {
+                totalCharges: { increment: order.totalAmount },
+                balance: { increment: order.totalAmount },
+                version: { increment: 1 }
+            }
+        });
+      }
+
+      const updated = await tx.laundryOrder.update({
+        where: { id },
+        data: updateData
+      });
+
+      await tx.laundryOrderStatusHistory.create({
+        data: {
+          laundryOrderId: id,
+          previousStatus: order.status,
+          newStatus: status,
+          changedBy: session.user.id,
+          notes,
+          deviceId
+        }
+      });
+
+      return updated;
+    });
+
+    // NOTE: SyncEngine Outbox events
+    // await createOutboxEvent('LaundryOrderStatusUpdated', { orderId: updatedOrder.id, status });
+    // if (status === 'DELIVERED') {
+    //    await createOutboxEvent('LaundryOrderDelivered', { orderId: updatedOrder.id, folioItemId: updatedOrder.folioItemId });
+    // }
+
+    return successResponse(updatedOrder);
+  } catch (err: any) {
+    console.error('[LaundryOrders PATCH]', err);
+    if (err.message === 'Order is already billed') {
+        return errorResponse('CONFLICT', err.message, 409);
+    }
+    return errorResponse('INTERNAL_ERROR', 'Failed to update laundry order', 500);
+  }
+}

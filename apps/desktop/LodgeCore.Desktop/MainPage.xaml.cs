@@ -36,10 +36,12 @@ public partial class MainPage : ContentPage
         await webView2.EnsureCoreWebView2Async();
         
         // Listen for postMessage JSON-RPC from the React frontend
+        webView2.CoreWebView2.WebMessageReceived -= CoreWebView2_WebMessageReceived;
         webView2.CoreWebView2.WebMessageReceived += CoreWebView2_WebMessageReceived;
 
 #if !DEBUG
         webView2.CoreWebView2.AddWebResourceRequestedFilter("http://lodgecore.local/*", Microsoft.Web.WebView2.Core.CoreWebView2WebResourceContext.All);
+        webView2.CoreWebView2.WebResourceRequested -= CoreWebView2_WebResourceRequested;
         webView2.CoreWebView2.WebResourceRequested += CoreWebView2_WebResourceRequested;
         
         // Navigate to the isolated Desktop route
@@ -321,13 +323,15 @@ public partial class MainPage : ContentPage
                     responseData = await pmsInterop.RecordPaymentAsync(
                         parameters?["folioId"]?.ToString() ?? "",
                         parameters?["payment"]?["amount"]?.GetValue<decimal>() ?? 0,
-                        parameters?["payment"]?["method"]?.ToString() ?? "");
+                        parameters?["payment"]?["method"]?.ToString() ?? "",
+                        parameters?["idempotencyKey"]?.ToString());
                     break;
                 case "folios.addCharge":
                     responseData = await pmsInterop.RecordChargeAsync(
                         parameters?["folioId"]?.ToString() ?? "",
                         parameters?["charge"]?["amount"]?.GetValue<decimal>() ?? 0,
-                        parameters?["charge"]?["description"]?.ToString() ?? "");
+                        parameters?["charge"]?["description"]?.ToString() ?? "",
+                        parameters?["idempotencyKey"]?.ToString());
                     break;
                 case "keycards.encode":
                     responseData = await hardwareInterop.EncodeCardAsync(
@@ -626,7 +630,14 @@ public partial class MainPage : ContentPage
                     });
                     MainThread.BeginInvokeOnMainThread(() => 
                     {
-                        sender.PostWebMessageAsString(responseJson);
+                        try
+                        {
+                            sender.PostWebMessageAsString(responseJson);
+                        }
+                        catch (Exception innerEx)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Failed to post message: {innerEx.Message}");
+                        }
                     });
                 }
                 catch (Exception ex)
@@ -644,8 +655,15 @@ public partial class MainPage : ContentPage
 
     private void SendError(Microsoft.Web.WebView2.Core.CoreWebView2 sender, string id, string errorMessage)
     {
-        var errorJson = JsonSerializer.Serialize(new { id, error = errorMessage });
-        sender.PostWebMessageAsString(errorJson);
+        try
+        {
+            var errorJson = JsonSerializer.Serialize(new { id, error = errorMessage });
+            sender.PostWebMessageAsString(errorJson);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Failed to send error: {ex.Message}");
+        }
     }
 #endif
 }

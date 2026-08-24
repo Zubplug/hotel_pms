@@ -110,6 +110,24 @@ public class SyncEngine : BackgroundService
         }
     }
 
+    public async Task<bool> RetryDeadLetterEventAsync(string eventId)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<LodgeCore.Desktop.Data.LocalDbContext>();
+        
+        var evt = await db.OutboxEvents.FindAsync(eventId);
+        if (evt == null || evt.SyncStatus != "DEAD_LETTER") return false;
+        
+        evt.SyncStatus = "PENDING";
+        evt.AttemptCount = 0;
+        evt.NextAttemptAt = DateTime.UtcNow;
+        evt.LastError = null;
+        
+        await db.SaveChangesAsync();
+        TriggerManualSync();
+        return true;
+    }
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _logger.LogInformation("SyncEngine is starting.");
@@ -153,9 +171,9 @@ public class SyncEngine : BackgroundService
                 try
                 {
                     BroadcastHealth(SyncState.SYNCING, null, "PREP", 0, 1, "Preparing sync...");
-                    await PushPendingEventsAsync(stoppingToken);
-                    await PushFrontDeskOutboxAsync(stoppingToken);
-                    await PushKeycardAuditsAsync(stoppingToken);
+                    try { await PushPendingEventsAsync(stoppingToken); } catch (Exception ex) { _logger.LogError(ex, "Failed to push POS events"); }
+                    try { await PushFrontDeskOutboxAsync(stoppingToken); } catch (Exception ex) { _logger.LogError(ex, "Failed to push Front Desk events"); }
+                    try { await PushKeycardAuditsAsync(stoppingToken); } catch (Exception ex) { _logger.LogError(ex, "Failed to push Keycard events"); }
 
                     // ── Sync guests FIRST so GuestId FK is satisfied when
                     //    reservations are saved in PullUpdatesAsync below.
@@ -233,7 +251,7 @@ public class SyncEngine : BackgroundService
             pendingCount = dbContext.SyncEvents.Count(e => e.Status == "PENDING" || e.Status == "FAILED")
                          + dbContext.OutboxEvents.Count(e => e.Status == "PENDING" || e.Status == "FAILED");
         } 
-        catch { }
+        catch (Exception ex) { _logger.LogWarning($"Failed to count pending events: {ex.Message}"); }
 
         if (state == SyncState.SYNCING && pendingCount == 0 && string.IsNullOrEmpty(phase))
         {
@@ -268,7 +286,7 @@ public class SyncEngine : BackgroundService
             pendingCount = dbContext.SyncEvents.Count(e => e.Status == "PENDING" || e.Status == "FAILED")
                          + dbContext.OutboxEvents.Count(e => e.Status == "PENDING" || e.Status == "FAILED");
         } 
-        catch { }
+        catch (Exception ex) { _logger.LogWarning($"Failed to count pending events: {ex.Message}"); }
 
         return new SyncHealthInfo
         {
@@ -291,6 +309,15 @@ public class SyncEngine : BackgroundService
     {
         using var scope = _serviceProvider.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
+
+        var deadEvents = await dbContext.SyncEvents
+            .Where(e => (e.Status == "PENDING" || e.Status == "FAILED") && e.AttemptCount >= 5)
+            .ToListAsync(stoppingToken);
+        if (deadEvents.Any())
+        {
+            foreach (var evt in deadEvents) evt.Status = "DEAD_LETTER";
+            await dbContext.SaveChangesAsync(stoppingToken);
+        }
 
         var pendingEvents = await dbContext.SyncEvents
             .Where(e => e.Status == "PENDING" || e.Status == "FAILED")
@@ -500,7 +527,6 @@ public class SyncEngine : BackgroundService
             hasMore = root.TryGetProperty("hasMore", out var hm) && hm.GetBoolean();
             var nextCursor = root.TryGetProperty("syncedAt", out var sa) && sa.ValueKind != System.Text.Json.JsonValueKind.Null ? sa.GetString() : null;
 
-            using var transaction = await dbContext.Database.BeginTransactionAsync(stoppingToken);
             try
             {
             // ---- Apply property config ------------------------------------
@@ -534,7 +560,7 @@ public class SyncEngine : BackgroundService
 
                     if (root.TryGetProperty("syncedAt", out var syncedAtEl))
                     {
-                        Preferences.Set($"LastPull_{propertyId}", syncedAtEl.GetString());
+                        // Removed inline LastPull setting to rely on nextCursor at the end of the batch
                     }
 
                     if (propEl.TryGetProperty("businessDate", out var bd) &&
@@ -767,8 +793,28 @@ public class SyncEngine : BackgroundService
                     }
 
                     res.Status = el.TryGetProperty("status", out var st) && st.ValueKind != System.Text.Json.JsonValueKind.Null ? st.GetString() ?? "" : "";
-                    res.RoomId = el.TryGetProperty("roomId", out var ri) && ri.ValueKind != System.Text.Json.JsonValueKind.Null ? ri.GetString() : null;
-                    res.RoomNumber = el.TryGetProperty("roomNumber", out var rn) && rn.ValueKind != System.Text.Json.JsonValueKind.Null ? rn.GetString() : null;
+                    
+                    var existingRooms = await dbContext.ReservationRooms.Where(rr => rr.ReservationId == id).ToListAsync(stoppingToken);
+                    if (existingRooms.Any()) dbContext.ReservationRooms.RemoveRange(existingRooms);
+
+                    if (el.TryGetProperty("reservationRooms", out var roomsArr) && roomsArr.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    {
+                        foreach (var roomEl in roomsArr.EnumerateArray())
+                        {
+                            var rr = new LodgeCore.Desktop.Data.Entities.LocalReservationRoom
+                            {
+                                ReservationId = id,
+                                RoomTypeId = roomEl.TryGetProperty("roomTypeId", out var rtid) && rtid.ValueKind != System.Text.Json.JsonValueKind.Null ? rtid.GetString() ?? "" : "",
+                                RoomId = roomEl.TryGetProperty("roomId", out var rid) && rid.ValueKind != System.Text.Json.JsonValueKind.Null ? rid.GetString() : null,
+                                Status = roomEl.TryGetProperty("status", out var rst) && rst.ValueKind != System.Text.Json.JsonValueKind.Null ? rst.GetString() ?? "PENDING" : "PENDING"
+                            };
+                            if (roomEl.TryGetProperty("checkIn", out var rci) && rci.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(rci.GetString(), out var rcid)) rr.CheckInDate = rcid;
+                            if (roomEl.TryGetProperty("checkOut", out var rco) && rco.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(rco.GetString(), out var rcod)) rr.CheckOutDate = rcod;
+                            rr.Adults = roomEl.TryGetProperty("adults", out var radl) ? radl.GetInt32() : 1;
+                            rr.Children = roomEl.TryGetProperty("children", out var rchl) ? rchl.GetInt32() : 0;
+                            dbContext.ReservationRooms.Add(rr);
+                        }
+                    }
                     
                     if (el.TryGetProperty("checkIn", out var ci) && ci.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(ci.GetString(), out var cid))
                         res.CheckInDate = cid;
@@ -777,7 +823,6 @@ public class SyncEngine : BackgroundService
                     
                     res.Adults = el.TryGetProperty("adults", out var adl) ? adl.GetInt32() : res.Adults;
                     res.Children = el.TryGetProperty("children", out var chl) ? chl.GetInt32() : res.Children;
-                    res.RoomTypeId = el.TryGetProperty("roomTypeId", out var rti2) && rti2.ValueKind != System.Text.Json.JsonValueKind.Null ? rti2.GetString() : res.RoomTypeId;
                     res.SpecialRequests = el.TryGetProperty("specialRequests", out var sr) && sr.ValueKind != System.Text.Json.JsonValueKind.Null ? sr.GetString() : res.SpecialRequests;
                     res.ConfirmationNumber = el.TryGetProperty("confirmationNumber", out var cn) && cn.ValueKind != System.Text.Json.JsonValueKind.Null ? cn.GetString() : res.ConfirmationNumber;
                     if (el.TryGetProperty("depositRequired", out var dr) && dr.ValueKind != System.Text.Json.JsonValueKind.Null && decimal.TryParse(dr.GetString() ?? dr.GetRawText(), out var drv))
@@ -1501,7 +1546,6 @@ public class SyncEngine : BackgroundService
 
 
                 await dbContext.SaveChangesAsync(stoppingToken);
-                await transaction.CommitAsync(stoppingToken);
 
                 if (!string.IsNullOrEmpty(nextCursor))
                 {
@@ -1510,7 +1554,6 @@ public class SyncEngine : BackgroundService
             }
             catch (Exception ex)
             {
-                await transaction.RollbackAsync(stoppingToken);
                 throw new Exception($"Failed to apply sync page {pageCount}: {ex.Message}", ex);
             }
         }

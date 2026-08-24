@@ -7,6 +7,7 @@ namespace LodgeCore.Desktop.Data;
 public class LocalDbContext : DbContext
 {
     public DbSet<LocalReservation> Reservations { get; set; } = null!;
+    public DbSet<LocalReservationRoom> ReservationRooms { get; set; } = null!;
     public DbSet<LocalGuest> Guests { get; set; } = null!;
     public DbSet<LocalFolio> Folios { get; set; } = null!;
     public DbSet<LocalSyncEvent> SyncEvents { get; set; } = null!;
@@ -53,6 +54,11 @@ public class LocalDbContext : DbContext
     public DbSet<LocalSyncMetadata> SyncMetadata { get; set; } = null!;
     public DbSet<LocalPosProductionBatch> PosProductionBatches { get; set; } = null!;
     public DbSet<LocalPosProductionBatchItem> PosProductionBatchItems { get; set; } = null!;
+
+    public DbSet<LocalLaundryItem> LaundryItems { get; set; } = null!;
+    public DbSet<LocalLaundryOrder> LaundryOrders { get; set; } = null!;
+    public DbSet<LocalLaundryOrderItem> LaundryOrderItems { get; set; } = null!;
+    public DbSet<LocalLaundryOrderStatusHistory> LaundryOrderStatusHistory { get; set; } = null!;
 
     public LocalDbContext(DbContextOptions<LocalDbContext> options) : base(options)
     {
@@ -116,6 +122,11 @@ public class LocalDbContext : DbContext
             .HasForeignKey(r => r.GuestId)
             .IsRequired(false);
 
+        modelBuilder.Entity<LocalReservationRoom>()
+            .HasOne(rr => rr.Reservation)
+            .WithMany(r => r.Rooms)
+            .HasForeignKey(rr => rr.ReservationId);
+
         modelBuilder.Entity<LocalFolio>()
             .HasOne(f => f.Reservation)
             .WithOne(r => r.Folio)
@@ -178,5 +189,15 @@ public class LocalDbContext : DbContext
             .HasMany(b => b.Items)
             .WithOne()
             .HasForeignKey(i => i.BatchId);
+
+        modelBuilder.Entity<LocalLaundryOrder>()
+            .HasMany(o => o.Items)
+            .WithOne()
+            .HasForeignKey(i => i.LaundryOrderId);
+            
+        modelBuilder.Entity<LocalLaundryOrder>()
+            .HasMany(o => o.StatusHistory)
+            .WithOne()
+            .HasForeignKey(h => h.LaundryOrderId);
     }
 }
