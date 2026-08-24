@@ -71,11 +71,12 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
       const lData = await provider.reservations.lookupByRoom(readData.roomNo, propertyId);
       if (!lData || lData.error) throw new Error(lData?.error?.message || 'Failed to lookup reservation');
 
-      if (!lData.data?.reservation && !lData.data?.data) { // fallback check for different API structures
+      const resolvedReservation = lData.data?.reservation || lData.data?.data || lData.data || lData.reservation || lData;
+      if (!resolvedReservation?.id && !resolvedReservation?.reservationId) {
         throw new Error(`No active reservation found for room ${readData.roomNo}`);
       }
 
-      setReservation(lData.data.reservation || lData.data.data || lData.data);
+      setReservation(resolvedReservation);
       setStep('CONFIRMING');
 
     } catch (err: any) {

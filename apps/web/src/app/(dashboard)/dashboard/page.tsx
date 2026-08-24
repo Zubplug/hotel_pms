@@ -117,7 +117,11 @@ export default function CEODashboardPage() {
           <span className="text-sm font-medium text-muted-foreground">Portfolio:</span>
           <Select value={selectedPropertyId} onValueChange={(val: any) => val && setSelectedPropertyId(val)}>
             <SelectTrigger className="w-[240px] bg-background">
-              <SelectValue placeholder="All Properties" />
+              <SelectValue placeholder="All Properties">
+                {selectedPropertyId === 'ALL'
+                  ? 'All Properties'
+                  : properties.find((property: any) => property.id === selectedPropertyId)?.name || 'All Properties'}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="ALL">All Properties</SelectItem>

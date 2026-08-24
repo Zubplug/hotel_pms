@@ -222,7 +222,12 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
                       <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
                           <SelectTrigger disabled={loadingGuests} className="h-14 rounded-2xl bg-white/50 border-slate-200 text-lg shadow-sm">
-                            <SelectValue placeholder="Search by name or email..." />
+                            <SelectValue placeholder="Search by name or email...">
+                              {(() => {
+                                const guest = filteredGuests.find((item: any) => item.id === field.value);
+                                return guest ? `${guest.firstName} ${guest.lastName}` : field.value ? 'Selected guest' : undefined;
+                              })()}
+                            </SelectValue>
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent className="rounded-xl shadow-2xl border-slate-100 max-h-[300px]">
@@ -381,7 +386,9 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <FormControl>
                             <SelectTrigger disabled={loadingRoomTypes} className="h-12 rounded-xl bg-slate-800/50 border-slate-700 text-white">
-                              <SelectValue placeholder="Select room type..." />
+                              <SelectValue placeholder="Select room type...">
+                                {roomTypes?.find((rt: any) => rt.id === field.value)?.name || 'Select room type...'}
+                              </SelectValue>
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent className="bg-slate-800 border-slate-700 text-white">
@@ -409,7 +416,11 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
                               <SelectValue placeholder={
                                 (!checkIn || !checkOut || !roomTypeId) ? 'Awaiting selection...' : 
                                 loadingAvailableRooms ? 'Searching availability...' : 'Select a ready room'
-                              } />
+                              }>
+                                {availableRooms?.find((room: any) => room.id === field.value)?.number
+                                  ? `Room ${formatRoomNumber(availableRooms.find((room: any) => room.id === field.value).number)}`
+                                  : field.value ? 'Selected room' : undefined}
+                              </SelectValue>
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent className="bg-slate-800 border-slate-700 text-white max-h-60">

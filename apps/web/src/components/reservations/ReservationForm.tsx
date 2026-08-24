@@ -17,6 +17,7 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Loader2, Plus } from 'lucide-react';
 import { useProperty } from '@/components/PropertyProvider';
+import { formatRoomNumber } from '@/lib/format-room';
 
 const formSchema = z.object({
   isNewGuest: z.boolean(),
@@ -190,7 +191,12 @@ export function ReservationForm() {
                       <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
                           <SelectTrigger disabled={loadingGuests}>
-                            <SelectValue placeholder="Search guest..." />
+                            <SelectValue placeholder="Search guest...">
+                              {(() => {
+                                const guest = guests?.find((item: any) => item.id === field.value);
+                                return guest ? `${guest.firstName} ${guest.lastName}${guest.email ? ` (${guest.email})` : ''}` : field.value ? 'Selected guest' : undefined;
+                              })()}
+                            </SelectValue>
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
@@ -260,7 +266,9 @@ export function ReservationForm() {
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
                         <SelectTrigger disabled={loadingRoomTypes}>
-                          <SelectValue placeholder="Select a room type" />
+                        <SelectValue placeholder="Select a room type">
+                          {roomTypes?.find((rt: any) => rt.id === field.value)?.name || 'Select a room type'}
+                        </SelectValue>
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
@@ -288,7 +296,11 @@ export function ReservationForm() {
                           <SelectValue placeholder={
                             (!checkIn || !checkOut || !roomTypeId) ? 'Select dates & type first' : 
                             loadingAvailableRooms ? 'Searching...' : 'Select a room'
-                          } />
+                          }>
+                            {availableRooms?.find((room: any) => room.id === field.value)?.number
+                              ? `Room ${formatRoomNumber(availableRooms.find((room: any) => room.id === field.value).number)}`
+                              : field.value ? 'Selected room' : undefined}
+                          </SelectValue>
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>

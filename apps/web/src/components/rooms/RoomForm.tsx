@@ -149,7 +149,9 @@ export function RoomForm({ initialData }: RoomFormProps) {
                 <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
                   <FormControl>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select a room type" />
+                      <SelectValue placeholder="Select a room type">
+                        {roomTypes?.find((roomType: any) => roomType.id === field.value)?.name || 'Select a room type'}
+                      </SelectValue>
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
@@ -175,7 +177,9 @@ export function RoomForm({ initialData }: RoomFormProps) {
                 }} defaultValue={field.value} value={field.value}>
                   <FormControl>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select a building" />
+                      <SelectValue placeholder="Select a building">
+                        {buildings?.find((building: any) => building.id === field.value)?.name || 'Select a building'}
+                      </SelectValue>
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
@@ -198,7 +202,12 @@ export function RoomForm({ initialData }: RoomFormProps) {
                 <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value} disabled={!selectedBuildingId}>
                   <FormControl>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select a floor" />
+                      <SelectValue placeholder="Select a floor">
+                        {(() => {
+                          const floor = floors?.find((item: any) => item.id === field.value);
+                          return floor ? `Floor ${floor.number} ${floor.name ? `(${floor.name})` : ''}` : 'Select a floor';
+                        })()}
+                      </SelectValue>
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>

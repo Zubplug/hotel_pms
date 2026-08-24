@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2 } from 'lucide-react';
+import { formatRoomNumber } from '@/lib/format-room';
 
 export function RoomReassignmentDialog({ open, onOpenChange, reservation }: { open: boolean; onOpenChange: (open: boolean) => void; reservation: any }) {
   const { propertyId } = useProperty();
@@ -103,7 +104,9 @@ export function RoomReassignmentDialog({ open, onOpenChange, reservation }: { op
               setSelectedRoomId('');
             }}>
               <SelectTrigger>
-                <SelectValue placeholder="Select room type" />
+                <SelectValue placeholder="Select room type">
+                  {roomTypes?.find((roomType: any) => roomType.id === selectedRoomTypeId)?.name || 'Select room type'}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {roomTypes?.map((rt: any) => (
@@ -128,12 +131,17 @@ export function RoomReassignmentDialog({ open, onOpenChange, reservation }: { op
                   isLoadingRooms ? 'Loading rooms...' : 
                   availableRooms?.length ? 'Select a room' : 
                   'No rooms available'
-                } />
+                }>
+                  {(() => {
+                    const room = availableRooms?.find((item: any) => item.id === selectedRoomId);
+                    return room ? `Room ${formatRoomNumber(room.number)}` : selectedRoomId ? 'Selected room' : undefined;
+                  })()}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {availableRooms?.map((room: any) => (
                   <SelectItem key={room.id} value={room.id}>
-                    Room {room.number}
+                    Room {formatRoomNumber(room.number)}
                   </SelectItem>
                 ))}
               </SelectContent>

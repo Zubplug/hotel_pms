@@ -126,7 +126,9 @@ export default function ShiftReportPage() {
             <label className="text-sm font-medium">Cashier</label>
             <Select value={userId} onValueChange={(val) => setUserId(val || 'ALL')}>
               <SelectTrigger className="w-[200px]">
-                <SelectValue />
+                <SelectValue>
+                  {userId === 'ALL' ? 'All Users' : 'My Transactions'}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">All Users</SelectItem>
