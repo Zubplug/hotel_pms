@@ -1050,8 +1050,9 @@ export async function POST(req: NextRequest) {
                  metadata: {
                    amount: amount > 0 ? amount : -amount,
                    currency: payload.currency || 'NGN',
+                   method: payload.method || 'PAYMENT',
                  },
-                 idempotencyKey: `sync_PAYMENT_${aggregateId}_${Date.now()}`
+                 idempotencyKey: `sync_PAYMENT_${idempotencyKey || id}`
                });
              }
            } catch (notifErr) {

@@ -22,6 +22,7 @@ export interface NotificationPolicy {
   creditLimitThreshold?: number;
   notifyOnCheckIn?: boolean;
   notifyOnCheckOut?: boolean;
+  notifyOnPayment?: boolean;
   notifyOnReservationCreated?: boolean;
   notifyOnReservationCancelled?: boolean;
   notifyOnStayExtended?: boolean;
@@ -172,6 +173,7 @@ async function fetchPolicy(propertyId: string): Promise<NotificationPolicy | nul
     creditLimitThreshold: np.creditLimitThreshold,
     notifyOnCheckIn: np.notifyOnCheckIn ?? true,
     notifyOnCheckOut: np.notifyOnCheckOut ?? true,
+    notifyOnPayment: np.notifyOnPayment ?? true,
     notifyOnReservationCreated: np.notifyOnReservationCreated ?? true,
     notifyOnReservationCancelled: np.notifyOnReservationCancelled ?? true,
     notifyOnStayExtended: np.notifyOnStayExtended ?? true,
@@ -191,6 +193,32 @@ async function evaluateEvent(event: NotificationEvent, policy: NotificationPolic
   };
 
   switch (event.type) {
+    case 'PAYMENT_RECEIVED': {
+      if (!policy.notifyOnPayment) return null;
+
+      const folio = await prisma.folio.findUnique({
+        where: { id: event.entityId },
+        include: {
+          reservation: { include: { primaryGuest: true } },
+          guest: true,
+        },
+      });
+      if (!folio) return null;
+
+      const guest = folio.reservation?.primaryGuest || folio.guest;
+      const guestName = guest?.firstName ? `${guest.firstName} ${guest.lastName}` : 'Guest';
+      const amount = Number(event.metadata?.amount || 0);
+      const currency = event.metadata?.currency || folio.currency;
+      const method = String(event.metadata?.method || 'PAYMENT').replaceAll('_', ' ');
+
+      return {
+        subject: `Payment Received — ${guestName}`,
+        body: `💳 ${currency} ${amount.toLocaleString()} received via ${method}\n👤 Guest: ${guestName}\n🧾 Folio: ${folio.folioNumber}`,
+        category: 'Finance',
+        priority: 'Normal',
+      };
+    }
+
     case 'PAYMENT_LARGE': {
       if (!policy.largePaymentThreshold) return null;
       const payment = await prisma.payment.findUnique({ where: { id: event.entityId } });

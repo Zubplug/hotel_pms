@@ -158,12 +158,17 @@ export async function POST(req: NextRequest) {
 
     // Fire notification for the payment (fire and forget)
     NotificationEngine.emit({
-      type: 'PAYMENT_LARGE',
+      type: 'PAYMENT_RECEIVED',
       organizationId: folio.property.organizationId,
       propertyId: folio.propertyId,
-      entityType: 'payment',
-      entityId: result.payment.id,
-      idempotencyKey: `payment_large_${result.payment.id}`,
+      entityType: 'folio',
+      entityId: folio.id,
+      metadata: {
+        amount: numericAmount,
+        currency,
+        method,
+      },
+      idempotencyKey: `payment_received_${result.payment.id}`,
     }).catch(err => console.error('[NotificationEngine] Failed to emit payment notification:', err));
 
     return successResponse(result, 201);
