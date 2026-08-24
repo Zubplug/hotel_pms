@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, RefreshCw, AlertTriangle, CheckCircle2, Clock, CloudOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { format } from 'date-fns';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
@@ -47,9 +48,20 @@ export default function SyncCenterPage() {
     if (provider.system?.forceSync) {
       await provider.system.forceSync();
     }
-    setTimeout(() => {
-      refetch();
+    setTimeout(async () => {
+      const res = await refetch();
       setIsForceSyncing(false);
+      
+      // Check if there are still failures after sync
+      if (res.data?.success && res.data.data) {
+        const failedEvents = res.data.data.filter((e: any) => e.Status === 'FAILED' || e.Status === 'DEAD_LETTER' || e.Status === 'RETRY_EXHAUSTED');
+        if (failedEvents.length > 0) {
+          const firstError = failedEvents[0].LastError || 'Unknown sync error';
+          toast.error(`Sync Failed: ${firstError}`, { duration: 10000 });
+        } else {
+          toast.success('Sync completed successfully');
+        }
+      }
     }, 2000);
   };
 
@@ -130,15 +142,17 @@ export default function SyncCenterPage() {
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     <span className="px-2 py-1 bg-red-200 text-red-800 text-xs font-bold rounded-full uppercase">
-                      {evt.OperationType.replace('_', ' ')}
+                      {evt.EventType ? evt.EventType.replace('_', ' ') : 'UNKNOWN'}
                     </span>
-                    <span className="text-sm font-bold text-slate-700">Entity: {evt.EntityId.substring(0, 8)}...</span>
+                    <span className="text-sm font-bold text-slate-700">
+                      {evt.AggregateType}: {evt.AggregateId?.substring(0, 8)}...
+                    </span>
                   </div>
                   <p className="text-red-700 font-medium">{evt.LastError || 'Conflict occurred during synchronization.'}</p>
                 </div>
                 <div className="text-right text-xs text-slate-500">
-                  <p>ID: {evt.Id.substring(0, 8)}</p>
-                  <p>{format(new Date(evt.CreatedAt), 'MMM d, h:mm a')}</p>
+                  <p>ID: {evt.Id?.substring(0, 8)}</p>
+                  <p>{evt.OccurredAt ? format(new Date(evt.OccurredAt), 'MMM d, h:mm a') : 'Unknown'}</p>
                 </div>
               </div>
             ))}
@@ -165,16 +179,19 @@ export default function SyncCenterPage() {
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     <span className="px-2 py-1 bg-slate-100 text-slate-700 text-xs font-bold rounded-full uppercase">
-                      {evt.OperationType.replace('_', ' ')}
+                      {evt.EventType ? evt.EventType.replace('_', ' ') : 'UNKNOWN'}
                     </span>
-                    <span className="text-sm font-bold text-slate-700">Entity: {evt.EntityId.substring(0, 8)}...</span>
+                    <span className="text-sm font-bold text-slate-700">
+                      {evt.AggregateType}: {evt.AggregateId?.substring(0, 8)}...
+                    </span>
                   </div>
                   {evt.Status === 'FAILED' && evt.LastError && (
                     <p className="text-amber-600 text-sm font-medium mt-1">Failed (Retry {evt.AttemptCount}): {evt.LastError}</p>
                   )}
                 </div>
                 <div className="text-right text-xs text-slate-500">
-                  <p>{format(new Date(evt.CreatedAt), 'MMM d, h:mm a')}</p>
+                  <p>ID: {evt.Id?.substring(0, 8)}</p>
+                  <p>{evt.OccurredAt ? format(new Date(evt.OccurredAt), 'MMM d, h:mm a') : 'Unknown'}</p>
                 </div>
               </div>
             ))}

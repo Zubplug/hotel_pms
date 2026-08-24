@@ -41,7 +41,7 @@ export default function ReceptionistDashboardPage() {
   const router = useRouter();
   const { propertyId } = useProperty();
   const { data: session } = useLodgeCoreSession();
-  const { provider } = useLodgeCoreProvider();
+  const { provider, syncStatus } = useLodgeCoreProvider();
 
   const [checkInReservationId, setCheckInReservationId] = useState<string | null>(null);
   const [checkOutReservation, setCheckOutReservation] = useState<any | null>(null);
@@ -101,6 +101,22 @@ export default function ReceptionistDashboardPage() {
     <div className="min-h-[calc(100vh-4rem)] p-4 md:p-8 bg-slate-50/50 pb-20">
       <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
         
+        {/* Sync Status Banner */}
+        {syncStatus === 'error' && (
+          <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl shadow-sm flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="w-5 h-5 text-red-600" />
+              <div>
+                <h3 className="text-sm font-bold text-red-800">Sync Error Detected</h3>
+                <p className="text-sm text-red-700">The desktop agent is failing to push data to the cloud. Click Sync Center to view the exact error.</p>
+              </div>
+            </div>
+            <Button size="sm" variant="outline" className="text-red-700 border-red-200 hover:bg-red-100" onClick={() => router.push('/frontdesk/sync')}>
+              Open Sync Center
+            </Button>
+          </div>
+        )}
+
         {/* Welcome Header */}
         <div className="flex flex-col xl:flex-row justify-between items-start xl:items-end gap-6 w-full">
           <div className="flex-1 min-w-0 pr-4">

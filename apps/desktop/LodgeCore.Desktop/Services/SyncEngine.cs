@@ -1825,10 +1825,20 @@ Last Error:       {errorStr}
         var dbContext = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
         
         var identity = await GetSyncIdentityAsync(stoppingToken);
-        if (identity == null) return;
+        if (identity == null) 
+        {
+            _logger.LogWarning("[PUSH-FD] Skipping push: identity is null (no propertyId or session).");
+            return;
+        }
+        _logger.LogInformation($"[PUSH-FD] Identity resolved. PropertyId={identity.PropertyId} DeviceId={identity.DeviceId} TerminalId={identity.TerminalId}");
         
         var token = await GetActiveTokenAsync();
-        if (string.IsNullOrEmpty(token)) return;
+        if (string.IsNullOrEmpty(token)) 
+        {
+            _logger.LogWarning("[PUSH-FD] Skipping push: no device credential token found. Device may need to be re-provisioned.");
+            return;
+        }
+        _logger.LogInformation($"[PUSH-FD] Token acquired. Length={token.Length}, Prefix={token.Substring(0, Math.Min(8, token.Length))}...");
 
         var allPending = await dbContext.OutboxEvents
             .Where(e => e.Status == "PENDING" || e.Status == "FAILED" || e.Status == "CONFLICT")
@@ -1848,7 +1858,17 @@ Last Error:       {errorStr}
 
         var pendingEvents = eventsToPush.OrderBy(e => e.Sequence).Take(50).ToList();
 
-        if (!pendingEvents.Any()) return;
+        if (!pendingEvents.Any()) 
+        {
+            _logger.LogDebug("[PUSH-FD] No eligible outbox events to push.");
+            return;
+        }
+        
+        _logger.LogInformation($"[PUSH-FD] {pendingEvents.Count} events ready to push. Types: {string.Join(", ", pendingEvents.Select(e => $"{e.AggregateType}/{e.EventType}").Distinct())}");
+        foreach (var e in pendingEvents)
+        {
+            _logger.LogDebug($"[PUSH-FD-EVENT] id={e.Id} idempotencyKey={e.IdempotencyKey} type={e.AggregateType}/{e.EventType} aggregateId={e.AggregateId} attempts={e.AttemptCount} status={e.Status} lastError={e.LastError}");
+        }
 
         foreach (var e in pendingEvents) e.AttemptCount++;
 
@@ -1857,10 +1877,13 @@ Last Error:       {errorStr}
 
         _httpClient.Timeout = TimeSpan.FromSeconds(30);
 
-        var request = new HttpRequestMessage(HttpMethod.Post, "sync/push/frontdesk");
+        var requestUrl = "sync/push/frontdesk";
+        var request = new HttpRequestMessage(HttpMethod.Post, requestUrl);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         // Idempotency for batch endpoints is usually handled per-item, but we add a batch header just in case
         request.Headers.Add("Idempotency-Key", $"batch_{Guid.NewGuid()}");
+        
+        _logger.LogInformation($"[PUSH-FD] Sending POST to {_httpClient.BaseAddress}{requestUrl} with {pendingEvents.Count} events");
         
         var payload = new 
         {
@@ -1885,16 +1908,24 @@ Last Error:       {errorStr}
         try
         {
             var response = await _httpClient.SendAsync(request, stoppingToken);
+            _logger.LogInformation($"[PUSH-FD] Server responded: HTTP {(int)response.StatusCode} {response.StatusCode}");
+            
             if (response.IsSuccessStatusCode)
             {
-                var result = await response.Content.ReadFromJsonAsync<SyncPushFrontDeskResponse>(cancellationToken: stoppingToken);
+                var rawBody = await response.Content.ReadAsStringAsync(stoppingToken);
+                _logger.LogDebug($"[PUSH-FD] Success response body: {rawBody}");
+                SyncPushFrontDeskResponse? result = null;
+                try { result = System.Text.Json.JsonSerializer.Deserialize<SyncPushFrontDeskResponse>(rawBody, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }); }
+                catch (Exception parseEx) { _logger.LogError(parseEx, "[PUSH-FD] Failed to parse server response JSON."); }
                 if (result != null && result.Status == "SUCCESS" && result.Results != null)
                 {
+                    _logger.LogInformation($"[PUSH-FD] Server accepted batch. Processing {result.Results.Count} result(s).");
                     foreach (var res in result.Results)
                     {
                         var evt = pendingEvents.FirstOrDefault(e => e.Id == res.Id);
                         if (evt != null)
                         {
+                            _logger.LogInformation($"[PUSH-FD-RESULT] event={evt.AggregateType}/{evt.EventType} id={evt.Id} → status={res.Status} error={res.Error}");
                             evt.Status = res.Status; 
                             evt.LastError = res.Error;
                             
@@ -1926,11 +1957,16 @@ Last Error:       {errorStr}
                     }
                     await dbContext.SaveChangesAsync(stoppingToken);
                 }
+                else
+                {
+                    _logger.LogWarning($"[PUSH-FD] Server returned success but response had unexpected shape: Status={result?.Status} ResultCount={result?.Results?.Count ?? -1}. Raw: {rawBody?.Substring(0, Math.Min(500, rawBody?.Length ?? 0))}");
+                }
             }
             else
             {
+                var errorBody = await response.Content.ReadAsStringAsync(stoppingToken);
                 int statusCode = (int)response.StatusCode;
-                _logger.LogWarning($"Front Desk push failed with status {statusCode}");
+                _logger.LogWarning($"[PUSH-FD] Push FAILED. HTTP {statusCode}. Response body: {errorBody}");
                 
                 // Specific HTTP Failure Classifications
                 if (statusCode == 401 || statusCode == 403)
