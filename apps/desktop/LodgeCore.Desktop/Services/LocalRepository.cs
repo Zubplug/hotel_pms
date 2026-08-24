@@ -417,7 +417,9 @@ public class LocalRepository
 
     public async Task<bool> RecordKeycardEncodingAsync(string reservationId, string roomId, string userId, string deviceId, string? encodeData)
     {
-        var res = await _dbContext.Reservations.FirstOrDefaultAsync(r => r.Id == reservationId);
+        var res = await _dbContext.Reservations
+            .Include(r => r.Rooms)
+            .FirstOrDefaultAsync(r => r.Id == reservationId);
         if (res == null) throw new InvalidOperationException("Reservation not found.");
         if (res.RoomId != roomId) throw new InvalidOperationException("The reservation is not assigned to this room.");
 
@@ -726,7 +728,9 @@ public class LocalRepository
 
     public async Task<bool> ProcessCheckInAsync(string reservationId, string userId, string deviceId, string? encodeData = null)
     {
-        var res = await _dbContext.Reservations.FindAsync(reservationId);
+        var res = await _dbContext.Reservations
+            .Include(r => r.Rooms)
+            .FirstOrDefaultAsync(r => r.Id == reservationId);
         if (res == null || (res.Status != "PENDING" && res.Status != "CONFIRMED")) return false;
 
         res.Status = "CHECKED_IN";

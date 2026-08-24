@@ -1966,8 +1966,6 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
 
         try
         {
-            _httpClient.Timeout = TimeSpan.FromSeconds(30);
-
             var requestUrl = "sync/push/frontdesk";
             using var request = new HttpRequestMessage(HttpMethod.Post, requestUrl);
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -1995,7 +1993,9 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
             };
 
             request.Content = JsonContent.Create(payload);
-            var response = await _httpClient.SendAsync(request, stoppingToken);
+            using var requestTimeout = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+            requestTimeout.CancelAfter(TimeSpan.FromSeconds(30));
+            var response = await _httpClient.SendAsync(request, requestTimeout.Token);
             _lastPushHttpStatus = (int)response.StatusCode;
             _logger.LogInformation($"[PUSH-FD] Server responded: HTTP {(int)response.StatusCode} {response.StatusCode}");
             
