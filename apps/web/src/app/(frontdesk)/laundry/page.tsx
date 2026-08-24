@@ -136,7 +136,9 @@ export default function LaundryDashboard() {
               </div>
             ) : (
               orders.slice(0, 15).map((order) => {
-                const guestName = order.reservation?.primaryGuest ? `${order.reservation.primaryGuest.firstName} ${order.reservation.primaryGuest.lastName}` : 'Unknown Guest';
+                const guestName = order.reservation?.primaryGuest 
+                  ? `${order.reservation.primaryGuest.firstName} ${order.reservation.primaryGuest.lastName}` 
+                  : (order.guest ? `${order.guest.firstName} ${order.guest.lastName}` : 'Unknown Guest');
                 const initials = guestName.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase();
                 
                 return (

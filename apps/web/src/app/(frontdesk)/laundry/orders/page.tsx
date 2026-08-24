@@ -76,7 +76,11 @@ export default function LaundryOrdersPage() {
               ) : orders.map(order => (
                 <tr key={order.id} className="hover:bg-cyan-50/50 transition-colors group">
                   <td className="px-6 py-5 font-bold text-slate-900 font-mono text-base">{order.room?.number || 'N/A'}</td>
-                  <td className="px-6 py-5 font-medium text-slate-700">{order.reservation?.primaryGuest?.firstName} {order.reservation?.primaryGuest?.lastName}</td>
+                  <td className="px-6 py-5 font-medium text-slate-700">
+                    {order.reservation?.primaryGuest 
+                      ? `${order.reservation.primaryGuest.firstName} ${order.reservation.primaryGuest.lastName}` 
+                      : (order.guest ? `${order.guest.firstName} ${order.guest.lastName}` : 'Unknown')}
+                  </td>
                   <td className="px-6 py-5 font-semibold text-slate-600">{order.serviceType.replace('_', ' ')}</td>
                   <td className="px-6 py-5">{renderStatus(order.status)}</td>
                   <td className="px-6 py-5 font-bold text-slate-900">{formatCurrency(Number(order.totalAmount), order.currency)}</td>

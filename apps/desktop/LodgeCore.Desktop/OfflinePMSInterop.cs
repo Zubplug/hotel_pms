@@ -434,20 +434,26 @@ public class OfflinePMSInterop
         try
         {
             var res = await _repo.GetActiveReservationsAsync();
-            var mapped = res.Select(r => new
+            var mapped = res.Select(r =>
             {
-                id = r.Id,
-                confirmationNumber = !string.IsNullOrEmpty(r.ConfirmationNumber) ? r.ConfirmationNumber : (r.Id.Length >= 8 ? r.Id.Substring(0, 8).ToUpper() : r.Id.ToUpper()),
-                status = r.Status,
-                propertyId = r.PropertyId,
-                checkIn = r.CheckInDate,
-                checkOut = r.CheckOutDate,
-                primaryGuest = r.Guest != null 
-                    ? new { id = r.Guest.Id, firstName = r.Guest.FirstName, lastName = r.Guest.LastName, phone = r.Guest.Phone } 
-                    : new { id = "unknown", firstName = "Unknown", lastName = "Guest", phone = (string?)"" },
-                reservationRooms = new[] { new { room = new { number = r.RoomNumber, status = "CLEAN" }, roomType = new { name = "Standard" }, checkIn = r.CheckInDate, checkOut = r.CheckOutDate } },
-                folio = new { balance = r.Folio?.OutstandingBalance ?? 0, currency = r.Folio?.Currency ?? r.Currency ?? "NGN" },
-                isDirty = r.IsDirty
+                var guestId = r.Guest?.Id ?? r.GuestId ?? "";
+                var roomId = r.RoomId ?? r.Rooms?.FirstOrDefault()?.RoomId;
+                return new
+                {
+                    id = r.Id,
+                    confirmationNumber = !string.IsNullOrEmpty(r.ConfirmationNumber) ? r.ConfirmationNumber : (r.Id.Length >= 8 ? r.Id.Substring(0, 8).ToUpper() : r.Id.ToUpper()),
+                    status = r.Status,
+                    propertyId = r.PropertyId,
+                    primaryGuestId = guestId,
+                    checkIn = r.CheckInDate,
+                    checkOut = r.CheckOutDate,
+                    primaryGuest = r.Guest != null 
+                        ? new { id = r.Guest.Id, firstName = r.Guest.FirstName, lastName = r.Guest.LastName, phone = r.Guest.Phone } 
+                        : new { id = "unknown", firstName = "Unknown", lastName = "Guest", phone = (string?)"" },
+                    reservationRooms = new[] { new { roomId = roomId, room = new { id = roomId, number = r.RoomNumber, status = "CLEAN" }, roomType = new { name = "Standard" }, checkIn = r.CheckInDate, checkOut = r.CheckOutDate } },
+                    folio = new { balance = r.Folio?.OutstandingBalance ?? 0, currency = r.Folio?.Currency ?? r.Currency ?? "NGN" },
+                    isDirty = r.IsDirty
+                };
             });
             return JsonSerializer.Serialize(new { success = true, data = mapped }, _jsonOptions);
         }

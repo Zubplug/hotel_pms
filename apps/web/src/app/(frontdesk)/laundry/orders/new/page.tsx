@@ -38,11 +38,11 @@ export default function NewLaundryOrderPage() {
       .then(res => setItems(res.data || []));
       
     setFetchingGuests(true);
-    fetch(`/api/v1/reservations?propertyId=${propertyId}&status=IN_HOUSE&pageSize=100`)
-      .then(res => res.json())
-      .then(data => {
-         setReservations(data.data || []);
+    provider.reservations.list(propertyId, { status: 'IN_HOUSE', pageSize: 200 })
+      .then(res => {
+         setReservations(res.data?.items || res.data || []);
       })
+      .catch(console.error)
       .finally(() => setFetchingGuests(false));
   }, [propertyId]);
 
@@ -71,10 +71,10 @@ export default function NewLaundryOrderPage() {
           setSearchingWalkIn(true);
           searchTimeout.current = setTimeout(async () => {
               try {
-                  const res = await fetch(`/api/v1/guests?phone=${encodeURIComponent(phone)}&propertyId=${propertyId}`);
-                  const data = await res.json();
-                  if (data?.data && data.data.length > 0) {
-                      const guest = data.data[0];
+                  // Use the provider which searches local SQLite first, then falls back to cloud
+                  const res = await provider.guests.search(phone);
+                  if (res?.data && res.data.length > 0) {
+                      const guest = res.data[0];
                       setMatchingGuest(guest);
                       setWalkInDetails({
                           firstName: guest.firstName,

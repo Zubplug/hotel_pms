@@ -3072,7 +3072,7 @@ public class LocalRepository
             .ToListAsync();
     }
 
-    public async Task<List<LocalLaundryOrder>> GetLaundryOrdersAsync(string propertyId, string? status = null)
+    public async Task<object> GetLaundryOrdersAsync(string propertyId, string? status = null)
     {
         var query = _dbContext.LaundryOrders
             .Include(o => o.Items)
@@ -3083,7 +3083,67 @@ public class LocalRepository
             query = query.Where(o => o.Status == status);
         }
 
-        return await query.OrderByDescending(o => o.CreatedAt).ToListAsync();
+        var orders = await query.OrderByDescending(o => o.CreatedAt).ToListAsync();
+
+        var reservationIds = orders.Where(o => !string.IsNullOrEmpty(o.ReservationId)).Select(o => o.ReservationId!).Distinct().ToList();
+        var guestIds = orders.Where(o => !string.IsNullOrEmpty(o.GuestId)).Select(o => o.GuestId).Distinct().ToList();
+        var roomIds = orders.Where(o => !string.IsNullOrEmpty(o.RoomId)).Select(o => o.RoomId!).Distinct().ToList();
+
+        var reservations = await _dbContext.Reservations.Where(r => reservationIds.Contains(r.Id)).ToListAsync();
+        var resGuestIds = reservations.Select(r => r.GuestId).Where(id => !string.IsNullOrEmpty(id)).Select(id => id!).ToList();
+        var allGuestIds = guestIds.Concat(resGuestIds).Distinct().ToList();
+        var guests = await _dbContext.Guests.Where(g => allGuestIds.Contains(g.Id)).ToListAsync();
+        var rooms = await _dbContext.Rooms.Where(r => roomIds.Contains(r.Id)).ToListAsync();
+
+        var result = orders.Select(o => {
+            var res = reservations.FirstOrDefault(r => r.Id == o.ReservationId);
+            var resGuest = res != null ? guests.FirstOrDefault(g => g.Id == res.GuestId) : null;
+            var guest = guests.FirstOrDefault(g => g.Id == o.GuestId);
+            var room = rooms.FirstOrDefault(r => r.Id == o.RoomId);
+
+            return new {
+                id = o.Id,
+                propertyId = o.PropertyId,
+                customerType = o.CustomerType,
+                reservationId = o.ReservationId,
+                roomId = o.RoomId,
+                guestId = o.GuestId,
+                folioItemId = o.FolioItemId,
+                status = o.Status,
+                serviceType = o.ServiceType,
+                totalAmount = o.TotalAmount,
+                currency = o.Currency,
+                specialNotes = o.SpecialNotes,
+                requestedAt = o.RequestedAt,
+                expectedReadyAt = o.ExpectedReadyAt,
+                collectedAt = o.CollectedAt,
+                collectedBy = o.CollectedBy,
+                readyAt = o.ReadyAt,
+                deliveredAt = o.DeliveredAt,
+                deliveredBy = o.DeliveredBy,
+                version = o.Version,
+                createdAt = o.CreatedAt,
+                updatedAt = o.UpdatedAt,
+                items = o.Items,
+                reservation = res != null ? new {
+                    id = res.Id,
+                    primaryGuest = resGuest != null ? new {
+                        firstName = resGuest.FirstName,
+                        lastName = resGuest.LastName
+                    } : null
+                } : null,
+                guest = guest != null ? new {
+                    firstName = guest.FirstName,
+                    lastName = guest.LastName
+                } : null,
+                room = room != null ? new {
+                    id = room.Id,
+                    number = room.Number
+                } : null
+            };
+        }).ToList();
+
+        return result;
     }
 
     public async Task<string> CreateLaundryOrderAsync(string dataJson, string userId, string deviceId)
