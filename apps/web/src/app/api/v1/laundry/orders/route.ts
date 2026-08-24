@@ -85,12 +85,20 @@ export async function POST(req: NextRequest) {
       let unitPrice = Number(dbItem.basePrice);
       
       // Apply service pricing rules if they exist
+      // Apply service pricing rules if they exist, otherwise use default multipliers
       if (dbItem.servicePricingRules && (dbItem.servicePricingRules as any)[serviceType]) {
           const rule = (dbItem.servicePricingRules as any)[serviceType];
           if (rule.type === 'FIXED') {
               unitPrice = rule.amount;
           } else if (rule.type === 'MULTIPLIER') {
               unitPrice = unitPrice * rule.value;
+          }
+      } else {
+          // Default multipliers
+          if (serviceType === 'EXPRESS') {
+              unitPrice = unitPrice * 1.5;
+          } else if (serviceType === 'DRY_CLEAN') {
+              unitPrice = unitPrice * 2.0;
           }
       }
 
