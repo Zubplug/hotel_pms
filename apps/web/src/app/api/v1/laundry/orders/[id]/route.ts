@@ -82,6 +82,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             throw new Error('Order is already billed');
         }
 
+        if (!order.reservation) {
+            throw new Error('Cannot bill to room: order has no associated reservation');
+        }
+
         // Find active folio for the reservation
         const activeFolio = order.reservation.folios.length > 0 
             ? order.reservation.folios[0] 
@@ -155,7 +159,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return successResponse(updatedOrder);
   } catch (err: any) {
     console.error('[LaundryOrders PATCH]', err);
-    if (err.message === 'Order is already billed') {
+    if (err.message === 'Order is already billed' || err.message === 'Cannot bill to room: order has no associated reservation') {
         return errorResponse('CONFLICT', err.message, 409);
     }
     return errorResponse('INTERNAL_ERROR', 'Failed to update laundry order', 500);
