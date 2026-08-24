@@ -15,7 +15,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { DatePicker } from '@/components/ui/date-picker';
-import { Loader2, Plus, ArrowRight, UserPlus, Calendar } from 'lucide-react';
+import { Loader2, Plus, ArrowRight, UserPlus, Calendar, Search, X, CheckCircle2, Phone, Mail } from 'lucide-react';
 import { useProperty } from '@/components/PropertyProvider';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
@@ -94,6 +94,8 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
   const roomTypeId = form.watch('roomTypeId');
 
   const [guestSearch, setGuestSearch] = useState('');
+  const [guestDropdownOpen, setGuestDropdownOpen] = useState(false);
+  const [selectedGuest, setSelectedGuest] = useState<any>(null);
   
   // Custom simple debounce for search
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -109,6 +111,7 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
     queryFn: async () => {
       return provider.guests.search(debouncedSearch);
     },
+    enabled: !isNewGuest && guestDropdownOpen,
   });
   const filteredGuests = (guestsRes as any)?.data || [];
 
@@ -204,6 +207,9 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
                   onClick={() => {
                     form.setValue('isNewGuest', !isNewGuest);
                     form.setValue('guestId', '');
+                    setSelectedGuest(null);
+                    setGuestSearch('');
+                    setGuestDropdownOpen(false);
                   }}
                 >
                   {isNewGuest ? 'Switch to Existing Guest' : (
@@ -213,45 +219,87 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
               </div>
 
               {!isNewGuest ? (
-                <FormField
+                  <FormField
                   control={form.control}
                   name="guestId"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel className="text-slate-500 font-medium ml-1">Search Database</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger disabled={loadingGuests} className="h-14 rounded-2xl bg-white/50 border-slate-200 text-lg shadow-sm">
-                            <SelectValue placeholder="Search by name or email...">
-                              {(() => {
-                                const guest = filteredGuests.find((item: any) => item.id === field.value);
-                                return guest ? `${guest.firstName} ${guest.lastName}` : field.value ? 'Selected guest' : undefined;
-                              })()}
-                            </SelectValue>
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent className="rounded-xl shadow-2xl border-slate-100 max-h-[300px]">
-                          <div className="p-2 border-b border-slate-100 sticky top-0 bg-white z-10">
-                            <Input 
-                              placeholder="Search by name, email or phone..." 
-                              value={guestSearch}
-                              onChange={(e) => setGuestSearch(e.target.value)}
-                              onKeyDown={(e) => e.stopPropagation()} // Prevent select from closing
-                              className="h-9"
-                            />
+                      {selectedGuest || field.value ? (
+                        <div className="flex items-center justify-between gap-4 min-h-14 rounded-2xl bg-blue-50/70 border border-blue-200 px-4 shadow-sm">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white">
+                              {selectedGuest?.firstName?.[0]}{selectedGuest?.lastName?.[0]}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="truncate font-bold text-slate-800">{selectedGuest ? `${selectedGuest.firstName} ${selectedGuest.lastName}` : 'Selected guest'}</p>
+                              <p className="truncate text-xs text-slate-500">{selectedGuest?.phone || selectedGuest?.email || 'Guest selected'}</p>
+                            </div>
+                            <CheckCircle2 className="h-5 w-5 shrink-0 text-blue-600" />
                           </div>
-                          {filteredGuests.length === 0 ? (
-                            <div className="py-6 text-center text-sm text-slate-500">No matching guests found.</div>
-                          ) : (
-                            filteredGuests.map((guest: any) => (
-                              <SelectItem key={guest.id} value={guest.id} className="py-3 cursor-pointer">
-                                <div className="font-semibold">{guest.firstName} {guest.lastName}</div>
-                                <div className="text-xs text-slate-400">{guest.email || guest.phone || 'No contact info'}</div>
-                              </SelectItem>
-                            ))
+                          <Button type="button" variant="ghost" size="sm" className="shrink-0 text-slate-500 hover:text-blue-700" onClick={() => {
+                            field.onChange('');
+                            setSelectedGuest(null);
+                            setGuestSearch('');
+                            setGuestDropdownOpen(true);
+                          }}>
+                            Change
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="relative">
+                          <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+                          <Input
+                            value={guestSearch}
+                            onChange={(event) => {
+                              setGuestSearch(event.target.value);
+                              setGuestDropdownOpen(true);
+                            }}
+                            onFocus={() => setGuestDropdownOpen(true)}
+                            onBlur={() => setTimeout(() => setGuestDropdownOpen(false), 150)}
+                            placeholder="Search by name, phone number, or email..."
+                            className="h-14 rounded-2xl bg-white/70 pl-12 pr-12 text-base shadow-sm"
+                            disabled={loadingGuests}
+                          />
+                          {loadingGuests ? (
+                            <Loader2 className="absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 animate-spin text-blue-500" />
+                          ) : guestSearch ? (
+                            <button type="button" className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700" onMouseDown={(event) => event.preventDefault()} onClick={() => setGuestSearch('')}>
+                              <X className="h-5 w-5" />
+                            </button>
+                          ) : null}
+                          {guestDropdownOpen && (
+                            <div className="absolute z-30 mt-2 max-h-72 w-full overflow-y-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl">
+                              {!guestSearch && <p className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Recent guests</p>}
+                              {filteredGuests.length === 0 ? (
+                                <div className="px-4 py-8 text-center text-sm text-slate-500">{guestSearch ? 'No guest found for that search.' : 'No guests available.'}</div>
+                              ) : filteredGuests.map((guest: any) => (
+                                <button
+                                  key={guest.id}
+                                  type="button"
+                                  className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-blue-50"
+                                  onMouseDown={(event) => event.preventDefault()}
+                                  onClick={() => {
+                                    field.onChange(guest.id);
+                                    setSelectedGuest(guest);
+                                    setGuestSearch('');
+                                    setGuestDropdownOpen(false);
+                                  }}
+                                >
+                                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 font-bold text-slate-600">{guest.firstName?.[0]}{guest.lastName?.[0]}</div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="truncate font-bold text-slate-800">{guest.firstName} {guest.lastName}</p>
+                                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">
+                                      {guest.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{guest.phone}</span>}
+                                      {guest.email && <span className="flex items-center gap-1 truncate"><Mail className="h-3 w-3" />{guest.email}</span>}
+                                    </div>
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
                           )}
-                        </SelectContent>
-                      </Select>
+                        </div>
+                      )}
                       <FormMessage />
                     </FormItem>
                   )}

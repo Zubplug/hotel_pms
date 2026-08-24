@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Edit, RefreshCw, KeySquare, History, User, ShieldCheck, ShieldOff, Clock, CreditCard, ChevronDown, ChevronUp, CheckCircle2, CalendarDays, Fingerprint, Wifi } from 'lucide-react';
 import { FrontDeskExtendKeyDialog } from './FrontDeskExtendKeyDialog';
+import { RetryKeyCardButton } from '@/components/reservations/RetryKeyCardButton';
 import { cn } from '@/lib/utils';
 
 function getCredentialStatusConfig(cred: any) {
@@ -52,6 +53,28 @@ function getOperationLabel(op: string) {
     READ_CARD: 'Read Card',
   };
   return map[op] || op;
+}
+
+function shouldShowCardRetry(credentials: unknown[], operations: unknown[]) {
+  const hasActiveCredential = credentials.some((credential) => {
+    if (!credential || typeof credential !== 'object') return false;
+    const cred = credential as Record<string, unknown>;
+    return cred.status === 'ACTIVE' && new Date(String(cred.validUntil)).getTime() > Date.now();
+  });
+  const encodingInProgress = operations.some((operation) => {
+    if (!operation || typeof operation !== 'object') return false;
+    const op = operation as Record<string, unknown>;
+    return op.operation === 'ENCODE_CARD'
+      && ['QUEUED', 'DISPATCHING', 'WAITING_FOR_CARD', 'CARD_DETECTED', 'ENCODING'].includes(String(op.status));
+  });
+  const latestEncode = operations
+    .filter((operation): operation is Record<string, unknown> => {
+      if (!operation || typeof operation !== 'object') return false;
+      return (operation as Record<string, unknown>).operation === 'ENCODE_CARD';
+    })
+    .sort((left, right) => new Date(String(right.requestedAt || 0)).getTime() - new Date(String(left.requestedAt || 0)).getTime())[0];
+  const latestEncodeFailed = latestEncode && ['FAILED', 'ERROR'].includes(String(latestEncode.status));
+  return (!hasActiveCredential || latestEncodeFailed) && !encodingInProgress;
 }
 
 function CredentialCard({ cred, reservation }: { cred: any; reservation: any }) {
@@ -212,6 +235,8 @@ export function FrontDeskCardInformationSection({ reservation }: { reservation: 
   const credentials = reservation.lockCredentials || [];
   const operations = reservation.lockOperations || [];
   const visibleOps = showAllOps ? operations : operations.slice(0, 5);
+  const showCardRetry = shouldShowCardRetry(credentials, operations)
+    && ['PENDING', 'CONFIRMED', 'CHECKED_IN'].includes(reservation.status);
 
   if (credentials.length === 0 && operations.length === 0) {
     return (
@@ -231,7 +256,10 @@ export function FrontDeskCardInformationSection({ reservation }: { reservation: 
             </div>
             <div>
               <p className="font-black text-slate-800 text-lg">No key cards issued</p>
-              <p className="text-sm font-medium text-slate-500 mt-1">Cards will appear here after check-in is processed.</p>
+            <p className="text-sm font-medium text-slate-500 mt-1">Cards will appear here after check-in is processed.</p>
+            {showCardRetry && (
+              <RetryKeyCardButton reservation={reservation} className="mt-4 border-amber-300 text-amber-700 hover:bg-amber-50" />
+            )}
             </div>
           </div>
         </CardContent>
@@ -260,6 +288,11 @@ export function FrontDeskCardInformationSection({ reservation }: { reservation: 
             ))
           ) : (
             <p className="text-sm font-medium text-slate-500 text-center py-6">No credentials issued yet</p>
+          )}
+          {showCardRetry && (
+            <div className="pt-2 border-t border-slate-200">
+              <RetryKeyCardButton reservation={reservation} className="w-full border-amber-300 text-amber-700 hover:bg-amber-50" />
+            </div>
           )}
         </CardContent>
       </Card>

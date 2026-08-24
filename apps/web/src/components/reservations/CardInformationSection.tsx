@@ -11,6 +11,7 @@ import {
   Hash, CalendarDays, Fingerprint, Wifi, RefreshCw
 } from 'lucide-react';
 import { ExtendKeyCardDialog } from './ExtendKeyCardDialog';
+import { RetryKeyCardButton } from './RetryKeyCardButton';
 import { cn } from '@/lib/utils';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -58,6 +59,28 @@ function getOperationLabel(op: string) {
     READ_CARD: 'Read Card',
   };
   return map[op] || op;
+}
+
+function shouldShowCardRetry(credentials: unknown[], operations: unknown[]) {
+  const hasActiveCredential = credentials.some((credential) => {
+    if (!credential || typeof credential !== 'object') return false;
+    const cred = credential as Record<string, unknown>;
+    return cred.status === 'ACTIVE' && new Date(String(cred.validUntil)).getTime() > Date.now();
+  });
+  const encodingInProgress = operations.some((operation) => {
+    if (!operation || typeof operation !== 'object') return false;
+    const op = operation as Record<string, unknown>;
+    return op.operation === 'ENCODE_CARD'
+      && ['QUEUED', 'DISPATCHING', 'WAITING_FOR_CARD', 'CARD_DETECTED', 'ENCODING'].includes(String(op.status));
+  });
+  const latestEncode = operations
+    .filter((operation): operation is Record<string, unknown> => {
+      if (!operation || typeof operation !== 'object') return false;
+      return (operation as Record<string, unknown>).operation === 'ENCODE_CARD';
+    })
+    .sort((left, right) => new Date(String(right.requestedAt || 0)).getTime() - new Date(String(left.requestedAt || 0)).getTime())[0];
+  const latestEncodeFailed = latestEncode && ['FAILED', 'ERROR'].includes(String(latestEncode.status));
+  return (!hasActiveCredential || latestEncodeFailed) && !encodingInProgress;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -226,6 +249,8 @@ export function CardInformationSection({ reservation }: { reservation: any }) {
   const credentials = reservation.lockCredentials || [];
   const operations = reservation.lockOperations || [];
   const visibleOps = showAllOps ? operations : operations.slice(0, 5);
+  const showCardRetry = shouldShowCardRetry(credentials, operations)
+    && ['PENDING', 'CONFIRMED', 'CHECKED_IN'].includes(reservation.status);
 
   const activeCredential = credentials.find(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -247,6 +272,7 @@ export function CardInformationSection({ reservation }: { reservation: any }) {
             </div>
             <p className="font-medium text-muted-foreground">No key cards issued</p>
             <p className="text-sm text-muted-foreground">Cards will appear here after check-in</p>
+            {showCardRetry && <RetryKeyCardButton reservation={reservation} className="mt-4 border-amber-300 text-amber-700" />}
           </div>
         </CardContent>
       </Card>
@@ -274,6 +300,11 @@ export function CardInformationSection({ reservation }: { reservation: any }) {
             ))
           ) : (
             <p className="text-sm text-muted-foreground text-center py-4">No credentials issued yet</p>
+          )}
+          {showCardRetry && (
+            <div className="pt-2 border-t">
+              <RetryKeyCardButton reservation={reservation} className="w-full border-amber-300 text-amber-700" />
+            </div>
           )}
         </CardContent>
       </Card>
