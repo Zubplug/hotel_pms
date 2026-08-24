@@ -24,24 +24,56 @@ interface FrontDeskQuickCheckoutDialogProps {
 export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, initialReservation }: FrontDeskQuickCheckoutDialogProps) {
   const queryClient = useQueryClient();
   const { provider } = useLodgeCoreProvider();
-  const [step, setStep] = useState<'IDLE' | 'READING' | 'CONFIRMING' | 'CHECKING_OUT' | 'ERASING' | 'SUCCESS' | 'ERROR'>('IDLE');
+  const [step, setStep] = useState<'IDLE' | 'LOADING' | 'READING' | 'CONFIRMING' | 'CHECKING_OUT' | 'ERASING' | 'SUCCESS' | 'ERROR'>('IDLE');
   const [errorMsg, setErrorMsg] = useState('');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [reservation, setReservation] = useState<any>(null);
 
-  // Reset state when opened
+  // Reset state when opened and hydrate list/detail reservations before confirmation.
   useEffect(() => {
-    if (open) {
+    if (!open) return;
+
+    let cancelled = false;
+    const loadReservation = async () => {
       setErrorMsg('');
-      if (initialReservation) {
-        setReservation(initialReservation);
-        setStep('CONFIRMING');
-      } else {
+      if (!initialReservation) {
         setReservation(null);
         setStep('IDLE');
+        return;
       }
-    }
-  }, [open, initialReservation]);
+
+      setReservation(initialReservation);
+      const hasCheckoutDetails = Boolean(
+        initialReservation.primaryGuest &&
+        initialReservation.reservationRooms?.length &&
+        (initialReservation.folios?.length || initialReservation.folio)
+      );
+
+      if (hasCheckoutDetails) {
+        setStep('CONFIRMING');
+        return;
+      }
+
+      setStep('LOADING');
+      try {
+        const result = await provider.reservations.get(initialReservation.id);
+        const resolvedReservation = result?.data?.reservation || result?.data?.data || result?.data || result?.reservation || result;
+        if (!resolvedReservation?.id) throw new Error('Unable to load reservation details');
+        if (!cancelled) {
+          setReservation(resolvedReservation);
+          setStep('CONFIRMING');
+        }
+      } catch (err: any) {
+        if (!cancelled) {
+          setErrorMsg(err.message || 'Unable to load reservation details');
+          setStep('ERROR');
+        }
+      }
+    };
+
+    void loadReservation();
+    return () => { cancelled = true; };
+  }, [open, initialReservation, provider]);
 
   const handleReadCard = async () => {
     setStep('READING');
@@ -183,6 +215,14 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
               <Button onClick={handleReadCard} className="w-full h-14 rounded-2xl bg-blue-600 hover:bg-blue-700 text-lg font-bold shadow-lg shadow-blue-200">
                 Read Keycard <ArrowRight className="w-5 h-5 ml-2" />
               </Button>
+            </div>
+          )}
+
+          {step === 'LOADING' && (
+            <div className="text-center space-y-4 animate-in fade-in duration-300">
+              <Loader2 className="h-10 w-10 text-blue-600 animate-spin mx-auto" />
+              <h3 className="text-xl font-bold text-slate-900">Loading reservation...</h3>
+              <p className="text-slate-500">Please wait while checkout details are prepared.</p>
             </div>
           )}
 

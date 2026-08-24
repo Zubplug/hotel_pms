@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button';
 import { useProperty } from '@/components/PropertyProvider';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { FrontDeskCheckInDialog } from '@/components/frontdesk/FrontDeskCheckInDialog';
-import { CheckOutDialog } from '@/components/reservations/CheckOutDialog';
 import { FrontDeskQuickCheckoutDialog } from '@/components/frontdesk/FrontDeskQuickCheckoutDialog';
 import { FrontDeskReadCardDialog } from '@/components/frontdesk/FrontDeskReadCardDialog';
 import { LoadingState } from '@/components/ui/EmptyState';
@@ -367,11 +366,11 @@ export default function ReceptionistDashboardPage() {
       )}
       
       {checkOutReservation && (
-        <CheckOutDialog
+        <FrontDeskQuickCheckoutDialog
           open={!!checkOutReservation}
           onOpenChange={(open) => !open && setCheckOutReservation(null)}
-          reservation={checkOutReservation}
-          folio={checkOutReservation.folios[0]}
+          propertyId={propertyId}
+          initialReservation={checkOutReservation}
         />
       )}
 

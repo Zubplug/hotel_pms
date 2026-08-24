@@ -10,7 +10,7 @@ import { AddPaymentDialog } from './AddPaymentDialog';
 import { RefundDialog } from './RefundDialog';
 import { FrontDeskAddPaymentDialog } from '../frontdesk/FrontDeskAddPaymentDialog';
 import { FrontDeskRefundDialog } from '../frontdesk/FrontDeskRefundDialog';
-import { CheckOutDialog } from './CheckOutDialog';
+import { FrontDeskQuickCheckoutDialog } from '../frontdesk/FrontDeskQuickCheckoutDialog';
 import { usePathname } from 'next/navigation';
 import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
@@ -230,11 +230,11 @@ export function FolioSection({ reservation }: { reservation: any }) {
           />
         )
       )}
-      <CheckOutDialog
+      <FrontDeskQuickCheckoutDialog
         open={isCheckOutOpen}
         onOpenChange={setIsCheckOutOpen}
-        reservation={reservation}
-        folio={folio}
+        propertyId={reservation.propertyId}
+        initialReservation={reservation}
       />
     </>
   );

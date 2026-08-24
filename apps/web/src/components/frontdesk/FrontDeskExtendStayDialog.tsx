@@ -23,11 +23,12 @@ interface FrontDeskExtendStayDialogProps {
 export function FrontDeskExtendStayDialog({ open, onOpenChange, reservation }: FrontDeskExtendStayDialogProps) {
   const router = useRouter();
 
-  const [phase, setPhase] = useState<'SELECT' | 'PREVIEW' | 'PROCESSING' | 'SUCCESS' | 'FAILED'>('SELECT');
+  const [phase, setPhase] = useState<'SELECT' | 'PREVIEW' | 'PROCESSING' | 'ENCODING' | 'SUCCESS' | 'FAILED'>('SELECT');
   const [newCheckoutDate, setNewCheckoutDate] = useState<Date | undefined>(undefined);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [previewData, setPreviewData] = useState<any>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [extensionApplied, setExtensionApplied] = useState(false);
 
   const currentCheckOut = new Date(reservation.checkOut);
   const minDate = addDays(startOfDay(currentCheckOut), 1);
@@ -39,6 +40,7 @@ export function FrontDeskExtendStayDialog({ open, onOpenChange, reservation }: F
       setNewCheckoutDate(undefined);
       setPreviewData(null);
       setErrorMsg(null);
+      setExtensionApplied(false);
     }
   }, [open]);
 
@@ -59,6 +61,28 @@ export function FrontDeskExtendStayDialog({ open, onOpenChange, reservation }: F
     }
   };
 
+  const handleEncodeCard = async () => {
+    setPhase('ENCODING');
+    setErrorMsg(null);
+    try {
+      const roomId = reservation.reservationRooms?.[0]?.room?.id
+        || reservation.reservationRooms?.[0]?.roomId
+        || reservation.roomId;
+      if (!roomId) throw new Error('Stay extended, but no assigned room was found for keycard encoding.');
+
+      const encodeResult = await provider.keycards.encode(roomId, '', reservation.id);
+      if (!encodeResult?.success || encodeResult?.error) {
+        throw new Error(encodeResult?.error?.message || encodeResult?.error || 'Keycard encoding failed.');
+      }
+
+      setPhase('SUCCESS');
+      router.refresh();
+    } catch (err: unknown) {
+      setPhase('FAILED');
+      setErrorMsg(err instanceof Error ? err.message : 'Keycard encoding failed');
+    }
+  };
+
   const handleConfirmExtend = async () => {
     if (!newCheckoutDate) return;
     setPhase('PROCESSING');
@@ -66,8 +90,8 @@ export function FrontDeskExtendStayDialog({ open, onOpenChange, reservation }: F
     try {
       const res = await provider.reservations.extendStay(reservation.id, newCheckoutDate.toISOString());
       if (!res.success) { setPhase('FAILED'); setErrorMsg(res.error?.message || res.error || 'Extension failed'); return; }
-      setPhase('SUCCESS');
-      router.refresh();
+      setExtensionApplied(true);
+      await handleEncodeCard();
     } catch (err: unknown) {
       setPhase('FAILED');
       setErrorMsg(err instanceof Error ? err.message : 'Network error');
@@ -81,7 +105,7 @@ export function FrontDeskExtendStayDialog({ open, onOpenChange, reservation }: F
     <Dialog
       open={open}
       onOpenChange={(val) => {
-        if (phase === 'PROCESSING' && !val) return;
+        if ((phase === 'PROCESSING' || phase === 'ENCODING') && !val) return;
         onOpenChange(val);
       }}
     >
@@ -164,10 +188,12 @@ export function FrontDeskExtendStayDialog({ open, onOpenChange, reservation }: F
             </div>
           )}
 
-          {phase === 'PROCESSING' && (
+          {(phase === 'PROCESSING' || phase === 'ENCODING') && (
             <div className="flex flex-col items-center justify-center py-12 space-y-4">
               <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
-              <p className="text-sm font-medium text-slate-500">Processing extension...</p>
+              <p className="text-sm font-medium text-slate-500">
+                {phase === 'ENCODING' ? 'Place the guest card on the encoder to update its checkout time...' : 'Processing extension...'}
+              </p>
             </div>
           )}
 
@@ -227,8 +253,8 @@ export function FrontDeskExtendStayDialog({ open, onOpenChange, reservation }: F
                 <DialogClose render={
                   <Button variant="outline" className="rounded-xl h-12 px-6 font-semibold border-slate-200">Close</Button>
                 } />
-                <Button onClick={handlePreview} className="rounded-xl h-12 px-8 font-semibold bg-blue-600 hover:bg-blue-700 ml-auto">
-                  Try Again
+                <Button onClick={extensionApplied ? handleEncodeCard : handlePreview} className="rounded-xl h-12 px-8 font-semibold bg-blue-600 hover:bg-blue-700 ml-auto">
+                  {extensionApplied ? 'Retry Keycard' : 'Try Again'}
                 </Button>
               </>
             )}

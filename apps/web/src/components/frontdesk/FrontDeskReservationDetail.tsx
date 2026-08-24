@@ -11,6 +11,7 @@ import { FrontDeskReassignRoomDialog } from './FrontDeskReassignRoomDialog';
 import { FrontDeskCancelReservationDialog } from './FrontDeskCancelReservationDialog';
 import { FrontDeskAddPaymentDialog } from './FrontDeskAddPaymentDialog';
 import { FrontDeskExtendStayDialog } from './FrontDeskExtendStayDialog';
+import { FrontDeskQuickCheckoutDialog } from './FrontDeskQuickCheckoutDialog';
 import { FrontDeskReceiptDialog } from './FrontDeskReceiptDialog';
 import { FolioSection } from '../reservations/FolioSection';
 import { FrontDeskCardInformationSection } from './FrontDeskCardInformationSection';
@@ -31,6 +32,7 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
   const [isAddPaymentOpen, setIsAddPaymentOpen] = useState(false);
   const [isExtendStayOpen, setIsExtendStayOpen] = useState(false);
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
+  const [isQuickCheckoutOpen, setIsQuickCheckoutOpen] = useState(false);
 
   const resRoom = reservation.reservationRooms?.[0];
   const room = resRoom?.room;
@@ -133,7 +135,7 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
               </Button>
             )}
             {canCheckOut && (
-              <Button className="w-full h-14 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-lg shadow-sm">
+              <Button onClick={() => setIsQuickCheckoutOpen(true)} className="w-full h-14 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-lg shadow-sm">
                 <LogOut className="w-5 h-5 mr-2" /> Check Out
               </Button>
             )}
@@ -247,6 +249,14 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
       )}
       {isReceiptOpen && latestPayment && (
         <FrontDeskReceiptDialog paymentId={latestPayment.id} open={isReceiptOpen} onOpenChange={setIsReceiptOpen} />
+      )}
+      {isQuickCheckoutOpen && (
+        <FrontDeskQuickCheckoutDialog
+          open={isQuickCheckoutOpen}
+          onOpenChange={setIsQuickCheckoutOpen}
+          propertyId={reservation.propertyId}
+          initialReservation={reservation}
+        />
       )}
     </div>
   );

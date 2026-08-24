@@ -202,6 +202,7 @@ public class SyncEngine : BackgroundService
                 _isSyncing = true;
                 try
                 {
+                    _logger.LogInformation("[SYNC-CYCLE] Starting sync cycle. Online={Online}", _isOnline);
                     BroadcastHealth(SyncState.SYNCING, null, "PREP", 0, 1, "Preparing sync...");
                     try { await PushPendingEventsAsync(stoppingToken); } catch (Exception ex) { _logger.LogError(ex, "Failed to push POS events"); }
                     try { await PushFrontDeskOutboxAsync(stoppingToken); } catch (Exception ex) { _logger.LogError(ex, "Failed to push Front Desk events"); }
@@ -241,6 +242,7 @@ public class SyncEngine : BackgroundService
             }
             else
             {
+                _logger.LogWarning("[SYNC-CYCLE] Skipped sync cycle because the desktop reports offline connectivity.");
                 BroadcastHealth(_lastSyncState, "Device is offline");
             }
 
@@ -1857,11 +1859,19 @@ Last Error:       {errorStr}
     {
         using var scope = _serviceProvider.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
+
+        var allPending = await dbContext.OutboxEvents
+            .Where(e => e.Status == "PENDING" || e.Status == "FAILED" || e.Status == "CONFLICT")
+            .ToListAsync(stoppingToken);
+
+        _logger.LogInformation("[PUSH-FD] Queue inspection found {PendingCount} pending/failed/conflict event(s).", allPending.Count);
+        if (!allPending.Any()) return;
         
         var identity = await GetSyncIdentityAsync(stoppingToken);
         if (identity == null) 
         {
             _logger.LogWarning("[PUSH-FD] Skipping push: identity is null (no propertyId or session).");
+            await MarkFrontDeskEventsRetryableAsync(dbContext, allPending, "Desktop identity is not ready; sign in or provision the terminal.", stoppingToken);
             return;
         }
         _logger.LogInformation($"[PUSH-FD] Identity resolved. PropertyId={identity.PropertyId} DeviceId={identity.DeviceId} TerminalId={identity.TerminalId}");
@@ -1870,13 +1880,10 @@ Last Error:       {errorStr}
         if (string.IsNullOrEmpty(token)) 
         {
             _logger.LogWarning("[PUSH-FD] Skipping push: no device credential token found. Device may need to be re-provisioned.");
+            await MarkFrontDeskEventsRetryableAsync(dbContext, allPending, "No device credential token available; re-provision the terminal.", stoppingToken);
             return;
         }
         _logger.LogInformation($"[PUSH-FD] Token acquired. Length={token.Length}, Prefix={token.Substring(0, Math.Min(8, token.Length))}...");
-
-        var allPending = await dbContext.OutboxEvents
-            .Where(e => e.Status == "PENDING" || e.Status == "FAILED" || e.Status == "CONFLICT")
-            .ToListAsync(stoppingToken);
 
         var eventsToPush = new List<LocalOutboxEvent>();
         foreach (var group in allPending.GroupBy(e => e.AggregateId))
@@ -1894,7 +1901,7 @@ Last Error:       {errorStr}
 
         if (!pendingEvents.Any()) 
         {
-            _logger.LogDebug("[PUSH-FD] No eligible outbox events to push.");
+            _logger.LogInformation("[PUSH-FD] No eligible outbox events to push. QueueCount={QueueCount}", allPending.Count);
             return;
         }
         
@@ -1954,6 +1961,7 @@ Last Error:       {errorStr}
                 if (result != null && result.Status == "SUCCESS" && result.Results != null)
                 {
                     _logger.LogInformation($"[PUSH-FD] Server accepted batch. Processing {result.Results.Count} result(s).");
+                    var resultIds = result.Results.Select(res => res.Id).ToHashSet();
                     foreach (var res in result.Results)
                     {
                         var evt = pendingEvents.FirstOrDefault(e => e.Id == res.Id);
@@ -1989,11 +1997,28 @@ Last Error:       {errorStr}
                             }
                         }
                     }
+                    foreach (var evt in pendingEvents.Where(evt => !resultIds.Contains(evt.Id)))
+                    {
+                        evt.Status = "FAILED";
+                        evt.LastError = "Cloud accepted the request but did not return a result for this event.";
+                        evt.LastAttemptAt = DateTime.UtcNow;
+                        evt.NextAttemptAt = DateTime.UtcNow.AddSeconds(30);
+                        _logger.LogWarning("[PUSH-FD] Response omitted result for event {EventId}.", evt.Id);
+                    }
                     await dbContext.SaveChangesAsync(stoppingToken);
                 }
                 else
                 {
-                    _logger.LogWarning($"[PUSH-FD] Server returned success but response had unexpected shape: Status={result?.Status} ResultCount={result?.Results?.Count ?? -1}. Raw: {rawBody?.Substring(0, Math.Min(500, rawBody?.Length ?? 0))}");
+                    var responseSummary = FormatPushError(rawBody);
+                    _logger.LogWarning($"[PUSH-FD] Server returned success but response had unexpected shape: Status={result?.Status} ResultCount={result?.Results?.Count ?? -1}. Raw: {responseSummary}");
+                    foreach (var evt in pendingEvents)
+                    {
+                        evt.Status = "FAILED";
+                        evt.LastError = $"Cloud returned an unexpected push response: {responseSummary}";
+                        evt.LastAttemptAt = DateTime.UtcNow;
+                        evt.NextAttemptAt = DateTime.UtcNow.AddSeconds(30);
+                    }
+                    await dbContext.SaveChangesAsync(stoppingToken);
                 }
             }
             else
@@ -2007,11 +2032,19 @@ Last Error:       {errorStr}
                 {
                     if (await TryRefreshDeviceTokenAsync(stoppingToken))
                     {
+                        foreach (var evt in pendingEvents)
+                        {
+                            evt.Status = "FAILED";
+                            evt.LastError = $"HTTP {statusCode}: device token refreshed; retry scheduled. {FormatPushError(errorBody)}";
+                            evt.LastAttemptAt = DateTime.UtcNow;
+                            evt.NextAttemptAt = DateTime.UtcNow.AddSeconds(30);
+                        }
+                        await dbContext.SaveChangesAsync(stoppingToken);
                         return; // Retry on next loop
                     }
                     // Authentication/Authorization: Pause sync loop, don't increment attempt count
                     BroadcastHealth(SyncState.ERROR, null, "AUTH_ERROR", 0, 1, $"Auth failed: {statusCode}. Please re-authenticate.");
-                    throw new Exception($"Auth failed: {statusCode}. Please re-authenticate.");
+                    throw new Exception($"Auth failed: {statusCode}. Please re-authenticate. {FormatPushError(errorBody)}");
                 }
 
                 foreach (var evt in pendingEvents) 
@@ -2020,20 +2053,20 @@ Last Error:       {errorStr}
                     {
                         // Malformed Event / Invalid Schema
                         evt.Status = "DEAD_LETTER";
-                        evt.LastError = $"HTTP {statusCode}: Malformed or invalid event payload";
+                        evt.LastError = $"HTTP {statusCode}: Malformed or invalid event payload. {FormatPushError(errorBody)}";
                         evt.NextAttemptAt = null;
                     }
                     else if (statusCode == 409)
                     {
                         // Version Conflict / Optimistic Concurrency Failure
                         evt.Status = "CONFLICT";
-                        evt.LastError = $"HTTP 409: Concurrency conflict";
+                        evt.LastError = $"HTTP 409: Concurrency conflict. {FormatPushError(errorBody)}";
                         evt.NextAttemptAt = null;
                     }
                     else 
                     {
                         // 429, 500, 502, 503, 504: Transient Network or Server Error -> Retry
-                        evt.LastError = $"HTTP {statusCode}"; 
+                        evt.LastError = $"HTTP {statusCode}: {FormatPushError(errorBody)}";
                         evt.LastAttemptAt = DateTime.UtcNow;
                         
                         if (evt.AttemptCount >= 5) 
@@ -2053,13 +2086,18 @@ Last Error:       {errorStr}
                 await dbContext.SaveChangesAsync(stoppingToken);
             }
         }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error pushing Front Desk outbox events.");
+            var error = FormatPushError(ex.ToString());
             foreach (var evt in pendingEvents) 
             { 
                 evt.Status = "FAILED"; 
-                evt.LastError = ex.Message;
+                evt.LastError = error;
                 evt.LastAttemptAt = DateTime.UtcNow;
                 
                 if (evt.AttemptCount >= 5) 
@@ -2076,6 +2114,34 @@ Last Error:       {errorStr}
             await dbContext.SaveChangesAsync(stoppingToken);
             throw;
         }
+    }
+
+    private async Task MarkFrontDeskEventsRetryableAsync(
+        LocalDbContext dbContext,
+        IEnumerable<LocalOutboxEvent> events,
+        string reason,
+        CancellationToken stoppingToken)
+    {
+        var now = DateTime.UtcNow;
+        foreach (var evt in events.Where(e => e.Status != "CONFLICT"))
+        {
+            evt.Status = "FAILED";
+            evt.AttemptCount++;
+            evt.LastAttemptAt = now;
+            evt.NextAttemptAt = now.AddSeconds(30);
+            evt.LastError = reason;
+        }
+
+        await dbContext.SaveChangesAsync(stoppingToken);
+        BroadcastHealth(SyncState.ERROR, reason, "PUSH_FD", 0, events.Count(), reason);
+    }
+
+    private static string FormatPushError(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return "No additional error details returned.";
+
+        var normalized = value.Replace("\r", " ").Replace("\n", " ").Trim();
+        return normalized.Length <= 1000 ? normalized : normalized[..1000] + "...";
     }
 
     private class SyncPushFrontDeskResponse

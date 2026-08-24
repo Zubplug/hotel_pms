@@ -305,7 +305,10 @@ public class LocalRepository
 
     public async Task<bool> ExtendStayAsync(string reservationId, DateTime newCheckOut, string userId, string deviceId)
     {
-        var res = await _dbContext.Reservations.FindAsync(reservationId);
+        var res = await _dbContext.Reservations
+            .Include(r => r.Rooms)
+            .Include(r => r.Folio)
+            .FirstOrDefaultAsync(r => r.Id == reservationId);
         if (res == null) return false;
 
         if (res.Status != "CHECKED_IN" && res.Status != "PENDING" && res.Status != "CONFIRMED")
@@ -316,6 +319,16 @@ public class LocalRepository
 
         if (newCheckOut <= res.CheckOutDate)
             throw new InvalidOperationException("New checkout date must be after the current checkout date.");
+
+        var roomTypeId = res.RoomTypeId;
+        var roomType = !string.IsNullOrEmpty(roomTypeId)
+            ? await _dbContext.RoomTypes.FirstOrDefaultAsync(rt => rt.Id == roomTypeId)
+            : null;
+        if (roomType == null)
+            throw new InvalidOperationException("The reservation room rate is unavailable offline. Sync room types before extending the stay.");
+
+        var additionalNights = (int)(newCheckOut.Date - res.CheckOutDate.Date).TotalDays;
+        var additionalCharge = roomType.BasePrice * additionalNights;
 
         // Overlap check: is the room taken by another reservation during the extension window?
         if (!string.IsNullOrEmpty(res.RoomNumber))
@@ -333,6 +346,8 @@ public class LocalRepository
         }
 
         res.CheckOutDate = newCheckOut;
+        var reservationRoom = res.Rooms.FirstOrDefault();
+        if (reservationRoom != null) reservationRoom.CheckOutDate = newCheckOut;
         res.UpdatedAt = DateTime.UtcNow;
         res.IsDirty = true;
         res.LocalSequence++;
@@ -357,6 +372,20 @@ public class LocalRepository
         });
 
         await _dbContext.SaveChangesAsync();
+
+        if (res.Folio != null && additionalCharge > 0)
+        {
+            var idempotencyKey = $"EXTEND_STAY:{reservationId}:{newCheckOut.ToUniversalTime():O}";
+            var charged = await RecordChargeAsync(
+                res.Folio.Id,
+                additionalCharge,
+                $"Room Charge (Extension) - {additionalNights} night{(additionalNights == 1 ? "" : "s")}",
+                userId,
+                deviceId,
+                idempotencyKey);
+            if (!charged) throw new InvalidOperationException("Stay date was updated, but the extension charge could not be posted to the folio.");
+        }
+
         return true;
     }
 
@@ -369,14 +398,20 @@ public class LocalRepository
             throw new InvalidOperationException("New checkout date must be after the current checkout date.");
 
         var additionalNights = (int)(newCheckOut.Date - res.CheckOutDate.Date).TotalDays;
-        var ratePerNight = 15000m; // Default offline fallback rate
+        var roomType = !string.IsNullOrEmpty(res.RoomTypeId)
+            ? await _dbContext.RoomTypes.FirstOrDefaultAsync(rt => rt.Id == res.RoomTypeId)
+            : null;
+        if (roomType == null)
+            throw new InvalidOperationException("The reservation room rate is unavailable offline. Sync room types before extending the stay.");
+
+        var ratePerNight = roomType.BasePrice;
 
         return new
         {
             additionalNights,
             ratePerNight,
             additionalCharge = additionalNights * ratePerNight,
-            currency = res.Currency ?? "NGN"
+            currency = roomType.Currency ?? res.Currency ?? "NGN"
         };
     }
 
@@ -472,7 +507,7 @@ public class LocalRepository
             EventType = "ROOM_CHARGE",
             Sequence = folio.LocalSequence,
             IdempotencyKey = idempotencyKey ?? Guid.NewGuid().ToString(),
-            PayloadJson = JsonSerializer.Serialize(new { amount, description, currency = "NGN", businessDate = DateTime.UtcNow, originalBusinessDate = DateTime.UtcNow, idempotencyKey })
+            PayloadJson = JsonSerializer.Serialize(new { amount, description, currency = folio.Currency ?? "NGN", businessDate = DateTime.UtcNow, originalBusinessDate = DateTime.UtcNow, idempotencyKey })
         });
 
         await _dbContext.SaveChangesAsync();
