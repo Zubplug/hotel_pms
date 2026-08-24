@@ -1038,6 +1038,20 @@ public class OfflinePMSInterop
         }
     }
 
+    public async Task<string> RecordKeycardEncodingAsync(string reservationId, string roomId, string? encodeData)
+    {
+        try
+        {
+            var ctx = await GetSecureContextAsync();
+            var success = await _repo.RecordKeycardEncodingAsync(reservationId, roomId, ctx.UserId, ctx.DeviceId, encodeData);
+            return JsonSerializer.Serialize(new { success }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
     public async Task<string> PreviewExtendStayAsync(string reservationId, string newCheckOutDate)
     {
         try

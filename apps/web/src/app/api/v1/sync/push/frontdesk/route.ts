@@ -595,6 +595,61 @@ export async function POST(req: NextRequest) {
                });
              }
           }
+          else if (eventType === 'KEYCARD_ENCODE') {
+             const reservation = await tx.reservation.findUnique({
+               where: { id: aggregateId, propertyId },
+               include: { reservationRooms: { where: { status: 'ACTIVE' } } }
+             });
+             if (!reservation) throw new Error('Reservation not found or unauthorized');
+
+             const roomId = payload.roomId || reservation.reservationRooms[0]?.roomId;
+             if (!roomId) throw new Error('Keycard encode event has no room assignment');
+
+             let doorLock = await tx.doorLock.findFirst({ where: { roomId } });
+             if (!doorLock) {
+               doorLock = await tx.doorLock.create({
+                 data: {
+                   propertyId,
+                   roomId,
+                   lockCode: `ENCODER-${roomId}`,
+                   provider: 'DELUNS_ENCODER',
+                   status: 'ONLINE'
+                 }
+               });
+             }
+
+             const encodeData = payload.encodeData || {};
+             const credential = await tx.lockCredential.create({
+               data: {
+                 reservationId: aggregateId,
+                 roomId,
+                 lockId: doorLock.id,
+                 credentialType: 'rfid',
+                 status: 'ACTIVE',
+                 validFrom: new Date(),
+                 validUntil: new Date(reservation.checkOut),
+                 cardSerialNumber: encodeData.cardSnr || null,
+                 metadata: encodeData
+               }
+             });
+
+             await tx.lockOperation.create({
+               data: {
+                 propertyId,
+                 reservationId: aggregateId,
+                 roomId,
+                 lockId: doorLock.id,
+                 credentialId: credential.id,
+                 idempotencyKey: `KEYCARD_ENCODE:${aggregateId}:${payload.operationId || id}`,
+                 operation: 'ENCODE_CARD',
+                 status: 'COMPLETED',
+                 requestedAt: new Date(),
+                 startedAt: new Date(),
+                 completedAt: new Date(),
+                 metadata: { initiatedBy: operatorId || device.id, responseData: encodeData }
+               }
+             });
+          }
           else if (eventType === 'EDIT') {
              const res = await tx.reservation.findUnique({
                where: { id: aggregateId, propertyId },

@@ -415,6 +415,96 @@ public class LocalRepository
         };
     }
 
+    public async Task<bool> RecordKeycardEncodingAsync(string reservationId, string roomId, string userId, string deviceId, string? encodeData)
+    {
+        var res = await _dbContext.Reservations.FirstOrDefaultAsync(r => r.Id == reservationId);
+        if (res == null) throw new InvalidOperationException("Reservation not found.");
+        if (res.RoomId != roomId) throw new InvalidOperationException("The reservation is not assigned to this room.");
+
+        JsonElement? parsedEncodeData = null;
+        if (!string.IsNullOrWhiteSpace(encodeData))
+        {
+            parsedEncodeData = JsonSerializer.Deserialize<JsonElement>(encodeData);
+        }
+
+        var now = DateTime.UtcNow;
+        var operationId = Guid.NewGuid().ToString();
+        string? cardSerialNumber = null;
+        if (parsedEncodeData.HasValue
+            && parsedEncodeData.Value.ValueKind == JsonValueKind.Object
+            && parsedEncodeData.Value.TryGetProperty("cardSnr", out var cardSnr))
+        {
+            cardSerialNumber = cardSnr.GetString();
+        }
+
+        var credential = new LocalLockCredential
+        {
+            Id = Guid.NewGuid().ToString(),
+            ReservationId = res.Id,
+            RoomId = roomId,
+            LockId = $"ENCODER-{roomId}",
+            CredentialType = "RFID",
+            Status = "ACTIVE",
+            ValidFrom = now,
+            ValidUntil = res.CheckOutDate,
+            CardSerialNumber = cardSerialNumber,
+            IssueOperationId = operationId,
+            IssuedAt = now,
+            MetadataJson = encodeData,
+            CreatedAt = now,
+            UpdatedAt = now
+        };
+
+        var operation = new LocalLockOperation
+        {
+            Id = operationId,
+            PropertyId = res.PropertyId,
+            ReservationId = res.Id,
+            LockId = credential.LockId,
+            RoomId = roomId,
+            CredentialId = credential.Id,
+            Operation = "ENCODE_CARD",
+            Status = "COMPLETED",
+            RequestedAt = now,
+            StartedAt = now,
+            CompletedAt = now,
+            AgentId = "DESKTOP",
+            DeviceId = deviceId,
+            MetadataJson = JsonSerializer.Serialize(new { initiatedBy = userId }),
+            CommandJson = JsonSerializer.Serialize(new { responseData = parsedEncodeData })
+        };
+
+        res.IsDirty = true;
+        res.UpdatedAt = now;
+        res.LocalSequence++;
+        var eventVersion = res.Version;
+        res.Version++;
+
+        _dbContext.LockCredentials.Add(credential);
+        _dbContext.LockOperations.Add(operation);
+        _dbContext.OutboxEvents.Add(new LocalOutboxEvent
+        {
+            PropertyId = res.PropertyId,
+            DeviceId = deviceId,
+            OperatorId = userId,
+            AggregateType = "RESERVATION",
+            AggregateId = res.Id,
+            AggregateVersion = eventVersion,
+            EventType = "KEYCARD_ENCODE",
+            Sequence = res.LocalSequence,
+            PayloadJson = JsonSerializer.Serialize(new
+            {
+                roomId,
+                encodeData = parsedEncodeData,
+                operationId,
+                credentialId = credential.Id
+            })
+        });
+
+        await _dbContext.SaveChangesAsync();
+        return true;
+    }
+
     public async Task<bool> EditReservationAsync(string reservationId, LocalReservationPatch patch, string userId, string deviceId)
     {
         var res = await _dbContext.Reservations.FindAsync(reservationId);

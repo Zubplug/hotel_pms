@@ -340,6 +340,12 @@ public partial class MainPage : ContentPage
                         parameters?["reservationId"]?.ToString() ?? "",
                         parameters?["newCheckOutDate"]?.ToString() ?? "");
                     break;
+                case "reservations.recordKeycardEncoding":
+                    responseData = await pmsInterop.RecordKeycardEncodingAsync(
+                        parameters?["reservationId"]?.ToString() ?? "",
+                        parameters?["roomId"]?.ToString() ?? "",
+                        parameters?["encodeData"]?.ToString());
+                    break;
                 case "reservations.previewExtendStay":
                     responseData = await pmsInterop.PreviewExtendStayAsync(
                         parameters?["reservationId"]?.ToString() ?? "",
@@ -372,10 +378,30 @@ public partial class MainPage : ContentPage
                         parameters?["idempotencyKey"]?.ToString());
                     break;
                 case "keycards.encode":
-                    responseData = await hardwareInterop.EncodeCardAsync(
+                    var hardwareResponse = await hardwareInterop.EncodeCardAsync(
                         parameters?["roomId"]?.ToString() ?? "",
                         parameters?["lockCode"]?.ToString() ?? "",
                         parameters?["reservationId"]?.ToString() ?? "");
+                    var hardwareNode = JsonNode.Parse(hardwareResponse);
+                    if (hardwareNode?["success"]?.GetValue<bool>() == true && !string.IsNullOrWhiteSpace(parameters?["reservationId"]?.ToString()))
+                    {
+                        var recordResponse = await pmsInterop.RecordKeycardEncodingAsync(
+                            parameters?["reservationId"]?.ToString() ?? "",
+                            parameters?["roomId"]?.ToString() ?? "",
+                            hardwareNode["data"]?.ToJsonString());
+                        var recordNode = JsonNode.Parse(recordResponse);
+                        if (recordNode?["success"]?.GetValue<bool>() != true)
+                        {
+                            responseData = JsonSerializer.Serialize(new
+                            {
+                                success = false,
+                                error = $"Card encoded, but local card record failed: {recordNode?["error"]?.ToString() ?? "Unknown local recording error."}",
+                                data = hardwareNode["data"]
+                            });
+                            break;
+                        }
+                    }
+                    responseData = hardwareResponse;
                     break;
                 case "keycards.read":
                     responseData = await hardwareInterop.ReadCardAsync();
