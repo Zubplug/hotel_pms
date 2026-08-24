@@ -112,13 +112,13 @@ public class SyncEngine : BackgroundService
 
     public async Task<bool> RetryDeadLetterEventAsync(string eventId)
     {
-        using var scope = _scopeFactory.CreateScope();
+        using var scope = _serviceProvider.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<LodgeCore.Desktop.Data.LocalDbContext>();
         
         var evt = await db.OutboxEvents.FindAsync(eventId);
-        if (evt == null || evt.SyncStatus != "DEAD_LETTER") return false;
+        if (evt == null || evt.Status != "DEAD_LETTER") return false;
         
-        evt.SyncStatus = "PENDING";
+        evt.Status = "PENDING";
         evt.AttemptCount = 0;
         evt.NextAttemptAt = DateTime.UtcNow;
         evt.LastError = null;
