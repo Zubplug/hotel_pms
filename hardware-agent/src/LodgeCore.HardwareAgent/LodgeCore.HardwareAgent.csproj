@@ -11,54 +11,54 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="LockSDK.dll">
+    <Content Include="LockSDK.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="des.dll">
+    </Content>
+    <Content Include="des.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="DataReader.dll">
+    </Content>
+    <Content Include="DataReader.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="EasyD12_500.dll">
+    </Content>
+    <Content Include="EasyD12_500.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="EasyZUSBMulti.dll">
+    </Content>
+    <Content Include="EasyZUSBMulti.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="HOOKS_M1.dll">
+    </Content>
+    <Content Include="HOOKS_M1.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="HSDApp.dll">
+    </Content>
+    <Content Include="HSDApp.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="LockInfo.dll">
+    </Content>
+    <Content Include="LockInfo.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="MF0SIM.dll">
+    </Content>
+    <Content Include="MF0SIM.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="PubFunc.dll">
+    </Content>
+    <Content Include="PubFunc.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="PubFuns.dll">
+    </Content>
+    <Content Include="PubFuns.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="RC500USB.dll">
+    </Content>
+    <Content Include="RC500USB.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="RF50S.dll">
+    </Content>
+    <Content Include="RF50S.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="RF57S.dll">
+    </Content>
+    <Content Include="RF57S.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="Rf_Rw.dll">
+    </Content>
+    <Content Include="Rf_Rw.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="..\..\sdk\hslock\HsLockSDK.dll">
+    </Content>
+    <Content Include="..\..\sdk\hslock\HsLockSDK.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>

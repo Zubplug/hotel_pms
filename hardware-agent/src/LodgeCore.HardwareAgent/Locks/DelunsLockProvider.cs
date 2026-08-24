@@ -37,6 +37,19 @@ public class DelunsLockProvider : ILockProvider
         // preventing the SDK from returning the previously read card when the encoder is disconnected.
         int res = NativeSdkBridge.TP_Configuration(lockType);
         
+        // Auto-detect fallback if it returns -2 (NO_RW_MACHINE)
+        if (res == (int)LockSdkError.NO_RW_MACHINE)
+        {
+            int fallbackType = lockType == 4 ? 5 : 4;
+            _logger.LogWarning("Deluns encoder not found for lockType {Type}. Trying fallback type {FallbackType}...", lockType, fallbackType);
+            res = NativeSdkBridge.TP_Configuration(fallbackType);
+            
+            if (res == (int)LockSdkError.NO_RW_MACHINE)
+            {
+                _logger.LogError("Deluns encoder not found on either RF57 or RF50 protocol. Please ensure the USB Driver is installed and official software is closed.");
+            }
+        }
+        
         if (res == (int)LockSdkError.OPR_OK) 
         {
             _initialized = true;

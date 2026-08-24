@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?><?xml-stylesheet type='text/xsl' href='_UpgradeReport_Files/UpgradeReport.xslt'?><UpgradeLog>
+<Properties><Property Name="Solution" Value="LockSDKDemo">
+</Property><Property Name="解决方案文件" Value="D:\酒店锁\动态库\LockSDK V4.2酒管软件接口_200325\VB.net 2008 DEMO_V4.2\LockSDKDemo.sln">
+</Property><Property Name="用户选项文件" Value="D:\酒店锁\动态库\LockSDK V4.2酒管软件接口_200325\VB.net 2008 DEMO_V4.2\LockSDKDemo.suo">
+</Property><Property Name="Date" Value="2021年6月16日">
+</Property><Property Name="Time" Value="13:41">
+</Property><Property Name="日志号" Value="2">
+</Property></Properties><Event ErrorLevel="0" Project="" Source="LockSDKDemo.sln" Description="文件已成功备份为 D:\酒店锁\动态库\LockSDK V4.2酒管软件接口_200325\VB.net 2008 DEMO_V4.2\Backup1\LockSDKDemo.sln">
+</Event><Event ErrorLevel="0" Project="" Source="LockSDKDemo.suo" Description="文件已成功备份为 D:\酒店锁\动态库\LockSDK V4.2酒管软件接口_200325\VB.net 2008 DEMO_V4.2\Backup1\LockSDKDemo.suo">
+</Event><Event ErrorLevel="0" Project="LockSDKDemo" Source="LockSDKDemo\LockSDKDemo.vbproj" Description="项目文件已成功备份为 D:\酒店锁\动态库\LockSDK V4.2酒管软件接口_200325\VB.net 2008 DEMO_V4.2\Backup1\LockSDKDemo\LockSDKDemo.vbproj">
+</Event><Event ErrorLevel="0" Project="LockSDKDemo" Source="LockSDKDemo\LockSDKDemo.vbproj.user" Description="项目用户文件成功备份为 D:\酒店锁\动态库\LockSDK V4.2酒管软件接口_200325\VB.net 2008 DEMO_V4.2\Backup1\LockSDKDemo\LockSDKDemo.vbproj.user">
+</Event><Event ErrorLevel="0" Project="LockSDKDemo" Source="LockSDKDemo\IDD102.vb" Description="文件已成功备份为 D:\酒店锁\动态库\LockSDK V4.2酒管软件接口_200325\VB.net 2008 DEMO_V4.2\Backup1\LockSDKDemo\IDD102.vb">
+</Event><Event ErrorLevel="0" Project="LockSDKDemo" Source="LockSDKDemo\IDD102.Designer.vb" Description="文件已成功备份为 D:\酒店锁\动态库\LockSDK V4.2酒管软件接口_200325\VB.net 2008 DEMO_V4.2\Backup1\LockSDKDemo\IDD102.Designer.vb">
+</Event><Event ErrorLevel="0" Project="LockSDKDemo" Source="LockSDKDemo\Language.vb" Description="文件已成功备份为 D:\酒店锁\动态库\LockSDK V4.2酒管软件接口_200325\VB.net 2008 DEMO_V4.2\Backup1\LockSDKDemo\Language.vb">
+</Event><Event ErrorLevel="0" Project="LockSDKDemo" Source="LockSDKDemo\My Project\AssemblyInfo.vb" Description="文件已成功备份为 D:\酒店锁\动态库\LockSDK V4.2酒管软件接口_200325\VB.net 2008 DEMO_V4.2\Backup1\LockSDKDemo\My Project\AssemblyInfo.vb">
+</Event><Event ErrorLevel="0" Project="LockSDKDemo" Source="LockSDKDemo\My Project\Application.Designer.vb" Description="文件已成功备份为 D:\酒店锁\动态库\LockSDK V4.2酒管软件接口_200325\VB.net 2008 DEMO_V4.2\Backup1\LockSDKDemo\My Project\Application.Designer.vb">
+</Event><Event ErrorLevel="0" Project="LockSDKDemo" Source="LockSDKDemo\My Project\Resources.Designer.vb" Description="文件已成功备份为 D:\酒店锁\动态库\LockSDK V4.2酒管软件接口_200325\VB.net 2008 DEMO_V4.2\Backup1\LockSDKDemo\My Project\Resources.Designer.vb">
+</Event><Event ErrorLevel="0" Project="LockSDKDemo" Source="LockSDKDemo\My Project\Settings.Designer.vb" Description="文件已成功备份为 D:\酒店锁\动态库\LockSDK V4.2酒管软件接口_200325\VB.net 2008 DEMO_V4.2\Backup1\LockSDKDemo\My Project\Settings.Designer.vb">
+</Event><Event ErrorLevel="0" Project="LockSDKDemo" Source="LockSDKDemo\My Project\Application.myapp" Description="文件已成功备份为 D:\酒店锁\动态库\LockSDK V4.2酒管软件接口_200325\VB.net 2008 DEMO_V4.2\Backup1\LockSDKDemo\My Project\Application.myapp">
+</Event><Event ErrorLevel="0" Project="LockSDKDemo" Source="LockSDKDemo\My Project\Settings.settings" Description="文件已成功备份为 D:\酒店锁\动态库\LockSDK V4.2酒管软件接口_200325\VB.net 2008 DEMO_V4.2\Backup1\LockSDKDemo\My Project\Settings.settings">
+</Event><Event ErrorLevel="0" Project="LockSDKDemo" Source="LockSDKDemo\sn.ico" Description="文件已成功备份为 D:\酒店锁\动态库\LockSDK V4.2酒管软件接口_200325\VB.net 2008 DEMO_V4.2\Backup1\LockSDKDemo\sn.ico">
+</Event><Event ErrorLevel="0" Project="LockSDKDemo" Source="LockSDKDemo\IDD102.resx" Description="文件已成功备份为 D:\酒店锁\动态库\LockSDK V4.2酒管软件接口_200325\VB.net 2008 DEMO_V4.2\Backup1\LockSDKDemo\IDD102.resx">
+</Event><Event ErrorLevel="0" Project="LockSDKDemo" Source="LockSDKDemo\My Project\Resources.resx" Description="文件已成功备份为 D:\酒店锁\动态库\LockSDK V4.2酒管软件接口_200325\VB.net 2008 DEMO_V4.2\Backup1\LockSDKDemo\My Project\Resources.resx">
+</Event><Event ErrorLevel="1" Project="LockSDKDemo" Source="LockSDKDemo\LockSDKDemo.vbproj" Description="您的项目以 .NET Framework 2.0 或 3.0 为目标。如果您的项目使用的程序集需要更新的 .NET Framework，则项目生成将失败。通过单击项目菜单上的“属性”，然后在“.NET Framework”下拉框中选择一个新版本，可以更改 .NET Framework 的版本。(在 Visual Basic 中，可在单击“高级编辑器选项...”按钮时显示的“编译”选项卡上找到此下拉框。)">
+</Event><Event ErrorLevel="0" Project="LockSDKDemo" Source="LockSDKDemo\LockSDKDemo.vbproj" Description="项目已成功转换">
+</Event><Event ErrorLevel="3" Project="LockSDKDemo" Source="LockSDKDemo\LockSDKDemo.vbproj" Description="Converted">
+</Event><Event ErrorLevel="0" Project="" Source="LockSDKDemo.sln" Description="成功转换解决方案">
+</Event><Event ErrorLevel="3" Project="" Source="LockSDKDemo.sln" Description="Converted">
+</Event><Event ErrorLevel="0" Project="LockSDKDemo" Source="LockSDKDemo\LockSDKDemo.vbproj" Description="扫描完成: 项目文件不需要升级。">
+</Event></UpgradeLog>

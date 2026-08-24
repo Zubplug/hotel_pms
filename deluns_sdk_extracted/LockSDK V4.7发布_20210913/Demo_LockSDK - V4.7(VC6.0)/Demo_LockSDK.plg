@@ -1,0 +1,40 @@
+<html>
+<body>
+<pre>
+<h1>Build Log</h1>
+<h3>
+--------------------Configuration: Demo_LockSDK - Win32 Debug--------------------
+</h3>
+<h3>Command Lines</h3>
+Creating temporary file "C:\Users\zhangsai\AppData\Local\Temp\RSP8E07.tmp" with contents
+[
+/nologo /MTd /W3 /Gm /GX /ZI /Od /D "WIN32" /D "_DEBUG" /D "_WINDOWS" /D "_MBCS" /FR"Debug/" /Fp"Debug/Demo_LockSDK.pch" /Yu"stdafx.h" /Fo"Debug/" /Fd"Debug/" /FD /GZ /c 
+"D:\酒店锁\动态库\LockSDK V4.2酒管软件接口_200325\Demo_LockSDK - V4.2(VC6.0)\Demo_LockSDKDlg.cpp"
+]
+Creating command line "cl.exe @C:\Users\zhangsai\AppData\Local\Temp\RSP8E07.tmp" 
+Creating temporary file "C:\Users\zhangsai\AppData\Local\Temp\RSP8E08.tmp" with contents
+[
+PubFuns.lib /nologo /subsystem:windows /incremental:yes /pdb:"Debug/LockSDK_Demo.pdb" /debug /machine:I386 /out:"Debug/LockSDK_Demo.exe" /pdbtype:sept 
+".\Debug\Demo_LockSDK.obj"
+".\Debug\Demo_LockSDKDlg.obj"
+".\Debug\Language.obj"
+".\Debug\StdAfx.obj"
+".\Debug\Demo_LockSDK.res"
+".\LockSDK.lib"
+]
+Creating command line "link.exe @C:\Users\zhangsai\AppData\Local\Temp\RSP8E08.tmp"
+<h3>Output Window</h3>
+Compiling...
+Demo_LockSDKDlg.cpp
+Linking...
+Creating command line "bscmake.exe /nologo /o"Debug/Demo_LockSDK.bsc"  ".\Debug\StdAfx.sbr" ".\Debug\Demo_LockSDK.sbr" ".\Debug\Demo_LockSDKDlg.sbr" ".\Debug\Language.sbr""
+Creating browse info file...
+<h3>Output Window</h3>
+
+
+
+<h3>Results</h3>
+LockSDK_Demo.exe - 0 error(s), 0 warning(s)
+</pre>
+</body>
+</html>

@@ -39,6 +39,22 @@ public sealed class DelunsProvider : ILockProvider
             // The COM port is configured via the encoder hardware itself — 
             // the SDK auto-detects or uses the Windows COM port assignment.
             int result = LockSdkNative.TP_Configuration(lockType);
+            
+            if (result == (int)LockSdkError.NO_RW_MACHINE)
+            {
+                int fallbackType = lockType == 4 ? 5 : 4;
+                _logger.LogWarning("Deluns encoder not found for lockType {Type}. Trying fallback type {FallbackType}...", lockType, fallbackType);
+                result = LockSdkNative.TP_Configuration(fallbackType);
+                
+                if (result == (int)LockSdkError.NO_RW_MACHINE)
+                {
+                    _logger.LogError("Deluns encoder not found on either RF57 or RF50 protocol. Please ensure the USB Driver is installed and official software is closed.");
+                }
+                else if (result == (int)LockSdkError.OPR_OK)
+                {
+                    _lockType = fallbackType;
+                }
+            }
 
             if (result == (int)LockSdkError.OPR_OK)
             {

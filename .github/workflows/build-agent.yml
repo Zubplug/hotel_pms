@@ -15,16 +15,16 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: 8.0.x
+        dotnet-version: '10.0.x'
 
     - name: Restore dependencies
-      run: dotnet restore apps/agent-windows/LodgeCore.LockAgent/LodgeCore.LockAgent.csproj
+      run: dotnet restore hardware-agent/src/LodgeCore.HardwareAgent/LodgeCore.HardwareAgent.csproj
 
     - name: Build and Publish
-      run: dotnet publish apps/agent-windows/LodgeCore.LockAgent/LodgeCore.LockAgent.csproj -c Release -r win-x86 --self-contained true -p:PublishSingleFile=true -o ./publish
+      run: dotnet publish hardware-agent/src/LodgeCore.HardwareAgent/LodgeCore.HardwareAgent.csproj -c Release -r win-x86 --self-contained true -p:PublishSingleFile=true -o ./publish
 
     - name: Upload Build Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: LodgeCore.LockAgent-win-x86
+        name: LodgeCore.HardwareAgent-win-x86
         path: ./publish/

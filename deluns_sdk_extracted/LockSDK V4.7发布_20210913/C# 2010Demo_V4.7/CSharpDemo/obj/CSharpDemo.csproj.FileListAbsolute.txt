@@ -1,0 +1,80 @@
+F:\DEMO\LockSDK Demo\LOCKSDK_DEMO 20120622\C# 2.0 Demo\CSharpDemo\CSharpDemo\bin\Debug\CSharpDemo.exe
+F:\DEMO\LockSDK Demo\LOCKSDK_DEMO 20120622\C# 2.0 Demo\CSharpDemo\CSharpDemo\bin\Debug\CSharpDemo.pdb
+F:\DEMO\LockSDK Demo\LOCKSDK_DEMO 20120622\C# 2.0 Demo\CSharpDemo\CSharpDemo\obj\Debug\ResolveAssemblyReference.cache
+F:\DEMO\LockSDK Demo\LOCKSDK_DEMO 20120622\C# 2.0 Demo\CSharpDemo\CSharpDemo\obj\Debug\CSharpDemo.Properties.Resources.resources
+F:\DEMO\LockSDK Demo\LOCKSDK_DEMO 20120622\C# 2.0 Demo\CSharpDemo\CSharpDemo\obj\Debug\CSharpDemo.csproj.GenerateResource.Cache
+F:\DEMO\LockSDK Demo\LOCKSDK_DEMO 20120622\C# 2.0 Demo\CSharpDemo\CSharpDemo\obj\Debug\CSharpDemo.exe
+F:\DEMO\LockSDK Demo\LOCKSDK_DEMO 20120622\C# 2.0 Demo\CSharpDemo\CSharpDemo\obj\Debug\CSharpDemo.pdb
+F:\DEMO\LockSDK Demo\LOCKSDK_DEMO 20120622\C# 2.0 Demo\CSharpDemo\CSharpDemo\obj\Debug\CSharpDemo.LockSDK_Demo.resources
+F:\DEMO\LockSDK Demo\LOCKSDK_DEMO 20120622\C# 2.0 Demo\CSharpDemo\obj\Debug\CSharpDemo.exe
+F:\DEMO\LockSDK Demo\LOCKSDK_DEMO 20120622\C# 2.0 Demo\CSharpDemo\obj\Debug\CSharpDemo.pdb
+F:\DEMO\LockSDK Demo\LOCKSDK_DEMO 20120622\C# 2.0 Demo\CSharpDemo\bin\Debug\CSharpDemo.exe
+F:\DEMO\LockSDK Demo\LOCKSDK_DEMO 20120622\C# 2.0 Demo\CSharpDemo\bin\Debug\CSharpDemo.pdb
+F:\DEMO\LockSDK Demo\LOCKSDK_DEMO 20120622\C# 2.0 Demo\CSharpDemo\obj\Debug\ResolveAssemblyReference.cache
+F:\DEMO\LockSDK Demo\LOCKSDK_DEMO 20120622\C# 2.0 Demo\CSharpDemo\obj\Debug\CSharpDemo.LockSDK_Demo.resources
+F:\DEMO\LockSDK Demo\LOCKSDK_DEMO 20120622\C# 2.0 Demo\CSharpDemo\obj\Debug\CSharpDemo.Properties.Resources.resources
+F:\DEMO\LockSDK Demo\LOCKSDK_DEMO 20120622\C# 2.0 Demo\CSharpDemo\obj\Debug\CSharpDemo.csproj.GenerateResource.Cache
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121109\C# 2.0 Demo_V3.1\CSharpDemo\bin\Debug\CSharpDemo.exe
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121109\C# 2.0 Demo_V3.1\CSharpDemo\bin\Debug\CSharpDemo.pdb
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121109\C# 2.0 Demo_V3.1\CSharpDemo\obj\Debug\ResolveAssemblyReference.cache
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121109\C# 2.0 Demo_V3.1\CSharpDemo\obj\Debug\CSharpDemo.frmMain.resources
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121109\C# 2.0 Demo_V3.1\CSharpDemo\obj\Debug\CSharpDemo.Properties.Resources.resources
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121109\C# 2.0 Demo_V3.1\CSharpDemo\obj\Debug\CSharpDemo.csproj.GenerateResource.Cache
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121109\C# 2.0 Demo_V3.1\CSharpDemo\obj\Debug\CSharpDemo.exe
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121109\C# 2.0 Demo_V3.1\CSharpDemo\obj\Debug\CSharpDemo.pdb
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121109\C# 2.0 Demo_V3.1\CSharpDemo\bin\Release\CSharpDemo.exe
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121109\C# 2.0 Demo_V3.1\CSharpDemo\bin\Release\CSharpDemo.pdb
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121109\C# 2.0 Demo_V3.1\CSharpDemo\obj\Release\ResolveAssemblyReference.cache
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121109\C# 2.0 Demo_V3.1\CSharpDemo\obj\Release\CSharpDemo.frmMain.resources
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121109\C# 2.0 Demo_V3.1\CSharpDemo\obj\Release\CSharpDemo.Properties.Resources.resources
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121109\C# 2.0 Demo_V3.1\CSharpDemo\obj\Release\CSharpDemo.csproj.GenerateResource.Cache
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121109\C# 2.0 Demo_V3.1\CSharpDemo\obj\Release\CSharpDemo.exe
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121109\C# 2.0 Demo_V3.1\CSharpDemo\obj\Release\CSharpDemo.pdb
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121128\C# 2.0 Demo_V3.1\CSharpDemo\obj\Release\CSharpDemo.exe
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121128\C# 2.0 Demo_V3.1\CSharpDemo\obj\Release\CSharpDemo.pdb
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121128\C# 2.0 Demo_V3.1\CSharpDemo\bin\Release\CSharpDemo.exe
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121128\C# 2.0 Demo_V3.1\CSharpDemo\bin\Release\CSharpDemo.pdb
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121128\C# 2.0 Demo_V3.1\CSharpDemo\obj\Release\ResolveAssemblyReference.cache
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121128\C# 2.0 Demo_V3.1\CSharpDemo\obj\Release\CSharpDemo.frmMain.resources
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121128\C# 2.0 Demo_V3.1\CSharpDemo\obj\Release\CSharpDemo.Properties.Resources.resources
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121128\C# 2.0 Demo_V3.1\CSharpDemo\obj\Release\CSharpDemo.csproj.GenerateResource.Cache
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121128\C# 2.0 Demo_V3.1\CSharpDemo\obj\Debug\ResolveAssemblyReference.cache
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121128\C# 2.0 Demo_V3.1\CSharpDemo\obj\Debug\CSharpDemo.IDD102.resources
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121128\C# 2.0 Demo_V3.1\CSharpDemo\obj\Debug\CSharpDemo.Properties.Resources.resources
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121128\C# 2.0 Demo_V3.1\CSharpDemo\obj\Debug\CSharpDemo.csproj.GenerateResource.Cache
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121128\C# 2.0 Demo_V3.1\CSharpDemo\bin\Debug\CSharpDemo.exe
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121128\C# 2.0 Demo_V3.1\CSharpDemo\bin\Debug\CSharpDemo.pdb
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121128\C# 2.0 Demo_V3.1\CSharpDemo\obj\Debug\CSharpDemo.exe
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121128\C# 2.0 Demo_V3.1\CSharpDemo\obj\Debug\CSharpDemo.pdb
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121203\C# 2.0 Demo_V3.1\CSharpDemo\obj\Debug\ResolveAssemblyReference.cache
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121203\C# 2.0 Demo_V3.1\CSharpDemo\obj\Debug\CSharpDemo.IDD102.resources
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121203\C# 2.0 Demo_V3.1\CSharpDemo\obj\Debug\CSharpDemo.Properties.Resources.resources
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121203\C# 2.0 Demo_V3.1\CSharpDemo\obj\Debug\CSharpDemo.csproj.GenerateResource.Cache
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121203\C# 2.0 Demo_V3.1\CSharpDemo\bin\Debug\LockSDKDemo.exe
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121203\C# 2.0 Demo_V3.1\CSharpDemo\bin\Debug\LockSDKDemo.pdb
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121203\C# 2.0 Demo_V3.1\CSharpDemo\obj\Debug\LockSDKDemo.exe
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121203\C# 2.0 Demo_V3.1\CSharpDemo\obj\Debug\LockSDKDemo.pdb
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121204\C# 2.0 Demo_V3.1\CSharpDemo\obj\Debug\ResolveAssemblyReference.cache
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121204\C# 2.0 Demo_V3.1\CSharpDemo\obj\Debug\CSharpDemo.IDD102.resources
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121204\C# 2.0 Demo_V3.1\CSharpDemo\obj\Debug\CSharpDemo.Properties.Resources.resources
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121204\C# 2.0 Demo_V3.1\CSharpDemo\obj\Debug\CSharpDemo.csproj.GenerateResource.Cache
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121204\C# 2.0 Demo_V3.1\CSharpDemo\bin\Debug\LockSDK_Demo.exe
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121204\C# 2.0 Demo_V3.1\CSharpDemo\bin\Debug\LockSDK_Demo.pdb
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121204\C# 2.0 Demo_V3.1\CSharpDemo\obj\Debug\LockSDK_Demo.exe
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121204\C# 2.0 Demo_V3.1\CSharpDemo\obj\Debug\LockSDK_Demo.pdb
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121222_EN\C# 2.0 Demo_V3.1\CSharpDemo\obj\Debug\LockSDK_Demo.exe
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121222_EN\C# 2.0 Demo_V3.1\CSharpDemo\obj\Debug\LockSDK_Demo.pdb
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121222_EN\C# 2.0 Demo_V3.1\CSharpDemo\bin\Debug\LockSDK_Demo.exe
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121222_EN\C# 2.0 Demo_V3.1\CSharpDemo\bin\Debug\LockSDK_Demo.pdb
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121222_EN\C# 2.0 Demo_V3.1\CSharpDemo\obj\Debug\ResolveAssemblyReference.cache
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121222_EN\C# 2.0 Demo_V3.1\CSharpDemo\obj\Debug\CSharpDemo.IDD102.resources
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121222_EN\C# 2.0 Demo_V3.1\CSharpDemo\obj\Debug\CSharpDemo.Properties.Resources.resources
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121222_EN\C# 2.0 Demo_V3.1\CSharpDemo\obj\Debug\CSharpDemo.csproj.GenerateResource.Cache
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121227\C# 2.0 Demo_V3.1\CSharpDemo\bin\Debug\LockSDK_Demo.exe
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121227\C# 2.0 Demo_V3.1\CSharpDemo\bin\Debug\LockSDK_Demo.pdb
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121227\C# 2.0 Demo_V3.1\CSharpDemo\obj\Debug\ResolveAssemblyReference.cache
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121227\C# 2.0 Demo_V3.1\CSharpDemo\obj\Debug\CSharpDemo.IDD102.resources
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121227\C# 2.0 Demo_V3.1\CSharpDemo\obj\Debug\CSharpDemo.Properties.Resources.resources
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121227\C# 2.0 Demo_V3.1\CSharpDemo\obj\Debug\CSharpDemo.csproj.GenerateResource.Cache
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121227\C# 2.0 Demo_V3.1\CSharpDemo\obj\Debug\LockSDK_Demo.exe
+F:\DEMO\酒店LockSDK\LockSDK 酒管软件接口_121227\C# 2.0 Demo_V3.1\CSharpDemo\obj\Debug\LockSDK_Demo.pdb
