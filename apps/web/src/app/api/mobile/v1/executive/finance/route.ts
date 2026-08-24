@@ -47,6 +47,22 @@ export async function GET(req: NextRequest) {
     ]);
 
     // 3. Payments Collected Today
+    // FolioItem.businessDate is the authoritative business-date ledger for
+    // desktop/offline postings. Payment.createdAt reflects sync time and can
+    // fall on a different calendar day.
+    const paymentItems = await prisma.folioItem.findMany({
+      where: {
+        folio: { propertyId: primaryPropertyId },
+        type: 'PAYMENT',
+        voidedAt: null,
+        businessDate: {
+          gte: startOfDay(businessDate),
+          lte: endOfDay(businessDate)
+        }
+      },
+      select: { amount: true }
+    });
+
     const payments = await prisma.payment.findMany({
       where: {
         propertyId: primaryPropertyId,
@@ -59,12 +75,22 @@ export async function GET(req: NextRequest) {
       select: { amount: true, method: true }
     });
 
-    let totalPayments = 0;
+    const ledgerPaymentTotal = paymentItems.reduce((total, item) => total + Math.abs(Number(item.amount)), 0);
+    let totalPayments = ledgerPaymentTotal;
     const paymentsByMethod: Record<string, number> = {};
     for (const p of payments) {
       const amt = Number(p.amount);
-      totalPayments += amt;
       paymentsByMethod[p.method] = (paymentsByMethod[p.method] || 0) + amt;
+    }
+
+    // Older production rows may have a ledger item without a Payment row.
+    // Keep the total visible instead of silently dropping that amount.
+    const methodTotal = Object.values(paymentsByMethod).reduce((total, amount) => total + amount, 0);
+    if (totalPayments === 0 && methodTotal > 0) {
+      totalPayments = methodTotal;
+    }
+    if (methodTotal < totalPayments) {
+      paymentsByMethod.OTHER = (paymentsByMethod.OTHER || 0) + (totalPayments - methodTotal);
     }
 
     // 4. Outstanding Receivables
