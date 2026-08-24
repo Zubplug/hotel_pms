@@ -8,9 +8,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { cn, formatCurrency } from '@/lib/utils';
 import { ClientOnlyDate } from '@/components/ClientOnlyDate';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
 export default function LaundryDashboard() {
   const { propertyId } = useProperty();
+  const { provider } = useLodgeCoreProvider();
   const router = useRouter();
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -19,9 +21,8 @@ export default function LaundryDashboard() {
     if (!propertyId) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/v1/laundry/orders?propertyId=${propertyId}`);
-      const data = await res.json();
-      setOrders(data.data || []);
+      const res = await provider.laundry.getOrders(propertyId);
+      setOrders(res.data || []);
     } catch (err) {
       console.error(err);
     } finally {

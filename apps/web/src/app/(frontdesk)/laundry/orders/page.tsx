@@ -7,9 +7,11 @@ import { Loader2, ArrowLeft, Shirt, CheckCircle2, Clock } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { formatCurrency } from '@/lib/utils';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
 export default function LaundryOrdersPage() {
   const { propertyId } = useProperty();
+  const { provider } = useLodgeCoreProvider();
   const router = useRouter();
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -17,9 +19,8 @@ export default function LaundryOrdersPage() {
   useEffect(() => {
     if (!propertyId) return;
     setLoading(true);
-    fetch(`/api/v1/laundry/orders?propertyId=${propertyId}`)
-      .then(res => res.json())
-      .then(data => setOrders(data.data || []))
+    provider.laundry.getOrders(propertyId)
+      .then(res => setOrders(res.data || []))
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [propertyId]);

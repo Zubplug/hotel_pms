@@ -6,9 +6,11 @@ import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, CheckCircle2, Shirt, Loader2, Search } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
 export default function NewLaundryOrderPage() {
   const { propertyId } = useProperty();
+  const { provider } = useLodgeCoreProvider();
   const router = useRouter();
   
   const [items, setItems] = useState<any[]>([]);
@@ -25,9 +27,8 @@ export default function NewLaundryOrderPage() {
   
   useEffect(() => {
     if (!propertyId) return;
-    fetch(`/api/v1/laundry/items?propertyId=${propertyId}`)
-      .then(res => res.json())
-      .then(data => setItems(data.data || []));
+    provider.laundry.getItems(propertyId)
+      .then(res => setItems(res.data || []));
       
     setFetchingGuests(true);
     fetch(`/api/v1/reservations?propertyId=${propertyId}&status=IN_HOUSE&pageSize=100`)
@@ -89,24 +90,19 @@ export default function NewLaundryOrderPage() {
 
     const roomId = selectedReservation.reservationRooms?.[0]?.roomId;
 
-    const res = await fetch('/api/v1/laundry/orders', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        propertyId,
-        reservationId: selectedReservation.id,
-        guestId: selectedReservation.primaryGuestId,
-        roomId: roomId || undefined,
-        serviceType,
-        items: orderItems
-      })
+    const res = await provider.laundry.createOrder({
+      propertyId,
+      reservationId: selectedReservation.id,
+      guestId: selectedReservation.primaryGuestId,
+      roomId: roomId || undefined,
+      serviceType,
+      items: orderItems
     });
 
-    if (res.ok) {
+    if (!res.error) {
       router.push('/laundry');
     } else {
-      const error = await res.json();
-      alert(error.message);
+      alert(res.error || 'Failed to create order');
       setLoading(false);
     }
   };

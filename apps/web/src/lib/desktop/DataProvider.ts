@@ -115,4 +115,11 @@ export interface LodgeCoreDataProvider {
     getProductionBatches(outletId: string, station: string): Promise<{ data: any[], error: string | null }>;
     updateBatchStatus(batchId: string, status: string): Promise<{ data: any, error: string | null }>;
   };
+  laundry: {
+    getItems(propertyId: string): Promise<{ data: any[], error: string | null }>;
+    getOrders(propertyId: string, status?: string): Promise<{ data: any[], error: string | null }>;
+    createOrder(data: any): Promise<{ data: any, error: string | null }>;
+    updateOrderStatus(orderId: string, status: string): Promise<{ data: any, error: string | null }>;
+    deliverOrder(orderId: string): Promise<{ data: any, error: string | null }>;
+  };
 }

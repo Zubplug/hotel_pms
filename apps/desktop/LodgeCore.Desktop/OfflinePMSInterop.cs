@@ -2199,4 +2199,78 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
+
+    #region Laundry Module
+
+    public async Task<string> GetLaundryItemsAsync(string propertyId)
+    {
+        try
+        {
+            var ctx = await GetSecureContextAsync();
+            var items = await _repo.GetLaundryItemsAsync(propertyId);
+            return JsonSerializer.Serialize(new { success = true, data = items }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
+    public async Task<string> GetLaundryOrdersAsync(string propertyId, string? status = null)
+    {
+        try
+        {
+            var ctx = await GetSecureContextAsync();
+            var orders = await _repo.GetLaundryOrdersAsync(propertyId, status);
+            return JsonSerializer.Serialize(new { success = true, data = orders }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
+    public async Task<string> CreateLaundryOrderAsync(string dataJson)
+    {
+        try
+        {
+            var ctx = await GetSecureContextAsync();
+            var orderId = await _repo.CreateLaundryOrderAsync(dataJson, ctx.UserId, ctx.DeviceId);
+            return JsonSerializer.Serialize(new { success = true, data = new { id = orderId } }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
+    public async Task<string> UpdateLaundryOrderStatusAsync(string orderId, string status)
+    {
+        try
+        {
+            var ctx = await GetSecureContextAsync();
+            await _repo.UpdateLaundryOrderStatusAsync(orderId, status, ctx.UserId, ctx.DeviceId);
+            return JsonSerializer.Serialize(new { success = true }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
+    public async Task<string> DeliverLaundryOrderAsync(string orderId)
+    {
+        try
+        {
+            var ctx = await GetSecureContextAsync();
+            await _repo.DeliverLaundryOrderAsync(orderId, ctx.UserId, ctx.DeviceId);
+            return JsonSerializer.Serialize(new { success = true }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
+    #endregion
 }

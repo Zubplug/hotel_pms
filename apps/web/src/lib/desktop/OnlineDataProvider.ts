@@ -421,5 +421,33 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
         body: JSON.stringify({ status }),
       });
     },
+  },
+  laundry: {
+    getItems: async (propertyId: string) => {
+      return apiFetchResult(`/api/v1/laundry/items?propertyId=${propertyId}`);
+    },
+    getOrders: async (propertyId: string, status?: string) => {
+      let url = `/api/v1/laundry/orders?propertyId=${propertyId}`;
+      if (status) url += `&status=${status}`;
+      return apiFetchResult(url);
+    },
+    createOrder: async (data: any) => {
+      return apiFetchResult(`/api/v1/laundry/orders`, {
+        method: 'POST',
+        body: JSON.stringify(data)
+      });
+    },
+    updateOrderStatus: async (orderId: string, status: string) => {
+      return apiFetchResult(`/api/v1/laundry/orders/${orderId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status })
+      });
+    },
+    deliverOrder: async (orderId: string) => {
+      return apiFetchResult(`/api/v1/laundry/orders/${orderId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'DELIVERED' })
+      });
+    }
   }
 };

@@ -2937,4 +2937,263 @@ public class LocalRepository
         await _dbContext.SaveChangesAsync();
         return sessionId;
     }
+
+    #region Laundry Module
+
+    public async Task<List<LocalLaundryItem>> GetLaundryItemsAsync(string propertyId)
+    {
+        return await _dbContext.LaundryItems
+            .Where(i => i.PropertyId == propertyId && i.IsActive)
+            .ToListAsync();
+    }
+
+    public async Task<List<LocalLaundryOrder>> GetLaundryOrdersAsync(string propertyId, string? status = null)
+    {
+        var query = _dbContext.LaundryOrders
+            .Include(o => o.Items)
+            .Where(o => o.PropertyId == propertyId);
+
+        if (!string.IsNullOrEmpty(status))
+        {
+            query = query.Where(o => o.Status == status);
+        }
+
+        return await query.OrderByDescending(o => o.CreatedAt).ToListAsync();
+    }
+
+    public async Task<string> CreateLaundryOrderAsync(string dataJson, string userId, string deviceId)
+    {
+        using var json = JsonDocument.Parse(dataJson);
+        var root = json.RootElement;
+        
+        var orderId = Guid.NewGuid().ToString();
+        var propertyId = root.GetProperty("propertyId").GetString() ?? "";
+        var reservationId = root.GetProperty("reservationId").GetString() ?? "";
+        var guestId = root.GetProperty("guestId").GetString() ?? "";
+        var roomId = root.TryGetProperty("roomId", out var roomElem) && roomElem.ValueKind != JsonValueKind.Null ? roomElem.GetString() : null;
+        var serviceType = root.TryGetProperty("serviceType", out var svcElem) ? svcElem.GetString() ?? "STANDARD" : "STANDARD";
+        
+        decimal total = 0;
+        var orderItems = new List<LocalLaundryOrderItem>();
+        
+        if (root.TryGetProperty("items", out var itemsElem) && itemsElem.ValueKind == JsonValueKind.Array)
+        {
+            var itemsList = await _dbContext.LaundryItems.Where(i => i.PropertyId == propertyId).ToListAsync();
+            foreach (var item in itemsElem.EnumerateArray())
+            {
+                var itemId = item.GetProperty("itemId").GetString() ?? "";
+                var qty = item.GetProperty("quantity").GetInt32();
+                if (qty > 0)
+                {
+                    var catalogItem = itemsList.FirstOrDefault(i => i.Id == itemId);
+                    if (catalogItem != null)
+                    {
+                        var price = catalogItem.BasePrice;
+                        if (serviceType == "EXPRESS") price *= 1.5m;
+                        else if (serviceType == "DRY_CLEAN") price *= 2.0m;
+                        
+                        var lineTotal = price * qty;
+                        total += lineTotal;
+                        
+                        orderItems.Add(new LocalLaundryOrderItem
+                        {
+                            Id = Guid.NewGuid().ToString(),
+                            LaundryOrderId = orderId,
+                            ItemId = itemId,
+                            Quantity = qty,
+                            UnitPrice = price,
+                            TotalPrice = lineTotal
+                        });
+                    }
+                }
+            }
+        }
+        
+        var order = new LocalLaundryOrder
+        {
+            Id = orderId,
+            PropertyId = propertyId,
+            ReservationId = reservationId,
+            GuestId = guestId,
+            RoomId = roomId ?? "",
+            ServiceType = serviceType,
+            Status = "PENDING",
+            TotalAmount = total,
+            RequestedAt = DateTime.UtcNow,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
+            Version = 1,
+            Items = orderItems
+        };
+        
+        _dbContext.LaundryOrders.Add(order);
+        
+        var payloadObj = new {
+            propertyId = order.PropertyId,
+            reservationId = order.ReservationId,
+            guestId = order.GuestId,
+            roomId = order.RoomId,
+            serviceType = order.ServiceType,
+            status = order.Status,
+            totalAmount = order.TotalAmount,
+            requestedAt = order.RequestedAt,
+            items = orderItems.Select(i => new { itemId = i.ItemId, quantity = i.Quantity }).ToList()
+        };
+        
+        _dbContext.OutboxEvents.Add(new LocalOutboxEvent
+        {
+            PropertyId = order.PropertyId,
+            DeviceId = deviceId,
+            OperatorId = userId,
+            AggregateType = "LAUNDRY_ORDER",
+            AggregateId = order.Id,
+            AggregateVersion = 1,
+            EventType = "LAUNDRY_ORDER_CREATED",
+            Sequence = 1,
+            IdempotencyKey = Guid.NewGuid().ToString(),
+            PayloadJson = JsonSerializer.Serialize(payloadObj)
+        });
+
+        await _dbContext.SaveChangesAsync();
+        return order.Id;
+    }
+
+    public async Task UpdateLaundryOrderStatusAsync(string orderId, string status, string userId, string deviceId)
+    {
+        var order = await _dbContext.LaundryOrders.FindAsync(orderId);
+        if (order == null) throw new Exception("Laundry order not found");
+        
+        var previousStatus = order.Status;
+        if (previousStatus == status) return;
+        
+        order.Status = status;
+        order.UpdatedAt = DateTime.UtcNow;
+        if (status == "COLLECTED") order.CollectedAt = DateTime.UtcNow;
+        if (status == "READY") order.ReadyAt = DateTime.UtcNow;
+        
+        int eventVersion = order.Version;
+        order.Version++;
+        
+        _dbContext.LaundryOrderStatusHistory.Add(new LocalLaundryOrderStatusHistory
+        {
+            Id = Guid.NewGuid().ToString(),
+            LaundryOrderId = order.Id,
+            PreviousStatus = previousStatus,
+            NewStatus = status,
+            ChangedBy = userId,
+            ChangedAt = DateTime.UtcNow,
+            DeviceId = deviceId
+        });
+        
+        _dbContext.OutboxEvents.Add(new LocalOutboxEvent
+        {
+            PropertyId = order.PropertyId,
+            DeviceId = deviceId,
+            OperatorId = userId,
+            AggregateType = "LAUNDRY_ORDER",
+            AggregateId = order.Id,
+            AggregateVersion = eventVersion,
+            EventType = "LAUNDRY_STATUS_UPDATED",
+            Sequence = order.Version,
+            IdempotencyKey = Guid.NewGuid().ToString(),
+            PayloadJson = JsonSerializer.Serialize(new { status = status })
+        });
+        
+        await _dbContext.SaveChangesAsync();
+    }
+
+    public async Task DeliverLaundryOrderAsync(string orderId, string userId, string deviceId)
+    {
+        var order = await _dbContext.LaundryOrders.FindAsync(orderId);
+        if (order == null) throw new Exception("Laundry order not found");
+        
+        if (order.Status == "DELIVERED") return;
+        
+        var previousStatus = order.Status;
+        order.Status = "DELIVERED";
+        order.DeliveredAt = DateTime.UtcNow;
+        order.DeliveredBy = userId;
+        order.UpdatedAt = DateTime.UtcNow;
+        int eventVersion = order.Version;
+        order.Version++;
+        
+        _dbContext.LaundryOrderStatusHistory.Add(new LocalLaundryOrderStatusHistory
+        {
+            Id = Guid.NewGuid().ToString(),
+            LaundryOrderId = order.Id,
+            PreviousStatus = previousStatus,
+            NewStatus = "DELIVERED",
+            ChangedBy = userId,
+            ChangedAt = DateTime.UtcNow,
+            DeviceId = deviceId
+        });
+        
+        var idempotencyKey = $"{order.Id}_DELIVERY_FOLIO_CHARGE";
+        
+        // Find reservation folio
+        var folio = await _dbContext.Folios.FirstOrDefaultAsync(f => f.ReservationId == order.ReservationId);
+        if (folio != null && order.TotalAmount > 0)
+        {
+            if (!CheckFolioIdempotency(folio, idempotencyKey))
+            {
+                folio.TotalCharges += order.TotalAmount;
+                folio.UpdatedAt = DateTime.UtcNow;
+                folio.IsDirty = true;
+                folio.LocalSequence++;
+                int folioEventVersion = folio.Version;
+                folio.Version++;
+
+                var newItem = new
+                {
+                    id = Guid.NewGuid().ToString(),
+                    amount = order.TotalAmount,
+                    description = $"Laundry Service - {order.ServiceType}",
+                    type = "CHARGE",
+                    idempotencyKey = idempotencyKey,
+                    createdAt = DateTime.UtcNow
+                };
+
+                UpdateFolioTransactionsJson(folio, "items", newItem);
+
+                _dbContext.OutboxEvents.Add(new LocalOutboxEvent
+                {
+                    PropertyId = folio.PropertyId,
+                    DeviceId = deviceId,
+                    OperatorId = userId,
+                    AggregateType = "FOLIO",
+                    AggregateId = folio.Id,
+                    AggregateVersion = folioEventVersion,
+                    EventType = "ROOM_CHARGE",
+                    Sequence = folio.LocalSequence,
+                    IdempotencyKey = idempotencyKey,
+                    PayloadJson = JsonSerializer.Serialize(new { 
+                        amount = order.TotalAmount, 
+                        description = $"Laundry Service - {order.ServiceType}", 
+                        currency = "NGN", 
+                        businessDate = DateTime.UtcNow, 
+                        originalBusinessDate = DateTime.UtcNow, 
+                        idempotencyKey = idempotencyKey 
+                    })
+                });
+            }
+        }
+        
+        _dbContext.OutboxEvents.Add(new LocalOutboxEvent
+        {
+            PropertyId = order.PropertyId,
+            DeviceId = deviceId,
+            OperatorId = userId,
+            AggregateType = "LAUNDRY_ORDER",
+            AggregateId = order.Id,
+            AggregateVersion = eventVersion,
+            EventType = "LAUNDRY_STATUS_UPDATED",
+            Sequence = order.Version,
+            IdempotencyKey = Guid.NewGuid().ToString(),
+            PayloadJson = JsonSerializer.Serialize(new { status = "DELIVERED" })
+        });
+        
+        await _dbContext.SaveChangesAsync();
+    }
+
+    #endregion
 }

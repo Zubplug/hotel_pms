@@ -8,9 +8,11 @@ import { ArrowLeft, Plus, Shirt, CheckCircle2, XCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { formatCurrency } from '@/lib/utils';
 import { useSession } from 'next-auth/react';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
 export default function LaundryCatalogPage() {
   const { propertyId } = useProperty();
+  const { provider } = useLodgeCoreProvider();
   const router = useRouter();
   const { data: session } = useSession();
   const [items, setItems] = useState<any[]>([]);
@@ -23,9 +25,8 @@ export default function LaundryCatalogPage() {
 
   const fetchItems = async () => {
     if (!propertyId) return;
-    const res = await fetch(`/api/v1/laundry/items?propertyId=${propertyId}`);
-    const data = await res.json();
-    setItems(data.data || []);
+    const res = await provider.laundry.getItems(propertyId);
+    setItems(res.data || []);
   };
 
   useEffect(() => {
@@ -36,6 +37,8 @@ export default function LaundryCatalogPage() {
     e.preventDefault();
     if (!newItemName || !newItemPrice) return;
 
+    // Creating catalog items isn't strictly necessary for offline parity, but we use native fetch 
+    // as it represents administrative setup rather than offline operational workflows.
     await fetch('/api/v1/laundry/items', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

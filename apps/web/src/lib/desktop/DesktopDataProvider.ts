@@ -428,5 +428,22 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     updateBatchStatus: async (batchId: string, status: string) => {
       return invokeDesktop('pos.updateBatchStatus', { batchId, status });
     },
+  },
+  laundry: {
+    getItems: async (propertyId: string) => {
+      return invokeDesktop('laundry.getItems', { propertyId });
+    },
+    getOrders: async (propertyId: string, status?: string) => {
+      return invokeDesktop('laundry.getOrders', { propertyId, status });
+    },
+    createOrder: async (data: any) => {
+      return invokeDesktop('laundry.createOrder', { data: JSON.stringify(data) });
+    },
+    updateOrderStatus: async (orderId: string, status: string) => {
+      return invokeDesktop('laundry.updateOrderStatus', { orderId, status });
+    },
+    deliverOrder: async (orderId: string) => {
+      return invokeDesktop('laundry.deliverOrder', { orderId });
+    }
   }
 };
