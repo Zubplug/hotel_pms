@@ -29,6 +29,14 @@ export async function POST(req: NextRequest) {
     if (!adminStaff) {
       return NextResponse.json({ success: false, error: 'Staff record not found for admin user' }, { status: 400 });
     }
+
+    const property = await prisma.property.findUnique({
+      where: { id: propertyId }
+    });
+
+    if (!property) {
+      return NextResponse.json({ success: false, error: 'Invalid Property ID: Property not found' }, { status: 400 });
+    }
     
     // 2. Register Terminal
     const deviceCredential = randomBytes(32).toString('hex');
