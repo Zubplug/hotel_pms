@@ -152,6 +152,14 @@ public class LocalRepository
         
         return events;
     }
+
+    public async Task<List<LocalSyncEvent>> GetSyncEventsAsync()
+    {
+        return await _dbContext.SyncEvents
+            .OrderByDescending(e => e.CreatedAt)
+            .Take(500)
+            .ToListAsync();
+    }
     
     public async Task<List<LocalReservation>> GetActiveReservationsAsync()
     {
@@ -2891,6 +2899,9 @@ public class LocalRepository
         var deadLetters = await _dbContext.OutboxEvents
             .Where(e => e.Status == "DEAD_LETTER")
             .ToListAsync();
+        var deadSyncEvents = await _dbContext.SyncEvents
+            .Where(e => e.Status == "DEAD_LETTER")
+            .ToListAsync();
             
         foreach (var evt in deadLetters)
         {
@@ -2899,9 +2910,18 @@ public class LocalRepository
             evt.NextAttemptAt = null;
             evt.LastError = null;
         }
+
+        foreach (var evt in deadSyncEvents)
+        {
+            evt.Status = "PENDING";
+            evt.AttemptCount = 0;
+            evt.LastAttemptAt = null;
+            evt.ErrorCode = null;
+            evt.ErrorMessage = null;
+        }
         
         await _dbContext.SaveChangesAsync();
-        return deadLetters.Count;
+        return deadLetters.Count + deadSyncEvents.Count;
     }
 
     public void AppendSyncEvent(string entityType, string entityId, string operationType, object payload, string? terminalId, string? outletId, string? sessionId, string? operatorId)

@@ -117,7 +117,7 @@ export function SyncIndicator() {
           <>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => router.push('/frontdesk/sync')} className="cursor-pointer">
-              Open Sync Center
+              Open Push Queue
             </DropdownMenuItem>
           </>
         )}

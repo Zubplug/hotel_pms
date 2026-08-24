@@ -44,6 +44,9 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     getOutboxEvents: async () => {
       return invokeDesktop('sync.outbox');
     },
+    getSyncEvents: async () => {
+      return invokeDesktop('sync.events');
+    },
     retryDeadLetters: async () => {
       return invokeDesktop('sync.retryDeadLetters');
     }

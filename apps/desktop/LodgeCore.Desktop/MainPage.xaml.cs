@@ -332,6 +332,9 @@ public partial class MainPage : ContentPage
                 case "sync.outbox":
                     responseData = await pmsInterop.GetOutboxEventsAsync();
                     break;
+                case "sync.events":
+                    responseData = await pmsInterop.GetSyncEventsAsync();
+                    break;
                 case "reservations.extendStay":
                     responseData = await pmsInterop.ExtendStayAsync(
                         parameters?["reservationId"]?.ToString() ?? "",

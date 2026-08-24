@@ -429,6 +429,19 @@ public class OfflinePMSInterop
         }
     }
 
+    public async Task<string> GetSyncEventsAsync()
+    {
+        try
+        {
+            var res = await _repo.GetSyncEventsAsync();
+            return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
     public async Task<string> GetActiveReservationsAsync()
     {
         try

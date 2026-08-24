@@ -108,11 +108,11 @@ export default function ReceptionistDashboardPage() {
               <AlertCircle className="w-5 h-5 text-red-600" />
               <div>
                 <h3 className="text-sm font-bold text-red-800">Sync Error Detected</h3>
-                <p className="text-sm text-red-700">The desktop agent is failing to push data to the cloud. Click Sync Center to view the exact error.</p>
+              <p className="text-sm text-red-700">The desktop agent is failing to push data to the cloud. Open the push queue to view the exact error.</p>
               </div>
             </div>
             <Button size="sm" variant="outline" className="text-red-700 border-red-200 hover:bg-red-100" onClick={() => router.push('/frontdesk/sync')}>
-              Open Sync Center
+              Open Push Queue
             </Button>
           </div>
         )}
@@ -159,7 +159,7 @@ export default function ReceptionistDashboardPage() {
 
               <Button onClick={() => router.push('/frontdesk/sync')} variant="outline" className="h-20 md:h-24 md:w-36 rounded-2xl bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-100 shadow hover:shadow-md hover:-translate-y-1 transition-all flex flex-col gap-2 group">
                 <RefreshCw className="w-6 h-6 md:w-7 md:h-7 text-amber-600 group-hover:scale-110 transition-transform" />
-                <span className="font-bold text-sm">Sync Center</span>
+                <span className="font-bold text-sm">Push Queue</span>
               </Button>
             </div>
         </div>

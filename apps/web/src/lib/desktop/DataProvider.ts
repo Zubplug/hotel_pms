@@ -14,6 +14,7 @@ export interface LodgeCoreDataProvider {
     forceSync?: () => Promise<any>;
     getSyncHealth?: () => Promise<any>;
     getOutboxEvents?: () => Promise<any>;
+    getSyncEvents?: () => Promise<any>;
     retryDeadLetters?: () => Promise<any>;
   };
   properties: {
