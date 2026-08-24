@@ -155,6 +155,32 @@ public class OfflinePMSInterop
         }
     }
 
+    public async Task<string> PrintShiftReportAsync(string dataJson)
+    {
+        try
+        {
+            var ctx = await GetSecureContextAsync();
+            await _repo.LogHardwareEventAsync(ctx.UserId, ctx.DeviceId, "POS_SHIFT_REPORT_PRINT", dataJson);
+            
+            var report = JsonSerializer.Deserialize<ShiftReportData>(
+                dataJson,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+            );
+
+            if (report == null)
+                return JsonSerializer.Serialize(new { success = false, error = "Invalid shift report data" }, _jsonOptions);
+
+            var (success, error) = await _escPos.PrintShiftReportAsync(report, ctx.OutletId);
+            
+            return JsonSerializer.Serialize(new { success, error }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error printing shift report");
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
     public async Task<string> ProvisionDeviceAsync(string deviceToken)
     {
         try

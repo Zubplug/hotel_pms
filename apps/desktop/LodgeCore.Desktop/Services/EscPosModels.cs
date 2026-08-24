@@ -105,6 +105,19 @@ public record PaymentReceiptData(
     DateTime PrintedAt
 );
 
+public record ShiftReportData(
+    string StaffName,
+    int OrdersCount,
+    decimal GrossSales,
+    decimal NetSales,
+    decimal CashSales,
+    decimal CardSales,
+    decimal RoomCharges,
+    decimal TotalDiscounts,
+    string Currency,
+    DateTime PrintedAt
+);
+
 public record RegistrationCardData(
     string GuestName,
     string? Email,

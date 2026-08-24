@@ -69,10 +69,21 @@ public class EscPosService
         using var scope = _serviceProvider.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
 
-        return await db.PrinterConfigs
+        var printer = await db.PrinterConfigs
             .Where(p => p.IsActive && p.PrinterRole == role &&
                         (p.OutletId == null || p.OutletId == outletId))
             .FirstOrDefaultAsync();
+
+        if (printer == null)
+        {
+            // Fallback: If no exact role matches, just grab any active printer for this terminal.
+            // Many users only configure a single printer for everything.
+            printer = await db.PrinterConfigs
+                .Where(p => p.IsActive && (p.OutletId == null || p.OutletId == outletId))
+                .FirstOrDefaultAsync();
+        }
+
+        return printer;
     }
 
     public async Task<LocalPrinterConfig> SavePrinterAsync(LocalPrinterConfig config)
@@ -293,6 +304,45 @@ public class EscPosService
 
         if (printer.OpenCashDrawer)
             builder.AddCommand(EscPosBuilder.OpenDrawer);
+
+        return await SendToPrinterAsync(printer, builder.Build());
+    }
+
+    public async Task<(bool success, string? error)> PrintShiftReportAsync(ShiftReportData report, string? outletId = null)
+    {
+        var printer = await GetPrinterByRoleAsync("RECEIPT", outletId);
+        if (printer == null)
+            return (false, "No active RECEIPT printer configured.");
+
+        var profile = new PrinterProfile { PaperWidth = printer.PaperWidth, HotelName = printer.HotelName };
+        var builder = new EscPosBuilder(profile);
+
+        builder.PrintHeader("SHIFT SALES REPORT");
+        builder.AddRow("Staff:", report.StaffName);
+        builder.AddRow("Date:", report.PrintedAt.ToString("dd/MM/yyyy HH:mm"));
+        builder.AddDivider('─');
+
+        builder.AddRow("Total Orders", report.OrdersCount.ToString());
+        builder.AddDivider('─');
+        
+        string cur = report.Currency;
+        builder.AddRow("Gross Sales", $"{cur} {report.GrossSales:N2}");
+        builder.AddRow("Discounts", $"-{cur} {report.TotalDiscounts:N2}");
+        builder.AddCommand(EscPosBuilder.BoldOn);
+        builder.AddRow("Net Sales", $"{cur} {report.NetSales:N2}");
+        builder.AddCommand(EscPosBuilder.BoldOff);
+        
+        builder.AddDivider('─');
+        builder.AddCommand(EscPosBuilder.AlignCenter);
+        builder.AddLine("PAYMENT BREAKDOWN");
+        builder.AddCommand(EscPosBuilder.AlignLeft);
+        
+        builder.AddRow("Cash", $"{cur} {report.CashSales:N2}");
+        builder.AddRow("Card", $"{cur} {report.CardSales:N2}");
+        builder.AddRow("Room Charges", $"{cur} {report.RoomCharges:N2}");
+        
+        builder.AddLineFeed(3);
+        builder.AddCommand(EscPosBuilder.CutPartial);
 
         return await SendToPrinterAsync(printer, builder.Build());
     }

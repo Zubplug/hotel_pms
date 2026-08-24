@@ -81,8 +81,12 @@ export const HardwareBridge = {
     return invokeDesktop('hardware.printGuestFolio', { data });
   },
 
-  printPaymentReceipt: async (data: { paymentId: string, amount: number, method: string, guestName: string, version: number }) => {
+  printPaymentReceipt: async (data: { receiptNumber: string, guestName: string, roomNumber: string, folioNumber: string, amountPaid: number, paymentMethod: string, paymentReference?: string, previousBalance: number, remainingBalance: number, cashierName: string, currency: string, propertyName: string, propertyAddress?: string, printedAt: string }) => {
     return invokeDesktop('hardware.printPaymentReceipt', { data });
+  },
+
+  printShiftReport: async (data: { staffName: string, ordersCount: number, grossSales: number, netSales: number, cashSales: number, cardSales: number, roomCharges: number, totalDiscounts: number, currency: string, printedAt: string }) => {
+    return invokeDesktop('hardware.printShiftReport', { data });
   },
 
   testPrinter: async (printerConfig: any) => {

@@ -13,6 +13,7 @@ import { Loader2, DollarSign, Receipt, TrendingUp, CreditCard, Banknote, User } 
 import { formatCurrency } from '@/lib/utils';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { Card, CardContent } from '@/components/ui/card';
+import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
 
 interface MySalesModalProps {
   isOpen: boolean;
@@ -43,6 +44,35 @@ export function MySalesModal({ isOpen, onClose, operatorToken, staffName }: MySa
       onClose();
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handlePrint = async () => {
+    if (HardwareBridge.isAvailable() && salesData) {
+      try {
+        const res = await HardwareBridge.printShiftReport({
+          staffName,
+          ordersCount: salesData.ordersCount || 0,
+          grossSales: salesData.grossSales || 0,
+          netSales: salesData.netSales || 0,
+          cashSales: salesData.cashSales || 0,
+          cardSales: salesData.cardSales || 0,
+          roomCharges: salesData.roomCharges || 0,
+          totalDiscounts: salesData.totalDiscounts || 0,
+          currency: 'USD', // or get from config if available
+          printedAt: new Date().toISOString()
+        });
+        
+        if (res.success) {
+          toast.success('Shift report sent to printer');
+        } else {
+          toast.error(`Printer Error: ${res.error || 'Unknown error'}`);
+        }
+      } catch (e: any) {
+        toast.error(`Printer Error: ${e.message || String(e)}`);
+      }
+    } else {
+      window.print();
     }
   };
 
@@ -141,7 +171,7 @@ export function MySalesModal({ isOpen, onClose, operatorToken, staffName }: MySa
                 <Button onClick={onClose} variant="outline">
                   Close
                 </Button>
-                <Button onClick={() => window.print()} className="ml-2">
+                <Button onClick={handlePrint} className="ml-2">
                   Print Report
                 </Button>
               </div>

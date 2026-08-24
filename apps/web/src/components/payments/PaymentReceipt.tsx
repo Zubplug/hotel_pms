@@ -8,6 +8,7 @@ import { Printer, ArrowLeft, Building2, User, Calendar, FileText } from 'lucide-
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
 
 export function PaymentReceipt({ id, onClose, hideBack = false }: { id: string, onClose?: () => void, hideBack?: boolean }) {
   const router = useRouter();
@@ -22,8 +23,28 @@ export function PaymentReceipt({ id, onClose, hideBack = false }: { id: string, 
     }
   });
 
-  const handlePrint = () => {
-    window.print();
+  const handlePrint = async () => {
+    if (HardwareBridge.isAvailable() && data) {
+      const { property, guest, reservation, folio, payment, receiptId } = data;
+      await HardwareBridge.printPaymentReceipt({
+        receiptNumber: receiptId,
+        guestName: guest?.name || 'Walk-in Guest',
+        roomNumber: reservation?.roomNumber || '',
+        folioNumber: folio.id,
+        amountPaid: payment.amount,
+        paymentMethod: payment.method,
+        paymentReference: payment.providerTransactionId,
+        previousBalance: folio.balance + payment.amount, // Since payment is already applied
+        remainingBalance: folio.balance,
+        cashierName: payment.receivedByName || payment.receivedBy || 'System',
+        currency: payment.currency,
+        propertyName: property.name || 'LodgeCore',
+        propertyAddress: property.address,
+        printedAt: new Date().toISOString()
+      });
+    } else {
+      window.print();
+    }
   };
 
   if (isLoading) {

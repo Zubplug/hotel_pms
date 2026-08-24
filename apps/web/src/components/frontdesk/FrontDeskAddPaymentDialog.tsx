@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { toast } from 'sonner';
 import { Loader2, CreditCard, Banknote, Landmark, Receipt, CheckCircle2, ChevronRight, AlertCircle, ArrowUpRight } from 'lucide-react';
 import { cn, generateUUID } from '@/lib/utils';
 import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
@@ -29,19 +30,28 @@ export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio }: { open:
     setPrintStatus('PRINTING');
     try {
       const res = await HardwareBridge.printPaymentReceipt({
-        paymentId,
-        amount: Number(amount),
-        method,
+        receiptNumber: paymentId,
         guestName: folio?.reservation?.primaryGuest?.firstName + ' ' + folio?.reservation?.primaryGuest?.lastName,
-        version: Date.now()
+        roomNumber: folio?.reservation?.roomNumber || '',
+        folioNumber: folio?.id || '',
+        amountPaid: Number(amount),
+        paymentMethod: method,
+        paymentReference: notes,
+        previousBalance: folio?.balance,
+        remainingBalance: folio?.balance - Number(amount),
+        cashierName: 'System',
+        currency: folio?.currency || 'USD',
+        propertyName: 'LodgeCore',
+        printedAt: new Date().toISOString()
       });
-      const parsed = typeof res === 'string' ? JSON.parse(res) : res;
-      if (parsed?.success) {
+      if (res.success) {
         setPrintStatus('SUCCESS');
       } else {
+        toast.error(`Printer Error: ${res.error || 'Unknown error'}`);
         setPrintStatus('FAILED');
       }
-    } catch (e) {
+    } catch (e: any) {
+      toast.error(`Printer Error: ${e.message || String(e)}`);
       setPrintStatus('FAILED');
     }
   };

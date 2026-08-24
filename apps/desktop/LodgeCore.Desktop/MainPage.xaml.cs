@@ -227,6 +227,10 @@ public partial class MainPage : ContentPage
                     responseData = await pmsInterop.PrintPaymentReceiptAsync(
                         System.Text.Json.JsonSerializer.Serialize(parameters?["data"]));
                     break;
+                case "hardware.printShiftReport":
+                    responseData = await pmsInterop.PrintShiftReportAsync(
+                        System.Text.Json.JsonSerializer.Serialize(parameters?["data"]));
+                    break;
                 case "hardware.sendToKds":
                     responseData = await pmsInterop.SendToKdsAsync(
                         System.Text.Json.JsonSerializer.Serialize(parameters?["order"]));
