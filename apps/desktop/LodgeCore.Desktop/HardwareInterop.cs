@@ -273,16 +273,15 @@ public class HardwareInterop
             // ---- 5. Status eligibility ------------------------------------
             //
             // CHECKED_IN → guest already in-house: always allowed
-            // PENDING    → arriving guest:          allowed only within window (step 6)
+            // PENDING/CONFIRMED → arriving guest: allowed only within window (step 6)
             //
-            // CONFIRMED (future), CANCELLED, CHECKED_OUT → explicitly denied.
-            // We do NOT include CONFIRMED here. A reservation booked for next month
-            // is CONFIRMED, and should never produce a room key.
-            if (reservation.Status != "CHECKED_IN" && reservation.Status != "PENDING")
+            // CANCELLED, CHECKED_OUT → explicitly denied.
+            // Future CONFIRMED bookings are safely blocked by the check-in window below.
+            if (reservation.Status != "CHECKED_IN" && reservation.Status != "PENDING" && reservation.Status != "CONFIRMED")
             {
                 await WriteAuditAsync(session, "ENCODE", false,
                     $"DENIED - Reservation status '{reservation.Status}' is not eligible " +
-                    $"(must be CHECKED_IN or PENDING within check-in window)",
+                    $"(must be CHECKED_IN, PENDING, or CONFIRMED within check-in window)",
                     roomId, reservationId);
                 return Fail(
                     $"Reservation is not eligible for a keycard " +
@@ -303,7 +302,7 @@ public class HardwareInterop
             //   earliest = 2026-08-17 22:00 Lagos local time
             //   latest   = 2026-08-21 00:00 Lagos local time
             //
-            if (reservation.Status == "PENDING")
+            if (reservation.Status == "PENDING" || reservation.Status == "CONFIRMED")
             {
                 // CheckInDate and CheckOutDate are stored as dates without time-of-day.
                 // We treat them as midnight of that date in hotel local time.
