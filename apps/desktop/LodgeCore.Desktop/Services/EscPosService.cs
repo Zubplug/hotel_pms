@@ -154,14 +154,14 @@ public class EscPosService
         builder.AddRow("Name:", card.GuestName);
         if (!string.IsNullOrEmpty(card.Email)) builder.AddRow("Email:", card.Email);
         if (!string.IsNullOrEmpty(card.Phone)) builder.AddRow("Phone:", card.Phone);
-        builder.AddDivider('─');
+        builder.AddDivider('-');
 
         builder.AddRow("Conf #:", card.ConfirmationNumber);
         builder.AddRow("Room  :", card.RoomNumber ?? "TBA");
         builder.AddRow("Arrival:", card.ArrivalDate.ToString("dd/MM/yyyy HH:mm"));
         builder.AddRow("Depart :", card.DepartureDate.ToString("dd/MM/yyyy"));
         builder.AddRow("Guests :", $"{card.Adults}A {card.Children}C");
-        builder.AddDivider('━');
+        builder.AddDivider('=');
 
         builder.AddLineFeed(2);
         builder.AddLine("I agree to the hotel terms and conditions.");
@@ -199,7 +199,7 @@ public class EscPosService
         builder.AddRow("Arrival:", folio.ArrivalDate.ToString("dd MMM yyyy"));
         builder.AddRow("Depart:", folio.DepartureDate.ToString("dd MMM yyyy"));
         
-        builder.AddDivider('─');
+        builder.AddDivider('-');
 
         // Dynamic columns based on width
         int dateW = 7;
@@ -208,7 +208,7 @@ public class EscPosService
         builder.AddCommand(EscPosBuilder.BoldOn);
         builder.Add4ColRow("DATE", "DESCRIPTION", "DR", "CR", dateW, descW, amtW, amtW);
         builder.AddCommand(EscPosBuilder.BoldOff);
-        builder.AddDivider('─');
+        builder.AddDivider('-');
 
         foreach (var t in folio.Transactions)
         {
@@ -219,7 +219,7 @@ public class EscPosService
             builder.Add4ColRow(dateStr, t.Description, drStr, crStr, dateW, descW, amtW, amtW);
         }
 
-        builder.AddDivider('─');
+        builder.AddDivider('-');
         
         builder.AddRow("Total Charges", $"{folio.Currency} {folio.TotalCharges:N0}");
         builder.AddRow("Total Payments", $"{folio.Currency} {folio.TotalPayments:N0}");
@@ -229,20 +229,20 @@ public class EscPosService
         builder.AddCommand(EscPosBuilder.DoubleSize);
         if (folio.BalanceDue == 0)
         {
-            builder.AddRow("BALANCE", "0");
+            builder.AddRow("BALANCE", "0", true);
         }
         else if (folio.BalanceDue < 0)
         {
-            builder.AddRow("CREDIT", $"{folio.Currency} {Math.Abs(folio.BalanceDue):N0}");
+            builder.AddRow("CREDIT", $"{folio.Currency} {Math.Abs(folio.BalanceDue):N0}", true);
         }
         else
         {
-            builder.AddRow("BALANCE DUE", $"{folio.Currency} {folio.BalanceDue:N0}");
+            builder.AddRow("BALANCE DUE", $"{folio.Currency} {folio.BalanceDue:N0}", true);
         }
         builder.AddCommand(EscPosBuilder.NormalSize);
         builder.AddCommand(EscPosBuilder.BoldOff);
         
-        builder.AddDivider('━');
+        builder.AddDivider('=');
         builder.AddCommand(EscPosBuilder.AlignCenter);
         builder.AddLine("Thank you for staying with us!");
         builder.AddLineFeed(3);
@@ -274,7 +274,7 @@ public class EscPosService
         builder.AddRow("Room:", payment.RoomNumber);
         builder.AddRow("Folio #:", payment.FolioNumber);
         builder.AddRow("Cashier:", payment.CashierName);
-        builder.AddDivider('─');
+        builder.AddDivider('-');
 
         builder.AddRow("Payment Method:", payment.PaymentMethod);
         if (!string.IsNullOrEmpty(payment.PaymentReference))
@@ -283,12 +283,12 @@ public class EscPosService
         builder.AddLineFeed();
         builder.AddCommand(EscPosBuilder.BoldOn);
         builder.AddCommand(EscPosBuilder.DoubleSize);
-        builder.AddRow("AMOUNT PAID", $"{payment.Currency} {payment.AmountPaid:N0}");
+        builder.AddRow("AMOUNT PAID", $"{payment.Currency} {payment.AmountPaid:N0}", true);
         builder.AddCommand(EscPosBuilder.NormalSize);
         builder.AddCommand(EscPosBuilder.BoldOff);
         builder.AddLineFeed();
         
-        builder.AddDivider('─');
+        builder.AddDivider('-');
         builder.AddCommand(EscPosBuilder.AlignCenter);
         builder.AddLine("Folio Summary");
         builder.AddCommand(EscPosBuilder.AlignLeft);
@@ -296,7 +296,7 @@ public class EscPosService
         builder.AddRow("Amount Paid:", $"{payment.Currency} {payment.AmountPaid:N0}");
         builder.AddRow("Remaining Balance:", $"{payment.Currency} {payment.RemainingBalance:N0}");
         
-        builder.AddDivider('━');
+        builder.AddDivider('=');
         builder.AddCommand(EscPosBuilder.AlignCenter);
         builder.AddLine("Thank you!");
         builder.AddLineFeed(3);
@@ -320,10 +320,10 @@ public class EscPosService
         builder.PrintHeader("SHIFT SALES REPORT");
         builder.AddRow("Staff:", report.StaffName);
         builder.AddRow("Date:", report.PrintedAt.ToString("dd/MM/yyyy HH:mm"));
-        builder.AddDivider('─');
+        builder.AddDivider('-');
 
         builder.AddRow("Total Orders", report.OrdersCount.ToString());
-        builder.AddDivider('─');
+        builder.AddDivider('-');
         
         string cur = report.Currency;
         builder.AddRow("Gross Sales", $"{cur} {report.GrossSales:N2}");
@@ -332,7 +332,7 @@ public class EscPosService
         builder.AddRow("Net Sales", $"{cur} {report.NetSales:N2}");
         builder.AddCommand(EscPosBuilder.BoldOff);
         
-        builder.AddDivider('─');
+        builder.AddDivider('-');
         builder.AddCommand(EscPosBuilder.AlignCenter);
         builder.AddLine("PAYMENT BREAKDOWN");
         builder.AddCommand(EscPosBuilder.AlignLeft);
@@ -368,12 +368,12 @@ public class EscPosService
         if (!string.IsNullOrEmpty(receipt.ServerName)) builder.AddRow("Server:", receipt.ServerName);
         if (!string.IsNullOrEmpty(receipt.GuestName)) builder.AddRow("Guest:", receipt.GuestName);
         builder.AddRow("Date:", receipt.PrintedAt.ToString("dd/MM/yyyy HH:mm"));
-        builder.AddDivider('─');
+        builder.AddDivider('-');
 
         builder.AddCommand(EscPosBuilder.BoldOn);
         builder.AddRow("ITEM", "TOTAL");
         builder.AddCommand(EscPosBuilder.BoldOff);
-        builder.AddDivider('─');
+        builder.AddDivider('-');
 
         foreach (var item in receipt.Items)
         {
@@ -386,7 +386,7 @@ public class EscPosService
                     builder.AddLine($"  + {mod}");
         }
 
-        builder.AddDivider('─');
+        builder.AddDivider('-');
 
         string cur = receipt.Currency;
         builder.AddRow("Subtotal", $"{cur} {receipt.Subtotal:N2}");
@@ -397,12 +397,12 @@ public class EscPosService
         builder.AddLineFeed();
         builder.AddCommand(EscPosBuilder.BoldOn);
         builder.AddCommand(EscPosBuilder.DoubleSize);
-        builder.AddRow("TOTAL", $"{cur} {receipt.Total:N2}");
+        builder.AddRow("TOTAL", $"{cur} {receipt.Total:N2}", true);
         builder.AddCommand(EscPosBuilder.NormalSize);
         builder.AddCommand(EscPosBuilder.BoldOff);
         
         builder.AddRow("Payment", receipt.PaymentMethod);
-        builder.AddDivider('━');
+        builder.AddDivider('=');
 
         builder.AddCommand(EscPosBuilder.AlignCenter);
         builder.AddLine("Thank you for your patronage!");
@@ -451,7 +451,7 @@ public class EscPosService
         
         if (!string.IsNullOrEmpty(kot.ServerName)) builder.AddLine($"Server : {kot.ServerName}");
         builder.AddLine($"Time   : {kot.FiredAt:HH:mm:ss}");
-        builder.AddDivider('━');
+        builder.AddDivider('=');
 
         // Group items by course
         foreach (var item in kot.Items)
@@ -485,7 +485,7 @@ public class EscPosService
             builder.AddLineFeed();
         }
 
-        builder.AddDivider('━');
+        builder.AddDivider('=');
         builder.AddLineFeed(3);
         builder.AddCommand(EscPosBuilder.CutPartial);
 
@@ -514,7 +514,7 @@ public class EscPosService
         builder.AddLine($"Table: {kot.TableNumber ?? "Walk-in"}   Order: {kot.OrderNumber}");
         builder.AddLine($"Server: {kot.ServerName}");
         if (!string.IsNullOrEmpty(kot.KotNumber)) builder.AddLine($"Batch: {kot.KotNumber}");
-        builder.AddDivider('─');
+        builder.AddDivider('-');
 
         foreach (var item in kot.Items)
         {

@@ -57,9 +57,10 @@ public class EscPosBuilder
         _doc.Add(cmd);
     }
 
-    public void AddRow(string left, string right)
+    public void AddRow(string left, string right, bool isDoubleWidth = false)
     {
-        int spaces = _width - left.Length - right.Length;
+        int effectiveWidth = isDoubleWidth ? _width / 2 : _width;
+        int spaces = effectiveWidth - left.Length - right.Length;
         if (spaces < 1) spaces = 1;
         AddLine(left + new string(' ', spaces) + right);
     }
@@ -111,13 +112,13 @@ public class EscPosBuilder
             AddLine(_profile.HotelAddress);
 
         AddLineFeed();
-        AddDivider('━');
+        AddDivider('=');
 
         AddCommand(BoldOn);
         AddLine(title);
         AddCommand(BoldOff);
         
-        AddDivider('━');
+        AddDivider('=');
         AddCommand(AlignLeft);
     }
 
