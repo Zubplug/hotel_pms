@@ -224,6 +224,12 @@ export async function GET(req: NextRequest) {
       orderBy: { updatedAt: 'asc' },
     });
 
+    const laundryItems = await prisma.laundryItem.findMany({
+      where: buildWhere({ propertyId }),
+      take: limit,
+      orderBy: { updatedAt: 'asc' },
+    });
+
     let allGuests: any[] = [];
     if (!since && property.organizationId) {
       allGuests = await prisma.guest.findMany({
@@ -252,6 +258,7 @@ export async function GET(req: NextRequest) {
     posOrders.forEach(s => allEntities.push({ type: 'PosOrder', updatedAt: s.updatedAt, data: s }));
     housekeepingTasks.forEach(s => allEntities.push({ type: 'HousekeepingTask', updatedAt: s.updatedAt, data: s }));
     maintenanceTickets.forEach(s => allEntities.push({ type: 'MaintenanceTicket', updatedAt: s.updatedAt, data: s }));
+    laundryItems.forEach(s => allEntities.push({ type: 'LaundryItem', updatedAt: s.updatedAt, data: s }));
     allGuests.forEach(s => allEntities.push({ type: 'Guest', updatedAt: s.updatedAt, data: s }));
 
     // Sort globally by updatedAt ascending
@@ -291,6 +298,7 @@ export async function GET(req: NextRequest) {
     const finalPosOrders = allEntities.filter(e => e.type === 'PosOrder').map(e => e.data);
     const finalHousekeepingTasks = allEntities.filter(e => e.type === 'HousekeepingTask').map(e => e.data);
     const finalMaintenanceTickets = allEntities.filter(e => e.type === 'MaintenanceTicket').map(e => e.data);
+    const finalLaundryItems = allEntities.filter(e => e.type === 'LaundryItem').map(e => e.data);
     const finalGuests = allEntities.filter(e => e.type === 'Guest').map(e => e.data);
 
     // Flatten Guests and Folios from the resulting reservations
@@ -380,6 +388,7 @@ export async function GET(req: NextRequest) {
       posOrders: finalPosOrders,
       housekeepingTasks: finalHousekeepingTasks,
       maintenanceTickets: finalMaintenanceTickets,
+      laundryItems: finalLaundryItems
     });
 
   } catch (error: any) {

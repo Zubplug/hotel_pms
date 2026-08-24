@@ -43,6 +43,9 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     },
     getOutboxEvents: async () => {
       return invokeDesktop('sync.outbox');
+    },
+    retryDeadLetters: async () => {
+      return invokeDesktop('sync.retryDeadLetters');
     }
   },
   properties: {
@@ -132,42 +135,54 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     cancel: async (id: string, reason: string) => {
       return invokeDesktop('reservations.cancel', { id, reason });
     },
-    checkIn: async (id: string, userId: string, deviceId: string) => {
-      // 1. Process Check-In in Local DB
-      const res = await invokeDesktop('reservations.checkIn', { id, userId, deviceId });
-      
-      // 2. Fetch reservation to get Room ID for encoder
-      const resDetailsRaw = await invokeDesktop('reservations.get', { id });
-      const resDetails = typeof resDetailsRaw === 'string' ? JSON.parse(resDetailsRaw) : resDetailsRaw;
-      
-      const roomId = resDetails?.data?.reservationRooms?.[0]?.roomId;
-      
-      if (res.success && roomId) {
-         // 3. Trigger Hardware Encode
-         const encodeRes = await invokeDesktop('keycards.encode', { roomId, lockCode: '', reservationId: id });
-         
-         const opId = 'sync_encode_' + Date.now();
-         syncOperations.set(opId, encodeRes.data);
-         
-         // 4. Return in the identical format as Web API
-         return {
-           success: encodeRes.success,
-           error: typeof encodeRes.error === 'string' ? { message: encodeRes.error } : encodeRes.error,
-           data: {
-             operationId: opId,
-             status: encodeRes.success ? 'SUCCESS' : 'FAILED',
-             errorMessage: encodeRes.data?.errorMessage || encodeRes.error,
-             operation: {
-               id: opId,
-               status: encodeRes.success ? 'SUCCESS' : 'FAILED',
-               errorMessage: encodeRes.data?.errorMessage || encodeRes.error,
-               command: { responseData: encodeRes.data }
-             }
-           }
-         };
+    checkIn: async (id: string, userId: string, deviceId: string, options?: { bypassKeycard?: boolean }) => {
+      const bypass = options?.bypassKeycard === true;
+      let encodedRoomId = '';
+      let encodeRes: any = { success: true, data: { status: 'SUCCESS' } };
+
+      if (!bypass) {
+        // 1. Fetch reservation to get Room ID for encoder
+        const resDetailsRaw = await invokeDesktop('reservations.get', { id });
+        const resDetails = typeof resDetailsRaw === 'string' ? JSON.parse(resDetailsRaw) : resDetailsRaw;
+        const roomId = resDetails?.data?.reservationRooms?.[0]?.roomId || resDetails?.data?.roomId;
+        
+        if (!roomId) {
+            return { success: false, error: 'No room assigned for check-in encoding.' };
+        }
+        
+        // 2. Trigger Hardware Encode FIRST
+        encodeRes = await invokeDesktop('keycards.encode', { roomId, lockCode: '', reservationId: id });
+        if (!encodeRes.success) {
+            return { success: false, error: 'Hardware Error: ' + (encodeRes.error || 'Failed to encode keycard.') };
+        }
+        encodedRoomId = roomId;
       }
       
-      return res;
+      // 3. Process Check-In in Local DB
+      const res = await invokeDesktop('reservations.checkIn', { id, userId, deviceId, bypassKeycard: bypass, encodedRoomId });
+      
+      if (!res.success) {
+         return { success: false, error: res.error || 'Check-in database update failed.' };
+      }
+      
+      const opId = 'sync_encode_' + Date.now();
+      if (!bypass) {
+         syncOperations.set(opId, encodeRes.data);
+      }
+      
+      // 4. Return in the identical format as Web API
+      return {
+        success: true,
+        data: {
+          operationId: opId,
+          status: 'SUCCESS',
+          operation: {
+            id: opId,
+            status: 'SUCCESS',
+            command: { responseData: encodeRes.data }
+          }
+        }
+      };
     },
     checkOut: async (id: string, userId: string, deviceId: string) => {
       return invokeDesktop('reservations.checkOut', { id, userId, deviceId });

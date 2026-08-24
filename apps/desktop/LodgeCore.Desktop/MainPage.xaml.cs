@@ -246,7 +246,13 @@ public partial class MainPage : ContentPage
                     break;
                 case "reservations.checkIn":
                     string resId = parameters?["id"]?.ToString() ?? "";
-                    responseData = await pmsInterop.ProcessCheckInAsync(resId);
+                    bool bypassKeycard = false;
+                    if (parameters != null && parameters.ContainsKey("bypassKeycard") && parameters["bypassKeycard"] != null)
+                    {
+                        bool.TryParse(parameters["bypassKeycard"].ToString(), out bypassKeycard);
+                    }
+                    string encodedRoomId = parameters?["encodedRoomId"]?.ToString() ?? "";
+                    responseData = await pmsInterop.ProcessCheckInAsync(resId, bypassKeycard, encodedRoomId);
                     break;
                 case "reservations.checkOut":
                     string outResId = parameters?["id"]?.ToString() ?? "";
@@ -254,6 +260,9 @@ public partial class MainPage : ContentPage
                     break;
                 case "dashboard.get":
                     responseData = await pmsInterop.GetDashboardAsync(parameters?["propertyId"]?.ToString() ?? "");
+                    break;
+                case "sync.retryDeadLetters":
+                    responseData = await pmsInterop.RetryDeadLetterEventsAsync();
                     break;
                 case "guests.list":
                     responseData = await pmsInterop.GetGuestsAsync();

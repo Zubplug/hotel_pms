@@ -139,9 +139,17 @@ public class LocalRepository
 
     public async Task<List<LocalOutboxEvent>> GetOutboxEventsAsync()
     {
-        return await _dbContext.OutboxEvents
+        var events = await _dbContext.OutboxEvents
             .OrderByDescending(e => e.CreatedAt)
             .ToListAsync();
+            
+        // Strip sensitive payloads before sending to the UI
+        foreach(var evt in events)
+        {
+            evt.PayloadJson = "{}";
+        }
+        
+        return events;
     }
     
     public async Task<List<LocalReservation>> GetActiveReservationsAsync()
@@ -2784,6 +2792,59 @@ public class LocalRepository
         });
         await _dbContext.SaveChangesAsync();
     }
+    
+    public async Task RecordKeycardAuditAsync(LodgeCore.Desktop.Data.Entities.LocalKeycardAudit audit)
+    {
+        _dbContext.KeycardAudits.Add(audit);
+        
+        var outboxEvent = new LocalOutboxEvent
+        {
+            PropertyId = audit.PropertyId,
+            DeviceId = audit.DeviceId,
+            OperatorId = audit.StaffId,
+            AggregateType = "KEYCARD_AUDIT",
+            AggregateId = audit.Id,
+            AggregateVersion = 1,
+            EventType = "CREATE",
+            PayloadJson = JsonSerializer.Serialize(new
+            {
+                StaffId = audit.StaffId,
+                DeviceId = audit.DeviceId,
+                PropertyId = audit.PropertyId,
+                OperationType = audit.OperationType,
+                RoomId = audit.RoomId,
+                ReservationId = audit.ReservationId,
+                BusinessDate = audit.BusinessDate,
+                Timestamp = audit.Timestamp,
+                Success = audit.Success,
+                StatusReason = audit.StatusReason,
+                CardSnr = audit.CardSnr,
+                OperationId = audit.OperationId
+            })
+        };
+        
+        _dbContext.OutboxEvents.Add(outboxEvent);
+        await _dbContext.SaveChangesAsync();
+    }
+
+    public async Task<int> RetryDeadLetterEventsAsync()
+    {
+        var deadLetters = await _dbContext.OutboxEvents
+            .Where(e => e.Status == "DEAD_LETTER")
+            .ToListAsync();
+            
+        foreach (var evt in deadLetters)
+        {
+            evt.Status = "PENDING";
+            evt.AttemptCount = 0;
+            evt.NextAttemptAt = null;
+            evt.LastError = null;
+        }
+        
+        await _dbContext.SaveChangesAsync();
+        return deadLetters.Count;
+    }
+
     public void AppendSyncEvent(string entityType, string entityId, string operationType, object payload, string? terminalId, string? outletId, string? sessionId, string? operatorId)
     {
         var payloadJson = System.Text.Json.JsonSerializer.Serialize(payload);

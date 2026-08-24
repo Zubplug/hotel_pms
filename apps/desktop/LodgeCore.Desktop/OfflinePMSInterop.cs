@@ -551,11 +551,43 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
-    public async Task<string> ProcessCheckInAsync(string reservationId)
+    public async Task<string> ProcessCheckInAsync(string reservationId, bool bypassKeycard = false, string encodedRoomId = "")
     {
         try
         {
             var ctx = await GetSecureContextAsync();
+            var res = await _repo.GetReservationAsync(reservationId);
+            if (res == null) throw new Exception("Reservation not found");
+            var activeRoom = res.ReservationRooms?.FirstOrDefault(r => r.Status == "ACTIVE");
+            var roomId = activeRoom?.RoomId ?? res.RoomId;
+
+            if (!bypassKeycard)
+            {
+                if (string.IsNullOrEmpty(encodedRoomId) || encodedRoomId != roomId)
+                {
+                    throw new Exception("HARDWARE_ENFORCEMENT: Keycard must be encoded before check-in can proceed.");
+                }
+            }
+            else
+            {
+                // Create Security Audit Log for Bypass
+                await _repo.RecordKeycardAuditAsync(new LodgeCore.Desktop.Data.Entities.LocalKeycardAudit
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    PropertyId = res.PropertyId,
+                    OperationType = "CHECK_IN_BYPASS",
+                    ReservationId = reservationId,
+                    RoomId = roomId,
+                    StatusReason = "Check-in hardware enforcement was bypassed by an authorized user.",
+                    StaffId = ctx.UserId,
+                    DeviceId = ctx.DeviceId,
+                    Timestamp = DateTime.UtcNow,
+                    BusinessDate = DateTime.UtcNow,
+                    Success = true,
+                    OperationId = Guid.NewGuid().ToString()
+                });
+            }
+
             var success = await _repo.ProcessCheckInAsync(reservationId, ctx.UserId, ctx.DeviceId);
             return JsonSerializer.Serialize(new { success }, _jsonOptions);
         }
@@ -597,6 +629,24 @@ public class OfflinePMSInterop
             var ctx = await GetSecureContextAsync();
             var success = await _repo.ResolveMaintenanceTicketAsync(ticketId, ctx.UserId, ctx.DeviceId);
             return JsonSerializer.Serialize(new { success }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
+    public async Task<string> RetryDeadLetterEventsAsync()
+    {
+        try
+        {
+            await GetSecureContextAsync(); // Ensure auth
+            int count = await _repo.RetryDeadLetterEventsAsync();
+            
+            // Fire sync in background
+            _ = Task.Run(() => _syncEngine.TriggerSyncAsync());
+            
+            return JsonSerializer.Serialize(new { success = true, data = new { requeuedCount = count } }, _jsonOptions);
         }
         catch (Exception ex)
         {

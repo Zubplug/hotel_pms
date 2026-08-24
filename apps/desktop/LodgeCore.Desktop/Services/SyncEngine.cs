@@ -262,18 +262,25 @@ public class SyncEngine : BackgroundService
             // Legacy call compatibility
         }
 
-        OnSyncHealthChanged?.Invoke(new SyncHealthInfo
+        try 
         {
-            Network = _isOnline ? NetworkState.ONLINE : NetworkState.OFFLINE,
-            Sync = state,
-            LastSyncAt = _lastSuccess,
-            PendingOperations = pendingCount,
-            LastError = _lastError,
-            Phase = phase,
-            Current = current,
-            Total = total,
-            Message = message
-        });
+            OnSyncHealthChanged?.Invoke(new SyncHealthInfo
+            {
+                Network = _isOnline ? NetworkState.ONLINE : NetworkState.OFFLINE,
+                Sync = state,
+                LastSyncAt = _lastSuccess,
+                PendingOperations = pendingCount,
+                LastError = _lastError,
+                Phase = phase,
+                Current = current,
+                Total = total,
+                Message = message
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning($"BroadcastHealth invocation failed: {ex.Message}");
+        }
     }
 
     public SyncHealthInfo GetCurrentHealth()
@@ -1136,6 +1143,48 @@ public class SyncEngine : BackgroundService
                 }
             }
 
+            // 8b. Laundry Items
+            if (root.TryGetProperty("laundryItems", out var laundryItemsArray))
+            {
+                var incomingIds = new HashSet<string>();
+                foreach (var el in laundryItemsArray.EnumerateArray())
+                {
+                    var id = el.GetProperty("id").GetString();
+                    var elPropertyId = el.TryGetProperty("propertyId", out var pid) && pid.ValueKind != System.Text.Json.JsonValueKind.Null ? pid.GetString() : "";
+                    
+                    if (string.IsNullOrEmpty(id) || elPropertyId != propertyId) continue;
+                    incomingIds.Add(id);
+
+                    var prod = await dbContext.LaundryItems.FirstOrDefaultAsync(x => x.Id == id, stoppingToken);
+                    if (prod == null)
+                    {
+                        prod = new LodgeCore.Desktop.Data.Entities.LocalLaundryItem { Id = id, PropertyId = propertyId };
+                        dbContext.LaundryItems.Add(prod);
+                    }
+                    prod.Name = el.TryGetProperty("name", out var n) && n.ValueKind != System.Text.Json.JsonValueKind.Null ? n.GetString() ?? "" : "";
+                    prod.Category = el.TryGetProperty("category", out var cid) && cid.ValueKind != System.Text.Json.JsonValueKind.Null ? cid.GetString() ?? "" : "";
+                    prod.Description = el.TryGetProperty("description", out var desc) && desc.ValueKind != System.Text.Json.JsonValueKind.Null ? desc.GetString() ?? "" : "";
+                    
+                    prod.BasePrice = el.TryGetProperty("basePrice", out var pr) 
+                        ? (pr.ValueKind == System.Text.Json.JsonValueKind.Number ? pr.GetDecimal() : (pr.ValueKind == System.Text.Json.JsonValueKind.String && decimal.TryParse(pr.GetString(), out var dp) ? dp : 0m)) 
+                        : 0m;
+                        
+                    prod.Currency = el.TryGetProperty("currency", out var curr) && curr.ValueKind != System.Text.Json.JsonValueKind.Null ? curr.GetString() ?? "NGN" : "NGN";
+                    prod.IsActive = !el.TryGetProperty("isActive", out var ia) || ia.GetBoolean();
+                    
+                    if (el.TryGetProperty("servicePricingRules", out var rules) && rules.ValueKind != System.Text.Json.JsonValueKind.Null)
+                    {
+                        prod.ServicePricingRules = rules.GetRawText();
+                    }
+                }
+                
+                if (laundryItemsArray.GetArrayLength() > 0)
+                {
+                    var stale = await dbContext.LaundryItems.Where(p => p.PropertyId == propertyId && !incomingIds.Contains(p.Id)).ToListAsync(stoppingToken);
+                    if (stale.Any() && !isIncremental) dbContext.LaundryItems.RemoveRange(stale);
+                }
+            }
+
             // 9. POS Floor Plans
             if (root.TryGetProperty("posFloorPlans", out var posFloorPlansArray))
             {
@@ -1703,11 +1752,11 @@ public class SyncEngine : BackgroundService
 
                 foreach (var evt in pendingEvents) 
                 { 
-                    if (statusCode == 400)
+                    if (statusCode == 400 || statusCode == 422)
                     {
                         // Malformed Event / Invalid Schema
                         evt.Status = "DEAD_LETTER";
-                        evt.LastError = $"HTTP 400: Malformed event payload";
+                        evt.LastError = $"HTTP {statusCode}: Malformed or invalid event payload";
                         evt.NextAttemptAt = null;
                     }
                     else if (statusCode == 409)
