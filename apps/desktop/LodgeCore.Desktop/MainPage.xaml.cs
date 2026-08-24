@@ -271,6 +271,27 @@ public partial class MainPage : ContentPage
                 case "guests.search":
                     responseData = await pmsInterop.SearchGuestsAsync(parameters?["query"]?.ToString() ?? "");
                     break;
+                case "laundry.getItems":
+                    responseData = await pmsInterop.GetLaundryItemsAsync(parameters?["propertyId"]?.ToString() ?? "");
+                    break;
+                case "laundry.getOrders":
+                    responseData = await pmsInterop.GetLaundryOrdersAsync(
+                        parameters?["propertyId"]?.ToString() ?? "",
+                        parameters?["status"]?.ToString()
+                    );
+                    break;
+                case "laundry.createOrder":
+                    responseData = await pmsInterop.CreateLaundryOrderAsync(parameters?["data"]?.ToString() ?? "");
+                    break;
+                case "laundry.updateOrderStatus":
+                    responseData = await pmsInterop.UpdateLaundryOrderStatusAsync(
+                        parameters?["orderId"]?.ToString() ?? "",
+                        parameters?["status"]?.ToString() ?? ""
+                    );
+                    break;
+                case "laundry.deliverOrder":
+                    responseData = await pmsInterop.DeliverLaundryOrderAsync(parameters?["orderId"]?.ToString() ?? "");
+                    break;
                 case "guests.update":
                     responseData = await pmsInterop.UpdateGuestAsync(
                         parameters?["guestId"]?.ToString() ?? "",
