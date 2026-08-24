@@ -114,6 +114,7 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
     enabled: !isNewGuest && guestDropdownOpen,
   });
   const filteredGuests = (guestsRes as any)?.data || [];
+  const visibleGuests = filteredGuests.slice(0, 8);
 
   const { data: roomTypesRes, isLoading: loadingRoomTypes } = useQuery({
     queryKey: ['room-types', propertyId],
@@ -192,7 +193,7 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
           <div className="lg:col-span-7 space-y-6">
             
             {/* Guest Selection Glass Card */}
-            <div className="bg-white/70 backdrop-blur-xl border border-white/50 shadow-xl shadow-blue-900/5 rounded-3xl p-8">
+            <div className="relative z-40 bg-white/70 backdrop-blur-xl border border-white/50 shadow-xl shadow-blue-900/5 rounded-3xl p-8">
               <div className="flex items-center justify-between mb-8">
                 <div className="flex items-center gap-3">
                   <div className="bg-blue-100 p-2.5 rounded-2xl text-blue-700">
@@ -258,7 +259,9 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
                             onFocus={() => setGuestDropdownOpen(true)}
                             onBlur={() => setTimeout(() => setGuestDropdownOpen(false), 150)}
                             placeholder="Search by name, phone number, or email..."
-                            className="h-14 rounded-2xl bg-white/70 pl-12 pr-12 text-base shadow-sm"
+                            autoComplete="off"
+                            aria-label="Search guests by name, phone number, or email"
+                            className="h-14 rounded-2xl border-slate-200 bg-white pl-12 pr-12 text-base shadow-sm transition-shadow focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
                             disabled={loadingGuests}
                           />
                           {loadingGuests ? (
@@ -269,11 +272,14 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
                             </button>
                           ) : null}
                           {guestDropdownOpen && (
-                            <div className="absolute z-30 mt-2 max-h-72 w-full overflow-y-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl">
-                              {!guestSearch && <p className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Recent guests</p>}
-                              {filteredGuests.length === 0 ? (
+                            <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-64 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-[0_18px_45px_rgba(15,23,42,0.18)]">
+                              <div className="flex items-center justify-between px-3 py-2">
+                                <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-400">{guestSearch ? 'Matching guests' : 'Recent guests'}</p>
+                                {guestSearch && <span className="text-xs text-slate-400">{filteredGuests.length} found</span>}
+                              </div>
+                              {visibleGuests.length === 0 ? (
                                 <div className="px-4 py-8 text-center text-sm text-slate-500">{guestSearch ? 'No guest found for that search.' : 'No guests available.'}</div>
-                              ) : filteredGuests.map((guest: any) => (
+                              ) : visibleGuests.map((guest: any) => (
                                 <button
                                   key={guest.id}
                                   type="button"
