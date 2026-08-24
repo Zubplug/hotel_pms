@@ -249,7 +249,9 @@ public class HardwareInterop
             }
 
             // ---- 3. Validate Reservation -----------------------------------
-            var reservation = await db.Reservations.FindAsync(reservationId);
+            var reservation = await db.Reservations
+                .Include(r => r.Rooms)
+                .FirstOrDefaultAsync(r => r.Id == reservationId);
             if (reservation == null || reservation.PropertyId != session.PropertyId)
             {
                 await WriteAuditAsync(session, "ENCODE", false,

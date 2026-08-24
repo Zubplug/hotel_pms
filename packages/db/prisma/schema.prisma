@@ -2647,13 +2647,20 @@ model LaundryItem {
   updatedAt DateTime @updatedAt @db.Timestamptz
 }
 
+enum LaundryCustomerType {
+  IN_HOUSE
+  WALK_IN
+}
+
 model LaundryOrder {
   id         String   @id @default(uuid()) @db.Uuid
   propertyId String   @db.Uuid
   property   Property @relation(fields: [propertyId], references: [id])
 
-  reservationId String      @db.Uuid
-  reservation   Reservation @relation(fields: [reservationId], references: [id])
+  customerType LaundryCustomerType @default(IN_HOUSE)
+
+  reservationId String?      @db.Uuid
+  reservation   Reservation? @relation(fields: [reservationId], references: [id])
 
   roomId  String? @db.Uuid
   room    Room?   @relation(fields: [roomId], references: [id])

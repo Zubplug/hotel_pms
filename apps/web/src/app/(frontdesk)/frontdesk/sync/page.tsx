@@ -16,7 +16,7 @@ export default function SyncCenterPage() {
   const [isForceSyncing, setIsForceSyncing] = useState(false);
 
   const role = (session?.user as any)?.role;
-  const isAuthorized = role === 'ADMIN' || role === 'MANAGER' || role === 'SYSTEM_ADMIN';
+  const isAuthorized = role === 'ADMIN' || role === 'MANAGER' || role === 'SYSTEM_ADMIN' || role === 'RECEPTIONIST' || role === 'FRONT_DESK';
 
   // If unauthorized, return early
   if (session && !isAuthorized) {

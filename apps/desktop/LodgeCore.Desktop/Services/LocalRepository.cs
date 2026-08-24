@@ -1047,6 +1047,7 @@ public class LocalRepository
         var reservations = await _dbContext.Reservations
             .Include(r => r.Guest)
             .Include(r => r.Folio)
+            .Include(r => r.Rooms).ThenInclude(rr => rr.Room)
             .Where(r => r.PropertyId == propertyId && r.Status != "CANCELLED" && r.Status != "NO_SHOW")
             .ToListAsync();
             
@@ -1153,11 +1154,18 @@ public class LocalRepository
 
         var allRooms = await allRoomsQuery.ToListAsync();
 
-        var conflictingReservations = await _dbContext.Reservations
-            .Where(r => r.PropertyId == propertyId && (r.Status == "CONFIRMED" || r.Status == "CHECKED_IN"))
-            .Where(r => r.CheckInDate < checkOut && r.CheckOutDate > checkIn)
-            .Select(r => r.RoomId)
-            .Where(id => id != null)
+        // Get IDs of rooms already booked in the overlap window via the join table
+        var conflictingReservationIds = await _dbContext.Reservations
+            .Where(r => r.PropertyId == propertyId
+                && (r.Status == "CONFIRMED" || r.Status == "CHECKED_IN")
+                && r.CheckInDate < checkOut
+                && r.CheckOutDate > checkIn)
+            .Select(r => r.Id)
+            .ToListAsync();
+
+        var conflictingRoomIds = await _dbContext.Set<LocalReservationRoom>()
+            .Where(rr => conflictingReservationIds.Contains(rr.ReservationId) && rr.RoomId != null)
+            .Select(rr => rr.RoomId)
             .ToListAsync();
 
         var outOfOrderRooms = await _dbContext.MaintenanceTickets
@@ -1167,7 +1175,7 @@ public class LocalRepository
             .ToListAsync();
 
         var availableRooms = allRooms
-            .Where(r => !conflictingReservations.Contains(r.Id))
+            .Where(r => !conflictingRoomIds.Contains(r.Id))
             .Where(r => !outOfOrderRooms.Contains(r.Id))
             .ToList();
 

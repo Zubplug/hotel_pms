@@ -12,9 +12,12 @@ import { FrontDeskAddPaymentDialog } from '../frontdesk/FrontDeskAddPaymentDialo
 import { FrontDeskRefundDialog } from '../frontdesk/FrontDeskRefundDialog';
 import { CheckOutDialog } from './CheckOutDialog';
 import { usePathname } from 'next/navigation';
+import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
 export function FolioSection({ reservation }: { reservation: any }) {
   const pathname = usePathname();
+  const isFrontDesk = pathname.startsWith('/frontdesk');
   const [isAddPaymentOpen, setIsAddPaymentOpen] = useState(false);
   const [refundPaymentId, setRefundPaymentId] = useState<string | null>(null);
   const [isCheckOutOpen, setIsCheckOutOpen] = useState(false);
@@ -143,9 +146,32 @@ export function FolioSection({ reservation }: { reservation: any }) {
                               variant="ghost" 
                               size="sm" 
                               className="h-7 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                              onClick={() => {
-                                const basePath = pathname.startsWith('/frontdesk') ? '/frontdesk' : '';
-                                window.open(`${basePath}/payments/${linkedPayment.id}/receipt`, '_blank');
+                              onClick={async () => {
+                                if (isFrontDesk) {
+                                  // Use native ESC/POS printing on desktop
+                                  try {
+                                    await HardwareBridge.printPaymentReceipt({
+                                      receiptNumber: linkedPayment.reference || linkedPayment.id.substring(0, 8).toUpperCase(),
+                                      guestName: reservation.primaryGuest ? `${reservation.primaryGuest.firstName} ${reservation.primaryGuest.lastName}` : 'Guest',
+                                      roomNumber: reservation.reservationRooms?.[0]?.room?.number || 'N/A',
+                                      folioNumber: folio.id.substring(0, 8).toUpperCase(),
+                                      amountPaid: Math.abs(Number(linkedPayment.amount)),
+                                      paymentMethod: linkedPayment.method || 'CASH',
+                                      paymentReference: linkedPayment.reference,
+                                      previousBalance: 0,
+                                      remainingBalance: Number(folio.balance),
+                                      cashierName: 'Staff',
+                                      currency: folio.currency || 'NGN',
+                                      propertyName: '',
+                                      printedAt: new Date().toISOString(),
+                                    });
+                                  } catch {
+                                    // Fallback to browser print if native fails
+                                    window.open(`/frontdesk/payments/${linkedPayment.id}/receipt`, '_blank');
+                                  }
+                                } else {
+                                  window.open(`/payments/${linkedPayment.id}/receipt`, '_blank');
+                                }
                               }}
                             >
                               <Printer className="w-3 h-3 mr-1" /> Receipt
