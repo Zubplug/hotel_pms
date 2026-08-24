@@ -34,6 +34,7 @@ export async function GET(req: NextRequest) {
         reservation: {
           select: { confirmationNumber: true, primaryGuest: { select: { firstName: true, lastName: true } } }
         },
+        guest: { select: { firstName: true, lastName: true, phone: true } },
         room: { select: { number: true } },
         items: {
           include: {
@@ -44,7 +45,33 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: 'desc' }
     });
 
-    return successResponse(orders);
+    // Manually stitch the folio details for walk-in delivered orders
+    const walkInOrders = orders.filter(o => o.customerType === 'WALK_IN' && o.status === 'DELIVERED' && o.folioItemId);
+    const folioItemIds = walkInOrders.map(o => o.folioItemId as string);
+    let foliosByItemId: Record<string, any> = {};
+
+    if (folioItemIds.length > 0) {
+      const folioItems = await prisma.folioItem.findMany({
+        where: { id: { in: folioItemIds } },
+        include: { folio: true }
+      });
+      foliosByItemId = folioItems.reduce((acc, item) => {
+        acc[item.id] = item;
+        return acc;
+      }, {} as Record<string, any>);
+    }
+
+    const enhancedOrders = orders.map(order => {
+      if (order.folioItemId && foliosByItemId[order.folioItemId]) {
+        return {
+          ...order,
+          folioItem: foliosByItemId[order.folioItemId]
+        };
+      }
+      return order;
+    });
+
+    return successResponse(enhancedOrders);
   } catch (err) {
     console.error('[LaundryOrders GET]', err);
     return errorResponse('INTERNAL_ERROR', 'Failed to fetch laundry orders', 500);
@@ -57,10 +84,27 @@ export async function POST(req: NextRequest) {
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
 
     const body = await req.json();
-    const { propertyId, reservationId, roomId, guestId, serviceType, specialNotes, items } = body;
+    const { propertyId, customerType, reservationId, roomId, guestId, walkInDetails, serviceType, specialNotes, items } = body;
 
-    if (!propertyId || !reservationId || !items || !Array.isArray(items) || items.length === 0) {
+    if (!propertyId || !items || !Array.isArray(items) || items.length === 0) {
       return errorResponse('BAD_REQUEST', 'Missing required fields', 400);
+    }
+
+    const cType = customerType || 'IN_HOUSE';
+
+    if (cType === 'IN_HOUSE') {
+        if (!reservationId || !guestId) {
+            return errorResponse('BAD_REQUEST', 'IN_HOUSE orders require reservationId and guestId', 400);
+        }
+    } else if (cType === 'WALK_IN') {
+        if (reservationId || roomId) {
+            return errorResponse('BAD_REQUEST', 'WALK_IN orders cannot have reservationId or roomId', 400);
+        }
+        if (!walkInDetails?.phone || !walkInDetails?.firstName) {
+            return errorResponse('BAD_REQUEST', 'WALK_IN orders require a first name and phone number', 400);
+        }
+    } else {
+        return errorResponse('BAD_REQUEST', 'Invalid customerType', 400);
     }
 
     const canCreate = await hasPermission(session.user.id, 'laundry', 'create', propertyId);
@@ -84,7 +128,6 @@ export async function POST(req: NextRequest) {
 
       let unitPrice = Number(dbItem.basePrice);
       
-      // Apply service pricing rules if they exist
       // Apply service pricing rules if they exist, otherwise use default multipliers
       if (dbItem.servicePricingRules && (dbItem.servicePricingRules as any)[serviceType]) {
           const rule = (dbItem.servicePricingRules as any)[serviceType];
@@ -118,12 +161,45 @@ export async function POST(req: NextRequest) {
     }
 
     const order = await prisma.$transaction(async (tx: any) => {
+      let finalGuestId = guestId;
+
+      if (cType === 'WALK_IN') {
+          // Acquire transaction-level advisory lock based on phone number to prevent duplicate guest creation in concurrent requests
+          const numericPhone = walkInDetails.phone.replace(/[^0-9]/g, '');
+          const lockId = numericPhone ? Number(BigInt(numericPhone) % BigInt(2147483647)) : 123456789;
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockId})`;
+
+          // Try to reuse guest by phone number
+          const existingGuest = await tx.guest.findFirst({
+              where: { 
+                  phone: walkInDetails.phone,
+                  organizationId: (await tx.property.findUnique({ where: { id: propertyId } }))?.organizationId || ''
+              }
+          });
+
+          if (existingGuest) {
+              finalGuestId = existingGuest.id;
+          } else {
+              const newGuest = await tx.guest.create({
+                  data: {
+                      organizationId: (await tx.property.findUnique({ where: { id: propertyId } }))?.organizationId || '',
+                      firstName: walkInDetails.firstName,
+                      lastName: walkInDetails.lastName || '',
+                      phone: walkInDetails.phone,
+                      email: walkInDetails.email || null,
+                  }
+              });
+              finalGuestId = newGuest.id;
+          }
+      }
+
       const newOrder = await tx.laundryOrder.create({
         data: {
           propertyId,
-          reservationId,
-          roomId,
-          guestId,
+          customerType: cType,
+          reservationId: cType === 'IN_HOUSE' ? reservationId : null,
+          roomId: cType === 'IN_HOUSE' ? roomId : null,
+          guestId: finalGuestId,
           serviceType: serviceType || 'STANDARD',
           specialNotes,
           totalAmount,
@@ -146,9 +222,6 @@ export async function POST(req: NextRequest) {
 
       return newOrder;
     });
-
-    // NOTE: SyncEngine Outbox event for Desktop Parity
-    // await createOutboxEvent('LaundryOrderCreated', { orderId: order.id });
 
     return successResponse(order, 201);
   } catch (err) {

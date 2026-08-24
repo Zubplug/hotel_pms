@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useProperty } from '@/components/PropertyProvider';
 import { Button } from '@/components/ui/button';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Loader2, Shirt, CheckCircle2, Clock, Truck } from 'lucide-react';
+import { ArrowLeft, Loader2, Shirt, CheckCircle2, Clock, Truck, CreditCard, Banknote, Receipt } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
@@ -18,6 +18,9 @@ export default function ManageLaundryOrderPage() {
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
+  
+  const [paymentMethod, setPaymentMethod] = useState('CASH');
+  const [processingPayment, setProcessingPayment] = useState(false);
 
   const fetchOrder = async () => {
     if (!propertyId) return;
@@ -63,6 +66,41 @@ export default function ManageLaundryOrderPage() {
       }
     } finally {
       setUpdating(false);
+    }
+  };
+
+  const handleSettlePayment = async () => {
+    if (!order?.folioItem?.folio) return;
+    const folio = order.folioItem.folio;
+    
+    if (folio.balance <= 0) return alert('Folio is already fully paid.');
+    
+    setProcessingPayment(true);
+    try {
+      const res = await fetch('/api/v1/payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          folioId: folio.id,
+          amount: Number(folio.balance),
+          currency: folio.currency,
+          method: paymentMethod,
+          idempotencyKey: `laundry_pay_${order.id}_${Date.now()}`,
+          notes: 'Walk-in laundry payment settled via frontdesk'
+        })
+      });
+      
+      const data = await res.json();
+      if (res.ok || res.status === 201 || res.status === 200) {
+        alert('Payment recorded successfully!');
+        await fetchOrder();
+      } else {
+        alert(data.error || 'Failed to process payment');
+      }
+    } catch (e: any) {
+      alert('Network error while processing payment');
+    } finally {
+      setProcessingPayment(false);
     }
   };
 
@@ -120,17 +158,70 @@ export default function ManageLaundryOrderPage() {
              </div>
           </div>
 
-          <div>
+           <div>
              <h2 className="text-lg font-bold mb-4">Items</h2>
              <div className="space-y-3">
                {order.items?.map((item: any) => (
-                 <div key={item.id} className="flex justify-between items-center p-4 bg-slate-50 rounded-xl">
+                 <div key={item.id} className="flex justify-between items-center p-4 bg-slate-50 rounded-xl border border-slate-100">
                     <span className="font-bold text-slate-800">{item.quantity}x {item.item?.name || 'Item'}</span>
                     <span className="font-semibold text-slate-600">{formatCurrency(Number(item.priceAtTime), order.currency)}</span>
                  </div>
                ))}
              </div>
           </div>
+
+          {order.customerType === 'WALK_IN' && order.status === 'DELIVERED' && order.folioItem?.folio && (
+            <div className="mt-8 p-6 bg-cyan-50/50 rounded-2xl border border-cyan-100">
+              <h2 className="text-lg font-bold text-cyan-900 mb-4 flex items-center gap-2">
+                <Receipt className="w-5 h-5" /> Walk-In Folio Settlement
+              </h2>
+              
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div className="p-4 bg-white rounded-xl shadow-sm border border-slate-100">
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Charges</p>
+                  <p className="text-xl font-black text-slate-900">{formatCurrency(Number(order.folioItem.folio.totalCharges), order.folioItem.folio.currency)}</p>
+                </div>
+                <div className="p-4 bg-white rounded-xl shadow-sm border border-slate-100">
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Paid</p>
+                  <p className="text-xl font-black text-emerald-600">{formatCurrency(Number(order.folioItem.folio.totalPayments), order.folioItem.folio.currency)}</p>
+                </div>
+                <div className="p-4 bg-white rounded-xl shadow-sm border border-cyan-200 ring-2 ring-cyan-100 col-span-2">
+                  <p className="text-xs font-bold text-cyan-700 uppercase tracking-wider">Balance Due</p>
+                  <p className="text-2xl font-black text-cyan-700">{formatCurrency(Number(order.folioItem.folio.balance), order.folioItem.folio.currency)}</p>
+                </div>
+              </div>
+
+              {Number(order.folioItem.folio.balance) > 0 ? (
+                <div className="flex items-end gap-4 p-4 bg-white rounded-xl border border-slate-200">
+                  <div className="flex-1 space-y-2">
+                    <label className="text-sm font-bold text-slate-700">Payment Method</label>
+                    <select 
+                      className="w-full h-12 bg-slate-50 border border-slate-200 rounded-lg px-3 font-medium outline-none focus:ring-2 focus:ring-cyan-500"
+                      value={paymentMethod}
+                      onChange={e => setPaymentMethod(e.target.value)}
+                    >
+                      <option value="CASH">Cash</option>
+                      <option value="POS">POS / Card Terminal</option>
+                      <option value="CARD">Online Card</option>
+                      <option value="BANK_TRANSFER">Bank Transfer</option>
+                    </select>
+                  </div>
+                  <Button 
+                    onClick={handleSettlePayment} 
+                    disabled={processingPayment} 
+                    className="h-12 px-8 bg-cyan-600 hover:bg-cyan-700 text-white font-bold rounded-lg shadow-md"
+                  >
+                    {processingPayment ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <Banknote className="w-5 h-5 mr-2" />}
+                    Record Payment
+                  </Button>
+                </div>
+              ) : (
+                <div className="p-4 bg-emerald-50 text-emerald-800 rounded-xl border border-emerald-200 flex items-center font-bold">
+                  <CheckCircle2 className="w-5 h-5 mr-2 text-emerald-600" /> Folio Fully Settled
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

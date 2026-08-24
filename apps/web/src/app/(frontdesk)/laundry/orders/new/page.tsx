@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useProperty } from '@/components/PropertyProvider';
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, CheckCircle2, Shirt, Loader2, Search } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Shirt, Loader2, Search, User, Phone, Mail } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
@@ -16,14 +16,21 @@ export default function NewLaundryOrderPage() {
   const [items, setItems] = useState<any[]>([]);
   const [selectedItems, setSelectedItems] = useState<Record<string, number>>({});
   
+  const [customerType, setCustomerType] = useState<'IN_HOUSE' | 'WALK_IN'>('IN_HOUSE');
+
   const [reservations, setReservations] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedReservation, setSelectedReservation] = useState<any>(null);
   const [showDropdown, setShowDropdown] = useState(false);
   
+  const [walkInDetails, setWalkInDetails] = useState({ firstName: '', lastName: '', phone: '', email: '' });
+  const [matchingGuest, setMatchingGuest] = useState<any>(null);
+  const searchTimeout = useRef<NodeJS.Timeout | null>(null);
+
   const [serviceType, setServiceType] = useState('STANDARD');
   const [loading, setLoading] = useState(false);
   const [fetchingGuests, setFetchingGuests] = useState(false);
+  const [searchingWalkIn, setSearchingWalkIn] = useState(false);
   
   useEffect(() => {
     if (!propertyId) return;
@@ -55,6 +62,36 @@ export default function NewLaundryOrderPage() {
     setShowDropdown(false);
   };
 
+  const handleWalkInPhoneChange = (phone: string) => {
+      setWalkInDetails(prev => ({ ...prev, phone }));
+      setMatchingGuest(null);
+      if (searchTimeout.current) clearTimeout(searchTimeout.current);
+
+      if (phone.length >= 6) {
+          setSearchingWalkIn(true);
+          searchTimeout.current = setTimeout(async () => {
+              try {
+                  const res = await fetch(`/api/v1/guests?phone=${encodeURIComponent(phone)}&propertyId=${propertyId}`);
+                  const data = await res.json();
+                  if (data?.data && data.data.length > 0) {
+                      const guest = data.data[0];
+                      setMatchingGuest(guest);
+                      setWalkInDetails({
+                          firstName: guest.firstName,
+                          lastName: guest.lastName || '',
+                          phone: guest.phone,
+                          email: guest.email || ''
+                      });
+                  }
+              } catch (e) {
+                  console.error(e);
+              } finally {
+                  setSearchingWalkIn(false);
+              }
+          }, 600);
+      }
+  };
+
   const getMultiplier = (type: string) => {
     if (type === 'EXPRESS') return 1.5;
     if (type === 'DRY_CLEAN') return 2.0;
@@ -79,8 +116,14 @@ export default function NewLaundryOrderPage() {
 
   const handleSubmit = async (e: any) => {
     e.preventDefault();
-    if (!selectedReservation) return alert('Please select a guest');
     
+    if (customerType === 'IN_HOUSE' && !selectedReservation) return alert('Please select a guest');
+    if (customerType === 'WALK_IN') {
+        if (!walkInDetails.firstName || !walkInDetails.phone) {
+            return alert('First Name and Phone are required for walk-ins');
+        }
+    }
+
     const orderItems = Object.entries(selectedItems)
       .filter(([_, qty]) => qty > 0)
       .map(([itemId, quantity]) => ({ itemId, quantity }));
@@ -88,16 +131,23 @@ export default function NewLaundryOrderPage() {
     if (orderItems.length === 0) return alert('Select at least one item');
     setLoading(true);
 
-    const roomId = selectedReservation.reservationRooms?.[0]?.roomId;
-
-    const res = await provider.laundry.createOrder({
+    const payload: any = {
       propertyId,
-      reservationId: selectedReservation.id,
-      guestId: selectedReservation.primaryGuestId,
-      roomId: roomId || undefined,
+      customerType,
       serviceType,
       items: orderItems
-    });
+    };
+
+    if (customerType === 'IN_HOUSE') {
+        payload.reservationId = selectedReservation.id;
+        payload.guestId = selectedReservation.primaryGuestId;
+        const roomId = selectedReservation.reservationRooms?.[0]?.roomId;
+        if (roomId) payload.roomId = roomId;
+    } else {
+        payload.walkInDetails = walkInDetails;
+    }
+
+    const res = await provider.laundry.createOrder(payload);
 
     if (!res.error) {
       router.push('/laundry');
@@ -124,44 +174,100 @@ export default function NewLaundryOrderPage() {
 
         <form onSubmit={handleSubmit} className="bg-white p-8 rounded-3xl border border-slate-200/60 shadow-xl shadow-slate-200/40 space-y-8">
           
+          <div className="flex gap-4 p-1 bg-slate-100 rounded-xl overflow-hidden w-full max-w-sm">
+             <button type="button" onClick={() => setCustomerType('IN_HOUSE')} className={`flex-1 py-2 font-bold rounded-lg transition-all ${customerType === 'IN_HOUSE' ? 'bg-white text-cyan-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                In-House Guest
+             </button>
+             <button type="button" onClick={() => setCustomerType('WALK_IN')} className={`flex-1 py-2 font-bold rounded-lg transition-all ${customerType === 'WALK_IN' ? 'bg-white text-cyan-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                Walk-In
+             </button>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="space-y-2 relative">
-              <label className="block text-sm font-bold text-slate-700">Guest / Room Search</label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
-                <input 
-                  type="text"
-                  placeholder="Search room or guest name..."
-                  className="w-full h-12 pl-10 pr-4 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-cyan-500"
-                  value={searchQuery}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value);
-                    setSelectedReservation(null);
-                    setShowDropdown(true);
-                  }}
-                  onFocus={() => setShowDropdown(true)}
-                  onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
-                />
-                {fetchingGuests && (
-                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 animate-spin" />
-                )}
-              </div>
-              
-              {showDropdown && filteredReservations.length > 0 && (
-                <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
-                  {filteredReservations.map(res => (
-                    <div 
-                      key={res.id} 
-                      className="px-4 py-3 hover:bg-cyan-50 cursor-pointer flex justify-between items-center border-b border-slate-50 last:border-0"
-                      onClick={() => handleSelectReservation(res)}
-                    >
-                      <span className="font-bold text-slate-700">{res.primaryGuest?.firstName} {res.primaryGuest?.lastName}</span>
-                      <span className="font-mono text-sm bg-slate-100 px-2 py-1 rounded text-slate-600">{res.reservationRooms?.[0]?.room?.number || 'N/A'}</span>
-                    </div>
-                  ))}
+            {customerType === 'IN_HOUSE' ? (
+                <div className="space-y-2 relative">
+                <label className="block text-sm font-bold text-slate-700">Guest / Room Search</label>
+                <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
+                    <input 
+                    type="text"
+                    placeholder="Search room or guest name..."
+                    className="w-full h-12 pl-10 pr-4 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-cyan-500"
+                    value={searchQuery}
+                    onChange={(e) => {
+                        setSearchQuery(e.target.value);
+                        setSelectedReservation(null);
+                        setShowDropdown(true);
+                    }}
+                    onFocus={() => setShowDropdown(true)}
+                    onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
+                    />
+                    {fetchingGuests && (
+                    <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 animate-spin" />
+                    )}
                 </div>
-              )}
-            </div>
+                
+                {showDropdown && filteredReservations.length > 0 && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                    {filteredReservations.map(res => (
+                        <div 
+                        key={res.id} 
+                        className="px-4 py-3 hover:bg-cyan-50 cursor-pointer flex justify-between items-center border-b border-slate-50 last:border-0"
+                        onClick={() => handleSelectReservation(res)}
+                        >
+                        <span className="font-bold text-slate-700">{res.primaryGuest?.firstName} {res.primaryGuest?.lastName}</span>
+                        <span className="font-mono text-sm bg-slate-100 px-2 py-1 rounded text-slate-600">{res.reservationRooms?.[0]?.room?.number || 'N/A'}</span>
+                        </div>
+                    ))}
+                    </div>
+                )}
+                </div>
+            ) : (
+                <div className="space-y-4">
+                    <div className="space-y-2 relative">
+                        <label className="block text-sm font-bold text-slate-700 flex justify-between">
+                            Phone Number
+                            {matchingGuest && <span className="text-cyan-600 text-xs bg-cyan-50 px-2 py-0.5 rounded-full">Existing Guest Found</span>}
+                        </label>
+                        <div className="relative">
+                            <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
+                            <input 
+                                type="tel"
+                                required
+                                placeholder="Enter phone number..."
+                                className="w-full h-12 pl-10 pr-4 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-cyan-500"
+                                value={walkInDetails.phone}
+                                onChange={(e) => handleWalkInPhoneChange(e.target.value)}
+                            />
+                            {searchingWalkIn && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 animate-spin" />}
+                        </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <label className="block text-sm font-bold text-slate-700">First Name</label>
+                            <input 
+                                type="text"
+                                required
+                                disabled={!!matchingGuest}
+                                className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-cyan-500 disabled:opacity-60"
+                                value={walkInDetails.firstName}
+                                onChange={(e) => setWalkInDetails(prev => ({ ...prev, firstName: e.target.value }))}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="block text-sm font-bold text-slate-700">Last Name (Optional)</label>
+                            <input 
+                                type="text"
+                                disabled={!!matchingGuest}
+                                className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 font-medium outline-none focus:ring-2 focus:ring-cyan-500 disabled:opacity-60"
+                                value={walkInDetails.lastName}
+                                onChange={(e) => setWalkInDetails(prev => ({ ...prev, lastName: e.target.value }))}
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <div className="space-y-2">
               <label className="block text-sm font-bold text-slate-700">Service Type</label>

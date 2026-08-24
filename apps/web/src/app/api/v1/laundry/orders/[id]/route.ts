@@ -82,24 +82,54 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             throw new Error('Order is already billed');
         }
 
-        if (!order.reservation) {
-            throw new Error('Cannot bill to room: order has no associated reservation');
-        }
+        let activeFolio;
 
-        // Find active folio for the reservation
-        const activeFolio = order.reservation.folios.length > 0 
-            ? order.reservation.folios[0] 
-            : await tx.folio.create({
-                data: {
-                    reservationId: order.reservation.id,
+        if (order.customerType === 'IN_HOUSE') {
+            const reservation = order.reservation;
+            if (!reservation) {
+                throw new Error('Cannot bill to room: IN_HOUSE order has no associated reservation');
+            }
+            // Find active folio for the reservation
+            activeFolio = reservation.folios.length > 0 
+                ? reservation.folios[0] 
+                : await tx.folio.create({
+                    data: {
+                        reservationId: reservation.id,
+                        propertyId: order.propertyId,
+                        guestId: order.guestId,
+                        folioNumber: `FOL-${Date.now()}`,
+                        type: 'ROOM',
+                        status: 'OPEN',
+                        currency: order.currency
+                    }
+                });
+        } else if (order.customerType === 'WALK_IN') {
+            // Find an active WALK_IN folio for this guest
+            const existingFolios = await tx.folio.findMany({
+                where: {
                     propertyId: order.propertyId,
                     guestId: order.guestId,
-                    folioNumber: `FOL-${Date.now()}`,
-                    type: 'ROOM',
-                    status: 'OPEN',
-                    currency: order.currency
-                }
+                    type: 'WALK_IN',
+                    status: 'OPEN'
+                },
+                take: 1
             });
+
+            activeFolio = existingFolios.length > 0
+                ? existingFolios[0]
+                : await tx.folio.create({
+                    data: {
+                        propertyId: order.propertyId,
+                        guestId: order.guestId,
+                        folioNumber: `FOL-${Date.now()}`,
+                        type: 'WALK_IN',
+                        status: 'OPEN',
+                        currency: order.currency
+                    }
+                });
+        } else {
+            throw new Error('Invalid customer type for billing');
+        }
 
         const folioItem = await tx.folioItem.create({
             data: {
@@ -150,16 +180,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       return updated;
     });
 
-    // NOTE: SyncEngine Outbox events
-    // await createOutboxEvent('LaundryOrderStatusUpdated', { orderId: updatedOrder.id, status });
-    // if (status === 'DELIVERED') {
-    //    await createOutboxEvent('LaundryOrderDelivered', { orderId: updatedOrder.id, folioItemId: updatedOrder.folioItemId });
-    // }
-
     return successResponse(updatedOrder);
   } catch (err: any) {
     console.error('[LaundryOrders PATCH]', err);
-    if (err.message === 'Order is already billed' || err.message === 'Cannot bill to room: order has no associated reservation') {
+    if (err.message === 'Order is already billed' || err.message.includes('Cannot bill')) {
         return errorResponse('CONFLICT', err.message, 409);
     }
     return errorResponse('INTERNAL_ERROR', 'Failed to update laundry order', 500);
