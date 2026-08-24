@@ -159,7 +159,14 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
       }
       
       // 3. Process Check-In in Local DB
-      const res = await invokeDesktop('reservations.checkIn', { id, userId, deviceId, bypassKeycard: bypass, encodedRoomId });
+      const res = await invokeDesktop('reservations.checkIn', { 
+        id, 
+        userId, 
+        deviceId, 
+        bypassKeycard: bypass, 
+        encodedRoomId, 
+        encodeData: encodeRes.data ? JSON.stringify(encodeRes.data) : undefined 
+      });
       
       if (!res.success) {
          return { success: false, error: res.error || 'Check-in database update failed.' };

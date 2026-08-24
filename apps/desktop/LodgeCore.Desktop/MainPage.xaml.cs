@@ -251,8 +251,9 @@ public partial class MainPage : ContentPage
                     {
                         bool.TryParse(parameters["bypassKeycard"].ToString(), out bypassKeycard);
                     }
-                    string encodedRoomId = parameters?["encodedRoomId"]?.ToString() ?? "";
-                    responseData = await pmsInterop.ProcessCheckInAsync(resId, bypassKeycard, encodedRoomId);
+                    var encodedRoomId = parameters?["encodedRoomId"]?.ToString() ?? "";
+                    var encodeData = parameters?["encodeData"]?.ToString();
+                    responseData = await pmsInterop.ProcessCheckInAsync(resId, bypassKeycard, encodedRoomId, encodeData);
                     break;
                 case "reservations.checkOut":
                     string outResId = parameters?["id"]?.ToString() ?? "";

@@ -590,7 +590,7 @@ public class LocalRepository
         folio.TransactionsJson = rootObj.ToJsonString();
     }
 
-    public async Task<bool> ProcessCheckInAsync(string reservationId, string userId, string deviceId)
+    public async Task<bool> ProcessCheckInAsync(string reservationId, string userId, string deviceId, string? encodeData = null)
     {
         var res = await _dbContext.Reservations.FindAsync(reservationId);
         if (res == null || (res.Status != "PENDING" && res.Status != "CONFIRMED")) return false;
@@ -612,7 +612,11 @@ public class LocalRepository
             AggregateVersion = eventVersion,
             EventType = "CHECK_IN",
             Sequence = res.LocalSequence,
-            PayloadJson = JsonSerializer.Serialize(new { roomId = res.RoomId })
+            PayloadJson = JsonSerializer.Serialize(new 
+            { 
+                roomId = res.RoomId,
+                encodeData = encodeData != null ? JsonSerializer.Deserialize<JsonElement>(encodeData) : null
+            })
         });
 
         await _dbContext.SaveChangesAsync();

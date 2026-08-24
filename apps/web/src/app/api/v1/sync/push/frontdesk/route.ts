@@ -283,6 +283,9 @@ export async function POST(req: NextRequest) {
              await tx.folioItem.createMany({ data: folioItems });
           }
           else if (eventType === 'CHECK_IN') {
+             const reservation = await tx.reservation.findUnique({ where: { id: aggregateId } });
+             if (!reservation) throw new Error(`Reservation ${aggregateId} not found`);
+             
              await tx.reservation.update({
                where: { id: aggregateId },
                data: { status: 'CHECKED_IN' }
@@ -292,6 +295,37 @@ export async function POST(req: NextRequest) {
                  where: { id: payload.roomId },
                  data: { status: 'OCCUPIED' }
                });
+             }
+             
+             // If we have keycard encode data from offline check-in, store it!
+             if (payload.encodeData && payload.encodeData.cardSnr && payload.roomId) {
+                 // Try to find an existing lock for this room
+                 let doorLock = await tx.doorLock.findFirst({ where: { roomId: payload.roomId } });
+                 if (!doorLock) {
+                    doorLock = await tx.doorLock.create({
+                      data: {
+                        propertyId: payload.propertyId || reservation.propertyId,
+                        roomId: payload.roomId,
+                        lockCode: `ENCODER-${payload.roomId}`,
+                        provider: 'DELUNS_ENCODER',
+                        status: 'ONLINE'
+                      }
+                    });
+                 }
+                 
+                 await tx.lockCredential.create({
+                     data: {
+                         reservationId: aggregateId,
+                         roomId: payload.roomId,
+                         lockId: doorLock.id,
+                         credentialType: 'rfid',
+                         status: 'ACTIVE',
+                         validFrom: new Date(),
+                         validUntil: new Date(reservation.checkOut),
+                         cardSerialNumber: payload.encodeData.cardSnr,
+                         metadata: payload.encodeData
+                     }
+                 });
              }
           } 
           else if (eventType === 'CHECK_OUT') {
