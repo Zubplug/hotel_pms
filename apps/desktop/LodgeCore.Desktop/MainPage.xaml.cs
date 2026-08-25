@@ -401,6 +401,18 @@ public partial class MainPage : ContentPage
                         parameters?["charge"]?["description"]?.ToString() ?? "",
                         parameters?["charge"]?["idempotencyKey"]?.ToString() ?? parameters?["idempotencyKey"]?.ToString());
                     break;
+                case "frontdesk.session.get":
+                    responseData = await pmsInterop.GetFrontdeskSessionAsync(parameters?["propertyId"]?.ToString() ?? "");
+                    break;
+                case "frontdesk.cashAccounts.list":
+                    responseData = await pmsInterop.GetFrontdeskCashAccountsAsync(parameters?["propertyId"]?.ToString() ?? "");
+                    break;
+                case "frontdesk.session.open":
+                    responseData = await pmsInterop.OpenFrontdeskSessionAsync(parameters?["propertyId"]?.ToString() ?? "", parameters?["cashAccountId"]?.ToString() ?? "", parameters?["openingFloat"]?.GetValue<decimal>() ?? 0);
+                    break;
+                case "frontdesk.session.close":
+                    responseData = await pmsInterop.CloseFrontdeskSessionAsync(parameters?["sessionId"]?.ToString() ?? "", parameters?["declaredCash"]?.GetValue<decimal>() ?? 0);
+                    break;
                 case "keycards.encode":
                     var hardwareResponse = await hardwareInterop.EncodeCardAsync(
                         parameters?["roomId"]?.ToString() ?? "",

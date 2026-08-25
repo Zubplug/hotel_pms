@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
 
     const body = await req.json();
-    const { folioId, amount, currency, method, idempotencyKey, notes, providerTransactionId } = body;
+    const { folioId, amount, currency, method, idempotencyKey, notes, providerTransactionId, terminalId, reference, authorizationCode, frontdeskSessionId } = body;
 
     if (!folioId || !amount || !currency || !method || !idempotencyKey) {
       return errorResponse('BAD_REQUEST', 'Missing required fields (folioId, amount, currency, method, idempotencyKey)', 400);
@@ -58,6 +58,15 @@ export async function POST(req: NextRequest) {
     const allowedPropertyIds = await getUserPropertyIds(session.user.id);
     if (!allowedPropertyIds.includes(folio.propertyId)) {
       return errorResponse('FORBIDDEN', 'No access to this property', 403);
+    }
+
+    const staff = await prisma.staff.findFirst({ where: { userId: session.user.id } });
+    const activeFrontdeskSession = staff
+      ? await prisma.frontdeskSession.findFirst({ where: { id: frontdeskSessionId || undefined, propertyId: folio.propertyId, staffId: staff.id, status: 'OPEN' } })
+      : null;
+    const role = String((session.user as any).role || '');
+    if (['RECEPTIONIST', 'FRONT_DESK', 'FRONT_DESK_MANAGER'].includes(role) && !activeFrontdeskSession) {
+      return errorResponse('CONFLICT', 'Open a front desk cashier session before posting a payment.', 409);
     }
 
     if (currency !== folio.currency) {
@@ -120,10 +129,34 @@ export async function POST(req: NextRequest) {
           idempotencyKey,
           receiptNumber: receiptNumber as any,
           providerTransactionId,
+          terminalId,
+          reference,
+          authorizationCode,
+          frontdeskSessionId: activeFrontdeskSession?.id,
           receivedBy: session.user.id,
           notes
         } as any
       });
+
+      if (activeFrontdeskSession && method === 'CASH' && staff) {
+        await tx.posCashMovement.create({
+          data: {
+            propertyId: folio.propertyId,
+            deviceId: terminalId || 'FRONT_DESK',
+            frontdeskSessionId: activeFrontdeskSession.id,
+            userId: staff.id,
+            amount: numericAmount,
+            currency,
+            type: 'PAYMENT',
+            sourceAccountId: activeFrontdeskSession.cashAccountId,
+            destinationAccountId: activeFrontdeskSession.cashAccountId,
+            reasonCode: 'FOLIO_PAYMENT',
+            receiptReference: reference || payment.receiptNumber,
+            operationId: `FD-PAYMENT-${payment.id}`,
+            businessDate: activeFrontdeskSession.businessDate
+          }
+        });
+      }
 
       // D. Write Atomic Audit Log
       await tx.auditLog.create({

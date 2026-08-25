@@ -117,12 +117,14 @@ model Property {
   inventoryAlerts      InventoryAlert[]
   approvalRequests     ApprovalRequest[]
   refundApprovalRules  RefundApprovalRule[]
+  frontdeskSessions    FrontdeskSession[]
+  cashAccounts         CashAccount[]
+  reconciliationExceptions ReconciliationException[]
 
   createdAt     DateTime       @default(now()) @db.Timestamptz
   updatedAt     DateTime       @updatedAt @db.Timestamptz
   deletedAt     DateTime?      @db.Timestamptz
   PosSession    PosSession[]
-  CashAccount   CashAccount[]
   HotelEvent    HotelEvent[]
   laundryItems  LaundryItem[]
   laundryOrders LaundryOrder[]
@@ -898,6 +900,8 @@ model Payment {
   folio         Folio        @relation(fields: [folioId], references: [id])
   reservationId String?      @db.Uuid
   reservation   Reservation? @relation(fields: [reservationId], references: [id])
+  frontdeskSessionId String? @db.Uuid
+  frontdeskSession   FrontdeskSession? @relation(fields: [frontdeskSessionId], references: [id])
   propertyId    String       @db.Uuid
   property      Property     @relation(fields: [propertyId], references: [id])
 
@@ -905,6 +909,9 @@ model Payment {
   provider              String?
   providerTransactionId String?
   providerRef           String?
+  terminalId            String?
+  reference             String?
+  authorizationCode     String?
 
   amount       Decimal  @db.Decimal(18, 4)
   currency     String
@@ -931,6 +938,8 @@ model Payment {
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([frontdeskSessionId])
 }
 
 model Refund {
@@ -1412,6 +1421,8 @@ model Staff {
   primaryPosSessions   PosSession[]           @relation("PosSessionPrimaryOperator")
   processedPosPayments PosPayment[]           @relation("PaymentProcessedBy")
   CashAccount          CashAccount[]
+  frontdeskSessions    FrontdeskSession[]
+  frontdeskAudits      FrontdeskSessionAudit[]
 }
 
 model StaffPosOutletAccess {
@@ -2288,6 +2299,10 @@ model PosSession {
 }
 
 enum PosCashMovementType {
+  OPENING_FLOAT
+  PAYMENT
+  REFUND
+  ADJUSTMENT
   PAID_OUT
   CASH_DROP
   CASH_TRANSFER_IN
@@ -2317,6 +2332,7 @@ model CashAccount {
 
   sourceMovements      PosCashMovement[] @relation("SourceAccount")
   destinationMovements PosCashMovement[] @relation("DestinationAccount")
+  frontdeskSessions    FrontdeskSession[]
 }
 
 model PosCashMovement {
@@ -2324,6 +2340,7 @@ model PosCashMovement {
   propertyId           String              @db.Uuid
   deviceId             String
   posSessionId         String?             @db.Uuid
+  frontdeskSessionId   String?             @db.Uuid
   userId               String              @db.Uuid
   amount               Decimal             @db.Decimal(18, 4)
   currency             String              @default("NGN")
@@ -2338,10 +2355,92 @@ model PosCashMovement {
   authorizedBy         String?             @db.Uuid
 
   session            PosSession? @relation(fields: [posSessionId], references: [id])
+  frontdeskSession   FrontdeskSession? @relation(fields: [frontdeskSessionId], references: [id])
   sourceAccount      CashAccount @relation("SourceAccount", fields: [sourceAccountId], references: [id])
   destinationAccount CashAccount @relation("DestinationAccount", fields: [destinationAccountId], references: [id])
 
   createdAt DateTime @default(now()) @db.Timestamptz
+
+  @@index([frontdeskSessionId])
+}
+
+enum FrontdeskSessionStatus {
+  OPEN
+  CLOSING
+  CLOSED
+  UNDER_REVIEW
+  RECONCILED
+  REOPEN_REQUESTED
+}
+
+model FrontdeskSession {
+  id                    String                 @id @default(uuid()) @db.Uuid
+  propertyId            String                 @db.Uuid
+  property              Property               @relation(fields: [propertyId], references: [id])
+  staffId               String                 @db.Uuid
+  staff                 Staff                  @relation(fields: [staffId], references: [id])
+  cashAccountId         String                 @db.Uuid
+  cashAccount           CashAccount            @relation(fields: [cashAccountId], references: [id])
+  shiftReference        String                 @unique
+  businessDate          DateTime               @db.Date
+  status                FrontdeskSessionStatus @default(OPEN)
+  openingFloat          Decimal                @default(0) @db.Decimal(18, 4)
+  systemExpectedCash   Decimal                @default(0) @db.Decimal(18, 4)
+  declaredCash          Decimal?               @db.Decimal(18, 4)
+  variance              Decimal?               @db.Decimal(18, 4)
+  openedAt              DateTime               @default(now()) @db.Timestamptz
+  closingAt             DateTime?              @db.Timestamptz
+  closedAt              DateTime?              @db.Timestamptz
+  reconciledAt          DateTime?              @db.Timestamptz
+  reconciledBy          String?                @db.Uuid
+  reconciliationDecision String?
+  reconciliationNotes   String?
+
+  payments              Payment[]
+  cashMovements         PosCashMovement[]
+  audits                FrontdeskSessionAudit[]
+  exceptions            ReconciliationException[]
+
+  createdAt             DateTime               @default(now()) @db.Timestamptz
+  updatedAt             DateTime               @updatedAt @db.Timestamptz
+
+  @@index([propertyId, businessDate])
+  @@index([staffId, status])
+  @@index([cashAccountId, status])
+}
+
+model FrontdeskSessionAudit {
+  id                  String           @id @default(uuid()) @db.Uuid
+  frontdeskSessionId  String           @db.Uuid
+  frontdeskSession    FrontdeskSession @relation(fields: [frontdeskSessionId], references: [id])
+  action              String
+  performedBy         String           @db.Uuid
+  performer           Staff            @relation(fields: [performedBy], references: [id])
+  notes               String?
+  metadata            Json?
+  createdAt           DateTime         @default(now()) @db.Timestamptz
+
+  @@index([frontdeskSessionId, createdAt])
+}
+
+model ReconciliationException {
+  id                 String           @id @default(uuid()) @db.Uuid
+  propertyId         String           @db.Uuid
+  property           Property         @relation(fields: [propertyId], references: [id])
+  frontdeskSessionId String           @db.Uuid
+  frontdeskSession   FrontdeskSession @relation(fields: [frontdeskSessionId], references: [id])
+  type               String
+  severity           String
+  amount             Decimal?         @db.Decimal(18, 4)
+  source             String
+  reason             String
+  status             String           @default("OPEN")
+  resolvedBy         String?          @db.Uuid
+  resolvedAt         DateTime?        @db.Timestamptz
+  createdAt          DateTime         @default(now()) @db.Timestamptz
+
+  @@index([propertyId, status])
+  @@index([frontdeskSessionId, status])
 }
 
 model PosSettlement {

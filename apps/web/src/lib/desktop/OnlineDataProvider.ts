@@ -60,6 +60,20 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
       return apiFetch(`/api/v1/frontdesk/dashboard?propertyId=${propertyId}`);
     }
   },
+  frontdesk: {
+    async listCashAccounts(propertyId: string) {
+      return apiFetch(`/api/v1/frontdesk/cash-accounts?propertyId=${encodeURIComponent(propertyId)}`);
+    },
+    async getSession(propertyId: string) {
+      return apiFetch(`/api/v1/frontdesk/sessions?propertyId=${encodeURIComponent(propertyId)}`);
+    },
+    async openSession(data: any) {
+      return apiFetch('/api/v1/frontdesk/sessions', { method: 'POST', body: JSON.stringify(data) });
+    },
+    async closeSession(sessionId: string, declaredCash: number) {
+      return apiFetch(`/api/v1/frontdesk/sessions/${sessionId}/close`, { method: 'POST', body: JSON.stringify({ declaredCash }) });
+    },
+  },
   refunds: {
     async list(propertyId: string) {
       return apiFetch(`/api/v1/refund-requests?propertyId=${encodeURIComponent(propertyId)}`);

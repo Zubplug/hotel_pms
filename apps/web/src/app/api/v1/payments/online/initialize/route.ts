@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
 
     const body = await req.json();
-    const { folioId, amount, currency } = body;
+    const { folioId, amount, currency, terminalId, frontdeskSessionId } = body;
 
     if (!folioId || !amount || !currency) {
       return errorResponse('BAD_REQUEST', 'Missing required fields', 400);
@@ -39,6 +39,15 @@ export async function POST(req: NextRequest) {
     const allowedPropertyIds = await getUserPropertyIds(session.user.id);
     if (!allowedPropertyIds.includes(folio.propertyId)) {
       return errorResponse('FORBIDDEN', 'No access to this property', 403);
+    }
+
+    const staff = await prisma.staff.findFirst({ where: { userId: session.user.id } });
+    const activeFrontdeskSession = staff
+      ? await prisma.frontdeskSession.findFirst({ where: { id: frontdeskSessionId || undefined, propertyId: folio.propertyId, staffId: staff.id, status: 'OPEN' } })
+      : null;
+    const role = String((session.user as any).role || '');
+    if (['RECEPTIONIST', 'FRONT_DESK', 'FRONT_DESK_MANAGER'].includes(role) && !activeFrontdeskSession) {
+      return errorResponse('CONFLICT', 'Open a front desk cashier session before starting a payment.', 409);
     }
 
     if (currency !== folio.currency) {
@@ -73,6 +82,8 @@ export async function POST(req: NextRequest) {
           baseAmount: numericAmount,
           status: 'PENDING',
           idempotencyKey: providerRef, // Using providerRef as the idempotency key here
+          terminalId,
+          frontdeskSessionId: activeFrontdeskSession?.id,
           receivedBy: session.user.id, // Who initiated the link
         }
       });

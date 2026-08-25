@@ -628,6 +628,50 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
+
+    public async Task<string> GetFrontdeskSessionAsync(string propertyId)
+    {
+        try
+        {
+            var ctx = await GetSecureContextAsync();
+            var session = await _repo.GetActiveFrontdeskSessionAsync(propertyId, ctx.UserId);
+            return JsonSerializer.Serialize(new { success = true, data = new { session } }, _jsonOptions);
+        }
+        catch (Exception ex) { return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions); }
+    }
+
+    public async Task<string> GetFrontdeskCashAccountsAsync(string propertyId)
+    {
+        try
+        {
+            await GetSecureContextAsync();
+            var accounts = await _repo.GetCashAccountsAsync(propertyId);
+            return JsonSerializer.Serialize(new { success = true, data = accounts }, _jsonOptions);
+        }
+        catch (Exception ex) { return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions); }
+    }
+
+    public async Task<string> OpenFrontdeskSessionAsync(string propertyId, string cashAccountId, decimal openingFloat)
+    {
+        try
+        {
+            var ctx = await GetSecureContextAsync();
+            var session = await _repo.OpenFrontdeskSessionAsync(propertyId, ctx.UserId, cashAccountId, openingFloat, ctx.DeviceId);
+            return JsonSerializer.Serialize(new { success = true, data = new { session } }, _jsonOptions);
+        }
+        catch (Exception ex) { return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions); }
+    }
+
+    public async Task<string> CloseFrontdeskSessionAsync(string sessionId, decimal declaredCash)
+    {
+        try
+        {
+            var ctx = await GetSecureContextAsync();
+            var session = await _repo.CloseFrontdeskSessionAsync(sessionId, declaredCash, ctx.UserId, ctx.DeviceId);
+            return JsonSerializer.Serialize(new { success = true, data = new { session } }, _jsonOptions);
+        }
+        catch (Exception ex) { return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions); }
+    }
     public async Task<string> RecordAdvanceDepositAsync(string folioId, decimal amount, string method, string? reference, string? notes, string? idempotencyKey = null)
     {
         try

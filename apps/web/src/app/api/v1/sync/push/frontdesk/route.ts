@@ -139,7 +139,9 @@ export async function POST(req: NextRequest) {
 
           let updatedCount = 0;
           
-          if (aggregateType === 'FOLIO') {
+          if (aggregateType === 'FRONTDESK_SESSION') {
+             updatedCount = 1;
+          } else if (aggregateType === 'FOLIO') {
              const res = await tx.folio.updateMany({
                where: { id: aggregateId, version: aggregateVersion },
                data: { version: { increment: 1 } }
@@ -167,7 +169,17 @@ export async function POST(req: NextRequest) {
 
              // Retrieve actual version to report in the conflict
              let currentVersion = 1;
-             if (aggregateType === 'FOLIO') {
+          if (aggregateType === 'FRONTDESK_SESSION' && eventType === 'FRONTDESK_SESSION_OPENED') {
+             const sessionId = payload.sessionId || aggregateId;
+             const existingSession = await tx.frontdeskSession.findUnique({ where: { id: sessionId } });
+             if (!existingSession) {
+               await tx.frontdeskSession.create({ data: { id: sessionId, propertyId, staffId: payload.staffId || actorId, cashAccountId: payload.cashAccountId, shiftReference: payload.shiftReference, businessDate: new Date(payload.businessDate), openingFloat: Number(payload.openingFloat || 0), systemExpectedCash: Number(payload.openingFloat || 0) } });
+               await tx.frontdeskSessionAudit.create({ data: { frontdeskSessionId: sessionId, action: 'OPENED', performedBy: actorId, notes: 'Offline session synchronized' } });
+             }
+          } else if (aggregateType === 'FRONTDESK_SESSION' && eventType === 'FRONTDESK_SESSION_CLOSED') {
+             await tx.frontdeskSession.update({ where: { id: aggregateId }, data: { status: 'CLOSED', closingAt: new Date(), closedAt: new Date(), declaredCash: Number(payload.declaredCash || 0), systemExpectedCash: Number(payload.systemExpectedCash || 0), variance: Number(payload.variance || 0) } });
+             await tx.frontdeskSessionAudit.create({ data: { frontdeskSessionId: aggregateId, action: 'CLOSED', performedBy: actorId, notes: 'Offline close synchronized' } });
+          } else if (aggregateType === 'FOLIO') {
                 const f = await tx.folio.findUnique({ where: { id: aggregateId }});
                 if (f) currentVersion = f.version;
              } else if (aggregateType === 'RESERVATION') {
@@ -651,9 +663,19 @@ export async function POST(req: NextRequest) {
                    baseAmount: amount,
                    status: 'COMPLETED',
                    idempotencyKey: `pay_${idempotencyKey}`,
-                   receivedBy: actorId
+                   receivedBy: actorId,
+                   frontdeskSessionId: payload.frontdeskSessionId || null,
+                   terminalId: payload.terminalId || device.id,
+                   reference: payload.reference || null,
+                   authorizationCode: payload.authorizationCode || null
                  }
                });
+
+               if (payload.frontdeskSessionId && methodStr === 'CASH') {
+                 const session = await tx.frontdeskSession.findUnique({ where: { id: payload.frontdeskSessionId } });
+                 if (!session || session.status !== 'OPEN') throw new Error('Front desk session is not open');
+                 await tx.posCashMovement.create({ data: { propertyId, deviceId: device.id, frontdeskSessionId: session.id, userId: actorId, amount, currency: payload.currency || 'NGN', type: 'PAYMENT', sourceAccountId: session.cashAccountId, destinationAccountId: session.cashAccountId, reasonCode: 'FOLIO_PAYMENT', receiptReference: payload.reference || null, operationId: `FD-PAYMENT-${idempotencyKey}`, businessDate: session.businessDate } });
+               }
 
                await tx.folio.update({
                  where: { id: aggregateId },

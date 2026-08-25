@@ -100,6 +100,30 @@ public class LocalPosSession
     public ICollection<LocalPosCashMovement> CashMovements { get; set; } = new List<LocalPosCashMovement>();
 }
 
+public class LocalFrontdeskSession
+{
+    [Key] public string Id { get; set; } = string.Empty;
+    public string PropertyId { get; set; } = string.Empty;
+    public string StaffId { get; set; } = string.Empty;
+    public string CashAccountId { get; set; } = string.Empty;
+    public string ShiftReference { get; set; } = string.Empty;
+    public DateTime BusinessDate { get; set; }
+    public string Status { get; set; } = "OPEN";
+    public decimal OpeningFloat { get; set; }
+    public decimal SystemExpectedCash { get; set; }
+    public decimal? DeclaredCash { get; set; }
+    public decimal? Variance { get; set; }
+    public DateTime OpenedAt { get; set; }
+    public DateTime? ClosingAt { get; set; }
+    public DateTime? ClosedAt { get; set; }
+    public DateTime? ReconciledAt { get; set; }
+    public string? ReconciledBy { get; set; }
+    public string? ReconciliationDecision { get; set; }
+    public string? ReconciliationNotes { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+}
+
 public class LocalPosOrder
 {
     [Key] public string Id { get; set; } = string.Empty;
@@ -498,5 +522,4 @@ public class LocalPosTerminal
     public int StaffVersion { get; set; } = 0;
     public int MenuVersion { get; set; } = 0;
 }
-
 

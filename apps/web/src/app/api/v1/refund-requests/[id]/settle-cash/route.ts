@@ -40,6 +40,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         status: 'COMPLETED',
         idempotencyKey: `refund-request:${request.id}`
       } });
+      const staff = await tx.staff.findFirst({ where: { userId: user.id } });
+      const activeSession = staff ? await tx.frontdeskSession.findFirst({ where: { propertyId: request.propertyId, staffId: staff.id, status: 'OPEN' } }) : null;
+      if (activeSession && staff) {
+        await tx.posCashMovement.create({
+          data: {
+            propertyId: request.propertyId,
+            deviceId: 'FRONT_DESK',
+            frontdeskSessionId: activeSession.id,
+            userId: staff.id,
+            amount,
+            currency: request.currency,
+            type: 'REFUND',
+            sourceAccountId: activeSession.cashAccountId,
+            destinationAccountId: activeSession.cashAccountId,
+            reasonCode: 'CASH_REFUND',
+            receiptReference: `refund:${request.id}`,
+            operationId: `FD-REFUND-${request.id}`,
+            businessDate: activeSession.businessDate
+          }
+        });
+      }
       await tx.folioItem.create({ data: { folioId: request.folioId, businessDate: new Date(), type: 'REFUND', source: 'MANUAL', description: `Cash refund request ${request.id}`, quantity: 1, unitAmount: amount, amount, currency: request.currency, baseAmount: amount, postedBy: user.id } });
       const totalRefunded = await tx.refund.aggregate({ where: { paymentId: request.paymentId, status: { not: 'FAILED' } }, _sum: { amount: true } });
       await tx.payment.update({ where: { id: request.paymentId }, data: { status: Number(totalRefunded._sum.amount || 0) >= Number(request.payment.amount) ? 'REFUNDED' : 'PARTIALLY_REFUNDED' } });

@@ -450,7 +450,7 @@ function PrinterForm({
 }
 
 // ─── Main Page ──────────────────────────────────────────────────────────────
-export function PrinterSettingsPage({ onClose }: { onClose?: () => void } = {}) {
+export function PrinterSettingsPanel({ onClose }: { onClose?: () => void } = {}) {
   const { isDesktopMode } = useLodgeCoreProvider();
   const [printers, setPrinters] = useState<PrinterConfig[]>([]);
   const [loading, setLoading] = useState(true);
@@ -627,5 +627,5 @@ export function PrinterSettingsPage({ onClose }: { onClose?: () => void } = {}) 
 }
 
 export default function PrinterSettingsRoute() {
-  return <PrinterSettingsPage />;
+  return <PrinterSettingsPanel />;
 }

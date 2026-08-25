@@ -17,6 +17,12 @@ export interface LodgeCoreDataProvider {
     getSyncEvents?: () => Promise<any>;
     retryDeadLetters?: () => Promise<any>;
   };
+  frontdesk: {
+    listCashAccounts(propertyId: string): Promise<any>;
+    getSession(propertyId: string): Promise<any>;
+    openSession(data: { propertyId: string; cashAccountId: string; openingFloat: number }): Promise<any>;
+    closeSession(sessionId: string, declaredCash: number): Promise<any>;
+  };
   properties: {
     list(): Promise<any>;
   };

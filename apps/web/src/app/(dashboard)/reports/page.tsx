@@ -1,9 +1,15 @@
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { FileText, Users, CreditCard } from 'lucide-react';
+import { FileText, Users, CreditCard, WalletCards } from 'lucide-react';
 
 export default function ReportsOverviewPage() {
   const reports = [
+    {
+      title: 'Frontdesk Reconciliation',
+      description: 'Trace inflows and outflows to shifts, staff, guests, rooms, folios, payment methods, and references.',
+      href: '/reports/frontdesk',
+      icon: WalletCards,
+    },
     {
       title: 'Shift / Cashier Report',
       description: 'View end-of-shift net cash, card, and online payments for specific cashiers or the entire property.',

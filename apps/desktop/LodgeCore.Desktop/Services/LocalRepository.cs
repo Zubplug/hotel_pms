@@ -864,6 +864,69 @@ public class LocalRepository
         return true;
     }
 
+    public async Task<LocalFrontdeskSession?> GetActiveFrontdeskSessionAsync(string propertyId, string staffId)
+    {
+        return await _dbContext.FrontdeskSessions.FirstOrDefaultAsync(session => session.PropertyId == propertyId && session.StaffId == staffId && session.Status == "OPEN");
+    }
+
+    public async Task<List<LocalCashAccount>> GetCashAccountsAsync(string propertyId)
+    {
+        return await _dbContext.CashAccounts.Where(account => account.PropertyId == propertyId && account.IsActive).OrderBy(account => account.Name).ToListAsync();
+    }
+
+    public async Task<LocalFrontdeskSession> OpenFrontdeskSessionAsync(string propertyId, string staffId, string cashAccountId, decimal openingFloat, string deviceId)
+    {
+        var existing = await GetActiveFrontdeskSessionAsync(propertyId, staffId);
+        if (existing != null) throw new InvalidOperationException("Staff already has an open front desk session.");
+        var tillInUse = await _dbContext.FrontdeskSessions.AnyAsync(session => session.PropertyId == propertyId && session.CashAccountId == cashAccountId && session.Status == "OPEN");
+        if (tillInUse) throw new InvalidOperationException("Till is already in use by another open session.");
+        var property = await _dbContext.Properties.FindAsync(propertyId);
+        var now = DateTime.UtcNow;
+        var session = new LocalFrontdeskSession
+        {
+            Id = Guid.NewGuid().ToString(), PropertyId = propertyId, StaffId = staffId, CashAccountId = cashAccountId,
+            ShiftReference = $"FD-{now:yyyyMMdd}-{Guid.NewGuid().ToString()[..8].ToUpperInvariant()}",
+            BusinessDate = property?.BusinessDate.Date ?? now.Date, OpeningFloat = openingFloat, SystemExpectedCash = openingFloat,
+            OpenedAt = now, CreatedAt = now, UpdatedAt = now
+        };
+        _dbContext.FrontdeskSessions.Add(session);
+        if (openingFloat > 0)
+        {
+            _dbContext.PosCashMovements.Add(new LocalPosCashMovement
+            {
+                Id = Guid.NewGuid().ToString(), PropertyId = propertyId, DeviceId = deviceId, UserId = staffId,
+                Amount = openingFloat, Type = "OPENING_FLOAT", SourceAccountId = cashAccountId, DestinationAccountId = cashAccountId,
+                ReasonCode = "OPEN_SHIFT", OperationId = $"FLOAT-{session.Id}", BusinessDate = session.BusinessDate, CreatedAt = now
+            });
+        }
+        _dbContext.OutboxEvents.Add(new LocalOutboxEvent
+        {
+            IdempotencyKey = $"frontdesk-open:{session.Id}", PropertyId = propertyId, DeviceId = deviceId, OperatorId = staffId,
+            AggregateType = "FRONTDESK_SESSION", AggregateId = session.Id, EventType = "FRONTDESK_SESSION_OPENED", Sequence = 1,
+            PayloadJson = JsonSerializer.Serialize(new { sessionId = session.Id, propertyId, staffId, cashAccountId, session.ShiftReference, session.BusinessDate, openingFloat })
+        });
+        await _dbContext.SaveChangesAsync();
+        return session;
+    }
+
+    public async Task<LocalFrontdeskSession> CloseFrontdeskSessionAsync(string sessionId, decimal declaredCash, string staffId, string deviceId)
+    {
+        var session = await _dbContext.FrontdeskSessions.FirstOrDefaultAsync(item => item.Id == sessionId && item.StaffId == staffId);
+        if (session == null) throw new InvalidOperationException("Front desk session not found.");
+        if (session.Status != "OPEN") throw new InvalidOperationException($"Session is already {session.Status}.");
+        var movements = await _dbContext.PosCashMovements.Where(item => item.PropertyId == session.PropertyId && item.CreatedAt >= session.OpenedAt && item.CreatedAt <= DateTime.UtcNow).ToListAsync();
+        var expected = session.OpeningFloat + movements.Where(item => item.Type is "PAYMENT" or "CASH_TRANSFER_IN").Sum(item => item.Amount) - movements.Where(item => item.Type is "REFUND" or "PAID_OUT" or "CASH_DROP" or "CASH_TRANSFER_OUT").Sum(item => item.Amount);
+        session.Status = "CLOSED"; session.DeclaredCash = declaredCash; session.SystemExpectedCash = expected; session.Variance = declaredCash - expected; session.ClosingAt = DateTime.UtcNow; session.ClosedAt = DateTime.UtcNow; session.UpdatedAt = DateTime.UtcNow;
+        _dbContext.OutboxEvents.Add(new LocalOutboxEvent
+        {
+            IdempotencyKey = $"frontdesk-close:{session.Id}", PropertyId = session.PropertyId, DeviceId = deviceId, OperatorId = staffId,
+            AggregateType = "FRONTDESK_SESSION", AggregateId = session.Id, EventType = "FRONTDESK_SESSION_CLOSED", Sequence = 2,
+            PayloadJson = JsonSerializer.Serialize(new { sessionId = session.Id, declaredCash, systemExpectedCash = expected, variance = session.Variance, businessDate = session.BusinessDate })
+        });
+        await _dbContext.SaveChangesAsync();
+        return session;
+    }
+
     public async Task<bool> RecordPaymentAsync(string folioId, decimal amount, string method, string userId, string deviceId, string? idempotencyKey = null)
     {
         var folio = await _dbContext.Folios.FindAsync(folioId);
@@ -884,6 +947,7 @@ public class LocalRepository
         int eventVersion = folio.Version;
         folio.Version++;
 
+        var frontdeskSession = await GetActiveFrontdeskSessionAsync(folio.PropertyId, userId);
         var newPayment = new
         {
             id = Guid.NewGuid().ToString(),
@@ -909,6 +973,17 @@ public class LocalRepository
 
         UpdateFolioTransactionsJson(folio, "items", newItem);
 
+        if (frontdeskSession != null && string.Equals(method, "CASH", StringComparison.OrdinalIgnoreCase))
+        {
+            _dbContext.PosCashMovements.Add(new LocalPosCashMovement
+            {
+                Id = Guid.NewGuid().ToString(), PropertyId = folio.PropertyId, DeviceId = deviceId, PosSessionId = null,
+                UserId = userId, Amount = amount, Type = "PAYMENT", SourceAccountId = frontdeskSession.CashAccountId,
+                DestinationAccountId = frontdeskSession.CashAccountId, ReasonCode = "FOLIO_PAYMENT", OperationId = $"FD-PAYMENT-{newPayment.id}",
+                BusinessDate = frontdeskSession.BusinessDate, CreatedAt = DateTime.UtcNow
+            });
+        }
+
         _dbContext.OutboxEvents.Add(new LocalOutboxEvent
         {
             PropertyId = folio.PropertyId,
@@ -920,7 +995,7 @@ public class LocalRepository
             EventType = "POST_PAYMENT",
             Sequence = folio.LocalSequence,
             IdempotencyKey = idempotencyKey ?? Guid.NewGuid().ToString(),
-            PayloadJson = JsonSerializer.Serialize(new { amount, method, reservationId = folio.ReservationId, currency = "NGN", businessDate = DateTime.UtcNow, originalBusinessDate = DateTime.UtcNow, idempotencyKey })
+            PayloadJson = JsonSerializer.Serialize(new { amount, method, reservationId = folio.ReservationId, currency = "NGN", businessDate = DateTime.UtcNow, originalBusinessDate = DateTime.UtcNow, idempotencyKey, frontdeskSessionId = frontdeskSession?.Id })
         });
 
         await _dbContext.SaveChangesAsync();
@@ -1341,6 +1416,14 @@ public class LocalRepository
             ApprovedMethod TEXT NULL, Category TEXT NOT NULL, Reason TEXT NOT NULL,
             Status TEXT NOT NULL, CurrentApprovalStep INTEGER NOT NULL DEFAULT 1,
             CreatedAt TEXT NOT NULL, UpdatedAt TEXT NOT NULL, IsDirty INTEGER NOT NULL DEFAULT 0
+        );");
+        await _dbContext.Database.ExecuteSqlRawAsync(@"CREATE TABLE IF NOT EXISTS FrontdeskSessions (
+            Id TEXT NOT NULL PRIMARY KEY, PropertyId TEXT NOT NULL, StaffId TEXT NOT NULL,
+            CashAccountId TEXT NOT NULL, ShiftReference TEXT NOT NULL UNIQUE, BusinessDate TEXT NOT NULL,
+            Status TEXT NOT NULL, OpeningFloat TEXT NOT NULL DEFAULT '0', SystemExpectedCash TEXT NOT NULL DEFAULT '0',
+            DeclaredCash TEXT NULL, Variance TEXT NULL, OpenedAt TEXT NOT NULL, ClosingAt TEXT NULL,
+            ClosedAt TEXT NULL, ReconciledAt TEXT NULL, ReconciledBy TEXT NULL, ReconciliationDecision TEXT NULL,
+            ReconciliationNotes TEXT NULL, CreatedAt TEXT NOT NULL, UpdatedAt TEXT NOT NULL
         );");
         
         // Seed Stanzel Grand Resort for the pilot if it doesn't exist

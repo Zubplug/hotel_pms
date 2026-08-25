@@ -27,6 +27,7 @@ public class LocalDbContext : DbContext
     public DbSet<LocalStockItem> StockItems { get; set; } = null!;
     public DbSet<LocalRecipeIngredient> RecipeIngredients { get; set; } = null!;
     public DbSet<LocalPosSession> PosSessions { get; set; } = null!;
+    public DbSet<LocalFrontdeskSession> FrontdeskSessions { get; set; } = null!;
     public DbSet<LocalPosOrder> PosOrders { get; set; } = null!;
     public DbSet<LocalPosOrderItem> PosOrderItems { get; set; } = null!;
     public DbSet<LocalPosPayment> PosPayments { get; set; } = null!;
