@@ -37,7 +37,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const result = await prisma.$transaction(async tx => {
       const updated = await tx.reservation.update({ where: { id }, data: { status: 'NO_SHOW', noShowAt: new Date(), noShowBy: session.user.id, noShowAssessedAt: new Date(), noShowChargeAmount: assessment.noShowCharge, noShowRefundableAmount: assessment.refundableAmount } });
-      if (reservation.reservationRooms.length) await tx.reservationRoom.updateMany({ where: { reservationId: id, status: 'ACTIVE' }, data: { status: 'NO_SHOW' } });
+      if (reservation.reservationRooms.length) {
+        await tx.reservationRoom.updateMany({ where: { reservationId: id, status: 'ACTIVE' }, data: { status: 'NO_SHOW' } });
+        for (const reservationRoom of reservation.reservationRooms) {
+          const otherActive = await tx.reservationRoom.findFirst({
+            where: {
+              roomId: reservationRoom.roomId,
+              status: 'ACTIVE',
+              reservationId: { not: id },
+              checkIn: { lt: reservation.checkOut },
+              checkOut: { gt: reservation.checkIn },
+            },
+          });
+          if (!otherActive) await tx.room.update({ where: { id: reservationRoom.roomId }, data: { status: 'AVAILABLE' } });
+        }
+      }
       await tx.auditLog.create({ data: { organizationId: reservation.property.organizationId, propertyId: reservation.propertyId, userId: session.user.id, userEmail: session.user.email, userRole: (session.user as any).role || 'STAFF', action: 'RESERVATION_NO_SHOW_ASSESSED', resource: 'Reservation', resourceId: id, previousValue: { status: reservation.status }, newValue: { status: 'NO_SHOW', chargeAmount: assessment.noShowCharge, refundableAmount: assessment.refundableAmount }, ipAddress: req.headers.get('x-forwarded-for') || '', userAgent: req.headers.get('user-agent') || '', requestId: req.headers.get('x-request-id') || crypto.randomUUID() } });
       return updated;
     });

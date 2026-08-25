@@ -45,6 +45,18 @@ export function FolioSection({ reservation }: { reservation: any }) {
   // Compute total charges dynamically from FolioItems if we want, or use the DB totalCharges/totalPayments/balance.
   // We use the DB authoritative values.
   const totalCharges = Number(folio.balance) + Number(folio.totalPayments);
+  const ledgerItems = [
+    ...(folio.items || []),
+    ...(folio.credits || []).map((credit: any) => ({
+      id: 'credit-' + credit.id,
+      amount: Number(credit.amount || 0) * -1,
+      type: credit.type || 'ADVANCE_DEPOSIT',
+      description: credit.description || (credit.type === 'CREDIT_ADJUSTMENT' ? 'Folio credit' : 'Advance deposit') + (credit.method ? ' (' + credit.method + ')' : '') + (credit.reference ? ' — ' + credit.reference : ''),
+      createdAt: credit.createdAt,
+      creditStatus: credit.status,
+      creditRemainingAmount: credit.remainingAmount,
+    })),
+  ].sort((a: any, b: any) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
 
   return (
     <>
@@ -115,14 +127,14 @@ export function FolioSection({ reservation }: { reservation: any }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {!folio.items || folio.items.length === 0 ? (
+                {ledgerItems.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-6 py-8 text-center text-muted-foreground">
                       No transactions recorded.
                     </td>
                   </tr>
                 ) : (
-                  folio.items.map((item: any) => {
+                  ledgerItems.map((item: any) => {
                     const isDebit = item.amount > 0;
                     const isCredit = item.amount < 0;
                     const absAmount = Math.abs(item.amount);
@@ -142,6 +154,7 @@ export function FolioSection({ reservation }: { reservation: any }) {
                           <Badge variant={item.type === 'CHARGE' ? 'outline' : item.type === 'PAYMENT' ? 'default' : 'secondary'} className="text-[10px]">
                             {item.type}
                           </Badge>
+                          {item.creditStatus && <Badge variant="secondary" className="ml-1 text-[10px]">{item.creditStatus}</Badge>}
                         </td>
                         <td className="px-6 py-3 text-slate-800 font-medium max-w-[250px] truncate" title={item.description}>
                           {item.description}
@@ -216,6 +229,7 @@ export function FolioSection({ reservation }: { reservation: any }) {
           open={isAddPaymentOpen} 
           onOpenChange={setIsAddPaymentOpen} 
           folio={folio} 
+          onPaymentSuccess={() => window.location.reload()}
         />
       ) : (
         <AddPaymentDialog 
@@ -230,6 +244,7 @@ export function FolioSection({ reservation }: { reservation: any }) {
           onOpenChange={setIsAddDepositOpen}
           folio={folio}
           mode="deposit"
+          onPaymentSuccess={() => window.location.reload()}
         />
       )}
       

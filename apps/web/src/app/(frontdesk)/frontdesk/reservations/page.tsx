@@ -183,6 +183,7 @@ export default function FrontDeskReservationsPage() {
             const room = res.reservationRooms?.[0];
             const balance = res.folio?.balance || 0;
             const isUnpaid = balance > 0;
+            const arrivalOverdue = res.status === 'CONFIRMED' && isArrivalOverdue(res);
             
             return (
               <Link href={`/frontdesk/reservations/detail?id=${res.id}`} key={res.id}>
@@ -191,6 +192,7 @@ export default function FrontDeskReservationsPage() {
                   {/* Status Indicator Bar */}
                   <div className={`absolute top-0 left-0 w-full h-1.5 ${
                     res.status === 'CHECKED_IN' ? 'bg-blue-500' :
+                    arrivalOverdue ? 'bg-red-500' :
                     res.status === 'CONFIRMED' ? 'bg-emerald-500' : 'bg-slate-300'
                   }`} />
 
@@ -224,9 +226,14 @@ export default function FrontDeskReservationsPage() {
                         res.status === 'CHECKED_IN' ? 'bg-blue-100 text-blue-800' :
                         res.status === 'CONFIRMED' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'
                       }`}>
-                        {res.status === 'CHECKED_IN' ? <LogIn className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                      {res.status === 'CHECKED_IN' ? <LogIn className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
                         {res.status}
                       </span>
+                      {arrivalOverdue && (
+                        <span className="px-2 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800">
+                          Arrival overdue
+                        </span>
+                      )}
                       {(() => {
                         const isDesktopMode = typeof window !== 'undefined' && !!(window as any).chrome?.webview;
                         if (!isDesktopMode) return null; // Web mode doesn't cache locally
@@ -277,4 +284,14 @@ export default function FrontDeskReservationsPage() {
       )}
     </div>
   );
+}
+
+function isArrivalOverdue(reservation: any) {
+  if (!reservation.checkIn) return false;
+  const checkIn = new Date(reservation.checkIn);
+  if (Number.isNaN(checkIn.getTime())) return false;
+  const cutoff = new Date(checkIn);
+  cutoff.setDate(cutoff.getDate() + 1);
+  cutoff.setHours(2, 0, 0, 0);
+  return Date.now() >= cutoff.getTime();
 }

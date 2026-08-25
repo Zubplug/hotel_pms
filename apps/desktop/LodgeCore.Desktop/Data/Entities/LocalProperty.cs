@@ -22,4 +22,11 @@ public class LocalProperty
     public decimal CreditAdjustmentApprovalThreshold { get; set; } = 1m;
     public decimal RefundApprovalThreshold { get; set; } = 1m;
     public string OfflineHighValueDepositPolicy { get; set; } = "BLOCK";
+    public string NoShowCutoffTime { get; set; } = "02:00";
+    public int NoShowGracePeriodMinutes { get; set; }
+    public string NoShowChargeType { get; set; } = "FIRST_NIGHT";
+    public decimal NoShowChargeValue { get; set; }
+    public bool NoShowRefundableUnusedNights { get; set; } = true;
+    public bool NoShowAllowReinstatement { get; set; } = true;
+    public bool NoShowReinstatementRequiresApproval { get; set; } = true;
 }

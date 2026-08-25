@@ -74,6 +74,11 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Property not found' }, { status: 404 });
     }
 
+    const noShowPolicy = await prisma.noShowPolicy.findFirst({
+      where: { propertyId },
+      orderBy: { name: 'asc' },
+    });
+
     // ---- Fetch Data -----------------------------------------------------
     // To support pagination across multiple tables, we fetch up to `limit` from EACH table,
     // then merge, sort by updatedAt, and slice the overall list to `limit`.
@@ -392,6 +397,13 @@ export async function GET(req: NextRequest) {
       creditAdjustmentApprovalThreshold: Number(financialControls.creditAdjustmentApprovalThreshold ?? 1),
       refundApprovalThreshold: Number(financialControls.refundApprovalThreshold ?? 1),
       offlineHighValueDepositPolicy: String(financialControls.offlineHighValueDepositPolicy ?? 'BLOCK').toUpperCase(),
+      noShowCutoffTime: noShowPolicy?.cutoffTime ?? '02:00',
+      noShowGracePeriodMinutes: noShowPolicy?.gracePeriodMinutes ?? 0,
+      noShowChargeType: noShowPolicy?.chargeType ?? 'FIRST_NIGHT',
+      noShowChargeValue: Number(noShowPolicy?.chargeValue ?? 0),
+      noShowRefundableUnusedNights: noShowPolicy?.refundableUnusedNights ?? true,
+      noShowAllowReinstatement: noShowPolicy?.allowReinstatement ?? true,
+      noShowReinstatementRequiresApproval: noShowPolicy?.reinstatementRequiresApproval ?? true,
     };
 
     return NextResponse.json({

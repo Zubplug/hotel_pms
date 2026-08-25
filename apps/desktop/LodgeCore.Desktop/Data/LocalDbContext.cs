@@ -123,7 +123,14 @@ public class LocalDbContext : DbContext
             "ALTER TABLE Properties ADD COLUMN DepositApprovalThreshold TEXT NOT NULL DEFAULT '250000'",
             "ALTER TABLE Properties ADD COLUMN CreditAdjustmentApprovalThreshold TEXT NOT NULL DEFAULT '1'",
             "ALTER TABLE Properties ADD COLUMN RefundApprovalThreshold TEXT NOT NULL DEFAULT '1'",
-            "ALTER TABLE Properties ADD COLUMN OfflineHighValueDepositPolicy TEXT NOT NULL DEFAULT 'BLOCK'"
+            "ALTER TABLE Properties ADD COLUMN OfflineHighValueDepositPolicy TEXT NOT NULL DEFAULT 'BLOCK'",
+            "ALTER TABLE Properties ADD COLUMN NoShowCutoffTime TEXT NOT NULL DEFAULT '02:00'",
+            "ALTER TABLE Properties ADD COLUMN NoShowGracePeriodMinutes INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE Properties ADD COLUMN NoShowChargeType TEXT NOT NULL DEFAULT 'FIRST_NIGHT'",
+            "ALTER TABLE Properties ADD COLUMN NoShowChargeValue TEXT NOT NULL DEFAULT '0'",
+            "ALTER TABLE Properties ADD COLUMN NoShowRefundableUnusedNights INTEGER NOT NULL DEFAULT 1",
+            "ALTER TABLE Properties ADD COLUMN NoShowAllowReinstatement INTEGER NOT NULL DEFAULT 1",
+            "ALTER TABLE Properties ADD COLUMN NoShowReinstatementRequiresApproval INTEGER NOT NULL DEFAULT 1"
         };
         foreach (var sql in columns)
         {

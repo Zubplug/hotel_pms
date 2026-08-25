@@ -67,6 +67,21 @@ export async function POST(
         data: { status: 'CANCELLED', cancellationReason: reason }
       });
 
+      for (const reservationRoom of existingReservation.reservationRooms) {
+        const otherActive = await tx.reservationRoom.findFirst({
+          where: {
+            roomId: reservationRoom.roomId,
+            status: 'ACTIVE',
+            reservationId: { not: id },
+            checkIn: { lt: existingReservation.checkOut },
+            checkOut: { gt: existingReservation.checkIn },
+          },
+        });
+        if (!otherActive) {
+          await tx.room.update({ where: { id: reservationRoom.roomId }, data: { status: 'AVAILABLE' } });
+        }
+      }
+
       const organizationId = existingReservation.property.organizationId;
       const propertyId = existingReservation.propertyId;
 

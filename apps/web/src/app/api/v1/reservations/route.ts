@@ -178,6 +178,11 @@ export async function POST(req: NextRequest) {
         },
       });
 
+      await tx.room.update({
+        where: { id: room.id },
+        data: { status: 'RESERVED' },
+      });
+
       // 7D.1: Create Folio
       const folioNumber = 'FOL-' + Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
       const newFolio = await tx.folio.create({

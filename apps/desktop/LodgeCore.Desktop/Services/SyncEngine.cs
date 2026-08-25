@@ -731,6 +731,20 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                         localProp.RefundApprovalThreshold = refundThreshold;
                     if (propEl.TryGetProperty("offlineHighValueDepositPolicy", out var ohp))
                         localProp.OfflineHighValueDepositPolicy = ohp.GetString() ?? localProp.OfflineHighValueDepositPolicy;
+                    if (propEl.TryGetProperty("noShowCutoffTime", out var nsc))
+                        localProp.NoShowCutoffTime = nsc.GetString() ?? localProp.NoShowCutoffTime;
+                    if (propEl.TryGetProperty("noShowGracePeriodMinutes", out var nsg) && nsg.TryGetInt32(out var graceMinutes))
+                        localProp.NoShowGracePeriodMinutes = Math.Max(0, graceMinutes);
+                    if (propEl.TryGetProperty("noShowChargeType", out var nsct))
+                        localProp.NoShowChargeType = nsct.GetString() ?? localProp.NoShowChargeType;
+                    if (propEl.TryGetProperty("noShowChargeValue", out var nscv) && nscv.TryGetDecimal(out var chargeValue))
+                        localProp.NoShowChargeValue = Math.Max(0, chargeValue);
+                    if (propEl.TryGetProperty("noShowRefundableUnusedNights", out var nsr))
+                        localProp.NoShowRefundableUnusedNights = nsr.ValueKind == System.Text.Json.JsonValueKind.True;
+                    if (propEl.TryGetProperty("noShowAllowReinstatement", out var nsa))
+                        localProp.NoShowAllowReinstatement = nsa.ValueKind == System.Text.Json.JsonValueKind.True;
+                    if (propEl.TryGetProperty("noShowReinstatementRequiresApproval", out var nsra))
+                        localProp.NoShowReinstatementRequiresApproval = nsra.ValueKind == System.Text.Json.JsonValueKind.True;
 
                     if (root.TryGetProperty("syncedAt", out var syncedAtEl))
                     {
@@ -758,6 +772,13 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                         CreditAdjustmentApprovalThreshold = propEl.TryGetProperty("creditAdjustmentApprovalThreshold", out var caat2) && caat2.TryGetDecimal(out var creditThreshold2) ? creditThreshold2 : 1m,
                         RefundApprovalThreshold = propEl.TryGetProperty("refundApprovalThreshold", out var rat2) && rat2.TryGetDecimal(out var refundThreshold2) ? refundThreshold2 : 1m,
                         OfflineHighValueDepositPolicy = propEl.TryGetProperty("offlineHighValueDepositPolicy", out var ohp2) && ohp2.ValueKind != System.Text.Json.JsonValueKind.Null ? ohp2.GetString() ?? "BLOCK" : "BLOCK",
+                        NoShowCutoffTime = propEl.TryGetProperty("noShowCutoffTime", out var nsc2) && nsc2.ValueKind != System.Text.Json.JsonValueKind.Null ? nsc2.GetString() ?? "02:00" : "02:00",
+                        NoShowGracePeriodMinutes = propEl.TryGetProperty("noShowGracePeriodMinutes", out var nsg2) && nsg2.TryGetInt32(out var graceMinutes2) ? Math.Max(0, graceMinutes2) : 0,
+                        NoShowChargeType = propEl.TryGetProperty("noShowChargeType", out var nsct2) && nsct2.ValueKind != System.Text.Json.JsonValueKind.Null ? nsct2.GetString() ?? "FIRST_NIGHT" : "FIRST_NIGHT",
+                        NoShowChargeValue = propEl.TryGetProperty("noShowChargeValue", out var nscv2) && nscv2.TryGetDecimal(out var chargeValue2) ? Math.Max(0, chargeValue2) : 0,
+                        NoShowRefundableUnusedNights = !propEl.TryGetProperty("noShowRefundableUnusedNights", out var nsr2) || nsr2.ValueKind == System.Text.Json.JsonValueKind.True,
+                        NoShowAllowReinstatement = !propEl.TryGetProperty("noShowAllowReinstatement", out var nsa2) || nsa2.ValueKind == System.Text.Json.JsonValueKind.True,
+                        NoShowReinstatementRequiresApproval = !propEl.TryGetProperty("noShowReinstatementRequiresApproval", out var nsra2) || nsra2.ValueKind == System.Text.Json.JsonValueKind.True,
                         BusinessDate = propEl.TryGetProperty("businessDate", out var bd2) && bd2.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(bd2.GetString(), out var parsedDate2) ? parsedDate2 : DateTime.UtcNow.Date
                     };
                     dbContext.Properties.Add(localProp);

@@ -769,6 +769,24 @@ public class OfflinePMSInterop
                 }).ToArray<object>()
                 : Array.Empty<object>();
 
+            var credits = folioJson.ValueKind == System.Text.Json.JsonValueKind.Object && folioJson.TryGetProperty("credits", out var creditProp) && creditProp.ValueKind == System.Text.Json.JsonValueKind.Array
+                ? creditProp.EnumerateArray().Select(c => new {
+                    id = c.TryGetProperty("id", out var cid) ? cid.GetString() : null,
+                    amount = c.TryGetProperty("amount", out var cAmt)
+                        ? (cAmt.ValueKind == System.Text.Json.JsonValueKind.String && decimal.TryParse(cAmt.GetString(), out var cd) ? cd : cAmt.ValueKind == System.Text.Json.JsonValueKind.Number ? cAmt.GetDecimal() : 0m)
+                        : 0m,
+                    remainingAmount = c.TryGetProperty("remainingAmount", out var remaining)
+                        ? (remaining.ValueKind == System.Text.Json.JsonValueKind.String && decimal.TryParse(remaining.GetString(), out var rd) ? rd : remaining.ValueKind == System.Text.Json.JsonValueKind.Number ? remaining.GetDecimal() : 0m)
+                        : 0m,
+                    type = c.TryGetProperty("type", out var cType) ? cType.GetString() : "ADVANCE_DEPOSIT",
+                    method = c.TryGetProperty("method", out var cMethod) ? cMethod.GetString() : null,
+                    reference = c.TryGetProperty("reference", out var cReference) ? cReference.GetString() : null,
+                    description = c.TryGetProperty("notes", out var cNotes) ? cNotes.GetString() : null,
+                    status = c.TryGetProperty("status", out var cStatus) ? cStatus.GetString() : "AVAILABLE",
+                    createdAt = c.TryGetProperty("createdAt", out var cCreated) && cCreated.ValueKind == System.Text.Json.JsonValueKind.String && DateTime.TryParse(cCreated.GetString(), out var createdAt) ? createdAt : DateTime.UtcNow
+                }).ToArray<object>()
+                : Array.Empty<object>();
+
             var mapped = new
             {
                 id = r.Id,
@@ -812,7 +830,8 @@ public class OfflinePMSInterop
                         availableCredit = f?.AvailableCredit ?? 0,
                         currency = f?.Currency ?? r.Currency ?? "NGN",
                         items = items,
-                        payments = payments
+                        payments = payments,
+                        credits = credits
                     }
                 },
                 auditLogs = Array.Empty<object>(),

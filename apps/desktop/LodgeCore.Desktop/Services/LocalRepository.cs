@@ -43,6 +43,17 @@ public class LocalRepository
         if (reservation.CheckOutDate <= reservation.CheckInDate)
             throw new InvalidOperationException("Check-out must be after check-in.");
 
+        if (!string.IsNullOrEmpty(reservation.RoomId))
+        {
+            var roomAlreadyReserved = await _dbContext.Reservations
+                .Where(r => r.PropertyId == reservation.PropertyId && r.Id != reservation.Id && r.Status != "CANCELLED" && r.Status != "NO_SHOW")
+                .AnyAsync(r => r.Rooms.Any(rr => rr.RoomId == reservation.RoomId &&
+                    rr.CheckInDate < reservation.CheckOutDate &&
+                    rr.CheckOutDate > reservation.CheckInDate));
+            if (roomAlreadyReserved)
+                throw new InvalidOperationException("The selected room is already reserved for the requested dates.");
+        }
+
         int nights = (int)Math.Ceiling((reservation.CheckOutDate - reservation.CheckInDate).TotalDays);
         decimal totalAmount = baseRate * nights;
 
@@ -138,8 +149,16 @@ public class LocalRepository
         
         _dbContext.OutboxEvents.Add(outboxEvent);
         
-        // If room is specified and status implies occupancy, update room status
-        if (!string.IsNullOrEmpty(reservation.RoomId) && reservation.Status == "CHECKED_IN")
+        if (!string.IsNullOrEmpty(reservation.RoomId) && reservation.Status == "CONFIRMED")
+        {
+            var room = await _dbContext.Rooms.FirstOrDefaultAsync(r => r.Id == reservation.RoomId);
+            if (room != null && room.Status is "AVAILABLE" or "CLEAN" or "INSPECTED")
+            {
+                room.Status = "RESERVED";
+                room.UpdatedAt = DateTime.UtcNow;
+            }
+        }
+        else if (!string.IsNullOrEmpty(reservation.RoomId) && reservation.Status == "CHECKED_IN")
         {
             var room = await _dbContext.Rooms.FirstOrDefaultAsync(r => r.Id == reservation.RoomId);
             if (room != null && room.Status != "OCCUPIED")
@@ -253,6 +272,21 @@ public class LocalRepository
         int eventVersion = res.Version;
         res.Version++;
 
+        foreach (var reservationRoom in await _dbContext.ReservationRooms
+            .Where(rr => rr.ReservationId == reservationId && rr.Status == "ACTIVE")
+            .ToListAsync())
+        {
+            reservationRoom.Status = "CANCELLED";
+            var room = await _dbContext.Rooms.FindAsync(reservationRoom.RoomId);
+            if (room != null && !await _dbContext.ReservationRooms.AnyAsync(rr =>
+                rr.RoomId == room.Id && rr.ReservationId != reservationId && rr.Status == "ACTIVE" &&
+                rr.CheckInDate < res.CheckOutDate && rr.CheckOutDate > res.CheckInDate))
+            {
+                room.Status = "AVAILABLE";
+                room.UpdatedAt = DateTime.UtcNow;
+            }
+        }
+
         _dbContext.OutboxEvents.Add(new LocalOutboxEvent
         {
             PropertyId = res.PropertyId,
@@ -286,10 +320,35 @@ public class LocalRepository
         var res = await _dbContext.Reservations.Include(r => r.Folio).FirstOrDefaultAsync(r => r.Id == reservationId);
         if (res == null) throw new InvalidOperationException("Reservation not found");
         if (res.Status != "CONFIRMED") throw new InvalidOperationException($"Cannot assess a {res.Status} reservation as no-show.");
-        res.Status = "NO_SHOW"; res.NoShowAt = DateTime.UtcNow; res.NoShowBy = userId; res.NoShowAssessedAt = DateTime.UtcNow; res.IsDirty = true; res.LocalSequence++;
+        if (res.LateArrivalExpected) throw new InvalidOperationException("Late arrival is authorized for this reservation.");
+        var property = await _dbContext.Properties.FindAsync(res.PropertyId);
+        var cutoff = res.CheckInDate.Date.AddDays(1);
+        if (TimeSpan.TryParse(property?.NoShowCutoffTime ?? "02:00", out var cutoffTime)) cutoff = cutoff.Add(cutoffTime);
+        cutoff = cutoff.AddMinutes(property?.NoShowGracePeriodMinutes ?? 0);
+        if (DateTime.UtcNow < cutoff) throw new InvalidOperationException($"No-show assessment is available after {cutoff:u}.");
+
+        var totalNights = Math.Max(1, (res.CheckOutDate - res.CheckInDate).Days);
+        var bookedValue = Math.Max(0, res.Folio?.TotalCharges ?? 0);
+        var totalPaid = Math.Max(0, res.Folio?.TotalPayments ?? 0);
+        var firstNight = bookedValue / totalNights;
+        var chargeType = (property?.NoShowChargeType ?? "FIRST_NIGHT").ToUpperInvariant();
+        var chargeValue = Math.Max(0, property?.NoShowChargeValue ?? 0);
+        var noShowCharge = chargeType switch
+        {
+            "FULL_STAY" => bookedValue,
+            "PERCENTAGE" => bookedValue * chargeValue / 100m,
+            "FIRST_NIGHT" => firstNight,
+            "FLAT" => chargeValue,
+            _ => 0m
+        };
+        var refundableAmount = property?.NoShowRefundableUnusedNights == true
+            ? Math.Max(0, Math.Min(totalPaid, bookedValue > 0 ? bookedValue : totalPaid) - noShowCharge)
+            : 0m;
+
+        res.Status = "NO_SHOW"; res.NoShowAt = DateTime.UtcNow; res.NoShowBy = userId; res.NoShowAssessedAt = DateTime.UtcNow; res.NoShowChargeAmount = noShowCharge; res.NoShowRefundableAmount = refundableAmount; res.IsDirty = true; res.LocalSequence++;
         _dbContext.OutboxEvents.Add(new LocalOutboxEvent { PropertyId = res.PropertyId, DeviceId = deviceId, OperatorId = userId, AggregateType = "RESERVATION", AggregateId = res.Id, EventType = "NO_SHOW", Sequence = res.LocalSequence, PayloadJson = JsonSerializer.Serialize(new { reservationId = res.Id }) });
         await _dbContext.SaveChangesAsync();
-        return new { reservation = res, assessment = new { totalNights = Math.Max(1, (res.CheckOutDate - res.CheckInDate).Days), noShowCharge = 0, refundableAmount = res.Folio?.TotalPayments ?? 0 } };
+        return new { reservation = res, assessment = new { totalNights, bookedValue, noShowCharge, refundableAmount }, refundRequired = refundableAmount > 0 };
     }
 
     public async Task<object?> ReinstateReservationAsync(string reservationId, string reason, string userId, string deviceId)
@@ -297,7 +356,18 @@ public class LocalRepository
         var res = await _dbContext.Reservations.FindAsync(reservationId);
         if (res == null) throw new InvalidOperationException("Reservation not found");
         if (res.Status != "NO_SHOW") throw new InvalidOperationException("Only no-show reservations can be reinstated.");
+        var property = await _dbContext.Properties.FindAsync(res.PropertyId);
+        if (property?.NoShowAllowReinstatement == false) throw new InvalidOperationException("Reinstatement is disabled by property policy.");
         res.Status = "CONFIRMED"; res.ReinstatedAt = DateTime.UtcNow; res.ReinstatedBy = userId; res.ReinstatementReason = reason; res.IsDirty = true; res.LocalSequence++;
+        foreach (var reservationRoom in await _dbContext.ReservationRooms.Where(rr => rr.ReservationId == reservationId && rr.Status == "NO_SHOW").ToListAsync())
+        {
+            reservationRoom.Status = "ACTIVE";
+            if (!string.IsNullOrEmpty(reservationRoom.RoomId))
+            {
+                var room = await _dbContext.Rooms.FindAsync(reservationRoom.RoomId);
+                if (room != null) room.Status = "RESERVED";
+            }
+        }
         _dbContext.OutboxEvents.Add(new LocalOutboxEvent { PropertyId = res.PropertyId, DeviceId = deviceId, OperatorId = userId, AggregateType = "RESERVATION", AggregateId = res.Id, EventType = "REINSTATE", Sequence = res.LocalSequence, PayloadJson = JsonSerializer.Serialize(new { reservationId = res.Id, reason }) });
         await _dbContext.SaveChangesAsync();
         return res;

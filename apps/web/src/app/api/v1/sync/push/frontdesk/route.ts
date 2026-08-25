@@ -292,6 +292,10 @@ export async function POST(req: NextRequest) {
                }
              });
 
+             if (room && (payload.Status || payload.status || 'CONFIRMED') === 'CONFIRMED') {
+               await tx.room.update({ where: { id: room.id }, data: { status: 'RESERVED' } });
+             }
+
              await tx.reservationGuest.create({
                data: {
                  reservationId: aggregateId,
@@ -717,7 +721,11 @@ export async function POST(req: NextRequest) {
              const activeRefund = await tx.refundRequest.findFirst({ where: { reservationId: aggregateId, status: { in: ['PENDING_APPROVAL', 'APPROVED', 'PROCESSING', 'COMPLETED'] } } });
              if (activeRefund) throw new Error('Refund workflow prevents reinstatement');
              await tx.reservation.update({ where: { id: aggregateId }, data: { status: 'CONFIRMED', reinstatedAt: new Date(), reinstatedBy: isUuid(event.operatorId) ? event.operatorId : null, reinstatementReason: payload.reason || 'Offline reinstatement' } });
+             const reinstatedRooms = await tx.reservationRoom.findMany({ where: { reservationId: aggregateId, status: 'NO_SHOW' } });
              await tx.reservationRoom.updateMany({ where: { reservationId: aggregateId, status: 'NO_SHOW' }, data: { status: 'ACTIVE' } });
+             for (const reservationRoom of reinstatedRooms) {
+               if (reservationRoom.roomId) await tx.room.update({ where: { id: reservationRoom.roomId }, data: { status: 'RESERVED' } });
+             }
           }
           else if (eventType === 'CANCEL') {
              // Idempotent — if already cancelled, treat as success
