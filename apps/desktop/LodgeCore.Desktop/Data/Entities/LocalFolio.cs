@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace LodgeCore.Desktop.Data.Entities;
 
 public class LocalFolio
@@ -11,8 +13,39 @@ public class LocalFolio
     public decimal TotalCharges { get; set; }
     public decimal TotalPayments { get; set; }
     public decimal AvailableCredit { get; set; }
-    public decimal OutstandingBalance => TotalCharges - TotalPayments;
-    public decimal NetBalance => OutstandingBalance - AvailableCredit;
+    public decimal AppliedCreditAmount
+    {
+        get
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(TransactionsJson ?? "{}");
+                if (!document.RootElement.TryGetProperty("credits", out var credits) || credits.ValueKind != JsonValueKind.Array)
+                    return 0m;
+
+                return credits.EnumerateArray().Sum(credit =>
+                {
+                    var amount = ReadDecimal(credit, "amount");
+                    var remaining = credit.TryGetProperty("remainingAmount", out _) ? ReadDecimal(credit, "remainingAmount") : amount;
+                    return Math.Max(0m, amount - remaining);
+                });
+            }
+            catch
+            {
+                return 0m;
+            }
+        }
+    }
+
+    private static decimal ReadDecimal(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var value)) return 0m;
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetDecimal(out var number)) return number;
+        return value.ValueKind == JsonValueKind.String && decimal.TryParse(value.GetString(), out var text) ? text : 0m;
+    }
+
+    public decimal OutstandingBalance => Math.Max(0m, TotalCharges - TotalPayments - AppliedCreditAmount);
+    public decimal NetBalance => OutstandingBalance;
     public string? Currency { get; set; }
 
     // Storing transactions as JSON string for simplicity offline, or we could make a separate table

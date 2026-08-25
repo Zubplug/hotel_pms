@@ -74,10 +74,8 @@ export function FolioSection({ reservation }: { reservation: any }) {
 
   const isClosed = folio.status === 'CLOSED';
 
-  // Compute total charges dynamically from FolioItems if we want, or use the DB totalCharges/totalPayments/balance.
-  // We use the DB authoritative values.
-  const totalCharges = Number(folio.balance) + Number(folio.totalPayments);
-  const outstandingBalance = Number(folio.balance);
+  const totalCharges = Number(folio.totalCharges || 0);
+  const outstandingBalance = Math.max(0, Number(folio.balance || 0));
   const availableCredit = Number(folio.availableCredit || 0);
   const ledgerItems = [
     ...(folio.items || []),

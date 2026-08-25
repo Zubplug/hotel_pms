@@ -407,6 +407,12 @@ public partial class MainPage : ContentPage
                 case "frontdesk.cashAccounts.list":
                     responseData = await pmsInterop.GetFrontdeskCashAccountsAsync(parameters?["propertyId"]?.ToString() ?? "");
                     break;
+                case "frontdesk.report.get":
+                    responseData = await pmsInterop.GetFrontdeskReconciliationReportAsync(
+                        parameters?["propertyId"]?.ToString() ?? "",
+                        parameters?["startDate"]?.ToString() ?? "",
+                        parameters?["endDate"]?.ToString() ?? "");
+                    break;
                 case "frontdesk.session.open":
                     responseData = await pmsInterop.OpenFrontdeskSessionAsync(parameters?["propertyId"]?.ToString() ?? "", parameters?["cashAccountId"]?.ToString() ?? "", parameters?["openingFloat"]?.GetValue<decimal>() ?? 0);
                     break;

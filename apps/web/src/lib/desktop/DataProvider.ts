@@ -20,6 +20,7 @@ export interface LodgeCoreDataProvider {
   frontdesk: {
     listCashAccounts(propertyId: string): Promise<any>;
     getSession(propertyId: string): Promise<any>;
+    getReport(propertyId: string, startDate: string, endDate: string): Promise<any>;
     openSession(data: { propertyId: string; cashAccountId: string; openingFloat: number }): Promise<any>;
     closeSession(sessionId: string, declaredCash: number): Promise<any>;
   };

@@ -756,6 +756,8 @@ public class LocalRepository
         folio.TotalCharges += amount;
         var creditApplicationAmount = Math.Min(folio.AvailableCredit, amount);
         folio.AvailableCredit -= creditApplicationAmount;
+        if (creditApplicationAmount > 0)
+            ApplyCreditToTransactionsJson(folio, creditApplicationAmount);
         folio.UpdatedAt = DateTime.UtcNow;
         folio.IsDirty = true;
         folio.LocalSequence++;
@@ -872,6 +874,130 @@ public class LocalRepository
     public async Task<List<LocalCashAccount>> GetCashAccountsAsync(string propertyId)
     {
         return await _dbContext.CashAccounts.Where(account => account.PropertyId == propertyId && account.IsActive).OrderBy(account => account.Name).ToListAsync();
+    }
+
+    public async Task<object> GetFrontdeskReconciliationReportAsync(string propertyId, DateTime startDate, DateTime endDate)
+    {
+        var sessions = await _dbContext.FrontdeskSessions
+            .Where(session => session.PropertyId == propertyId && session.BusinessDate >= startDate.Date && session.BusinessDate <= endDate.Date)
+            .OrderByDescending(session => session.BusinessDate)
+            .ThenByDescending(session => session.OpenedAt)
+            .ToListAsync();
+
+        var movements = await _dbContext.PosCashMovements
+            .Where(movement => movement.PropertyId == propertyId && movement.CreatedAt >= startDate && movement.CreatedAt <= endDate)
+            .OrderByDescending(movement => movement.CreatedAt)
+            .ToListAsync();
+
+        var folios = await _dbContext.Folios
+            .Where(folio => folio.PropertyId == propertyId)
+            .Include(folio => folio.Reservation)
+            .ThenInclude(reservation => reservation!.Guest)
+            .Include(folio => folio.Reservation)
+            .ThenInclude(reservation => reservation!.Rooms)
+            .ThenInclude(room => room.Room)
+            .ToListAsync();
+
+        var sessionById = sessions.ToDictionary(session => session.Id);
+        var accountIds = sessions.Select(session => session.CashAccountId).Distinct().ToList();
+        var accounts = await _dbContext.CashAccounts.Where(account => accountIds.Contains(account.Id)).ToDictionaryAsync(account => account.Id);
+        var rows = new List<Dictionary<string, object?>>();
+
+        foreach (var movement in movements)
+        {
+            var inflow = movement.Type is "OPENING_FLOAT" or "PAYMENT" or "CASH_TRANSFER_IN";
+            var session = sessionById.Values.FirstOrDefault(item => item.CashAccountId == movement.SourceAccountId && item.BusinessDate == movement.BusinessDate);
+            rows.Add(new Dictionary<string, object?>
+            {
+                ["id"] = movement.Id,
+                ["kind"] = "CASH_MOVEMENT",
+                ["date"] = movement.CreatedAt,
+                ["direction"] = inflow ? "INFLOW" : "OUTFLOW",
+                ["amount"] = movement.Amount,
+                ["currency"] = movement.Currency,
+                ["method"] = "CASH",
+                ["type"] = movement.Type,
+                ["description"] = movement.Notes ?? movement.ReasonCode,
+                ["reference"] = movement.ReceiptReference ?? movement.OperationId,
+                ["shiftReference"] = session?.ShiftReference ?? "",
+                ["folioNumber"] = null,
+                ["confirmationNumber"] = null,
+                ["guest"] = null,
+                ["rooms"] = Array.Empty<string>(),
+            });
+        }
+
+        foreach (var folio in folios)
+        {
+            if (string.IsNullOrWhiteSpace(folio.TransactionsJson)) continue;
+            try
+            {
+                using var document = JsonDocument.Parse(folio.TransactionsJson);
+                if (!document.RootElement.TryGetProperty("items", out var items) || items.ValueKind != JsonValueKind.Array) continue;
+                var reservation = folio.Reservation;
+                var guestName = reservation?.Guest == null ? null : $"{reservation.Guest.FirstName} {reservation.Guest.LastName}".Trim();
+                var rooms = reservation?.Rooms.Select(room => room.Room?.DisplayName ?? room.Room?.Number).Where(number => !string.IsNullOrWhiteSpace(number)).ToArray() ?? Array.Empty<string>();
+
+                foreach (var item in items.EnumerateArray())
+                {
+                    var createdAt = item.TryGetProperty("createdAt", out var createdAtElement) && DateTime.TryParse(createdAtElement.GetString(), out var parsedCreatedAt) ? parsedCreatedAt : folio.UpdatedAt;
+                    if (createdAt < startDate || createdAt > endDate) continue;
+                    var amount = ReadDecimal(item, "amount");
+                    rows.Add(new Dictionary<string, object?>
+                    {
+                        ["id"] = item.TryGetProperty("id", out var itemId) ? itemId.GetString() : Guid.NewGuid().ToString(),
+                        ["kind"] = "FOLIO_ITEM",
+                        ["date"] = createdAt,
+                        ["direction"] = amount >= 0 ? "INFLOW" : "OUTFLOW",
+                        ["amount"] = Math.Abs(amount),
+                        ["currency"] = folio.Currency ?? "NGN",
+                        ["method"] = "FOLIO",
+                        ["type"] = item.TryGetProperty("type", out var itemType) ? itemType.GetString() : "CHARGE",
+                        ["description"] = item.TryGetProperty("description", out var description) ? description.GetString() : "Folio transaction",
+                        ["reference"] = item.TryGetProperty("idempotencyKey", out var key) ? key.GetString() : null,
+                        ["shiftReference"] = "",
+                        ["folioNumber"] = folio.Id,
+                        ["confirmationNumber"] = reservation?.ConfirmationNumber,
+                        ["guest"] = guestName,
+                        ["rooms"] = rooms,
+                    });
+                }
+            }
+            catch (JsonException)
+            {
+            }
+        }
+
+        var inflows = movements.Where(movement => movement.Type is "OPENING_FLOAT" or "PAYMENT" or "CASH_TRANSFER_IN").Sum(movement => movement.Amount);
+        var outflows = movements.Where(movement => movement.Type is not ("OPENING_FLOAT" or "PAYMENT" or "CASH_TRANSFER_IN")).Sum(movement => movement.Amount);
+
+        return new
+        {
+            propertyId,
+            startDate,
+            endDate,
+            sessions = sessions.Select(session => new
+            {
+                session.Id,
+                session.ShiftReference,
+                session.BusinessDate,
+                session.Status,
+                session.OpeningFloat,
+                session.SystemExpectedCash,
+                session.DeclaredCash,
+                session.Variance,
+                cashAccount = accounts.TryGetValue(session.CashAccountId, out var account) ? new { account.Id, account.Name, account.Type } : null,
+            }),
+            rows = rows.OrderByDescending(row => row["date"]).ToList(),
+            totals = new { inflows, outflows, net = inflows - outflows, sessions = sessions.Count },
+        };
+    }
+
+    private static decimal ReadDecimal(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var value)) return 0m;
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetDecimal(out var number)) return number;
+        return value.ValueKind == JsonValueKind.String && decimal.TryParse(value.GetString(), out var text) ? text : 0m;
     }
 
     public async Task<LocalFrontdeskSession> OpenFrontdeskSessionAsync(string propertyId, string staffId, string cashAccountId, decimal openingFloat, string deviceId)
@@ -1134,6 +1260,36 @@ public class LocalRepository
         }
 
         folio.TransactionsJson = rootObj.ToJsonString();
+    }
+
+    private void ApplyCreditToTransactionsJson(LocalFolio folio, decimal amount)
+    {
+        if (amount <= 0 || string.IsNullOrWhiteSpace(folio.TransactionsJson)) return;
+
+        try
+        {
+            var root = System.Text.Json.Nodes.JsonNode.Parse(folio.TransactionsJson) as System.Text.Json.Nodes.JsonObject;
+            if (root == null || root["credits"] is not System.Text.Json.Nodes.JsonArray credits) return;
+
+            var remainingToApply = amount;
+            foreach (var creditNode in credits)
+            {
+                if (remainingToApply <= 0 || creditNode is not System.Text.Json.Nodes.JsonObject credit) break;
+                var remaining = credit["remainingAmount"]?.GetValue<decimal>() ?? 0m;
+                if (remaining <= 0) continue;
+
+                var applied = Math.Min(remainingToApply, remaining);
+                var newRemaining = remaining - applied;
+                credit["remainingAmount"] = newRemaining;
+                credit["status"] = newRemaining <= 0 ? "EXHAUSTED" : "PARTIALLY_APPLIED";
+                remainingToApply -= applied;
+            }
+
+            folio.TransactionsJson = root.ToJsonString();
+        }
+        catch
+        {
+        }
     }
 
     public async Task<bool> ProcessCheckInAsync(string reservationId, string userId, string deviceId, string? encodeData = null)

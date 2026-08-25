@@ -66,6 +66,7 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
   frontdesk: {
     listCashAccounts: async (propertyId: string) => invokeDesktop('frontdesk.cashAccounts.list', { propertyId }),
     getSession: async (propertyId: string) => invokeDesktop('frontdesk.session.get', { propertyId }),
+    getReport: async (propertyId: string, startDate: string, endDate: string) => invokeDesktop('frontdesk.report.get', { propertyId, startDate, endDate }),
     openSession: async (data: any) => invokeDesktop('frontdesk.session.open', data),
     closeSession: async (sessionId: string, declaredCash: number) => invokeDesktop('frontdesk.session.close', { sessionId, declaredCash }),
   },

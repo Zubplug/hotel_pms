@@ -39,6 +39,37 @@ async function main() {
     },
   })
 
+  const organizationProperties = await prisma.property.findMany({
+    where: { organizationId: org.id },
+    select: { id: true },
+  })
+
+  for (const property of organizationProperties) {
+    const cashAccounts = [
+      { name: 'Frontdesk Till 1', type: 'FRONTDESK_TILL' },
+      { name: 'Frontdesk Till 2', type: 'FRONTDESK_TILL' },
+      { name: 'Reception Safe', type: 'SAFE' },
+    ]
+
+    for (const cashAccount of cashAccounts) {
+      const existing = await prisma.cashAccount.findFirst({
+        where: { propertyId: property.id, name: cashAccount.name },
+      })
+
+      if (!existing) {
+        await prisma.cashAccount.create({
+          data: {
+            propertyId: property.id,
+            name: cashAccount.name,
+            type: cashAccount.type,
+            balance: 0,
+            isActive: true,
+          },
+        })
+      }
+    }
+  }
+
   // 3. Buildings & Floors
   const buildingA = await prisma.building.create({
     data: {

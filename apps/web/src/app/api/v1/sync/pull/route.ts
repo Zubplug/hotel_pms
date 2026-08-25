@@ -79,6 +79,12 @@ export async function GET(req: NextRequest) {
       orderBy: { name: 'asc' },
     });
 
+    const cashAccounts = await prisma.cashAccount.findMany({
+      where: buildWhere({ propertyId, isActive: true }),
+      take: limit,
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+    });
+
     // ---- Fetch Data -----------------------------------------------------
     // To support pagination across multiple tables, we fetch up to `limit` from EACH table,
     // then merge, sort by updatedAt, and slice the overall list to `limit`.
@@ -412,6 +418,7 @@ export async function GET(req: NextRequest) {
       hasMore:    hasMore,
       
       property:   propertyPayload,
+      cashAccounts,
       staff:      staffWithPermissions,
       rooms:      finalRooms,
       roomTypes:  finalRoomTypes,

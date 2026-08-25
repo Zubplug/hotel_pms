@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { format, differenceInDays, addDays } from 'date-fns';
+import { format, differenceInCalendarDays, addDays, startOfDay, isBefore } from 'date-fns';
 import { toast } from 'sonner';
 import { formatRoomNumber } from '@/lib/format-room';
 
@@ -73,20 +73,26 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
     },
   });
 
-  // Hydrate dates safely on client
+  const { data: dashboardRes } = useQuery({
+    queryKey: ['frontdesk', 'dashboard', propertyId],
+    queryFn: () => provider.dashboard.get(propertyId),
+    enabled: !!propertyId,
+    staleTime: 60_000,
+  });
+
+  const businessDate = useMemo(() => {
+    const rawDate = (dashboardRes as any)?.data?.businessDate || (dashboardRes as any)?.businessDate;
+    return rawDate ? startOfDay(new Date(rawDate)) : startOfDay(new Date());
+  }, [dashboardRes]);
+
+  // Hydrate dates safely on client using the property's business date.
   useEffect(() => {
-    if (!datesInitialized && isWalkIn) {
-      const cachedDashboard: any = queryClient.getQueryData(['frontdesk', 'dashboard', propertyId]);
-      const businessDate = cachedDashboard?.data?.businessDate 
-        ? new Date(cachedDashboard.data.businessDate) 
-        : new Date();
-      const nextBusinessDate = addDays(businessDate, 1);
-      
+    if (!datesInitialized && businessDate) {
       form.setValue('checkIn', businessDate);
-      form.setValue('checkOut', nextBusinessDate);
+      form.setValue('checkOut', addDays(businessDate, 1));
       setDatesInitialized(true);
     }
-  }, [datesInitialized, isWalkIn, queryClient, propertyId, form]);
+  }, [datesInitialized, businessDate, form]);
 
   const isNewGuest = form.watch('isNewGuest');
   const checkIn = form.watch('checkIn');
@@ -178,9 +184,14 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
 
   // Pricing Calculation
   const selectedRoomType = roomTypes?.find((rt: any) => rt.id === roomTypeId);
-  const nights = (checkIn && checkOut && checkOut > checkIn) 
-    ? differenceInDays(checkOut, checkIn) 
+  const nights = (checkIn && checkOut && checkOut > checkIn)
+    ? differenceInCalendarDays(checkOut, checkIn)
     : 0;
+
+  const invalidDateRange = !checkIn || !checkOut || nights < 1;
+  const minimumCheckoutDate = checkIn ? addDays(checkIn, 1) : addDays(businessDate, 1);
+  const disableCheckInDate = (date: Date) => isBefore(startOfDay(date), businessDate);
+  const disableCheckoutDate = (date: Date) => isBefore(startOfDay(date), minimumCheckoutDate);
 
   const nightlyRate = Number(selectedRoomType?.baseRate || 0);
   const estimatedTotal = nightlyRate * nights;
@@ -408,10 +419,14 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
                     render={({ field }) => (
                       <FormItem className="flex flex-col">
                         <FormLabel className="text-slate-400 ml-1">Check-In</FormLabel>
-                        <DatePicker 
+                        <DatePicker
                           value={field.value} 
-                          onChange={field.onChange} 
+                          onChange={(date) => {
+                            field.onChange(date);
+                            if (date && (!checkOut || checkOut <= date)) form.setValue('checkOut', addDays(date, 1), { shouldValidate: true });
+                          }}
                           disabled={isWalkIn}
+                          disabledDays={disableCheckInDate}
                           className="h-12 rounded-xl bg-slate-900 border-slate-700 text-white" 
                         />
                         {isWalkIn && <p className="text-xs text-blue-400 mt-1 ml-1 font-medium">Locked to Business Date</p>}
@@ -425,9 +440,10 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
                     render={({ field }) => (
                       <FormItem className="flex flex-col">
                         <FormLabel className="text-slate-400 ml-1">Check-Out</FormLabel>
-                        <DatePicker 
+                        <DatePicker
                           value={field.value} 
                           onChange={field.onChange} 
+                          disabledDays={disableCheckoutDate}
                           className="h-12 rounded-xl bg-slate-900 border-slate-700 text-white" 
                         />
                         <FormMessage />
@@ -510,6 +526,11 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
                       {nights} {nights === 1 ? 'Night' : 'Nights'}
                     </span>
                   </div>
+                  {checkIn && checkOut && nights > 0 && (
+                    <p className="mb-3 text-xs font-medium text-blue-200/90">
+                      {format(checkIn, 'dd MMM yyyy')} → {format(checkOut, 'dd MMM yyyy')}
+                    </p>
+                  )}
                   {selectedRoomType && formatter && nights > 0 ? (
                     <>
                       <div className="flex items-center justify-between text-sm text-blue-100">
@@ -519,12 +540,17 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
                       <div className="mt-2 text-3xl font-bold text-white tracking-tight">
                         {formatter.format(estimatedTotal)}
                       </div>
+                      <div className="mt-2 flex items-center justify-between border-t border-blue-400/20 pt-2 text-xs text-blue-200">
+                        <span>Average nightly total</span>
+                        <span className="font-semibold">{formatter.format(estimatedTotal / nights)}</span>
+                      </div>
                     </>
                   ) : (
                     <div className="text-2xl font-bold text-white tracking-tight">Select a room type and dates</div>
                   )}
+                  {checkIn && checkOut && invalidDateRange && <p className="mt-2 text-xs font-medium text-rose-300">Choose a checkout date at least one night after check-in.</p>}
                   <div className="mt-2 text-xs text-blue-200/80">
-                    Calculated automatically from the selected room rate and number of nights.
+                    Estimated from the selected room rate and nights. The server validates the final rate when saved.
                   </div>
                 </div>
 

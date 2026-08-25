@@ -785,6 +785,40 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                 }
             }
 
+            if (root.TryGetProperty("cashAccounts", out var cashAccountsArray) && cashAccountsArray.ValueKind == System.Text.Json.JsonValueKind.Array)
+            {
+                var cashAccountIndex = 0;
+                var cashAccountCount = cashAccountsArray.GetArrayLength();
+                foreach (var accountEl in cashAccountsArray.EnumerateArray())
+                {
+                    cashAccountIndex++;
+                    BroadcastHealth(SyncState.SYNCING, null, "CASH_ACCOUNTS", cashAccountIndex, cashAccountCount, "Syncing cash accounts...");
+                    var accountId = accountEl.TryGetProperty("id", out var accountIdEl) ? accountIdEl.GetString() : null;
+                    if (string.IsNullOrWhiteSpace(accountId)) continue;
+
+                    var account = await dbContext.CashAccounts.FirstOrDefaultAsync(a => a.Id == accountId, stoppingToken);
+                    if (account == null)
+                    {
+                        account = new LodgeCore.Desktop.Data.Entities.LocalCashAccount { Id = accountId, PropertyId = propertyId };
+                        dbContext.CashAccounts.Add(account);
+                    }
+
+                    account.PropertyId = propertyId;
+                    account.OutletId = accountEl.TryGetProperty("outletId", out var outletIdEl) && outletIdEl.ValueKind != System.Text.Json.JsonValueKind.Null ? outletIdEl.GetString() : null;
+                    account.Name = accountEl.TryGetProperty("name", out var accountNameEl) ? accountNameEl.GetString() ?? account.Name : account.Name;
+                    account.Type = accountEl.TryGetProperty("type", out var accountTypeEl) ? accountTypeEl.GetString() ?? account.Type : account.Type;
+                    account.OwnerId = accountEl.TryGetProperty("ownerId", out var ownerIdEl) && ownerIdEl.ValueKind != System.Text.Json.JsonValueKind.Null ? ownerIdEl.GetString() : null;
+                    account.Balance = accountEl.TryGetProperty("balance", out var balanceEl)
+                        ? balanceEl.ValueKind == System.Text.Json.JsonValueKind.String && decimal.TryParse(balanceEl.GetString(), out var balanceFromString)
+                            ? balanceFromString
+                            : balanceEl.ValueKind == System.Text.Json.JsonValueKind.Number && balanceEl.TryGetDecimal(out var balanceFromNumber)
+                                ? balanceFromNumber
+                                : account.Balance
+                        : account.Balance;
+                    account.IsActive = !accountEl.TryGetProperty("isActive", out var activeEl) || activeEl.ValueKind == System.Text.Json.JsonValueKind.True;
+                }
+            }
+
             // ---- Apply staff records --------------------------------------
             if (root.TryGetProperty("staff", out var staffArray))
             {
@@ -1214,6 +1248,9 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     folio.Status = el.TryGetProperty("status", out var st) && st.ValueKind != System.Text.Json.JsonValueKind.Null ? st.GetString() ?? "" : "";
                     folio.TotalCharges = el.TryGetProperty("totalCharges", out var tc) && tc.ValueKind != System.Text.Json.JsonValueKind.Null && decimal.TryParse(tc.GetString(), out var tcd) ? tcd : 0m;
                     folio.TotalPayments = el.TryGetProperty("totalPayments", out var tp) && tp.ValueKind != System.Text.Json.JsonValueKind.Null && decimal.TryParse(tp.GetString(), out var tpd) ? tpd : 0m;
+                    folio.Version = el.TryGetProperty("version", out var folioVersion) && folioVersion.TryGetInt32(out var serverFolioVersion)
+                        ? serverFolioVersion
+                        : folio.Version;
                     folio.AvailableCredit = el.TryGetProperty("availableCredit", out var ac) && ac.ValueKind != System.Text.Json.JsonValueKind.Null && decimal.TryParse(ac.GetString(), out var acd)
                         ? acd
                         : el.TryGetProperty("credits", out var credits) && credits.ValueKind == System.Text.Json.JsonValueKind.Array
