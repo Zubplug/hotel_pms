@@ -165,16 +165,21 @@ export default function MaintenancePage() {
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
   const [resolving, setResolving] = useState<string | null>(null);
+  const [rooms, setRooms] = useState<any[]>([]);
 
-  const loadTickets = async () => {
+  const loadData = async () => {
     if (!propertyId) return;
     setLoading(true);
     setError(null);
     try {
-      const result = await provider.maintenance.list(propertyId);
-      const data = Array.isArray(result) ? result : (result as any)?.data || [];
+      const [ticketsResult, roomsResult] = await Promise.all([
+        provider.maintenance.list(propertyId),
+        provider.rooms.list(propertyId)
+      ]);
+      
+      const ticketsData = Array.isArray(ticketsResult) ? ticketsResult : (ticketsResult as any)?.data || [];
       setTickets(
-        data.map((ticket: any) => ({
+        ticketsData.map((ticket: any) => ({
           ...ticket,
           issueDescription:
             ticket.issueDescription || ticket.description || ticket.title || 'Maintenance issue',
@@ -184,15 +189,18 @@ export default function MaintenancePage() {
           requiresRoomRestriction: Boolean(ticket.requiresRoomRestriction),
         })),
       );
+
+      const roomsData = Array.isArray(roomsResult) ? roomsResult : (roomsResult as any)?.data || [];
+      setRooms(roomsData);
     } catch (err: any) {
-      setError(err?.message || 'Failed to load tickets');
+      setError(err?.message || 'Failed to load data');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    void loadTickets();
+    void loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId, provider]);
 
@@ -210,7 +218,7 @@ export default function MaintenancePage() {
         requiresRoomRestriction: false,
       });
       setShowNewTicket(false);
-      await loadTickets();
+      await loadData();
     } catch (err: any) {
       setError(err?.message || 'Failed to create ticket');
     } finally {
@@ -222,7 +230,7 @@ export default function MaintenancePage() {
     setResolving(id);
     try {
       await provider.maintenance.resolveTicket(id);
-      await loadTickets();
+      await loadData();
     } catch (err: any) {
       setError(err?.message || 'Failed to update ticket');
     } finally {
@@ -360,14 +368,30 @@ export default function MaintenancePage() {
             <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5 block">
-                  Room Number <span className="font-normal text-slate-400">(optional)</span>
+                  Room <span className="font-normal text-slate-400">(optional)</span>
                 </label>
-                <Input
-                  placeholder="e.g. 204"
-                  value={newTicket.roomNumber}
-                  onChange={(e) => setNewTicket({ ...newTicket, roomNumber: e.target.value })}
-                  className="rounded-xl border-slate-200"
-                />
+                <div className="relative">
+                  <select
+                    className="w-full appearance-none h-10 rounded-xl border border-slate-200 bg-white pr-9 pl-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    value={newTicket.roomId}
+                    onChange={(e) => {
+                      const selectedRoom = rooms.find(r => r.id === e.target.value);
+                      setNewTicket({ 
+                        ...newTicket, 
+                        roomId: e.target.value,
+                        roomNumber: selectedRoom?.number || ''
+                      });
+                    }}
+                  >
+                    <option value="">General (No Room)</option>
+                    {rooms.map((room) => (
+                      <option key={room.id} value={room.id}>
+                        {room.number} {room.roomType?.name ? `(${room.roomType.name})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                </div>
               </div>
 
               <div>
