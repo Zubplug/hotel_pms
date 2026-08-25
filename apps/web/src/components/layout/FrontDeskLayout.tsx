@@ -144,7 +144,7 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
             <Brush className="h-4 w-4" />
             Housekeeping
           </Link>
-          <Link href="/maintenance" className="hidden md:inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted hover:text-foreground">
+          <Link href="/frontdesk/maintenance" className="hidden md:inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted hover:text-foreground">
             <Wrench className="h-4 w-4" />
             Maintenance
           </Link>
@@ -167,7 +167,7 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
                 <DropdownMenuItem onClick={() => router.push('/frontdesk/housekeeping')} className="w-full cursor-pointer">
                   <Brush className="mr-2 h-4 w-4" /> Housekeeping
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => router.push('/maintenance')} className="w-full cursor-pointer">
+                <DropdownMenuItem onClick={() => router.push('/frontdesk/maintenance')} className="w-full cursor-pointer">
                   <Wrench className="mr-2 h-4 w-4" /> Maintenance
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => router.push('/frontdesk/refunds')} className="w-full cursor-pointer">
