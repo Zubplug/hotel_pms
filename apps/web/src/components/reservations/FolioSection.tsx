@@ -48,17 +48,17 @@ export function FolioSection({ reservation }: { reservation: any }) {
 
   return (
     <>
-      <Card className="mt-6 border-slate-200 shadow-sm">
-        <CardHeader className="bg-slate-50 border-b flex flex-row items-center justify-between py-4">
+      <Card className="mt-6 overflow-hidden border-slate-200 shadow-sm">
+        <CardHeader className="flex flex-col gap-4 border-b bg-slate-50 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
-            <CardTitle className="text-xl font-bold flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-lg font-bold sm:text-xl">
               <Wallet className="w-5 h-5" /> Folio Ledger
             </CardTitle>
             <Badge variant={isClosed ? 'secondary' : 'default'} className="uppercase">
               {folio.status}
             </Badge>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {!isClosed && (
               <>
                 <Button size="sm" onClick={() => setIsAddPaymentOpen(true)}>
@@ -80,30 +80,30 @@ export function FolioSection({ reservation }: { reservation: any }) {
         </CardHeader>
         <CardContent className="p-0">
           {/* Summary Banner */}
-          <div className="grid grid-cols-4 divide-x border-b bg-white">
-            <div className="p-4 text-center">
+          <div className="grid grid-cols-1 divide-y border-b bg-white sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-4">
+            <div className="min-w-0 p-4 text-center sm:p-5">
               <p className="text-sm text-muted-foreground mb-1">Total Charges</p>
-              <p className="text-2xl font-semibold text-slate-800">{formatCurrency(totalCharges)}</p>
+              <p className="whitespace-nowrap text-xl font-semibold tabular-nums text-slate-800 sm:text-2xl">{formatCurrency(totalCharges)}</p>
             </div>
-            <div className="p-4 text-center">
+            <div className="min-w-0 p-4 text-center sm:p-5">
               <p className="text-sm text-muted-foreground mb-1">Total Payments</p>
-              <p className="text-2xl font-semibold text-emerald-600">{formatCurrency(folio.totalPayments)}</p>
+              <p className="whitespace-nowrap text-xl font-semibold tabular-nums text-emerald-600 sm:text-2xl">{formatCurrency(folio.totalPayments)}</p>
             </div>
-            <div className="p-4 text-center bg-slate-50/50">
+            <div className="min-w-0 bg-slate-50/50 p-4 text-center sm:p-5">
               <p className="text-sm text-muted-foreground mb-1">Outstanding Balance</p>
-              <p className={`text-2xl font-bold ${Number(folio.balance) > 0 ? 'text-red-600' : Number(folio.balance) < 0 ? 'text-amber-600' : 'text-slate-800'}`}>
+              <p className={`whitespace-nowrap text-xl font-bold tabular-nums sm:text-2xl ${Number(folio.balance) > 0 ? 'text-red-600' : Number(folio.balance) < 0 ? 'text-amber-600' : 'text-slate-800'}`}>
                 {formatCurrency(folio.balance)}
               </p>
             </div>
-            <div className="p-4 text-center bg-blue-50/40">
+            <div className="min-w-0 bg-blue-50/40 p-4 text-center sm:p-5">
               <p className="text-sm text-muted-foreground mb-1">Available Credit</p>
-              <p className="text-2xl font-bold text-blue-700">{formatCurrency(folio.availableCredit || 0)}</p>
+              <p className="whitespace-nowrap text-xl font-bold tabular-nums text-blue-700 sm:text-2xl">{formatCurrency(folio.availableCredit || 0)}</p>
             </div>
           </div>
 
           {/* Ledger Table */}
           <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
+            <table className="w-full min-w-[900px] text-left text-sm">
               <thead className="bg-slate-50/50 border-b text-slate-500 uppercase text-xs font-semibold">
                 <tr>
                   <th className="px-6 py-3">Date</th>
@@ -146,10 +146,10 @@ export function FolioSection({ reservation }: { reservation: any }) {
                         <td className="px-6 py-3 text-slate-800 font-medium max-w-[250px] truncate" title={item.description}>
                           {item.description}
                         </td>
-                        <td className="px-6 py-3 text-right tabular-nums">
+                        <td className="whitespace-nowrap px-6 py-3 text-right tabular-nums">
                           {isDebit ? formatCurrency(absAmount) : '-'}
                         </td>
-                        <td className="px-6 py-3 text-right tabular-nums text-emerald-600 font-medium">
+                        <td className="whitespace-nowrap px-6 py-3 text-right font-medium tabular-nums text-emerald-600">
                           {isCredit ? formatCurrency(absAmount) : '-'}
                         </td>
                         <td className="px-6 py-3 text-center flex justify-end gap-2">

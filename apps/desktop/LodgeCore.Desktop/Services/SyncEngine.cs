@@ -999,6 +999,11 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                         res.CheckInDate = cid;
                     if (el.TryGetProperty("checkOut", out var co) && co.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(co.GetString(), out var cod))
                         res.CheckOutDate = cod;
+
+                    if (string.IsNullOrWhiteSpace(res.RoomTypeId))
+                    {
+                        res.RoomTypeId = res.Rooms.FirstOrDefault()?.RoomTypeId;
+                    }
                     
                     res.Adults = el.TryGetProperty("adults", out var adl) ? adl.GetInt32() : res.Adults;
                     res.Children = el.TryGetProperty("children", out var chl) ? chl.GetInt32() : res.Children;

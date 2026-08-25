@@ -1,4 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
 
 namespace LodgeCore.Desktop;
 
@@ -11,6 +13,7 @@ public partial class App : Application
 
     protected override Window CreateWindow(IActivationState? activationState)
     {
+        EnsureDesktopShortcut();
         var window = new Window(new SplashPage());
 
         try 
@@ -40,5 +43,37 @@ public partial class App : Application
         }
 
         return window;
+    }
+
+    private static void EnsureDesktopShortcut()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+
+        try
+        {
+            var desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+            var shortcutPath = Path.Combine(desktopPath, "LodgeCore Front Desk.lnk");
+            if (File.Exists(shortcutPath)) return;
+
+            var executablePath = Process.GetCurrentProcess().MainModule?.FileName;
+            if (string.IsNullOrWhiteSpace(executablePath)) return;
+
+            var shellType = Type.GetTypeFromProgID("WScript.Shell");
+            if (shellType == null) return;
+
+            dynamic shell = Activator.CreateInstance(shellType)!;
+            dynamic shortcut = shell.CreateShortcut(shortcutPath);
+            shortcut.TargetPath = executablePath;
+            shortcut.WorkingDirectory = Path.GetDirectoryName(executablePath);
+            shortcut.Description = "LodgeCore Front Desk";
+            shortcut.IconLocation = $"{executablePath},0";
+            shortcut.Save();
+            Marshal.FinalReleaseComObject(shortcut);
+            Marshal.FinalReleaseComObject(shell);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Could not create desktop shortcut: {ex.Message}");
+        }
     }
 }

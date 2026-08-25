@@ -383,7 +383,7 @@ public partial class MainPage : ContentPage
                         parameters?["folioId"]?.ToString() ?? "",
                         parameters?["payment"]?["amount"]?.GetValue<decimal>() ?? 0,
                         parameters?["payment"]?["method"]?.ToString() ?? "",
-                        parameters?["idempotencyKey"]?.ToString());
+                        parameters?["payment"]?["idempotencyKey"]?.ToString() ?? parameters?["idempotencyKey"]?.ToString());
                     break;
                 case "folios.addDeposit":
                     responseData = await pmsInterop.RecordAdvanceDepositAsync(
@@ -392,14 +392,14 @@ public partial class MainPage : ContentPage
                         parameters?["deposit"]?["method"]?.ToString() ?? "",
                         parameters?["deposit"]?["reference"]?.ToString(),
                         parameters?["deposit"]?["notes"]?.ToString(),
-                        parameters?["idempotencyKey"]?.ToString());
+                        parameters?["deposit"]?["idempotencyKey"]?.ToString() ?? parameters?["idempotencyKey"]?.ToString());
                     break;
                 case "folios.addCharge":
                     responseData = await pmsInterop.RecordChargeAsync(
                         parameters?["folioId"]?.ToString() ?? "",
                         parameters?["charge"]?["amount"]?.GetValue<decimal>() ?? 0,
                         parameters?["charge"]?["description"]?.ToString() ?? "",
-                        parameters?["idempotencyKey"]?.ToString());
+                        parameters?["charge"]?["idempotencyKey"]?.ToString() ?? parameters?["idempotencyKey"]?.ToString());
                     break;
                 case "keycards.encode":
                     var hardwareResponse = await hardwareInterop.EncodeCardAsync(

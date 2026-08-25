@@ -408,7 +408,14 @@ public class LocalRepository
         if (newCheckOut <= res.CheckOutDate)
             throw new InvalidOperationException("New checkout date must be after the current checkout date.");
 
-        var roomTypeId = res.RoomTypeId;
+        var roomTypeId = res.RoomTypeId ?? res.Rooms.FirstOrDefault()?.RoomTypeId;
+        if (string.IsNullOrWhiteSpace(roomTypeId))
+        {
+            var assignedRoomId = res.Rooms.FirstOrDefault()?.RoomId;
+            roomTypeId = !string.IsNullOrWhiteSpace(assignedRoomId)
+                ? (await _dbContext.Rooms.FirstOrDefaultAsync(r => r.Id == assignedRoomId))?.RoomTypeId
+                : null;
+        }
         var roomType = !string.IsNullOrEmpty(roomTypeId)
             ? await _dbContext.RoomTypes.FirstOrDefaultAsync(rt => rt.Id == roomTypeId)
             : null;
@@ -489,8 +496,9 @@ public class LocalRepository
             throw new InvalidOperationException("New checkout date must be after the current checkout date.");
 
         var additionalNights = (int)(newCheckOut.Date - res.CheckOutDate.Date).TotalDays;
-        var roomType = !string.IsNullOrEmpty(res.RoomTypeId)
-            ? await _dbContext.RoomTypes.FirstOrDefaultAsync(rt => rt.Id == res.RoomTypeId)
+        var roomTypeId = res.RoomTypeId ?? res.Rooms.FirstOrDefault()?.RoomTypeId;
+        var roomType = !string.IsNullOrEmpty(roomTypeId)
+            ? await _dbContext.RoomTypes.FirstOrDefaultAsync(rt => rt.Id == roomTypeId)
             : null;
         if (roomType == null)
             throw new InvalidOperationException("The reservation room rate is unavailable offline. Sync room types before extending the stay.");
@@ -917,6 +925,14 @@ public class LocalRepository
                 foreach (var payment in payments.EnumerateArray())
                 {
                     if (payment.TryGetProperty("idempotencyKey", out var keyProp) && keyProp.ValueKind == System.Text.Json.JsonValueKind.String && keyProp.GetString() == idempotencyKey)
+                        return true;
+                }
+            }
+            if (doc.RootElement.TryGetProperty("credits", out var credits) && credits.ValueKind == System.Text.Json.JsonValueKind.Array)
+            {
+                foreach (var credit in credits.EnumerateArray())
+                {
+                    if (credit.TryGetProperty("idempotencyKey", out var keyProp) && keyProp.ValueKind == System.Text.Json.JsonValueKind.String && keyProp.GetString() == idempotencyKey)
                         return true;
                 }
             }

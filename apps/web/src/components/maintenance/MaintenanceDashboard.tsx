@@ -5,6 +5,7 @@ import { useProperty } from '@/components/PropertyProvider';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import {
   Wrench,
   Plus,
@@ -270,6 +271,7 @@ export default function MaintenancePage() {
             </p>
           </div>
 
+          <Dialog open={showNewTicket} onOpenChange={setShowNewTicket}>
           <div className="flex items-center gap-3">
             {/* connectivity badge */}
             <span
@@ -287,13 +289,12 @@ export default function MaintenancePage() {
               )}
             </span>
 
-            <Button
-              className="rounded-xl bg-orange-600 hover:bg-orange-700 text-white shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all font-semibold"
-              onClick={() => setShowNewTicket((v) => !v)}
+            <DialogTrigger
+              render={<Button className="rounded-xl bg-orange-600 hover:bg-orange-700 text-white shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all font-semibold" />}
             >
               <Plus className="mr-2 h-4 w-4" />
               New Ticket
-            </Button>
+            </DialogTrigger>
           </div>
         </div>
 
@@ -348,20 +349,13 @@ export default function MaintenancePage() {
         </div>
 
         {/* ── New Ticket Form ── */}
-        {showNewTicket && (
-          <div className="bg-white rounded-3xl border border-slate-200/60 shadow-xl shadow-slate-200/40 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300">
-            <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+        <DialogContent className="max-w-2xl rounded-2xl p-0">
+            <DialogHeader className="border-b border-slate-100 bg-slate-50/50 px-6 py-5">
+              <DialogTitle className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <Plus className="w-5 h-5 text-orange-600" />
                 New Maintenance Ticket
-              </h2>
-              <button
-                onClick={() => setShowNewTicket(false)}
-                className="text-slate-400 hover:text-slate-700 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+              </DialogTitle>
+            </DialogHeader>
 
             <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -458,8 +452,8 @@ export default function MaintenancePage() {
                 </div>
               </div>
             </div>
-          </div>
-        )}
+        </DialogContent>
+        </Dialog>
 
         {/* ── Ticket Table ── */}
         <div className="bg-white rounded-3xl border border-slate-200/60 shadow-xl shadow-slate-200/40 overflow-hidden">

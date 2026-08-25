@@ -268,7 +268,34 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
         <FrontDeskExtendStayDialog reservation={reservation} open={isExtendStayOpen} onOpenChange={setIsExtendStayOpen} />
       )}
       {isReceiptOpen && latestPayment && (
-        <FrontDeskReceiptDialog paymentId={latestPayment.id} open={isReceiptOpen} onOpenChange={setIsReceiptOpen} />
+        <FrontDeskReceiptDialog
+          paymentId={latestPayment.id}
+          open={isReceiptOpen}
+          onOpenChange={setIsReceiptOpen}
+          localData={{
+            receiptId: latestPayment.reference || `RCPT-${latestPayment.id.substring(0, 8).toUpperCase()}`,
+            property: reservation.property || { name: 'LodgeCore' },
+            guest: guest ? { name: `${guest.firstName} ${guest.lastName}`, email: guest.email } : null,
+            reservation: {
+              confirmationNumber: reservation.confirmationNumber,
+              roomNumber: room?.number || 'Unassigned',
+              checkIn: reservation.checkIn,
+              checkOut: reservation.checkOut,
+            },
+            folio: {
+              id: folio.id,
+              totalCharges: Number(folio.totalCharges || 0),
+              totalPayments: Number(folio.totalPayments || 0),
+              balance: Number(folio.balance || 0),
+            },
+            payment: {
+              ...latestPayment,
+              date: latestPayment.createdAt,
+              amount: Number(latestPayment.amount),
+              providerTransactionId: latestPayment.providerTransactionId || latestPayment.reference,
+            },
+          }}
+        />
       )}
       {isQuickCheckoutOpen && (
         <FrontDeskQuickCheckoutDialog

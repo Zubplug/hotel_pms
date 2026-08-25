@@ -81,7 +81,7 @@ jobs:
             $tag = "${{ github.ref_name }}"
             $version = $tag.TrimStart('v') + ".0"
         } else {
-            $version = "1.0.0.0"
+            $version = "1.2.24.0"
         }
         echo "APP_VERSION=$version" >> $env:GITHUB_ENV
 

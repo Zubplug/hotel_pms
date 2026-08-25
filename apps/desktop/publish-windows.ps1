@@ -1,6 +1,6 @@
 # Build and Publish LodgeCore Windows Installer (MSIX)
 param (
-    [string]$Version = "1.0.0.0"
+    [string]$Version = "1.2.24.0"
 )
 
 $ErrorActionPreference = "Stop"

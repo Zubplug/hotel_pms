@@ -1,4 +1,5 @@
 using Microsoft.Maui.ApplicationModel;
+using System.Reflection;
 
 namespace LodgeCore.Desktop;
 
@@ -7,6 +8,8 @@ public partial class SplashPage : ContentPage
     public SplashPage()
     {
         InitializeComponent();
+        var version = Assembly.GetExecutingAssembly().GetName().Version;
+        VersionLabel.Text = version == null ? $"v{AppInfo.Current.VersionString}" : $"v{version.ToString(3)}";
     }
 
     protected override async void OnAppearing()

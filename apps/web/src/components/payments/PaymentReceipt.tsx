@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
 
-export function PaymentReceipt({ id, onClose, hideBack = false }: { id: string, onClose?: () => void, hideBack?: boolean }) {
+export function PaymentReceipt({ id, onClose, hideBack = false, localData }: { id: string, onClose?: () => void, hideBack?: boolean, localData?: any }) {
   const router = useRouter();
 
   const { data, isLoading, error } = useQuery({
@@ -20,7 +20,9 @@ export function PaymentReceipt({ id, onClose, hideBack = false }: { id: string, 
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to fetch receipt');
       return json.data;
-    }
+    },
+    enabled: !localData,
+    initialData: localData,
   });
 
   const handlePrint = async () => {
