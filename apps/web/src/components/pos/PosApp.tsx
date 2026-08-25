@@ -20,7 +20,7 @@ import { EmergencyCashBankModal } from '@/components/pos/EmergencyCashBankModal'
 import { AutoLockScreen } from '@/components/pos/AutoLockScreen';
 import { CategoryTileGrid } from '@/components/pos/CategoryTileGrid';
 import { ProductCardStepper } from '@/components/pos/ProductCardStepper';
-import { PosStaffStrip } from '@/components/pos/PosStaffStrip';
+// PosStaffStrip removed from header — orders accessible via sidebar
 import { ChargeModal } from '@/components/pos/ChargeModal';
 import { ActionSuccessModal } from '@/components/pos/ActionSuccessModal';
 import { WaiterTicketsModal } from '@/components/pos/WaiterTicketsModal';
@@ -152,8 +152,23 @@ export default function PosApp() {
           provider.pos.getProducts(propertyId),
           provider.pos.getCategories(propertyId),
         ]);
-        if (prodRes.data) setProducts(prodRes.data);
-        if (catRes.data) setCategories(catRes.data);
+        if (prodRes.data) {
+          setProducts((prodRes.data || []).map((product: any) => ({
+            ...product,
+            id: product.id ?? product.Id,
+            name: product.name ?? product.Name ?? 'Unnamed product',
+            categoryId: product.categoryId ?? product.CategoryId ?? '',
+            price: Number(product.price ?? product.Price ?? 0),
+            taxRate: Number(product.taxRate ?? product.TaxRate ?? 0),
+          })));
+        }
+        if (catRes.data) {
+          setCategories((catRes.data || []).map((category: any) => ({
+            ...category,
+            id: category.id ?? category.Id,
+            name: category.name ?? category.Name ?? 'Uncategorised',
+          })));
+        }
 
         const activeSessionId =
           (session as any)?.sessionId ||
@@ -580,9 +595,9 @@ export default function PosApp() {
   // ─────────────────────────────────────────────────────────────────
   // Totals
   // ─────────────────────────────────────────────────────────────────
-  const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const subtotal = cart.reduce((sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0), 0);
   const tax = cart.reduce(
-    (sum, item) => sum + item.price * item.quantity * (item.taxRate / 100),
+    (sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0) * (Number(item.taxRate || 0) / 100),
     0
   );
   const total = subtotal + tax;
@@ -744,53 +759,89 @@ export default function PosApp() {
         {/* 2. Main Workspace */}
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden" style={{ background: '#f8fafc' }}>
 
-          {/* ── Top Bar (Search + Categories + Cart Toggle) ── */}
+          {/* ── Top Bar (Professional Header) ── */}
           {viewMode === 'menu' && (
-            <div className="bg-white border-b border-slate-200 px-3 py-2 shrink-0 shadow-sm z-10">
-              {/* Row 1: Staff strip */}
-              <div className="mb-2">
-                <PosStaffStrip 
-                  orders={myActiveOrders}
-                  onSelectOrder={handleOrderResume}
-                  activeOrderId={currentOrderId}
-                />
-              </div>
-              {/* Row 2: Search + Cart toggle */}
-              <div className="flex items-center gap-2">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Search items..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="w-full h-9 pl-9 pr-3 rounded-lg bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 text-sm font-medium text-slate-700 placeholder:text-slate-400"
-                  />
-                </div>
-                {/* Cart badge toggle */}
-                <button
-                  onClick={() => setCartOpen(o => !o)}
-                  className={`relative flex items-center justify-center h-9 px-3 rounded-lg border font-semibold text-sm transition-all touch-manipulation ${
-                    cartOpen ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                  }`}
-                  title={cartOpen ? 'Hide cart' : 'Show cart'}
-                >
-                  {cartOpen ? <PanelRightClose className="w-4 h-4" /> : <PanelRightOpen className="w-4 h-4" />}
-                  {!cartOpen && cart.length > 0 && (
-                    <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center">
-                      {cart.length > 9 ? '9+' : cart.length}
+            <div className="bg-white border-b border-slate-200 shrink-0 z-10" style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
+
+              {/* ── Row 1: Context · Search · Actions ── */}
+              <div className="flex items-center gap-3 px-4" style={{ height: '52px' }}>
+
+                {/* Left: Outlet + active context */}
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="flex flex-col min-w-0 leading-tight">
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                      {sessionContext?.outlet?.name || 'POS Terminal'}
+                    </span>
+                    <span className="text-sm font-black text-slate-800 truncate">
+                      {activeOrderType === 'TABLE'
+                        ? (activeTableName ? `Table ${activeTableName}` : 'No Table Selected')
+                        : (activeDisplayName || activeOrderType.replace(/_/g, ' '))}
+                    </span>
+                  </div>
+                  {currentOrderId && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-[10px] font-bold text-emerald-700 uppercase tracking-wide whitespace-nowrap shrink-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      Order Active
                     </span>
                   )}
-                </button>
+                </div>
+
+                {/* Centre: Search */}
+                <div className="relative flex-1 max-w-sm mx-auto">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Search menu items…"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="w-full h-9 pl-9 pr-3 rounded-lg bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 text-sm font-medium text-slate-700 placeholder:text-slate-400 transition-shadow"
+                  />
+                </div>
+
+                {/* Right: Status + Cart toggle */}
+                <div className="flex items-center gap-2 shrink-0">
+                  {/* Online / Offline pill */}
+                  <div className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide transition-colors ${
+                    isOnline
+                      ? 'bg-emerald-50 border border-emerald-200 text-emerald-700'
+                      : 'bg-amber-50 border border-amber-200 text-amber-700'
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${
+                      isOnline ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'
+                    }`} />
+                    {isOnline ? 'Online' : 'Offline'}
+                  </div>
+
+                  {/* Cart toggle */}
+                  <button
+                    id="pos-cart-toggle"
+                    onClick={() => setCartOpen(o => !o)}
+                    className={`relative flex items-center justify-center h-9 px-3 rounded-lg border font-semibold text-sm transition-all touch-manipulation ${
+                      cartOpen
+                        ? 'bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-500/20'
+                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300'
+                    }`}
+                    title={cartOpen ? 'Hide order panel' : 'Show order panel'}
+                  >
+                    {cartOpen ? <PanelRightClose className="w-4 h-4" /> : <PanelRightOpen className="w-4 h-4" />}
+                    {!cartOpen && cart.length > 0 && (
+                      <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center shadow-sm">
+                        {cart.length > 9 ? '9+' : cart.length}
+                      </span>
+                    )}
+                  </button>
+                </div>
               </div>
-              {/* Row 3: Categories */}
-              <div className="mt-2">
-                <CategoryTileGrid 
+
+              {/* ── Row 2: Category strip ── */}
+              <div className="px-4 pb-2.5">
+                <CategoryTileGrid
                   categories={categories}
                   activeCategory={activeCategory}
                   onSelectCategory={setActiveCategory}
                 />
               </div>
+
             </div>
           )}
 
@@ -1239,16 +1290,14 @@ export default function PosApp() {
         />
       )}
 
-      {activeOperator && operatorToken && (sessionContext?.outlet?.id || sessionContext?.outletId) && posSessionId && (
-        <WaiterTicketsModal
-          isOpen={showKitchenModal}
-          onClose={() => setShowKitchenModal(false)}
-          dataProvider={provider.pos}
-          outletId={sessionContext?.outlet?.id || sessionContext?.outletId}
-          operatorToken={operatorToken}
-          sessionId={posSessionId}
-        />
-      )}
+      <WaiterTicketsModal
+        isOpen={showKitchenModal}
+        onClose={() => setShowKitchenModal(false)}
+        dataProvider={provider.pos}
+        outletId={sessionContext?.outlet?.id || sessionContext?.outletId || ''}
+        operatorToken={operatorToken || ''}
+        sessionId={posSessionId || ''}
+      />
     </div>
     </AutoLockScreen>
   );

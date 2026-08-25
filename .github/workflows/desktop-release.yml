@@ -85,13 +85,18 @@ jobs:
         }
         echo "APP_VERSION=$version" >> $env:GITHUB_ENV
 
-        # Sync manifest Publisher and Version with the exact cert Subject and tag version to prevent APPX0101 and fix updates
+        # Sync manifest Publisher AND Version with cert Subject and tag version
+        # This ensures the built MSIX filename matches what the .appinstaller declares
         $manifestPath = ".\apps\desktop\LodgeCore.Desktop\Platforms\Windows\Package.appxmanifest"
-        $manifest = Get-Content $manifestPath
-        $manifest = $manifest -replace 'Publisher="[^"]+"', "Publisher=`"$subject`""
-        $manifest = $manifest -replace '(<Identity[^>]+?Version=)"[^"]+"', "`$1`"$version`""
-        $manifest | Set-Content $manifestPath
-        Write-Host "Manifest Publisher updated to: $subject, Version updated to: $version"
+        [xml]$manifestXml = Get-Content $manifestPath -Raw
+        $ns = New-Object System.Xml.XmlNamespaceManager($manifestXml.NameTable)
+        $ns.AddNamespace('pkg', 'http://schemas.microsoft.com/appx/manifest/foundation/windows10')
+        $identity = $manifestXml.SelectSingleNode('//pkg:Identity', $ns)
+        $identity.SetAttribute('Publisher', $subject)
+        $identity.SetAttribute('Version', $version)
+        $manifestXml.Save($manifestPath)
+        Write-Host "Manifest Publisher updated to: $subject"
+        Write-Host "Manifest Version updated to: $version"
 
     - name: Publish MAUI Windows MSIX
       shell: powershell
@@ -130,19 +135,43 @@ jobs:
         # Direct download URL for the MSIX on GitHub Releases
         $msixUrl = "https://github.com/$repo/releases/download/$tag/$msixName"
 
-        $xml = "<?xml version=`"1.0`" encoding=`"utf-8`"?>`n" +
-               "<AppInstaller Uri=`"$appinstallerUrl`" Version=`"$version`" xmlns=`"http://schemas.microsoft.com/appx/appinstaller/2018`">`n" +
-               "  <MainPackage Name=`"com.lodgecore.frontdesk`" Version=`"$version`" Publisher=`"$env:CERT_SUBJECT`" Uri=`"$msixUrl`" ProcessorArchitecture=`"x86`" />`n" +
-               "  <UpdateSettings>`n" +
-               "    <OnLaunch HoursBetweenUpdateChecks=`"1`" ShowPrompt=`"true`" UpdateBlocksActivation=`"true` />`n" +
-               "    <AutomaticBackgroundTask />`n" +
-               "    <ForceUpdateFromAnyVersion>true</ForceUpdateFromAnyVersion>`n" +
-               "  </UpdateSettings>`n" +
-               "</AppInstaller>"
+        # Build .appinstaller XML — using XmlWriter to avoid string-escaping bugs
+        $xmlPath = ".\release-artifacts\LodgeCore.appinstaller"
+        $settings = New-Object System.Xml.XmlWriterSettings
+        $settings.Indent = $true
+        $settings.IndentChars = "  "
+        $settings.Encoding = [System.Text.Encoding]::UTF8
+        $settings.OmitXmlDeclaration = $false
         New-Item -ItemType Directory -Force -Path .\release-artifacts | Out-Null
-        $xml | Out-File -FilePath .\release-artifacts\LodgeCore.appinstaller -Encoding utf8
+        $writer = [System.Xml.XmlWriter]::Create($xmlPath, $settings)
+        $writer.WriteStartDocument()
+        $writer.WriteStartElement('AppInstaller', 'http://schemas.microsoft.com/appx/appinstaller/2018')
+        $writer.WriteAttributeString('Uri', $appinstallerUrl)
+        $writer.WriteAttributeString('Version', $version)
+        # MainPackage
+        $writer.WriteStartElement('MainPackage')
+        $writer.WriteAttributeString('Name', 'com.lodgecore.frontdesk')
+        $writer.WriteAttributeString('Version', $version)
+        $writer.WriteAttributeString('Publisher', $env:CERT_SUBJECT)
+        $writer.WriteAttributeString('Uri', $msixUrl)
+        $writer.WriteAttributeString('ProcessorArchitecture', 'x86')
+        $writer.WriteEndElement()
+        # UpdateSettings
+        $writer.WriteStartElement('UpdateSettings')
+        $writer.WriteStartElement('OnLaunch')
+        $writer.WriteAttributeString('HoursBetweenUpdateChecks', '1')
+        $writer.WriteAttributeString('ShowPrompt', 'true')
+        $writer.WriteAttributeString('UpdateBlocksActivation', 'true')
+        $writer.WriteEndElement() # OnLaunch
+        $writer.WriteElementString('AutomaticBackgroundTask', $null, $null)
+        $writer.WriteElementString('ForceUpdateFromAnyVersion', 'true')
+        $writer.WriteEndElement() # UpdateSettings
+        $writer.WriteEndElement() # AppInstaller
+        $writer.WriteEndDocument()
+        $writer.Flush()
+        $writer.Close()
         Write-Host "=== Generated .appinstaller ==="
-        Get-Content .\release-artifacts\LodgeCore.appinstaller
+        Get-Content $xmlPath
 
     - name: Prepare Release Artifacts
       shell: powershell
