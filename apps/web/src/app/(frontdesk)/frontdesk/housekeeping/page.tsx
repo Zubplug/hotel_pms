@@ -1,4 +1,4 @@
-import HousekeepingDashboard from '@/app/(dashboard)/housekeeping/page';
+import HousekeepingDashboard from '../../../(dashboard)/housekeeping/page';
 
 export default function FrontDeskHousekeepingPage() {
   return <HousekeepingDashboard />;

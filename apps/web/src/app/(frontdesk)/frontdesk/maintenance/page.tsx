@@ -1,4 +1,4 @@
-import MaintenancePage from '@/app/(dashboard)/maintenance/page';
+import MaintenancePage from '../../../(dashboard)/maintenance/page';
 
 export default function FrontDeskMaintenancePage() {
   return <MaintenancePage />;

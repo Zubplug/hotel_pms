@@ -1813,12 +1813,12 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
 
                     if (task == null)
                     {
-                        task = new LodgeCore.Desktop.Data.Entities.LocalHousekeepingTask { Id = id };
+                        task = new LodgeCore.Desktop.Data.Entities.LocalHousekeepingTask { Id = id, PropertyId = propertyId };
                         dbContext.HousekeepingTasks.Add(task);
                     }
-                    
+                    task.PropertyId = propertyId;
                     task.RoomId = el.TryGetProperty("roomId", out var rid) && rid.ValueKind != System.Text.Json.JsonValueKind.Null ? rid.GetString() ?? "" : "";
-                    task.TaskType = el.TryGetProperty("type", out var typ) && typ.ValueKind != System.Text.Json.JsonValueKind.Null ? typ.GetString() ?? "" : "";
+                    task.TaskType = el.TryGetProperty("type", out var typ) && typ.ValueKind != System.Text.Json.JsonValueKind.Null ? typ.GetString() ?? "" : (el.TryGetProperty("taskType", out var taskType) ? taskType.GetString() ?? "" : "");
                     task.Status = el.TryGetProperty("status", out var st) && st.ValueKind != System.Text.Json.JsonValueKind.Null ? st.GetString() ?? "" : "";
                     var room = await dbContext.Rooms.FirstOrDefaultAsync(r => r.Id == task.RoomId, stoppingToken);
                     if (room != null)
@@ -1852,8 +1852,9 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                         ticket = new LodgeCore.Desktop.Data.Entities.LocalMaintenanceTicket { Id = id, PropertyId = propertyId };
                         dbContext.MaintenanceTickets.Add(ticket);
                     }
-                    
+                    ticket.PropertyId = propertyId;
                     ticket.RoomId = el.TryGetProperty("roomId", out var rid) && rid.ValueKind != System.Text.Json.JsonValueKind.Null ? rid.GetString() ?? "" : "";
+                    ticket.RoomNumber = el.TryGetProperty("roomNumber", out var roomNumber) && roomNumber.ValueKind != System.Text.Json.JsonValueKind.Null ? roomNumber.GetString() ?? "" : "";
                     var title = el.TryGetProperty("title", out var tEl) && tEl.ValueKind != System.Text.Json.JsonValueKind.Null ? tEl.GetString() ?? "" : "";
                     var desc = el.TryGetProperty("description", out var dEl) && dEl.ValueKind != System.Text.Json.JsonValueKind.Null ? dEl.GetString() ?? "" : "";
                     ticket.IssueDescription = $"{title} - {desc}".Trim();

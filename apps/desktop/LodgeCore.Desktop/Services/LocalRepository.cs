@@ -48,6 +48,11 @@ public class LocalRepository
 
         reservation.Currency = currency;
         
+        if (reservation.Guest != null && _dbContext.Entry(reservation.Guest).State == EntityState.Detached)
+        {
+            _dbContext.Guests.Add(reservation.Guest);
+        }
+
         _dbContext.Reservations.Add(reservation);
 
         // Create Folio
@@ -107,7 +112,15 @@ public class LocalRepository
                 PropertyId = reservation.PropertyId,
                 FolioId = folio.Id,
                 GuestId = reservation.GuestId,
-                Guest = reservation.Guest,
+                Guest = reservation.Guest == null ? null : new
+                {
+                    reservation.Guest.Id,
+                    reservation.Guest.OrganizationId,
+                    reservation.Guest.FirstName,
+                    reservation.Guest.LastName,
+                    reservation.Guest.Email,
+                    reservation.Guest.Phone
+                },
                 RoomId = reservation.RoomId,
                 RoomNumber = reservation.RoomNumber,
                 RoomTypeId = reservation.RoomTypeId,
@@ -1109,6 +1122,18 @@ public class LocalRepository
 
     public async Task<LocalMaintenanceTicket> CreateMaintenanceTicketAsync(LocalMaintenanceTicket ticket, string userId, string deviceId)
     {
+        ticket.IsDirty = true;
+        ticket.UpdatedAt = DateTime.UtcNow;
+        if (ticket.RequiresRoomRestriction && !string.IsNullOrWhiteSpace(ticket.RoomId))
+        {
+            var room = await _dbContext.Rooms.FirstOrDefaultAsync(r => r.Id == ticket.RoomId);
+            if (room != null)
+            {
+                room.Status = "MAINTENANCE";
+                room.MaintenanceStatus = "OPEN";
+                room.UpdatedAt = DateTime.UtcNow;
+            }
+        }
         _dbContext.MaintenanceTickets.Add(ticket);
         
         _dbContext.OutboxEvents.Add(new LocalOutboxEvent
@@ -1139,6 +1164,18 @@ public class LocalRepository
         ticket.IsDirty = true;
         int eventVersion = ticket.Version;
         ticket.Version++;
+
+        if (!string.IsNullOrWhiteSpace(ticket.RoomId))
+        {
+            var room = await _dbContext.Rooms.FirstOrDefaultAsync(r => r.Id == ticket.RoomId);
+            if (room != null && room.Status == "MAINTENANCE")
+            {
+                room.Status = "DIRTY";
+                room.MaintenanceStatus = "RESOLVED";
+                room.HousekeepingStatus = "PENDING";
+                room.UpdatedAt = DateTime.UtcNow;
+            }
+        }
 
         _dbContext.OutboxEvents.Add(new LocalOutboxEvent
         {
