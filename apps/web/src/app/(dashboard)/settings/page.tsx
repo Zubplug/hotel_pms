@@ -8,7 +8,8 @@ import {
   MonitorSmartphone,
   ShieldCheck,
   Store,
-  GitBranch
+  GitBranch,
+  Clock3
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -20,6 +21,14 @@ const settingsLinks = [
     icon: GitBranch,
     color: 'text-red-500',
     bgColor: 'bg-red-500/10'
+  },
+  {
+    title: 'No-Show Policy',
+    description: 'Configure arrival cutoffs, no-show penalties, refunds, and reinstatement rules per property.',
+    href: '/settings/no-show-policy',
+    icon: Clock3,
+    color: 'text-amber-500',
+    bgColor: 'bg-amber-500/10'
   },
   {
     title: 'General',

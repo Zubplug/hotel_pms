@@ -454,6 +454,12 @@ model NoShowPolicy {
   name        String
   chargeType  String // 'NONE' | 'FIRST_NIGHT' | 'FULL_STAY' | 'PERCENTAGE'
   chargeValue Decimal  @db.Decimal(18, 4)
+  cutoffTime String @default("02:00")
+  gracePeriodMinutes Int @default(0)
+  refundableUnusedNights Boolean @default(true)
+  allowReinstatement Boolean @default(true)
+  reinstatementRequiresApproval Boolean @default(true)
+  exceptionRequiresApproval Boolean @default(true)
 
   ratePlans    RatePlan[]
   reservations Reservation[]
@@ -601,6 +607,16 @@ model Reservation {
 
   noShowAt DateTime? @db.Timestamptz
   noShowBy String?   @db.Uuid // Staff ID
+  lateArrivalExpected Boolean @default(false)
+  lateArrivalNotes String?
+  lateArrivalAt DateTime? @db.Timestamptz
+  lateArrivalBy String? @db.Uuid
+  noShowAssessedAt DateTime? @db.Timestamptz
+  noShowChargeAmount Decimal? @db.Decimal(18, 4)
+  noShowRefundableAmount Decimal? @db.Decimal(18, 4)
+  reinstatedAt DateTime? @db.Timestamptz
+  reinstatedBy String? @db.Uuid
+  reinstatementReason String?
 
   version   Int    @default(1) // Optimistic locking
   createdBy String @db.Uuid // Staff ID

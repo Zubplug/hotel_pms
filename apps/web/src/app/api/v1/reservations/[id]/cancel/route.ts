@@ -22,6 +22,8 @@ export async function POST(
       where: { id },
       include: {
         reservationRooms: true,
+        folios: { include: { payments: { include: { refunds: true } } } },
+        cancellationPolicy: true,
         property: { select: { organizationId: true } }
       }
     });
@@ -33,6 +35,25 @@ export async function POST(
     if (existingReservation.status !== 'CONFIRMED') {
       return errorResponse('BAD_REQUEST', `Cannot cancel a reservation that is ${existingReservation.status}`, 400);
     }
+
+    const completedPayments = existingReservation.folios.flatMap(folio => folio.payments).filter(payment => payment.status === 'COMPLETED');
+    const totalPaid = completedPayments.reduce((sum, payment) => sum + Number(payment.amount), 0);
+    const bookedValue = Number((existingReservation.ratePlanSnapshot as any)?.total || 0) || totalPaid;
+    const cancellationPolicy = existingReservation.cancellationPolicy;
+    const hoursBeforeCheckIn = (new Date(existingReservation.checkIn).getTime() - Date.now()) / 3_600_000;
+    let cancellationPenalty = 0;
+    if (cancellationPolicy && hoursBeforeCheckIn < cancellationPolicy.hoursBeforeCheckIn) {
+      const nights = Math.max(1, Math.round((new Date(existingReservation.checkOut).getTime() - new Date(existingReservation.checkIn).getTime()) / 86_400_000));
+      const firstNight = bookedValue / nights;
+      cancellationPenalty = cancellationPolicy.penaltyType === 'FIRST_NIGHT'
+        ? firstNight
+        : cancellationPolicy.penaltyType === 'PERCENTAGE'
+          ? bookedValue * Number(cancellationPolicy.penaltyValue) / 100
+          : cancellationPolicy.penaltyType === 'FLAT'
+            ? Number(cancellationPolicy.penaltyValue)
+            : cancellationPolicy.type === 'NON_REFUNDABLE' ? bookedValue : 0;
+    }
+    cancellationPenalty = Math.min(Math.max(0, cancellationPenalty), totalPaid);
 
     // 2. Perform transactional cancellation
     const cancelled = await prisma.$transaction(async (tx: any) => {
@@ -67,7 +88,80 @@ export async function POST(
         },
       });
 
-      return { updatedRes, updatedResRoom, organizationId };
+      const refundRequests = [];
+      for (const folio of existingReservation.folios) {
+        for (const payment of folio.payments) {
+          if (payment.status !== 'COMPLETED') continue;
+          const refundedAmount = payment.refunds
+            .filter((refund: any) => refund.status !== 'FAILED')
+            .reduce((sum: number, refund: any) => sum + Number(refund.amount), 0);
+          const pending = await tx.refundRequest.aggregate({
+            where: { paymentId: payment.id, status: { in: ['PENDING_APPROVAL', 'APPROVED', 'PROCESSING'] as any } },
+            _sum: { requestedAmount: true },
+          });
+          const paymentPenalty = totalPaid > 0 ? cancellationPenalty * Number(payment.amount) / totalPaid : 0;
+          const amount = Number(payment.amount) - refundedAmount - Number(pending._sum.requestedAmount || 0) - paymentPenalty;
+          if (amount <= 0) continue;
+
+          const idempotencyKey = `reservation_cancel_refund_${id}_${payment.id}`;
+          const existingRequest = await tx.refundRequest.findUnique({ where: { idempotencyKey } });
+          if (existingRequest) {
+            refundRequests.push(existingRequest);
+            continue;
+          }
+
+          const workflowRules = await tx.refundApprovalRule.findMany({ where: { propertyId, isActive: true }, orderBy: { stepOrder: 'asc' } });
+          const matchingRules = workflowRules.filter((rule: any) => (rule.minAmount == null || amount >= Number(rule.minAmount)) && (rule.maxAmount == null || amount <= Number(rule.maxAmount)));
+          const firstRule = matchingRules[0];
+          const fallbackRoleName = amount > 250000 ? 'FINANCE_MANAGER' : amount > 50000 ? 'MANAGER' : 'FRONT_DESK_MANAGER';
+          const role = firstRule?.roleId
+            ? await tx.role.findUnique({ where: { id: firstRule.roleId } })
+            : await tx.role.findFirst({ where: { organizationId, name: fallbackRoleName } });
+          const candidate = firstRule?.approverId
+            ? { userId: firstRule.approverId }
+            : role
+              ? await tx.userRole.findFirst({ where: { roleId: role.id, userId: { not: session.user.id }, OR: [{ propertyId }, { propertyId: null }] }, select: { userId: true } })
+              : null;
+
+          const request = await tx.refundRequest.create({
+            data: {
+              organizationId,
+              propertyId,
+              reservationId: id,
+              folioId: folio.id,
+              paymentId: payment.id,
+              guestId: existingReservation.primaryGuestId,
+              requestedAmount: amount,
+              currency: payment.currency,
+              requestedMethod: 'ORIGINAL_PAYMENT',
+              category: 'RESERVATION_CANCELLED',
+              reason: `Reservation cancelled: ${reason}${cancellationPenalty > 0 ? `; policy penalty applied: ${paymentPenalty.toFixed(2)}` : ''}`,
+              requestedById: session.user.id,
+              currentApproverId: candidate?.userId,
+              approvalRoleId: role?.id,
+              currentApprovalStep: firstRule?.stepOrder || 1,
+              idempotencyKey,
+              expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+            },
+          });
+          await tx.approvalRequest.create({
+            data: {
+              propertyId,
+              type: 'REFUND',
+              status: 'PENDING',
+              requestedBy: session.user.id,
+              amount,
+              currency: payment.currency,
+              reason: request.reason,
+              details: { refundRequestId: request.id, category: request.category, requestedAmount: amount, requestedMethod: 'ORIGINAL_PAYMENT', approverRoleId: role?.id, approverId: candidate?.userId, stepOrder: firstRule?.stepOrder || 1 },
+              expiresAt: request.expiresAt,
+            },
+          });
+          refundRequests.push(request);
+        }
+      }
+
+      return { updatedRes, updatedResRoom, organizationId, refundRequests };
     });
 
     const rateSnapshot = existingReservation.ratePlanSnapshot as any;
@@ -96,7 +190,7 @@ export async function POST(
       metadata: { reason },
     });
 
-    return successResponse(cancelled.updatedRes);
+    return successResponse({ ...cancelled.updatedRes, refundRequests: cancelled.refundRequests });
   } catch (err: any) {
     console.error('[Reservation Cancel POST]', err);
     return errorResponse('INTERNAL_ERROR', 'An unexpected error occurred', 500);

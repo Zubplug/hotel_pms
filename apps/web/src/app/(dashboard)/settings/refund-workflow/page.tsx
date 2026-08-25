@@ -40,9 +40,10 @@ export default function RefundWorkflowSettings() {
         ]);
         const workflow = await workflowResponse.json();
         const optionData = await optionsResponse.json();
+        if (!optionsResponse.ok) throw new Error(optionData.error || 'Unable to load roles and staff');
         setOptions(optionData.data || { approvers: [], roles: [] });
         setRules((workflow.data || []).map((rule: { stepOrder: number; minAmount: string | null; maxAmount: string | null; roleId: string | null; approverId: string | null }) => ({ stepOrder: rule.stepOrder, minAmount: rule.minAmount || '', maxAmount: rule.maxAmount || '', roleId: rule.roleId || '', approverId: rule.approverId || '' })));
-      } catch { toast.error('Unable to load refund workflow'); }
+      } catch (error) { toast.error(error instanceof Error ? error.message : 'Unable to load refund workflow'); }
     })();
   }, [propertyId]);
 

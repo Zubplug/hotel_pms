@@ -220,6 +220,7 @@ export function FolioSection({ reservation }: { reservation: any }) {
             onOpenChange={(open) => !open && setRefundPaymentId(null)}
             paymentId={refundPaymentId}
             folio={folio}
+            reservation={reservation}
           />
         ) : (
           <RefundDialog
@@ -227,6 +228,7 @@ export function FolioSection({ reservation }: { reservation: any }) {
             onOpenChange={(open) => !open && setRefundPaymentId(null)}
             paymentId={refundPaymentId}
             folio={folio}
+            reservation={reservation}
           />
         )
       )}

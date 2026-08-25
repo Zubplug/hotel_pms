@@ -10,11 +10,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Loader2, AlertCircle, CornerDownRight, CheckCircle2 } from 'lucide-react';
 import { cn, generateUUID } from '@/lib/utils';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
+import { getReducedStayEstimate } from '@/lib/refunds/reduced-stay';
 
-export function FrontDeskRefundDialog({ open, onOpenChange, folio, paymentId }: { open: boolean, onOpenChange: (open: boolean) => void, folio: any, paymentId: string }) {
+export function FrontDeskRefundDialog({ open, onOpenChange, folio, reservation, paymentId }: { open: boolean, onOpenChange: (open: boolean) => void, folio: any, reservation: any, paymentId: string }) {
   const [amount, setAmount] = useState<string>('');
   const [reason, setReason] = useState('');
   const [category, setCategory] = useState('MANUAL_ADJUSTMENT');
+  const [reducedStayNightsInput, setReducedStayNightsInput] = useState('1');
   const [refundMethod, setRefundMethod] = useState('ORIGINAL_PAYMENT');
   const [bankAccountName, setBankAccountName] = useState('');
   const [bankAccountNumber, setBankAccountNumber] = useState('');
@@ -29,6 +31,10 @@ export function FrontDeskRefundDialog({ open, onOpenChange, folio, paymentId }: 
 
   const payment = folio?.payments?.find((p: any) => p.id === paymentId);
   const maxRefundable = payment ? Number(payment.amount) - (payment.refunds || []).reduce((sum: number, r: any) => sum + (r.status !== 'FAILED' ? Number(r.amount) : 0), 0) : 0;
+  const roomChargeTotal = (folio?.items || []).filter((item: any) => item.source === 'ROOM_CHARGE' && item.type === 'CHARGE' && !item.voidedAt).reduce((sum: number, item: any) => sum + Number(item.amount || 0), 0);
+  const reducedStay = getReducedStayEstimate({ checkIn: reservation?.checkIn, checkOut: reservation?.checkOut, status: reservation?.status, roomChargeTotal });
+  const reducedStayNights = category === 'REDUCED_STAY' ? Math.min(reducedStay.availableNights, Math.max(0, Number(reducedStayNightsInput) || 0)) : 0;
+  const reducedStayAmount = reducedStayNights * reducedStay.nightlyRoomAmount;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,6 +50,9 @@ export function FrontDeskRefundDialog({ open, onOpenChange, folio, paymentId }: 
       if (numAmount > maxRefundable) {
         throw new Error(`Cannot refund more than the remaining refundable amount (${maxRefundable})`);
       }
+      if (category === 'REDUCED_STAY' && (reducedStayNights <= 0 || Math.abs(numAmount - reducedStayAmount) > 0.01)) {
+        throw new Error('Select valid remaining nights for the reduced-stay refund');
+      }
 
       const res = await provider.refunds.request({
           paymentId,
@@ -53,6 +62,7 @@ export function FrontDeskRefundDialog({ open, onOpenChange, folio, paymentId }: 
           amount: numAmount,
           reason,
           category,
+          reducedStayNights: category === 'REDUCED_STAY' ? reducedStayNights : undefined,
           refundMethod,
           bankAccountName,
           bankAccountNumber,
@@ -122,7 +132,8 @@ export function FrontDeskRefundDialog({ open, onOpenChange, folio, paymentId }: 
                     step="0.01" 
                     max={maxRefundable}
                     value={amount} 
-                    onChange={(e) => setAmount(e.target.value)} 
+                    onChange={(e) => setAmount(e.target.value)}
+                    readOnly={category === 'REDUCED_STAY'}
                     disabled={isSubmitting}
                     required
                     autoFocus
@@ -131,11 +142,14 @@ export function FrontDeskRefundDialog({ open, onOpenChange, folio, paymentId }: 
                 </div>
               </div>
 
+              {category === 'REDUCED_STAY' && <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 text-sm"><p>Available nights to reduce: <strong>{reducedStay.availableNights}</strong> of {reducedStay.totalNights}</p><Label>Nights to reduce</Label><Input type="number" min="1" max={reducedStay.availableNights} value={reducedStayNightsInput} onChange={(e) => { const value = Math.min(reducedStay.availableNights, Math.max(0, Number(e.target.value) || 0)); setReducedStayNightsInput(String(value)); setAmount((value * reducedStay.nightlyRoomAmount).toFixed(2)); }} disabled={isSubmitting} required /><p className="text-xs text-slate-500">Estimated refund: {folio?.currency} {reducedStayAmount.toFixed(2)} ({folio?.currency} {reducedStay.nightlyRoomAmount.toFixed(2)} per night)</p></div>}
+
               <div className="space-y-3">
                 <Label className="text-sm font-bold text-slate-700">Refund Category</Label>
-                <select value={category} onChange={(e) => setCategory(e.target.value)} disabled={isSubmitting} className="w-full h-12 rounded-xl border border-slate-200 bg-white px-4 text-sm">
+                <select value={category} onChange={(e) => { const value = e.target.value; setCategory(value); if (value === 'REDUCED_STAY') { setReducedStayNightsInput('1'); setAmount(reducedStay.nightlyRoomAmount.toFixed(2)); } }} disabled={isSubmitting} className="w-full h-12 rounded-xl border border-slate-200 bg-white px-4 text-sm">
                   <option value="MANUAL_ADJUSTMENT">Manual adjustment</option>
                   <option value="RESERVATION_CANCELLED">Reservation cancelled</option>
+                  <option value="NO_SHOW">No-show refund</option>
                   <option value="REDUCED_STAY">Reduced stay</option>
                   <option value="FOLIO_CREDIT_BALANCE">Folio credit balance</option>
                   <option value="DUPLICATE_PAYMENT">Duplicate payment</option>

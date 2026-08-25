@@ -4,9 +4,32 @@ import { createHash, randomUUID } from 'crypto';
 import { compare } from 'bcryptjs';
 import { NotificationEngine } from '@/lib/notification-engine';
 import { encrypt } from '@/lib/encryption';
+import { getReducedStayEstimate } from '@/lib/refunds/reduced-stay';
 
 const isUuid = (value: unknown): value is string =>
   typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+
+async function queueCancellationRefunds(tx: any, reservation: any, propertyId: string, organizationId: string, requestedById: string, reason: string) {
+  const workflowRules = await tx.refundApprovalRule.findMany({ where: { propertyId, isActive: true }, orderBy: { stepOrder: 'asc' } });
+  for (const folio of reservation.folios || []) {
+    for (const payment of folio.payments || []) {
+      if (payment.status !== 'COMPLETED') continue;
+      const refunded = payment.refunds.filter((refund: any) => refund.status !== 'FAILED').reduce((sum: number, refund: any) => sum + Number(refund.amount), 0);
+      const pending = await tx.refundRequest.aggregate({ where: { paymentId: payment.id, status: { in: ['PENDING_APPROVAL', 'APPROVED', 'PROCESSING'] as any } }, _sum: { requestedAmount: true } });
+      const amount = Number(payment.amount) - refunded - Number(pending._sum.requestedAmount || 0);
+      if (amount <= 0) continue;
+      const idempotencyKey = `reservation_cancel_refund_${reservation.id}_${payment.id}`;
+      if (await tx.refundRequest.findUnique({ where: { idempotencyKey } })) continue;
+      const matchingRules = workflowRules.filter((rule: any) => (rule.minAmount == null || amount >= Number(rule.minAmount)) && (rule.maxAmount == null || amount <= Number(rule.maxAmount)));
+      const firstRule = matchingRules[0];
+      const fallbackRoleName = amount > 250000 ? 'FINANCE_MANAGER' : amount > 50000 ? 'MANAGER' : 'FRONT_DESK_MANAGER';
+      const role = firstRule?.roleId ? await tx.role.findUnique({ where: { id: firstRule.roleId } }) : await tx.role.findFirst({ where: { organizationId, name: fallbackRoleName } });
+      const candidate = firstRule?.approverId ? { userId: firstRule.approverId } : role ? await tx.userRole.findFirst({ where: { roleId: role.id, userId: { not: requestedById }, OR: [{ propertyId }, { propertyId: null }] }, select: { userId: true } }) : null;
+      const request = await tx.refundRequest.create({ data: { organizationId, propertyId, reservationId: reservation.id, folioId: folio.id, paymentId: payment.id, guestId: reservation.primaryGuestId, requestedAmount: amount, currency: payment.currency, requestedMethod: 'ORIGINAL_PAYMENT', category: 'RESERVATION_CANCELLED', reason: `Reservation cancelled: ${reason}`, requestedById, currentApproverId: candidate?.userId, approvalRoleId: role?.id, currentApprovalStep: firstRule?.stepOrder || 1, idempotencyKey, expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) } });
+      await tx.approvalRequest.create({ data: { propertyId, type: 'REFUND', status: 'PENDING', requestedBy: requestedById, amount, currency: payment.currency, reason: request.reason, details: { refundRequestId: request.id, category: request.category, requestedAmount: amount, requestedMethod: 'ORIGINAL_PAYMENT', approverRoleId: role?.id, approverId: candidate?.userId, stepOrder: firstRule?.stepOrder || 1 }, expiresAt: request.expiresAt } });
+    }
+  }
+}
 
 export async function POST(req: NextRequest) {
   const requestId = randomUUID();
@@ -482,11 +505,18 @@ export async function POST(req: NextRequest) {
           else if (eventType === 'REFUND_REQUESTED') {
              const amount = Math.abs(Number(payload.amount ?? payload.Amount));
              const paymentId = payload.paymentId || payload.PaymentId || aggregateId;
-             const payment = await tx.payment.findUnique({ where: { id: paymentId }, include: { folio: true, reservation: true } });
+             const payment = await tx.payment.findUnique({ where: { id: paymentId }, include: { folio: { include: { items: true } }, reservation: true } });
              if (!payment || payment.propertyId !== propertyId) throw new Error('Payment not found or unauthorized');
              if (!Number.isFinite(amount) || amount <= 0) throw new Error('Refund amount must be positive');
              const requestedMethod = String(payload.requestedMethod || payload.refundMethod || 'ORIGINAL_PAYMENT').toUpperCase();
              if (!['CASH', 'BANK_TRANSFER', 'ORIGINAL_PAYMENT'].includes(requestedMethod)) throw new Error('Invalid refund method');
+             const category = String(payload.category || 'MANUAL_ADJUSTMENT').toUpperCase();
+             if (category === 'REDUCED_STAY') {
+               const reducedStayNights = Number(payload.reducedStayNights ?? payload.ReducedStayNights);
+               const roomChargeTotal = payment.folio.items.filter(item => item.source === 'ROOM_CHARGE' && item.type === 'CHARGE' && !item.voidedAt).reduce((sum, item) => sum + Number(item.amount), 0);
+               const estimate = getReducedStayEstimate({ checkIn: payment.reservation?.checkIn, checkOut: payment.reservation?.checkOut, status: payment.reservation?.status, roomChargeTotal });
+               if (!Number.isInteger(reducedStayNights) || reducedStayNights <= 0 || reducedStayNights > estimate.availableNights || Math.abs(amount - reducedStayNights * estimate.nightlyRoomAmount) > 0.01) throw new Error('Invalid reduced-stay refund calculation');
+             }
              const existingRequest = await tx.refundRequest.findUnique({ where: { idempotencyKey } });
              if (!existingRequest) {
                const requesterId = isUuid(event.operatorId) ? event.operatorId : device.id;
@@ -499,7 +529,7 @@ export async function POST(req: NextRequest) {
                  bankAccountLast4: requestedMethod === 'BANK_TRANSFER' && bankAccountNumber ? bankAccountNumber.slice(-4) : null,
                  bankName: requestedMethod === 'BANK_TRANSFER' ? payload.bankName || null : null,
                  bankCode: requestedMethod === 'BANK_TRANSFER' ? payload.bankCode || null : null,
-                 category: payload.category || 'MANUAL_ADJUSTMENT', reason: payload.reason || 'Offline refund request', requestedById: requesterId, idempotencyKey,
+                 category, reason: payload.reason || 'Offline refund request', requestedById: requesterId, idempotencyKey,
                  expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
                } });
                await tx.approvalRequest.create({ data: { propertyId, type: 'REFUND', status: 'PENDING', requestedBy: requesterId, amount, currency: request.currency, reason: request.reason, expiresAt: request.expiresAt, details: { refundRequestId: request.id, category: request.category, requestedAmount: amount, requestedMethod, stepOrder: 1 } } });
@@ -509,7 +539,7 @@ export async function POST(req: NextRequest) {
              // Idempotent — if already cancelled, treat as success
              const res = await tx.reservation.findUnique({
                where: { id: aggregateId, propertyId },
-               include: { reservationRooms: { where: { status: 'ACTIVE' } } }
+               include: { reservationRooms: { where: { status: 'ACTIVE' } }, folios: { include: { payments: { include: { refunds: true } } } } }
              });
              if (!res) throw new Error('Reservation not found or unauthorized');
              if (res.status === 'CHECKED_OUT') throw new Error('Cannot cancel a checked-out reservation');
@@ -540,6 +570,7 @@ export async function POST(req: NextRequest) {
                  }
                }
              }
+             await queueCancellationRefunds(tx, res, propertyId, property.organizationId, isUuid(event.operatorId) ? event.operatorId : device.id, payload.reason || 'Offline reservation cancellation');
           }
           else if (eventType === 'REASSIGN_ROOM') {
              const { newRoomId, oldRoomId, newRoomNumber } = payload;

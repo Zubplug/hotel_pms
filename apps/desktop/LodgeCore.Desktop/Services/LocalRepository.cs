@@ -1020,12 +1020,12 @@ public class LocalRepository
         return await _dbContext.RefundRequests.Where(request => request.PropertyId == propertyId).OrderByDescending(request => request.CreatedAt).Take(100).ToListAsync();
     }
 
-    public async Task<LocalRefundRequest> QueueRefundRequestAsync(string paymentId, string propertyId, string reservationId, string folioId, decimal amount, string currency, string category, string reason, string requestedMethod, string? bankAccountName, string? bankAccountNumber, string? bankName, string? bankCode, string userId, string deviceId)
+    public async Task<LocalRefundRequest> QueueRefundRequestAsync(string paymentId, string propertyId, string reservationId, string folioId, decimal amount, string currency, string category, int reducedStayNights, string reason, string requestedMethod, string? bankAccountName, string? bankAccountNumber, string? bankName, string? bankCode, string userId, string deviceId)
     {
         var idempotencyKey = Guid.NewGuid().ToString();
         var request = new LocalRefundRequest { Id = Guid.NewGuid().ToString(), IdempotencyKey = idempotencyKey, PropertyId = propertyId, ReservationId = reservationId, FolioId = folioId, PaymentId = paymentId, RequestedAmount = amount, Currency = currency, RequestedMethod = requestedMethod, Category = category, Reason = reason, IsDirty = true };
         _dbContext.RefundRequests.Add(request);
-        _dbContext.OutboxEvents.Add(new LocalOutboxEvent { IdempotencyKey = idempotencyKey, PropertyId = propertyId, DeviceId = deviceId, OperatorId = userId, AggregateType = "PAYMENT", AggregateId = paymentId, EventType = "REFUND_REQUESTED", PayloadJson = JsonSerializer.Serialize(new { PaymentId = paymentId, PropertyId = propertyId, ReservationId = reservationId, FolioId = folioId, Amount = amount, Currency = currency, Category = category, Reason = reason, RequestedMethod = requestedMethod, BankAccountName = bankAccountName, BankAccountNumber = bankAccountNumber, BankName = bankName, BankCode = bankCode, IdempotencyKey = idempotencyKey }) });
+        _dbContext.OutboxEvents.Add(new LocalOutboxEvent { IdempotencyKey = idempotencyKey, PropertyId = propertyId, DeviceId = deviceId, OperatorId = userId, AggregateType = "PAYMENT", AggregateId = paymentId, EventType = "REFUND_REQUESTED", PayloadJson = JsonSerializer.Serialize(new { PaymentId = paymentId, PropertyId = propertyId, ReservationId = reservationId, FolioId = folioId, Amount = amount, Currency = currency, Category = category, ReducedStayNights = reducedStayNights, Reason = reason, RequestedMethod = requestedMethod, BankAccountName = bankAccountName, BankAccountNumber = bankAccountNumber, BankName = bankName, BankCode = bankCode, IdempotencyKey = idempotencyKey }) });
         await _dbContext.SaveChangesAsync();
         return request;
     }

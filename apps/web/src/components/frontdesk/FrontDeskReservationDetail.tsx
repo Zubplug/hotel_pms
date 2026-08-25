@@ -9,6 +9,7 @@ import { FrontDeskCheckInDialog } from './FrontDeskCheckInDialog';
 import { FrontDeskEditReservationDialog } from './FrontDeskEditReservationDialog';
 import { FrontDeskReassignRoomDialog } from './FrontDeskReassignRoomDialog';
 import { FrontDeskCancelReservationDialog } from './FrontDeskCancelReservationDialog';
+import { NoShowActions } from '../reservations/NoShowActions';
 import { FrontDeskAddPaymentDialog } from './FrontDeskAddPaymentDialog';
 import { FrontDeskExtendStayDialog } from './FrontDeskExtendStayDialog';
 import { FrontDeskQuickCheckoutDialog } from './FrontDeskQuickCheckoutDialog';
@@ -199,6 +200,7 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
 
             {/* Existing Folio Component embedded nicely */}
             <div className="p-8 flex-1 bg-slate-50 space-y-8">
+              <NoShowActions reservation={reservation} onUpdated={() => window.location.reload()} />
               <FolioSection reservation={reservation} />
               <FrontDeskCardInformationSection reservation={reservation} />
             </div>

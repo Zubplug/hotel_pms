@@ -13,6 +13,7 @@ import { ExtendStayDialog } from './ExtendStayDialog';
 import { ExtendKeyCardDialog } from './ExtendKeyCardDialog';
 import { CardInformationSection } from './CardInformationSection';
 import { FolioSection } from './FolioSection';
+import { NoShowActions } from './NoShowActions';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ReservationTimeline } from './ReservationTimeline';
 import { GuestHistory } from './GuestHistory';
@@ -110,6 +111,8 @@ export function ReservationDetail({ reservation }: { reservation: any }) {
           </Button>
         </div>
       </div>
+
+      <NoShowActions reservation={reservation} onUpdated={() => window.location.reload()} />
 
       <Tabs defaultValue="overview" className="w-full">
         <TabsList className="mb-4">

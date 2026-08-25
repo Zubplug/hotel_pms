@@ -4,6 +4,7 @@ import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { getUserPropertyIds } from '@/lib/property-access';
 import { encrypt } from '@/lib/encryption';
+import { getReducedStayEstimate } from '@/lib/refunds/reduced-stay';
 
 const ACTIVE_REQUEST_STATUSES = ['PENDING_APPROVAL', 'APPROVED', 'PROCESSING'] as const;
 
@@ -17,6 +18,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const amount = Number(body.amount);
     const reason = String(body.reason || '').trim();
     const category = String(body.category || 'MANUAL_ADJUSTMENT').toUpperCase();
+    const reducedStayNights = Number(body.reducedStayNights);
     const requestedMethod = String(body.refundMethod || body.method || 'ORIGINAL_PAYMENT').toUpperCase();
     const bankAccountName = String(body.bankAccountName || '').trim();
     const bankAccountNumber = String(body.bankAccountNumber || '').replace(/\s+/g, '');
@@ -37,7 +39,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const payment = await prisma.payment.findUnique({
       where: { id: paymentId },
-      include: { folio: { include: { property: true } }, reservation: true }
+      include: { folio: { include: { property: true, items: true } }, reservation: true }
     });
     if (!payment) return errorResponse('NOT_FOUND', 'Payment not found', 404);
 
@@ -74,6 +76,29 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       }
       if (category === 'REDUCED_STAY' && !payment.reservation) {
         throw new Error('REFUND_REQUIRES_RESERVATION');
+      }
+      if (category === 'NO_SHOW') {
+        if (payment.reservation?.status !== 'NO_SHOW') throw new Error('REFUND_REQUIRES_NO_SHOW');
+        const maximumEligible = Number(payment.reservation.noShowRefundableAmount || 0);
+        if (maximumEligible <= 0 || amount > maximumEligible) throw new Error('NO_SHOW_REFUND_LIMIT_EXCEEDED');
+      }
+      if (category === 'REDUCED_STAY') {
+        const roomChargeTotal = payment.folio.items
+          .filter(item => item.source === 'ROOM_CHARGE' && item.type === 'CHARGE' && !item.voidedAt)
+          .reduce((sum, item) => sum + Number(item.amount), 0);
+        const estimate = getReducedStayEstimate({
+          checkIn: payment.reservation?.checkIn,
+          checkOut: payment.reservation?.checkOut,
+          status: payment.reservation?.status,
+          roomChargeTotal,
+        });
+        if (!Number.isInteger(reducedStayNights) || reducedStayNights <= 0 || reducedStayNights > estimate.availableNights) {
+          throw new Error('INVALID_REDUCED_STAY_NIGHTS');
+        }
+        const expectedAmount = reducedStayNights * estimate.nightlyRoomAmount;
+        if (expectedAmount <= 0 || Math.abs(amount - expectedAmount) > 0.01) {
+          throw new Error('INVALID_REDUCED_STAY_AMOUNT');
+        }
       }
 
       const workflowRules = await tx.refundApprovalRule.findMany({ where: { propertyId: payment.propertyId, isActive: true }, orderBy: { stepOrder: 'asc' } });
@@ -136,7 +161,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       REFUND_LIMIT_EXCEEDED: ['CONFLICT', 'Total refunded and pending amounts exceed the original payment.', 409],
       REFUND_REQUIRES_CREDIT_BALANCE: ['BAD_REQUEST', 'A credit balance is required for this refund category.', 400],
       REFUND_REQUIRES_CANCELLED_RESERVATION: ['BAD_REQUEST', 'The reservation must be cancelled first.', 400],
-      REFUND_REQUIRES_RESERVATION: ['BAD_REQUEST', 'This refund category requires a reservation.', 400]
+      REFUND_REQUIRES_RESERVATION: ['BAD_REQUEST', 'This refund category requires a reservation.', 400],
+      INVALID_REDUCED_STAY_NIGHTS: ['BAD_REQUEST', 'The reduced-stay nights are no longer available.', 400],
+      INVALID_REDUCED_STAY_AMOUNT: ['BAD_REQUEST', 'The reduced-stay refund amount changed; please recalculate it.', 400],
+      REFUND_REQUIRES_NO_SHOW: ['BAD_REQUEST', 'The reservation must be assessed as a no-show first.', 400],
+      NO_SHOW_REFUND_LIMIT_EXCEEDED: ['CONFLICT', 'The requested refund exceeds the no-show eligible balance.', 409]
     };
     const mapped = messages[error.message];
     if (mapped) return errorResponse(mapped[0], mapped[1], mapped[2]);
