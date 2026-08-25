@@ -19,6 +19,7 @@ public class LocalDbContext : DbContext
     public DbSet<LocalRoom> Rooms { get; set; } = null!;
     public DbSet<LocalRoomType> RoomTypes { get; set; } = null!;
     public DbSet<LocalProperty> Properties { get; set; } = null!;
+    public DbSet<LocalRefundRequest> RefundRequests { get; set; } = null!;
 
     public DbSet<LocalPosOutlet> PosOutlets { get; set; } = null!;
     public DbSet<LocalProductCategory> ProductCategories { get; set; } = null!;

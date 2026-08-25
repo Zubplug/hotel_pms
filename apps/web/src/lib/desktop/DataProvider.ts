@@ -26,6 +26,10 @@ export interface LodgeCoreDataProvider {
   dashboard: {
     get(propertyId: string): Promise<any>;
   };
+  refunds: {
+    list(propertyId: string): Promise<any>;
+    request(data: any): Promise<any>;
+  };
   guests: {
     list(): Promise<any>; // returns { data: any[] }
     search(query: string): Promise<any>; // returns { data: any[] }

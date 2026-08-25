@@ -79,6 +79,10 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
       return invokeDesktop('dashboard.get', { propertyId });
     }
   },
+  refunds: {
+    list: async (propertyId: string) => invokeDesktop('refunds.list', { propertyId }),
+    request: async (data: any) => invokeDesktop('refunds.request', data),
+  },
 
   guests: {
     list: async () => {

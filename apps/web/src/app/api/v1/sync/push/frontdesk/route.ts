@@ -3,6 +3,7 @@ import prisma from '@hotel-pms/db';
 import { createHash, randomUUID } from 'crypto';
 import { compare } from 'bcryptjs';
 import { NotificationEngine } from '@/lib/notification-engine';
+import { encrypt } from '@/lib/encryption';
 
 const isUuid = (value: unknown): value is string =>
   typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
@@ -476,6 +477,32 @@ export async function POST(req: NextRequest) {
                    balance: { decrement: amount }
                  }
                });
+             }
+          }
+          else if (eventType === 'REFUND_REQUESTED') {
+             const amount = Math.abs(Number(payload.amount ?? payload.Amount));
+             const paymentId = payload.paymentId || payload.PaymentId || aggregateId;
+             const payment = await tx.payment.findUnique({ where: { id: paymentId }, include: { folio: true, reservation: true } });
+             if (!payment || payment.propertyId !== propertyId) throw new Error('Payment not found or unauthorized');
+             if (!Number.isFinite(amount) || amount <= 0) throw new Error('Refund amount must be positive');
+             const requestedMethod = String(payload.requestedMethod || payload.refundMethod || 'ORIGINAL_PAYMENT').toUpperCase();
+             if (!['CASH', 'BANK_TRANSFER', 'ORIGINAL_PAYMENT'].includes(requestedMethod)) throw new Error('Invalid refund method');
+             const existingRequest = await tx.refundRequest.findUnique({ where: { idempotencyKey } });
+             if (!existingRequest) {
+               const requesterId = isUuid(event.operatorId) ? event.operatorId : device.id;
+               const bankAccountNumber = String(payload.bankAccountNumber || '').replace(/\s+/g, '');
+               const request = await tx.refundRequest.create({ data: {
+                 organizationId: property.organizationId, propertyId, reservationId: payment.reservationId, folioId: payment.folioId, paymentId,
+                 requestedAmount: amount, currency: payload.currency || payment.currency, requestedMethod,
+                 bankAccountName: requestedMethod === 'BANK_TRANSFER' ? payload.bankAccountName || null : null,
+                 bankAccountNumberEncrypted: requestedMethod === 'BANK_TRANSFER' && bankAccountNumber ? encrypt(bankAccountNumber) : null,
+                 bankAccountLast4: requestedMethod === 'BANK_TRANSFER' && bankAccountNumber ? bankAccountNumber.slice(-4) : null,
+                 bankName: requestedMethod === 'BANK_TRANSFER' ? payload.bankName || null : null,
+                 bankCode: requestedMethod === 'BANK_TRANSFER' ? payload.bankCode || null : null,
+                 category: payload.category || 'MANUAL_ADJUSTMENT', reason: payload.reason || 'Offline refund request', requestedById: requesterId, idempotencyKey,
+                 expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+               } });
+               await tx.approvalRequest.create({ data: { propertyId, type: 'REFUND', status: 'PENDING', requestedBy: requesterId, amount, currency: request.currency, reason: request.reason, expiresAt: request.expiresAt, details: { refundRequestId: request.id, category: request.category, requestedAmount: amount, requestedMethod, stepOrder: 1 } } });
              }
           }
           else if (eventType === 'CANCEL') {

@@ -981,6 +981,14 @@ public class LocalRepository
     public async Task EnsureDatabaseCreatedAsync()
     {
         await _dbContext.ApplyMigrationsSafelyAsync();
+        await _dbContext.Database.ExecuteSqlRawAsync(@"CREATE TABLE IF NOT EXISTS RefundRequests (
+            Id TEXT NOT NULL PRIMARY KEY, PropertyId TEXT NOT NULL, ReservationId TEXT NOT NULL,
+            FolioId TEXT NOT NULL, PaymentId TEXT NOT NULL, IdempotencyKey TEXT NOT NULL, RequestedAmount TEXT NOT NULL,
+            ApprovedAmount TEXT NULL, Currency TEXT NOT NULL, RequestedMethod TEXT NOT NULL,
+            ApprovedMethod TEXT NULL, Category TEXT NOT NULL, Reason TEXT NOT NULL,
+            Status TEXT NOT NULL, CurrentApprovalStep INTEGER NOT NULL DEFAULT 1,
+            CreatedAt TEXT NOT NULL, UpdatedAt TEXT NOT NULL, IsDirty INTEGER NOT NULL DEFAULT 0
+        );");
         
         // Seed Stanzel Grand Resort for the pilot if it doesn't exist
         if (!await _dbContext.Properties.AnyAsync())
@@ -1005,6 +1013,47 @@ public class LocalRepository
     public async Task<List<LocalProperty>> GetPropertiesAsync()
     {
         return await _dbContext.Properties.Where(p => p.IsActive).ToListAsync();
+    }
+
+    public async Task<List<LocalRefundRequest>> GetRefundRequestsAsync(string propertyId)
+    {
+        return await _dbContext.RefundRequests.Where(request => request.PropertyId == propertyId).OrderByDescending(request => request.CreatedAt).Take(100).ToListAsync();
+    }
+
+    public async Task<LocalRefundRequest> QueueRefundRequestAsync(string paymentId, string propertyId, string reservationId, string folioId, decimal amount, string currency, string category, string reason, string requestedMethod, string? bankAccountName, string? bankAccountNumber, string? bankName, string? bankCode, string userId, string deviceId)
+    {
+        var idempotencyKey = Guid.NewGuid().ToString();
+        var request = new LocalRefundRequest { Id = Guid.NewGuid().ToString(), IdempotencyKey = idempotencyKey, PropertyId = propertyId, ReservationId = reservationId, FolioId = folioId, PaymentId = paymentId, RequestedAmount = amount, Currency = currency, RequestedMethod = requestedMethod, Category = category, Reason = reason, IsDirty = true };
+        _dbContext.RefundRequests.Add(request);
+        _dbContext.OutboxEvents.Add(new LocalOutboxEvent { IdempotencyKey = idempotencyKey, PropertyId = propertyId, DeviceId = deviceId, OperatorId = userId, AggregateType = "PAYMENT", AggregateId = paymentId, EventType = "REFUND_REQUESTED", PayloadJson = JsonSerializer.Serialize(new { PaymentId = paymentId, PropertyId = propertyId, ReservationId = reservationId, FolioId = folioId, Amount = amount, Currency = currency, Category = category, Reason = reason, RequestedMethod = requestedMethod, BankAccountName = bankAccountName, BankAccountNumber = bankAccountNumber, BankName = bankName, BankCode = bankCode, IdempotencyKey = idempotencyKey }) });
+        await _dbContext.SaveChangesAsync();
+        return request;
+    }
+
+    public async Task UpsertRefundRequestsAsync(IEnumerable<LocalRefundRequest> requests, string propertyId)
+    {
+        foreach (var incoming in requests.Where(request => request.PropertyId == propertyId))
+        {
+            var existing = await _dbContext.RefundRequests.FirstOrDefaultAsync(request => request.Id == incoming.Id || request.IdempotencyKey == incoming.IdempotencyKey);
+            if (existing == null)
+            {
+                _dbContext.RefundRequests.Add(incoming);
+                continue;
+            }
+            if (existing.IsDirty) continue;
+            existing.RequestedAmount = incoming.RequestedAmount;
+            existing.IdempotencyKey = incoming.IdempotencyKey;
+            existing.ApprovedAmount = incoming.ApprovedAmount;
+            existing.Currency = incoming.Currency;
+            existing.RequestedMethod = incoming.RequestedMethod;
+            existing.ApprovedMethod = incoming.ApprovedMethod;
+            existing.Category = incoming.Category;
+            existing.Reason = incoming.Reason;
+            existing.Status = incoming.Status;
+            existing.CurrentApprovalStep = incoming.CurrentApprovalStep;
+            existing.UpdatedAt = incoming.UpdatedAt;
+        }
+        await _dbContext.SaveChangesAsync();
     }
 
     public async Task<List<LocalGuest>> GetGuestsAsync()

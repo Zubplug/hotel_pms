@@ -60,6 +60,14 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
       return apiFetch(`/api/v1/frontdesk/dashboard?propertyId=${propertyId}`);
     }
   },
+  refunds: {
+    async list(propertyId: string) {
+      return apiFetch(`/api/v1/refund-requests?propertyId=${encodeURIComponent(propertyId)}`);
+    },
+    async request(data: any) {
+      return apiFetch(`/api/v1/payments/${data.paymentId}/refund`, { method: 'POST', body: JSON.stringify(data) });
+    }
+  },
   guests: {
     async list() {
       return apiFetch(`/api/v1/guests`);

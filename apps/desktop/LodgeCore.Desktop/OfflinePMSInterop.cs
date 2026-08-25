@@ -429,6 +429,34 @@ public class OfflinePMSInterop
         }
     }
 
+    public async Task<string> GetRefundRequestsAsync(string propertyId)
+    {
+        try
+        {
+            var data = await _repo.GetRefundRequestsAsync(propertyId);
+            return JsonSerializer.Serialize(new { success = true, data }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
+    public async Task<string> RequestRefundAsync(string payloadJson)
+    {
+        try
+        {
+            var payload = JsonNode.Parse(payloadJson)?.AsObject() ?? throw new Exception("Invalid refund request");
+            var ctx = await GetSecureContextAsync();
+            var request = await _repo.QueueRefundRequestAsync(payload["paymentId"]?.ToString() ?? "", payload["propertyId"]?.ToString() ?? "", payload["reservationId"]?.ToString() ?? "", payload["folioId"]?.ToString() ?? "", payload["amount"]?.GetValue<decimal>() ?? 0, payload["currency"]?.ToString() ?? "NGN", payload["category"]?.ToString() ?? "MANUAL_ADJUSTMENT", payload["reason"]?.ToString() ?? "", payload["refundMethod"]?.ToString() ?? "ORIGINAL_PAYMENT", payload["bankAccountName"]?.ToString(), payload["bankAccountNumber"]?.ToString(), payload["bankName"]?.ToString(), payload["bankCode"]?.ToString(), ctx.UserId, ctx.DeviceId);
+            return JsonSerializer.Serialize(new { success = true, data = request }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
     public async Task<string> GetSyncEventsAsync()
     {
         try

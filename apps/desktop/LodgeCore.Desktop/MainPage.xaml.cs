@@ -332,6 +332,12 @@ public partial class MainPage : ContentPage
                 case "sync.outbox":
                     responseData = await pmsInterop.GetOutboxEventsAsync();
                     break;
+                case "refunds.list":
+                    responseData = await pmsInterop.GetRefundRequestsAsync(parameters?["propertyId"]?.ToString() ?? "");
+                    break;
+                case "refunds.request":
+                    responseData = await pmsInterop.RequestRefundAsync(parameters?.ToJsonString() ?? "{}");
+                    break;
                 case "sync.events":
                     responseData = await pmsInterop.GetSyncEventsAsync();
                     break;

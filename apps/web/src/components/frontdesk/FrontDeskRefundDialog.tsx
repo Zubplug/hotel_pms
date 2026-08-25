@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2, AlertCircle, CornerDownRight, CheckCircle2 } from 'lucide-react';
 import { cn, generateUUID } from '@/lib/utils';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
 export function FrontDeskRefundDialog({ open, onOpenChange, folio, paymentId }: { open: boolean, onOpenChange: (open: boolean) => void, folio: any, paymentId: string }) {
   const [amount, setAmount] = useState<string>('');
@@ -24,6 +25,7 @@ export function FrontDeskRefundDialog({ open, onOpenChange, folio, paymentId }: 
   const [success, setSuccess] = useState(false);
   
   const queryClient = useQueryClient();
+  const { provider } = useLodgeCoreProvider();
 
   const payment = folio?.payments?.find((p: any) => p.id === paymentId);
   const maxRefundable = payment ? Number(payment.amount) - (payment.refunds || []).reduce((sum: number, r: any) => sum + (r.status !== 'FAILED' ? Number(r.amount) : 0), 0) : 0;
@@ -43,10 +45,11 @@ export function FrontDeskRefundDialog({ open, onOpenChange, folio, paymentId }: 
         throw new Error(`Cannot refund more than the remaining refundable amount (${maxRefundable})`);
       }
 
-      const res = await fetch(`/api/v1/payments/${paymentId}/refund`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const res = await provider.refunds.request({
+          paymentId,
+          propertyId: folio.propertyId,
+          reservationId: folio.reservationId,
+          folioId: folio.id,
           amount: numAmount,
           reason,
           category,
@@ -56,11 +59,8 @@ export function FrontDeskRefundDialog({ open, onOpenChange, folio, paymentId }: 
           bankName,
           bankCode,
           idempotencyKey: generateUUID()
-        })
       });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error?.message || data.error || 'Failed to process refund');
+      if (!res?.success && res?.error) throw new Error(res.error?.message || res.error || 'Failed to process refund');
 
       await queryClient.invalidateQueries({ queryKey: ['reservation', folio.reservationId] });
       setSuccess(true);

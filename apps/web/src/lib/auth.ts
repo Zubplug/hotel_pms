@@ -63,8 +63,25 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         
         capabilities = Array.from(new Set(capabilities));
         
-        const primaryRole = user.roles?.[0]?.role?.name || 'STAFF';
-        const organizationId = user.roles?.[0]?.role?.organizationId || null;
+        let primaryRole = user.roles?.[0]?.role?.name || 'STAFF';
+        let organizationId = user.roles?.[0]?.role?.organizationId || null;
+        let propertyId = propertyIds.length > 0 ? propertyIds[0] : null;
+
+        // Industry standard: Super Admin bypasses normal role checks and gets all capabilities
+        if (user.isSuperAdmin) {
+          const allPermissions = await prisma.permission.findMany({ select: { name: true } });
+          capabilities = Array.from(new Set([...capabilities, ...allPermissions.map(p => p.name)]));
+          primaryRole = 'SUPER_ADMIN';
+
+          // Ensure Super Admin has a working context if no roles are assigned
+          if (!propertyId) {
+            const firstProperty = await prisma.property.findFirst();
+            if (firstProperty) {
+              propertyId = firstProperty.id;
+              organizationId = firstProperty.organizationId;
+            }
+          }
+        }
 
         // Return user object
         return {
@@ -75,7 +92,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           role: primaryRole,
           capabilities,
           sessionVersion: user.sessionVersion || 1,
-          propertyId: propertyIds.length > 0 ? propertyIds[0] : null,
+          propertyId,
           organizationId
         };
       },

@@ -137,6 +137,9 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
               )}
             </div>
           )}
+          <Link href="/frontdesk/refunds" className="hidden md:inline-flex rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted hover:text-foreground">
+            Refund Status
+          </Link>
         </div>
 
         {/* Center/Right: Hardware, Date/Time, User */}
@@ -158,6 +161,9 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => router.push('/maintenance')} className="w-full cursor-pointer">
                   <Wrench className="mr-2 h-4 w-4" /> Maintenance
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => router.push('/frontdesk/refunds')} className="w-full cursor-pointer">
+                  <Activity className="mr-2 h-4 w-4" /> Refund Status
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => router.push('/reports')} className="w-full cursor-pointer">
                   <Activity className="mr-2 h-4 w-4" /> Room Status

@@ -222,6 +222,7 @@ public class SyncEngine : BackgroundService
 
                     // Pull all other entities (RoomTypes, Rooms, Reservations, Folios …)
                     await PullUpdatesAsync(stoppingToken);
+                    try { await SyncRefundStatusesAsync(stoppingToken); } catch (Exception ex) { _logger.LogWarning(ex, "Failed to sync refund statuses"); }
 
                     // Resolve any conflicts that emerged from the push/pull
                     using (var scope = _serviceProvider.CreateScope())
@@ -1873,6 +1874,50 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
             dbContext.Reservations.RemoveRange(oldReservations);
             await dbContext.SaveChangesAsync(stoppingToken);
         }
+    }
+
+    private async Task SyncRefundStatusesAsync(CancellationToken stoppingToken)
+    {
+        using var scope = _serviceProvider.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
+        var identity = await GetSyncIdentityAsync(stoppingToken);
+        if (identity == null) return;
+        var token = await GetActiveTokenAsync();
+        if (string.IsNullOrEmpty(token)) return;
+        _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        var response = await _httpClient.GetAsync($"refund-requests?propertyId={Uri.EscapeDataString(identity.PropertyId)}", stoppingToken);
+        if (!response.IsSuccessStatusCode) return;
+        using var document = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync(stoppingToken));
+        if (!document.RootElement.TryGetProperty("data", out var data) || data.ValueKind != System.Text.Json.JsonValueKind.Array) return;
+        var statuses = new List<LocalRefundRequest>();
+        foreach (var item in data.EnumerateArray())
+        {
+            decimal.TryParse(item.GetProperty("requestedAmount").ToString(), out var requestedAmount);
+            decimal? approvedAmountValue = null;
+            if (item.TryGetProperty("approvedAmount", out var approvedAmountElement) && approvedAmountElement.ValueKind != System.Text.Json.JsonValueKind.Null && decimal.TryParse(approvedAmountElement.ToString(), out var parsedApprovedAmount)) approvedAmountValue = parsedApprovedAmount;
+            statuses.Add(new LocalRefundRequest
+            {
+                Id = item.GetProperty("id").GetString() ?? string.Empty,
+                PropertyId = item.GetProperty("propertyId").GetString() ?? identity.PropertyId,
+                ReservationId = item.TryGetProperty("reservationId", out var reservationId) && reservationId.ValueKind != System.Text.Json.JsonValueKind.Null ? reservationId.GetString() ?? string.Empty : string.Empty,
+                FolioId = item.GetProperty("folioId").GetString() ?? string.Empty,
+                PaymentId = item.GetProperty("paymentId").GetString() ?? string.Empty,
+                RequestedAmount = requestedAmount,
+                ApprovedAmount = approvedAmountValue,
+                Currency = item.GetProperty("currency").GetString() ?? "NGN",
+                RequestedMethod = item.TryGetProperty("requestedMethod", out var requestedMethod) ? requestedMethod.GetString() ?? "ORIGINAL_PAYMENT" : "ORIGINAL_PAYMENT",
+                ApprovedMethod = item.TryGetProperty("approvedMethod", out var approvedMethod) && approvedMethod.ValueKind != System.Text.Json.JsonValueKind.Null ? approvedMethod.GetString() : null,
+                Category = item.GetProperty("category").GetString() ?? string.Empty,
+                Reason = item.GetProperty("reason").GetString() ?? string.Empty,
+                Status = item.GetProperty("status").GetString() ?? "PENDING_APPROVAL",
+                CurrentApprovalStep = item.TryGetProperty("currentApprovalStep", out var step) ? step.GetInt32() : 1,
+                CreatedAt = item.TryGetProperty("createdAt", out var created) && DateTime.TryParse(created.GetString(), out var createdAt) ? createdAt : DateTime.UtcNow,
+                UpdatedAt = item.TryGetProperty("updatedAt", out var updated) && DateTime.TryParse(updated.GetString(), out var updatedAt) ? updatedAt : DateTime.UtcNow
+            });
+            var incomingRequest = statuses[^1];
+            if (item.TryGetProperty("idempotencyKey", out var incomingKey)) incomingRequest.IdempotencyKey = incomingKey.GetString() ?? incomingRequest.Id;
+        }
+        await new LocalRepository(dbContext).UpsertRefundRequestsAsync(statuses, identity.PropertyId);
     }
 
     private async Task PushFrontDeskOutboxAsync(CancellationToken stoppingToken)
