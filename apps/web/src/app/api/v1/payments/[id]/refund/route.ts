@@ -1,236 +1,147 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { getUserPropertyIds } from '@/lib/property-access';
-import { PaystackProvider } from '@/lib/payment-providers/paystack';
-import { NotificationEngine } from '@/lib/notification-engine';
-import crypto from 'crypto';
+import { encrypt } from '@/lib/encryption';
+
+const ACTIVE_REQUEST_STATUSES = ['PENDING_APPROVAL', 'APPROVED', 'PROCESSING'] as const;
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth();
-    if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    if (!session?.user?.id) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
 
-    const { id } = await params;
+    const { id: paymentId } = await params;
     const body = await req.json();
-    const { amount, reason, idempotencyKey } = body;
-
-    if (!amount || !reason || !idempotencyKey) {
-      return errorResponse('BAD_REQUEST', 'Missing required fields (amount, reason, idempotencyKey)', 400);
+    const amount = Number(body.amount);
+    const reason = String(body.reason || '').trim();
+    const category = String(body.category || 'MANUAL_ADJUSTMENT').toUpperCase();
+    const requestedMethod = String(body.refundMethod || body.method || 'ORIGINAL_PAYMENT').toUpperCase();
+    const bankAccountName = String(body.bankAccountName || '').trim();
+    const bankAccountNumber = String(body.bankAccountNumber || '').replace(/\s+/g, '');
+    const bankName = String(body.bankName || '').trim();
+    const bankCode = String(body.bankCode || '').trim();
+    const idempotencyKey = String(body.idempotencyKey || '').trim();
+    if (!Number.isFinite(amount) || amount <= 0 || !reason || !idempotencyKey || !['CASH', 'BANK_TRANSFER', 'ORIGINAL_PAYMENT'].includes(requestedMethod)) {
+      return errorResponse('BAD_REQUEST', 'Amount, reason, and idempotencyKey are required', 400);
+    }
+    if (requestedMethod === 'BANK_TRANSFER' && (!bankAccountName || !/^\d{6,20}$/.test(bankAccountNumber) || !bankName)) {
+      return errorResponse('BAD_REQUEST', 'Bank name, account name, and a valid account number are required for bank transfers', 400);
     }
 
-    const numericAmount = Number(amount);
-    if (isNaN(numericAmount) || numericAmount <= 0) {
-      return errorResponse('BAD_REQUEST', 'Refund amount must be greater than zero', 400);
-    }
-
-    // 1. Role-based authorization limit
     const capabilities = (session.user as any).capabilities || [];
-    
     if (!capabilities.includes('ACCESS_REFUNDS')) {
-      return errorResponse('FORBIDDEN', 'You do not have the capability to perform refunds.', 403);
+      return errorResponse('FORBIDDEN', 'You do not have permission to request refunds.', 403);
     }
 
-    let maxRefundLimit = 0;
-    if (capabilities.includes('LIMIT_REFUND_UNLIMITED')) {
-      maxRefundLimit = Infinity;
-    } else if (capabilities.includes('LIMIT_REFUND_250K')) {
-      maxRefundLimit = 250000;
-    } else if (capabilities.includes('LIMIT_REFUND_50K')) {
-      maxRefundLimit = 50000;
-    }
-
-    if (numericAmount > maxRefundLimit) {
-      return errorResponse('FORBIDDEN', `Your capability limit prevents refunding amounts above ${maxRefundLimit}.`, 403);
-    }
-
-    // 2. Idempotency Check
-    const existingRefund = await prisma.refund.findUnique({
-      where: { idempotencyKey }
-    });
-
-    if (existingRefund) {
-      return successResponse(existingRefund, 200);
-    }
-
-    // 3. Fetch Payment and Validate Constraints
     const payment = await prisma.payment.findUnique({
-      where: { id },
-      include: {
-        folio: { include: { property: true } },
-        refunds: true
-      }
+      where: { id: paymentId },
+      include: { folio: { include: { property: true } }, reservation: true }
     });
-
     if (!payment) return errorResponse('NOT_FOUND', 'Payment not found', 404);
-    if (payment.status !== 'COMPLETED') {
-      return errorResponse('BAD_REQUEST', 'Only COMPLETED payments can be refunded', 400);
-    }
 
-    const allowedPropertyIds = await getUserPropertyIds(session.user.id);
-    if (!allowedPropertyIds.includes(payment.propertyId)) {
+    const allowedProperties = await getUserPropertyIds(session.user.id);
+    if (!allowedProperties.includes(payment.propertyId)) {
       return errorResponse('FORBIDDEN', 'No access to this property', 403);
     }
-
-    // Check maximum refund age (e.g. 180 days)
-    const MAX_REFUND_AGE_DAYS = 180;
-    const paymentAgeDays = (Date.now() - payment.createdAt.getTime()) / (1000 * 60 * 60 * 24);
-    if (paymentAgeDays > MAX_REFUND_AGE_DAYS) {
-      return errorResponse('BAD_REQUEST', `Payment is too old to be refunded. Maximum age is ${MAX_REFUND_AGE_DAYS} days.`, 400);
+    if (payment.status !== 'COMPLETED') {
+      return errorResponse('BAD_REQUEST', 'Only completed payments can be refunded', 400);
     }
 
-    // 4. Concurrency & Mathematical Validation
-    // To protect against concurrent refunds on the same payment, we will use a transaction 
-    // that aggregates existing refunds dynamically via SUM, ensuring atomic math.
-    
-    let gatewayRefundStatus: 'COMPLETED' | 'PROCESSING' | 'FAILED' = 'COMPLETED';
-    let providerRefundId: string | undefined;
+    const result = await prisma.$transaction(async tx => {
+      const existing = await tx.refundRequest.findUnique({ where: { idempotencyKey } });
+      if (existing) return existing;
 
-    // 5. Gateway Processing (if applicable)
-    if (payment.method === 'PAYMENT_GATEWAY' && payment.providerTransactionId) {
-      const provider = new PaystackProvider();
-      
-      try {
-        const gatewayRes = await provider.refundTransaction(
-          payment.providerTransactionId,
-          numericAmount,
-          payment.currency,
-          reason
-        );
-        gatewayRefundStatus = gatewayRes.status;
-        providerRefundId = gatewayRes.providerRefundId;
-        
-        if (gatewayRefundStatus === 'FAILED') {
-          return errorResponse('BAD_GATEWAY', `Gateway refund failed: ${gatewayRes.message}`, 502);
-        }
-      } catch (err: any) {
-        return errorResponse('BAD_GATEWAY', `Failed to process gateway refund: ${err.message}`, 502);
-      }
-    }
-
-    // 6. Atomic Ledger Update
-    const result = await prisma.$transaction(async (tx: any) => {
-      // Re-sum existing refunds in transaction to prevent concurrency attacks
-      const aggregates = await tx.refund.aggregate({
-        where: { paymentId: payment.id, status: { not: 'FAILED' } },
+      const refunds = await tx.refund.aggregate({
+        where: { paymentId, status: { not: 'FAILED' } },
         _sum: { amount: true }
       });
-      const totalRefundedSoFar = Number(aggregates._sum.amount || 0);
-
-      if ((totalRefundedSoFar + numericAmount) > Number(payment.amount)) {
-        throw new Error('Refund amount exceeds original payment total.');
+      const pending = await tx.refundRequest.aggregate({
+        where: { paymentId, status: { in: ACTIVE_REQUEST_STATUSES as any } },
+        _sum: { requestedAmount: true }
+      });
+      const alreadyCommitted = Number(refunds._sum.amount || 0) + Number(pending._sum.requestedAmount || 0);
+      if (alreadyCommitted + amount > Number(payment.amount)) {
+        throw new Error('REFUND_LIMIT_EXCEEDED');
       }
 
-      // Determine new payment status
-      const isFullRefund = (totalRefundedSoFar + numericAmount) === Number(payment.amount);
-      const newPaymentStatus = isFullRefund ? 'REFUNDED' : 'PARTIALLY_REFUNDED';
-
-      // Create immutable Refund record
-      const refund = await tx.refund.create({
-        data: {
-          paymentId: payment.id,
-          folioId: payment.folioId,
-          propertyId: payment.propertyId,
-          amount: numericAmount,
-          currency: payment.currency,
-          reason,
-          authorizedBy: session.user.id,
-          providerRefundId,
-          status: gatewayRefundStatus,
-          idempotencyKey
-        }
-      });
-
-      let updatedFolio = null;
-
-      // Only affect Folio ledger if the refund was successfully processed/completed locally 
-      // (For gateway PROCESSING states, we might defer ledger updates to a webhook, but for simplicity here we assume if it's not FAILED, we record the financial event and let reconciliation catch discrepancies, OR we only update folio if COMPLETED)
-      if (gatewayRefundStatus === 'COMPLETED') {
-        const folio = payment.folio;
-        updatedFolio = await tx.folio.update({
-          where: { id: folio.id, version: folio.version },
-          data: {
-            version: { increment: 1 },
-            totalPayments: { decrement: numericAmount },
-            balance: { increment: numericAmount }
-          }
-        });
-
-        // FolioItem for the Refund
-        await tx.folioItem.create({
-          data: {
-            folioId: folio.id,
-            businessDate: new Date(),
-            type: 'REFUND',
-            source: 'MANUAL', // or GATEWAY depending on logic
-            description: `Refund for Payment ${payment.id.split('-')[0]} - ${reason}`,
-            quantity: 1,
-            unitAmount: numericAmount, // Positive amount adds back to balance
-            amount: numericAmount,
-            currency: payment.currency,
-            baseAmount: numericAmount,
-            postedBy: session.user.id,
-          }
-        });
+      if (category === 'FOLIO_CREDIT_BALANCE' && Number(payment.folio.balance) >= 0) {
+        throw new Error('REFUND_REQUIRES_CREDIT_BALANCE');
+      }
+      if (category === 'RESERVATION_CANCELLED' && payment.reservation?.status !== 'CANCELLED') {
+        throw new Error('REFUND_REQUIRES_CANCELLED_RESERVATION');
+      }
+      if (category === 'REDUCED_STAY' && !payment.reservation) {
+        throw new Error('REFUND_REQUIRES_RESERVATION');
       }
 
-      // Update original payment
-      await tx.payment.update({
-        where: { id: payment.id },
-        data: { status: newPaymentStatus }
-      });
+      const workflowRules = await tx.refundApprovalRule.findMany({ where: { propertyId: payment.propertyId, isActive: true }, orderBy: { stepOrder: 'asc' } });
+      const matchingRules = workflowRules.filter(rule => (rule.minAmount == null || amount >= Number(rule.minAmount)) && (rule.maxAmount == null || amount <= Number(rule.maxAmount)));
+      const firstRule = matchingRules[0];
+      const fallbackRoleName = amount > 250000 ? 'FINANCE_MANAGER' : amount > 50000 ? 'MANAGER' : 'FRONT_DESK_MANAGER';
+      const role = firstRule?.roleId ? await tx.role.findUnique({ where: { id: firstRule.roleId } }) : await tx.role.findFirst({ where: { organizationId: payment.folio.property.organizationId, name: fallbackRoleName } });
+      const candidate = firstRule?.approverId
+        ? { userId: firstRule.approverId }
+        : role ? await tx.userRole.findFirst({ where: { roleId: role.id, userId: { not: session.user.id }, OR: [{ propertyId: payment.propertyId }, { propertyId: null }] }, select: { userId: true } }) : null;
 
-      // Audit Log
-      await tx.auditLog.create({
+      const request = await tx.refundRequest.create({
         data: {
           organizationId: payment.folio.property.organizationId,
           propertyId: payment.propertyId,
-          userId: session.user.id,
-          userEmail: session.user.email,
-          userRole: (session.user as any).role || 'STAFF',
-          action: 'PAYMENT_REFUNDED',
-          resource: 'Payment',
-          resourceId: payment.id,
-          newValue: {
-            refundId: refund.id,
-            amount: numericAmount,
-            status: gatewayRefundStatus,
-            newPaymentStatus
-          },
-          ipAddress: req.headers.get('x-forwarded-for') || '127.0.0.1',
-          userAgent: req.headers.get('user-agent') || 'Unknown',
-          requestId: req.headers.get('x-request-id') || crypto.randomUUID(),
+          reservationId: payment.reservationId,
+          folioId: payment.folioId,
+          paymentId,
+          guestId: payment.reservation?.primaryGuestId,
+          requestedAmount: amount,
+          currency: payment.currency,
+          requestedMethod,
+          bankAccountName: requestedMethod === 'BANK_TRANSFER' ? bankAccountName : null,
+          bankAccountNumberEncrypted: requestedMethod === 'BANK_TRANSFER' ? encrypt(bankAccountNumber) : null,
+          bankAccountLast4: requestedMethod === 'BANK_TRANSFER' ? bankAccountNumber.slice(-4) : null,
+          bankName: requestedMethod === 'BANK_TRANSFER' ? bankName : null,
+          bankCode: requestedMethod === 'BANK_TRANSFER' ? bankCode || null : null,
+          category,
+          reason,
+          supportingNotes: body.supportingNotes ? String(body.supportingNotes) : null,
+          requestedById: session.user.id,
+          currentApproverId: candidate?.userId,
+          approvalRoleId: role?.id,
+          currentApprovalStep: firstRule?.stepOrder || 1,
+          idempotencyKey,
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
         }
       });
 
-      return { refund, updatedFolio };
+      await tx.approvalRequest.create({
+        data: {
+          propertyId: payment.propertyId,
+          type: 'REFUND',
+          status: 'PENDING',
+          requestedBy: session.user.id,
+          amount,
+          currency: payment.currency,
+          reason,
+          details: { refundRequestId: request.id, category, requestedAmount: amount, approvedAmount: null, requestedMethod, approverRoleId: role?.id, approverId: candidate?.userId, stepOrder: firstRule?.stepOrder || 1 },
+          expiresAt: request.expiresAt
+        }
+      });
+
+      return request;
     });
 
-    if (gatewayRefundStatus === 'COMPLETED') {
-      NotificationEngine.emit({
-        type: 'REFUND_HIGH_VALUE',
-        organizationId: payment.folio.property.organizationId,
-        propertyId: payment.propertyId,
-        entityType: 'payment',
-        entityId: payment.id,
-        idempotencyKey: `refund_high_value_${result.refund.id}`,
-      }).catch(err => console.error('[NotificationEngine] Failed to emit refund notification:', err));
-    }
-
-    return successResponse(result, 201);
-
-  } catch (err: any) {
-    console.error('[Payment Refund POST]', err);
-    if (err.message === 'Refund amount exceeds original payment total.') {
-      return errorResponse('BAD_REQUEST', err.message, 400);
-    }
-    if (err.code === 'P2002') {
-      return errorResponse('CONFLICT', 'A refund with this idempotency key is already processing.', 409);
-    }
-    if (err.code === 'P2025') {
-      return errorResponse('CONFLICT', 'The folio was modified by another transaction. Please try again.', 409);
-    }
-    return errorResponse('INTERNAL_ERROR', 'Unexpected error processing refund', 500);
+    return successResponse({ status: result.status, refundRequest: result }, 202);
+  } catch (error: any) {
+    const messages: Record<string, [string, string, number]> = {
+      REFUND_LIMIT_EXCEEDED: ['CONFLICT', 'Total refunded and pending amounts exceed the original payment.', 409],
+      REFUND_REQUIRES_CREDIT_BALANCE: ['BAD_REQUEST', 'A credit balance is required for this refund category.', 400],
+      REFUND_REQUIRES_CANCELLED_RESERVATION: ['BAD_REQUEST', 'The reservation must be cancelled first.', 400],
+      REFUND_REQUIRES_RESERVATION: ['BAD_REQUEST', 'This refund category requires a reservation.', 400]
+    };
+    const mapped = messages[error.message];
+    if (mapped) return errorResponse(mapped[0], mapped[1], mapped[2]);
+    if (error.code === 'P2002') return errorResponse('CONFLICT', 'A refund request with this idempotency key already exists.', 409);
+    console.error('[Refund Request POST]', error);
+    return errorResponse('INTERNAL_ERROR', 'Unable to create refund request', 500);
   }
 }

@@ -310,6 +310,29 @@ export async function POST(req: NextRequest) {
               // Note: SERVER_BANKING logic runs separately (e.g. at end of shift/cash drop),
               // but we ensure non-cash doesn't increment cash balances.
           }
+          else if (event.eventType === 'REFUND_REQUESTED') {
+              const amount = Math.abs(Number(payload.Amount ?? payload.amount));
+              if (!Number.isFinite(amount) || amount <= 0) throw new Error('Refund amount must be positive');
+              await tx.approvalRequest.create({
+                data: {
+                  propertyId: event.propertyId,
+                  type: 'REFUND',
+                  status: 'PENDING',
+                  requestedBy: event.operatorId,
+                  amount,
+                  currency: payload.Currency || payload.currency || 'NGN',
+                  reason: payload.Reason || payload.reason || 'POS refund request',
+                  details: {
+                    posRefund: true,
+                    orderId: payload.OrderId || payload.orderId || event.aggregateId,
+                    method: payload.Method || payload.method || 'CASH',
+                    amount,
+                    sourceEventId: event.id,
+                    sourceIdempotencyKey: event.idempotencyKey
+                  }
+                }
+              });
+          }
           else if (event.eventType === 'ORDER_CLOSED') {
               await tx.posOrder.update({
                   where: { id: event.aggregateId },

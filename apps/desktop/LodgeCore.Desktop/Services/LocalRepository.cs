@@ -2282,7 +2282,7 @@ public class LocalRepository
             Id = Guid.NewGuid().ToString(),
             OrderId = orderId,
             Method = method,
-            Status = method == "CASH" ? "CONFIRMED" : "PENDING_GATEWAY",
+            Status = "PENDING_APPROVAL",
             Amount = -amount, // Negative for refund
             OperationId = operationId,
             DeviceId = deviceId,
@@ -2296,7 +2296,7 @@ public class LocalRepository
             OperationId = operationId,
             EntityType = "POS_PAYMENT",
             EntityId = payment.Id,
-            OperationType = "CREATE", // Might map to a REFUND type eventually, but for now treating as negative payment
+            OperationType = "REFUND_REQUESTED",
             PayloadJson = JsonSerializer.Serialize(payment),
             UserId = userId,
             DeviceId = deviceId

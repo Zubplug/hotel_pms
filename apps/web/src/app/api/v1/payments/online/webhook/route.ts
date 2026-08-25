@@ -208,6 +208,9 @@ async function handleRefundProcessed(req: NextRequest, event: any) {
         where: { id: refund.id },
         data: { status: 'COMPLETED' }
       });
+      if (refund.refundRequestId) {
+        await tx.refundRequest.update({ where: { id: refund.refundRequestId }, data: { status: 'COMPLETED' } });
+      }
 
       // 2. Update Folio
       const folio = await tx.folio.findUnique({ where: { id: refund.folioId }});
@@ -284,6 +287,9 @@ async function handleRefundFailed(req: NextRequest, event: any) {
         where: { id: refund.id },
         data: { status: 'FAILED' }
       });
+      if (refund.refundRequestId) {
+        await tx.refundRequest.update({ where: { id: refund.refundRequestId }, data: { status: 'FAILED' } });
+      }
 
       await tx.auditLog.create({
         data: {

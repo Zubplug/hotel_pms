@@ -107,7 +107,7 @@ export async function GET(req: NextRequest) {
     }
 
     for (const r of refunds) {
-      const method = r.payment.method;
+      const method = r.method || r.payment.method;
       if (!aggregation[method]) aggregation[method] = { payments: 0, refunds: 0, net: 0 };
       const amount = Number(r.amount);
       aggregation[method].refunds += amount;

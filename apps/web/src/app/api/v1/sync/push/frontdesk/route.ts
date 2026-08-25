@@ -1107,10 +1107,10 @@ export async function POST(req: NextRequest) {
                // Fetch the true actual version from DB to populate the conflict correctly
                try {
                    if (aggregateType === 'FOLIO') {
-                       const f = await prisma.folio.findUnique({ where: { id: aggregateId }});
+                       const f = await prisma.folio.findUnique({ where: { id: rawAggregateId }});
                        if (f) expectedVersion = f.version;
                    } else if (aggregateType === 'RESERVATION') {
-                       const r = await prisma.reservation.findUnique({ where: { id: aggregateId }});
+                       const r = await prisma.reservation.findUnique({ where: { id: rawAggregateId }});
                        if (r) expectedVersion = r.version;
                    }
                } catch (e) {}
@@ -1126,7 +1126,7 @@ export async function POST(req: NextRequest) {
                     deviceId: device.id,
                     operatorId: isUuid(operatorId) ? operatorId : device.id,
                     aggregateType,
-                    aggregateId,
+                    aggregateId: rawAggregateId,
                     aggregateVersion,
                     eventType,
                     occurredAt: new Date(occurredAt || Date.now()),
@@ -1140,7 +1140,7 @@ export async function POST(req: NextRequest) {
                     propertyId,
                     hotelEventId: ev.id,
                     aggregateType,
-                    aggregateId,
+                    aggregateId: rawAggregateId,
                     expectedVersion: expectedVersion,
                     receivedVersion: aggregateVersion,
                     conflictReason: 'Optimistic Concurrency Failure: Edge node operated on stale state.',

@@ -13,6 +13,12 @@ import { cn, generateUUID } from '@/lib/utils';
 export function FrontDeskRefundDialog({ open, onOpenChange, folio, paymentId }: { open: boolean, onOpenChange: (open: boolean) => void, folio: any, paymentId: string }) {
   const [amount, setAmount] = useState<string>('');
   const [reason, setReason] = useState('');
+  const [category, setCategory] = useState('MANUAL_ADJUSTMENT');
+  const [refundMethod, setRefundMethod] = useState('ORIGINAL_PAYMENT');
+  const [bankAccountName, setBankAccountName] = useState('');
+  const [bankAccountNumber, setBankAccountNumber] = useState('');
+  const [bankName, setBankName] = useState('');
+  const [bankCode, setBankCode] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -43,6 +49,12 @@ export function FrontDeskRefundDialog({ open, onOpenChange, folio, paymentId }: 
         body: JSON.stringify({
           amount: numAmount,
           reason,
+          category,
+          refundMethod,
+          bankAccountName,
+          bankAccountNumber,
+          bankName,
+          bankCode,
           idempotencyKey: generateUUID()
         })
       });
@@ -120,6 +132,21 @@ export function FrontDeskRefundDialog({ open, onOpenChange, folio, paymentId }: 
               </div>
 
               <div className="space-y-3">
+                <Label className="text-sm font-bold text-slate-700">Refund Category</Label>
+                <select value={category} onChange={(e) => setCategory(e.target.value)} disabled={isSubmitting} className="w-full h-12 rounded-xl border border-slate-200 bg-white px-4 text-sm">
+                  <option value="MANUAL_ADJUSTMENT">Manual adjustment</option>
+                  <option value="RESERVATION_CANCELLED">Reservation cancelled</option>
+                  <option value="REDUCED_STAY">Reduced stay</option>
+                  <option value="FOLIO_CREDIT_BALANCE">Folio credit balance</option>
+                  <option value="DUPLICATE_PAYMENT">Duplicate payment</option>
+                  <option value="SERVICE_FAILURE">Service failure</option>
+                </select>
+              </div>
+
+              <div className="space-y-3"><Label className="text-sm font-bold text-slate-700">Refund Method</Label><select value={refundMethod} onChange={e => setRefundMethod(e.target.value)} disabled={isSubmitting} className="w-full h-12 rounded-xl border border-slate-200 bg-white px-4 text-sm"><option value="ORIGINAL_PAYMENT">Original payment method</option><option value="CASH">Cash</option><option value="BANK_TRANSFER">Bank transfer</option></select></div>
+              {refundMethod === 'BANK_TRANSFER' && <div className="grid grid-cols-2 gap-3 rounded-xl border border-slate-200 bg-white p-4"><Input placeholder="Account name" value={bankAccountName} onChange={e => setBankAccountName(e.target.value)} required /><Input placeholder="Account number" value={bankAccountNumber} onChange={e => setBankAccountNumber(e.target.value)} required /><Input placeholder="Bank name" value={bankName} onChange={e => setBankName(e.target.value)} required /><Input placeholder="Bank code (optional)" value={bankCode} onChange={e => setBankCode(e.target.value)} /></div>}
+
+              <div className="space-y-3">
                 <Label className="text-sm font-bold text-slate-700">Reason for Refund</Label>
                 <Textarea 
                   value={reason} 
@@ -159,9 +186,9 @@ export function FrontDeskRefundDialog({ open, onOpenChange, folio, paymentId }: 
               </div>
               
               <div>
-                <h3 className="text-2xl font-bold text-slate-900 tracking-tight">Refund Processed</h3>
+                <h3 className="text-2xl font-bold text-slate-900 tracking-tight">Refund Request Submitted</h3>
                 <p className="text-slate-500 mt-2 text-sm max-w-[280px] mx-auto">
-                  The refund of <span className="font-bold text-slate-700">{folio?.currency} {Number(amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span> has been successfully issued.
+                  The refund of <span className="font-bold text-slate-700">{folio?.currency} {Number(amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span> is awaiting approval. No financial refund has been finalized yet.
                 </p>
               </div>
               

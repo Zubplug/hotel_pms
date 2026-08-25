@@ -1,0 +1,11 @@
+ALTER TABLE "RefundRequest"
+ADD COLUMN "requestedMethod" TEXT NOT NULL DEFAULT 'ORIGINAL_PAYMENT',
+ADD COLUMN "approvedMethod" TEXT,
+ADD COLUMN "bankAccountName" TEXT,
+ADD COLUMN "bankAccountNumberEncrypted" TEXT,
+ADD COLUMN "bankAccountLast4" TEXT,
+ADD COLUMN "bankName" TEXT,
+ADD COLUMN "bankCode" TEXT;
+
+ALTER TABLE "Refund"
+ADD COLUMN "method" TEXT NOT NULL DEFAULT 'ORIGINAL_PAYMENT';

@@ -7,11 +7,20 @@ import {
   Bell,
   MonitorSmartphone,
   ShieldCheck,
-  Store
+  Store,
+  GitBranch
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 const settingsLinks = [
+  {
+    title: 'Refund Workflow',
+    description: 'Configure property-specific refund thresholds, approval steps, roles, and staff.',
+    href: '/settings/refund-workflow',
+    icon: GitBranch,
+    color: 'text-red-500',
+    bgColor: 'bg-red-500/10'
+  },
   {
     title: 'General',
     description: 'Manage your property details, timezone, and contact information.',

@@ -25,6 +25,7 @@ import {
   Wrench,
   HandCoins,
   Shirt,
+  BadgeDollarSign,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -64,6 +65,8 @@ const ALL_NAV = [
     ]
   },
   { name: 'Cash Office', href: '/cash-office', icon: HandCoins, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'ACCOUNTANT'] },
+  { name: 'Refunds', href: '/refunds', icon: BadgeDollarSign, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'FINANCE_MANAGER', 'ADMIN'] },
+  { name: 'Refunds', href: '/refunds', icon: BadgeDollarSign, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'FINANCE_MANAGER', 'ADMIN'] },
   { name: 'Settings', href: '/settings', icon: Settings, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER'] },
 ];
 

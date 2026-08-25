@@ -13,6 +13,12 @@ import { generateUUID } from '@/lib/utils';
 export function RefundDialog({ open, onOpenChange, folio, paymentId }: { open: boolean, onOpenChange: (open: boolean) => void, folio: any, paymentId: string }) {
   const [amount, setAmount] = useState<string>('');
   const [reason, setReason] = useState('');
+  const [category, setCategory] = useState('MANUAL_ADJUSTMENT');
+  const [refundMethod, setRefundMethod] = useState('ORIGINAL_PAYMENT');
+  const [bankAccountName, setBankAccountName] = useState('');
+  const [bankAccountNumber, setBankAccountNumber] = useState('');
+  const [bankName, setBankName] = useState('');
+  const [bankCode, setBankCode] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -42,6 +48,12 @@ export function RefundDialog({ open, onOpenChange, folio, paymentId }: { open: b
         body: JSON.stringify({
           amount: numAmount,
           reason,
+          category,
+          refundMethod,
+          bankAccountName,
+          bankAccountNumber,
+          bankName,
+          bankCode,
           idempotencyKey: generateUUID()
         })
       });
@@ -53,6 +65,9 @@ export function RefundDialog({ open, onOpenChange, folio, paymentId }: { open: b
       onOpenChange(false);
       setAmount('');
       setReason('');
+      setCategory('MANUAL_ADJUSTMENT');
+      setRefundMethod('ORIGINAL_PAYMENT');
+      setBankAccountName(''); setBankAccountNumber(''); setBankName(''); setBankCode('');
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -88,6 +103,28 @@ export function RefundDialog({ open, onOpenChange, folio, paymentId }: { open: b
             />
             <p className="text-xs text-muted-foreground">Maximum refundable: {maxRefundable}</p>
           </div>
+
+          <div className="space-y-2">
+            <Label>Refund Category</Label>
+            <select value={category} onChange={(e) => setCategory(e.target.value)} disabled={isSubmitting} className="w-full h-10 rounded-md border bg-background px-3 text-sm">
+              <option value="MANUAL_ADJUSTMENT">Manual adjustment</option>
+              <option value="RESERVATION_CANCELLED">Reservation cancelled</option>
+              <option value="REDUCED_STAY">Reduced stay</option>
+              <option value="FOLIO_CREDIT_BALANCE">Folio credit balance</option>
+              <option value="DUPLICATE_PAYMENT">Duplicate payment</option>
+              <option value="SERVICE_FAILURE">Service failure</option>
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Refund Method</Label>
+            <select value={refundMethod} onChange={(e) => setRefundMethod(e.target.value)} disabled={isSubmitting} className="w-full h-10 rounded-md border bg-background px-3 text-sm">
+              <option value="ORIGINAL_PAYMENT">Original payment method</option>
+              <option value="CASH">Cash</option>
+              <option value="BANK_TRANSFER">Bank transfer</option>
+            </select>
+          </div>
+          {refundMethod === 'BANK_TRANSFER' && <div className="grid grid-cols-2 gap-3 rounded-md border p-3"><Input placeholder="Account name" value={bankAccountName} onChange={e => setBankAccountName(e.target.value)} required /><Input placeholder="Account number" value={bankAccountNumber} onChange={e => setBankAccountNumber(e.target.value)} required /><Input placeholder="Bank name" value={bankName} onChange={e => setBankName(e.target.value)} required /><Input placeholder="Bank code (optional)" value={bankCode} onChange={e => setBankCode(e.target.value)} /></div>}
 
           <div className="space-y-2">
             <Label>Reason for Refund</Label>

@@ -32,6 +32,7 @@ model Organization {
   roles         Role[]
   notifications Notification[]
   auditLogs     AuditLog[]
+  refundRequests RefundRequest[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -79,6 +80,7 @@ model Property {
   folios               Folio[]
   payments             Payment[]
   refunds              Refund[]
+  refundRequests       RefundRequest[]
   taxes                Tax[]
   discounts            Discount[]
   housekeepingTasks    HousekeepingTask[]
@@ -113,6 +115,7 @@ model Property {
   syncConflicts        SyncConflict[]
   inventoryAlerts      InventoryAlert[]
   approvalRequests     ApprovalRequest[]
+  refundApprovalRules  RefundApprovalRule[]
 
   createdAt     DateTime       @default(now()) @db.Timestamptz
   updatedAt     DateTime       @updatedAt @db.Timestamptz
@@ -606,6 +609,7 @@ model Reservation {
   reservationRooms  ReservationRoom[]
   folios            Folio[]
   payments          Payment[]
+  refundRequests    RefundRequest[]
   guestServiceReqs  GuestServiceRequest[]
   lockCredentials   LockCredential[]
   lockOperations    LockOperation[]
@@ -685,6 +689,7 @@ model Folio {
   items     FolioItem[]
   payments  Payment[]
   refunds   Refund[]
+  refundRequests RefundRequest[]
   posOrders PosOrder[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
@@ -793,6 +798,7 @@ model Payment {
   syncedAt             DateTime? @db.Timestamptz
 
   refunds Refund[]
+  refundRequests RefundRequest[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -807,8 +813,12 @@ model Refund {
   propertyId String   @db.Uuid
   property   Property @relation(fields: [propertyId], references: [id])
 
+  refundRequestId String?        @unique @db.Uuid
+  refundRequest   RefundRequest? @relation(fields: [refundRequestId], references: [id])
+
   amount           Decimal @db.Decimal(18, 4)
   currency         String
+  method           String  @default("ORIGINAL_PAYMENT")
   reason           String
   authorizedBy     String  @db.Uuid
   providerRefundId String?
@@ -818,6 +828,102 @@ model Refund {
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
+}
+
+enum RefundRequestStatus {
+  PENDING_APPROVAL
+  APPROVED
+  PROCESSING
+  COMPLETED
+  REJECTED
+  FAILED
+  CANCELLED
+  EXPIRED
+}
+
+model RefundRequest {
+  id             String              @id @default(uuid()) @db.Uuid
+  organizationId String              @db.Uuid
+  propertyId     String              @db.Uuid
+  reservationId  String?             @db.Uuid
+  folioId        String              @db.Uuid
+  paymentId      String              @db.Uuid
+  guestId        String?             @db.Uuid
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  property     Property     @relation(fields: [propertyId], references: [id])
+  reservation  Reservation? @relation(fields: [reservationId], references: [id])
+  folio        Folio        @relation(fields: [folioId], references: [id])
+  payment      Payment      @relation(fields: [paymentId], references: [id])
+
+  requestedAmount Decimal             @db.Decimal(18, 4)
+  approvedAmount  Decimal?            @db.Decimal(18, 4)
+  currency        String
+  requestedMethod String              @default("ORIGINAL_PAYMENT")
+  approvedMethod  String?
+  bankAccountName String?
+  bankAccountNumberEncrypted String?
+  bankAccountLast4 String?
+  bankName        String?
+  bankCode        String?
+  category        String
+  reason          String
+  supportingNotes String?
+  status          RefundRequestStatus @default(PENDING_APPROVAL)
+
+  requestedById     String  @db.Uuid
+  currentApproverId String? @db.Uuid
+  approvalRoleId    String? @db.Uuid
+  currentApprovalStep Int @default(1)
+  requestedBy       User    @relation("RefundRequestedBy", fields: [requestedById], references: [id])
+  currentApprover   User?   @relation("RefundCurrentApprover", fields: [currentApproverId], references: [id])
+  approvalRole      Role?   @relation(fields: [approvalRoleId], references: [id])
+
+  idempotencyKey String  @unique
+  expiresAt      DateTime? @db.Timestamptz
+  createdAt      DateTime  @default(now()) @db.Timestamptz
+  updatedAt      DateTime  @updatedAt @db.Timestamptz
+
+  refund    Refund?
+  approvals RefundApproval[]
+
+  @@index([propertyId, status])
+  @@index([paymentId, status])
+  @@index([currentApproverId, status])
+}
+
+model RefundApproval {
+  id              String   @id @default(uuid()) @db.Uuid
+  refundRequestId String   @db.Uuid
+  approverId      String   @db.Uuid
+  decision        String
+  stepOrder       Int      @default(1)
+  comments        String?
+  decidedAt       DateTime @default(now()) @db.Timestamptz
+
+  refundRequest RefundRequest @relation(fields: [refundRequestId], references: [id])
+  approver      User          @relation("RefundApprover", fields: [approverId], references: [id])
+
+  @@index([refundRequestId, decidedAt])
+}
+
+model RefundApprovalRule {
+  id         String   @id @default(uuid()) @db.Uuid
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  stepOrder  Int
+  minAmount  Decimal? @db.Decimal(18, 4)
+  maxAmount  Decimal? @db.Decimal(18, 4)
+  roleId     String?  @db.Uuid
+  approverId String?  @db.Uuid
+  role       Role?    @relation("RefundRuleRole", fields: [roleId], references: [id], onDelete: SetNull)
+  approver   User?    @relation("RefundRuleApprover", fields: [approverId], references: [id], onDelete: SetNull)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now()) @db.Timestamptz
+  updatedAt  DateTime @updatedAt @db.Timestamptz
+
+  @@unique([propertyId, stepOrder])
+  @@index([propertyId, isActive])
 }
 
 model Tax {
@@ -1213,6 +1319,10 @@ model User {
   updatedAt DateTime @updatedAt @db.Timestamptz
 
   roles                   UserRole[]
+  requestedRefunds        RefundRequest[] @relation("RefundRequestedBy")
+  assignedRefunds         RefundRequest[] @relation("RefundCurrentApprover")
+  refundApprovals         RefundApproval[] @relation("RefundApprover")
+  refundApprovalRules     RefundApprovalRule[] @relation("RefundRuleApprover")
   deviceTokens            DeviceToken[]
   notificationPreferences UserNotificationPreference[]
 }
@@ -1259,6 +1369,8 @@ model Role {
 
   permissions RolePermission[]
   users       UserRole[]
+  refundApprovalRequests RefundRequest[]
+  refundApprovalRules RefundApprovalRule[] @relation("RefundRuleRole")
 }
 
 model Permission {
