@@ -32,6 +32,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const updated = await tx.reservation.update({ where: { id }, data: { status: 'CONFIRMED', reinstatedAt: new Date(), reinstatedBy: session.user.id, reinstatementReason: String(body.reason || 'No-show reinstated by management') } });
       await tx.reservationRoom.updateMany({ where: { reservationId: id, status: 'NO_SHOW' }, data: { status: 'ACTIVE' } });
       for (const roomAssignment of reservation.reservationRooms) {
+        if (!roomAssignment.roomId) continue;
         await tx.room.update({ where: { id: roomAssignment.roomId }, data: { status: 'RESERVED' } });
       }
       await tx.auditLog.create({ data: { organizationId: reservation.property.organizationId, propertyId: reservation.propertyId, userId: session.user.id, userEmail: session.user.email, userRole: (session.user as any).role || 'STAFF', action: 'RESERVATION_REINSTATED', resource: 'Reservation', resourceId: id, previousValue: { status: 'NO_SHOW' }, newValue: { status: 'CONFIRMED', reason: body.reason || 'No-show reinstated by management' }, ipAddress: req.headers.get('x-forwarded-for') || '', userAgent: req.headers.get('user-agent') || '', requestId: req.headers.get('x-request-id') || crypto.randomUUID() } });

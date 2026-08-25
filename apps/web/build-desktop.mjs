@@ -17,7 +17,7 @@ try {
   }
 
   // Run the build synchronously
-  execSync('npx cross-env NEXT_PUBLIC_IS_DESKTOP=true next build', { 
+  execSync('npx cross-env NEXT_PUBLIC_IS_DESKTOP=true next build --webpack', {
     stdio: 'inherit',
     env: process.env
   });

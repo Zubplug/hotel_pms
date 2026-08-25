@@ -40,6 +40,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       if (reservation.reservationRooms.length) {
         await tx.reservationRoom.updateMany({ where: { reservationId: id, status: 'ACTIVE' }, data: { status: 'NO_SHOW' } });
         for (const reservationRoom of reservation.reservationRooms) {
+          if (!reservationRoom.roomId) continue;
           const otherActive = await tx.reservationRoom.findFirst({
             where: {
               roomId: reservationRoom.roomId,
