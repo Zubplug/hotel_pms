@@ -34,9 +34,10 @@ export function AutoLockScreen({ children, onLock, isLocked }: AutoLockScreenPro
     // Initial set
     reset();
 
-    const keepAlive = isDesktopMode && provider.pos.keepAlive
+    const keepAliveFn = isDesktopMode ? provider.pos.keepAlive : undefined;
+    const keepAlive = keepAliveFn
       ? window.setInterval(() => {
-          void provider.pos.keepAlive();
+          void keepAliveFn();
         }, Math.max(10000, autoLockSeconds * 500))
       : undefined;
 

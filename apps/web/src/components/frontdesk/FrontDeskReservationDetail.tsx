@@ -17,7 +17,9 @@ import { FrontDeskQuickCheckoutDialog } from './FrontDeskQuickCheckoutDialog';
 import { FrontDeskReceiptDialog } from './FrontDeskReceiptDialog';
 import { FolioSection } from '../reservations/FolioSection';
 import { FrontDeskCardInformationSection } from './FrontDeskCardInformationSection';
-import { LogIn, User, MapPin, CalendarClock, CreditCard, Receipt, LogOut, ChevronDown, Edit3, XCircle } from 'lucide-react';
+import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
+import { toast } from 'sonner';
+import { LogIn, User, MapPin, CalendarClock, CreditCard, Receipt, LogOut, ChevronDown, Edit3, XCircle, Loader2 } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,6 +38,7 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
   const [isExtendStayOpen, setIsExtendStayOpen] = useState(false);
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
   const [isQuickCheckoutOpen, setIsQuickCheckoutOpen] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
 
   const resRoom = reservation.reservationRooms?.[0];
   const room = resRoom?.room;
@@ -54,6 +57,45 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
   const canManageReservation = canEditReservation || canReassignRoom || canCancelReservation;
   
   const latestPayment = folio?.payments?.filter((p: any) => p.status === 'COMPLETED' || p.status === 'REFUNDED').sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+
+  // On desktop: fire directly to the thermal printer.
+  // On web: open the A4 FrontDeskReceiptDialog.
+  const handlePrintReceipt = async () => {
+    if (!latestPayment) return;
+    if (HardwareBridge.isAvailable()) {
+      setIsPrinting(true);
+      try {
+        const res = await HardwareBridge.printPaymentReceipt({
+          receiptNumber: latestPayment.reference || latestPayment.id.substring(0, 8).toUpperCase(),
+          guestName: guest ? `${guest.firstName} ${guest.lastName}` : 'Guest',
+          roomNumber: room?.number || 'N/A',
+          folioNumber: folio?.id?.substring(0, 8).toUpperCase() || '',
+          amountPaid: Math.abs(Number(latestPayment.amount)),
+          paymentMethod: latestPayment.method || 'CASH',
+          paymentReference: latestPayment.reference || latestPayment.providerTransactionId,
+          previousBalance: Number(folio?.balance || 0) + Math.abs(Number(latestPayment.amount)),
+          remainingBalance: Number(folio?.balance || 0),
+          cashierName: latestPayment.receivedByName || 'Front Desk',
+          currency: folio?.currency || 'NGN',
+          propertyName: reservation.property?.name || 'LodgeCore',
+          propertyAddress: reservation.property?.address,
+          printedAt: new Date().toISOString(),
+        });
+        if (res?.success) {
+          toast.success('Receipt printed successfully');
+        } else {
+          toast.error(`Printer error: ${res?.error || 'Unknown error'}`);
+        }
+      } catch (e: any) {
+        toast.error(`Printer error: ${e?.message || String(e)}`);
+      } finally {
+        setIsPrinting(false);
+      }
+    } else {
+      // Web fallback — show A4 receipt dialog
+      setIsReceiptOpen(true);
+    }
+  };
 
   const formatCurrency = (amount: number, currency?: string | null) => {
     return new Intl.NumberFormat('en-NG', { style: 'currency', currency: currency || 'NGN', maximumFractionDigits: 0 }).format(amount);
@@ -162,10 +204,13 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
               {latestPayment && (
                 <Button
                   variant="outline"
+                  disabled={isPrinting}
                   className={`${canAddPayment || canExtendStay ? 'col-span-2' : ''} h-12 rounded-xl font-semibold border-slate-200`}
-                  onClick={() => setIsReceiptOpen(true)}
+                  onClick={handlePrintReceipt}
                 >
-                  <Receipt className="w-4 h-4 mr-2" /> Print Receipt
+                  {isPrinting
+                    ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Printing...</>
+                    : <><Receipt className="w-4 h-4 mr-2" /> Print Receipt</>}
                 </Button>
               )}
 
