@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { Button } from '@/components/ui/button';
+import { FrontDeskAddPaymentDialog } from './FrontDeskAddPaymentDialog';
 import {
   Dialog,
   DialogContent,
@@ -12,6 +13,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { RefreshCw, MapPin, Loader2, Check } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface FrontDeskReassignRoomDialogProps {
   reservation: any;
@@ -23,12 +25,21 @@ export function FrontDeskReassignRoomDialog({ reservation, open, onOpenChange }:
   const queryClient = useQueryClient();
   const resRoom = reservation.reservationRooms?.[0];
   const currentRoom = resRoom?.room;
+  const currentRate = Number(currentRoom?.roomType?.baseRate || resRoom?.rateAmount || 0);
+  const nights = resRoom?.checkIn && resRoom?.checkOut
+    ? Math.max(0, Math.ceil((new Date(resRoom.checkOut).getTime() - (reservation.status === 'CHECKED_IN'
+      ? Math.max(new Date(resRoom.checkIn).setHours(0, 0, 0, 0), new Date().setHours(0, 0, 0, 0) + 86400000)
+      : new Date(resRoom.checkIn).getTime())) / 86400000))
+    : 0;
+  const folio = reservation.folio || reservation.folios?.[0];
+  const availableFolioCredit = Math.max(0, -Number(folio?.balance || 0));
   
   const checkIn = resRoom?.checkIn ? new Date(resRoom.checkIn).toISOString().split('T')[0] : '';
   const checkOut = resRoom?.checkOut ? new Date(resRoom.checkOut).toISOString().split('T')[0] : '';
 
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [upgradePayment, setUpgradePayment] = useState<{ folio: any; amount: number; roomId: string } | null>(null);
 
   const { provider } = useLodgeCoreProvider();
 
@@ -42,28 +53,73 @@ export function FrontDeskReassignRoomDialog({ reservation, open, onOpenChange }:
     enabled: open && !!checkIn && !!checkOut,
   });
 
+  const selectedRoomPreview = availableRooms?.find((r: any) => r.id === selectedRoomId);
+  const selectedRate = Number(selectedRoomPreview?.roomType?.baseRate || 0);
+  const upgradeAmount = Math.max(0, selectedRate - currentRate) * nights;
+  const downgradeCredit = Math.max(0, currentRate - selectedRate) * nights;
+
   const reassignMutation = useMutation({
     mutationFn: async () => {
       if (!selectedRoomId) throw new Error('No room selected');
       const selectedRoom = availableRooms?.find((r: any) => r.id === selectedRoomId);
       if (!selectedRoom) throw new Error('Invalid room selected');
+      const newRate = Number(selectedRoom.roomType?.baseRate || 0);
+      const upgradeAmount = Math.max(0, newRate - currentRate) * nights;
+      if (upgradeAmount > 0 && !window.confirm(`This room upgrade adds ${selectedRoom.roomType?.currency || 'NGN'} ${upgradeAmount.toLocaleString()} to the folio. Continue?`)) {
+        throw new Error('Room upgrade cancelled');
+      }
+      if (upgradeAmount > 0 && !(reservation.folio?.id || reservation.folios?.[0]?.id)) {
+        throw new Error('Cannot process a room upgrade without an open folio.');
+      }
 
       const res = await provider.reservations.reassignRoom(reservation.id, { 
         roomId: selectedRoom.id,
-        roomTypeId: selectedRoom.roomTypeId
+        roomTypeId: selectedRoom.roomTypeId,
+        upgradeAmount,
+        downgradeCredit,
+        upgradeRate: newRate,
+        nights
       });
       if (!res.success) throw new Error(res.error?.message || res.error || 'Failed to reassign room');
-      return res.data;
+      const paymentDue = Math.max(0, upgradeAmount - availableFolioCredit);
+      return { data: res.data, upgradeAmount, paymentDue, downgradeCredit, roomId: selectedRoom.id };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['reservation', reservation.id] });
       queryClient.invalidateQueries({ queryKey: ['frontdesk', 'dashboard'] });
       onOpenChange(false);
+      if (result.upgradeAmount > 0 && result.paymentDue > 0) {
+        if (!folio?.id) {
+          toast.error('Room changed, but the upgrade cannot be collected because no folio is available.');
+          return;
+        }
+        setUpgradePayment({
+          folio: {
+            ...folio,
+            balance: Number(folio.balance || 0) + result.upgradeAmount,
+            totalCharges: Number(folio.totalCharges || 0) + result.upgradeAmount,
+          },
+          amount: result.paymentDue,
+          roomId: result.roomId,
+        });
+      } else if (reservation.status === 'CHECKED_IN') {
+        void encodeNewRoomCard(result.roomId);
+      }
     },
     onError: (err: Error) => {
       setError(err.message);
     }
   });
+
+  const encodeNewRoomCard = async (roomId: string) => {
+    const encodeResult = await provider.keycards.encode(roomId, '', reservation.id);
+    if (!encodeResult?.success || encodeResult?.error) {
+      toast.error(encodeResult?.error?.message || encodeResult?.error || 'Room changed, but new room card encoding failed. Use Retry Card.');
+    } else {
+      toast.success('Payment received and new room card encoding started.');
+    }
+    queryClient.invalidateQueries({ queryKey: ['reservation', reservation.id] });
+  };
 
   const handleOpenChange = (val: boolean) => {
     if (!reassignMutation.isPending) {
@@ -153,6 +209,35 @@ export function FrontDeskReassignRoomDialog({ reservation, open, onOpenChange }:
             </div>
           </div>
 
+          {selectedRoomPreview && upgradeAmount > 0 && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm">
+              <div className="flex items-center justify-between gap-4">
+                <span className="font-semibold text-amber-900">Upgrade charge</span>
+                <span className="font-bold text-amber-900">
+                  {selectedRoomPreview.roomType?.currency || 'NGN'} {upgradeAmount.toLocaleString()}
+                </span>
+              </div>
+              <p className="mt-1 text-amber-800">
+                {selectedRoomPreview.roomType?.name} · {nights} remaining night{nights === 1 ? '' : 's'}
+              </p>
+              {availableFolioCredit > 0 && (
+                <p className="mt-1 text-amber-800">Existing folio credit will be applied before payment.</p>
+              )}
+            </div>
+          )}
+
+          {selectedRoomPreview && downgradeCredit > 0 && (
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm">
+              <div className="flex items-center justify-between gap-4">
+                <span className="font-semibold text-blue-900">Downgrade credit</span>
+                <span className="font-bold text-blue-900">
+                  {selectedRoomPreview.roomType?.currency || 'NGN'} {downgradeCredit.toLocaleString()}
+                </span>
+              </div>
+              <p className="mt-1 text-blue-800">This credit will be applied to the guest folio.</p>
+            </div>
+          )}
+
           {error && (
             <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm font-medium border border-red-100">
               {error}
@@ -183,5 +268,16 @@ export function FrontDeskReassignRoomDialog({ reservation, open, onOpenChange }:
         </DialogFooter>
       </DialogContent>
     </Dialog>
+      {upgradePayment && (
+        <FrontDeskAddPaymentDialog
+          open
+          folio={upgradePayment.folio}
+          initialAmount={upgradePayment.amount}
+          onOpenChange={(open) => { if (!open) setUpgradePayment(null); }}
+          onPaymentSuccess={() => {
+            if (reservation.status === 'CHECKED_IN') void encodeNewRoomCard(upgradePayment.roomId);
+          }}
+        />
+      )}
   );
 }

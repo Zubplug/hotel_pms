@@ -219,7 +219,7 @@ public class LocalRepository
 
     public async Task<bool> CancelReservationAsync(string reservationId, string userId, string deviceId)
     {
-        var res = await _dbContext.Reservations.Include(r => r.Folio).FirstOrDefaultAsync(r => r.Id == reservationId);
+        var res = await _dbContext.Reservations.FindAsync(reservationId);
         if (res == null) return false;
 
         // Guard: already cancelled is a no-op (idempotent)
@@ -259,7 +259,7 @@ public class LocalRepository
 
     public async Task<object?> MarkLateArrivalAsync(string reservationId, string notes, string userId, string deviceId)
     {
-        var res = await _dbContext.Reservations.FindAsync(reservationId);
+        var res = await _dbContext.Reservations.Include(r => r.Folio).FirstOrDefaultAsync(r => r.Id == reservationId);
         if (res == null) throw new InvalidOperationException("Reservation not found");
         if (res.Status != "CONFIRMED") throw new InvalidOperationException("Late arrival can only be recorded for confirmed reservations.");
         res.LateArrivalExpected = true; res.LateArrivalNotes = notes; res.LateArrivalAt = DateTime.UtcNow; res.LateArrivalBy = userId; res.IsDirty = true; res.LocalSequence++;
@@ -292,15 +292,31 @@ public class LocalRepository
 
     public async Task<bool> ReassignRoomAsync(string reservationId, string roomId, string? roomTypeId, string userId, string deviceId)
     {
-        var res = await _dbContext.Reservations.FindAsync(reservationId);
+        var res = await _dbContext.Reservations
+            .Include(r => r.Folio)
+            .Include(r => r.Rooms)
+            .FirstOrDefaultAsync(r => r.Id == reservationId);
         if (res == null) return false;
 
         var room = await _dbContext.Rooms.FindAsync(roomId);
         if (room == null) throw new InvalidOperationException("Target room not found locally.");
 
+        var oldRoomId = res.RoomId;
+        var oldRoomTypeId = res.RoomTypeId;
+        var oldRoomType = string.IsNullOrWhiteSpace(oldRoomTypeId) ? null : await _dbContext.RoomTypes.FindAsync(oldRoomTypeId);
+        var effectiveRoomTypeId = roomTypeId ?? room.RoomTypeId;
+        var newRoomType = string.IsNullOrWhiteSpace(effectiveRoomTypeId) ? null : await _dbContext.RoomTypes.FindAsync(effectiveRoomTypeId);
+        var pricingStart = res.Status == "CHECKED_IN"
+            ? res.CheckInDate.Date > DateTime.UtcNow.Date ? res.CheckInDate.Date : DateTime.UtcNow.Date.AddDays(1)
+            : res.CheckInDate.Date;
+        var nights = Math.Max(0, (int)(res.CheckOutDate.Date - pricingStart).TotalDays);
+        var rateDifference = oldRoomType != null && newRoomType != null
+            ? (newRoomType.BasePrice - oldRoomType.BasePrice) * nights
+            : 0;
+
         res.RoomId = roomId;
         res.RoomNumber = room.Number;
-        if (roomTypeId != null) res.RoomTypeId = roomTypeId;
+        res.RoomTypeId = effectiveRoomTypeId;
 
         res.UpdatedAt = DateTime.UtcNow;
         res.IsDirty = true;
@@ -320,12 +336,34 @@ public class LocalRepository
             Sequence = res.LocalSequence,
             PayloadJson = JsonSerializer.Serialize(new
             {
-                roomId = roomId,
-                roomTypeId = roomTypeId ?? room.RoomTypeId
+                newRoomId = roomId,
+                oldRoomId,
+                roomTypeId = effectiveRoomTypeId
             })
         });
 
         await _dbContext.SaveChangesAsync();
+
+        if (rateDifference > 0 && res.Folio != null)
+        {
+            await RecordChargeAsync(
+                res.Folio.Id,
+                rateDifference,
+                $"Room upgrade - {nights} night{(nights == 1 ? "" : "s")}",
+                userId,
+                deviceId,
+                $"ROOM_UPGRADE:{reservationId}:{roomId}:{res.CheckOutDate:yyyy-MM-dd}");
+        }
+        else if (rateDifference < 0 && res.Folio != null)
+        {
+            await RecordCreditAsync(
+                res.Folio.Id,
+                Math.Abs(rateDifference),
+                $"Room downgrade credit - {nights} night{(nights == 1 ? "" : "s")}",
+                userId,
+                deviceId,
+                $"ROOM_DOWNGRADE:{reservationId}:{roomId}:{res.CheckOutDate:yyyy-MM-dd}");
+        }
         return true;
     }
 
@@ -637,6 +675,49 @@ public class LocalRepository
             AggregateId = folioId,
             AggregateVersion = eventVersion,
             EventType = "ROOM_CHARGE",
+            Sequence = folio.LocalSequence,
+            IdempotencyKey = idempotencyKey ?? Guid.NewGuid().ToString(),
+            PayloadJson = JsonSerializer.Serialize(new { amount, description, currency = folio.Currency ?? "NGN", businessDate = DateTime.UtcNow, originalBusinessDate = DateTime.UtcNow, idempotencyKey })
+        });
+
+        await _dbContext.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> RecordCreditAsync(string folioId, decimal amount, string description, string userId, string deviceId, string? idempotencyKey = null)
+    {
+        var folio = await _dbContext.Folios.FindAsync(folioId);
+        if (folio == null) return false;
+        if (amount <= 0) throw new InvalidOperationException("Credit amount must be positive.");
+        if (!string.IsNullOrEmpty(idempotencyKey) && CheckFolioIdempotency(folio, idempotencyKey)) return true;
+
+        folio.TotalPayments += amount;
+        folio.UpdatedAt = DateTime.UtcNow;
+        folio.IsDirty = true;
+        folio.LocalSequence++;
+        int eventVersion = folio.Version;
+        folio.Version++;
+
+        UpdateFolioTransactionsJson(folio, "items", new
+        {
+            id = Guid.NewGuid().ToString(),
+            amount = -amount,
+            description,
+            type = "PAYMENT",
+            source = "ROOM_DOWNGRADE_CREDIT",
+            idempotencyKey,
+            createdAt = DateTime.UtcNow
+        });
+
+        _dbContext.OutboxEvents.Add(new LocalOutboxEvent
+        {
+            PropertyId = folio.PropertyId,
+            DeviceId = deviceId,
+            OperatorId = userId,
+            AggregateType = "FOLIO",
+            AggregateId = folioId,
+            AggregateVersion = eventVersion,
+            EventType = "ROOM_CREDIT",
             Sequence = folio.LocalSequence,
             IdempotencyKey = idempotencyKey ?? Guid.NewGuid().ToString(),
             PayloadJson = JsonSerializer.Serialize(new { amount, description, currency = folio.Currency ?? "NGN", businessDate = DateTime.UtcNow, originalBusinessDate = DateTime.UtcNow, idempotencyKey })

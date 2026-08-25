@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from '@/components/ui/dialog';
@@ -13,9 +13,9 @@ import { Loader2, CreditCard, Banknote, Landmark, Receipt, CheckCircle2, Chevron
 import { cn, generateUUID } from '@/lib/utils';
 import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
 
-export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio }: { open: boolean, onOpenChange: (open: boolean) => void, folio: any }) {
+export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio, initialAmount, onPaymentSuccess }: { open: boolean, onOpenChange: (open: boolean) => void, folio: any, initialAmount?: number, onPaymentSuccess?: () => void }) {
   const [method, setMethod] = useState<string>('CASH');
-  const [amount, setAmount] = useState<string>(folio?.balance > 0 ? folio.balance.toString() : '');
+  const [amount, setAmount] = useState<string>(initialAmount?.toString() || (folio?.balance > 0 ? folio.balance.toString() : ''));
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,6 +24,10 @@ export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio }: { open:
   
   const queryClient = useQueryClient();
   const { provider } = useLodgeCoreProvider();
+
+  useEffect(() => {
+    if (open) setAmount(initialAmount?.toString() || (folio?.balance > 0 ? folio.balance.toString() : ''));
+  }, [open, initialAmount, folio?.balance]);
 
   const triggerPrint = async (paymentId: string) => {
     if (!HardwareBridge.isAvailable()) return;
@@ -115,6 +119,7 @@ export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio }: { open:
 
       await queryClient.invalidateQueries({ queryKey: ['reservation', folio.reservationId] });
       setSuccessPaymentId(paymentId);
+      onPaymentSuccess?.();
       triggerPrint(paymentId);
     } catch (err: any) {
       setError(err.message);

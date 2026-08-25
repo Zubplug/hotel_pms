@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
           },
         },
       },
-      include: { roomType: { select: { id: true, name: true } } },
+      include: { roomType: { select: { id: true, name: true, baseRate: true, currency: true } } },
       orderBy: { number: 'asc' },
     });
 

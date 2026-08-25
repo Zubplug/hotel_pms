@@ -8,9 +8,8 @@ import { Button } from '@/components/ui/button';
 import {
   KeySquare, ShieldCheck, ShieldOff, Clock, CreditCard,
   ChevronDown, ChevronUp, AlertTriangle, CheckCircle2,
-  Hash, CalendarDays, Fingerprint, Wifi, RefreshCw
+  Hash, CalendarDays, Fingerprint, Wifi
 } from 'lucide-react';
-import { ExtendKeyCardDialog } from './ExtendKeyCardDialog';
 import { RetryKeyCardButton } from './RetryKeyCardButton';
 import { cn } from '@/lib/utils';
 
@@ -88,7 +87,6 @@ function CredentialCard({ cred, reservation }: { cred: any; reservation: any }) 
   const config = getCredentialStatusConfig(cred);
   const TypeIcon = getCredentialTypeIcon(cred.credentialType);
   const StatusIcon = config.icon;
-  const [showExtend, setShowExtend] = useState(false);
 
   const validUntil = new Date(cred.validUntil);
   const validFrom = new Date(cred.validFrom);
@@ -184,27 +182,7 @@ function CredentialCard({ cred, reservation }: { cred: any; reservation: any }) 
           )}
         </div>
 
-        {/* Actions */}
-        {isActive && reservation.status === 'CHECKED_IN' && (
-          <div className="pt-1">
-            <Button
-              size="sm"
-              variant="outline"
-              className="w-full"
-              onClick={() => setShowExtend(true)}
-            >
-              <RefreshCw className="w-3.5 h-3.5 mr-2" />
-              Extend / Re-encode Card
-            </Button>
-          </div>
-        )}
       </div>
-
-      <ExtendKeyCardDialog
-        open={showExtend}
-        onOpenChange={setShowExtend}
-        reservation={reservation}
-      />
     </>
   );
 }
@@ -250,7 +228,7 @@ export function CardInformationSection({ reservation }: { reservation: any }) {
   const operations = reservation.lockOperations || [];
   const visibleOps = showAllOps ? operations : operations.slice(0, 5);
   const showCardRetry = shouldShowCardRetry(credentials, operations)
-    && ['PENDING', 'CONFIRMED', 'CHECKED_IN'].includes(reservation.status);
+    && reservation.status === 'CHECKED_IN';
 
   const activeCredential = credentials.find(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

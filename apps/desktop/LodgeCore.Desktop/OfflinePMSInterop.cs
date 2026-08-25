@@ -723,6 +723,10 @@ public class OfflinePMSInterop
             var r = await _repo.GetReservationAsync(id);
             if (r == null) return JsonSerializer.Serialize(new { success = false, error = "Not found" }, _jsonOptions);
 
+            var reservationRoomType = string.IsNullOrWhiteSpace(r.RoomTypeId)
+                ? null
+                : (await _repo.GetRoomTypesAsync(r.PropertyId)).FirstOrDefault(rt => rt.Id == r.RoomTypeId);
+
             var f = r.Folio;
             var folioJson = f != null && !string.IsNullOrEmpty(f.TransactionsJson) 
                 ? JsonSerializer.Deserialize<System.Text.Json.JsonElement>(f.TransactionsJson, _jsonOptions)
@@ -773,11 +777,15 @@ public class OfflinePMSInterop
                     new {
                         id = r.Id,
                         roomId = r.RoomId,
+                        roomTypeId = r.RoomTypeId,
                         checkIn = r.CheckInDate,
                         checkOut = r.CheckOutDate,
+                        rateAmount = reservationRoomType?.BasePrice ?? 0,
                         room = new {
                             number = r.RoomNumber ?? "Unassigned",
-                            roomType = new { name = r.RoomTypeId ?? "Unknown Type" }
+                            roomType = reservationRoomType == null
+                                ? new { name = "Unknown", baseRate = 0m, currency = r.Currency ?? "NGN" }
+                                : new { name = reservationRoomType.Name, baseRate = reservationRoomType.BasePrice, currency = reservationRoomType.Currency }
                         }
                     }
                 },
@@ -1058,8 +1066,8 @@ public class OfflinePMSInterop
                 housekeepingStatus = r.Status,
                 floor = new { number = r.FloorName },
                 roomType = types.FirstOrDefault(rt => rt.Id == r.RoomTypeId) != null 
-                           ? new { name = types.First(rt => rt.Id == r.RoomTypeId).Name, code = types.First(rt => rt.Id == r.RoomTypeId).Name } 
-                           : new { name = "Unknown", code = "UNK" }
+                           ? new { name = types.First(rt => rt.Id == r.RoomTypeId).Name, code = types.First(rt => rt.Id == r.RoomTypeId).Name, baseRate = types.First(rt => rt.Id == r.RoomTypeId).BasePrice, currency = types.First(rt => rt.Id == r.RoomTypeId).Currency }
+                           : new { name = "Unknown", code = "UNK", baseRate = 0m, currency = "NGN" }
             });
             return JsonSerializer.Serialize(new { success = true, data = mapped }, _jsonOptions);
         }

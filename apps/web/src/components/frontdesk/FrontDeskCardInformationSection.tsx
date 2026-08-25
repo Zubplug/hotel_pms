@@ -5,8 +5,7 @@ import { format, isPast, isFuture, isWithinInterval, differenceInDays } from 'da
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Edit, RefreshCw, KeySquare, History, User, ShieldCheck, ShieldOff, Clock, CreditCard, ChevronDown, ChevronUp, CheckCircle2, CalendarDays, Fingerprint, Wifi } from 'lucide-react';
-import { FrontDeskExtendKeyDialog } from './FrontDeskExtendKeyDialog';
+import { Edit, KeySquare, History, User, ShieldCheck, ShieldOff, Clock, CreditCard, ChevronDown, ChevronUp, CheckCircle2, CalendarDays, Fingerprint, Wifi } from 'lucide-react';
 import { RetryKeyCardButton } from '@/components/reservations/RetryKeyCardButton';
 import { cn } from '@/lib/utils';
 
@@ -81,7 +80,6 @@ function CredentialCard({ cred, reservation }: { cred: any; reservation: any }) 
   const config = getCredentialStatusConfig(cred);
   const TypeIcon = getCredentialTypeIcon(cred.credentialType);
   const StatusIcon = config.icon;
-  const [showExtend, setShowExtend] = useState(false);
 
   const validUntil = new Date(cred.validUntil);
   const validFrom = new Date(cred.validFrom);
@@ -173,26 +171,7 @@ function CredentialCard({ cred, reservation }: { cred: any; reservation: any }) 
           )}
         </div>
 
-        {/* Actions */}
-        {isActive && reservation.status === 'CHECKED_IN' && (
-          <div className="pt-2 relative z-10">
-            <Button
-              variant="outline"
-              className="w-full h-12 rounded-xl border-2 border-emerald-200 text-emerald-700 font-bold hover:bg-emerald-50 hover:text-emerald-800 shadow-sm"
-              onClick={() => setShowExtend(true)}
-            >
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Extend / Re-encode Card
-            </Button>
-          </div>
-        )}
       </div>
-
-      <FrontDeskExtendKeyDialog
-        open={showExtend}
-        onOpenChange={setShowExtend}
-        reservation={reservation}
-      />
     </>
   );
 }
@@ -236,7 +215,7 @@ export function FrontDeskCardInformationSection({ reservation }: { reservation: 
   const operations = reservation.lockOperations || [];
   const visibleOps = showAllOps ? operations : operations.slice(0, 5);
   const showCardRetry = shouldShowCardRetry(credentials, operations)
-    && ['PENDING', 'CONFIRMED', 'CHECKED_IN'].includes(reservation.status);
+    && reservation.status === 'CHECKED_IN';
 
   if (credentials.length === 0 && operations.length === 0) {
     return (

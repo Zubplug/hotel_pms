@@ -37,7 +37,7 @@ export async function GET(
             room: {
               include: {
                 doorLocks: { select: { id: true, lockCode: true, provider: true, status: true } },
-                roomType: { select: { name: true, defaultBedConfig: true } },
+                roomType: { select: { name: true, defaultBedConfig: true, baseRate: true, currency: true } },
               },
             },
           },
@@ -128,11 +128,6 @@ export async function PATCH(
     if (!existingReservation) return errorResponse('NOT_FOUND', 'Reservation not found', 404);
     await assertPropertyAccess(session.user.id, existingReservation.propertyId);
 
-    // Business Logic: Check-in protection
-    if (['CHECKED_IN', 'CHECKED_OUT', 'CANCELLED'].includes(existingReservation.status)) {
-      return errorResponse('BAD_REQUEST', `Cannot edit a ${existingReservation.status} reservation`, 400);
-    }
-
     const {
       guestId,
       checkIn,
@@ -143,6 +138,27 @@ export async function PATCH(
       children,
       specialRequests
     } = body;
+    const isRoomReassignment = (!!roomId || !!roomTypeId)
+      && checkIn === undefined
+      && checkOut === undefined
+      && guestId === undefined
+      && adults === undefined
+      && children === undefined
+      && specialRequests === undefined;
+
+    // Business Logic: Check-in protection
+    const isCheckedInRoomMove = existingReservation.status === 'CHECKED_IN'
+      && (!!roomId || !!roomTypeId)
+      && checkIn === undefined
+      && checkOut === undefined
+      && guestId === undefined
+      && adults === undefined
+      && children === undefined
+      && specialRequests === undefined;
+    if (['CHECKED_OUT', 'CANCELLED'].includes(existingReservation.status)
+      || (existingReservation.status === 'CHECKED_IN' && !isCheckedInRoomMove)) {
+      return errorResponse('BAD_REQUEST', `Cannot edit a ${existingReservation.status} reservation`, 400);
+    }
 
     // Check if dates or room changed to perform availability check
     let needsAvailabilityCheck = false;
@@ -193,6 +209,7 @@ export async function PATCH(
 
     let newTotalAmount = (existingReservation.ratePlanSnapshot as any)?.total || 0;
     let newRateAmount = existingReservation.reservationRooms[0]?.rateAmount;
+    let roomMoveAdjustment = 0;
 
     // Recalculate pricing if room type or dates changed
     if (newRoomTypeId && newCheckInDate && newCheckOutDate && 
@@ -204,8 +221,15 @@ export async function PATCH(
       if (!rt) return errorResponse('NOT_FOUND', 'Room type not found', 404);
 
       newRateAmount = rt.baseRate;
-      const nights = Math.max(1, Math.ceil((newCheckOutDate.getTime() - newCheckInDate.getTime()) / (1000 * 60 * 60 * 24)));
+      const pricingStart = existingReservation.status === 'CHECKED_IN'
+        ? new Date(Math.max(newCheckInDate.getTime(), new Date(new Date().setHours(0, 0, 0, 0) + 86400000).getTime()))
+        : newCheckInDate;
+      const nights = Math.max(0, Math.ceil((newCheckOutDate.getTime() - pricingStart.getTime()) / (1000 * 60 * 60 * 24)));
       newTotalAmount = Number(newRateAmount) * nights;
+      roomMoveAdjustment = (Number(newRateAmount) - Number(existingReservation.reservationRooms[0]?.rateAmount || 0)) * nights;
+      if (isRoomReassignment) {
+        newTotalAmount = Number((existingReservation.ratePlanSnapshot as any)?.total || 0) + roomMoveAdjustment;
+      }
     }
 
     // Begin atomic transaction
@@ -240,9 +264,9 @@ export async function PATCH(
 
       // 3. Update Folio Ledger
       const oldTotalAmount = (existingReservation.ratePlanSnapshot as any)?.total || 0;
-      if (Number(newTotalAmount) !== Number(oldTotalAmount) || 
+      if (!isRoomReassignment && (Number(newTotalAmount) !== Number(oldTotalAmount) ||
           newCheckInDate.getTime() !== existingReservation.reservationRooms[0]?.checkIn.getTime() || 
-          newCheckOutDate.getTime() !== existingReservation.reservationRooms[0]?.checkOut.getTime()) {
+          newCheckOutDate.getTime() !== existingReservation.reservationRooms[0]?.checkOut.getTime())) {
         
         const folio = await tx.folio.findFirst({ where: { reservationId: id, type: 'ROOM' } });
         if (folio) {
@@ -282,6 +306,38 @@ export async function PATCH(
               ...totals,
             }
           });
+        }
+      }
+
+      if (isRoomReassignment && roomMoveAdjustment !== 0) {
+        const folio = await tx.folio.findFirst({ where: { reservationId: id, type: 'ROOM' } });
+        if (folio) {
+          const nights = Math.max(1, Math.ceil((newCheckOutDate.getTime() - newCheckInDate.getTime()) / (1000 * 60 * 60 * 24)));
+          const adjustmentKey = `ROOM_REASSIGNMENT:${id}:${newRoomId}:${newCheckOutDate.toISOString().slice(0, 10)}`;
+          const existingAdjustment = await tx.folioItem.findFirst({ where: { folioId: folio.id, posTransactionId: adjustmentKey } });
+          if (!existingAdjustment) {
+            const amount = Math.abs(roomMoveAdjustment);
+            const isUpgrade = roomMoveAdjustment > 0;
+            await tx.folioItem.create({
+              data: {
+                folioId: folio.id,
+                businessDate: new Date(),
+                type: isUpgrade ? 'CHARGE' : 'PAYMENT',
+                source: isUpgrade ? 'ROOM_UPGRADE' : 'ROOM_DOWNGRADE_CREDIT',
+                description: `${isUpgrade ? 'Room upgrade charge' : 'Room downgrade credit'} - ${nights} night${nights === 1 ? '' : 's'}`,
+                quantity: 1,
+                unitAmount: isUpgrade ? amount : -amount,
+                amount: isUpgrade ? amount : -amount,
+                currency: existingReservation.currency || 'NGN',
+                baseAmount: amount,
+                postedBy: session.user.id as string,
+                posTransactionId: adjustmentKey,
+              }
+            });
+          }
+          const allFolioItems = await tx.folioItem.findMany({ where: { folioId: folio.id } });
+          const totals = calculateFolioTotals(allFolioItems);
+          await tx.folio.update({ where: { id: folio.id }, data: totals });
         }
       }
 

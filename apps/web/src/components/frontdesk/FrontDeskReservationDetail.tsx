@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -26,6 +27,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 export function FrontDeskReservationDetail({ reservation }: { reservation: any }) {
+  const queryClient = useQueryClient();
   const [isCheckInDialogOpen, setIsCheckInDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isReassignDialogOpen, setIsReassignDialogOpen] = useState(false);
@@ -44,6 +46,12 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
   const isPaid = balance <= 0;
   const canCheckIn = reservation.status === 'CONFIRMED' && room;
   const canCheckOut = reservation.status === 'CHECKED_IN';
+  const canAddPayment = ['CONFIRMED', 'CHECKED_IN'].includes(reservation.status) && !!folio;
+  const canExtendStay = reservation.status === 'CHECKED_IN';
+  const canReassignRoom = ['CONFIRMED', 'CHECKED_IN'].includes(reservation.status);
+  const canEditReservation = reservation.status === 'CONFIRMED';
+  const canCancelReservation = reservation.status === 'CONFIRMED';
+  const canManageReservation = canEditReservation || canReassignRoom || canCancelReservation;
   
   const latestPayment = folio?.payments?.filter((p: any) => p.status === 'COMPLETED' || p.status === 'REFUNDED').sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
 
@@ -141,39 +149,44 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
               </Button>
             )}
             <div className="grid grid-cols-2 gap-3">
-              <Button variant="outline" className="h-12 rounded-xl font-semibold border-slate-200" onClick={() => setIsAddPaymentOpen(true)}>
-                <CreditCard className="w-4 h-4 mr-2" /> Add Payment
-              </Button>
-              <Button variant="outline" className="h-12 rounded-xl font-semibold border-slate-200" onClick={() => setIsExtendStayOpen(true)}>
-                <CalendarClock className="w-4 h-4 mr-2" /> Extend Stay
-              </Button>
-              <Button 
-                variant="outline" 
-                className="col-span-2 h-12 rounded-xl font-semibold border-slate-200"
-                disabled={!latestPayment}
-                onClick={() => {
-                  if (latestPayment) setIsReceiptOpen(true);
-                }}
-              >
-                <Receipt className="w-4 h-4 mr-2" /> Print Receipt
-              </Button>
+              {canAddPayment && (
+                <Button variant="outline" className="h-12 rounded-xl font-semibold border-slate-200" onClick={() => setIsAddPaymentOpen(true)}>
+                  <CreditCard className="w-4 h-4 mr-2" /> Add Payment
+                </Button>
+              )}
+              {canExtendStay && (
+                <Button variant="outline" className="h-12 rounded-xl font-semibold border-slate-200" onClick={() => setIsExtendStayOpen(true)}>
+                  <CalendarClock className="w-4 h-4 mr-2" /> Extend Stay
+                </Button>
+              )}
+              {latestPayment && (
+                <Button
+                  variant="outline"
+                  className={`${canAddPayment || canExtendStay ? 'col-span-2' : ''} h-12 rounded-xl font-semibold border-slate-200`}
+                  onClick={() => setIsReceiptOpen(true)}
+                >
+                  <Receipt className="w-4 h-4 mr-2" /> Print Receipt
+                </Button>
+              )}
 
-              {reservation.status === 'CONFIRMED' && (
+              {canManageReservation && (
                 <DropdownMenu>
                   <DropdownMenuTrigger className="col-span-2 h-12 rounded-xl font-semibold border border-slate-200 bg-white hover:bg-slate-50 flex items-center justify-center text-sm shadow-sm transition-colors w-full">
                     Manage Reservation <ChevronDown className="w-4 h-4 ml-2" />
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-56 p-2 rounded-xl border-slate-200 shadow-xl">
-                    <DropdownMenuItem className="rounded-lg p-3 cursor-pointer font-medium" onClick={() => setIsEditDialogOpen(true)}>
+                    {canEditReservation && <DropdownMenuItem className="rounded-lg p-3 cursor-pointer font-medium" onClick={() => setIsEditDialogOpen(true)}>
                       <Edit3 className="w-4 h-4 mr-2 text-slate-500" /> Edit Details
-                    </DropdownMenuItem>
-                    <DropdownMenuItem className="rounded-lg p-3 cursor-pointer font-medium" onClick={() => setIsReassignDialogOpen(true)}>
+                    </DropdownMenuItem>}
+                    {canReassignRoom && <DropdownMenuItem className="rounded-lg p-3 cursor-pointer font-medium" onClick={() => setIsReassignDialogOpen(true)}>
                       <MapPin className="w-4 h-4 mr-2 text-slate-500" /> Reassign Room
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator className="my-2" />
-                    <DropdownMenuItem className="rounded-lg p-3 cursor-pointer text-red-600 font-semibold focus:text-red-700 focus:bg-red-50" onClick={() => setIsCancelDialogOpen(true)}>
-                      <XCircle className="w-4 h-4 mr-2" /> Cancel Reservation
-                    </DropdownMenuItem>
+                    </DropdownMenuItem>}
+                    {canCancelReservation && <>
+                      <DropdownMenuSeparator className="my-2" />
+                      <DropdownMenuItem className="rounded-lg p-3 cursor-pointer text-red-600 font-semibold focus:text-red-700 focus:bg-red-50" onClick={() => setIsCancelDialogOpen(true)}>
+                        <XCircle className="w-4 h-4 mr-2" /> Cancel Reservation
+                      </DropdownMenuItem>
+                    </>}
                   </DropdownMenuContent>
                 </DropdownMenu>
               )}
@@ -200,7 +213,12 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
 
             {/* Existing Folio Component embedded nicely */}
             <div className="p-8 flex-1 bg-slate-50 space-y-8">
-              <NoShowActions reservation={reservation} onUpdated={() => window.location.reload()} />
+              {(reservation.status === 'CONFIRMED' || reservation.status === 'NO_SHOW') && (
+                <NoShowActions
+                  reservation={reservation}
+                  onUpdated={() => queryClient.invalidateQueries({ queryKey: ['reservation', reservation.id] })}
+                />
+              )}
               <FolioSection reservation={reservation} />
               <FrontDeskCardInformationSection reservation={reservation} />
             </div>

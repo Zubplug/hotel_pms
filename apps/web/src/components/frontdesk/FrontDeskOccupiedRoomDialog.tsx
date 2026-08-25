@@ -16,7 +16,6 @@ import { format } from 'date-fns';
 import { formatRoomNumber } from '@/lib/format-room';
 import { useProperty } from '@/components/PropertyProvider';
 import { FrontDeskExtendStayDialog } from './FrontDeskExtendStayDialog';
-import { FrontDeskExtendKeyDialog } from './FrontDeskExtendKeyDialog';
 import { FrontDeskQuickCheckoutDialog } from './FrontDeskQuickCheckoutDialog';
 
 interface FrontDeskOccupiedRoomDialogProps {
@@ -34,7 +33,6 @@ export function FrontDeskOccupiedRoomDialog({ room, isOpen, onClose }: FrontDesk
   
   const [showExtendStay, setShowExtendStay] = useState(false);
   const [showCheckOut, setShowCheckOut] = useState(false);
-  const [showEncodeKey, setShowEncodeKey] = useState(false);
 
   const { data: resData, isLoading, isError, refetch } = useQuery({
     queryKey: ['active-reservation', room?.id],
@@ -169,13 +167,6 @@ export function FrontDeskOccupiedRoomDialog({ room, isOpen, onClose }: FrontDesk
                       <LogOut className="w-4 h-4 mr-2" /> Checkout
                     </Button>
                   </div>
-                  <Button 
-                    variant="outline" 
-                    className="rounded-xl h-12 border-slate-200 font-bold hover:bg-slate-100"
-                    onClick={() => setShowEncodeKey(true)}
-                  >
-                    <Key className="w-4 h-4 mr-2" /> Encode Key
-                  </Button>
                 </div>
               </div>
             )}
@@ -219,16 +210,6 @@ export function FrontDeskOccupiedRoomDialog({ room, isOpen, onClose }: FrontDesk
               primaryGuest: resData.guest,
               reservationRooms: [{ room: { number: resData.room.number } }],
               folios: [{ balance: resData.folioBalance, currency: resData.currency }]
-            }}
-          />
-          <FrontDeskExtendKeyDialog
-            open={showEncodeKey}
-            onOpenChange={setShowEncodeKey}
-            reservation={{
-              id: resData.reservationId,
-              propertyId: propertyId,
-              primaryGuest: resData.guest,
-              reservationRooms: [{ room: { number: resData.room.number } }]
             }}
           />
         </>
