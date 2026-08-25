@@ -255,6 +255,7 @@ export default function MaintenancePage() {
 
   return (
     <div className="min-h-[calc(100vh-4rem)] p-4 md:p-8 bg-slate-50/50 pb-20">
+      <Dialog open={showNewTicket} onOpenChange={setShowNewTicket}>
       <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
 
         {/* ── Header ── */}
@@ -271,7 +272,6 @@ export default function MaintenancePage() {
             </p>
           </div>
 
-          <Dialog open={showNewTicket} onOpenChange={setShowNewTicket}>
           <div className="flex items-center gap-3">
             {/* connectivity badge */}
             <span
