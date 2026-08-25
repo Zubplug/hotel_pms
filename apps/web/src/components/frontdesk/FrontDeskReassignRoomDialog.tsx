@@ -132,7 +132,8 @@ export function FrontDeskReassignRoomDialog({ reservation, open, onOpenChange }:
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-[600px] p-0 overflow-hidden border-0 shadow-2xl rounded-2xl flex flex-col max-h-[90vh]">
         <div className="bg-slate-50 p-6 border-b border-slate-100 flex items-center gap-4 shrink-0">
           <div className="bg-emerald-100 p-3 rounded-xl text-emerald-600 shadow-sm shrink-0">
@@ -267,7 +268,7 @@ export function FrontDeskReassignRoomDialog({ reservation, open, onOpenChange }:
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+      </Dialog>
       {upgradePayment && (
         <FrontDeskAddPaymentDialog
           open
@@ -279,5 +280,6 @@ export function FrontDeskReassignRoomDialog({ reservation, open, onOpenChange }:
           }}
         />
       )}
+    </>
   );
 }
