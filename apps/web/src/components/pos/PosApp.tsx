@@ -32,7 +32,7 @@ import { ModifierSelectionModal } from '@/components/pos/ModifierSelectionModal'
 import { CheckSplitModal } from '@/components/pos/CheckSplitModal';
 import { KotPanel } from '@/components/pos/KotPanel';
 import { PosSidebar } from '@/components/pos/PosSidebar';
-import { PrinterSettingsView } from '@/app/(pos)/pos/printer-settings/page';
+import { PrinterSettingsView } from '@/components/pos/PrinterSettingsView';
 import { SyncCenterPanel } from '@/components/sync/SyncCenterPanel';
 
 import { usePosOnlineStatus } from '@/lib/pos/usePosOnlineStatus';
