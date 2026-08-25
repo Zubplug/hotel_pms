@@ -19,6 +19,7 @@ export function FolioSection({ reservation }: { reservation: any }) {
   const pathname = usePathname();
   const isFrontDesk = pathname.startsWith('/frontdesk');
   const [isAddPaymentOpen, setIsAddPaymentOpen] = useState(false);
+  const [isAddDepositOpen, setIsAddDepositOpen] = useState(false);
   const [refundPaymentId, setRefundPaymentId] = useState<string | null>(null);
   const [isCheckOutOpen, setIsCheckOutOpen] = useState(false);
 
@@ -59,9 +60,16 @@ export function FolioSection({ reservation }: { reservation: any }) {
           </div>
           <div className="flex gap-2">
             {!isClosed && (
-              <Button size="sm" onClick={() => setIsAddPaymentOpen(true)}>
-                <PlusCircle className="w-4 h-4 mr-2" /> Add Payment
-              </Button>
+              <>
+                <Button size="sm" onClick={() => setIsAddPaymentOpen(true)}>
+                  <PlusCircle className="w-4 h-4 mr-2" /> Add Payment
+                </Button>
+                {isFrontDesk && (
+                  <Button size="sm" variant="outline" onClick={() => setIsAddDepositOpen(true)}>
+                    <Wallet className="w-4 h-4 mr-2" /> Add Deposit/Credit
+                  </Button>
+                )}
+              </>
             )}
             {reservation.status === 'CHECKED_IN' && !isClosed && (
               <Button size="sm" variant="outline" className="border-blue-200 text-blue-700 hover:bg-blue-50" onClick={() => setIsCheckOutOpen(true)}>
@@ -72,7 +80,7 @@ export function FolioSection({ reservation }: { reservation: any }) {
         </CardHeader>
         <CardContent className="p-0">
           {/* Summary Banner */}
-          <div className="grid grid-cols-3 divide-x border-b bg-white">
+          <div className="grid grid-cols-4 divide-x border-b bg-white">
             <div className="p-4 text-center">
               <p className="text-sm text-muted-foreground mb-1">Total Charges</p>
               <p className="text-2xl font-semibold text-slate-800">{formatCurrency(totalCharges)}</p>
@@ -86,6 +94,10 @@ export function FolioSection({ reservation }: { reservation: any }) {
               <p className={`text-2xl font-bold ${Number(folio.balance) > 0 ? 'text-red-600' : Number(folio.balance) < 0 ? 'text-amber-600' : 'text-slate-800'}`}>
                 {formatCurrency(folio.balance)}
               </p>
+            </div>
+            <div className="p-4 text-center bg-blue-50/40">
+              <p className="text-sm text-muted-foreground mb-1">Available Credit</p>
+              <p className="text-2xl font-bold text-blue-700">{formatCurrency(folio.availableCredit || 0)}</p>
             </div>
           </div>
 
@@ -210,6 +222,14 @@ export function FolioSection({ reservation }: { reservation: any }) {
           open={isAddPaymentOpen} 
           onOpenChange={setIsAddPaymentOpen} 
           folio={folio} 
+        />
+      )}
+      {isFrontDesk && (
+        <FrontDeskAddPaymentDialog
+          open={isAddDepositOpen}
+          onOpenChange={setIsAddDepositOpen}
+          folio={folio}
+          mode="deposit"
         />
       )}
       

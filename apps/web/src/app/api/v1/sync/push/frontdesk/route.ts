@@ -369,29 +369,28 @@ export async function POST(req: NextRequest) {
              }
           }
           else if (eventType === 'ROOM_CREDIT') {
-             const existingCredit = await tx.folioItem.findFirst({ where: { posTransactionId: idempotencyKey } });
-             if (existingCredit) throw new Error('IDEMPOTENCY_DUPLICATE');
              const amount = Number(payload.amount);
              if (!Number.isFinite(amount) || amount <= 0) throw new Error('Credit amount must be positive');
-             await tx.folioItem.create({
+             const folio = await tx.folio.findUnique({ where: { id: aggregateId, propertyId } });
+             if (!folio) throw new Error('Folio not found or unauthorized');
+             await tx.folioCredit.create({
                data: {
                  folioId: aggregateId,
-                 businessDate: new Date(payload.originalBusinessDate || payload.businessDate || new Date()),
-                 type: 'PAYMENT',
-                 source: 'ROOM_DOWNGRADE_CREDIT',
-                 description: payload.description || 'Room downgrade credit',
-                 quantity: 1,
-                 unitAmount: -amount,
-                 amount: -amount,
+                 reservationId: folio.reservationId,
+                 propertyId,
+                 amount,
+                 remainingAmount: amount,
                  currency: payload.currency || 'NGN',
-                 baseAmount: amount,
-                 postedBy: actorId,
+                 method: 'OTHER',
+                 status: 'AVAILABLE',
+                 notes: payload.description || 'Room downgrade credit',
+                 receivedBy: actorId,
                  deviceId: device.id,
-                 isLatePosting: true,
-                 posTransactionId: idempotencyKey
+                 operationId: payload.operationId || id,
+                 idempotencyKey,
+                 businessDate: new Date(payload.originalBusinessDate || payload.businessDate || new Date()),
                }
              });
-             await tx.folio.update({ where: { id: aggregateId }, data: { totalPayments: { increment: amount }, balance: { decrement: amount } } });
           }
           else if (eventType === 'ROOM_CHARGE' || eventType === 'POST_CHARGE') {
              const existingCharge = await tx.folioItem.findFirst({ where: { posTransactionId: idempotencyKey } });
@@ -424,6 +423,72 @@ export async function POST(req: NextRequest) {
              await tx.folio.update({
                where: { id: aggregateId },
                data: { totalCharges: { increment: amount }, balance: { increment: amount } }
+             });
+
+             const creditAmount = Number(payload.creditApplicationAmount || 0);
+             if (creditAmount > 0) {
+               if (!Number.isFinite(creditAmount) || creditAmount > amount) throw new Error('Invalid credit application amount');
+               let remainingToApply = creditAmount;
+               const credits = await tx.folioCredit.findMany({
+                 where: { folioId: aggregateId, propertyId, status: { in: ['AVAILABLE', 'PARTIALLY_APPLIED'] }, remainingAmount: { gt: 0 } },
+                 orderBy: { createdAt: 'asc' }
+               });
+               for (const credit of credits) {
+                 if (remainingToApply <= 0) break;
+                 const applied = Math.min(remainingToApply, Number(credit.remainingAmount));
+                 const updated = await tx.folioCredit.updateMany({
+                   where: { id: credit.id, remainingAmount: { gte: applied } },
+                   data: { remainingAmount: { decrement: applied }, status: applied >= Number(credit.remainingAmount) ? 'EXHAUSTED' : 'PARTIALLY_APPLIED' }
+                 });
+                 if (updated.count !== 1) continue;
+                 await tx.folioCreditApplication.create({
+                   data: {
+                     creditId: credit.id,
+                     folioId: aggregateId,
+                     amount: applied,
+                     currency: payload.currency || 'NGN',
+                     source: payload.source || 'OTHER',
+                     description: payload.description || 'Applied guest credit',
+                     idempotencyKey: `${payload.creditApplicationKey || `CREDIT_APPLICATION:${idempotencyKey}`}:${credit.id}`,
+                     appliedBy: actorId,
+                     deviceId: device.id,
+                     businessDate: new Date(payload.originalBusinessDate || payload.businessDate || new Date())
+                   }
+                 });
+                 remainingToApply -= applied;
+               }
+             }
+          }
+          else if (eventType === 'ADVANCE_DEPOSIT') {
+             const amount = Number(payload.amount);
+             if (!Number.isFinite(amount) || amount <= 0) throw new Error('Deposit amount must be positive');
+
+             const folio = await tx.folio.findUnique({ where: { id: aggregateId, propertyId } });
+             if (!folio) throw new Error('Folio not found or unauthorized');
+             if (folio.status !== 'OPEN') throw new Error('Cannot add a deposit to a closed folio');
+
+             let methodStr = String(payload.method || 'CASH').toUpperCase();
+             const validMethods = ['CASH','BANK_TRANSFER','POS','CARD','CARD_OFFLINE','PAYMENT_GATEWAY','MOBILE_PAYMENT','CHEQUE','ROOM_CHARGE','OTHER'];
+             if (!validMethods.includes(methodStr)) methodStr = 'OTHER';
+
+             await tx.folioCredit.create({
+               data: {
+                 folioId: aggregateId,
+                 reservationId: folio.reservationId,
+                 propertyId,
+                 amount,
+                 remainingAmount: amount,
+                 currency: payload.currency || folio.currency || 'NGN',
+                 method: methodStr as any,
+                 status: 'AVAILABLE',
+                 reference: payload.reference || null,
+                 notes: payload.notes || null,
+                 receivedBy: actorId,
+                 deviceId: device.id,
+                 operationId: payload.operationId || id,
+                 idempotencyKey,
+                 businessDate: new Date(payload.originalBusinessDate || payload.businessDate || new Date()),
+               }
              });
           }
           else if (eventType === 'POST_PAYMENT') {

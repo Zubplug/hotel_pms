@@ -13,9 +13,10 @@ import { Loader2, CreditCard, Banknote, Landmark, Receipt, CheckCircle2, Chevron
 import { cn, generateUUID } from '@/lib/utils';
 import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
 
-export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio, initialAmount, onPaymentSuccess }: { open: boolean, onOpenChange: (open: boolean) => void, folio: any, initialAmount?: number, onPaymentSuccess?: () => void }) {
+export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio, initialAmount, onPaymentSuccess, mode = 'payment' }: { open: boolean, onOpenChange: (open: boolean) => void, folio: any, initialAmount?: number, onPaymentSuccess?: () => void, mode?: 'payment' | 'deposit' }) {
+  const isDeposit = mode === 'deposit';
   const [method, setMethod] = useState<string>('CASH');
-  const [amount, setAmount] = useState<string>(initialAmount?.toString() || (folio?.balance > 0 ? folio.balance.toString() : ''));
+  const [amount, setAmount] = useState<string>(initialAmount?.toString() || (!isDeposit && folio?.balance > 0 ? folio.balance.toString() : ''));
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -26,8 +27,8 @@ export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio, initialAm
   const { provider } = useLodgeCoreProvider();
 
   useEffect(() => {
-    if (open) setAmount(initialAmount?.toString() || (folio?.balance > 0 ? folio.balance.toString() : ''));
-  }, [open, initialAmount, folio?.balance]);
+    if (open) setAmount(initialAmount?.toString() || (!isDeposit && folio?.balance > 0 ? folio.balance.toString() : ''));
+  }, [open, initialAmount, folio?.balance, isDeposit]);
 
   const triggerPrint = async (paymentId: string) => {
     if (!HardwareBridge.isAvailable()) return;
@@ -71,11 +72,11 @@ export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio, initialAm
         throw new Error('Amount must be greater than zero');
       }
 
-      if (numAmount > Number(folio.balance)) {
+      if (!isDeposit && numAmount > Number(folio.balance)) {
         throw new Error('Payment amount cannot exceed the outstanding balance');
       }
 
-      const isGateway = method === 'PAYMENT_GATEWAY';
+      const isGateway = !isDeposit && method === 'PAYMENT_GATEWAY';
       
       let paymentId = null;
 
@@ -110,7 +111,9 @@ export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio, initialAm
           idempotencyKey: generateUUID()
         };
 
-        const res = await provider.folios.addPayment(folio.id, payload);
+        const res = isDeposit
+          ? await provider.folios.addDeposit(folio.id, { ...payload, reference: notes })
+          : await provider.folios.addPayment(folio.id, payload);
         if (!res.success) {
            throw new Error(res.error?.message || res.error || 'Failed to record payment');
         }
@@ -145,7 +148,7 @@ export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio, initialAm
                 <Banknote className="w-5 h-5" />
               </div>
               <div>
-                <DialogTitle className="text-xl">Receive Payment</DialogTitle>
+                <DialogTitle className="text-xl">{isDeposit ? 'Add Deposit / Credit' : 'Receive Payment'}</DialogTitle>
                 <DialogDescription className="text-slate-500 mt-1">
                   Process transaction for Folio <span className="font-mono text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">#{folio?.id?.slice(0,8)?.toUpperCase()}</span>
                 </DialogDescription>
@@ -175,9 +178,9 @@ export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio, initialAm
               
               {/* Payment Method Selector Grid */}
               <div className="space-y-3">
-                <Label className="text-sm font-bold text-slate-700">Payment Method</Label>
+                <Label className="text-sm font-bold text-slate-700">{isDeposit ? 'Deposit Method' : 'Payment Method'}</Label>
                 <div className="grid grid-cols-2 gap-3">
-                  {paymentMethods.map((m) => {
+                    {paymentMethods.filter((m) => !isDeposit || m.id !== 'PAYMENT_GATEWAY').map((m) => {
                     const isSelected = method === m.id;
                     const Icon = m.icon;
                     return (
@@ -206,7 +209,7 @@ export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio, initialAm
 
               {/* Amount Input */}
               <div className="space-y-3 bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                <Label className="text-sm font-bold text-slate-700">Amount Received ({folio?.currency})</Label>
+                <Label className="text-sm font-bold text-slate-700">{isDeposit ? 'Deposit Amount' : 'Amount Received'} ({folio?.currency})</Label>
                 <div className="relative">
                   <div className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">
                     {folio?.currency}
@@ -214,7 +217,7 @@ export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio, initialAm
                   <Input 
                     type="number" 
                     step="0.01" 
-                    max={folio?.balance}
+                    max={isDeposit ? undefined : folio?.balance}
                     value={amount} 
                     onChange={(e) => setAmount(e.target.value)} 
                     disabled={isSubmitting}
@@ -273,7 +276,7 @@ export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio, initialAm
               <div>
                 <h3 className="text-2xl font-bold text-slate-900 tracking-tight">Payment Successful</h3>
                 <p className="text-slate-500 mt-2 text-sm max-w-[280px] mx-auto">
-                  The payment of <span className="font-bold text-slate-700">{folio?.currency} {Number(amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span> has been securely recorded to the folio.
+                  The {isDeposit ? 'deposit' : 'payment'} of <span className="font-bold text-slate-700">{folio?.currency} {Number(amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span> has been securely recorded to the folio.
                 </p>
               </div>
 

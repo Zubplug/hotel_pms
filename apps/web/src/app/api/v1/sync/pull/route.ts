@@ -123,7 +123,7 @@ export async function GET(req: NextRequest) {
         primaryGuest: true,
         reservationGuests: { include: { guest: true } },
         reservationRooms: { include: { room: true } },
-        folios: { include: { items: true, payments: true } },
+        folios: { include: { items: true, payments: true, credits: true } },
         lockCredentials: true,
         lockOperations: { orderBy: { requestedAt: 'desc' }, take: 20 }
       },

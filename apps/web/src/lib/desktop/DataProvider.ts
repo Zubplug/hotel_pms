@@ -65,6 +65,7 @@ export interface LodgeCoreDataProvider {
     get(id: string): Promise<any>;
     addCharge(folioId: string, charge: any): Promise<any>;
     addPayment(folioId: string, payment: any): Promise<any>;
+    addDeposit(folioId: string, deposit: any): Promise<any>;
   };
   keycards: {
     encode(roomId: string, lockCode: string, reservationId: string): Promise<any>;

@@ -648,6 +648,8 @@ public class LocalRepository
             return true;
 
         folio.TotalCharges += amount;
+        var creditApplicationAmount = Math.Min(folio.AvailableCredit, amount);
+        folio.AvailableCredit -= creditApplicationAmount;
         folio.UpdatedAt = DateTime.UtcNow;
         folio.IsDirty = true;
         folio.LocalSequence++;
@@ -665,6 +667,19 @@ public class LocalRepository
         };
 
         UpdateFolioTransactionsJson(folio, "items", newItem);
+        if (creditApplicationAmount > 0)
+        {
+            UpdateFolioTransactionsJson(folio, "creditApplications", new
+            {
+                id = Guid.NewGuid().ToString(),
+                amount = creditApplicationAmount,
+                source = "CHARGE",
+                description = $"Applied guest credit to {description}",
+                status = "PENDING_SYNC",
+                idempotencyKey = $"CREDIT_APPLICATION:{idempotencyKey ?? newItem.id}",
+                createdAt = DateTime.UtcNow
+            });
+        }
 
         _dbContext.OutboxEvents.Add(new LocalOutboxEvent
         {
@@ -677,7 +692,17 @@ public class LocalRepository
             EventType = "ROOM_CHARGE",
             Sequence = folio.LocalSequence,
             IdempotencyKey = idempotencyKey ?? Guid.NewGuid().ToString(),
-            PayloadJson = JsonSerializer.Serialize(new { amount, description, currency = folio.Currency ?? "NGN", businessDate = DateTime.UtcNow, originalBusinessDate = DateTime.UtcNow, idempotencyKey })
+            PayloadJson = JsonSerializer.Serialize(new
+            {
+                amount,
+                description,
+                currency = folio.Currency ?? "NGN",
+                businessDate = DateTime.UtcNow,
+                originalBusinessDate = DateTime.UtcNow,
+                idempotencyKey,
+                creditApplicationAmount,
+                creditApplicationKey = creditApplicationAmount > 0 ? $"CREDIT_APPLICATION:{idempotencyKey ?? newItem.id}" : null
+            })
         });
 
         await _dbContext.SaveChangesAsync();
@@ -691,19 +716,20 @@ public class LocalRepository
         if (amount <= 0) throw new InvalidOperationException("Credit amount must be positive.");
         if (!string.IsNullOrEmpty(idempotencyKey) && CheckFolioIdempotency(folio, idempotencyKey)) return true;
 
-        folio.TotalPayments += amount;
+        folio.AvailableCredit += amount;
         folio.UpdatedAt = DateTime.UtcNow;
         folio.IsDirty = true;
         folio.LocalSequence++;
         int eventVersion = folio.Version;
         folio.Version++;
 
-        UpdateFolioTransactionsJson(folio, "items", new
+        UpdateFolioTransactionsJson(folio, "credits", new
         {
             id = Guid.NewGuid().ToString(),
-            amount = -amount,
+            amount,
+            remainingAmount = amount,
             description,
-            type = "PAYMENT",
+            type = "CREDIT_ADJUSTMENT",
             source = "ROOM_DOWNGRADE_CREDIT",
             idempotencyKey,
             createdAt = DateTime.UtcNow
@@ -784,6 +810,64 @@ public class LocalRepository
             Sequence = folio.LocalSequence,
             IdempotencyKey = idempotencyKey ?? Guid.NewGuid().ToString(),
             PayloadJson = JsonSerializer.Serialize(new { amount, method, reservationId = folio.ReservationId, currency = "NGN", businessDate = DateTime.UtcNow, originalBusinessDate = DateTime.UtcNow, idempotencyKey })
+        });
+
+        await _dbContext.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> RecordAdvanceDepositAsync(string folioId, decimal amount, string method, string? reference, string? notes, string userId, string deviceId, string? idempotencyKey = null)
+    {
+        var folio = await _dbContext.Folios.FindAsync(folioId);
+        if (folio == null) return false;
+        if (amount <= 0) throw new InvalidOperationException("Deposit amount must be positive.");
+        if (string.IsNullOrWhiteSpace(idempotencyKey)) throw new InvalidOperationException("Deposit requires an idempotency key.");
+        if (CheckFolioIdempotency(folio, idempotencyKey)) return true;
+
+        folio.AvailableCredit += amount;
+        folio.UpdatedAt = DateTime.UtcNow;
+        folio.IsDirty = true;
+        folio.LocalSequence++;
+        int eventVersion = folio.Version;
+        folio.Version++;
+
+        UpdateFolioTransactionsJson(folio, "credits", new
+        {
+            id = Guid.NewGuid().ToString(),
+            amount,
+            remainingAmount = amount,
+            method,
+            reference,
+            notes,
+            type = "ADVANCE_DEPOSIT",
+            status = "PENDING_SYNC",
+            idempotencyKey,
+            createdAt = DateTime.UtcNow
+        });
+
+        _dbContext.OutboxEvents.Add(new LocalOutboxEvent
+        {
+            PropertyId = folio.PropertyId,
+            DeviceId = deviceId,
+            OperatorId = userId,
+            AggregateType = "FOLIO",
+            AggregateId = folioId,
+            AggregateVersion = eventVersion,
+            EventType = "ADVANCE_DEPOSIT",
+            Sequence = folio.LocalSequence,
+            IdempotencyKey = idempotencyKey,
+            PayloadJson = JsonSerializer.Serialize(new
+            {
+                amount,
+                method,
+                reference,
+                notes,
+                reservationId = folio.ReservationId,
+                currency = folio.Currency ?? "NGN",
+                businessDate = DateTime.UtcNow,
+                originalBusinessDate = DateTime.UtcNow,
+                idempotencyKey
+            })
         });
 
         await _dbContext.SaveChangesAsync();
@@ -1549,15 +1633,13 @@ public class LocalRepository
         
         if (!string.IsNullOrEmpty(order.FolioId))
         {
-            var folioEventData = new { amount = order.Total, description = $"POS Order #{order.OrderNumber}" };
-            AppendSyncEvent("FOLIO", order.FolioId, "ADD_ROOM_CHARGE", folioEventData, deviceId, order.OutletId, order.SessionId, userId);
-            
-            var folio = await _dbContext.Folios.FindAsync(order.FolioId);
-            if (folio != null)
-            {
-                folio.TotalCharges += order.Total;
-                folio.UpdatedAt = DateTime.UtcNow;
-            }
+            await RecordChargeAsync(
+                order.FolioId,
+                order.Total,
+                $"POS Order #{order.OrderNumber}",
+                userId,
+                deviceId,
+                $"POS_ORDER:{order.Id}:FOLIO_CHARGE");
         }
         
         await _dbContext.SaveChangesAsync();
@@ -3614,6 +3696,8 @@ public class LocalRepository
             if (!CheckFolioIdempotency(folio, idempotencyKey))
             {
                 folio.TotalCharges += order.TotalAmount;
+                var creditApplicationAmount = Math.Min(folio.AvailableCredit, order.TotalAmount);
+                folio.AvailableCredit -= creditApplicationAmount;
                 folio.UpdatedAt = DateTime.UtcNow;
                 folio.IsDirty = true;
                 folio.LocalSequence++;
@@ -3631,6 +3715,19 @@ public class LocalRepository
                 };
 
                 UpdateFolioTransactionsJson(folio, "items", newItem);
+                if (creditApplicationAmount > 0)
+                {
+                    UpdateFolioTransactionsJson(folio, "creditApplications", new
+                    {
+                        id = Guid.NewGuid().ToString(),
+                        amount = creditApplicationAmount,
+                        source = "LAUNDRY",
+                        description = $"Applied guest credit to Laundry Service - {order.ServiceType}",
+                        status = "PENDING_SYNC",
+                        idempotencyKey = $"CREDIT_APPLICATION:{idempotencyKey}",
+                        createdAt = DateTime.UtcNow
+                    });
+                }
 
                 _dbContext.OutboxEvents.Add(new LocalOutboxEvent
                 {
@@ -3649,7 +3746,9 @@ public class LocalRepository
                         currency = "NGN", 
                         businessDate = DateTime.UtcNow, 
                         originalBusinessDate = DateTime.UtcNow, 
-                        idempotencyKey = idempotencyKey 
+                        idempotencyKey = idempotencyKey,
+                        creditApplicationAmount,
+                        creditApplicationKey = creditApplicationAmount > 0 ? $"CREDIT_APPLICATION:{idempotencyKey}" : null
                     })
                 });
             }

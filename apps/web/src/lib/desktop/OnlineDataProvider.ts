@@ -195,7 +195,8 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
         method: 'POST',
         body: JSON.stringify(payment)
       });
-    }
+    },
+    addDeposit: async () => ({ success: false, error: 'Advance deposits are available on the desktop front desk.' })
   },
   keycards: {
     encode: async (roomId, lockCode, reservationId) => {

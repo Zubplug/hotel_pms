@@ -78,6 +78,7 @@ model Property {
   exchangeRates        ExchangeRate[]
   reservations         Reservation[]
   folios               Folio[]
+  folioCredits         FolioCredit[]
   payments             Payment[]
   refunds              Refund[]
   refundRequests       RefundRequest[]
@@ -625,6 +626,7 @@ model Reservation {
   reservationRooms  ReservationRoom[]
   folios            Folio[]
   payments          Payment[]
+  folioCredits      FolioCredit[]
   refundRequests    RefundRequest[]
   guestServiceReqs  GuestServiceRequest[]
   lockCredentials   LockCredential[]
@@ -704,12 +706,58 @@ model Folio {
 
   items     FolioItem[]
   payments  Payment[]
+  credits   FolioCredit[]
+  creditApplications FolioCreditApplication[]
   refunds   Refund[]
   refundRequests RefundRequest[]
   posOrders PosOrder[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
+}
+
+model FolioCredit {
+  id              String       @id @default(uuid()) @db.Uuid
+  folioId         String       @db.Uuid
+  folio           Folio        @relation(fields: [folioId], references: [id])
+  reservationId   String?      @db.Uuid
+  reservation     Reservation? @relation(fields: [reservationId], references: [id])
+  propertyId      String       @db.Uuid
+  property        Property     @relation(fields: [propertyId], references: [id])
+
+  amount          Decimal      @db.Decimal(18, 4)
+  remainingAmount Decimal      @db.Decimal(18, 4)
+  currency        String
+  method          PaymentMethod
+  status          String       @default("AVAILABLE") // AVAILABLE | PARTIALLY_APPLIED | EXHAUSTED | REFUNDED
+  reference       String?
+  notes           String?
+  receivedBy      String       @db.Uuid
+  deviceId        String?
+  operationId     String?
+  idempotencyKey  String       @unique
+  businessDate    DateTime     @db.Date
+
+  applications FolioCreditApplication[]
+  createdAt    DateTime @default(now()) @db.Timestamptz
+  updatedAt    DateTime @updatedAt @db.Timestamptz
+}
+
+model FolioCreditApplication {
+  id             String      @id @default(uuid()) @db.Uuid
+  creditId       String      @db.Uuid
+  credit         FolioCredit @relation(fields: [creditId], references: [id])
+  folioId        String      @db.Uuid
+  folio          Folio       @relation(fields: [folioId], references: [id])
+  amount         Decimal     @db.Decimal(18, 4)
+  currency       String
+  source         String
+  description    String
+  idempotencyKey String      @unique
+  appliedBy      String      @db.Uuid
+  deviceId       String?
+  businessDate   DateTime    @db.Date
+  createdAt      DateTime    @default(now()) @db.Timestamptz
 }
 
 enum FolioItemSource {

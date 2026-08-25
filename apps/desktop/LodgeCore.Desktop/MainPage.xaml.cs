@@ -385,6 +385,15 @@ public partial class MainPage : ContentPage
                         parameters?["payment"]?["method"]?.ToString() ?? "",
                         parameters?["idempotencyKey"]?.ToString());
                     break;
+                case "folios.addDeposit":
+                    responseData = await pmsInterop.RecordAdvanceDepositAsync(
+                        parameters?["folioId"]?.ToString() ?? "",
+                        parameters?["deposit"]?["amount"]?.GetValue<decimal>() ?? 0,
+                        parameters?["deposit"]?["method"]?.ToString() ?? "",
+                        parameters?["deposit"]?["reference"]?.ToString(),
+                        parameters?["deposit"]?["notes"]?.ToString(),
+                        parameters?["idempotencyKey"]?.ToString());
+                    break;
                 case "folios.addCharge":
                     responseData = await pmsInterop.RecordChargeAsync(
                         parameters?["folioId"]?.ToString() ?? "",

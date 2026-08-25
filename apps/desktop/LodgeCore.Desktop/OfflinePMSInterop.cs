@@ -616,6 +616,19 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
+    public async Task<string> RecordAdvanceDepositAsync(string folioId, decimal amount, string method, string? reference, string? notes, string? idempotencyKey = null)
+    {
+        try
+        {
+            var ctx = await GetSecureContextAsync();
+            var success = await _repo.RecordAdvanceDepositAsync(folioId, amount, method, reference, notes, ctx.UserId, ctx.DeviceId, idempotencyKey);
+            return JsonSerializer.Serialize(new { success, pendingSync = success }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
     public async Task<string> ProcessCheckInAsync(string reservationId, bool bypassKeycard = false, string encodedRoomId = "", string? encodeData = null)
     {
         try
@@ -796,6 +809,7 @@ public class OfflinePMSInterop
                         balance = f != null ? f.TotalCharges - f.TotalPayments : 0,
                         totalCharges = f?.TotalCharges ?? 0,
                         totalPayments = f?.TotalPayments ?? 0,
+                        availableCredit = f?.AvailableCredit ?? 0,
                         currency = f?.Currency ?? r.Currency ?? "NGN",
                         items = items,
                         payments = payments

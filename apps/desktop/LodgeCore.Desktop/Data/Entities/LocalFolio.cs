@@ -10,7 +10,9 @@ public class LocalFolio
     public string Status { get; set; } = "OPEN";
     public decimal TotalCharges { get; set; }
     public decimal TotalPayments { get; set; }
+    public decimal AvailableCredit { get; set; }
     public decimal OutstandingBalance => TotalCharges - TotalPayments;
+    public decimal NetBalance => OutstandingBalance - AvailableCredit;
     public string? Currency { get; set; }
 
     // Storing transactions as JSON string for simplicity offline, or we could make a separate table

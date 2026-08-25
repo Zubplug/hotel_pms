@@ -70,7 +70,8 @@ export async function GET(
             payments: { 
               orderBy: { createdAt: 'desc' },
               include: { refunds: { orderBy: { createdAt: 'desc' } } } 
-            }
+            },
+            credits: { orderBy: { createdAt: 'asc' } }
           }
         },
       },
@@ -98,7 +99,11 @@ export async function GET(
       return true;
     });
 
-    return successResponse({ ...reservation, lockCredentials, auditLogs });
+    const folios = reservation.folios.map((folio) => ({
+      ...folio,
+      availableCredit: folio.credits.reduce((sum, credit) => sum + Number(credit.remainingAmount), 0),
+    }));
+    return successResponse({ ...reservation, folios, lockCredentials, auditLogs });
   } catch (err: any) {
     if (err?.code === 'FORBIDDEN') return errorResponse('FORBIDDEN', err.message, 403);
     return errorResponse('INTERNAL_ERROR', err instanceof Error ? err.message : String(err), 500, err instanceof Error ? { stack: err.stack } : undefined);

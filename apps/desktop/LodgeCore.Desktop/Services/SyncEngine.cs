@@ -1149,6 +1149,11 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     folio.Status = el.TryGetProperty("status", out var st) && st.ValueKind != System.Text.Json.JsonValueKind.Null ? st.GetString() ?? "" : "";
                     folio.TotalCharges = el.TryGetProperty("totalCharges", out var tc) && tc.ValueKind != System.Text.Json.JsonValueKind.Null && decimal.TryParse(tc.GetString(), out var tcd) ? tcd : 0m;
                     folio.TotalPayments = el.TryGetProperty("totalPayments", out var tp) && tp.ValueKind != System.Text.Json.JsonValueKind.Null && decimal.TryParse(tp.GetString(), out var tpd) ? tpd : 0m;
+                    folio.AvailableCredit = el.TryGetProperty("availableCredit", out var ac) && ac.ValueKind != System.Text.Json.JsonValueKind.Null && decimal.TryParse(ac.GetString(), out var acd)
+                        ? acd
+                        : el.TryGetProperty("credits", out var credits) && credits.ValueKind == System.Text.Json.JsonValueKind.Array
+                            ? credits.EnumerateArray().Sum(credit => credit.TryGetProperty("remainingAmount", out var remaining) && decimal.TryParse(remaining.GetString(), out var remainingAmount) ? remainingAmount : 0m)
+                            : 0m;
                     // Stringify the whole folio for local offline rendering without full schema
                     folio.TransactionsJson = el.GetRawText();
                     folio.UpdatedAt = DateTime.UtcNow;
