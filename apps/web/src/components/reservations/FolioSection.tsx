@@ -1,6 +1,37 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+
+// Auto-fits currency text to card width — no wrap, no cut, no ellipsis
+function FitAmount({ value, className }: { value: string; className?: string }) {
+  const ref = useRef<HTMLParagraphElement>(null);
+
+  const fit = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.fontSize = '1.125rem'; // reset to max (18px)
+    while (el.scrollWidth > el.clientWidth && parseFloat(el.style.fontSize) > 9) {
+      el.style.fontSize = `${(parseFloat(el.style.fontSize) - 0.5).toFixed(1)}px`;
+    }
+  }, [value]);
+
+  useEffect(() => {
+    fit();
+    const ro = new ResizeObserver(fit);
+    if (ref.current) ro.observe(ref.current);
+    return () => ro.disconnect();
+  }, [fit]);
+
+  return (
+    <p
+      ref={ref}
+      style={{ fontSize: '1.125rem' }}
+      className={`w-full overflow-hidden whitespace-nowrap font-bold leading-tight tabular-nums ${className ?? ''}`}
+    >
+      {value}
+    </p>
+  );
+}
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -119,30 +150,28 @@ export function FolioSection({ reservation }: { reservation: any }) {
                 <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-slate-500 sm:text-xs">Total Charges</p>
                 <TrendingUp className="h-3.5 w-3.5 shrink-0 text-slate-400" />
               </div>
-              <p className="w-full break-all font-bold leading-tight tabular-nums text-slate-900" style={{ fontSize: 'clamp(0.75rem, 2.5vw, 1.25rem)' }}>{formatCurrency(totalCharges)}</p>
+              <FitAmount value={formatCurrency(totalCharges)} className="text-slate-900" />
             </div>
             <div className="min-w-0 overflow-hidden rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 shadow-sm sm:p-4">
               <div className="mb-2 flex items-center justify-between gap-1">
                 <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-emerald-700 sm:text-xs">Total Payments</p>
                 <Wallet className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
               </div>
-              <p className="w-full break-all font-bold leading-tight tabular-nums text-emerald-700" style={{ fontSize: 'clamp(0.75rem, 2.5vw, 1.25rem)' }}>{formatCurrency(folio.totalPayments)}</p>
+              <FitAmount value={formatCurrency(folio.totalPayments)} className="text-emerald-700" />
             </div>
             <div className={`min-w-0 overflow-hidden rounded-xl border p-3 shadow-sm sm:p-4 ${outstandingBalance > 0 ? 'border-rose-100 bg-rose-50/70' : 'border-slate-200 bg-white'}`}>
               <div className="mb-2 flex items-center justify-between gap-1">
                 <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-slate-500 sm:text-xs">Outstanding</p>
                 <TrendingDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
               </div>
-              <p className={`w-full break-all font-bold leading-tight tabular-nums ${outstandingBalance > 0 ? 'text-rose-700' : 'text-slate-900'}`} style={{ fontSize: 'clamp(0.75rem, 2.5vw, 1.25rem)' }}>
-                {formatCurrency(outstandingBalance)}
-              </p>
+              <FitAmount value={formatCurrency(outstandingBalance)} className={outstandingBalance > 0 ? 'text-rose-700' : 'text-slate-900'} />
             </div>
             <div className="min-w-0 overflow-hidden rounded-xl border border-blue-100 bg-blue-50/70 p-3 shadow-sm sm:p-4">
               <div className="mb-2 flex items-center justify-between gap-1">
                 <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-blue-700 sm:text-xs">Available Credit</p>
                 <CornerDownRight className="h-3.5 w-3.5 shrink-0 text-blue-600" />
               </div>
-              <p className="w-full break-all font-bold leading-tight tabular-nums text-blue-700" style={{ fontSize: 'clamp(0.75rem, 2.5vw, 1.25rem)' }}>{formatCurrency(availableCredit)}</p>
+              <FitAmount value={formatCurrency(availableCredit)} className="text-blue-700" />
             </div>
           </div>
 

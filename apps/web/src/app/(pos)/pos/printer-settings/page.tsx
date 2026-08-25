@@ -450,7 +450,7 @@ function PrinterForm({
 }
 
 // ─── Main Page ──────────────────────────────────────────────────────────────
-export default function PrinterSettingsPage({ onClose }: { onClose?: () => void }) {
+export function PrinterSettingsView({ onClose }: { onClose?: () => void } = {}) {
   const { isDesktopMode } = useLodgeCoreProvider();
   const [printers, setPrinters] = useState<PrinterConfig[]>([]);
   const [loading, setLoading] = useState(true);
@@ -624,4 +624,9 @@ export default function PrinterSettingsPage({ onClose }: { onClose?: () => void 
       )}
     </div>
   );
+}
+
+// Next.js page route — no custom props allowed by PageProps constraint
+export default function PrinterSettingsPage() {
+  return <PrinterSettingsView />;
 }

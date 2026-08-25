@@ -32,7 +32,7 @@ import { ModifierSelectionModal } from '@/components/pos/ModifierSelectionModal'
 import { CheckSplitModal } from '@/components/pos/CheckSplitModal';
 import { KotPanel } from '@/components/pos/KotPanel';
 import { PosSidebar } from '@/components/pos/PosSidebar';
-import PrinterSettingsPage from '@/app/(pos)/pos/printer-settings/page';
+import { PrinterSettingsView } from '@/app/(pos)/pos/printer-settings/page';
 import { SyncCenterPanel } from '@/components/sync/SyncCenterPanel';
 
 import { usePosOnlineStatus } from '@/lib/pos/usePosOnlineStatus';
@@ -1325,7 +1325,7 @@ export default function PosApp() {
 
       {showPrinterSettings && (
         <div className="fixed inset-0 z-[120] overflow-auto bg-gray-50">
-          <PrinterSettingsPage onClose={() => setShowPrinterSettings(false)} />
+          <PrinterSettingsView onClose={() => setShowPrinterSettings(false)} />
         </div>
       )}
       {showSyncCenter && (
