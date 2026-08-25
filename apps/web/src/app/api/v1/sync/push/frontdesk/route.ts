@@ -682,6 +682,31 @@ export async function POST(req: NextRequest) {
                }
              }
 
+             const downgradeCredit = Math.max(0, oldRate - newRate) * nights;
+             if (downgradeCredit > 0 && res.folios[0]) {
+               const creditKey = `ROOM_DOWNGRADE:${aggregateId}:${newRoomId}:${new Date(activeRoom?.checkOut || res.checkOut).toISOString().slice(0, 10)}`;
+               const existingCredit = await tx.folioItem.findFirst({ where: { folioId: res.folios[0].id, posTransactionId: creditKey } });
+               if (!existingCredit) {
+                 await tx.folioItem.create({
+                   data: {
+                     folioId: res.folios[0].id,
+                     businessDate: new Date(),
+                     type: 'PAYMENT',
+                     source: 'ROOM_DOWNGRADE_CREDIT',
+                     description: `Room downgrade credit - ${nights} night${nights === 1 ? '' : 's'}`,
+                     quantity: 1,
+                     unitAmount: -downgradeCredit,
+                     amount: -downgradeCredit,
+                     currency: res.currency,
+                     baseAmount: downgradeCredit,
+                     postedBy: actorId,
+                     posTransactionId: creditKey
+                   }
+                 });
+                 await tx.folio.update({ where: { id: res.folios[0].id }, data: { totalPayments: { increment: downgradeCredit }, balance: { decrement: downgradeCredit } } });
+               }
+             }
+
              // Room assignment is tracked via reservationRoom; no field on reservation to update here
 
              // Release old room if it was this reservation's room
@@ -744,33 +769,9 @@ export async function POST(req: NextRequest) {
                await tx.reservationRoom.update({
                  where: { id: activeRoom.id },
                  data: { checkOut: newCheckOut }
-                 });
-               }
+               });
              }
-             const downgradeCredit = Math.max(0, oldRate - newRate) * nights;
-             if (downgradeCredit > 0 && res.folios[0]) {
-               const creditKey = `ROOM_DOWNGRADE:${aggregateId}:${newRoomId}:${new Date(activeRoom?.checkOut || res.checkOut).toISOString().slice(0, 10)}`;
-               const existingCredit = await tx.folioItem.findFirst({ where: { folioId: res.folios[0].id, posTransactionId: creditKey } });
-               if (!existingCredit) {
-                 await tx.folioItem.create({
-                   data: {
-                     folioId: res.folios[0].id,
-                     businessDate: new Date(),
-                     type: 'PAYMENT',
-                     source: 'ROOM_DOWNGRADE_CREDIT',
-                     description: `Room downgrade credit - ${nights} night${nights === 1 ? '' : 's'}`,
-                     quantity: 1,
-                     unitAmount: -downgradeCredit,
-                     amount: -downgradeCredit,
-                     currency: res.currency,
-                     baseAmount: downgradeCredit,
-                     postedBy: actorId,
-                     posTransactionId: creditKey
-                   }
-                 });
-                 await tx.folio.update({ where: { id: res.folios[0].id }, data: { totalPayments: { increment: downgradeCredit }, balance: { decrement: downgradeCredit } } });
-               }
-             }
+          }
           else if (eventType === 'KEYCARD_ENCODE') {
              const reservation = await tx.reservation.findUnique({
                where: { id: aggregateId, propertyId },

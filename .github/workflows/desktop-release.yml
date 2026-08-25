@@ -132,9 +132,9 @@ jobs:
 
         $xml = "<?xml version=`"1.0`" encoding=`"utf-8`"?>`n" +
                "<AppInstaller Uri=`"$appinstallerUrl`" Version=`"$version`" xmlns=`"http://schemas.microsoft.com/appx/appinstaller/2018`">`n" +
-               "  <MainPackage Name=`"LodgeCore.Desktop`" Version=`"$version`" Publisher=`"$env:CERT_SUBJECT`" Uri=`"$msixUrl`" ProcessorArchitecture=`"x86`" />`n" +
+               "  <MainPackage Name=`"com.lodgecore.frontdesk`" Version=`"$version`" Publisher=`"$env:CERT_SUBJECT`" Uri=`"$msixUrl`" ProcessorArchitecture=`"x86`" />`n" +
                "  <UpdateSettings>`n" +
-               "    <OnLaunch HoursBetweenUpdateChecks=`"24`" ShowPrompt=`"false`" UpdateBlocksActivation=`"false`" />`n" +
+               "    <OnLaunch HoursBetweenUpdateChecks=`"1`" ShowPrompt=`"true`" UpdateBlocksActivation=`"true` />`n" +
                "    <AutomaticBackgroundTask />`n" +
                "    <ForceUpdateFromAnyVersion>true</ForceUpdateFromAnyVersion>`n" +
                "  </UpdateSettings>`n" +
@@ -170,9 +170,9 @@ jobs:
         body: |
           ## Installation
 
-          **First time install:** Download and run `LodgeCore.Desktop_*.msix`
-          > You will need to trust the LodgeCore certificate first. See [setup guide](https://hotel-pms-web-nine.vercel.app).
+          **First time install:** Download and open `LodgeCore.appinstaller`.
+          > This registers Windows App Installer auto-updates. You will need to trust the LodgeCore certificate first.
 
-          **Auto-update:** If already installed, the app will check for updates automatically every 24 hours.
+          **Auto-update:** If installed through `LodgeCore.appinstaller`, Windows checks for updates on launch and in the background.
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

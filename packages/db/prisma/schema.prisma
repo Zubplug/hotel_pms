@@ -714,6 +714,8 @@ model Folio {
 
 enum FolioItemSource {
   ROOM_CHARGE
+  ROOM_UPGRADE
+  ROOM_DOWNGRADE_CREDIT
   MANUAL
   POS
   RESTAURANT
