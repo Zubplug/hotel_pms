@@ -453,7 +453,6 @@ export default function MaintenancePage() {
               </div>
             </div>
         </DialogContent>
-        </Dialog>
 
         {/* ── Ticket Table ── */}
         <div className="bg-white rounded-3xl border border-slate-200/60 shadow-xl shadow-slate-200/40 overflow-hidden">
@@ -597,6 +596,7 @@ export default function MaintenancePage() {
           )}
         </div>
       </div>
+      </Dialog>
     </div>
   );
 }
