@@ -77,21 +77,35 @@ export function FolioSection({ reservation }: { reservation: any }) {
               {folio.status}
             </Badge>
           </div>
-          <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto lg:justify-end [&_button]:shrink-0 [&_button]:border-white/20 [&_button]:text-white [&_button]:hover:bg-white/10">
+          <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto lg:justify-end">
             {!isClosed && (
               <>
-                <Button size="sm" className="whitespace-nowrap bg-white text-slate-900 hover:bg-slate-100" onClick={() => setIsAddPaymentOpen(true)}>
+                <Button
+                  size="sm"
+                  className="whitespace-nowrap bg-white text-slate-900 hover:bg-slate-100 shrink-0"
+                  onClick={() => setIsAddPaymentOpen(true)}
+                >
                   <PlusCircle className="w-4 h-4 mr-2" /> Add Payment
                 </Button>
                 {isFrontDesk && (
-                  <Button size="sm" variant="outline" className="whitespace-nowrap" onClick={() => setIsAddDepositOpen(true)}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="whitespace-nowrap shrink-0 border-white/40 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+                    onClick={() => setIsAddDepositOpen(true)}
+                  >
                     <Wallet className="w-4 h-4 mr-2" /> Add Deposit/Credit
                   </Button>
                 )}
               </>
             )}
             {reservation.status === 'CHECKED_IN' && !isClosed && (
-              <Button size="sm" variant="outline" className="whitespace-nowrap border-blue-200 text-blue-700 hover:bg-blue-50" onClick={() => setIsCheckOutOpen(true)}>
+              <Button
+                size="sm"
+                variant="outline"
+                className="whitespace-nowrap shrink-0 border-white/40 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+                onClick={() => setIsCheckOutOpen(true)}
+              >
                 <ArrowRightLeft className="w-4 h-4 mr-2" /> Check Out
               </Button>
             )}
@@ -99,24 +113,36 @@ export function FolioSection({ reservation }: { reservation: any }) {
         </CardHeader>
         <CardContent className="p-0">
           {/* Summary Banner */}
-          <div className="grid grid-cols-1 gap-3 border-b bg-slate-50/70 p-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="mb-3 flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Total charges</p><TrendingUp className="h-4 w-4 text-slate-400" /></div>
-              <p className="break-words text-lg font-bold leading-tight tabular-nums text-slate-900 sm:text-2xl">{formatCurrency(totalCharges)}</p>
+          <div className="grid grid-cols-2 gap-3 border-b bg-slate-50/70 p-4 lg:grid-cols-4">
+            <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+              <div className="mb-2 flex items-center justify-between gap-1">
+                <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-slate-500 sm:text-xs">Total Charges</p>
+                <TrendingUp className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+              </div>
+              <p className="truncate text-base font-bold leading-tight tabular-nums text-slate-900 sm:text-xl">{formatCurrency(totalCharges)}</p>
             </div>
-            <div className="min-w-0 rounded-xl border border-emerald-100 bg-emerald-50/60 p-4 shadow-sm">
-              <div className="mb-3 flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-wider text-emerald-700">Total payments</p><Wallet className="h-4 w-4 text-emerald-600" /></div>
-              <p className="break-words text-lg font-bold leading-tight tabular-nums text-emerald-700 sm:text-2xl">{formatCurrency(folio.totalPayments)}</p>
+            <div className="min-w-0 overflow-hidden rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 shadow-sm sm:p-4">
+              <div className="mb-2 flex items-center justify-between gap-1">
+                <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-emerald-700 sm:text-xs">Total Payments</p>
+                <Wallet className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+              </div>
+              <p className="truncate text-base font-bold leading-tight tabular-nums text-emerald-700 sm:text-xl">{formatCurrency(folio.totalPayments)}</p>
             </div>
-            <div className={`min-w-0 rounded-xl border p-4 shadow-sm ${outstandingBalance > 0 ? 'border-rose-100 bg-rose-50/70' : 'border-slate-200 bg-white'}`}>
-              <div className="mb-3 flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Outstanding</p><TrendingDown className="h-4 w-4 text-slate-400" /></div>
-              <p className={`break-words text-lg font-bold leading-tight tabular-nums sm:text-2xl ${outstandingBalance > 0 ? 'text-rose-700' : 'text-slate-900'}`}>
+            <div className={`min-w-0 overflow-hidden rounded-xl border p-3 shadow-sm sm:p-4 ${outstandingBalance > 0 ? 'border-rose-100 bg-rose-50/70' : 'border-slate-200 bg-white'}`}>
+              <div className="mb-2 flex items-center justify-between gap-1">
+                <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-slate-500 sm:text-xs">Outstanding</p>
+                <TrendingDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+              </div>
+              <p className={`truncate text-base font-bold leading-tight tabular-nums sm:text-xl ${outstandingBalance > 0 ? 'text-rose-700' : 'text-slate-900'}`}>
                 {formatCurrency(outstandingBalance)}
               </p>
             </div>
-            <div className="min-w-0 rounded-xl border border-blue-100 bg-blue-50/70 p-4 shadow-sm">
-              <div className="mb-3 flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-wider text-blue-700">Available credit</p><CornerDownRight className="h-4 w-4 text-blue-600" /></div>
-              <p className="break-words text-lg font-bold leading-tight tabular-nums text-blue-700 sm:text-2xl">{formatCurrency(availableCredit)}</p>
+            <div className="min-w-0 overflow-hidden rounded-xl border border-blue-100 bg-blue-50/70 p-3 shadow-sm sm:p-4">
+              <div className="mb-2 flex items-center justify-between gap-1">
+                <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-blue-700 sm:text-xs">Available Credit</p>
+                <CornerDownRight className="h-3.5 w-3.5 shrink-0 text-blue-600" />
+              </div>
+              <p className="truncate text-base font-bold leading-tight tabular-nums text-blue-700 sm:text-xl">{formatCurrency(availableCredit)}</p>
             </div>
           </div>
 
