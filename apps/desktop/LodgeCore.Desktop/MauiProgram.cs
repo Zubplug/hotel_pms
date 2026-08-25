@@ -91,6 +91,7 @@ public static class MauiProgram
         {
             var db = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
             db.Database.EnsureCreated();
+            db.ApplyNoShowSchemaAsync().GetAwaiter().GetResult();
         }
 
         return app;

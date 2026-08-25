@@ -74,6 +74,16 @@ public class LocalReservation
     
     public DateTime? NoShowAt { get; set; }
     public string? NoShowBy { get; set; }
+    public bool LateArrivalExpected { get; set; }
+    public string? LateArrivalNotes { get; set; }
+    public DateTime? LateArrivalAt { get; set; }
+    public string? LateArrivalBy { get; set; }
+    public DateTime? NoShowAssessedAt { get; set; }
+    public decimal? NoShowChargeAmount { get; set; }
+    public decimal? NoShowRefundableAmount { get; set; }
+    public DateTime? ReinstatedAt { get; set; }
+    public string? ReinstatedBy { get; set; }
+    public string? ReinstatementReason { get; set; }
     
     public LocalFolio? Folio { get; set; }
     

@@ -85,8 +85,8 @@ export function FrontDeskRefundDialog({ open, onOpenChange, folio, reservation, 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[550px] p-0 overflow-hidden bg-slate-50/50 rounded-2xl flex flex-col">
-        <div className="bg-white px-6 pt-6 pb-4 border-b border-slate-100 relative shrink-0">
+      <DialogContent className="w-[calc(100vw-1rem)] max-w-[760px] max-h-[calc(100vh-1rem)] p-0 overflow-hidden bg-slate-50/50 rounded-2xl flex flex-col">
+        <div className="bg-white px-4 sm:px-6 pt-5 sm:pt-6 pb-4 border-b border-slate-100 relative shrink-0">
           <DialogHeader>
             <div className="flex items-center gap-3 mb-2">
               <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center text-amber-600">
@@ -102,7 +102,7 @@ export function FrontDeskRefundDialog({ open, onOpenChange, folio, reservation, 
           </DialogHeader>
           
           {/* Max Refundable Chip */}
-          <div className="absolute top-6 right-6 text-right">
+          <div className="relative mt-3 text-left sm:absolute sm:top-6 sm:right-6 sm:mt-0 sm:text-right">
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Max Refundable</p>
             <p className="font-black text-xl text-amber-600 tracking-tight">
               {folio?.currency} {maxRefundable.toLocaleString(undefined, { minimumFractionDigits: 2 })}
@@ -110,7 +110,7 @@ export function FrontDeskRefundDialog({ open, onOpenChange, folio, reservation, 
           </div>
         </div>
 
-        <div className="px-6 py-6 bg-slate-50/50 relative overflow-y-auto flex-1">
+        <div className="min-h-0 px-4 sm:px-6 py-4 sm:py-6 bg-slate-50/50 relative overflow-y-auto flex-1">
           {error && (
             <div className="mb-6 p-4 bg-red-50 border border-red-100 text-red-700 rounded-xl flex items-start gap-3">
               <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-red-500" />
@@ -158,7 +158,7 @@ export function FrontDeskRefundDialog({ open, onOpenChange, folio, reservation, 
               </div>
 
               <div className="space-y-3"><Label className="text-sm font-bold text-slate-700">Refund Method</Label><select value={refundMethod} onChange={e => setRefundMethod(e.target.value)} disabled={isSubmitting} className="w-full h-12 rounded-xl border border-slate-200 bg-white px-4 text-sm"><option value="ORIGINAL_PAYMENT">Original payment method</option><option value="CASH">Cash</option><option value="BANK_TRANSFER">Bank transfer</option></select></div>
-              {refundMethod === 'BANK_TRANSFER' && <div className="grid grid-cols-2 gap-3 rounded-xl border border-slate-200 bg-white p-4"><Input placeholder="Account name" value={bankAccountName} onChange={e => setBankAccountName(e.target.value)} required /><Input placeholder="Account number" value={bankAccountNumber} onChange={e => setBankAccountNumber(e.target.value)} required /><Input placeholder="Bank name" value={bankName} onChange={e => setBankName(e.target.value)} required /><Input placeholder="Bank code (optional)" value={bankCode} onChange={e => setBankCode(e.target.value)} /></div>}
+              {refundMethod === 'BANK_TRANSFER' && <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-xl border border-slate-200 bg-white p-4"><Input placeholder="Account name" value={bankAccountName} onChange={e => setBankAccountName(e.target.value)} required /><Input placeholder="Account number" value={bankAccountNumber} onChange={e => setBankAccountNumber(e.target.value)} required /><Input placeholder="Bank name" value={bankName} onChange={e => setBankName(e.target.value)} required /><Input placeholder="Bank code (optional)" value={bankCode} onChange={e => setBankCode(e.target.value)} /></div>}
 
               <div className="space-y-3">
                 <Label className="text-sm font-bold text-slate-700">Reason for Refund</Label>
@@ -172,16 +172,16 @@ export function FrontDeskRefundDialog({ open, onOpenChange, folio, reservation, 
                 />
               </div>
 
-              <div className="pt-4 border-t border-slate-200 flex justify-end gap-3">
+              <div className="pt-4 border-t border-slate-200 flex flex-col-reverse sm:flex-row justify-end gap-3">
                 <DialogClose render={
-                  <Button type="button" variant="outline" className="h-12 px-6 rounded-xl font-semibold border-slate-200" disabled={isSubmitting}>
+                  <Button type="button" variant="outline" className="w-full sm:w-auto h-12 px-6 rounded-xl font-semibold border-slate-200" disabled={isSubmitting}>
                     Cancel
                   </Button>
                 } />
                 <Button 
                   type="submit" 
                   disabled={isSubmitting || !amount || Number(amount) <= 0}
-                  className="h-12 px-8 rounded-xl font-semibold bg-amber-600 hover:bg-amber-700 text-white shadow-sm"
+                  className="w-full sm:w-auto h-12 px-8 rounded-xl font-semibold bg-amber-600 hover:bg-amber-700 text-white shadow-sm"
                 >
                   {isSubmitting ? (
                     <Loader2 className="w-5 h-5 mr-2 animate-spin" />

@@ -45,6 +45,9 @@ export interface LodgeCoreDataProvider {
     create(data: any): Promise<any>;
     update(id: string, data: any): Promise<any>;
     cancel(id: string, reason: string): Promise<any>;
+    markLateArrival(id: string, notes: string): Promise<any>;
+    assessNoShow(id: string): Promise<any>;
+    reinstate(id: string, reason: string): Promise<any>;
     checkIn(id: string, userId: string, deviceId: string): Promise<any>;
     checkOut(id: string, userId: string, deviceId: string): Promise<any>;
     extendStay(id: string, newCheckOutDate: string): Promise<any>;

@@ -5,6 +5,7 @@ import { compare } from 'bcryptjs';
 import { NotificationEngine } from '@/lib/notification-engine';
 import { encrypt } from '@/lib/encryption';
 import { getReducedStayEstimate } from '@/lib/refunds/reduced-stay';
+import { calculateNoShowAssessment } from '@/lib/refunds/no-show';
 
 const isUuid = (value: unknown): value is string =>
   typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
@@ -534,6 +535,37 @@ export async function POST(req: NextRequest) {
                } });
                await tx.approvalRequest.create({ data: { propertyId, type: 'REFUND', status: 'PENDING', requestedBy: requesterId, amount, currency: request.currency, reason: request.reason, expiresAt: request.expiresAt, details: { refundRequestId: request.id, category: request.category, requestedAmount: amount, requestedMethod, stepOrder: 1 } } });
              }
+          }
+          else if (eventType === 'LATE_ARRIVAL') {
+             const res = await tx.reservation.findUnique({ where: { id: aggregateId, propertyId } });
+             if (!res) throw new Error('Reservation not found or unauthorized');
+             if (res.status !== 'CONFIRMED') throw new Error(`Cannot record late arrival for a ${res.status} reservation`);
+             await tx.reservation.update({ where: { id: aggregateId }, data: { lateArrivalExpected: true, lateArrivalNotes: payload.notes || null, lateArrivalAt: new Date(), lateArrivalBy: isUuid(event.operatorId) ? event.operatorId : null } });
+          }
+          else if (eventType === 'NO_SHOW') {
+             const res = await tx.reservation.findUnique({ where: { id: aggregateId, propertyId }, include: { noShowPolicy: true, folios: { include: { items: true, payments: { where: { status: 'COMPLETED' } } } } } });
+             if (!res) throw new Error('Reservation not found or unauthorized');
+             if (res.status !== 'CONFIRMED') throw new Error(`Cannot assess a ${res.status} reservation as no-show`);
+             const cutoff = new Date(res.checkIn);
+             const [cutoffHour, cutoffMinute] = String(res.noShowPolicy?.cutoffTime || '02:00').split(':').map(Number);
+             cutoff.setUTCHours(24 + (Number.isFinite(cutoffHour) ? cutoffHour : 2), Number.isFinite(cutoffMinute) ? cutoffMinute : 0, 0, 0);
+             cutoff.setTime(cutoff.getTime() + (res.noShowPolicy?.gracePeriodMinutes || 0) * 60_000);
+             if (new Date() < cutoff) throw new Error(`No-show cutoff has not passed; eligible after ${cutoff.toISOString()}`);
+             const bookedValue = Number((res.ratePlanSnapshot as any)?.total || 0) || res.folios.flatMap(folio => folio.items).filter(item => item.type === 'CHARGE' && item.source === 'ROOM_CHARGE' && !item.voidedAt).reduce((sum, item) => sum + Number(item.amount), 0);
+             const totalPaid = res.folios.flatMap(folio => folio.payments).reduce((sum, payment) => sum + Number(payment.amount), 0);
+             const assessment = calculateNoShowAssessment({ checkIn: res.checkIn, checkOut: res.checkOut, bookedValue, totalPaid, chargeType: res.noShowPolicy?.chargeType || 'FIRST_NIGHT', chargeValue: Number(res.noShowPolicy?.chargeValue || 0), refundableUnusedNights: res.noShowPolicy?.refundableUnusedNights ?? true });
+             await tx.reservation.update({ where: { id: aggregateId }, data: { status: 'NO_SHOW', noShowAt: new Date(), noShowBy: isUuid(event.operatorId) ? event.operatorId : null, noShowAssessedAt: new Date(), noShowChargeAmount: assessment.noShowCharge, noShowRefundableAmount: assessment.refundableAmount } });
+             await tx.reservationRoom.updateMany({ where: { reservationId: aggregateId, status: 'ACTIVE' }, data: { status: 'NO_SHOW' } });
+          }
+          else if (eventType === 'REINSTATE') {
+             const res = await tx.reservation.findUnique({ where: { id: aggregateId, propertyId }, include: { noShowPolicy: true } });
+             if (!res) throw new Error('Reservation not found or unauthorized');
+             if (res.status !== 'NO_SHOW') throw new Error(`Cannot reinstate a ${res.status} reservation`);
+             if (res.noShowPolicy?.allowReinstatement === false) throw new Error('Reinstatement is disabled by property policy');
+             const activeRefund = await tx.refundRequest.findFirst({ where: { reservationId: aggregateId, status: { in: ['PENDING_APPROVAL', 'APPROVED', 'PROCESSING', 'COMPLETED'] } } });
+             if (activeRefund) throw new Error('Refund workflow prevents reinstatement');
+             await tx.reservation.update({ where: { id: aggregateId }, data: { status: 'CONFIRMED', reinstatedAt: new Date(), reinstatedBy: isUuid(event.operatorId) ? event.operatorId : null, reinstatementReason: payload.reason || 'Offline reinstatement' } });
+             await tx.reservationRoom.updateMany({ where: { reservationId: aggregateId, status: 'NO_SHOW' }, data: { status: 'ACTIVE' } });
           }
           else if (eventType === 'CANCEL') {
              // Idempotent — if already cancelled, treat as success

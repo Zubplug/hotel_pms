@@ -254,6 +254,39 @@ public class LocalRepository
         return true;
     }
 
+    public async Task<object?> MarkLateArrivalAsync(string reservationId, string notes, string userId, string deviceId)
+    {
+        var res = await _dbContext.Reservations.FindAsync(reservationId);
+        if (res == null) throw new InvalidOperationException("Reservation not found");
+        if (res.Status != "CONFIRMED") throw new InvalidOperationException("Late arrival can only be recorded for confirmed reservations.");
+        res.LateArrivalExpected = true; res.LateArrivalNotes = notes; res.LateArrivalAt = DateTime.UtcNow; res.LateArrivalBy = userId; res.IsDirty = true; res.LocalSequence++;
+        _dbContext.OutboxEvents.Add(new LocalOutboxEvent { PropertyId = res.PropertyId, DeviceId = deviceId, OperatorId = userId, AggregateType = "RESERVATION", AggregateId = res.Id, EventType = "LATE_ARRIVAL", Sequence = res.LocalSequence, PayloadJson = JsonSerializer.Serialize(new { reservationId = res.Id, notes, lateArrivalExpected = true }) });
+        await _dbContext.SaveChangesAsync();
+        return res;
+    }
+
+    public async Task<object?> AssessNoShowAsync(string reservationId, string userId, string deviceId)
+    {
+        var res = await _dbContext.Reservations.Include(r => r.Folio).FirstOrDefaultAsync(r => r.Id == reservationId);
+        if (res == null) throw new InvalidOperationException("Reservation not found");
+        if (res.Status != "CONFIRMED") throw new InvalidOperationException($"Cannot assess a {res.Status} reservation as no-show.");
+        res.Status = "NO_SHOW"; res.NoShowAt = DateTime.UtcNow; res.NoShowBy = userId; res.NoShowAssessedAt = DateTime.UtcNow; res.IsDirty = true; res.LocalSequence++;
+        _dbContext.OutboxEvents.Add(new LocalOutboxEvent { PropertyId = res.PropertyId, DeviceId = deviceId, OperatorId = userId, AggregateType = "RESERVATION", AggregateId = res.Id, EventType = "NO_SHOW", Sequence = res.LocalSequence, PayloadJson = JsonSerializer.Serialize(new { reservationId = res.Id }) });
+        await _dbContext.SaveChangesAsync();
+        return new { reservation = res, assessment = new { totalNights = Math.Max(1, (res.CheckOutDate - res.CheckInDate).Days), noShowCharge = 0, refundableAmount = res.Folio?.TotalPayments ?? 0 } };
+    }
+
+    public async Task<object?> ReinstateReservationAsync(string reservationId, string reason, string userId, string deviceId)
+    {
+        var res = await _dbContext.Reservations.FindAsync(reservationId);
+        if (res == null) throw new InvalidOperationException("Reservation not found");
+        if (res.Status != "NO_SHOW") throw new InvalidOperationException("Only no-show reservations can be reinstated.");
+        res.Status = "CONFIRMED"; res.ReinstatedAt = DateTime.UtcNow; res.ReinstatedBy = userId; res.ReinstatementReason = reason; res.IsDirty = true; res.LocalSequence++;
+        _dbContext.OutboxEvents.Add(new LocalOutboxEvent { PropertyId = res.PropertyId, DeviceId = deviceId, OperatorId = userId, AggregateType = "RESERVATION", AggregateId = res.Id, EventType = "REINSTATE", Sequence = res.LocalSequence, PayloadJson = JsonSerializer.Serialize(new { reservationId = res.Id, reason }) });
+        await _dbContext.SaveChangesAsync();
+        return res;
+    }
+
     public async Task<bool> ReassignRoomAsync(string reservationId, string roomId, string? roomTypeId, string userId, string deviceId)
     {
         var res = await _dbContext.Reservations.FindAsync(reservationId);

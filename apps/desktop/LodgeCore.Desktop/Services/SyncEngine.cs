@@ -1010,6 +1010,16 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     
                     if (el.TryGetProperty("noShowAt", out var nsAt) && nsAt.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(nsAt.GetString(), out var nsAtD)) res.NoShowAt = nsAtD;
                     res.NoShowBy = el.TryGetProperty("noShowBy", out var nsBy) && nsBy.ValueKind != System.Text.Json.JsonValueKind.Null ? nsBy.GetString() : null;
+                    res.LateArrivalExpected = el.TryGetProperty("lateArrivalExpected", out var lae) && lae.ValueKind == System.Text.Json.JsonValueKind.True;
+                    res.LateArrivalNotes = el.TryGetProperty("lateArrivalNotes", out var lan) && lan.ValueKind != System.Text.Json.JsonValueKind.Null ? lan.GetString() : null;
+                    if (el.TryGetProperty("lateArrivalAt", out var laat) && laat.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(laat.GetString(), out var laatD)) res.LateArrivalAt = laatD;
+                    res.LateArrivalBy = el.TryGetProperty("lateArrivalBy", out var lab) && lab.ValueKind != System.Text.Json.JsonValueKind.Null ? lab.GetString() : null;
+                    if (el.TryGetProperty("noShowAssessedAt", out var nsa) && nsa.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(nsa.GetString(), out var nsaD)) res.NoShowAssessedAt = nsaD;
+                    if (el.TryGetProperty("noShowChargeAmount", out var nsc) && nsc.ValueKind != System.Text.Json.JsonValueKind.Null && decimal.TryParse(nsc.GetString() ?? nsc.GetRawText(), out var nscD)) res.NoShowChargeAmount = nscD;
+                    if (el.TryGetProperty("noShowRefundableAmount", out var nsr) && nsr.ValueKind != System.Text.Json.JsonValueKind.Null && decimal.TryParse(nsr.GetString() ?? nsr.GetRawText(), out var nsrD)) res.NoShowRefundableAmount = nsrD;
+                    if (el.TryGetProperty("reinstatedAt", out var ria) && ria.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(ria.GetString(), out var riaD)) res.ReinstatedAt = riaD;
+                    res.ReinstatedBy = el.TryGetProperty("reinstatedBy", out var rib) && rib.ValueKind != System.Text.Json.JsonValueKind.Null ? rib.GetString() : null;
+                    res.ReinstatementReason = el.TryGetProperty("reinstatementReason", out var rir) && rir.ValueKind != System.Text.Json.JsonValueKind.Null ? rir.GetString() : null;
                     res.CreatedBy = el.TryGetProperty("createdBy", out var cb) && cb.ValueKind != System.Text.Json.JsonValueKind.Null ? cb.GetString() : null;
 
                     res.UpdatedAt = DateTime.UtcNow;

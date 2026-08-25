@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { AlertCircle, Clock3, Loader2, RotateCcw } from 'lucide-react';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
 export function NoShowActions({ reservation, onUpdated }: { reservation: any; onUpdated?: () => void }) {
   const [notes, setNotes] = useState('');
@@ -12,14 +13,18 @@ export function NoShowActions({ reservation, onUpdated }: { reservation: any; on
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [assessment, setAssessment] = useState<any>(null);
+  const { provider } = useLodgeCoreProvider();
 
   async function request(path: string, body: Record<string, unknown>) {
     setBusy(true); setMessage(null);
     try {
-      const response = await fetch(`/api/v1/reservations/${reservation.id}/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error?.message || payload.error || 'Request failed');
-      return payload.data;
+      const result = path === 'late-arrival'
+        ? await provider.reservations.markLateArrival(reservation.id, String(body.notes || ''))
+        : path === 'no-show'
+          ? await provider.reservations.assessNoShow(reservation.id)
+          : await provider.reservations.reinstate(reservation.id, String(body.reason || ''));
+      if (!result?.success) throw new Error(result?.error?.message || result?.error || 'Request failed');
+      return result.data;
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Request failed'); return null; }
     finally { setBusy(false); }
   }

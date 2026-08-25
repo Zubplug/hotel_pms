@@ -363,6 +363,15 @@ public partial class MainPage : ContentPage
                 case "reservations.cancel":
                     responseData = await pmsInterop.CancelReservationAsync(parameters?["id"]?.ToString() ?? "");
                     break;
+                case "reservations.lateArrival":
+                    responseData = await pmsInterop.MarkLateArrivalAsync(parameters?["id"]?.ToString() ?? "", parameters?["notes"]?.ToString() ?? "");
+                    break;
+                case "reservations.noShow":
+                    responseData = await pmsInterop.AssessNoShowAsync(parameters?["id"]?.ToString() ?? "");
+                    break;
+                case "reservations.reinstate":
+                    responseData = await pmsInterop.ReinstateReservationAsync(parameters?["id"]?.ToString() ?? "", parameters?["reason"]?.ToString() ?? "");
+                    break;
                 case "reservations.reassignRoom":
                     responseData = await pmsInterop.ReassignRoomAsync(parameters?.ToString() ?? "{}");
                     break;

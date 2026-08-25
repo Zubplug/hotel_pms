@@ -95,6 +95,27 @@ public class LocalDbContext : DbContext
         }
     }
 
+    public async Task ApplyNoShowSchemaAsync()
+    {
+        var columns = new[]
+        {
+            "ALTER TABLE Reservations ADD COLUMN LateArrivalExpected INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE Reservations ADD COLUMN LateArrivalNotes TEXT",
+            "ALTER TABLE Reservations ADD COLUMN LateArrivalAt TEXT",
+            "ALTER TABLE Reservations ADD COLUMN LateArrivalBy TEXT",
+            "ALTER TABLE Reservations ADD COLUMN NoShowAssessedAt TEXT",
+            "ALTER TABLE Reservations ADD COLUMN NoShowChargeAmount TEXT",
+            "ALTER TABLE Reservations ADD COLUMN NoShowRefundableAmount TEXT",
+            "ALTER TABLE Reservations ADD COLUMN ReinstatedAt TEXT",
+            "ALTER TABLE Reservations ADD COLUMN ReinstatedBy TEXT",
+            "ALTER TABLE Reservations ADD COLUMN ReinstatementReason TEXT"
+        };
+        foreach (var sql in columns)
+        {
+            try { await Database.ExecuteSqlRawAsync(sql); } catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
+        }
+    }
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
         if (!optionsBuilder.IsConfigured)

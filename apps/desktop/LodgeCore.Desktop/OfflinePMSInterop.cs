@@ -556,6 +556,24 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
+
+    public async Task<string> MarkLateArrivalAsync(string reservationId, string notes)
+    {
+        try { var ctx = await GetSecureContextAsync("reservation:update", "frontdesk:all"); var result = await _repo.MarkLateArrivalAsync(reservationId, notes, ctx.UserId, ctx.DeviceId); return JsonSerializer.Serialize(new { success = true, data = result }, _jsonOptions); }
+        catch (Exception ex) { return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions); }
+    }
+
+    public async Task<string> AssessNoShowAsync(string reservationId)
+    {
+        try { var ctx = await GetSecureContextAsync("reservation:update", "frontdesk:all"); var result = await _repo.AssessNoShowAsync(reservationId, ctx.UserId, ctx.DeviceId); return JsonSerializer.Serialize(new { success = true, data = result }, _jsonOptions); }
+        catch (Exception ex) { return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions); }
+    }
+
+    public async Task<string> ReinstateReservationAsync(string reservationId, string reason)
+    {
+        try { var ctx = await GetSecureContextAsync("refund:approve", "frontdesk:all"); var result = await _repo.ReinstateReservationAsync(reservationId, reason, ctx.UserId, ctx.DeviceId); return JsonSerializer.Serialize(new { success = true, data = result }, _jsonOptions); }
+        catch (Exception ex) { return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions); }
+    }
     public async Task<string> CheckAvailabilityAsync(string roomNumber, DateTime checkIn, DateTime checkOut)
     {
         try
