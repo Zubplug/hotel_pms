@@ -216,10 +216,10 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
   },
   housekeeping: {
     list: async (propertyId) => {
-      return apiFetch(`/api/v1/housekeeping?propertyId=${propertyId}`);
+      return apiFetch(`/api/v1/housekeeping/tasks?propertyId=${encodeURIComponent(propertyId)}`);
     },
     updateTask: async (taskId, status) => {
-      return apiFetch(`/api/v1/housekeeping/${taskId}`, {
+      return apiFetch(`/api/v1/housekeeping/tasks/${taskId}/status`, {
         method: 'PATCH',
         body: JSON.stringify({ status })
       });
