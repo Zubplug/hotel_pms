@@ -175,7 +175,7 @@ export function ActiveOrdersModal({ isOpen, onClose, operatorToken, sessionId, s
                   <div className="grid grid-cols-2 gap-4 my-4">
                     <div className="flex flex-col">
                       <span className="text-xs text-slate-500 font-medium">Items</span>
-                      <span className="font-bold text-slate-800">{Number(order.itemCount ?? order.items?.reduce((sum: number, item: any) => sum + Number(item.quantity || 0), 0) || 0)}</span>
+                      <span className="font-bold text-slate-800">{Number(order.itemCount ?? (order.items?.reduce((sum: number, item: any) => sum + Number(item.quantity || 0), 0) ?? 0))}</span>
                     </div>
                     <div className="flex flex-col">
                       <span className="text-xs text-slate-500 font-medium">Total</span>
