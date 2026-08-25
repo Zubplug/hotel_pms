@@ -450,7 +450,7 @@ function PrinterForm({
 }
 
 // ─── Main Page ──────────────────────────────────────────────────────────────
-export default function PrinterSettingsPage({ onClose }: { onClose?: () => void } = {}) {
+export default function PrinterSettingsPage({ onClose }: { onClose?: () => void }) {
   const { isDesktopMode } = useLodgeCoreProvider();
   const [printers, setPrinters] = useState<PrinterConfig[]>([]);
   const [loading, setLoading] = useState(true);
