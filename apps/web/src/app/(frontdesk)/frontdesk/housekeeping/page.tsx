@@ -1,5 +1,1 @@
-import HousekeepingDashboard from '../../../(dashboard)/housekeeping/page';
-
-export default function FrontDeskHousekeepingPage() {
-  return <HousekeepingDashboard />;
-}
+export { default } from '@/components/housekeeping/HousekeepingDashboard';

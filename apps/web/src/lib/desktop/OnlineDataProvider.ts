@@ -227,18 +227,26 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
   },
   maintenance: {
     list: async (propertyId) => {
-      return apiFetch(`/api/v1/maintenance?propertyId=${propertyId}`);
+      const result = await apiFetch(`/api/v1/maintenance/tickets?propertyId=${encodeURIComponent(propertyId)}`);
+      return { ...result, data: result.data?.tickets || [] };
     },
     createTicket: async (ticket) => {
-      return apiFetch(`/api/v1/maintenance`, {
+      return apiFetch(`/api/v1/maintenance/tickets`, {
         method: 'POST',
-        body: JSON.stringify(ticket)
+        body: JSON.stringify({
+          ...ticket,
+          roomId: ticket.roomId || undefined,
+          location: ticket.location || ticket.roomNumber || undefined,
+          title: ticket.title || ticket.issueDescription || 'Maintenance issue',
+          description: ticket.description || ticket.issueDescription || '',
+          priority: ticket.priority === 'URGENT' ? 'CRITICAL' : ticket.priority,
+        })
       });
     },
     resolveTicket: async (ticketId: string, resolution?: any) => {
-      return apiFetch(`/api/v1/maintenance/${ticketId}/resolve`, {
-        method: 'POST',
-        body: JSON.stringify({ resolution })
+      return apiFetch(`/api/v1/maintenance/tickets/${ticketId}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'RESOLVED', ...(resolution || {}) })
       });
     }
   },
