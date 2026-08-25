@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
     }) as any[];
 
     const reportSessions = sessions.map((frontdeskSession) => {
-      const payments = frontdeskSession.payments.map((payment) => ({
+      const payments = frontdeskSession.payments.map((payment: any) => ({
         id: payment.id,
         kind: 'PAYMENT',
         date: payment.createdAt,
@@ -81,10 +81,10 @@ export async function GET(request: NextRequest) {
         confirmationNumber: payment.folio.reservation?.confirmationNumber,
         folioNumber: payment.folio.folioNumber,
         guest: payment.folio.guest ? `${payment.folio.guest.firstName} ${payment.folio.guest.lastName}` : null,
-        rooms: payment.folio.reservation?.reservationRooms.map((room) => room.room?.displayName || room.room?.number).filter(Boolean) || [],
+        rooms: payment.folio.reservation?.reservationRooms.map((room: any) => room.room?.displayName || room.room?.number).filter(Boolean) || [],
       }));
 
-      const movements = frontdeskSession.cashMovements.map((movement) => {
+      const movements = frontdeskSession.cashMovements.map((movement: any) => {
         const inflow = ['OPENING_FLOAT', 'PAYMENT', 'CASH_TRANSFER_IN'].includes(movement.type);
         return {
           id: movement.id,
@@ -108,7 +108,7 @@ export async function GET(request: NextRequest) {
         };
       });
 
-      const charges = frontdeskSession.payments.flatMap((payment) => payment.folio.items.map((item) => {
+      const charges = frontdeskSession.payments.flatMap((payment: any) => payment.folio.items.map((item: any) => {
         const itemAmount = toNumber(item.amount);
         return {
         id: item.id,
@@ -128,7 +128,7 @@ export async function GET(request: NextRequest) {
         confirmationNumber: payment.folio.reservation?.confirmationNumber,
         folioNumber: payment.folio.folioNumber,
         guest: payment.folio.guest ? `${payment.folio.guest.firstName} ${payment.folio.guest.lastName}` : null,
-        rooms: payment.folio.reservation?.reservationRooms.map((room) => room.room?.displayName || room.room?.number).filter(Boolean) || [],
+        rooms: payment.folio.reservation?.reservationRooms.map((room: any) => room.room?.displayName || room.room?.number).filter(Boolean) || [],
         source: item.source,
         quantity: toNumber(item.quantity),
         unitAmount: toNumber(item.unitAmount),
