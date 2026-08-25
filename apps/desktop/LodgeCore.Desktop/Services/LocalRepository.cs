@@ -464,7 +464,7 @@ public class LocalRepository
     public async Task<bool> ExtendStayAsync(string reservationId, DateTime newCheckOut, string userId, string deviceId)
     {
         var res = await _dbContext.Reservations
-            .Include(r => r.Rooms)
+            .Include(r => r.Rooms).ThenInclude(rr => rr.Room)
             .Include(r => r.Folio)
             .FirstOrDefaultAsync(r => r.Id == reservationId);
         if (res == null) return false;
@@ -478,22 +478,22 @@ public class LocalRepository
         if (newCheckOut <= res.CheckOutDate)
             throw new InvalidOperationException("New checkout date must be after the current checkout date.");
 
-        var roomTypeId = res.RoomTypeId ?? res.Rooms.FirstOrDefault()?.RoomTypeId;
-        if (string.IsNullOrWhiteSpace(roomTypeId))
+        // Resolve room type ID from reservation, ReservationRoom, or the Room entity itself
+        var firstResRoom = res.Rooms.FirstOrDefault();
+        var roomTypeId = res.RoomTypeId
+            ?? firstResRoom?.RoomTypeId
+            ?? firstResRoom?.Room?.RoomTypeId;
+        if (string.IsNullOrWhiteSpace(roomTypeId) && !string.IsNullOrWhiteSpace(firstResRoom?.RoomId))
         {
-            var assignedRoomId = res.Rooms.FirstOrDefault()?.RoomId;
-            roomTypeId = !string.IsNullOrWhiteSpace(assignedRoomId)
-                ? (await _dbContext.Rooms.FirstOrDefaultAsync(r => r.Id == assignedRoomId))?.RoomTypeId
-                : null;
+            roomTypeId = (await _dbContext.Rooms.FirstOrDefaultAsync(r => r.Id == firstResRoom.RoomId))?.RoomTypeId;
         }
         var roomType = !string.IsNullOrEmpty(roomTypeId)
             ? await _dbContext.RoomTypes.FirstOrDefaultAsync(rt => rt.Id == roomTypeId)
             : null;
-        if (roomType == null)
-            throw new InvalidOperationException("The reservation room rate is unavailable offline. Sync room types before extending the stay.");
+        // If room type is unavailable locally, proceed without charging — server will reconcile on sync
 
         var additionalNights = (int)(newCheckOut.Date - res.CheckOutDate.Date).TotalDays;
-        var additionalCharge = roomType.BasePrice * additionalNights;
+        var additionalCharge = (roomType?.BasePrice ?? 0m) * additionalNights;
 
         // Overlap check: is the room taken by another reservation during the extension window?
         if (!string.IsNullOrEmpty(res.RoomNumber))
@@ -556,7 +556,9 @@ public class LocalRepository
 
     public async Task<object> PreviewExtendStayAsync(string reservationId, DateTime newCheckOut)
     {
-        var res = await _dbContext.Reservations.FindAsync(reservationId);
+        var res = await _dbContext.Reservations
+            .Include(r => r.Rooms).ThenInclude(rr => rr.Room)
+            .FirstOrDefaultAsync(r => r.Id == reservationId);
         if (res == null) throw new InvalidOperationException("Reservation not found");
 
         if (newCheckOut <= res.CheckInDate)
@@ -566,21 +568,31 @@ public class LocalRepository
             throw new InvalidOperationException("New checkout date must be after the current checkout date.");
 
         var additionalNights = (int)(newCheckOut.Date - res.CheckOutDate.Date).TotalDays;
-        var roomTypeId = res.RoomTypeId ?? res.Rooms.FirstOrDefault()?.RoomTypeId;
+
+        // Resolve room type from all available sources
+        var firstResRoom = res.Rooms.FirstOrDefault();
+        var roomTypeId = res.RoomTypeId
+            ?? firstResRoom?.RoomTypeId
+            ?? firstResRoom?.Room?.RoomTypeId;
+        if (string.IsNullOrWhiteSpace(roomTypeId) && !string.IsNullOrWhiteSpace(firstResRoom?.RoomId))
+        {
+            roomTypeId = (await _dbContext.Rooms.FirstOrDefaultAsync(r => r.Id == firstResRoom.RoomId))?.RoomTypeId;
+        }
         var roomType = !string.IsNullOrEmpty(roomTypeId)
             ? await _dbContext.RoomTypes.FirstOrDefaultAsync(rt => rt.Id == roomTypeId)
             : null;
-        if (roomType == null)
-            throw new InvalidOperationException("The reservation room rate is unavailable offline. Sync room types before extending the stay.");
 
-        var ratePerNight = roomType.BasePrice;
+        // If room type unavailable offline, return a zero-rate preview so the UI can still proceed
+        var ratePerNight = roomType?.BasePrice ?? 0m;
+        var currency = roomType?.Currency ?? res.Currency ?? "NGN";
 
         return new
         {
             additionalNights,
             ratePerNight,
             additionalCharge = additionalNights * ratePerNight,
-            currency = roomType.Currency ?? res.Currency ?? "NGN"
+            currency,
+            rateUnavailableOffline = roomType == null
         };
     }
 
@@ -2280,7 +2292,11 @@ public class LocalRepository
             var check = await _dbContext.PosChecks.FirstOrDefaultAsync(c => c.Id == checkId);
             if (check != null)
             {
-                var checkPayments = await _dbContext.PosPayments.Where(p => p.CheckId == checkId).SumAsync(p => p.Amount);
+                var checkPaymentAmounts = await _dbContext.PosPayments
+                    .Where(p => p.CheckId == checkId)
+                    .Select(p => p.Amount)
+                    .ToListAsync();
+                var checkPayments = checkPaymentAmounts.Sum();
                 if (checkPayments + amount >= check.Total)
                 {
                     check.Status = "PAID";
@@ -2289,7 +2305,11 @@ public class LocalRepository
             }
         }
 
-        var orderPayments = await _dbContext.PosPayments.Where(p => p.OrderId == orderId).SumAsync(p => p.Amount);
+        var orderPaymentAmounts = await _dbContext.PosPayments
+            .Where(p => p.OrderId == orderId)
+            .Select(p => p.Amount)
+            .ToListAsync();
+        var orderPayments = orderPaymentAmounts.Sum();
         if (orderPayments + amount >= order.Total)
         {
             order.Status = "COMPLETED";
@@ -2760,9 +2780,10 @@ public class LocalRepository
             .Select(s => s.Id)
             .ToListAsync();
             
-        var pendingCashAmount = await _dbContext.PosSettlements
+        var pendingCashAmount = (await _dbContext.PosSettlements
             .Where(s => pendingSessions.Contains(s.SessionId))
-            .SumAsync(s => s.ActualCash);
+            .Select(s => s.ActualCash)
+            .ToListAsync()).Sum();
 
         var today = DateTime.UtcNow.Date;
         
@@ -2777,9 +2798,10 @@ public class LocalRepository
             .Where(m => m.SourceAccountId == safeAccount.Id && m.Type == PosConstants.CashMovementTypes.BankDeposit && m.CreatedAt >= today)
             .Sum(m => m.Amount);
 
-        decimal todayVariances = await _dbContext.PosSettlements
+        decimal todayVariances = (await _dbContext.PosSettlements
             .Where(s => s.PropertyId == propertyId && s.SettledAt >= today)
-            .SumAsync(s => s.Variance);
+            .Select(s => s.Variance)
+            .ToListAsync()).Sum();
 
         return new {
             PendingHandoversCount = pendingHandoversCount,
