@@ -93,6 +93,7 @@ export interface LodgeCoreDataProvider {
     validateSupervisorPin(pin: string, propertyId?: string): Promise<{ data: any, error: string | null }>;
     startSession(data: { userId: string; propertyId: string; deviceId: string; outletId: string; openingCash: number }): Promise<{ data: any, error: string | null }>;
     startEmergencyBank(pin: string, reason: string, operatorToken: string): Promise<{ data: any, error: string | null }>;
+    keepAlive?: () => Promise<{ data?: any, error: string | null }>;
     getSessionContext(sessionId: string): Promise<{ data: any, error: string | null }>;
     getAuthorizedOutlets(propertyId: string, deviceId: string): Promise<{ data: { outlets: any[], device: any } | null, error: string | null }>;
     // Phase 1.8 — Restaurant Operations

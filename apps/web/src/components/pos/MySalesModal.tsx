@@ -26,6 +26,10 @@ export function MySalesModal({ isOpen, onClose, operatorToken, staffName }: MySa
   const { provider } = useLodgeCoreProvider();
   const [salesData, setSalesData] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const money = (value: unknown) => {
+    const amount = Number(value);
+    return Number.isFinite(amount) ? amount : 0;
+  };
 
   useEffect(() => {
     if (isOpen && operatorToken) {
@@ -53,12 +57,12 @@ export function MySalesModal({ isOpen, onClose, operatorToken, staffName }: MySa
         const res = await HardwareBridge.printShiftReport({
           staffName,
           ordersCount: salesData.ordersCount || 0,
-          grossSales: salesData.grossSales || 0,
-          netSales: salesData.netSales || 0,
-          cashSales: salesData.cashSales || 0,
-          cardSales: salesData.cardSales || 0,
-          roomCharges: salesData.roomCharges || 0,
-          totalDiscounts: salesData.totalDiscounts || 0,
+          grossSales: money(salesData.grossSales),
+          netSales: money(salesData.netSales),
+          cashSales: money(salesData.cashSales),
+          cardSales: money(salesData.cardSales),
+          roomCharges: money(salesData.roomCharges ?? salesData.roomChargeSales),
+          totalDiscounts: money(salesData.totalDiscounts),
           currency: 'USD', // or get from config if available
           printedAt: new Date().toISOString()
         });
@@ -110,7 +114,7 @@ export function MySalesModal({ isOpen, onClose, operatorToken, staffName }: MySa
                     </div>
                     <div>
                       <p className="text-sm font-medium text-slate-500">Gross Sales</p>
-                      <h4 className="text-2xl font-bold text-slate-900">{formatCurrency(salesData.grossSales)}</h4>
+                      <h4 className="text-2xl font-bold text-slate-900">{formatCurrency(money(salesData.grossSales))}</h4>
                     </div>
                   </CardContent>
                 </Card>
@@ -121,7 +125,7 @@ export function MySalesModal({ isOpen, onClose, operatorToken, staffName }: MySa
                     </div>
                     <div>
                       <p className="text-sm font-medium text-slate-500">Net Sales</p>
-                      <h4 className="text-2xl font-bold text-slate-900">{formatCurrency(salesData.netSales)}</h4>
+                      <h4 className="text-2xl font-bold text-slate-900">{formatCurrency(money(salesData.netSales))}</h4>
                     </div>
                   </CardContent>
                 </Card>
@@ -143,25 +147,25 @@ export function MySalesModal({ isOpen, onClose, operatorToken, staffName }: MySa
                         <Banknote className="w-5 h-5 text-slate-400" />
                         <span className="font-medium text-slate-700">Cash Received</span>
                       </div>
-                      <span className="font-bold text-slate-900">{formatCurrency(salesData.cashSales)}</span>
+                      <span className="font-bold text-slate-900">{formatCurrency(money(salesData.cashSales))}</span>
                     </div>
                     <div className="flex items-center justify-between p-4">
                       <div className="flex items-center gap-3">
                         <CreditCard className="w-5 h-5 text-slate-400" />
                         <span className="font-medium text-slate-700">Card Payments</span>
                       </div>
-                      <span className="font-bold text-slate-900">{formatCurrency(salesData.cardSales)}</span>
+                      <span className="font-bold text-slate-900">{formatCurrency(money(salesData.cardSales))}</span>
                     </div>
                     <div className="flex items-center justify-between p-4 bg-slate-50/50">
                       <div className="flex items-center gap-3">
                         <User className="w-5 h-5 text-slate-400" />
                         <span className="font-medium text-slate-700">Room Charges</span>
                       </div>
-                      <span className="font-bold text-slate-900">{formatCurrency(salesData.roomCharges)}</span>
+                      <span className="font-bold text-slate-900">{formatCurrency(money(salesData.roomCharges ?? salesData.roomChargeSales))}</span>
                     </div>
                     <div className="flex items-center justify-between p-4">
                       <span className="font-medium text-red-600">Total Discounts Given</span>
-                      <span className="font-bold text-red-600">-{formatCurrency(salesData.totalDiscounts)}</span>
+                      <span className="font-bold text-red-600">-{formatCurrency(money(salesData.totalDiscounts))}</span>
                     </div>
                   </div>
                 </CardContent>

@@ -29,6 +29,7 @@ export function MyShiftBankModal({
   const [actualCashStr, setActualCashStr] = useState<string>('');
   const [successDialog, setSuccessDialog] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen && posSessionId) {
@@ -38,13 +39,18 @@ export function MyShiftBankModal({
 
   const loadSessionContext = async () => {
     setIsLoading(true);
+    setLoadError(null);
     try {
       const res = await provider.pos.getSessionContext(posSessionId);
       if (!res.error && res.data) {
         setSessionDetails(res.data);
+      } else {
+        setSessionDetails(null);
+        setLoadError(res.error || 'No active shift bank was found. Open a POS shift and try again.');
       }
-    } catch (e) {
-      toast.error('Failed to load shift bank details.');
+    } catch (e: any) {
+      setSessionDetails(null);
+      setLoadError(e?.message || 'Failed to load shift bank details.');
     } finally {
       setIsLoading(false);
     }
@@ -98,8 +104,16 @@ export function MyShiftBankModal({
 
         {/* Content */}
         <div className="p-6 flex-1 overflow-y-auto min-h-0">
-          {isLoading || !sessionDetails ? (
+          {isLoading ? (
             <div className="py-12 text-center text-slate-500">Loading details...</div>
+          ) : loadError ? (
+            <div className="py-12 text-center">
+              <p className="font-semibold text-red-600">Unable to load shift bank</p>
+              <p className="mt-2 text-sm text-slate-500">{loadError}</p>
+              <Button className="mt-5" onClick={loadSessionContext}>Try again</Button>
+            </div>
+          ) : !sessionDetails ? (
+            <div className="py-12 text-center text-slate-500">No active shift bank found.</div>
           ) : (
             <div className="space-y-6">
               

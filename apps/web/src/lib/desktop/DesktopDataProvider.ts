@@ -358,6 +358,9 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     startEmergencyBank: async (pin: string, reason: string, operatorToken: string) => {
       return invokeDesktop('pos.startEmergencyBank', { pin, reason, operatorToken });
     },
+    keepAlive: async () => {
+      return invokeDesktop('pos.keepAlive');
+    },
     getSessionContext: async (sessionId: string) => {
       const res = await invokeDesktop('pos.getSessionContext', { sessionId });
       if (!res?.success || !res.data) return res;

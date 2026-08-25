@@ -1235,6 +1235,8 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     var stale = await dbContext.PosOutlets.Where(o => o.PropertyId == propertyId && !incomingIds.Contains(o.Id)).ToListAsync(stoppingToken);
                     if (stale.Any() && !isIncremental) dbContext.PosOutlets.RemoveRange(stale);
                 }
+
+                await dbContext.SaveChangesAsync(stoppingToken);
             }
 
             // 7. POS Categories
@@ -1518,6 +1520,8 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     var stale = await dbContext.PosFloorPlans.Where(f => outletIds.Contains(f.OutletId) && !incomingIds.Contains(f.Id)).ToListAsync(stoppingToken);
                     if (stale.Any() && !isIncremental) dbContext.PosFloorPlans.RemoveRange(stale);
                 }
+
+                await dbContext.SaveChangesAsync(stoppingToken);
             }
 
             // 10. POS Tables

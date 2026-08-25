@@ -26,6 +26,12 @@ export function WaiterTicketsModal({
   const fetchTickets = async () => {
     setIsLoading(true);
     setError(null);
+    if (!outletId || !operatorToken || !sessionId) {
+      setTickets([]);
+      setError('Open a POS shift and sign in as an operator to view kitchen tickets.');
+      setIsLoading(false);
+      return;
+    }
     try {
       const res = await dataProvider.getWaiterTickets(outletId, operatorToken, sessionId);
       if (res.error) throw new Error(res.error);

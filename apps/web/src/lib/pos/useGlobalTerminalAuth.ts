@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 
@@ -51,6 +52,7 @@ export function useGlobalTerminalAuth({
 }): UseGlobalTerminalAuthResult {
   const { provider, isDesktopMode } = useLodgeCoreProvider();
   const { data: session } = useLodgeCoreSession();
+  const queryClient = useQueryClient();
   const propertyId = (session?.user as any)?.propertyId || '';
 
   const [staff, setStaff] = useState<StaffProfile[]>([]);
@@ -118,6 +120,8 @@ export function useGlobalTerminalAuth({
           // Read back the terminal configuration to decide routing
           const statusRes = await provider.system?.getTerminalStatus?.();
           const mode = statusRes?.desktopMode || 'UNKNOWN';
+          await queryClient.invalidateQueries({ queryKey: ['desktop_auth'] });
+          await queryClient.refetchQueries({ queryKey: ['desktop_auth'] });
           setStep('success');
           onAuthenticated(mode);
         } else {

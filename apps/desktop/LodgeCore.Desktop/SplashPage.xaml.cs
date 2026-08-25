@@ -48,11 +48,7 @@ public partial class SplashPage : ContentPage
         );
 
         // Navigate to main page
-        Application.Current!.Windows[0].Page = new NavigationPage(new MainPage())
-        {
-            BarBackgroundColor = Color.FromArgb("#0B1220"),
-            BarTextColor = Colors.White
-        };
+        Application.Current!.Windows[0].Page = new MainPage();
     }
 
     private async Task AnimateLoadingAsync(string statusText, double fromPercent, double toPercent, uint durationMs)

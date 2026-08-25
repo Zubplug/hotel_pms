@@ -2571,7 +2571,6 @@ public class LocalRepository
             .ToListAsync();
 
         var payments = await _dbContext.PosPayments
-            .Include(p => p.OrderId)
             .Where(p => p.Status == "COMPLETED" && _dbContext.PosOrders.Any(o => o.Id == p.OrderId && o.SessionId == sessionId))
             .ToListAsync();
 

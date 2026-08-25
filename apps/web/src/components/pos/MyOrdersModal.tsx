@@ -94,7 +94,15 @@ export function MyOrdersModal({ isOpen, onClose, operatorToken, staffName }: MyO
     try {
       const res = await provider.pos.getServerOrders(dateRange, statusFilter, undefined, operatorToken);
       if (res.error) throw new Error(res.error);
-      setOrders(res.data || []);
+      setOrders((res.data || []).map((order: any) => ({
+        ...order,
+        id: order.id ?? order.Id,
+        orderNumber: order.orderNumber ?? order.OrderNumber ?? '',
+        tableNumber: order.tableNumber ?? order.TableNumber ?? '',
+        displayName: order.displayName ?? order.DisplayName ?? '',
+        status: order.status ?? order.Status ?? '',
+        total: Number(order.total ?? order.Total ?? 0),
+      })));
     } catch (error: any) {
       toast.error(error.message || 'Failed to load orders');
     } finally {
