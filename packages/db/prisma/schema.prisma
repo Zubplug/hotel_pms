@@ -737,6 +737,8 @@ model FolioCredit {
   operationId     String?
   idempotencyKey  String       @unique
   businessDate    DateTime     @db.Date
+  approvalId      String?
+  approvalStatus  String       @default("NOT_REQUIRED") // NOT_REQUIRED | PENDING_APPROVAL | APPROVED | REJECTED
 
   applications FolioCreditApplication[]
   createdAt    DateTime @default(now()) @db.Timestamptz
@@ -757,7 +759,68 @@ model FolioCreditApplication {
   appliedBy      String      @db.Uuid
   deviceId       String?
   businessDate   DateTime    @db.Date
+  approvalId     String?
   createdAt      DateTime    @default(now()) @db.Timestamptz
+}
+
+model FinancialAuditLog {
+  id                    String   @id @default(uuid()) @db.Uuid
+  operationId           String
+  approvalId            String?
+  propertyId            String   @db.Uuid
+  reservationId         String?
+  folioId               String?
+  guestId               String?
+  creditId              String?
+  creditApplicationId   String?
+  transactionId         String?
+  operationType         String
+  amount                Decimal? @db.Decimal(18, 4)
+  currency              String?
+  operatorId            String?
+  operatorRole          String?
+  deviceId              String?
+  terminalId            String?
+  businessDate          DateTime @db.Date
+  reason                String?
+  balanceBefore         Decimal? @db.Decimal(18, 4)
+  balanceAfter          Decimal? @db.Decimal(18, 4)
+  approvalStatus        String
+  approverId            String?
+  approvedAt            DateTime? @db.Timestamptz
+  rejectionReason       String?
+  idempotencyKey        String   @unique
+  metadata              Json?
+  createdAt             DateTime @default(now()) @db.Timestamptz
+
+  @@index([propertyId, createdAt])
+  @@index([folioId, createdAt])
+  @@index([operationId])
+}
+
+model SupervisorOverride {
+  id             String   @id @default(uuid()) @db.Uuid
+  operationId    String
+  propertyId     String   @db.Uuid
+  reservationId  String?
+  folioId        String?
+  transactionId  String?
+  operatorId     String
+  supervisorId   String
+  operation      String
+  reason         String
+  amount         Decimal? @db.Decimal(18, 4)
+  currency       String?
+  deviceId       String?
+  terminalId     String?
+  approvalId     String?
+  businessDate   DateTime @db.Date
+  idempotencyKey String   @unique
+  createdAt      DateTime @default(now()) @db.Timestamptz
+
+  @@index([propertyId, createdAt])
+  @@index([operatorId, createdAt])
+  @@index([supervisorId, createdAt])
 }
 
 enum FolioItemSource {
@@ -2755,6 +2818,7 @@ model ApprovalRequest {
 
   reason  String
   details Json? // Detailed payload/snapshot of the request
+  idempotencyKey String? @unique
 
   expiresAt DateTime? @db.Timestamptz
 

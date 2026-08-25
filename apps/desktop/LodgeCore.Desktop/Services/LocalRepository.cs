@@ -715,8 +715,12 @@ public class LocalRepository
         if (folio == null) return false;
         if (amount <= 0) throw new InvalidOperationException("Credit amount must be positive.");
         if (!string.IsNullOrEmpty(idempotencyKey) && CheckFolioIdempotency(folio, idempotencyKey)) return true;
+        var property = await _dbContext.Properties.FindAsync(folio.PropertyId);
+        if (property != null && amount >= property.CreditAdjustmentApprovalThreshold && property.OfflineHighValueDepositPolicy == "BLOCK")
+            throw new InvalidOperationException("Credit adjustments are blocked while offline. Connect to the server for manager approval.");
+        var requiresApproval = property != null && amount >= property.CreditAdjustmentApprovalThreshold && property.OfflineHighValueDepositPolicy == "ALLOW_WITH_APPROVAL";
 
-        folio.AvailableCredit += amount;
+        if (!requiresApproval) folio.AvailableCredit += amount;
         folio.UpdatedAt = DateTime.UtcNow;
         folio.IsDirty = true;
         folio.LocalSequence++;
@@ -731,6 +735,7 @@ public class LocalRepository
             description,
             type = "CREDIT_ADJUSTMENT",
             source = "ROOM_DOWNGRADE_CREDIT",
+            status = requiresApproval ? "PENDING_APPROVAL" : "PENDING_SYNC",
             idempotencyKey,
             createdAt = DateTime.UtcNow
         });
@@ -743,10 +748,10 @@ public class LocalRepository
             AggregateType = "FOLIO",
             AggregateId = folioId,
             AggregateVersion = eventVersion,
-            EventType = "ROOM_CREDIT",
+            EventType = requiresApproval ? "CREDIT_ADJUSTMENT_REQUEST" : "ROOM_CREDIT",
             Sequence = folio.LocalSequence,
             IdempotencyKey = idempotencyKey ?? Guid.NewGuid().ToString(),
-            PayloadJson = JsonSerializer.Serialize(new { amount, description, currency = folio.Currency ?? "NGN", businessDate = DateTime.UtcNow, originalBusinessDate = DateTime.UtcNow, idempotencyKey })
+            PayloadJson = JsonSerializer.Serialize(new { amount, description, currency = folio.Currency ?? "NGN", businessDate = DateTime.UtcNow, originalBusinessDate = DateTime.UtcNow, idempotencyKey, requiresApproval })
         });
 
         await _dbContext.SaveChangesAsync();
@@ -824,7 +829,12 @@ public class LocalRepository
         if (string.IsNullOrWhiteSpace(idempotencyKey)) throw new InvalidOperationException("Deposit requires an idempotency key.");
         if (CheckFolioIdempotency(folio, idempotencyKey)) return true;
 
-        folio.AvailableCredit += amount;
+        var property = await _dbContext.Properties.FindAsync(folio.PropertyId);
+        var requiresApproval = property != null && amount >= property.DepositApprovalThreshold && property.OfflineHighValueDepositPolicy == "ALLOW_WITH_APPROVAL";
+        if (property != null && amount >= property.DepositApprovalThreshold && property.OfflineHighValueDepositPolicy == "BLOCK")
+            throw new InvalidOperationException($"High-value deposits of {amount:N2} are blocked while offline. Connect to the server for manager approval.");
+
+        if (!requiresApproval) folio.AvailableCredit += amount;
         folio.UpdatedAt = DateTime.UtcNow;
         folio.IsDirty = true;
         folio.LocalSequence++;
@@ -840,7 +850,7 @@ public class LocalRepository
             reference,
             notes,
             type = "ADVANCE_DEPOSIT",
-            status = "PENDING_SYNC",
+            status = requiresApproval ? "PENDING_APPROVAL" : "PENDING_SYNC",
             idempotencyKey,
             createdAt = DateTime.UtcNow
         });
@@ -853,7 +863,7 @@ public class LocalRepository
             AggregateType = "FOLIO",
             AggregateId = folioId,
             AggregateVersion = eventVersion,
-            EventType = "ADVANCE_DEPOSIT",
+            EventType = requiresApproval ? "ADVANCE_DEPOSIT_REQUEST" : "ADVANCE_DEPOSIT",
             Sequence = folio.LocalSequence,
             IdempotencyKey = idempotencyKey,
             PayloadJson = JsonSerializer.Serialize(new
@@ -866,7 +876,8 @@ public class LocalRepository
                 currency = folio.Currency ?? "NGN",
                 businessDate = DateTime.UtcNow,
                 originalBusinessDate = DateTime.UtcNow,
-                idempotencyKey
+                idempotencyKey,
+                requiresApproval
             })
         });
 

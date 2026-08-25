@@ -378,6 +378,7 @@ export async function GET(req: NextRequest) {
     );
 
     const settings = (property.settings as Record<string, unknown>) ?? {};
+    const financialControls = (settings.financialControls as Record<string, unknown>) ?? {};
     const propertyPayload = {
       id: property.id,
       name: property.name,
@@ -387,6 +388,10 @@ export async function GET(req: NextRequest) {
       isActive: property.isActive,
       earlyCheckinWindowHours: (settings.earlyCheckinWindowHours as number) ?? 2,
       bankingModel: ((settings.pos as any)?.bankingModel as string) ?? 'CENTRAL_CASHIER',
+      depositApprovalThreshold: Number(financialControls.depositApprovalThreshold ?? 250000),
+      creditAdjustmentApprovalThreshold: Number(financialControls.creditAdjustmentApprovalThreshold ?? 1),
+      refundApprovalThreshold: Number(financialControls.refundApprovalThreshold ?? 1),
+      offlineHighValueDepositPolicy: String(financialControls.offlineHighValueDepositPolicy ?? 'BLOCK').toUpperCase(),
     };
 
     return NextResponse.json({

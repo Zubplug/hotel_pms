@@ -723,6 +723,15 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     if (propEl.TryGetProperty("bankingModel", out var bm))
                         localProp.BankingModel = bm.GetString() ?? localProp.BankingModel;
 
+                    if (propEl.TryGetProperty("depositApprovalThreshold", out var dat) && dat.TryGetDecimal(out var depositThreshold))
+                        localProp.DepositApprovalThreshold = depositThreshold;
+                    if (propEl.TryGetProperty("creditAdjustmentApprovalThreshold", out var caat) && caat.TryGetDecimal(out var creditThreshold))
+                        localProp.CreditAdjustmentApprovalThreshold = creditThreshold;
+                    if (propEl.TryGetProperty("refundApprovalThreshold", out var rat) && rat.TryGetDecimal(out var refundThreshold))
+                        localProp.RefundApprovalThreshold = refundThreshold;
+                    if (propEl.TryGetProperty("offlineHighValueDepositPolicy", out var ohp))
+                        localProp.OfflineHighValueDepositPolicy = ohp.GetString() ?? localProp.OfflineHighValueDepositPolicy;
+
                     if (root.TryGetProperty("syncedAt", out var syncedAtEl))
                     {
                         // Removed inline LastPull setting to rely on nextCursor at the end of the batch
@@ -745,6 +754,10 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                         IsActive = true,
                         EarlyCheckinWindowHours = propEl.TryGetProperty("earlyCheckinWindowHours", out var eciw2) ? eciw2.GetInt32() : 2,
                         BankingModel = propEl.TryGetProperty("bankingModel", out var bm2) && bm2.ValueKind != System.Text.Json.JsonValueKind.Null ? bm2.GetString() ?? "SERVER_BANKING" : "SERVER_BANKING",
+                        DepositApprovalThreshold = propEl.TryGetProperty("depositApprovalThreshold", out var dat2) && dat2.TryGetDecimal(out var depositThreshold2) ? depositThreshold2 : 250000m,
+                        CreditAdjustmentApprovalThreshold = propEl.TryGetProperty("creditAdjustmentApprovalThreshold", out var caat2) && caat2.TryGetDecimal(out var creditThreshold2) ? creditThreshold2 : 1m,
+                        RefundApprovalThreshold = propEl.TryGetProperty("refundApprovalThreshold", out var rat2) && rat2.TryGetDecimal(out var refundThreshold2) ? refundThreshold2 : 1m,
+                        OfflineHighValueDepositPolicy = propEl.TryGetProperty("offlineHighValueDepositPolicy", out var ohp2) && ohp2.ValueKind != System.Text.Json.JsonValueKind.Null ? ohp2.GetString() ?? "BLOCK" : "BLOCK",
                         BusinessDate = propEl.TryGetProperty("businessDate", out var bd2) && bd2.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(bd2.GetString(), out var parsedDate2) ? parsedDate2 : DateTime.UtcNow.Date
                     };
                     dbContext.Properties.Add(localProp);
@@ -2082,9 +2095,9 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                             evt.Status = res.Status; 
                             evt.LastError = res.Error;
                             
-                            if (res.Status == "SYNCED")
+                            if (res.Status == "SYNCED" || res.Status == "PENDING_APPROVAL")
                             {
-                                evt.SyncedAt = DateTime.UtcNow;
+                                if (res.Status == "SYNCED") evt.SyncedAt = DateTime.UtcNow;
                                 evt.NextAttemptAt = null;
                                 ClearIsDirtyIfSafe(dbContext, evt);
                             }

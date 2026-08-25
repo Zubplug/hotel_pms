@@ -136,6 +136,76 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         throw new Error('CONFLICT');
       }
 
+      if (approval.type === 'ADVANCE_DEPOSIT' || approval.type === 'CREDIT_ADJUSTMENT') {
+        if (approval.requestedBy === user.id) throw new Error('SELF_APPROVAL');
+        const details = (approval.details || {}) as {
+          folioId?: string;
+          reservationId?: string | null;
+          amount?: number;
+          method?: string;
+          reference?: string | null;
+          notes?: string | null;
+          sourceEventKey?: string;
+          deviceId?: string;
+        };
+        const folio = await tx.folio.findUnique({ where: { id: details.folioId || '' } });
+        if (!folio || folio.propertyId !== approval.propertyId || folio.status !== 'OPEN') throw new Error('FOLIO_NOT_AVAILABLE');
+        const amount = Number(details.amount || approval.amount || 0);
+        if (!Number.isFinite(amount) || amount <= 0) throw new Error('INVALID_DEPOSIT_AMOUNT');
+        const idempotencyKey = details.sourceEventKey || approval.id;
+        const existingCredit = await tx.folioCredit.findUnique({ where: { idempotencyKey } });
+        const credit = existingCredit || await tx.folioCredit.create({
+          data: {
+            folioId: folio.id,
+            reservationId: details.reservationId || folio.reservationId,
+            propertyId: approval.propertyId,
+            amount,
+            remainingAmount: amount,
+            currency: approval.currency || folio.currency,
+            method: (details.method || 'CASH') as any,
+            status: 'AVAILABLE',
+            reference: details.reference || null,
+            notes: details.notes || null,
+            receivedBy: approval.requestedBy,
+            deviceId: details.deviceId || null,
+            operationId: approval.id,
+            idempotencyKey,
+            businessDate: new Date()
+          }
+        });
+        if (!existingCredit) {
+          await tx.financialAuditLog.create({
+            data: {
+              operationId: approval.id,
+              approvalId: approval.id,
+              propertyId: approval.propertyId,
+              reservationId: credit.reservationId,
+              folioId: folio.id,
+              creditId: credit.id,
+            operationType: approval.type,
+              amount,
+              currency: credit.currency,
+              operatorId: approval.requestedBy,
+              deviceId: credit.deviceId,
+              businessDate: credit.businessDate,
+              reason: approval.reason,
+              balanceBefore: folio.balance,
+              balanceAfter: folio.balance,
+              approvalStatus: 'APPROVED',
+              approverId: user.id,
+              approvedAt: new Date(),
+              idempotencyKey: `audit:approval:${approval.id}`,
+              metadata: { source: 'DESKTOP_APPROVAL' }
+            }
+          });
+        }
+        const updated = await tx.approvalRequest.update({
+          where: { id: approval.id },
+          data: { status: 'APPROVED', reviewedBy: user.id, reviewedAt: new Date() }
+        });
+        return { status: 'EXECUTED', approval: updated, creditId: credit.id };
+      }
+
       // 4. State Transition
       const updatedApproval = await tx.approvalRequest.update({
         where: { id: (await params).id },

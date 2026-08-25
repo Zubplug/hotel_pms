@@ -18,4 +18,8 @@ public class LocalProperty
     /// </summary>
     public int EarlyCheckinWindowHours { get; set; } = 2;
     public string BankingModel { get; set; } = "CENTRAL_CASHIER";
+    public decimal DepositApprovalThreshold { get; set; } = 250000m;
+    public decimal CreditAdjustmentApprovalThreshold { get; set; } = 1m;
+    public decimal RefundApprovalThreshold { get; set; } = 1m;
+    public string OfflineHighValueDepositPolicy { get; set; } = "BLOCK";
 }

@@ -104,6 +104,7 @@ export async function POST(req: NextRequest) {
       
       try {
         const payload = JSON.parse(payloadJson || '{}');
+        let resultStatus = 'SYNCED';
         let aggregateId = rawAggregateId;
         if (aggregateType === 'FOLIO' && eventType === 'POST_PAYMENT' && payload.reservationId) {
           const targetFolio = await prisma.folio.findFirst({
@@ -373,7 +374,7 @@ export async function POST(req: NextRequest) {
              if (!Number.isFinite(amount) || amount <= 0) throw new Error('Credit amount must be positive');
              const folio = await tx.folio.findUnique({ where: { id: aggregateId, propertyId } });
              if (!folio) throw new Error('Folio not found or unauthorized');
-             await tx.folioCredit.create({
+             const credit = await tx.folioCredit.create({
                data: {
                  folioId: aggregateId,
                  reservationId: folio.reservationId,
@@ -391,6 +392,27 @@ export async function POST(req: NextRequest) {
                  businessDate: new Date(payload.originalBusinessDate || payload.businessDate || new Date()),
                }
              });
+             await tx.financialAuditLog.create({
+               data: {
+                 operationId: payload.operationId || id,
+                 propertyId,
+                 reservationId: folio.reservationId,
+                 folioId: aggregateId,
+                 creditId: credit.id,
+                 operationType: 'ROOM_DOWNGRADE_CREDIT',
+                 amount,
+                 currency: payload.currency || folio.currency || 'NGN',
+                 operatorId: actorId,
+                 deviceId: device.id,
+                 businessDate: new Date(payload.originalBusinessDate || payload.businessDate || new Date()),
+                 reason: payload.description || 'Room downgrade credit',
+                 balanceBefore: folio.balance,
+                 balanceAfter: folio.balance,
+                 approvalStatus: 'NOT_REQUIRED',
+                 idempotencyKey: `audit:${idempotencyKey}`,
+                 metadata: { eventType, source: 'DESKTOP' }
+               }
+             });
           }
           else if (eventType === 'ROOM_CHARGE' || eventType === 'POST_CHARGE') {
              const existingCharge = await tx.folioItem.findFirst({ where: { posTransactionId: idempotencyKey } });
@@ -401,6 +423,8 @@ export async function POST(req: NextRequest) {
              
              const amount = Number(payload.amount);
              if (!Number.isFinite(amount) || amount <= 0) throw new Error('Charge amount must be positive');
+             const folio = await tx.folio.findUnique({ where: { id: aggregateId, propertyId } });
+             if (!folio) throw new Error('Folio not found or unauthorized');
              await tx.folioItem.create({
                data: {
                  folioId: aggregateId,
@@ -441,7 +465,7 @@ export async function POST(req: NextRequest) {
                    data: { remainingAmount: { decrement: applied }, status: applied >= Number(credit.remainingAmount) ? 'EXHAUSTED' : 'PARTIALLY_APPLIED' }
                  });
                  if (updated.count !== 1) continue;
-                 await tx.folioCreditApplication.create({
+                 const application = await tx.folioCreditApplication.create({
                    data: {
                      creditId: credit.id,
                      folioId: aggregateId,
@@ -455,9 +479,87 @@ export async function POST(req: NextRequest) {
                      businessDate: new Date(payload.originalBusinessDate || payload.businessDate || new Date())
                    }
                  });
+                 await tx.financialAuditLog.create({
+                   data: {
+                     operationId: payload.creditApplicationKey || `CREDIT_APPLICATION:${idempotencyKey}`,
+                     propertyId,
+                     reservationId: folio.reservationId,
+                     folioId: aggregateId,
+                     creditId: credit.id,
+                     creditApplicationId: application.id,
+                     transactionId: idempotencyKey,
+                     operationType: 'CREDIT_APPLICATION',
+                     amount: applied,
+                     currency: payload.currency || folio.currency || 'NGN',
+                     operatorId: actorId,
+                     deviceId: device.id,
+                     businessDate: new Date(payload.originalBusinessDate || payload.businessDate || new Date()),
+                     reason: payload.description || 'Applied guest credit',
+                     balanceBefore: credit.remainingAmount,
+                     balanceAfter: Number(credit.remainingAmount) - applied,
+                     approvalStatus: 'NOT_REQUIRED',
+                     idempotencyKey: `audit:${payload.creditApplicationKey || `CREDIT_APPLICATION:${idempotencyKey}`}:${credit.id}`,
+                     metadata: { eventType, source: 'DESKTOP' }
+                   }
+                 });
                  remainingToApply -= applied;
                }
              }
+          }
+          else if (eventType === 'ADVANCE_DEPOSIT_REQUEST' || eventType === 'CREDIT_ADJUSTMENT_REQUEST') {
+             const amount = Number(payload.amount);
+             if (!Number.isFinite(amount) || amount <= 0) throw new Error('Deposit amount must be positive');
+             const folio = await tx.folio.findUnique({ where: { id: aggregateId, propertyId } });
+             if (!folio) throw new Error('Folio not found or unauthorized');
+             const approvalKey = `approval:${idempotencyKey}`;
+             const existingApproval = await tx.approvalRequest.findUnique({ where: { idempotencyKey: approvalKey } });
+             const approval = existingApproval || await tx.approvalRequest.create({
+                 data: {
+                   propertyId,
+                   type: eventType === 'CREDIT_ADJUSTMENT_REQUEST' ? 'CREDIT_ADJUSTMENT' : 'ADVANCE_DEPOSIT',
+                   status: 'PENDING',
+                   requestedBy: actorId,
+                   amount,
+                   currency: payload.currency || folio.currency || 'NGN',
+                   reason: payload.description || payload.notes || 'Financial operation requires approval',
+                   idempotencyKey: approvalKey,
+                   details: {
+                     folioId: aggregateId,
+                     reservationId: folio.reservationId,
+                     amount,
+                     method: payload.method || 'OTHER',
+                     operationType: eventType === 'CREDIT_ADJUSTMENT_REQUEST' ? 'CREDIT_ADJUSTMENT' : 'ADVANCE_DEPOSIT',
+                     reference: payload.reference || null,
+                     notes: payload.notes || null,
+                     operatorId: actorId,
+                     deviceId: device.id,
+                     sourceEventId: id,
+                     sourceEventKey: idempotencyKey
+                   }
+                 }
+             });
+             await tx.financialAuditLog.create({
+               data: {
+                 operationId: idempotencyKey,
+                 approvalId: approval.id,
+                 propertyId,
+                 reservationId: folio.reservationId,
+                 folioId: aggregateId,
+                 operationType: eventType === 'CREDIT_ADJUSTMENT_REQUEST' ? 'CREDIT_ADJUSTMENT' : 'ADVANCE_DEPOSIT',
+                 amount,
+                 currency: payload.currency || folio.currency || 'NGN',
+                 operatorId: actorId,
+                 deviceId: device.id,
+                 businessDate: new Date(payload.originalBusinessDate || payload.businessDate || new Date()),
+                 reason: payload.description || payload.notes || 'Financial operation requires approval',
+                 balanceBefore: folio.balance,
+                 balanceAfter: folio.balance,
+                 approvalStatus: 'PENDING_APPROVAL',
+                 idempotencyKey: `audit:${idempotencyKey}`,
+                 metadata: { eventType, source: 'DESKTOP' }
+               }
+             });
+             resultStatus = 'PENDING_APPROVAL';
           }
           else if (eventType === 'ADVANCE_DEPOSIT') {
              const amount = Number(payload.amount);
@@ -1301,7 +1403,7 @@ export async function POST(req: NextRequest) {
           });
         });
         
-        results.push({ id, status: 'SYNCED', idempotencyKey });
+        results.push({ id, status: resultStatus, idempotencyKey });
         
         // Post-transaction notifications for mobile hub parity
         if (aggregateType === 'RESERVATION') {

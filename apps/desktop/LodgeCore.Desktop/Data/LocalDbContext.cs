@@ -116,6 +116,22 @@ public class LocalDbContext : DbContext
         }
     }
 
+    public async Task ApplyFinancialControlSchemaAsync()
+    {
+        var columns = new[]
+        {
+            "ALTER TABLE Properties ADD COLUMN DepositApprovalThreshold TEXT NOT NULL DEFAULT '250000'",
+            "ALTER TABLE Properties ADD COLUMN CreditAdjustmentApprovalThreshold TEXT NOT NULL DEFAULT '1'",
+            "ALTER TABLE Properties ADD COLUMN RefundApprovalThreshold TEXT NOT NULL DEFAULT '1'",
+            "ALTER TABLE Properties ADD COLUMN OfflineHighValueDepositPolicy TEXT NOT NULL DEFAULT 'BLOCK'"
+        };
+        foreach (var sql in columns)
+        {
+            try { await Database.ExecuteSqlRawAsync(sql); }
+            catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
+        }
+    }
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
         if (!optionsBuilder.IsConfigured)
