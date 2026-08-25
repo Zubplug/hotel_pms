@@ -5,6 +5,64 @@ import { NotificationEngine } from '@/lib/notification-engine';
 
 const BATCH_SIZE = 50;
 
+const FINANCIAL_EVENT_TYPES = new Set([
+  'POST_PAYMENT',
+  'PAYMENT',
+  'ADVANCE_DEPOSIT',
+  'ADVANCE_DEPOSIT_REQUEST',
+  'POST_CHARGE',
+  'ROOM_CHARGE',
+  'ROOM_CREDIT',
+  'CREDIT_ADJUSTMENT_REQUEST',
+  'REFUND_REQUESTED',
+  'REFUND',
+  'POS_PAYMENT',
+  'POS_ORDER'
+]);
+
+function classifySyncConflict(conflict: { aggregateType: string; hotelEvent: { eventType: string } }) {
+  const eventType = conflict.hotelEvent.eventType.toUpperCase();
+  const aggregateType = conflict.aggregateType.toUpperCase();
+
+  if (
+    FINANCIAL_EVENT_TYPES.has(eventType) ||
+    eventType.includes('PAYMENT') ||
+    eventType.includes('CHARGE') ||
+    eventType.includes('REFUND') ||
+    eventType.includes('DEPOSIT') ||
+    eventType.includes('CREDIT') ||
+    aggregateType === 'FOLIO' ||
+    aggregateType === 'POS_ORDER'
+  ) {
+    return 'FINANCIAL';
+  }
+
+  if (eventType === 'CHECK_IN' || eventType === 'CHECK_OUT' || aggregateType === 'RESERVATION') {
+    return 'REVIEW';
+  }
+
+  return 'OPERATIONAL';
+}
+
+export async function getNightAuditConflictSummary(propertyId: string) {
+  const conflicts = await prisma.syncConflict.findMany({
+    where: { propertyId, status: 'PENDING' },
+    select: {
+      aggregateType: true,
+      hotelEvent: { select: { eventType: true } }
+    }
+  });
+
+  return conflicts.reduce(
+    (summary, conflict) => {
+      summary.total += 1;
+      summary[classifySyncConflict(conflict).toLowerCase() as 'financial' | 'review' | 'operational'] += 1;
+      return summary;
+    },
+    { total: 0, financial: 0, review: 0, operational: 0 }
+  );
+}
+
 export async function executeNightAudit(propertyId: string, userId: string | null, userEmail: string | null | undefined, userRole: string = 'SYSTEM', reqIp: string = '127.0.0.1', reqUserAgent: string = 'SYSTEM') {
   const property = await prisma.property.findUnique({
     where: { id: propertyId }
@@ -27,7 +85,7 @@ export async function executeNightAudit(propertyId: string, userId: string | nul
     throw new Error(`CONFLICT:Night Audit for ${businessDate.toISOString().split('T')[0]} is already in progress.`);
   }
 
-  const [openSessions, pendingConflicts] = await Promise.all([
+  const [openSessions, conflictSummary] = await Promise.all([
     prisma.posSession.count({
       where: {
         propertyId,
@@ -35,11 +93,11 @@ export async function executeNightAudit(propertyId: string, userId: string | nul
         status: { in: ['OPEN', 'RECONCILIATION_REQUIRED'] }
       }
     }),
-    prisma.syncConflict.count({ where: { propertyId, status: 'PENDING' } })
+    getNightAuditConflictSummary(propertyId)
   ]);
 
-  if (openSessions > 0 || pendingConflicts > 0) {
-    throw new Error(`POS_CONFLICTS_EXIST:Night Audit blocked: ${openSessions} open POS session(s), ${pendingConflicts} pending sync conflict(s).`);
+  if (openSessions > 0) {
+    throw new Error(`POS_CONFLICTS_EXIST:Night Audit blocked: ${openSessions} open POS session(s) must be closed or reconciled first. Pending sync conflicts do not block rollover and remain queued for review.`);
   }
 
   // 1. Idempotently initialize the Night Audit Run for this businessDate
@@ -179,6 +237,15 @@ export async function executeNightAudit(propertyId: string, userId: string | nul
   }
 
   // 5. Update Night Audit Counters and Finalize
+  const exceptions = {
+    pendingSyncConflicts: conflictSummary.total,
+    financialSyncConflicts: conflictSummary.financial,
+    reviewSyncConflicts: conflictSummary.review,
+    operationalSyncConflicts: conflictSummary.operational,
+    stayoverTaskErrors: errors,
+    rolloverCompleted: true
+  };
+
   const completedAudit = await prisma.nightAudit.update({
     where: { id: auditRun.id },
     data: {
@@ -186,13 +253,20 @@ export async function executeNightAudit(propertyId: string, userId: string | nul
       completedAt: new Date(),
       tasksCreated: { increment: totalTasksCreated },
       tasksSkipped: { increment: totalTasksSkipped },
-      errors: { increment: errors }
+      errors: { increment: errors },
+      exceptions
     }
   });
 
   const dateRollover = await prisma.property.updateMany({
     where: { id: propertyId, businessDate },
-    data: { businessDate: nextBusinessDate, lastAuditAt: new Date() }
+    data: {
+      businessDate: nextBusinessDate,
+      lastAuditAt: new Date(),
+      auditStatus: errors > 0 || conflictSummary.total > 0
+        ? 'COMPLETED_WITH_EXCEPTIONS'
+        : 'COMPLETED'
+    }
   });
 
   if (dateRollover.count !== 1) {
@@ -209,14 +283,14 @@ export async function executeNightAudit(propertyId: string, userId: string | nul
       action: 'NIGHT_AUDIT_COMPLETED',
       resource: 'NightAudit',
       resourceId: auditRun.id,
-      newValue: { tasksCreated: totalTasksCreated, tasksSkipped: totalTasksSkipped, errors },
+      newValue: { tasksCreated: totalTasksCreated, tasksSkipped: totalTasksSkipped, errors, exceptions },
       ipAddress: reqIp,
       userAgent: reqUserAgent,
       requestId: crypto.randomUUID(),
     }
   });
 
-  if (errors > 0) {
+  if (errors > 0 || conflictSummary.total > 0) {
     await NotificationEngine.emit({
       type: 'NIGHT_AUDIT_DISCREPANCY',
       organizationId: property.organizationId,
@@ -224,7 +298,7 @@ export async function executeNightAudit(propertyId: string, userId: string | nul
       entityType: 'night_audit',
       entityId: completedAudit.id,
       idempotencyKey: `night_audit_${completedAudit.id}_discrepancy`,
-      metadata: { errors }
+      metadata: { errors, ...conflictSummary }
     });
   } else {
     await NotificationEngine.emit({
@@ -242,7 +316,8 @@ export async function executeNightAudit(propertyId: string, userId: string | nul
     auditId: completedAudit.id,
     tasksCreated: totalTasksCreated,
     tasksSkipped: totalTasksSkipped,
-    errors
+    errors,
+    conflicts: conflictSummary
   };
 }
 
@@ -288,6 +363,14 @@ export async function getNightAuditPreview(propertyId: string) {
     }
   });
 
+  const pendingSyncConflicts = await getNightAuditConflictSummary(propertyId);
+
+  const warnings = [] as string[];
+  if (pendingArrivals > 0) warnings.push('There are still pending arrivals for today.');
+  if (pendingSyncConflicts.total > 0) {
+    warnings.push(`${pendingSyncConflicts.total} sync conflict(s) will remain visible for review after rollover.`);
+  }
+
   return {
     timezone: property.timezone,
     businessDate,
@@ -297,6 +380,7 @@ export async function getNightAuditPreview(propertyId: string) {
     pendingArrivals,
     unresolvedFolios,
     openApprovals,
-    warnings: pendingArrivals > 0 ? ['There are still pending arrivals for today.'] : []
+    pendingSyncConflicts,
+    warnings
   };
 }
