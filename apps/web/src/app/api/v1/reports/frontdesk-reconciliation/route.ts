@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
       where: { propertyId, businessDate: { gte: start, lte: end } },
       orderBy: [{ businessDate: 'desc' }, { openedAt: 'desc' }],
       include: {
-        staff: { select: { id: true, firstName: true, lastName: true, role: true } },
+        staff: { select: { id: true, firstName: true, lastName: true, position: true } },
         cashAccount: { select: { id: true, name: true, type: true } },
         exceptions: { orderBy: { createdAt: 'desc' } },
         payments: {
@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
         },
         cashMovements: { orderBy: { createdAt: 'desc' } },
       },
-    });
+    }) as any[];
 
     const reportSessions = sessions.map((frontdeskSession) => {
       const payments = frontdeskSession.payments.map((payment) => ({

@@ -12,6 +12,7 @@ import { Loader2, RefreshCcw, ArrowDownToLine, ArrowUpFromLine, WalletCards } fr
 
 type ReportRow = {
   id: string;
+  kind: string;
   sessionId: string;
   shiftReference: string;
   date: string;
