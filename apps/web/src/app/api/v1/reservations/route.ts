@@ -91,6 +91,9 @@ export async function POST(req: NextRequest) {
 
     const checkInDate = new Date(checkIn);
     const checkOutDate = new Date(checkOut);
+    if (isNaN(checkInDate.getTime()) || isNaN(checkOutDate.getTime())) {
+      return errorResponse('BAD_REQUEST', 'Check-in and check-out must be valid dates', 400);
+    }
     const nights = Math.max(1, Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24)));
 
     if (checkOutDate <= checkInDate) {

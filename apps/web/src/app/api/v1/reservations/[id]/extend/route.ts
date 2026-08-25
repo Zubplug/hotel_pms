@@ -4,6 +4,7 @@ import { successResponse, errorResponse } from '@/lib/api-response';
 import { auth } from '@/lib/auth';
 import { assertPropertyAccess } from '@/lib/property-access';
 import { NotificationEngine } from '@/lib/notification-engine';
+import { calculateFolioTotals } from '@/lib/finance/folio-totals';
 
 export async function POST(
   req: NextRequest,
@@ -47,6 +48,9 @@ export async function POST(
 
     if (requestedCheckOut <= currentCheckOut) {
       return errorResponse('BAD_REQUEST', 'New checkout date must be after current checkout date', 400);
+    }
+    if (requestedCheckOut <= new Date(reservation.checkIn)) {
+      return errorResponse('BAD_REQUEST', 'New checkout date must be after check-in', 400);
     }
 
     // Idempotency: if we already processed this exact extension, return success
@@ -102,7 +106,14 @@ export async function POST(
       // 1. Update Reservation checkout
       await tx.reservation.update({
         where: { id: reservation.id },
-        data: { checkOut: requestedCheckOut }
+        data: {
+          checkOut: requestedCheckOut,
+          ratePlanSnapshot: {
+            ...(reservation.ratePlanSnapshot as any || {}),
+            nights: Math.ceil((requestedCheckOut.getTime() - new Date(reservation.checkIn).getTime()) / (1000 * 60 * 60 * 24)),
+            total: Number(resRoom.rateAmount) * Math.ceil((requestedCheckOut.getTime() - new Date(reservation.checkIn).getTime()) / (1000 * 60 * 60 * 24)),
+          },
+        }
       });
 
       // 2. Update ReservationRoom checkout
@@ -141,18 +152,12 @@ export async function POST(
 
         // Recalculate folio totals
         const allItems = await tx.folioItem.findMany({ where: { folioId: folio.id } });
-        const totalCharges = allItems
-          .filter((i: any) => i.type === 'CHARGE' && !i.voidedAt)
-          .reduce((acc: any, item: any) => acc + Number(item.amount), 0);
-        const totalPayments = allItems
-          .filter((i: any) => i.type === 'PAYMENT' && !i.voidedAt)
-          .reduce((acc: any, item: any) => acc + Number(item.amount), 0);
+        const totals = calculateFolioTotals(allItems);
 
         await tx.folio.update({
           where: { id: folio.id },
           data: {
-            totalCharges,
-            balance: totalCharges - totalPayments,
+            ...totals,
           }
         });
       }

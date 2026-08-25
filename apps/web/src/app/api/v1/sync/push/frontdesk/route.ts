@@ -6,6 +6,7 @@ import { NotificationEngine } from '@/lib/notification-engine';
 import { encrypt } from '@/lib/encryption';
 import { getReducedStayEstimate } from '@/lib/refunds/reduced-stay';
 import { calculateNoShowAssessment } from '@/lib/refunds/no-show';
+import { calculateFolioTotals } from '@/lib/finance/folio-totals';
 
 const isUuid = (value: unknown): value is string =>
   typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
@@ -242,6 +243,9 @@ export async function POST(req: NextRequest) {
 
              const checkInDate = new Date(payload.CheckInDate || payload.checkInDate || payload.checkIn);
              const checkOutDate = new Date(payload.CheckOutDate || payload.checkOutDate || payload.checkOut);
+             if (isNaN(checkInDate.getTime()) || isNaN(checkOutDate.getTime()) || checkOutDate <= checkInDate) {
+               throw new Error('Check-out must be after check-in');
+             }
              const nights = Math.max(1, Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24)));
              const baseRate = Number(roomType.baseRate);
              const amount = baseRate * nights;
@@ -351,52 +355,6 @@ export async function POST(req: NextRequest) {
                });
              }
              
-             // If we have keycard encode data from offline check-in, store it!
-             if (payload.encodeData && payload.encodeData.cardSnr && payload.roomId) {
-                 // Try to find an existing lock for this room
-                 let doorLock = await tx.doorLock.findFirst({ where: { roomId: payload.roomId } });
-                 if (!doorLock) {
-                    doorLock = await tx.doorLock.create({
-                      data: {
-                        propertyId: payload.propertyId || reservation.propertyId,
-                        roomId: payload.roomId,
-                        lockCode: `ENCODER-${payload.roomId}`,
-                        provider: 'DELUNS_ENCODER',
-                        status: 'ONLINE'
-                      }
-                    });
-                 }
-                 
-                 const credential = await tx.lockCredential.create({
-                     data: {
-                         reservationId: aggregateId,
-                         roomId: payload.roomId,
-                         lockId: doorLock.id,
-                         credentialType: 'rfid',
-                         status: 'ACTIVE',
-                         validFrom: new Date(),
-                         validUntil: new Date(reservation.checkOut),
-                         cardSerialNumber: payload.encodeData.cardSnr,
-                         metadata: payload.encodeData
-                     }
-                 });
-                 
-                 await tx.lockOperation.create({
-                     data: {
-                         propertyId: payload.propertyId || reservation.propertyId,
-                         reservationId: aggregateId,
-                         roomId: payload.roomId,
-                         lockId: doorLock.id,
-                         credentialId: credential.id,
-                         operation: 'ENCODE_CARD',
-                         status: 'COMPLETED',
-                         requestedAt: new Date(),
-                         startedAt: new Date(),
-                         completedAt: new Date(),
-                         metadata: { initiatedBy: actorId, responseData: payload.encodeData }
-                     }
-                 });
-             }
           }
           else if (eventType === 'CHECK_OUT') {
              await tx.reservation.update({
@@ -418,6 +376,7 @@ export async function POST(req: NextRequest) {
              }
              
              const amount = Number(payload.amount);
+             if (!Number.isFinite(amount) || amount <= 0) throw new Error('Charge amount must be positive');
              await tx.folioItem.create({
                data: {
                  folioId: aggregateId,
@@ -455,6 +414,7 @@ export async function POST(req: NextRequest) {
                where: { posTransactionId: idempotencyKey }
              });
              if (!existing) {
+               if (amount > Number(folio.balance) + 0.01) throw new Error('Payment amount exceeds outstanding balance');
                await tx.folioItem.create({
                  data: {
                    folioId: aggregateId,
@@ -699,7 +659,14 @@ export async function POST(req: NextRequest) {
 
              await tx.reservation.update({
                where: { id: aggregateId },
-               data: { checkOut: newCheckOut }
+               data: {
+                 checkOut: newCheckOut,
+                 ratePlanSnapshot: {
+                   ...(res.ratePlanSnapshot as any || {}),
+                   nights: Math.ceil((newCheckOut.getTime() - res.checkIn.getTime()) / (1000 * 60 * 60 * 24)),
+                   total: Number(activeRoom?.rateAmount || (res.ratePlanSnapshot as any)?.baseRate || 0) * Math.ceil((newCheckOut.getTime() - res.checkIn.getTime()) / (1000 * 60 * 60 * 24)),
+                 },
+               }
              });
 
              if (activeRoom) {
@@ -772,6 +739,7 @@ export async function POST(req: NextRequest) {
              if (!res) throw new Error('Reservation not found or unauthorized');
              if (res.status === 'CHECKED_OUT' || res.status === 'CANCELLED')
                throw new Error(`Cannot edit a ${res.status} reservation`);
+             if (res.status === 'CHECKED_IN') throw new Error('Cannot edit a CHECKED_IN reservation');
 
              const p = payload;
              const newCheckIn  = p.checkIn  ? new Date(p.checkIn)  : res.checkIn;
@@ -801,10 +769,9 @@ export async function POST(req: NextRequest) {
                  where: { id: newRoomTypeId, propertyId }
                });
                if (rt) {
-                 const nights = Math.max(1, Math.ceil(
-                   (newCheckOut.getTime() - newCheckIn.getTime()) / (1000 * 60 * 60 * 24)
-                 ));
-                 newRateAmount = Number(rt.baseRate) * nights;
+                 // ReservationRoom.rateAmount is the nightly rate. The total is
+                 // represented by the folio room-charge items and snapshot.
+                 newRateAmount = Number(rt.baseRate);
                }
              }
 
@@ -817,6 +784,14 @@ export async function POST(req: NextRequest) {
                  adults:          p.adults           ?? res.adults,
                  children:        p.children         ?? res.children,
                  specialRequests: p.specialRequests  ?? res.specialRequests,
+                 ...(newRateAmount !== undefined && newRoomTypeId ? {
+                   ratePlanSnapshot: {
+                     ...(res.ratePlanSnapshot as any || {}),
+                     baseRate: newRateAmount,
+                     nights: Math.ceil((newCheckOut.getTime() - newCheckIn.getTime()) / (1000 * 60 * 60 * 24)),
+                     total: newRateAmount * Math.ceil((newCheckOut.getTime() - newCheckIn.getTime()) / (1000 * 60 * 60 * 24)),
+                   }
+                 } : {}),
                }
              });
 
@@ -833,6 +808,36 @@ export async function POST(req: NextRequest) {
                    rateAmount: newRateAmount,
                  }
                });
+             }
+
+             const folio = await tx.folio.findFirst({
+               where: { reservationId: aggregateId, propertyId },
+             });
+             if (folio && (p.checkIn || p.checkOut || p.roomTypeId)) {
+               const items = await tx.folioItem.findMany({ where: { folioId: folio.id } });
+               const nonRoomItems = items.filter((item: any) => item.source !== 'ROOM_CHARGE');
+               const nights = Math.ceil((newCheckOut.getTime() - newCheckIn.getTime()) / (1000 * 60 * 60 * 24));
+               const roomItems = Array.from({ length: nights }, (_, index) => {
+                 const businessDate = new Date(newCheckIn);
+                 businessDate.setDate(businessDate.getDate() + index);
+                 return {
+                   folioId: folio.id,
+                   businessDate,
+                   type: 'CHARGE',
+                   source: 'ROOM_CHARGE',
+                   description: `Room Charge - Night ${index + 1}`,
+                   quantity: 1,
+                   unitAmount: newRateAmount || 0,
+                   amount: newRateAmount || 0,
+                   currency: res.currency,
+                   baseAmount: newRateAmount || 0,
+                   postedBy: actorId,
+                 };
+               });
+               await tx.folioItem.deleteMany({ where: { folioId: folio.id, source: 'ROOM_CHARGE' } });
+               await tx.folioItem.createMany({ data: roomItems as any[] });
+               const totals = calculateFolioTotals([...nonRoomItems, ...roomItems]);
+               await tx.folio.update({ where: { id: folio.id }, data: totals });
              }
           }
           else if (eventType === 'EDIT_GUEST' && aggregateType === 'GUEST') {

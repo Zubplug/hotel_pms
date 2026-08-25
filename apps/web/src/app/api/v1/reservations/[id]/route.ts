@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { assertPropertyAccess } from '@/lib/property-access';
+import { calculateFolioTotals } from '@/lib/finance/folio-totals';
 
 export async function GET(
   _req: NextRequest,
@@ -89,7 +90,15 @@ export async function GET(
 
     await assertPropertyAccess(session.user.id, reservation.propertyId);
 
-    return successResponse({ ...reservation, auditLogs });
+    const seenActiveCardSerials = new Set<string>();
+    const lockCredentials = reservation.lockCredentials.filter((credential) => {
+      if (credential.status !== 'ACTIVE' || !credential.cardSerialNumber) return true;
+      if (seenActiveCardSerials.has(credential.cardSerialNumber)) return false;
+      seenActiveCardSerials.add(credential.cardSerialNumber);
+      return true;
+    });
+
+    return successResponse({ ...reservation, lockCredentials, auditLogs });
   } catch (err: any) {
     if (err?.code === 'FORBIDDEN') return errorResponse('FORBIDDEN', err.message, 403);
     return errorResponse('INTERNAL_ERROR', err instanceof Error ? err.message : String(err), 500, err instanceof Error ? { stack: err.stack } : undefined);
@@ -144,11 +153,16 @@ export async function PATCH(
 
     if (checkIn && new Date(checkIn).getTime() !== newCheckInDate.getTime()) {
       newCheckInDate = new Date(checkIn);
+      if (isNaN(newCheckInDate.getTime())) return errorResponse('BAD_REQUEST', 'Check-in must be a valid date', 400);
       needsAvailabilityCheck = true;
     }
     if (checkOut && new Date(checkOut).getTime() !== newCheckOutDate.getTime()) {
       newCheckOutDate = new Date(checkOut);
+      if (isNaN(newCheckOutDate.getTime())) return errorResponse('BAD_REQUEST', 'Check-out must be a valid date', 400);
       needsAvailabilityCheck = true;
+    }
+    if (newCheckOutDate <= newCheckInDate) {
+      return errorResponse('BAD_REQUEST', 'Check-out must be after check-in', 400);
     }
     if (roomId && roomId !== newRoomId) {
       newRoomId = roomId;
@@ -260,15 +274,12 @@ export async function PATCH(
           await tx.folioItem.createMany({ data: folioItems });
 
           const allFolioItems = await tx.folioItem.findMany({ where: { folioId: folio.id } });
-          const newTotalCharges = allFolioItems.filter((i: any) => i.type === 'CHARGE').reduce((acc: any, item: any) => acc + Number(item.amount), 0);
-          const newTotalPayments = allFolioItems.filter((i: any) => i.type === 'PAYMENT').reduce((acc: any, item: any) => acc + Number(item.amount), 0);
-          const newBalance = newTotalCharges - newTotalPayments;
+          const totals = calculateFolioTotals(allFolioItems);
           
           await tx.folio.update({
             where: { id: folio.id },
             data: {
-              totalCharges: newTotalCharges,
-              balance: newBalance,
+              ...totals,
             }
           });
         }

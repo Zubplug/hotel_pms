@@ -40,7 +40,10 @@ public class LocalRepository
             }
         }
         
-        int nights = (int)Math.Max(1, Math.Ceiling((reservation.CheckOutDate - reservation.CheckInDate).TotalDays));
+        if (reservation.CheckOutDate <= reservation.CheckInDate)
+            throw new InvalidOperationException("Check-out must be after check-in.");
+
+        int nights = (int)Math.Ceiling((reservation.CheckOutDate - reservation.CheckInDate).TotalDays);
         decimal totalAmount = baseRate * nights;
 
         reservation.Currency = currency;
@@ -428,6 +431,9 @@ public class LocalRepository
         var res = await _dbContext.Reservations.FindAsync(reservationId);
         if (res == null) throw new InvalidOperationException("Reservation not found");
 
+        if (newCheckOut <= res.CheckInDate)
+            throw new InvalidOperationException("New checkout date must be after the check-in date.");
+
         if (newCheckOut <= res.CheckOutDate)
             throw new InvalidOperationException("New checkout date must be after the current checkout date.");
 
@@ -648,6 +654,11 @@ public class LocalRepository
         if (!string.IsNullOrEmpty(idempotencyKey) && CheckFolioIdempotency(folio, idempotencyKey))
             return true;
 
+        if (amount <= 0)
+            throw new InvalidOperationException("Payment amount must be positive.");
+        if (amount > folio.OutstandingBalance + 0.01m)
+            throw new InvalidOperationException("Payment amount exceeds the outstanding balance.");
+
         folio.TotalPayments += amount;
         folio.UpdatedAt = DateTime.UtcNow;
         folio.IsDirty = true;
@@ -774,52 +785,6 @@ public class LocalRepository
         int eventVersion = res.Version;
         res.Version++;
 
-        if (!string.IsNullOrEmpty(encodeData))
-        {
-            var parsed = JsonSerializer.Deserialize<JsonElement>(encodeData);
-            var cardSnr = parsed.ValueKind == JsonValueKind.Object && parsed.TryGetProperty("cardSnr", out var snrProp) ? snrProp.GetString() : null;
-            var now = DateTime.UtcNow;
-
-            var credential = new Data.Entities.LocalLockCredential
-            {
-                Id = Guid.NewGuid().ToString(),
-                ReservationId = res.Id,
-                RoomId = res.RoomId ?? string.Empty,
-                LockId = $"ENCODER-{res.RoomId}",
-                CredentialType = "RFID",
-                Status = "ACTIVE",
-                ValidFrom = res.CheckInDate,
-                ValidUntil = res.CheckOutDate,
-                CardSerialNumber = cardSnr,
-                IssuedAt = now,
-                MetadataJson = encodeData,
-                CreatedAt = now,
-                UpdatedAt = now
-            };
-
-            var op = new Data.Entities.LocalLockOperation
-            {
-                Id = Guid.NewGuid().ToString(),
-                PropertyId = res.PropertyId,
-                ReservationId = res.Id,
-                LockId = credential.LockId,
-                RoomId = credential.RoomId,
-                CredentialId = credential.Id,
-                Operation = "ENCODE_CARD",
-                Status = "COMPLETED",
-                RequestedAt = now,
-                StartedAt = now,
-                CompletedAt = now,
-                AgentId = "DESKTOP",
-                DeviceId = deviceId,
-                MetadataJson = JsonSerializer.Serialize(new { initiatedBy = userId }),
-                CommandJson = JsonSerializer.Serialize(new { responseData = parsed })
-            };
-
-            _dbContext.LockCredentials.Add(credential);
-            _dbContext.LockOperations.Add(op);
-        }
-
         _dbContext.OutboxEvents.Add(new LocalOutboxEvent
         {
             PropertyId = res.PropertyId,
@@ -832,8 +797,7 @@ public class LocalRepository
             Sequence = res.LocalSequence,
             PayloadJson = JsonSerializer.Serialize(new 
             { 
-                roomId = res.RoomId,
-                encodeData = encodeData != null ? JsonSerializer.Deserialize<JsonElement>(encodeData) : (JsonElement?)null
+                roomId = res.RoomId
             })
         });
 
