@@ -34,11 +34,11 @@ export async function GET(req: NextRequest) {
     const [arrivalsCount, departuresCount, inHouseCount, hardwareAgent, rooms] = await Promise.all([
       // Arrivals: checking in today
       prisma.reservation.count({
-        where: { propertyId, checkIn: businessDate, status: { notIn: ['CANCELLED', 'NO_SHOW'] } }
+        where: { propertyId, checkIn: businessDate, status: { notIn: ['CANCELLED', 'NO_SHOW', 'CHECKED_OUT'] } }
       }),
-      // Departures: checking out today
+      // Departures: checked-in guests whose stay expires today
       prisma.reservation.count({
-        where: { propertyId, checkOut: businessDate, status: { notIn: ['CANCELLED', 'NO_SHOW'] } }
+        where: { propertyId, checkOut: businessDate, status: 'CHECKED_IN' }
       }),
       // In-House: Currently Checked In
       prisma.reservation.count({
@@ -74,7 +74,7 @@ export async function GET(req: NextRequest) {
 
     // 3. Fetch Detailed Arrivals List
     const arrivals = await prisma.reservation.findMany({
-      where: { propertyId, checkIn: businessDate, status: { notIn: ['CANCELLED', 'NO_SHOW'] } },
+      where: { propertyId, checkIn: businessDate, status: { notIn: ['CANCELLED', 'NO_SHOW', 'CHECKED_OUT'] } },
       include: {
         primaryGuest: true,
         reservationRooms: { include: { room: { include: { roomType: true } } } },
@@ -84,7 +84,7 @@ export async function GET(req: NextRequest) {
 
     // 4. Fetch Detailed Departures List
     const departures = await prisma.reservation.findMany({
-      where: { propertyId, checkOut: businessDate, status: { notIn: ['CANCELLED', 'NO_SHOW'] } },
+      where: { propertyId, checkOut: businessDate, status: 'CHECKED_IN' },
       include: {
         primaryGuest: true,
         reservationRooms: { include: { room: true } },

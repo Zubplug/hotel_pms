@@ -46,11 +46,7 @@ public class SessionManager
         var deviceId = await Microsoft.Maui.Storage.SecureStorage.Default.GetAsync("DEVICE_ID") ?? "UNKNOWN_DEVICE";
 
         // Find if there's an active POS session for this specific operator or terminal
-        var activeSession = await _dbContext.PosSessions
-            .Where(s => s.PropertyId == property.Id && s.Status == PosConstants.SessionStatus.Open && 
-                        (s.UserId == staff.Id || s.PrimaryOperatorId == staff.Id || s.DeviceId == deviceId))
-            .OrderByDescending(s => s.OpenedAt)
-            .FirstOrDefaultAsync();
+        var activeSession = await FindBankingSessionAsync(property, staff, deviceId);
 
         // Invalidate previous contexts
         var oldContexts = await _dbContext.OperatorContexts.Where(c => c.IsActive).ToListAsync();
@@ -58,9 +54,6 @@ public class SessionManager
         {
             c.IsActive = false;
         }
-
-        // Fetch auto-lock timer from terminal or outlet settings if available, else default 60s
-        var autoLockSeconds = outlet.AutoLockSeconds ?? 60; // 60 seconds default for Restaurant
 
         // Create new trusted context
         var newContext = new LocalOperatorContext
@@ -73,7 +66,7 @@ public class SessionManager
             SessionId = activeSession?.Id ?? string.Empty,
             OperatorTokenVersion = Guid.NewGuid().ToString(),
             AuthenticatedAt = DateTime.UtcNow,
-            ExpiresAt = DateTime.UtcNow.AddSeconds(autoLockSeconds), // Enforce Auto-lock timer
+            ExpiresAt = DateTime.MaxValue,
             IsActive = true
         };
 
@@ -83,23 +76,63 @@ public class SessionManager
         return newContext;
     }
 
+    public async Task<LocalOperatorContext> EstablishOperatorContextAsync(string staffId)
+    {
+        var staff = await _dbContext.Staff.FirstOrDefaultAsync(s => s.Id == staffId && s.IsActive && s.HasPosAccess);
+        if (staff == null)
+            throw new Exception("Staff member not found or inactive.");
+
+        var property = await _dbContext.Properties.FirstOrDefaultAsync();
+        if (property == null)
+            throw new Exception("Device is not configured to a property.");
+
+        var outlet = await _dbContext.PosOutlets.FirstOrDefaultAsync(o => o.PropertyId == property.Id && o.IsActive);
+        if (outlet == null)
+            throw new Exception("No active POS outlet found for this property.");
+
+        var deviceId = await Microsoft.Maui.Storage.SecureStorage.Default.GetAsync("DEVICE_ID") ?? "UNKNOWN_DEVICE";
+        var activeSession = await FindBankingSessionAsync(property, staff, deviceId);
+
+        var oldContexts = await _dbContext.OperatorContexts.Where(c => c.IsActive).ToListAsync();
+        foreach (var context in oldContexts)
+            context.IsActive = false;
+
+        var newContext = new LocalOperatorContext
+        {
+            Id = Guid.NewGuid().ToString(),
+            DeviceId = deviceId,
+            PropertyId = property.Id,
+            OutletId = outlet.Id,
+            StaffId = staff.Id,
+            SessionId = activeSession?.Id ?? string.Empty,
+            OperatorTokenVersion = Guid.NewGuid().ToString(),
+            AuthenticatedAt = DateTime.UtcNow,
+            ExpiresAt = DateTime.MaxValue,
+            IsActive = true
+        };
+
+        _dbContext.OperatorContexts.Add(newContext);
+        await _dbContext.SaveChangesAsync();
+        return newContext;
+    }
+
     /// <summary>
     /// Retrieves the current trusted operator context independently of React IPC payload.
     /// </summary>
     public async Task<LocalOperatorContext> GetActiveContextAsync()
     {
         var context = await _dbContext.OperatorContexts
-            .FirstOrDefaultAsync(c => c.IsActive && c.ExpiresAt > DateTime.UtcNow);
+            .FirstOrDefaultAsync(c => c.IsActive);
 
         if (context == null)
             throw new UnauthorizedAccessException("No active operator session found on this terminal.");
 
         // Check if POS Session changed
-        var activePosSession = await _dbContext.PosSessions
-            .Where(s => s.PropertyId == context.PropertyId && s.Status == PosConstants.SessionStatus.Open &&
-                        (s.UserId == context.StaffId || s.PrimaryOperatorId == context.StaffId || s.DeviceId == context.DeviceId))
-            .OrderByDescending(s => s.OpenedAt)
-            .FirstOrDefaultAsync();
+        var property = await _dbContext.Properties.FirstOrDefaultAsync(p => p.Id == context.PropertyId);
+        var staff = await _dbContext.Staff.FirstOrDefaultAsync(s => s.Id == context.StaffId);
+        var activePosSession = property != null && staff != null
+            ? await FindBankingSessionAsync(property, staff, context.DeviceId)
+            : null;
             
         if (activePosSession != null && context.SessionId != activePosSession.Id)
         {
@@ -108,6 +141,27 @@ public class SessionManager
         }
 
         return context;
+    }
+
+    private async Task<LocalPosSession?> FindBankingSessionAsync(LocalProperty property, LocalStaff staff, string deviceId)
+    {
+        var query = _dbContext.PosSessions
+            .Where(s => s.PropertyId == property.Id && s.Status == PosConstants.SessionStatus.Open);
+
+        if (string.Equals(property.BankingModel, PosConstants.BankingModels.ServerBanking, StringComparison.OrdinalIgnoreCase))
+        {
+            return await query
+                .Where(s => s.UserId == staff.Id || s.PrimaryOperatorId == staff.Id || s.StaffId == staff.Id)
+                .OrderByDescending(s => s.OpenedAt)
+                .FirstOrDefaultAsync();
+        }
+
+        if (string.Equals(staff.Role, "WAITER", StringComparison.OrdinalIgnoreCase)) return null;
+
+        return await query
+            .Where(s => s.DeviceId == deviceId)
+            .OrderByDescending(s => s.OpenedAt)
+            .FirstOrDefaultAsync();
     }
     
     public async Task LogoutAsync()
@@ -122,14 +176,7 @@ public class SessionManager
 
     public async Task KeepAliveAsync()
     {
-        var context = await _dbContext.OperatorContexts.FirstOrDefaultAsync(c => c.IsActive);
-        if (context != null)
-        {
-            var outlet = await _dbContext.PosOutlets.FirstOrDefaultAsync(o => o.Id == context.OutletId);
-            var autoLockSeconds = outlet?.AutoLockSeconds ?? 60;
-            context.ExpiresAt = DateTime.UtcNow.AddSeconds(autoLockSeconds);
-            await _dbContext.SaveChangesAsync();
-        }
+        await Task.CompletedTask;
     }
 
     /// <summary>

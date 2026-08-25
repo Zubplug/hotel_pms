@@ -32,6 +32,7 @@ interface MyOrdersModalProps {
 const STATUS_CONFIG: Record<string, { label: string; icon: React.ReactNode; className: string }> = {
   PAID:      { label: 'Paid',      icon: <CheckCircle2 className="w-3 h-3" />, className: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
   CLOSED:    { label: 'Closed',    icon: <CheckCircle2 className="w-3 h-3" />, className: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+  COMPLETED: { label: 'Paid',     icon: <CheckCircle2 className="w-3 h-3" />, className: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
   SUBMITTED: { label: 'Open',      icon: <Clock className="w-3 h-3" />,        className: 'bg-blue-100 text-blue-700 border-blue-200' },
   IN_SERVICE:{ label: 'In Service',icon: <Clock className="w-3 h-3" />,        className: 'bg-amber-100 text-amber-700 border-amber-200' },
   VOIDED:    { label: 'Voided',    icon: <XCircle className="w-3 h-3" />,      className: 'bg-slate-100 text-slate-500 border-slate-200' },
@@ -102,6 +103,8 @@ export function MyOrdersModal({ isOpen, onClose, operatorToken, staffName }: MyO
         displayName: order.displayName ?? order.DisplayName ?? '',
         status: order.status ?? order.Status ?? '',
         total: Number(order.total ?? order.Total ?? 0),
+        itemCount: Number(order.itemCount ?? order.items?.reduce((sum: number, item: any) => sum + Number(item.quantity || 0), 0) ?? 0),
+        createdAt: order.createdAt ?? order.CreatedAt ?? order.updatedAt ?? order.UpdatedAt ?? order.businessDate ?? order.BusinessDate,
       })));
     } catch (error: any) {
       toast.error(error.message || 'Failed to load orders');
@@ -131,8 +134,10 @@ export function MyOrdersModal({ isOpen, onClose, operatorToken, staffName }: MyO
   const paidCount   = filteredOrders.filter(o => o.status === 'PAID' || o.status === 'CLOSED').length;
   const openCount   = filteredOrders.filter(o => o.status === 'SUBMITTED' || o.status === 'IN_SERVICE').length;
 
-  const formatTime = (iso: string) =>
-    new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const formatTime = (iso: string) => {
+    const date = new Date(iso);
+    return Number.isNaN(date.getTime()) ? '—' : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
 
   const getOrderLabel = (order: any) => {
     if (order.orderType === 'TABLE') return `Table ${order.tableNumber || '—'}`;
@@ -302,7 +307,7 @@ export function MyOrdersModal({ isOpen, onClose, operatorToken, staffName }: MyO
                         {/* Items count */}
                         <td className="py-4 px-4">
                           <span className="text-slate-600 font-medium">
-                            {order.items?.length ?? order.itemCount ?? '—'}
+                            {order.itemCount ?? 0}
                           </span>
                         </td>
 

@@ -7,6 +7,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Loader2, Shirt, CheckCircle2, Clock, Truck, CreditCard, Banknote, Receipt } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 export default function ManageLaundryOrderPage() {
   const searchParams = useSearchParams();
@@ -21,6 +22,21 @@ export default function ManageLaundryOrderPage() {
   
   const [paymentMethod, setPaymentMethod] = useState('CASH');
   const [processingPayment, setProcessingPayment] = useState(false);
+  const [paymentConfirmationOpen, setPaymentConfirmationOpen] = useState(false);
+  const [successDialog, setSuccessDialog] = useState({
+    open: false,
+    title: '',
+    description: ''
+  });
+
+  const amountValue = (value: unknown) => {
+    const amount = Number(value);
+    return Number.isFinite(amount) ? amount : 0;
+  };
+
+  const itemUnitPrice = (item: any) => amountValue(
+    item.priceAtTime ?? item.unitPrice ?? item.UnitPrice ?? item.price ?? 0
+  );
 
   const fetchOrder = async () => {
     if (!propertyId) return;
@@ -45,6 +61,11 @@ export default function ManageLaundryOrderPage() {
       const res = await provider.laundry.updateOrderStatus(order.id, status);
       if (!res.error) {
         await fetchOrder();
+        setSuccessDialog({
+          open: true,
+          title: 'Status updated',
+          description: `The laundry order is now ${status.toLowerCase()}.`
+        });
       } else {
         alert(res.error || 'Failed to update status');
       }
@@ -61,6 +82,11 @@ export default function ManageLaundryOrderPage() {
       const res = await provider.laundry.deliverOrder(order.id);
       if (!res.error) {
         await fetchOrder();
+        setSuccessDialog({
+          open: true,
+          title: 'Order delivered',
+          description: 'The laundry order was delivered and the folio was charged successfully.'
+        });
       } else {
         alert(res.error || 'Failed to deliver order');
       }
@@ -73,7 +99,7 @@ export default function ManageLaundryOrderPage() {
     if (!order?.folioItem?.folio) return;
     const folio = order.folioItem.folio;
     
-    if (folio.balance <= 0) return alert('Folio is already fully paid.');
+    if (amountValue(folio.balance) <= 0) return alert('Folio is already fully paid.');
     
     setProcessingPayment(true);
     try {
@@ -82,7 +108,7 @@ export default function ManageLaundryOrderPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           folioId: folio.id,
-          amount: Number(folio.balance),
+          amount: amountValue(folio.balance),
           currency: folio.currency,
           method: paymentMethod,
           idempotencyKey: `laundry_pay_${order.id}_${Date.now()}`,
@@ -92,8 +118,13 @@ export default function ManageLaundryOrderPage() {
       
       const data = await res.json();
       if (res.ok || res.status === 201 || res.status === 200) {
-        alert('Payment recorded successfully!');
+        setPaymentConfirmationOpen(false);
         await fetchOrder();
+        setSuccessDialog({
+          open: true,
+          title: 'Payment recorded',
+          description: 'The payment was recorded successfully and the folio has been updated.'
+        });
       } else {
         alert(data.error || 'Failed to process payment');
       }
@@ -124,7 +155,7 @@ export default function ManageLaundryOrderPage() {
           </div>
           <div className="text-right">
             <p className="text-sm font-bold text-slate-500">Total</p>
-            <p className="text-2xl font-black text-cyan-700">{formatCurrency(Number(order.totalAmount), order.currency)}</p>
+            <p className="text-2xl font-black text-cyan-700">{formatCurrency(amountValue(order.totalAmount), order.currency)}</p>
           </div>
         </div>
 
@@ -164,7 +195,7 @@ export default function ManageLaundryOrderPage() {
                {order.items?.map((item: any) => (
                  <div key={item.id} className="flex justify-between items-center p-4 bg-slate-50 rounded-xl border border-slate-100">
                     <span className="font-bold text-slate-800">{item.quantity}x {item.item?.name || 'Item'}</span>
-                    <span className="font-semibold text-slate-600">{formatCurrency(Number(item.priceAtTime), order.currency)}</span>
+                    <span className="font-semibold text-slate-600">{formatCurrency(itemUnitPrice(item), order.currency)}</span>
                  </div>
                ))}
              </div>
@@ -179,19 +210,19 @@ export default function ManageLaundryOrderPage() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 <div className="p-4 bg-white rounded-xl shadow-sm border border-slate-100">
                   <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Charges</p>
-                  <p className="text-xl font-black text-slate-900">{formatCurrency(Number(order.folioItem.folio.totalCharges), order.folioItem.folio.currency)}</p>
+                  <p className="text-xl font-black text-slate-900">{formatCurrency(amountValue(order.folioItem.folio.totalCharges), order.folioItem.folio.currency)}</p>
                 </div>
                 <div className="p-4 bg-white rounded-xl shadow-sm border border-slate-100">
                   <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Paid</p>
-                  <p className="text-xl font-black text-emerald-600">{formatCurrency(Number(order.folioItem.folio.totalPayments), order.folioItem.folio.currency)}</p>
+                  <p className="text-xl font-black text-emerald-600">{formatCurrency(amountValue(order.folioItem.folio.totalPayments), order.folioItem.folio.currency)}</p>
                 </div>
                 <div className="p-4 bg-white rounded-xl shadow-sm border border-cyan-200 ring-2 ring-cyan-100 col-span-2">
                   <p className="text-xs font-bold text-cyan-700 uppercase tracking-wider">Balance Due</p>
-                  <p className="text-2xl font-black text-cyan-700">{formatCurrency(Number(order.folioItem.folio.balance), order.folioItem.folio.currency)}</p>
+                  <p className="text-2xl font-black text-cyan-700">{formatCurrency(amountValue(order.folioItem.folio.balance), order.folioItem.folio.currency)}</p>
                 </div>
               </div>
 
-              {Number(order.folioItem.folio.balance) > 0 ? (
+              {amountValue(order.folioItem.folio.balance) > 0 ? (
                 <div className="flex items-end gap-4 p-4 bg-white rounded-xl border border-slate-200">
                   <div className="flex-1 space-y-2">
                     <label className="text-sm font-bold text-slate-700">Payment Method</label>
@@ -207,7 +238,7 @@ export default function ManageLaundryOrderPage() {
                     </select>
                   </div>
                   <Button 
-                    onClick={handleSettlePayment} 
+                    onClick={() => setPaymentConfirmationOpen(true)}
                     disabled={processingPayment} 
                     className="h-12 px-8 bg-cyan-600 hover:bg-cyan-700 text-white font-bold rounded-lg shadow-md"
                   >
@@ -224,6 +255,67 @@ export default function ManageLaundryOrderPage() {
           )}
         </div>
       </div>
+
+      <Dialog open={paymentConfirmationOpen} onOpenChange={setPaymentConfirmationOpen}>
+        <DialogContent className="sm:max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>Confirm payment</DialogTitle>
+            <DialogDescription>
+              Confirm that you received the laundry payment before recording it on the folio.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-xl border border-cyan-100 bg-cyan-50/70 p-4">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-slate-600">Payment method</span>
+              <span className="font-bold text-slate-900">{paymentMethod.replace('_', ' ')}</span>
+            </div>
+            <div className="mt-3 flex items-center justify-between border-t border-cyan-100 pt-3">
+              <span className="font-semibold text-slate-700">Amount to record</span>
+              <span className="text-xl font-black text-cyan-700">
+                {formatCurrency(amountValue(order.folioItem?.folio?.balance), order.folioItem?.folio?.currency || order.currency)}
+              </span>
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:justify-end">
+            <Button variant="outline" onClick={() => setPaymentConfirmationOpen(false)} disabled={processingPayment}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-cyan-600 text-white hover:bg-cyan-700"
+              onClick={async () => {
+                await handleSettlePayment();
+              }}
+              disabled={processingPayment}
+            >
+              {processingPayment ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+              Confirm payment
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={successDialog.open}
+        onOpenChange={open => setSuccessDialog(current => ({ ...current, open }))}
+      >
+        <DialogContent className="sm:max-w-md rounded-2xl text-center">
+          <DialogHeader className="items-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100">
+              <CheckCircle2 className="h-8 w-8 text-emerald-600" />
+            </div>
+            <DialogTitle className="text-xl">{successDialog.title}</DialogTitle>
+            <DialogDescription>{successDialog.description}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="sm:justify-center">
+            <Button
+              className="min-w-28 bg-emerald-600 text-white hover:bg-emerald-700"
+              onClick={() => setSuccessDialog(current => ({ ...current, open: false }))}
+            >
+              Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

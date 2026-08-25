@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { LoadingState, EmptyState } from '@/components/ui/EmptyState';
 import { ReadCardCheckoutDialog } from '@/components/reservations/ReadCardCheckoutDialog';
 import { useProperty } from '@/components/PropertyProvider';
+import { formatRoomNumber } from '@/lib/format-room';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Reservation {
@@ -216,7 +217,7 @@ export default function ReservationsPage() {
                         <div className="flex items-center gap-1.5">
                           <BedDouble className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                           <span className="font-medium">
-                            {room.room?.number ?? '—'}
+                            {formatRoomNumber(room.room?.number) || '—'}
                           </span>
                           <span className="text-xs text-muted-foreground hidden lg:inline">
                             · {room.roomType?.name}

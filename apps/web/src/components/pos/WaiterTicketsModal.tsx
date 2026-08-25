@@ -43,6 +43,11 @@ export function WaiterTicketsModal({
     }
   };
 
+  const formatTicketTime = (value: string) => {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? '—' : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
   useEffect(() => {
     if (isOpen) {
       fetchTickets();
@@ -119,7 +124,7 @@ export function WaiterTicketsModal({
                         )}
                         <span className="flex items-center gap-1">
                           <Clock className="h-3 w-3" />
-                          {new Date(ticket.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          {formatTicketTime(ticket.createdAt || ticket.firedAt)}
                         </span>
                       </div>
                     </div>
@@ -132,7 +137,7 @@ export function WaiterTicketsModal({
                           <div className="flex items-start gap-2">
                             <span className="font-medium text-slate-700 min-w-[20px]">{item.quantity}x</span>
                             <div className="flex-1">
-                              <span className="text-slate-800">{item.productName}</span>
+                              <span className="text-slate-800">{item.productName || item.name || 'Item'}</span>
                               {item.modifiers?.length > 0 && (
                                 <div className="text-xs text-slate-500 mt-0.5">
                                   {item.modifiers.map((m: any) => m.name).join(', ')}

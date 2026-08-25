@@ -75,7 +75,9 @@ export function ActiveOrdersModal({ isOpen, onClose, operatorToken, sessionId, s
   };
 
   const formatElapsed = (createdAt: string) => {
-    const diff = Math.floor((Date.now() - new Date(createdAt).getTime()) / 60000);
+    const timestamp = new Date(createdAt).getTime();
+    if (!Number.isFinite(timestamp)) return '—';
+    const diff = Math.max(0, Math.floor((Date.now() - timestamp) / 60000));
     if (diff < 60) return `${diff} min`;
     const hours = Math.floor(diff / 60);
     const mins = diff % 60;
@@ -173,11 +175,11 @@ export function ActiveOrdersModal({ isOpen, onClose, operatorToken, sessionId, s
                   <div className="grid grid-cols-2 gap-4 my-4">
                     <div className="flex flex-col">
                       <span className="text-xs text-slate-500 font-medium">Items</span>
-                      <span className="font-bold text-slate-800">{order.itemCount}</span>
+                      <span className="font-bold text-slate-800">{Number(order.itemCount ?? order.items?.reduce((sum: number, item: any) => sum + Number(item.quantity || 0), 0) || 0)}</span>
                     </div>
                     <div className="flex flex-col">
                       <span className="text-xs text-slate-500 font-medium">Total</span>
-                      <span className="font-bold text-slate-800">{formatCurrency(order.total)}</span>
+                      <span className="font-bold text-slate-800">{formatCurrency(Number(order.total ?? order.totalAmount ?? 0))}</span>
                     </div>
                     <div className="flex flex-col">
                       <span className="text-xs text-slate-500 font-medium">Waiter</span>
@@ -187,7 +189,7 @@ export function ActiveOrdersModal({ isOpen, onClose, operatorToken, sessionId, s
                       <span className="text-xs text-slate-500 font-medium">Time</span>
                       <div className="flex items-center gap-1 font-bold text-slate-800">
                         <Clock className="w-3 h-3 text-slate-400" />
-                        {formatElapsed(order.createdAt)}
+                        {formatElapsed(order.createdAt || order.updatedAt)}
                       </div>
                     </div>
                   </div>

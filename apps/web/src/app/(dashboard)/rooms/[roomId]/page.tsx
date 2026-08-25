@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
+import { formatRoomNumber } from '@/lib/format-room';
 
 interface RoomDetail {
   id: string;
@@ -51,7 +52,7 @@ export default function RoomDetailPage() {
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <PageHeader
-        title={room.displayName || `Room ${room.number}`}
+        title={room.displayName || `Room ${formatRoomNumber(room.number)}`}
         description={`${room.roomType.name} · Floor ${room.floor.number} · ${room.floor.building.name}`}
         actions={
           <div className="flex gap-2">

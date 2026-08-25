@@ -22,6 +22,7 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { formatRoomNumber } from '@/lib/format-room';
 
 // ─── types ────────────────────────────────────────────────────────────────────
 type HKStatus =
@@ -409,7 +410,7 @@ export default function HousekeepingDashboard() {
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center font-bold text-slate-700 text-sm group-hover:bg-slate-200 transition-colors">
-                              {task.room?.number || '??'}
+                              {formatRoomNumber(task.room?.number) || '??'}
                             </div>
                           </div>
                         </td>

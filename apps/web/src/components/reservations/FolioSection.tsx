@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
-import { PlusCircle, Wallet, ArrowRightLeft, CornerDownRight, Printer } from 'lucide-react';
+import { PlusCircle, Wallet, ArrowRightLeft, CornerDownRight, Printer, Receipt, TrendingDown, TrendingUp } from 'lucide-react';
 import { AddPaymentDialog } from './AddPaymentDialog';
 import { RefundDialog } from './RefundDialog';
 import { FrontDeskAddPaymentDialog } from '../frontdesk/FrontDeskAddPaymentDialog';
@@ -14,6 +14,7 @@ import { FrontDeskQuickCheckoutDialog } from '../frontdesk/FrontDeskQuickCheckou
 import { usePathname } from 'next/navigation';
 import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
+import { formatRoomNumber } from '@/lib/format-room';
 
 export function FolioSection({ reservation }: { reservation: any }) {
   const pathname = usePathname();
@@ -45,6 +46,8 @@ export function FolioSection({ reservation }: { reservation: any }) {
   // Compute total charges dynamically from FolioItems if we want, or use the DB totalCharges/totalPayments/balance.
   // We use the DB authoritative values.
   const totalCharges = Number(folio.balance) + Number(folio.totalPayments);
+  const outstandingBalance = Number(folio.balance);
+  const availableCredit = Number(folio.availableCredit || 0);
   const ledgerItems = [
     ...(folio.items || []),
     ...(folio.credits || []).map((credit: any) => ({
@@ -60,20 +63,24 @@ export function FolioSection({ reservation }: { reservation: any }) {
 
   return (
     <>
-      <Card className="mt-6 overflow-hidden border-slate-200 shadow-sm">
-        <CardHeader className="flex flex-col gap-4 border-b bg-slate-50 py-4 sm:flex-row sm:items-center sm:justify-between">
+      <Card className="mt-6 overflow-hidden rounded-2xl border-slate-200 bg-white shadow-lg shadow-slate-200/50">
+        <CardHeader className="flex flex-col gap-5 border-b border-slate-200 bg-gradient-to-br from-slate-900 via-slate-800 to-blue-900 px-5 py-5 text-white sm:px-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-3">
-            <CardTitle className="flex items-center gap-2 text-lg font-bold sm:text-xl">
-              <Wallet className="w-5 h-5" /> Folio Ledger
-            </CardTitle>
-            <Badge variant={isClosed ? 'secondary' : 'default'} className="uppercase">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/20">
+              <Receipt className="h-5 w-5" />
+            </div>
+            <div>
+              <CardTitle className="text-lg font-bold sm:text-xl">Folio Ledger</CardTitle>
+              <p className="mt-0.5 text-xs text-slate-300">Charges, payments and credits for this stay</p>
+            </div>
+            <Badge className="border-white/20 bg-white/10 text-white uppercase" variant="outline">
               {folio.status}
             </Badge>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 [&_button]:border-white/20 [&_button]:text-white [&_button]:hover:bg-white/10">
             {!isClosed && (
               <>
-                <Button size="sm" onClick={() => setIsAddPaymentOpen(true)}>
+                <Button size="sm" className="bg-white text-slate-900 hover:bg-slate-100" onClick={() => setIsAddPaymentOpen(true)}>
                   <PlusCircle className="w-4 h-4 mr-2" /> Add Payment
                 </Button>
                 {isFrontDesk && (
@@ -92,31 +99,32 @@ export function FolioSection({ reservation }: { reservation: any }) {
         </CardHeader>
         <CardContent className="p-0">
           {/* Summary Banner */}
-          <div className="grid grid-cols-1 divide-y border-b bg-white sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-4">
-            <div className="min-w-0 p-4 text-center sm:p-5">
-              <p className="text-sm text-muted-foreground mb-1">Total Charges</p>
-              <p className="whitespace-nowrap text-xl font-semibold tabular-nums text-slate-800 sm:text-2xl">{formatCurrency(totalCharges)}</p>
+          <div className="grid grid-cols-1 gap-3 border-b bg-slate-50/70 p-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="mb-3 flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Total charges</p><TrendingUp className="h-4 w-4 text-slate-400" /></div>
+              <p className="whitespace-nowrap text-xl font-bold tabular-nums text-slate-900 sm:text-2xl">{formatCurrency(totalCharges)}</p>
             </div>
-            <div className="min-w-0 p-4 text-center sm:p-5">
-              <p className="text-sm text-muted-foreground mb-1">Total Payments</p>
-              <p className="whitespace-nowrap text-xl font-semibold tabular-nums text-emerald-600 sm:text-2xl">{formatCurrency(folio.totalPayments)}</p>
+            <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-4 shadow-sm">
+              <div className="mb-3 flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-wider text-emerald-700">Total payments</p><Wallet className="h-4 w-4 text-emerald-600" /></div>
+              <p className="whitespace-nowrap text-xl font-bold tabular-nums text-emerald-700 sm:text-2xl">{formatCurrency(folio.totalPayments)}</p>
             </div>
-            <div className="min-w-0 bg-slate-50/50 p-4 text-center sm:p-5">
-              <p className="text-sm text-muted-foreground mb-1">Outstanding Balance</p>
-              <p className={`whitespace-nowrap text-xl font-bold tabular-nums sm:text-2xl ${Number(folio.balance) > 0 ? 'text-red-600' : Number(folio.balance) < 0 ? 'text-amber-600' : 'text-slate-800'}`}>
-                {formatCurrency(folio.balance)}
+            <div className={`rounded-xl border p-4 shadow-sm ${outstandingBalance > 0 ? 'border-rose-100 bg-rose-50/70' : 'border-slate-200 bg-white'}`}>
+              <div className="mb-3 flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Outstanding</p><TrendingDown className="h-4 w-4 text-slate-400" /></div>
+              <p className={`whitespace-nowrap text-xl font-bold tabular-nums sm:text-2xl ${outstandingBalance > 0 ? 'text-rose-700' : 'text-slate-900'}`}>
+                {formatCurrency(outstandingBalance)}
               </p>
             </div>
-            <div className="min-w-0 bg-blue-50/40 p-4 text-center sm:p-5">
-              <p className="text-sm text-muted-foreground mb-1">Available Credit</p>
-              <p className="whitespace-nowrap text-xl font-bold tabular-nums text-blue-700 sm:text-2xl">{formatCurrency(folio.availableCredit || 0)}</p>
+            <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-4 shadow-sm">
+              <div className="mb-3 flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-wider text-blue-700">Available credit</p><CornerDownRight className="h-4 w-4 text-blue-600" /></div>
+              <p className="whitespace-nowrap text-xl font-bold tabular-nums text-blue-700 sm:text-2xl">{formatCurrency(availableCredit)}</p>
             </div>
           </div>
 
           {/* Ledger Table */}
-          <div className="overflow-x-auto">
+          <div className="p-4 sm:p-6">
+            <div className="overflow-x-auto rounded-xl border border-slate-200">
             <table className="w-full min-w-[900px] text-left text-sm">
-              <thead className="bg-slate-50/50 border-b text-slate-500 uppercase text-xs font-semibold">
+              <thead className="border-b bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500">
                 <tr>
                   <th className="px-6 py-3">Date</th>
                   <th className="px-6 py-3">Type</th>
@@ -126,7 +134,7 @@ export function FolioSection({ reservation }: { reservation: any }) {
                   <th className="px-6 py-3 text-center">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100 bg-white">
                 {ledgerItems.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-6 py-8 text-center text-muted-foreground">
@@ -146,26 +154,26 @@ export function FolioSection({ reservation }: { reservation: any }) {
                       : null;
 
                     return (
-                      <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="px-6 py-3 whitespace-nowrap text-slate-500">
+                      <tr key={item.id} className="transition-colors hover:bg-blue-50/40">
+                        <td className="whitespace-nowrap px-6 py-4 text-slate-500">
                           {format(new Date(item.createdAt), 'MMM d, h:mm a')}
                         </td>
-                        <td className="px-6 py-3">
+                        <td className="px-6 py-4">
                           <Badge variant={item.type === 'CHARGE' ? 'outline' : item.type === 'PAYMENT' ? 'default' : 'secondary'} className="text-[10px]">
                             {item.type}
                           </Badge>
                           {item.creditStatus && <Badge variant="secondary" className="ml-1 text-[10px]">{item.creditStatus}</Badge>}
                         </td>
-                        <td className="px-6 py-3 text-slate-800 font-medium max-w-[250px] truncate" title={item.description}>
+                        <td className="max-w-[300px] truncate px-6 py-4 font-medium text-slate-800" title={item.description}>
                           {item.description}
                         </td>
-                        <td className="whitespace-nowrap px-6 py-3 text-right tabular-nums">
+                        <td className="whitespace-nowrap px-6 py-4 text-right tabular-nums">
                           {isDebit ? formatCurrency(absAmount) : '-'}
                         </td>
-                        <td className="whitespace-nowrap px-6 py-3 text-right font-medium tabular-nums text-emerald-600">
+                        <td className="whitespace-nowrap px-6 py-4 text-right font-medium tabular-nums text-emerald-600">
                           {isCredit ? formatCurrency(absAmount) : '-'}
                         </td>
-                        <td className="px-6 py-3 text-center flex justify-end gap-2">
+                        <td className="flex justify-end gap-2 px-6 py-4 text-center">
                           {linkedPayment && (linkedPayment.status === 'COMPLETED' || linkedPayment.status === 'REFUNDED') && (
                             <Button 
                               variant="ghost" 
@@ -178,7 +186,7 @@ export function FolioSection({ reservation }: { reservation: any }) {
                                     await HardwareBridge.printPaymentReceipt({
                                       receiptNumber: linkedPayment.reference || linkedPayment.id.substring(0, 8).toUpperCase(),
                                       guestName: reservation.primaryGuest ? `${reservation.primaryGuest.firstName} ${reservation.primaryGuest.lastName}` : 'Guest',
-                                      roomNumber: reservation.reservationRooms?.[0]?.room?.number || 'N/A',
+                                      roomNumber: formatRoomNumber(reservation.reservationRooms?.[0]?.room?.number) || 'N/A',
                                       folioNumber: folio.id.substring(0, 8).toUpperCase(),
                                       amountPaid: Math.abs(Number(linkedPayment.amount)),
                                       paymentMethod: linkedPayment.method || 'CASH',
@@ -219,6 +227,7 @@ export function FolioSection({ reservation }: { reservation: any }) {
                 )}
               </tbody>
             </table>
+            </div>
           </div>
         </CardContent>
       </Card>

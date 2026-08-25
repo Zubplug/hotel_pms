@@ -14,6 +14,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { StatusTransitionDialog } from '@/components/rooms/StatusTransitionDialog';
 import { Settings2 } from 'lucide-react';
+import { formatRoomNumber } from '@/lib/format-room';
 
 interface Room {
   id: string;
@@ -130,7 +131,7 @@ export default function RoomsPage() {
                 <div className={`${view === 'list' ? 'col-span-1' : 'flex justify-between items-start mb-3'}`}>
                   <div className="flex flex-col">
                     <span className="text-2xl font-bold tracking-tighter group-hover:text-primary transition-colors">
-                      {room.number}
+                      {formatRoomNumber(room.number)}
                     </span>
                     <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
                       {room.roomType?.name ?? 'No Type'}

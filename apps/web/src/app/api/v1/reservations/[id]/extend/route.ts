@@ -5,6 +5,7 @@ import { auth } from '@/lib/auth';
 import { assertPropertyAccess } from '@/lib/property-access';
 import { NotificationEngine } from '@/lib/notification-engine';
 import { calculateFolioTotals } from '@/lib/finance/folio-totals';
+import { applyAvailableFolioCredit } from '@/lib/finance/apply-folio-credit';
 
 export async function POST(
   req: NextRequest,
@@ -159,6 +160,18 @@ export async function POST(
           data: {
             ...totals,
           }
+        });
+        await applyAvailableFolioCredit(tx, {
+          folioId: folio.id,
+          propertyId: reservation.propertyId,
+          guestId: reservation.primaryGuestId,
+          reservationId: reservation.id,
+          amount: additionalNights * Number(currentRate),
+          currency: resRoom.currency,
+          source: 'ROOM_EXTENSION',
+          description: `Applied guest credit to room extension - ${additionalNights} night${additionalNights === 1 ? '' : 's'}`,
+          appliedBy: session.user.id,
+          operationKey: idempotencyKey
         });
       }
 

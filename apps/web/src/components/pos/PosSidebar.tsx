@@ -2,7 +2,6 @@
 
 import React, { useState, useCallback } from 'react';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
 import {
   LayoutGrid, MapPin, Receipt, TrendingUp, ChefHat, Wallet,
   Monitor, Lock, UserCircle, RefreshCw, Wifi, WifiOff, Printer,
@@ -16,6 +15,8 @@ interface PosSidebarProps {
   onOpenMySales: () => void;
   onOpenShiftBank: () => void;
   onOpenKitchen: () => void;
+  onOpenPrinterSettings: () => void;
+  onOpenSyncCenter: () => void;
   onLock: () => void;
   onEmergencyOverride?: () => void;
   isOnline: boolean;
@@ -31,6 +32,8 @@ export function PosSidebar({
   onOpenMySales,
   onOpenShiftBank,
   onOpenKitchen,
+  onOpenPrinterSettings,
+  onOpenSyncCenter,
   onLock,
   onEmergencyOverride,
   isOnline,
@@ -38,7 +41,6 @@ export function PosSidebar({
   activeOperator,
   isDesktop = false,
 }: PosSidebarProps) {
-  const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
 
   const operatorName = activeOperator
@@ -152,7 +154,10 @@ export function PosSidebar({
         <NavItem icon={Wallet}     label="Shift Bank"   onClick={onOpenShiftBank} />
         <NavItem icon={ChefHat}    label="Kitchen"      onClick={onOpenKitchen} />
         {isDesktop && (
-          <NavItem icon={Printer}    label="Printers"     onClick={() => router.push('/pos/printer-settings')} />
+          <NavItem icon={Printer}    label="Printers"     onClick={onOpenPrinterSettings} />
+        )}
+        {isDesktop && (
+          <NavItem icon={RefreshCw}  label="Sync Center"  onClick={onOpenSyncCenter} />
         )}
       </div>
 

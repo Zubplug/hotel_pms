@@ -12,6 +12,7 @@ import { format, addDays, startOfDay } from 'date-fns';
 import { Loader2, CheckCircle2, AlertCircle, CalendarClock, ArrowRight, CreditCard } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
+import { formatRoomNumber } from '@/lib/format-room';
 
 interface FrontDeskExtendStayDialogProps {
   open: boolean;
@@ -119,7 +120,7 @@ export function FrontDeskExtendStayDialog({ open, onOpenChange, reservation }: F
               <div>
                 <DialogTitle className="text-xl">Extend Stay</DialogTitle>
                 <DialogDescription className="text-slate-500 mt-1">
-                  Adjust check-out date for room {reservation.reservationRooms?.[0]?.room?.number || reservation.roomNumber}
+                  Adjust check-out date for room {formatRoomNumber(reservation.reservationRooms?.[0]?.room?.number || reservation.roomNumber)}
                 </DialogDescription>
               </div>
             </div>

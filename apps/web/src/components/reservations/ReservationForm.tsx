@@ -309,7 +309,7 @@ export function ReservationForm() {
                         )}
                         {availableRooms?.map((room: any) => (
                           <SelectItem key={room.id} value={room.id}>
-                            Room {room.number}
+                            Room {formatRoomNumber(room.number)}
                           </SelectItem>
                         ))}
                       </SelectContent>

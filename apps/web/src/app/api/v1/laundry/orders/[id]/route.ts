@@ -149,15 +149,82 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         });
         
         updateData.folioItemId = folioItem.id;
-        
-        // Update folio totals
-        await tx.folio.update({
-            where: { id: activeFolio.id },
+
+        let creditApplied = 0;
+        const credits = await tx.folioCredit.findMany({
+          where: {
+            folioId: activeFolio.id,
+            propertyId: order.propertyId,
+            status: { in: ['AVAILABLE', 'PARTIALLY_APPLIED'] },
+            remainingAmount: { gt: 0 }
+          },
+          orderBy: { createdAt: 'asc' }
+        });
+
+        for (const credit of credits) {
+          if (creditApplied >= Number(order.totalAmount)) break;
+          const remainingCharge = Number(order.totalAmount) - creditApplied;
+          const applied = Math.min(remainingCharge, Number(credit.remainingAmount));
+          if (applied <= 0) continue;
+
+          const updatedCredit = await tx.folioCredit.updateMany({
+            where: { id: credit.id, remainingAmount: { gte: applied } },
             data: {
-                totalCharges: { increment: order.totalAmount },
-                balance: { increment: order.totalAmount },
-                version: { increment: 1 }
+              remainingAmount: { decrement: applied },
+              status: applied >= Number(credit.remainingAmount) ? 'EXHAUSTED' : 'PARTIALLY_APPLIED'
             }
+          });
+          if (updatedCredit.count !== 1) continue;
+
+          const applicationKey = `CREDIT_APPLICATION:LAUNDRY:${order.id}:${credit.id}`;
+          const application = await tx.folioCreditApplication.create({
+            data: {
+              creditId: credit.id,
+              folioId: activeFolio.id,
+              amount: applied,
+              currency: order.currency,
+              source: 'LAUNDRY',
+              description: `Applied guest credit to Laundry Service - ${order.serviceType}`,
+              idempotencyKey: applicationKey,
+              appliedBy: session.user.id,
+              deviceId,
+              businessDate: new Date()
+            }
+          });
+
+          await tx.financialAuditLog.create({
+            data: {
+              operationId: applicationKey,
+              propertyId: order.propertyId,
+              reservationId: activeFolio.reservationId,
+              folioId: activeFolio.id,
+              guestId: activeFolio.guestId,
+              creditId: credit.id,
+              creditApplicationId: application.id,
+              operationType: 'CREDIT_APPLICATION',
+              amount: applied,
+              currency: order.currency,
+              operatorId: session.user.id,
+              deviceId,
+              businessDate: new Date(),
+              reason: `Applied guest credit to Laundry Service - ${order.serviceType}`,
+              balanceBefore: activeFolio.balance,
+              balanceAfter: Number(activeFolio.balance) + Number(order.totalAmount) - creditApplied - applied,
+              approvalStatus: 'NOT_REQUIRED',
+              idempotencyKey: `audit:${applicationKey}`,
+              metadata: { source: 'LAUNDRY_DELIVERY' }
+            }
+          });
+          creditApplied += applied;
+        }
+
+        await tx.folio.update({
+          where: { id: activeFolio.id },
+          data: {
+            totalCharges: { increment: order.totalAmount },
+            balance: { increment: Number(order.totalAmount) - creditApplied },
+            version: { increment: 1 }
+          }
         });
       }
 

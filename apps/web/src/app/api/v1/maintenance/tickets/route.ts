@@ -43,7 +43,15 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: 'desc' }
     });
 
-    return successResponse({ tickets });
+    const normalizedTickets = tickets.map((ticket: any) => {
+      const room = ticket.property?.rooms?.find((candidate: any) => candidate.id === ticket.roomId);
+      return {
+        ...ticket,
+        roomNumber: room?.number || ticket.location || ''
+      };
+    });
+
+    return successResponse({ tickets: normalizedTickets });
   } catch (err: any) {
     console.error('[Maintenance Tickets GET]', err);
     return errorResponse('INTERNAL_ERROR', err.message, 500);

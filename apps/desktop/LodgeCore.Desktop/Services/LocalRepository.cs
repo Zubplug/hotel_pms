@@ -452,9 +452,11 @@ public class LocalRepository
 
     public async Task<bool> IsRoomAvailableAsync(string roomNumber, DateTime checkIn, DateTime checkOut)
     {
-        // Simple overlap check
+        var room = await _dbContext.Rooms.FirstOrDefaultAsync(r => r.Number == roomNumber || r.Code == roomNumber);
+        if (room == null) return false;
+
         var overlapping = await _dbContext.Reservations
-            .Where(r => r.RoomNumber == roomNumber && r.Status != "CANCELLED")
+            .Where(r => r.Rooms.Any(reservationRoom => reservationRoom.RoomId == room.Id) && r.Status != "CANCELLED")
             .Where(r => r.CheckInDate < checkOut && r.CheckOutDate > checkIn)
             .AnyAsync();
 
@@ -496,11 +498,12 @@ public class LocalRepository
         var additionalCharge = (roomType?.BasePrice ?? 0m) * additionalNights;
 
         // Overlap check: is the room taken by another reservation during the extension window?
-        if (!string.IsNullOrEmpty(res.RoomNumber))
+        var assignedRoomId = res.Rooms.FirstOrDefault()?.RoomId;
+        if (!string.IsNullOrEmpty(assignedRoomId))
         {
             var conflict = await _dbContext.Reservations
                 .Where(r => r.Id != reservationId
-                         && r.RoomNumber == res.RoomNumber
+                         && r.Rooms.Any(reservationRoom => reservationRoom.RoomId == assignedRoomId)
                          && r.Status != "CANCELLED"
                          && r.CheckInDate < newCheckOut
                          && r.CheckOutDate > res.CheckOutDate)
@@ -1094,7 +1097,11 @@ public class LocalRepository
 
     public async Task<bool> ProcessCheckOutAsync(string reservationId, string userId, string deviceId)
     {
-        var res = await _dbContext.Reservations.Include(r => r.Folio).FirstOrDefaultAsync(r => r.Id == reservationId);
+        var res = await _dbContext.Reservations
+            .Include(r => r.Folio)
+            .Include(r => r.Rooms)
+                .ThenInclude(rr => rr.Room)
+            .FirstOrDefaultAsync(r => r.Id == reservationId);
         if (res == null || res.Status != "CHECKED_IN") return false;
 
         if (res.Folio != null && res.Folio.OutstandingBalance > 0)
@@ -1123,10 +1130,12 @@ public class LocalRepository
         });
         
         // Also auto-generate a cleaning task upon checkout
-        var checkoutRoomId = res.RoomId;
+        var checkoutRoom = res.Rooms.FirstOrDefault(rr => !string.IsNullOrWhiteSpace(rr.RoomId));
+        var checkoutRoomId = checkoutRoom?.RoomId ?? res.RoomId;
         if (!string.IsNullOrWhiteSpace(checkoutRoomId))
         {
-            var room = await _dbContext.Rooms.FirstOrDefaultAsync(r => r.Id == checkoutRoomId);
+            var room = checkoutRoom?.Room
+                ?? await _dbContext.Rooms.FirstOrDefaultAsync(r => r.Id == checkoutRoomId);
             if (room != null)
             {
                 room.Status = "DIRTY";
@@ -1139,7 +1148,7 @@ public class LocalRepository
             {
                 PropertyId = res.PropertyId,
                 RoomId = checkoutRoomId,
-                RoomNumber = res.RoomNumber ?? "",
+                RoomNumber = room?.Number ?? res.RoomNumber ?? "",
                 TaskType = "CLEANING",
                 Status = "PENDING"
             };
@@ -1511,7 +1520,9 @@ public class LocalRepository
 
     public async Task<List<LocalRoomType>> GetRoomTypesAsync(string propertyId)
     {
-        return await _dbContext.RoomTypes.Where(rt => rt.PropertyId == propertyId).ToListAsync();
+        return await _dbContext.RoomTypes
+            .Where(rt => string.IsNullOrEmpty(propertyId) || rt.PropertyId == propertyId)
+            .ToListAsync();
     }
 
     public async Task<object> GetRoomsAsync(string propertyId)
@@ -1554,7 +1565,7 @@ public class LocalRepository
         var reservation = await _dbContext.Reservations
             .Include(r => r.Guest)
             .Include(r => r.Folio)
-            .Where(r => r.RoomNumber == room.Number && r.Status == "CHECKED_IN")
+            .Where(r => r.Rooms.Any(reservationRoom => reservationRoom.RoomId == room.Id) && r.Status == "CHECKED_IN")
             .FirstOrDefaultAsync();
 
         if (reservation == null) return null;
@@ -1644,8 +1655,12 @@ public class LocalRepository
         var roomDict = rooms.ToDictionary(r => r.Id);
         var roomTypeDict = roomTypes.ToDictionary(rt => rt.Id);
 
-        var arrivalsRaw = reservations.Where(r => r.CheckInDate.Date == today).ToList();
-        var departuresRaw = reservations.Where(r => r.CheckOutDate.Date == today).ToList();
+        var arrivalsRaw = reservations
+            .Where(r => r.CheckInDate.Date == today && r.Status != "CHECKED_OUT")
+            .ToList();
+        var departuresRaw = reservations
+            .Where(r => r.CheckOutDate.Date == today && r.Status == "CHECKED_IN")
+            .ToList();
         var inHouseCount = reservations.Count(r => r.Status == "CHECKED_IN");
         var totalRooms = rooms.Count;
         var availableRooms = rooms.Count(r => r.Status == "AVAILABLE" || r.Status == "CLEAN");
@@ -1727,7 +1742,7 @@ public class LocalRepository
     public async Task<List<LocalRoom>> GetAvailableRoomsAsync(string propertyId, string roomTypeId, DateTime checkIn, DateTime checkOut)
     {
         var allRoomsQuery = _dbContext.Rooms
-            .Where(r => r.PropertyId == propertyId && r.Status != "OUT_OF_ORDER" && r.Status != "MAINTENANCE");
+            .Where(r => r.PropertyId == propertyId && r.Status == "AVAILABLE");
 
         if (!string.IsNullOrEmpty(roomTypeId))
         {
@@ -1769,6 +1784,7 @@ public class LocalRepository
         // 1. Generate Deterministic Operation ID
         string operationId = $"op_{deviceId}_{DateTime.UtcNow.Ticks}_{Guid.NewGuid().ToString("N").Substring(0, 8)}";
         order.Id = Guid.NewGuid().ToString();
+        if (order.BusinessDate == default) order.BusinessDate = DateTime.UtcNow.Date;
         
         // Mark everything with the operation ID and device attribution
         foreach (var item in order.Items)
@@ -1783,6 +1799,38 @@ public class LocalRepository
             payment.OrderId = order.Id;
             payment.Method = payment.Method == "CARD" ? "CARD_OFFLINE" : payment.Method;
             payment.Status = payment.Method == "CASH" ? "CONFIRMED" : "PENDING";
+        }
+
+        if (order.Items.Any())
+        {
+            var kot = new LocalPosKot
+            {
+                Id = Guid.NewGuid().ToString(),
+                OrderId = order.Id,
+                OutletId = order.OutletId,
+                DeviceId = deviceId,
+                CreatedBy = userId,
+                OrderNumber = order.OrderNumber,
+                KotNumber = $"{order.OrderNumber}-{Guid.NewGuid().ToString("N").Substring(0, 4)}",
+                Status = "PENDING",
+                PrintStatus = "QUEUED",
+                OperationId = operationId,
+                BusinessDate = order.BusinessDate,
+                TableNumber = order.TableNumber,
+                ServerName = userId,
+                FiredAt = DateTime.UtcNow,
+                CreatedAt = DateTime.UtcNow,
+                ItemIdsJson = JsonSerializer.Serialize(order.Items.Select(i => i.Id))
+            };
+
+            foreach (var item in order.Items)
+            {
+                item.KotId = kot.Id;
+                item.KitchenStatus = "PENDING";
+                item.SentToKitchenAt = kot.FiredAt;
+            }
+
+            order.Kots.Add(kot);
         }
 
         foreach (var kot in order.Kots)
@@ -2020,6 +2068,8 @@ public class LocalRepository
         var result = new List<object>();
         foreach (var o in orders)
         {
+            var itemCount = o.Items?.Sum(i => i.Quantity) ?? 0m;
+            var calculatedTotal = o.Items?.Sum(i => i.Total != 0m ? i.Total : i.UnitPrice * i.Quantity) ?? 0m;
             result.Add(new {
                 id = o.Id,
                 orderNumber = o.OrderNumber,
@@ -2028,10 +2078,10 @@ public class LocalRepository
                 displayName = o.DisplayName,
                 status = o.Status,
                 paymentStatus = o.PaymentStatus,
-                itemCount = o.Items?.Count ?? 0,
-                total = o.Total,
+                itemCount,
+                total = o.Total != 0m ? o.Total : calculatedTotal,
                 waiterName = !string.IsNullOrEmpty(o.ServerStaffId) && staffDict.ContainsKey(o.ServerStaffId) ? staffDict[o.ServerStaffId] : "Unknown",
-                createdAt = o.CreatedAt
+                createdAt = o.CreatedAt == default ? o.UpdatedAt : o.CreatedAt
             });
         }
         
@@ -2119,12 +2169,19 @@ public class LocalRepository
         {
             Id = Guid.NewGuid().ToString(),
             OrderId = order.Id,
+            OutletId = order.OutletId,
+            DeviceId = deviceId,
+            CreatedBy = userId,
             OrderNumber = order.OrderNumber,
             KotNumber = $"{order.OrderNumber}-{order.Kots?.Count + 1 ?? 1}",
             TableNumber = order.TableNumber,
             ServerName = "Server", // Ideally fetch server name
             Status = "PENDING",
+            PrintStatus = "QUEUED",
+            OperationId = $"op_fire_{deviceId}_{DateTime.UtcNow.Ticks}",
+            BusinessDate = order.BusinessDate == default ? DateTime.UtcNow.Date : order.BusinessDate,
             FiredAt = DateTime.UtcNow,
+            CreatedAt = DateTime.UtcNow,
             ItemIdsJson = JsonSerializer.Serialize(newItems.Select(i => i.Id))
         };
         _dbContext.PosKots.Add(kot);
@@ -2591,17 +2648,17 @@ public class LocalRepository
             .ToListAsync();
 
         var payments = await _dbContext.PosPayments
-            .Where(p => p.Status == "COMPLETED" && _dbContext.PosOrders.Any(o => o.Id == p.OrderId && o.SessionId == sessionId))
+            .Where(p => (p.Status == "COMPLETED" || p.Status == "CONFIRMED") && _dbContext.PosOrders.Any(o => o.Id == p.OrderId && o.SessionId == sessionId))
             .ToListAsync();
 
         decimal openingFloat = movements.Where(m => m.Type == "OPENING_FLOAT").Sum(m => m.Amount);
         
         // Sales breakdown
         decimal cashSales = payments.Where(p => p.Method == PosConstants.PaymentMethods.Cash).Sum(p => p.Amount);
-        decimal cardSales = payments.Where(p => p.Method == PosConstants.PaymentMethods.Card).Sum(p => p.Amount);
+        decimal cardSales = payments.Where(p => p.Method == PosConstants.PaymentMethods.Card || p.Method == "CARD_OFFLINE").Sum(p => p.Amount);
         decimal bankTransferSales = payments.Where(p => p.Method == PosConstants.PaymentMethods.BankTransfer).Sum(p => p.Amount);
         decimal roomChargeSales = payments.Where(p => p.Method == PosConstants.PaymentMethods.RoomCharge).Sum(p => p.Amount);
-        decimal otherSales = payments.Where(p => p.Method != PosConstants.PaymentMethods.Cash && p.Method != PosConstants.PaymentMethods.Card && p.Method != PosConstants.PaymentMethods.BankTransfer && p.Method != PosConstants.PaymentMethods.RoomCharge).Sum(p => p.Amount);
+        decimal otherSales = payments.Where(p => p.Method != PosConstants.PaymentMethods.Cash && p.Method != PosConstants.PaymentMethods.Card && p.Method != "CARD_OFFLINE" && p.Method != PosConstants.PaymentMethods.BankTransfer && p.Method != PosConstants.PaymentMethods.RoomCharge).Sum(p => p.Amount);
         decimal totalSales = payments.Sum(p => p.Amount);
 
         decimal cashIn = movements.Where(m => m.Type == "CASH_IN" || m.Type == "CASH_TRANSFER_IN").Sum(m => m.Amount);
@@ -3282,7 +3339,14 @@ public class LocalRepository
 
         if (statusFilter != "all" && !string.IsNullOrEmpty(statusFilter))
         {
-            query = query.Where(o => o.Status == statusFilter);
+            var statuses = statusFilter.ToLowerInvariant() switch
+            {
+                "open" => new[] { "SUBMITTED", "IN_SERVICE" },
+                "paid" => new[] { "PAID", "COMPLETED", "CLOSED" },
+                "voided" => new[] { "VOIDED", "CANCELLED" },
+                _ => new[] { statusFilter.ToUpperInvariant() }
+            };
+            query = query.Where(o => statuses.Contains(o.Status));
         }
 
         var now = DateTime.UtcNow;
@@ -3319,6 +3383,8 @@ public class LocalRepository
         {
             var sessionOwnerId = !string.IsNullOrEmpty(o.SessionId) && sessions.ContainsKey(o.SessionId) ? sessions[o.SessionId] : null;
             var sessionOwnerName = !string.IsNullOrEmpty(sessionOwnerId) && staffDict.ContainsKey(sessionOwnerId) ? staffDict[sessionOwnerId] : "Unknown";
+            var itemCount = o.Items?.Sum(i => i.Quantity) ?? 0m;
+            var calculatedTotal = o.Items?.Sum(i => i.Total != 0m ? i.Total : i.UnitPrice * i.Quantity) ?? 0m;
 
             result.Add(new {
                 id = o.Id,
@@ -3332,8 +3398,9 @@ public class LocalRepository
                 status = o.Status,
                 paymentStatus = o.PaymentStatus,
                 displayName = o.DisplayName,
-                total = o.Total,
-                createdAt = o.CreatedAt,
+                total = o.Total != 0m ? o.Total : calculatedTotal,
+                itemCount,
+                createdAt = o.CreatedAt == default ? o.UpdatedAt : o.CreatedAt,
                 businessDate = o.BusinessDate,
                 items = o.Items,
                 sessionOwnerName = sessionOwnerName,
@@ -3354,31 +3421,35 @@ public class LocalRepository
             query = query.Where(o => o.SessionId == sessionId);
         }
         
-        var now = DateTime.UtcNow;
-        if (range == "today")
-        {
-            var start = now.Date;
-            query = query.Where(o => o.BusinessDate >= start);
-        }
-        // ... (similar range logic)
-
         var orders = await query.ToListAsync();
+        var now = DateTime.UtcNow;
+        var today = now.Date;
+        orders = range switch
+        {
+            "today" => orders.Where(o => (o.BusinessDate != default ? o.BusinessDate : o.CreatedAt).Date == today).ToList(),
+            "yesterday" => orders.Where(o => (o.BusinessDate != default ? o.BusinessDate : o.CreatedAt).Date == today.AddDays(-1)).ToList(),
+            "this_week" => orders.Where(o => (o.BusinessDate != default ? o.BusinessDate : o.CreatedAt).Date >= today.AddDays(-(int)((7 + (now.DayOfWeek - DayOfWeek.Monday)) % 7))).ToList(),
+            _ => orders
+        };
 
         var payments = await _dbContext.PosPayments
             .Where(p => orders.Select(o => o.Id).Contains(p.OrderId) && p.Status == "CONFIRMED")
             .ToListAsync();
 
-        var grossSales = orders.Where(o => o.Status != "VOIDED").Sum(o => o.Total);
+        var paidOrderIds = payments.Select(p => p.OrderId).Distinct().ToHashSet();
+        var grossSales = payments
+            .Where(p => orders.Any(o => o.Id == p.OrderId && o.Status != "VOIDED"))
+            .Sum(p => p.Amount);
         
         return new
         {
             grossSales = grossSales,
-            netSales = grossSales, // Simplified for now
-            ordersCount = orders.Count,
-            cashSales = payments.Where(p => p.Method == "CASH").Sum(p => p.Amount),
-            cardSales = payments.Where(p => p.Method == "CARD").Sum(p => p.Amount),
-            roomChargeSales = payments.Where(p => p.Method == "ROOM_CHARGE").Sum(p => p.Amount),
-            cityLedger = payments.Where(p => p.Method == "CITY_LEDGER").Sum(p => p.Amount)
+            netSales = grossSales,
+            ordersCount = paidOrderIds.Count,
+            cashSales = payments.Where(p => string.Equals(p.Method, "CASH", StringComparison.OrdinalIgnoreCase)).Sum(p => p.Amount),
+            cardSales = payments.Where(p => string.Equals(p.Method, "CARD", StringComparison.OrdinalIgnoreCase) || string.Equals(p.Method, "CARD_OFFLINE", StringComparison.OrdinalIgnoreCase)).Sum(p => p.Amount),
+            roomChargeSales = payments.Where(p => string.Equals(p.Method, "ROOM_CHARGE", StringComparison.OrdinalIgnoreCase)).Sum(p => p.Amount),
+            cityLedger = payments.Where(p => string.Equals(p.Method, "CITY_LEDGER", StringComparison.OrdinalIgnoreCase)).Sum(p => p.Amount)
         };
     }
     public async Task LogHardwareEventAsync(string userId, string deviceId, string eventType, string? payload)
@@ -3720,6 +3791,7 @@ public class LocalRepository
         
         decimal total = 0;
         var orderItems = new List<LocalLaundryOrderItem>();
+        var requestedQuantities = new Dictionary<string, int>(StringComparer.Ordinal);
         
         if (root.TryGetProperty("items", out var itemsElem) && itemsElem.ValueKind == JsonValueKind.Array)
         {
@@ -3728,29 +3800,35 @@ public class LocalRepository
             {
                 var itemId = item.GetProperty("itemId").GetString() ?? "";
                 var qty = item.GetProperty("quantity").GetInt32();
-                if (qty > 0)
+                if (!string.IsNullOrWhiteSpace(itemId) && qty > 0)
                 {
-                    var catalogItem = itemsList.FirstOrDefault(i => i.Id == itemId);
-                    if (catalogItem != null)
-                    {
-                        var price = catalogItem.BasePrice;
-                        if (serviceType == "EXPRESS") price *= 1.5m;
-                        else if (serviceType == "DRY_CLEAN") price *= 2.0m;
-                        
-                        var lineTotal = price * qty;
-                        total += lineTotal;
-                        
-                        orderItems.Add(new LocalLaundryOrderItem
-                        {
-                            Id = Guid.NewGuid().ToString(),
-                            LaundryOrderId = orderId,
-                            ItemId = itemId,
-                            Quantity = qty,
-                            UnitPrice = price,
-                            TotalPrice = lineTotal
-                        });
-                    }
+                    requestedQuantities[itemId] = requestedQuantities.TryGetValue(itemId, out var existingQuantity)
+                        ? existingQuantity + qty
+                        : qty;
                 }
+            }
+
+            foreach (var entry in requestedQuantities)
+            {
+                var catalogItem = itemsList.FirstOrDefault(i => i.Id == entry.Key);
+                if (catalogItem == null) continue;
+
+                var price = catalogItem.BasePrice;
+                if (serviceType == "EXPRESS") price *= 1.5m;
+                else if (serviceType == "DRY_CLEAN") price *= 2.0m;
+
+                var lineTotal = price * entry.Value;
+                total += lineTotal;
+
+                orderItems.Add(new LocalLaundryOrderItem
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    LaundryOrderId = orderId,
+                    ItemId = entry.Key,
+                    Quantity = entry.Value,
+                    UnitPrice = price,
+                    TotalPrice = lineTotal
+                });
             }
         }
         
@@ -3815,6 +3893,18 @@ public class LocalRepository
         
         var previousStatus = order.Status;
         if (previousStatus == status) return;
+
+        var allowedTransitions = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["PENDING"] = ["COLLECTED", "CANCELLED"],
+            ["COLLECTED"] = ["WASHING", "CANCELLED"],
+            ["WASHING"] = ["READY", "CANCELLED"],
+            ["READY"] = ["DELIVERED", "CANCELLED"],
+            ["DELIVERED"] = [],
+            ["CANCELLED"] = []
+        };
+        if (!allowedTransitions.TryGetValue(previousStatus, out var allowed) || !allowed.Contains(status, StringComparer.OrdinalIgnoreCase))
+            throw new InvalidOperationException($"Cannot transition laundry order from {previousStatus} to {status}.");
         
         order.Status = status;
         order.UpdatedAt = DateTime.UtcNow;
@@ -3858,6 +3948,8 @@ public class LocalRepository
         if (order == null) throw new Exception("Laundry order not found");
         
         if (order.Status == "DELIVERED") return;
+        if (order.Status != "READY")
+            throw new InvalidOperationException($"Cannot deliver laundry order while it is {order.Status}. Mark it READY first.");
         
         var previousStatus = order.Status;
         order.Status = "DELIVERED";

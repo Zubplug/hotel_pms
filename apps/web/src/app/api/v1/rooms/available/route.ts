@@ -36,8 +36,8 @@ export async function GET(req: NextRequest) {
       where: {
         propertyId,
         ...(roomTypeId ? { roomTypeId } : {}),
-        // Exclude rooms that are out of order or maintenance entirely (business logic decision)
-        status: { notIn: ['MAINTENANCE', 'OUT_OF_ORDER'] },
+        // Reservations may only be assigned to rooms explicitly marked available.
+        status: 'AVAILABLE',
         reservationRooms: {
           none: {
             status: { notIn: ['CANCELLED', 'NO_SHOW'] },

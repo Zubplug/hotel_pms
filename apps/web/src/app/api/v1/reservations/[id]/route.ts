@@ -4,6 +4,7 @@ import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { assertPropertyAccess } from '@/lib/property-access';
 import { calculateFolioTotals } from '@/lib/finance/folio-totals';
+import { applyAvailableFolioCredit } from '@/lib/finance/apply-folio-credit';
 
 export async function GET(
   _req: NextRequest,
@@ -343,6 +344,20 @@ export async function PATCH(
           const allFolioItems = await tx.folioItem.findMany({ where: { folioId: folio.id } });
           const totals = calculateFolioTotals(allFolioItems);
           await tx.folio.update({ where: { id: folio.id }, data: totals });
+          if (roomMoveAdjustment > 0) {
+            await applyAvailableFolioCredit(tx, {
+              folioId: folio.id,
+              propertyId: existingReservation.propertyId,
+              guestId: existingReservation.primaryGuestId,
+              reservationId: existingReservation.id,
+              amount,
+              currency: existingReservation.currency || 'NGN',
+              source: 'ROOM_UPGRADE',
+              description: `Applied guest credit to room upgrade - ${nights} night${nights === 1 ? '' : 's'}`,
+              appliedBy: session.user.id,
+              operationKey: adjustmentKey
+            });
+          }
         }
       }
 

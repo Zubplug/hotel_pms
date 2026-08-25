@@ -450,7 +450,7 @@ function PrinterForm({
 }
 
 // ─── Main Page ──────────────────────────────────────────────────────────────
-export default function PrinterSettingsPage() {
+export function PrinterSettingsPage({ onClose }: { onClose?: () => void } = {}) {
   const { isDesktopMode } = useLodgeCoreProvider();
   const [printers, setPrinters] = useState<PrinterConfig[]>([]);
   const [loading, setLoading] = useState(true);
@@ -514,12 +514,23 @@ export default function PrinterSettingsPage() {
       <div className="bg-white dark:bg-[#111] border-b border-gray-100 dark:border-[#1f1f1f] px-6 py-5">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link
-              href="/pos"
-              className="w-10 h-10 bg-gray-50 hover:bg-gray-100 dark:bg-[#1a1a1a] dark:hover:bg-[#252525] text-gray-500 dark:text-gray-400 rounded-xl flex items-center justify-center transition-colors"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </Link>
+            {onClose ? (
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-10 h-10 bg-gray-50 hover:bg-gray-100 dark:bg-[#1a1a1a] dark:hover:bg-[#252525] text-gray-500 dark:text-gray-400 rounded-xl flex items-center justify-center transition-colors"
+                aria-label="Back to POS"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+            ) : (
+              <Link
+                href="/pos"
+                className="w-10 h-10 bg-gray-50 hover:bg-gray-100 dark:bg-[#1a1a1a] dark:hover:bg-[#252525] text-gray-500 dark:text-gray-400 rounded-xl flex items-center justify-center transition-colors"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </Link>
+            )}
             <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-xl flex items-center justify-center">
               <Printer className="w-5 h-5 text-white" />
             </div>

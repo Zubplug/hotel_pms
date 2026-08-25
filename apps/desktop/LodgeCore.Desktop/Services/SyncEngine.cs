@@ -914,8 +914,34 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     room.FloorId = el.TryGetProperty("floorId", out var fid) && fid.ValueKind != System.Text.Json.JsonValueKind.Null ? fid.GetString() : null;
                     room.FloorName = el.TryGetProperty("floor", out var flr) && flr.ValueKind != System.Text.Json.JsonValueKind.Null && flr.TryGetProperty("name", out var fnm) && fnm.ValueKind != System.Text.Json.JsonValueKind.Null ? fnm.GetString() : null;
                     room.FloorNumber = el.TryGetProperty("floor", out var flr2) && flr2.ValueKind != System.Text.Json.JsonValueKind.Null && flr2.TryGetProperty("number", out var fnum) ? fnum.GetInt32() : (int?)null;
-                    room.Status = el.TryGetProperty("status", out var st) && st.ValueKind != System.Text.Json.JsonValueKind.Null ? st.GetString() ?? "" : "";
-                    room.HousekeepingStatus = el.TryGetProperty("housekeepingStatus", out var hs) && hs.ValueKind != System.Text.Json.JsonValueKind.Null ? hs.GetString() ?? "" : "";
+                    var incomingRoomStatus = el.TryGetProperty("status", out var st) && st.ValueKind != System.Text.Json.JsonValueKind.Null
+                        ? st.GetString() ?? ""
+                        : "";
+                    var hasOpenCleaningTask = await dbContext.HousekeepingTasks.AnyAsync(
+                        task => task.RoomId == id
+                            && task.TaskType == "CLEANING"
+                            && task.Status != "INSPECTED"
+                            && task.Status != "CANCELLED",
+                        stoppingToken);
+                    var hasCheckedOutReservation = await dbContext.Reservations
+                        .AnyAsync(reservation => reservation.Status == "CHECKED_OUT"
+                            && reservation.Rooms.Any(reservationRoom => reservationRoom.RoomId == id), stoppingToken);
+
+                    var preserveDirtyState = incomingRoomStatus == "OCCUPIED"
+                        && (hasOpenCleaningTask || hasCheckedOutReservation);
+                    if (!preserveDirtyState)
+                    {
+                        room.Status = incomingRoomStatus;
+                        room.HousekeepingStatus = el.TryGetProperty("housekeepingStatus", out var hs) && hs.ValueKind != System.Text.Json.JsonValueKind.Null
+                            ? hs.GetString() ?? ""
+                            : "";
+                    }
+                    else
+                    {
+                        room.Status = "DIRTY";
+                        room.HousekeepingStatus = "PENDING";
+                    }
+                    room.IsOccupied = room.Status == "OCCUPIED";
                     room.MaintenanceStatus = el.TryGetProperty("maintenanceStatus", out var ms) && ms.ValueKind != System.Text.Json.JsonValueKind.Null ? ms.GetString() ?? "" : "";
                     room.RoomTypeId = el.TryGetProperty("roomTypeId", out var rti) && rti.ValueKind != System.Text.Json.JsonValueKind.Null ? rti.GetString() ?? "" : "";
                     room.LockSystemCode = el.TryGetProperty("lockSystemCode", out var lsc) && lsc.ValueKind != System.Text.Json.JsonValueKind.Null ? lsc.GetString() : (el.TryGetProperty("code", out var loldc) && loldc.ValueKind != System.Text.Json.JsonValueKind.Null ? loldc.GetString() : null);
@@ -1884,7 +1910,18 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     }
                     ticket.PropertyId = propertyId;
                     ticket.RoomId = el.TryGetProperty("roomId", out var rid) && rid.ValueKind != System.Text.Json.JsonValueKind.Null ? rid.GetString() ?? "" : "";
-                    ticket.RoomNumber = el.TryGetProperty("roomNumber", out var roomNumber) && roomNumber.ValueKind != System.Text.Json.JsonValueKind.Null ? roomNumber.GetString() ?? "" : "";
+                    ticket.RoomNumber = el.TryGetProperty("roomNumber", out var roomNumber) && roomNumber.ValueKind != System.Text.Json.JsonValueKind.Null
+                        ? roomNumber.GetString() ?? ""
+                        : el.TryGetProperty("location", out var location) && location.ValueKind != System.Text.Json.JsonValueKind.Null
+                            ? location.GetString() ?? ""
+                            : "";
+                    if (string.IsNullOrWhiteSpace(ticket.RoomNumber) && !string.IsNullOrWhiteSpace(ticket.RoomId))
+                    {
+                        ticket.RoomNumber = await dbContext.Rooms
+                            .Where(room => room.Id == ticket.RoomId)
+                            .Select(room => room.Number)
+                            .FirstOrDefaultAsync(stoppingToken) ?? "";
+                    }
                     var title = el.TryGetProperty("title", out var tEl) && tEl.ValueKind != System.Text.Json.JsonValueKind.Null ? tEl.GetString() ?? "" : "";
                     var desc = el.TryGetProperty("description", out var dEl) && dEl.ValueKind != System.Text.Json.JsonValueKind.Null ? dEl.GetString() ?? "" : "";
                     ticket.IssueDescription = $"{title} - {desc}".Trim();

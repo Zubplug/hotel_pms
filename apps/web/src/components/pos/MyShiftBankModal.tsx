@@ -68,7 +68,7 @@ export function MyShiftBankModal({
 
     setIsSubmitting(true);
     try {
-      const res = await provider.pos.settleSession(posSessionId, actualCash, sessionDetails.primaryOperatorId || '');
+      const res = await provider.pos.settleSession(sessionDetails.id || posSessionId, actualCash, sessionDetails.primaryOperatorId || '');
       if (!res.error) {
         setSuccessDialog(true);
       } else {

@@ -5,6 +5,7 @@ import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Users, User, ArrowUpCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatRoomNumber } from "@/lib/format-room";
 
 export interface Room {
   id: string;
@@ -48,7 +49,7 @@ export function RoomCard({ room, className }: RoomCardProps) {
           <span className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
             {room.roomType?.name || "Standard"}
           </span>
-          <h3 className="text-3xl font-bold tracking-tight mt-1">{room.number}</h3>
+          <h3 className="text-3xl font-bold tracking-tight mt-1">{formatRoomNumber(room.number)}</h3>
         </div>
         <StatusBadge status={room.status} />
       </CardHeader>

@@ -7,6 +7,7 @@ import { encrypt } from '@/lib/encryption';
 import { getReducedStayEstimate } from '@/lib/refunds/reduced-stay';
 import { calculateNoShowAssessment } from '@/lib/refunds/no-show';
 import { calculateFolioTotals } from '@/lib/finance/folio-totals';
+import { applyAvailableFolioCredit } from '@/lib/finance/apply-folio-credit';
 
 const isUuid = (value: unknown): value is string =>
   typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
@@ -483,6 +484,10 @@ export async function POST(req: NextRequest) {
                      businessDate: new Date(payload.originalBusinessDate || payload.businessDate || new Date())
                    }
                  });
+                 await tx.folio.update({
+                   where: { id: aggregateId },
+                   data: { balance: { decrement: applied } }
+                 });
                  await tx.financialAuditLog.create({
                    data: {
                      operationId: payload.creditApplicationKey || `CREDIT_APPLICATION:${idempotencyKey}`,
@@ -646,7 +651,8 @@ export async function POST(req: NextRequest) {
                    baseAmount: amount,
                    status: 'COMPLETED',
                    idempotencyKey: `pay_${idempotencyKey}`,
-                   receivedBy: actorId
+                   receivedBy: actorId,
+                   frontdeskSessionId: payload.frontdeskSessionId || payload.FrontdeskSessionId || null
                  }
                });
 
@@ -854,6 +860,18 @@ export async function POST(req: NextRequest) {
                    }
                  });
                  await tx.folio.update({ where: { id: res.folios[0].id }, data: { totalCharges: { increment: upgradeAmount }, balance: { increment: upgradeAmount } } });
+                 await applyAvailableFolioCredit(tx, {
+                   folioId: res.folios[0].id,
+                   propertyId,
+                   guestId: res.primaryGuestId,
+                   reservationId: res.id,
+                   amount: upgradeAmount,
+                   currency: res.currency || 'NGN',
+                   source: 'ROOM_UPGRADE',
+                   description: `Applied guest credit to room upgrade - ${nights} night${nights === 1 ? '' : 's'}`,
+                   appliedBy: actorId,
+                   operationKey: upgradeKey
+                 });
                }
              }
 
@@ -1212,6 +1230,7 @@ export async function POST(req: NextRequest) {
                          id: aggregateId,
                          propertyId,
                          roomId: payload.RoomId || payload.roomId,
+                         location: payload.RoomNumber || payload.roomNumber || null,
                          categoryId: cat.id,
                          priority: (payload.Priority || payload.priority || 'NORMAL') as any,
                          status: (payload.Status || payload.status || 'OPEN') as any,
@@ -1377,6 +1396,18 @@ export async function POST(req: NextRequest) {
                                      await tx.folio.update({
                                          where: { id: activeFolio.id },
                                          data: { totalCharges: { increment: order.totalAmount }, balance: { increment: order.totalAmount } }
+                                     });
+                                     await applyAvailableFolioCredit(tx, {
+                                         folioId: activeFolio.id,
+                                         propertyId: order.propertyId,
+                                         guestId: activeFolio.guestId,
+                                         reservationId: activeFolio.reservationId,
+                                         amount: Number(order.totalAmount),
+                                         currency: order.currency,
+                                         source: 'LAUNDRY',
+                                         description: `Applied guest credit to Laundry Service - ${order.serviceType}`,
+                                         appliedBy: actorId,
+                                         operationKey: idempotencyKey
                                      });
                                  } else {
                                      folioItem = existingCharge;

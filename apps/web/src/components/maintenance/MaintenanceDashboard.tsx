@@ -24,6 +24,7 @@ import {
   Hourglass,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { formatRoomNumber } from '@/lib/format-room';
 
 // ─── types ────────────────────────────────────────────────────────────────────
 interface Ticket {
@@ -386,7 +387,7 @@ export default function MaintenancePage() {
                     <option value="">General (No Room)</option>
                     {rooms.map((room) => (
                       <option key={room.id} value={room.id}>
-                        {room.number} {room.roomType?.name ? `(${room.roomType.name})` : ''}
+                        {formatRoomNumber(room.number)} {room.roomType?.name ? `(${room.roomType.name})` : ''}
                       </option>
                     ))}
                   </select>
@@ -538,7 +539,7 @@ export default function MaintenancePage() {
                         {t.roomNumber ? (
                           <div className="flex items-center gap-2">
                             <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center font-bold text-slate-700 text-sm group-hover:bg-slate-200 transition-colors">
-                              {t.roomNumber}
+                              {formatRoomNumber(t.roomNumber)}
                             </div>
                             {t.requiresRoomRestriction && (
                               <span className="text-xs font-semibold text-red-500 bg-red-50 px-1.5 py-0.5 rounded-md">

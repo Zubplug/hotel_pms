@@ -9,6 +9,7 @@ import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
+import { formatRoomNumber } from '@/lib/format-room';
 
 export function PaymentReceipt({ id, onClose, hideBack = false, localData }: { id: string, onClose?: () => void, hideBack?: boolean, localData?: any }) {
   const router = useRouter();
@@ -147,7 +148,7 @@ export function PaymentReceipt({ id, onClose, hideBack = false, localData }: { i
                     <div className="text-slate-500">Confirmation</div>
                     <div className="font-medium text-slate-900 text-right">{reservation.confirmationNumber}</div>
                     <div className="text-slate-500">Room</div>
-                    <div className="font-medium text-slate-900 text-right">{reservation.roomNumber}</div>
+                    <div className="font-medium text-slate-900 text-right">{formatRoomNumber(reservation.roomNumber)}</div>
                     <div className="text-slate-500">Check In</div>
                     <div className="font-medium text-slate-900 text-right">{format(new Date(reservation.checkIn), 'dd MMM yyyy')}</div>
                     <div className="text-slate-500">Check Out</div>

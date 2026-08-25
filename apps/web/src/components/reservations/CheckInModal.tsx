@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Loader2, CheckCircle2, XCircle, CreditCard, Cpu, Wifi, ShieldCheck, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { formatRoomNumber } from '@/lib/format-room';
 
 // ─── Status stage definitions ────────────────────────────────────────────────
 
@@ -135,7 +136,7 @@ export function CheckInModal({ reservationId, guestName, roomNumber, onClose, on
             <div>
               <h2 className="text-lg font-semibold">Guest Check-In</h2>
               <p className="text-sm text-muted-foreground mt-0.5">
-                {guestName} · Room <span className="font-medium text-foreground">{roomNumber}</span>
+                {guestName} · Room <span className="font-medium text-foreground">{formatRoomNumber(roomNumber)}</span>
               </p>
             </div>
             {(phase === 'idle' || phase === 'success' || phase === 'error') && (
@@ -239,7 +240,7 @@ export function CheckInModal({ reservationId, guestName, roomNumber, onClose, on
               <div>
                 <h3 className="text-lg font-semibold">Check-in Complete!</h3>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Key card for Room <span className="font-medium text-foreground">{roomNumber}</span> is ready.
+                  Key card for Room <span className="font-medium text-foreground">{formatRoomNumber(roomNumber)}</span> is ready.
                   <br />
                   Hand the card to <span className="font-medium text-foreground">{guestName}</span>.
                 </p>

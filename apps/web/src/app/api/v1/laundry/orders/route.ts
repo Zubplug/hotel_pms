@@ -115,15 +115,24 @@ export async function POST(req: NextRequest) {
     const orderItemsData: any[] = [];
 
     // Fetch items from DB to ensure correct prices
-    const itemIds = items.map((i: any) => i.itemId);
+    const requestedQuantities = new Map<string, number>();
+    for (const item of items) {
+      const itemId = String(item?.itemId || '');
+      const quantity = Number(item?.quantity || 0);
+      if (itemId && Number.isInteger(quantity) && quantity > 0) {
+        requestedQuantities.set(itemId, (requestedQuantities.get(itemId) || 0) + quantity);
+      }
+    }
+
+    const itemIds = Array.from(requestedQuantities.keys());
     const dbItems = await prisma.laundryItem.findMany({
       where: { id: { in: itemIds }, propertyId, isActive: true }
     });
 
     const itemMap = new Map(dbItems.map(i => [i.id, i]));
 
-    for (const orderItem of items) {
-      const dbItem = itemMap.get(orderItem.itemId);
+    for (const [itemId, quantity] of requestedQuantities) {
+      const dbItem = itemMap.get(itemId);
       if (!dbItem) continue;
 
       let unitPrice = Number(dbItem.basePrice);
@@ -145,12 +154,12 @@ export async function POST(req: NextRequest) {
           }
       }
 
-      const totalPrice = unitPrice * orderItem.quantity;
+      const totalPrice = unitPrice * quantity;
       totalAmount += totalPrice;
 
       orderItemsData.push({
-        itemId: orderItem.itemId,
-        quantity: orderItem.quantity,
+        itemId,
+        quantity,
         unitPrice,
         totalPrice
       });

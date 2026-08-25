@@ -19,6 +19,7 @@ import { FolioSection } from '../reservations/FolioSection';
 import { FrontDeskCardInformationSection } from './FrontDeskCardInformationSection';
 import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
 import { toast } from 'sonner';
+import { formatRoomNumber } from '@/lib/format-room';
 import { LogIn, User, MapPin, CalendarClock, CreditCard, Receipt, LogOut, ChevronDown, Edit3, XCircle, Loader2 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -68,7 +69,7 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
         const res = await HardwareBridge.printPaymentReceipt({
           receiptNumber: latestPayment.reference || latestPayment.id.substring(0, 8).toUpperCase(),
           guestName: guest ? `${guest.firstName} ${guest.lastName}` : 'Guest',
-          roomNumber: room?.number || 'N/A',
+          roomNumber: formatRoomNumber(room?.number) || 'N/A',
           folioNumber: folio?.id?.substring(0, 8).toUpperCase() || '',
           amountPaid: Math.abs(Number(latestPayment.amount)),
           paymentMethod: latestPayment.method || 'CASH',
@@ -323,7 +324,7 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
             guest: guest ? { name: `${guest.firstName} ${guest.lastName}`, email: guest.email } : null,
             reservation: {
               confirmationNumber: reservation.confirmationNumber,
-              roomNumber: room?.number || 'Unassigned',
+              roomNumber: formatRoomNumber(room?.number) || 'Unassigned',
               checkIn: reservation.checkIn,
               checkOut: reservation.checkOut,
             },

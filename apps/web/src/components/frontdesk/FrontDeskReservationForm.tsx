@@ -123,7 +123,11 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
     },
     enabled: !!propertyId,
   });
-  const roomTypes = (roomTypesRes as any)?.data || [];
+  const roomTypes = ((roomTypesRes as any)?.data || []).map((roomType: any) => ({
+    ...roomType,
+    baseRate: Number(roomType.baseRate ?? roomType.basePrice ?? roomType.BasePrice ?? 0),
+    currency: roomType.currency || roomType.Currency || 'NGN',
+  }));
 
   const { data: availableRoomsRes, isLoading: loadingAvailableRooms } = useQuery({
     queryKey: ['available-rooms', propertyId, roomTypeId, checkIn?.toISOString(), checkOut?.toISOString()],
@@ -177,7 +181,10 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
   const nights = (checkIn && checkOut && checkOut > checkIn) 
     ? differenceInDays(checkOut, checkIn) 
     : 0;
-  
+
+  const nightlyRate = Number(selectedRoomType?.baseRate || 0);
+  const estimatedTotal = nightlyRate * nights;
+
   const formatter = selectedRoomType ? new Intl.NumberFormat('en-NG', {
     style: 'currency',
     currency: selectedRoomType.currency || 'NGN',
@@ -497,14 +504,27 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
 
                 {/* Total Estimate */}
                 <div className="bg-blue-600/20 border border-blue-500/30 rounded-2xl p-5 mt-4">
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-blue-200 text-sm font-medium">Estimated Total</span>
-                    <span className="text-xs bg-blue-500/30 text-blue-200 px-2 py-0.5 rounded-full">{nights} Nights</span>
+                  <div className="flex justify-between items-center mb-3">
+                    <span className="text-blue-200 text-sm font-medium">Stay Amount</span>
+                    <span className="text-xs bg-blue-500/30 text-blue-200 px-2 py-0.5 rounded-full">
+                      {nights} {nights === 1 ? 'Night' : 'Nights'}
+                    </span>
                   </div>
-                  <div className="text-3xl font-bold text-white tracking-tight">
-                    {selectedRoomType && formatter && nights > 0 
-                      ? formatter.format(selectedRoomType.baseRate * nights) 
-                      : '---'}
+                  {selectedRoomType && formatter && nights > 0 ? (
+                    <>
+                      <div className="flex items-center justify-between text-sm text-blue-100">
+                        <span>{nights} × {formatter.format(nightlyRate)} per night</span>
+                        <span className="font-semibold">Room rate</span>
+                      </div>
+                      <div className="mt-2 text-3xl font-bold text-white tracking-tight">
+                        {formatter.format(estimatedTotal)}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-2xl font-bold text-white tracking-tight">Select a room type and dates</div>
+                  )}
+                  <div className="mt-2 text-xs text-blue-200/80">
+                    Calculated automatically from the selected room rate and number of nights.
                   </div>
                 </div>
 

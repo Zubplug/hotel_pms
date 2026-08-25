@@ -30,6 +30,7 @@ public class OfflinePMSInterop
     private readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions 
     { 
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
         ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles
     };
 
@@ -277,6 +278,10 @@ public class OfflinePMSInterop
                 permissions,
                 staff.PosTokenVersion
             );
+            if (staff.HasPosAccess)
+            {
+                await _sessionManager.EstablishOperatorContextAsync(staff.Id);
+            }
 
             var property = await _repo.GetPropertyAsync(propertyId);
             var actualBankingModel = property?.BankingModel ?? "CENTRAL_CASHIER";
@@ -475,10 +480,17 @@ public class OfflinePMSInterop
         try
         {
             var res = await _repo.GetActiveReservationsAsync();
+            var roomTypes = (await _repo.GetRoomTypesAsync(string.Empty))
+                .GroupBy(roomType => roomType.Id)
+                .ToDictionary(group => group.Key, group => group.First().Name);
             var mapped = res.Select(r =>
             {
                 var guestId = r.Guest?.Id ?? r.GuestId ?? "";
-                var roomId = r.RoomId ?? r.Rooms?.FirstOrDefault()?.RoomId;
+                var assignedRoom = r.Rooms?.FirstOrDefault(room => !string.IsNullOrWhiteSpace(room.RoomId));
+                var roomId = r.RoomId ?? assignedRoom?.RoomId;
+                var roomNumber = assignedRoom?.Room?.Number ?? r.RoomNumber;
+                var roomTypeId = assignedRoom?.RoomTypeId ?? r.RoomTypeId;
+                var roomTypeName = roomTypeId != null && roomTypes.TryGetValue(roomTypeId, out var name) ? name : "Unassigned";
                 return new
                 {
                     id = r.Id,
@@ -491,8 +503,8 @@ public class OfflinePMSInterop
                     primaryGuest = r.Guest != null 
                         ? new { id = r.Guest.Id, firstName = r.Guest.FirstName, lastName = r.Guest.LastName, phone = r.Guest.Phone } 
                         : new { id = "unknown", firstName = "Unknown", lastName = "Guest", phone = (string?)"" },
-                    reservationRooms = new[] { new { roomId = roomId, room = new { id = roomId, number = r.RoomNumber, status = "CLEAN" }, roomType = new { name = "Standard" }, checkIn = r.CheckInDate, checkOut = r.CheckOutDate } },
-                    folio = new { balance = r.Folio?.OutstandingBalance ?? 0, currency = r.Folio?.Currency ?? r.Currency ?? "NGN" },
+                    reservationRooms = new[] { new { roomId = roomId, room = new { id = roomId, number = roomNumber, status = assignedRoom?.Room?.Status ?? "AVAILABLE" }, roomType = new { name = roomTypeName }, checkIn = r.CheckInDate, checkOut = r.CheckOutDate } },
+                    folio = new { balance = r.Folio?.NetBalance ?? 0, currency = r.Folio?.Currency ?? r.Currency ?? "NGN" },
                     isDirty = r.IsDirty
                 };
             });
@@ -824,7 +836,7 @@ public class OfflinePMSInterop
                     new {
                         id = f?.Id,
                         status = f?.Status ?? "OPEN",
-                        balance = f != null ? f.TotalCharges - f.TotalPayments : 0,
+                        balance = f?.NetBalance ?? 0,
                         totalCharges = f?.TotalCharges ?? 0,
                         totalPayments = f?.TotalPayments ?? 0,
                         availableCredit = f?.AvailableCredit ?? 0,
@@ -1223,7 +1235,8 @@ public class OfflinePMSInterop
                 { "status", data.Status },
                 { "totalCharges", data.TotalCharges },
                 { "totalPayments", data.TotalPayments },
-                { "balance", data.OutstandingBalance },
+                { "balance", data.NetBalance },
+                { "availableCredit", data.AvailableCredit },
                 { "createdAt", data.CreatedAt },
                 { "updatedAt", data.UpdatedAt },
                 { "version", data.Version }
@@ -1391,7 +1404,7 @@ public class OfflinePMSInterop
     {
         try
         {
-            var order = JsonSerializer.Deserialize<LodgeCore.Desktop.Data.Entities.LocalPosOrder>(dataJson);
+            var order = JsonSerializer.Deserialize<LodgeCore.Desktop.Data.Entities.LocalPosOrder>(dataJson, _jsonOptions);
             if (order == null) throw new Exception("Invalid order data");
             
             var posCtx = await _sessionManager.GetActiveContextAsync();
@@ -1921,6 +1934,11 @@ public class OfflinePMSInterop
             var terminal = await _repo.GetTerminalAsync(desktopSession.DeviceId);
             var outlet = terminal != null ? await _repo.GetOutletAsync(terminal.OutletId) : null;
             var posSession = await _repo.GetSessionContextAsync(sessionId);
+
+            if (posSession == null)
+            {
+                posSession = await _repo.GetActiveSessionForDeviceAsync(desktopSession.DeviceId);
+            }
             
             // Fallback outlet to the session's outlet if terminal doesn't provide it
             if (outlet == null && posSession != null && !string.IsNullOrEmpty(posSession.OutletId))
@@ -1928,7 +1946,7 @@ public class OfflinePMSInterop
                 outlet = await _repo.GetOutletAsync(posSession.OutletId);
             }
 
-            var settlementDetails = await _repo.GetSessionSettlementDetailsAsync(sessionId);
+            var settlementDetails = await _repo.GetSessionSettlementDetailsAsync(posSession?.Id ?? sessionId);
 
             var jsonDict = new Dictionary<string, object?>
             {

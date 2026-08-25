@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { CreditCard, Loader2, AlertCircle, Info, BedDouble, CalendarDays, User } from 'lucide-react';
 import { format } from 'date-fns';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
+import { formatRoomNumber } from '@/lib/format-room';
 
 interface ReadCardInfoDialogProps {
   open: boolean;
@@ -121,7 +122,7 @@ export function ReadCardInfoDialog({ open, onOpenChange, propertyId }: ReadCardI
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div className="text-muted-foreground">Room:</div>
-                  <div className="font-medium text-right">{cardInfo.roomNo || 'None'}</div>
+                  <div className="font-medium text-right">{formatRoomNumber(cardInfo.roomNo) || 'None'}</div>
                   
                   <div className="text-muted-foreground">Valid From:</div>
                   <div className="font-medium text-right">{cardInfo.checkIn ? format(new Date(cardInfo.checkIn), 'PPp') : 'N/A'}</div>

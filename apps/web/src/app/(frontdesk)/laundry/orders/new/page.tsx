@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft, CheckCircle2, Shirt, Loader2, Search, User, Phone, Mail } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
+import { formatRoomNumber } from '@/lib/format-room';
 
 export default function NewLaundryOrderPage() {
   const { propertyId } = useProperty();
@@ -38,7 +39,7 @@ export default function NewLaundryOrderPage() {
       .then(res => setItems(res.data || []));
       
     setFetchingGuests(true);
-    provider.reservations.list(propertyId, { status: 'IN_HOUSE', pageSize: 200 })
+    provider.reservations.list(propertyId, { status: 'CHECKED_IN', pageSize: 200 })
       .then(res => {
          setReservations(res.data?.items || res.data || []);
       })
@@ -47,10 +48,18 @@ export default function NewLaundryOrderPage() {
   }, [propertyId]);
 
   const filteredReservations = useMemo(() => {
-    if (!searchQuery) return reservations;
-    return reservations.filter(r => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const activeStays = reservations.filter(r => {
+      if (r.status !== 'CHECKED_IN') return false;
+      const checkOut = new Date(r.checkOut || r.reservationRooms?.[0]?.checkOut || 0);
+      return !Number.isNaN(checkOut.getTime()) && checkOut >= today;
+    });
+
+    if (!searchQuery) return activeStays;
+    return activeStays.filter(r => {
       const name = `${r.primaryGuest?.firstName} ${r.primaryGuest?.lastName}`.toLowerCase();
-      const room = r.reservationRooms?.[0]?.room?.number?.toLowerCase() || '';
+      const room = formatRoomNumber(r.reservationRooms?.[0]?.room?.number || r.roomNumber).toLowerCase();
       const query = searchQuery.toLowerCase();
       return name.includes(query) || room.includes(query);
     });
@@ -58,7 +67,7 @@ export default function NewLaundryOrderPage() {
 
   const handleSelectReservation = (res: any) => {
     setSelectedReservation(res);
-    setSearchQuery(`${res.reservationRooms?.[0]?.room?.number || 'N/A'} - ${res.primaryGuest?.firstName} ${res.primaryGuest?.lastName}`);
+    setSearchQuery(`${formatRoomNumber(res.reservationRooms?.[0]?.room?.number || res.roomNumber) || 'N/A'} - ${res.primaryGuest?.firstName} ${res.primaryGuest?.lastName}`);
     setShowDropdown(false);
   };
 
@@ -216,7 +225,7 @@ export default function NewLaundryOrderPage() {
                         onClick={() => handleSelectReservation(res)}
                         >
                         <span className="font-bold text-slate-700">{res.primaryGuest?.firstName} {res.primaryGuest?.lastName}</span>
-                        <span className="font-mono text-sm bg-slate-100 px-2 py-1 rounded text-slate-600">{res.reservationRooms?.[0]?.room?.number || 'N/A'}</span>
+                        <span className="font-mono text-sm bg-slate-100 px-2 py-1 rounded text-slate-600">{formatRoomNumber(res.reservationRooms?.[0]?.room?.number || res.roomNumber) || 'N/A'}</span>
                         </div>
                     ))}
                     </div>

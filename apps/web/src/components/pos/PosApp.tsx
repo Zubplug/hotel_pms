@@ -32,6 +32,8 @@ import { ModifierSelectionModal } from '@/components/pos/ModifierSelectionModal'
 import { CheckSplitModal } from '@/components/pos/CheckSplitModal';
 import { KotPanel } from '@/components/pos/KotPanel';
 import { PosSidebar } from '@/components/pos/PosSidebar';
+import { PrinterSettingsPage } from '@/app/(pos)/pos/printer-settings/page';
+import { SyncCenterPanel } from '@/components/sync/SyncCenterPanel';
 
 import { usePosOnlineStatus } from '@/lib/pos/usePosOnlineStatus';
 import { useLicenseGuard } from '@/lib/pos/useLicenseGuard';
@@ -102,6 +104,8 @@ export default function PosApp() {
   const [activeDisplayName, setActiveDisplayName] = useState<string>('');
 
   const [showKitchenModal, setShowKitchenModal] = useState(false);
+  const [showPrinterSettings, setShowPrinterSettings] = useState(false);
+  const [showSyncCenter, setShowSyncCenter] = useState(false);
 
   // ── Modals ────────────────────────────────────────────────────────
   const [modifierTarget, setModifierTarget] = useState<any | null>(null);
@@ -148,6 +152,8 @@ export default function PosApp() {
     if (!propertyId) return;
     const fetchData = async () => {
       try {
+        const configuredBankingModel = (session as any)?.user?.bankingModel;
+        if (configuredBankingModel) setBankingModel(configuredBankingModel);
         const [prodRes, catRes] = await Promise.all([
           provider.pos.getProducts(propertyId),
           provider.pos.getCategories(propertyId),
@@ -180,6 +186,7 @@ export default function PosApp() {
             const contextRes = await provider.pos.getSessionContext(activeSessionId);
             if (!contextRes.error && contextRes.data) {
               setSessionContext(contextRes.data);
+              if (contextRes.data.bankingModel) setBankingModel(contextRes.data.bankingModel);
             } else {
               // The cash bank doesn't exist anymore, but we don't kick them out of the POS.
               // Just clear the cash bank ID.
@@ -189,6 +196,18 @@ export default function PosApp() {
           } catch {
             console.error('Failed to load POS cash bank context');
           }
+        }
+
+        if (isDesktopMode && session?.user) {
+          const desktopUser = session.user as any;
+          setActiveOperator({
+            id: desktopUser.staffId || desktopUser.id,
+            firstName: desktopUser.name || 'Staff',
+            lastName: '',
+            role: desktopUser.role || 'WAITER'
+          });
+          setOperatorToken('desktop-session');
+          return;
         }
         
         const savedToken = localStorage.getItem('lodgecore_pos_operator_token');
@@ -222,9 +241,9 @@ export default function PosApp() {
   useEffect(() => {
     if (sessionStatus === 'authenticated') {
       const savedToken = localStorage.getItem('lodgecore_pos_operator_token');
-      if (!savedToken) setActiveOperator(null);
+      if (!savedToken && !isDesktopMode) setActiveOperator(null);
     }
-  }, [sessionStatus]);
+  }, [sessionStatus, isDesktopMode]);
 
   // Redirect to device registration if not registered
   useEffect(() => {
@@ -370,11 +389,11 @@ export default function PosApp() {
     const checks = order.checks || [];
     setOrderChecks(checks);
     
-    let itemsToLoad = order.items;
+    let itemsToLoad = Array.isArray(order.items) ? order.items : [];
     if (checks.length > 0) {
       const openCheck = checks.find((c: any) => c.status === 'OPEN') || checks[0];
       setActiveCheckId(openCheck.id);
-      itemsToLoad = openCheck.items;
+      itemsToLoad = Array.isArray(openCheck.items) ? openCheck.items : itemsToLoad;
       if (isTableFlow) toast.info(`Table ${order.tableNumber} — loaded check ${openCheck.checkNumber}`);
     } else {
       setActiveCheckId(null);
@@ -382,22 +401,25 @@ export default function PosApp() {
     }
 
     setCart(itemsToLoad.map((i: any) => {
-      const p = products.find(prod => prod.id === i.productId);
+      const productId = i.productId ?? i.ProductId;
+      const quantity = Number(i.quantity ?? i.Quantity ?? 0);
+      const unitPrice = Number(i.unitPrice ?? i.UnitPrice ?? 0);
+      const p = products.find(prod => prod.id === productId);
       return {
-        id: i.id,
-        productId: i.productId,
-        name: i.productName,
-        price: Number(i.unitPrice),
-        quantity: i.quantity,
-        firedQty: i.quantity,   // all loaded items are already sent
+        id: i.id ?? i.Id,
+        productId,
+        name: i.productName ?? i.ProductName ?? 'Item',
+        price: unitPrice,
+        quantity,
+        firedQty: quantity,
         pendingQty: 0,
-        taxRate: Number(i.taxRate),
-        kitchenStatus: i.kitchenStatus,
+        taxRate: Number(i.taxRate ?? i.TaxRate ?? 0),
+        kitchenStatus: i.kitchenStatus ?? i.KitchenStatus,
         station: p ? (p.resolvedStation || p.productionStation || 'KITCHEN') : 'KITCHEN',
         fired: true,
-        modifiers: i.modifiers || [],
+        modifiers: i.modifiers ?? i.Modifiers ?? [],
       };
-    }));
+    }).filter((item: OrderItem) => item.productId && item.quantity > 0));
   };
 
   const handleOrderResume = async (order: any) => {
@@ -722,6 +744,8 @@ export default function PosApp() {
           onOpenMySales={() => setShowMySales(true)}
           onOpenShiftBank={() => setShowShiftBank(true)}
           onOpenKitchen={() => setShowKitchenModal(true)}
+          onOpenPrinterSettings={() => setShowPrinterSettings(true)}
+          onOpenSyncCenter={() => setShowSyncCenter(true)}
           onLock={() => { 
             setActiveOperator(null); 
             setOperatorToken(null);
@@ -1298,6 +1322,17 @@ export default function PosApp() {
         operatorToken={operatorToken || ''}
         sessionId={posSessionId || ''}
       />
+
+      {showPrinterSettings && (
+        <div className="fixed inset-0 z-[120] overflow-auto bg-gray-50">
+          <PrinterSettingsPage onClose={() => setShowPrinterSettings(false)} />
+        </div>
+      )}
+      {showSyncCenter && (
+        <div className="fixed inset-0 z-[120] overflow-auto bg-gray-50">
+          <SyncCenterPanel onClose={() => setShowSyncCenter(false)} allowPosStaff />
+        </div>
+      )}
     </div>
     </AutoLockScreen>
   );

@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { formatRoomNumber } from '@/lib/format-room';
 
 export default function MyTasksMobileView() {
   const { propertyId } = useProperty();
@@ -104,7 +105,7 @@ export default function MyTasksMobileView() {
               <div className="p-4 border-b bg-gray-50 flex items-center justify-between">
                 <div>
                   <div className="text-sm font-semibold text-gray-500 uppercase tracking-wider">{task.type}</div>
-                  <div className="text-4xl font-bold text-gray-900 leading-none mt-1">{task.room?.number || '??'}</div>
+                  <div className="text-4xl font-bold text-gray-900 leading-none mt-1">{formatRoomNumber(task.room?.number) || '??'}</div>
                 </div>
                 <div className="text-right">
                   <div className={`px-3 py-1 rounded-full text-xs font-bold inline-block ${

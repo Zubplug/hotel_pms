@@ -13,6 +13,7 @@ import { FrontDeskReadCardDialog } from '@/components/frontdesk/FrontDeskReadCar
 import { LoadingState } from '@/components/ui/EmptyState';
 import { ClientOnlyDate } from '@/components/ClientOnlyDate';
 import { formatCurrency } from '@/lib/utils';
+import { formatRoomNumber } from '@/lib/format-room';
 import { 
   UserPlus, 
   CalendarPlus, 
@@ -232,7 +233,7 @@ export default function ReceptionistDashboardPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex justify-between items-start mb-1">
                           <h3 className="font-bold text-slate-900 truncate pr-4">{arr.guestName}</h3>
-                          <span className="font-mono text-xs text-slate-500 shrink-0">{arr.roomName}</span>
+                          <span className="font-mono text-xs text-slate-500 shrink-0">{formatRoomNumber(arr.roomName)}</span>
                         </div>
                         
                         <div className="flex items-center gap-3 mt-2">
@@ -308,7 +309,7 @@ export default function ReceptionistDashboardPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex justify-between items-start mb-1">
                           <h3 className="font-bold text-slate-900 truncate pr-4">{dep.guestName}</h3>
-                          <span className="font-mono text-xs text-slate-500 shrink-0">{dep.roomName}</span>
+                          <span className="font-mono text-xs text-slate-500 shrink-0">{formatRoomNumber(dep.roomName)}</span>
                         </div>
                         
                         <div className="flex items-center gap-3 mt-2">

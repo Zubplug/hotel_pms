@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
+import { formatRoomNumber } from '@/lib/format-room';
 
 interface FrontDeskReadCardDialogProps {
   open: boolean;
@@ -149,7 +150,7 @@ export function FrontDeskReadCardDialog({ open, onOpenChange, propertyId }: Fron
                 <div className="p-5 grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Room Number</span>
-                    <p className="font-mono text-xl text-slate-900 font-bold">{cardInfo.roomNo || 'None'}</p>
+                    <p className="font-mono text-xl text-slate-900 font-bold">{formatRoomNumber(cardInfo.roomNo) || 'None'}</p>
                   </div>
                   <div className="space-y-1">
                     <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Serial Number</span>
@@ -215,7 +216,7 @@ export function FrontDeskReadCardDialog({ open, onOpenChange, propertyId }: Fron
                   </div>
                   <div>
                     <h4 className="font-bold text-amber-900">No Active Reservation Found</h4>
-                    <p className="text-sm text-amber-800/80 mt-1">This card is encoded for Room {cardInfo.roomNo}, but there is no currently checked-in reservation assigned to this room in the system.</p>
+                    <p className="text-sm text-amber-800/80 mt-1">This card is encoded for Room {formatRoomNumber(cardInfo.roomNo)}, but there is no currently checked-in reservation assigned to this room in the system.</p>
                   </div>
                 </div>
               ) : null}
