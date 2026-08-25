@@ -625,3 +625,7 @@ export function PrinterSettingsPage({ onClose }: { onClose?: () => void } = {}) 
     </div>
   );
 }
+
+export default function PrinterSettingsRoute() {
+  return <PrinterSettingsPage />;
+}

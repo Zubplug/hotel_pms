@@ -651,8 +651,7 @@ export async function POST(req: NextRequest) {
                    baseAmount: amount,
                    status: 'COMPLETED',
                    idempotencyKey: `pay_${idempotencyKey}`,
-                   receivedBy: actorId,
-                   frontdeskSessionId: payload.frontdeskSessionId || payload.FrontdeskSessionId || null
+                   receivedBy: actorId
                  }
                });
 

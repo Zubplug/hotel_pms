@@ -321,8 +321,8 @@ export async function PATCH(
           const nights = Math.max(1, Math.ceil((newCheckOutDate.getTime() - newCheckInDate.getTime()) / (1000 * 60 * 60 * 24)));
           const adjustmentKey = `ROOM_REASSIGNMENT:${id}:${newRoomId}:${newCheckOutDate.toISOString().slice(0, 10)}`;
           const existingAdjustment = await tx.folioItem.findFirst({ where: { folioId: folio.id, posTransactionId: adjustmentKey } });
+          const amount = Math.abs(roomMoveAdjustment);
           if (!existingAdjustment) {
-            const amount = Math.abs(roomMoveAdjustment);
             const isUpgrade = roomMoveAdjustment > 0;
             await tx.folioItem.create({
               data: {
