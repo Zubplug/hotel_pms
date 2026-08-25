@@ -1173,6 +1173,21 @@ export async function POST(req: NextRequest) {
                      where: { id: aggregateId },
                      data: updateData
                  });
+                 const task = await tx.housekeepingTask.findUnique({ where: { id: aggregateId } });
+                 if (task) {
+                   const roomStatus = currentStatus === 'CLEANING' ? 'CLEANING'
+                     : currentStatus === 'CLEAN' ? 'CLEAN'
+                     : currentStatus === 'INSPECTED' ? 'AVAILABLE'
+                     : currentStatus === 'MAINTENANCE_REQUIRED' ? 'MAINTENANCE'
+                     : undefined;
+                   await tx.room.update({
+                     where: { id: task.roomId },
+                     data: {
+                       housekeepingStatus: currentStatus as any,
+                       ...(roomStatus ? { status: roomStatus as any } : {})
+                     }
+                   });
+                 }
              }
           }
           else if (aggregateType === 'MAINTENANCE_TICKET') {

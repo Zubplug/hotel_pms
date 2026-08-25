@@ -1015,6 +1015,15 @@ public class LocalRepository
         var checkoutRoomId = res.RoomId;
         if (!string.IsNullOrWhiteSpace(checkoutRoomId))
         {
+            var room = await _dbContext.Rooms.FirstOrDefaultAsync(r => r.Id == checkoutRoomId);
+            if (room != null)
+            {
+                room.Status = "DIRTY";
+                room.HousekeepingStatus = "PENDING";
+                room.IsOccupied = false;
+                room.UpdatedAt = DateTime.UtcNow;
+            }
+
             var cleaningTask = new LocalHousekeepingTask
             {
                 PropertyId = res.PropertyId,
@@ -1048,9 +1057,36 @@ public class LocalRepository
         var task = await _dbContext.HousekeepingTasks.FindAsync(taskId);
         if (task == null) return false;
 
-        task.Status = status;
+        var allowedTransitions = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["PENDING"] = ["ASSIGNED", "CANCELLED"],
+            ["ASSIGNED"] = ["CLEANING", "CANCELLED"],
+            ["CLEANING"] = ["CLEAN", "MAINTENANCE_REQUIRED"],
+            ["CLEAN"] = ["INSPECTED", "MAINTENANCE_REQUIRED"],
+            ["INSPECTED"] = [],
+            ["CANCELLED"] = [],
+            ["MAINTENANCE_REQUIRED"] = ["PENDING", "ASSIGNED"]
+        };
+        if (!allowedTransitions.TryGetValue(task.Status, out var allowed) || !allowed.Contains(status, StringComparer.OrdinalIgnoreCase))
+            throw new InvalidOperationException($"Cannot transition housekeeping task from {task.Status} to {status}.");
+
+        task.Status = status.ToUpperInvariant();
         task.UpdatedAt = DateTime.UtcNow;
         task.IsDirty = true;
+        var room = await _dbContext.Rooms.FirstOrDefaultAsync(r => r.Id == task.RoomId);
+        if (room != null)
+        {
+            room.HousekeepingStatus = task.Status;
+            room.Status = task.Status switch
+            {
+                "CLEANING" => "CLEANING",
+                "CLEAN" => "CLEAN",
+                "INSPECTED" => "AVAILABLE",
+                "MAINTENANCE_REQUIRED" => "MAINTENANCE",
+                _ => room.Status
+            };
+            room.UpdatedAt = DateTime.UtcNow;
+        }
         int eventVersion = task.Version;
         task.Version++;
 
@@ -1064,7 +1100,7 @@ public class LocalRepository
             AggregateVersion = eventVersion,
             EventType = "UPDATE_STATUS",
             Sequence = task.Version,
-            PayloadJson = JsonSerializer.Serialize(new { status })
+            PayloadJson = JsonSerializer.Serialize(new { status = task.Status })
         });
 
         await _dbContext.SaveChangesAsync();

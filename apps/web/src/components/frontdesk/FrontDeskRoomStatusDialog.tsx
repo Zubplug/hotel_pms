@@ -37,7 +37,9 @@ export function FrontDeskRoomStatusDialog({
   if (!room) return null;
 
   const currentStatus = room.status as RoomStatus;
-  const allowedTransitions = getAllowedTransitions(currentStatus);
+  const allowedTransitions = getAllowedTransitions(currentStatus).filter((status) =>
+    !['CLEANING', 'CLEAN', 'INSPECTED'].includes(status)
+  );
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -123,7 +125,10 @@ export function FrontDeskRoomStatusDialog({
         </div>
 
         <div className="p-6 bg-slate-50 overflow-y-auto flex-1">
-          <h4 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4">Select New Status</h4>
+          <h4 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2">Operational Status</h4>
+          <p className="text-xs text-slate-500 mb-4">
+            Cleaning and inspection statuses are managed from the Housekeeping dashboard.
+          </p>
           
           <div className="grid grid-cols-2 gap-3 mb-6">
             {allowedTransitions.length === 0 ? (

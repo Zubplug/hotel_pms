@@ -6,25 +6,34 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useProperty } from '@/components/PropertyProvider';
-import { Loader2, AlertCircle, Calendar, RefreshCcw } from 'lucide-react';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
+import { Loader2, AlertCircle, RefreshCcw, Check, X } from 'lucide-react';
 
 export default function HousekeepingDashboard() {
   const { propertyId } = useProperty();
   const { data: session } = useLodgeCoreSession();
+  const { provider, isDesktopMode, isOnline } = useLodgeCoreProvider();
   
   const [tasks, setTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [managingTaskId, setManagingTaskId] = useState<string | null>(null);
+  const [selectedStatus, setSelectedStatus] = useState('');
+  const [savingTaskId, setSavingTaskId] = useState<string | null>(null);
 
   const fetchTasks = async () => {
     if (!propertyId) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/v1/housekeeping/tasks?propertyId=${propertyId}`);
-      if (!res.ok) throw new Error('Failed to fetch tasks');
-      const data = await res.json();
-      setTasks(data.data || []);
+      const result = await provider.housekeeping.list(propertyId);
+      const data = Array.isArray(result) ? result : (result as any)?.data || [];
+      setTasks(data.map((task: any) => ({
+        ...task,
+        room: task.room || { number: task.roomNumber || '??' },
+        type: task.type || task.taskType || 'CLEANING',
+        assignedTo: task.assignedTo || task.assignedToUserId || null,
+      })));
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -34,21 +43,47 @@ export default function HousekeepingDashboard() {
 
   useEffect(() => {
     fetchTasks();
-  }, [propertyId]);
+  }, [propertyId, provider]);
+
+  const statusOptions: Record<string, string[]> = {
+    PENDING: ['ASSIGNED', 'CANCELLED'],
+    ASSIGNED: ['CLEANING', 'CANCELLED'],
+    CLEANING: ['CLEAN', 'MAINTENANCE_REQUIRED'],
+    CLEAN: ['INSPECTED', 'MAINTENANCE_REQUIRED'],
+    INSPECTED: [],
+    CANCELLED: [],
+    MAINTENANCE_REQUIRED: ['PENDING', 'ASSIGNED']
+  };
+
+  const saveTaskStatus = async (taskId: string) => {
+    if (!selectedStatus) return;
+    setSavingTaskId(taskId);
+    setError(null);
+    try {
+      await provider.housekeeping.updateTask(taskId, selectedStatus);
+      setManagingTaskId(null);
+      setSelectedStatus('');
+      await fetchTasks();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSavingTaskId(null);
+    }
+  };
 
   if (!propertyId) {
     return <div className="p-8 text-center text-muted-foreground">Please select a property to view Housekeeping.</div>;
   }
 
-  const role = (session?.user as any)?.role;
-  if (role === 'HOUSEKEEPER') {
+  const role = String((session?.user as any)?.role || '').toUpperCase();
+  const capabilities = ((session?.user as any)?.capabilities || []) as string[];
+  const isReceptionist = ['RECEPTIONIST', 'FRONT_DESK'].includes(role);
+  const canManage = isReceptionist || role === 'MANAGER' || role === 'ADMIN' || capabilities.includes('ACCESS_MANAGEMENT');
+  if (!canManage) {
     return (
       <div className="p-8 text-center">
-        <h2 className="text-xl font-semibold mb-4">Housekeeper View</h2>
-        <p className="text-muted-foreground mb-6">Please navigate to your mobile-friendly My Tasks view.</p>
-        <Button asChild>
-          <a href="/housekeeping/my-tasks">Go to My Tasks</a>
-        </Button>
+        <h2 className="text-xl font-semibold mb-4">Housekeeping is receptionist-managed</h2>
+        <p className="text-muted-foreground">Reception staff assign, update, inspect, and release rooms. Contact reception for task changes.</p>
       </div>
     );
   }
@@ -70,12 +105,15 @@ export default function HousekeepingDashboard() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold">Housekeeping Dashboard</h1>
-          <p className="text-muted-foreground">Manage room cleaning, status, and task assignments.</p>
+          <p className="text-muted-foreground">Reception-managed room cleaning, inspection, and release control.</p>
         </div>
-        <Button variant="outline" onClick={fetchTasks} disabled={loading}>
+        <div className="flex items-center gap-3">
+          <Badge variant="outline">{isDesktopMode && !isOnline ? 'Offline — local tasks' : 'Live task list'}</Badge>
+          <Button variant="outline" onClick={fetchTasks} disabled={loading}>
           {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCcw className="w-4 h-4 mr-2" />}
           Refresh
-        </Button>
+          </Button>
+        </div>
       </div>
 
       {error && (
@@ -163,7 +201,38 @@ export default function HousekeepingDashboard() {
                     )}
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <Button variant="ghost" size="sm">Manage</Button>
+                    {managingTaskId === task.id ? (
+                      <div className="flex items-center justify-end gap-2">
+                        <select
+                          value={selectedStatus}
+                          onChange={(event) => setSelectedStatus(event.target.value)}
+                          className="h-9 rounded-md border bg-background px-2 text-xs"
+                        >
+                          <option value="">Update status</option>
+                          {(statusOptions[task.status] || []).map((status) => (
+                            <option key={status} value={status}>{status.replaceAll('_', ' ')}</option>
+                          ))}
+                        </select>
+                        <Button size="icon" variant="outline" onClick={() => saveTaskStatus(task.id)} disabled={!selectedStatus || savingTaskId === task.id}>
+                          <Check className="h-4 w-4" />
+                        </Button>
+                        <Button size="icon" variant="ghost" onClick={() => setManagingTaskId(null)} disabled={savingTaskId === task.id}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setManagingTaskId(task.id);
+                          setSelectedStatus('');
+                        }}
+                        disabled={(statusOptions[task.status] || []).length === 0}
+                      >
+                        Manage
+                      </Button>
+                    )}
                   </td>
                 </tr>
               ))

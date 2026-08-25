@@ -38,23 +38,12 @@ export async function PATCH(
     if (!task) return errorResponse('NOT_FOUND', 'Task not found', 404);
     await assertPropertyAccess(session.user.id, task.propertyId);
 
-    // Ensure staff can only update their own tasks, unless they are a supervisor
+    // Housekeeping task management is controlled by reception or management.
     const capabilities = (session.user as any).capabilities || [];
-    const isBasicHousekeeper = capabilities.includes('ACCESS_HOUSEKEEPING') && !capabilities.includes('ACCESS_MANAGEMENT');
-    
-    if (isBasicHousekeeper) {
-      if (task.assignedTo !== session.user.id) {
-        return errorResponse('FORBIDDEN', 'You can only update your own assigned tasks', 403);
-      }
-      // Housekeepers shouldn't bypass straight to INSPECTED
-      if (status === 'INSPECTED') {
-        return errorResponse('FORBIDDEN', 'Only supervisors can inspect rooms', 403);
-      }
-    } else {
-      // Has management or specific update capability
-      const canManage = await hasPermission(session.user.id, 'housekeeping', 'update', task.propertyId);
-      if (!canManage && !capabilities.includes('ACCESS_MANAGEMENT')) return errorResponse('FORBIDDEN', 'Insufficient permissions', 403);
-    }
+    const userRole = String((session.user as any).role || '').toUpperCase();
+    const isReceptionist = userRole === 'RECEPTIONIST' || userRole === 'FRONT_DESK';
+    const canManage = isReceptionist || capabilities.includes('ACCESS_MANAGEMENT') || await hasPermission(session.user.id, 'housekeeping', 'update', task.propertyId);
+    if (!canManage) return errorResponse('FORBIDDEN', 'Only reception or management can update housekeeping tasks', 403);
 
     // Determine target status
     let targetStatus = status || task.status;

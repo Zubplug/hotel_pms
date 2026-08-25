@@ -31,7 +31,9 @@ export async function GET(req: NextRequest) {
     const capabilities = (session.user as any).capabilities || [];
     
     // If they have ACCESS_HOUSEKEEPING but not ACCESS_MANAGEMENT or something higher, they only see their own tasks
-    const isBasicHousekeeper = capabilities.includes('ACCESS_HOUSEKEEPING') && !capabilities.includes('ACCESS_MANAGEMENT');
+    const userRole = String((session.user as any).role || '').toUpperCase();
+    const isReceptionist = userRole === 'RECEPTIONIST' || userRole === 'FRONT_DESK';
+    const isBasicHousekeeper = !isReceptionist && capabilities.includes('ACCESS_HOUSEKEEPING') && !capabilities.includes('ACCESS_MANAGEMENT');
     if (isBasicHousekeeper) {
       // Basic housekeepers can only see their own tasks
       filterAssignedTo = session.user.id;

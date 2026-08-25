@@ -8,7 +8,7 @@ public class LocalHousekeepingTask
     public string RoomNumber { get; set; } = string.Empty;
     
     public string TaskType { get; set; } = "CLEANING"; // CLEANING, INSPECTION, MAINTENANCE
-    public string Status { get; set; } = "PENDING"; // PENDING, IN_PROGRESS, COMPLETED
+    public string Status { get; set; } = "PENDING"; // PENDING, ASSIGNED, CLEANING, CLEAN, INSPECTED, MAINTENANCE_REQUIRED, CANCELLED
     
     public string? AssignedToUserId { get; set; }
     public string? Notes { get; set; }
