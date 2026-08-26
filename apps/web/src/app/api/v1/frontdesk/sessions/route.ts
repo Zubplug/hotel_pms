@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
+import { getUserPropertyIds } from '@/lib/property-access';
 
 export async function GET(req: NextRequest) {
   try {
@@ -11,8 +12,11 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url);
     const propertyId = url.searchParams.get('propertyId');
     if (!propertyId) return errorResponse('BAD_REQUEST', 'Property ID is required', 400);
+    if (!(await getUserPropertyIds(session.user.id)).includes(propertyId)) return errorResponse('FORBIDDEN', 'No access to this property', 403);
     const status = url.searchParams.get('status') || undefined;
-    const staffId = url.searchParams.get('staffId') || undefined;
+    const staff = await prisma.staff.findFirst({ where: { userId: session.user.id }, select: { id: true } });
+    if (!staff) return errorResponse('UNAUTHORIZED', 'Staff record not found', 401);
+    const staffId = staff.id;
     const sessions = await prisma.frontdeskSession.findMany({
       where: { propertyId, status: status as any, staffId },
       include: { staff: { select: { id: true, firstName: true, lastName: true } }, cashAccount: { select: { id: true, name: true } } },
@@ -36,13 +40,16 @@ export async function POST(req: NextRequest) {
     if (!staff) return errorResponse('UNAUTHORIZED', 'Staff record not found', 401);
     const property = await prisma.property.findUnique({ where: { id: propertyId } });
     if (!property) return errorResponse('NOT_FOUND', 'Property not found', 404);
+    if (!(await getUserPropertyIds(session.user.id)).includes(propertyId)) return errorResponse('FORBIDDEN', 'No access to this property', 403);
+    const cashAccount = await prisma.cashAccount.findFirst({ where: { id: cashAccountId, propertyId, isActive: true } });
+    if (!cashAccount) return errorResponse('BAD_REQUEST', 'Cashier till is not active for this property', 400);
     const businessDate = property.businessDate || new Date(new Intl.DateTimeFormat('en-CA', { timeZone: property.timezone || 'Africa/Lagos' }).format(new Date()) + 'T00:00:00.000Z');
     const floatValue = Number(openingFloat) || 0;
     const shiftReference = `FD-${businessDate.toISOString().slice(0, 10).replace(/-/g, '')}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
     const created = await prisma.$transaction(async tx => {
-      const existingStaff = await tx.frontdeskSession.findFirst({ where: { staffId: staff.id, status: { in: ['OPEN', 'CLOSING'] } } });
+      const existingStaff = await tx.frontdeskSession.findFirst({ where: { propertyId, staffId: staff.id, status: { in: ['OPEN', 'CLOSING'] } } });
       if (existingStaff) throw new Error('STAFF_SESSION_EXISTS');
-      const existingTill = await tx.frontdeskSession.findFirst({ where: { cashAccountId, status: { in: ['OPEN', 'CLOSING'] } } });
+      const existingTill = await tx.frontdeskSession.findFirst({ where: { propertyId, cashAccountId, status: { in: ['OPEN', 'CLOSING'] } } });
       if (existingTill) throw new Error('TILL_SESSION_EXISTS');
       const frontdeskSession = await tx.frontdeskSession.create({ data: { propertyId, staffId: staff.id, cashAccountId, shiftReference, businessDate, openingFloat: floatValue, systemExpectedCash: floatValue } });
       if (floatValue > 0) {

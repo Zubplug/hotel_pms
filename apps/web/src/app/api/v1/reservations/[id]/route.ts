@@ -72,7 +72,8 @@ export async function GET(
               orderBy: { createdAt: 'desc' },
               include: { refunds: { orderBy: { createdAt: 'desc' } } } 
             },
-            credits: { orderBy: { createdAt: 'asc' } }
+            credits: { orderBy: { createdAt: 'asc' } },
+            creditApplications: { orderBy: { createdAt: 'asc' }, select: { amount: true } }
           }
         },
       },
@@ -103,6 +104,8 @@ export async function GET(
     const folios = reservation.folios.map((folio) => ({
       ...folio,
       availableCredit: folio.credits.reduce((sum, credit) => sum + Number(credit.remainingAmount), 0),
+      appliedCreditAmount: folio.creditApplications.reduce((sum, application) => sum + Number(application.amount), 0),
+      balance: Number(folio.totalCharges) - Number(folio.totalPayments) - folio.creditApplications.reduce((sum, application) => sum + Number(application.amount), 0),
     }));
     return successResponse({ ...reservation, folios, lockCredentials, auditLogs });
   } catch (err: any) {
@@ -304,7 +307,8 @@ export async function PATCH(
           await tx.folioItem.createMany({ data: folioItems });
 
           const allFolioItems = await tx.folioItem.findMany({ where: { folioId: folio.id } });
-          const totals = calculateFolioTotals(allFolioItems);
+          const creditApplications = await tx.folioCreditApplication.findMany({ where: { folioId: folio.id }, select: { amount: true } });
+          const totals = calculateFolioTotals(allFolioItems, creditApplications);
           
           await tx.folio.update({
             where: { id: folio.id },
@@ -342,7 +346,8 @@ export async function PATCH(
             });
           }
           const allFolioItems = await tx.folioItem.findMany({ where: { folioId: folio.id } });
-          const totals = calculateFolioTotals(allFolioItems);
+          const creditApplications = await tx.folioCreditApplication.findMany({ where: { folioId: folio.id }, select: { amount: true } });
+          const totals = calculateFolioTotals(allFolioItems, creditApplications);
           await tx.folio.update({ where: { id: folio.id }, data: totals });
           if (roomMoveAdjustment > 0) {
             await applyAvailableFolioCredit(tx, {

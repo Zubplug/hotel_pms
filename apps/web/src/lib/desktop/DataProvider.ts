@@ -20,15 +20,18 @@ export interface LodgeCoreDataProvider {
   frontdesk: {
     listCashAccounts(propertyId: string): Promise<any>;
     getSession(propertyId: string): Promise<any>;
+    getSessionSummary?(sessionId: string): Promise<any>;
     getReport(propertyId: string, startDate: string, endDate: string): Promise<any>;
     openSession(data: { propertyId: string; cashAccountId: string; openingFloat: number }): Promise<any>;
     closeSession(sessionId: string, declaredCash: number): Promise<any>;
+    reconcileSession?(sessionId: string, decision: string, notes?: string): Promise<any>;
   };
   properties: {
     list(): Promise<any>;
   };
   hardware: {
     poll(operationId: string): Promise<any>;
+    printShiftReport?(data: any): Promise<any>;
   };
   dashboard: {
     get(propertyId: string): Promise<any>;

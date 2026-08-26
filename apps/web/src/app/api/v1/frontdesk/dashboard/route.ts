@@ -122,6 +122,9 @@ export async function GET(req: NextRequest) {
         roomName: res.reservationRooms?.[0]?.room?.number || 'Unassigned',
         roomTypeName: res.reservationRooms?.[0]?.room?.roomType?.name || '',
         arrivalTime: property.checkInTime || '14:00', // Uses property config instead of hardcoded time
+        checkOutDate: res.checkOut.toISOString(),
+        checkOutTime: property.checkOutTime || '12:00',
+        stayEndsToday: res.status === 'CHECKED_IN' && res.checkOut.getTime() === businessDate.getTime(),
         balance,
         status: res.status,
         arrivalState: { label: arrivalStatus, color: arrivalColor },

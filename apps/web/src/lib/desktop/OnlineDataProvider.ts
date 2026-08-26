@@ -77,6 +77,9 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
     async closeSession(sessionId: string, declaredCash: number) {
       return apiFetch(`/api/v1/frontdesk/sessions/${sessionId}/close`, { method: 'POST', body: JSON.stringify({ declaredCash }) });
     },
+    async reconcileSession(sessionId: string, decision: string, notes?: string) {
+      return apiFetch(`/api/v1/frontdesk/sessions/${sessionId}/reconcile`, { method: 'POST', body: JSON.stringify({ decision, notes }) });
+    },
   },
   refunds: {
     async list(propertyId: string) {

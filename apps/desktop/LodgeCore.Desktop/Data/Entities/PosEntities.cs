@@ -275,6 +275,7 @@ public class LocalPosCashMovement
     public string PropertyId { get; set; } = string.Empty;
     public string DeviceId { get; set; } = string.Empty;
     public string? PosSessionId { get; set; } // Now optional
+    public string? FrontdeskSessionId { get; set; }
     public string UserId { get; set; } = string.Empty;
     
     public decimal Amount { get; set; }
@@ -522,4 +523,3 @@ public class LocalPosTerminal
     public int StaffVersion { get; set; } = 0;
     public int MenuVersion { get; set; } = 0;
 }
-

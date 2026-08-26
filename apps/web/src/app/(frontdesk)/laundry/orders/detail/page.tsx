@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useProperty } from '@/components/PropertyProvider';
 import { Button } from '@/components/ui/button';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Loader2, Shirt, CheckCircle2, Clock, Truck, CreditCard, Banknote, Receipt } from 'lucide-react';
+import { ArrowLeft, Loader2, Shirt, CheckCircle2, Clock, Truck, CreditCard, Banknote, Receipt, AlertTriangle } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -22,6 +22,7 @@ export default function ManageLaundryOrderPage() {
   
   const [paymentMethod, setPaymentMethod] = useState('CASH');
   const [processingPayment, setProcessingPayment] = useState(false);
+  const [deliveryConfirmationOpen, setDeliveryConfirmationOpen] = useState(false);
   const [paymentConfirmationOpen, setPaymentConfirmationOpen] = useState(false);
   const [successDialog, setSuccessDialog] = useState({
     open: false,
@@ -37,6 +38,18 @@ export default function ManageLaundryOrderPage() {
   const itemUnitPrice = (item: any) => amountValue(
     item.priceAtTime ?? item.unitPrice ?? item.UnitPrice ?? item.price ?? 0
   );
+
+  const displayItems = (items: any[] = []) => Object.values(items.reduce((groups: Record<string, any>, item: any) => {
+    const key = String(item.itemId || item.item?.id || item.item?.name || item.id);
+    const existing = groups[key];
+    if (existing) {
+      existing.quantity += Number(item.quantity || 0);
+      existing.totalPrice += amountValue(item.totalPrice ?? item.total ?? 0);
+    } else {
+      groups[key] = { ...item, quantity: Number(item.quantity || 0), totalPrice: amountValue(item.totalPrice ?? item.total ?? 0) };
+    }
+    return groups;
+  }, {}));
 
   const fetchOrder = async () => {
     if (!propertyId) return;
@@ -76,7 +89,7 @@ export default function ManageLaundryOrderPage() {
 
   const handleDeliver = async () => {
     if (!order) return;
-    if (!confirm('Deliver this order? This will create a Folio charge for the guest.')) return;
+    setDeliveryConfirmationOpen(false);
     setUpdating(true);
     try {
       const res = await provider.laundry.deliverOrder(order.id);
@@ -182,7 +195,7 @@ export default function ManageLaundryOrderPage() {
                   </Button>
                 )}
                 {order.status === 'READY' && (
-                  <Button onClick={handleDeliver} disabled={updating} className="bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl px-8 h-12 text-lg font-bold shadow-lg shadow-cyan-600/20">
+                  <Button onClick={() => setDeliveryConfirmationOpen(true)} disabled={updating} className="bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl px-8 h-12 text-lg font-bold shadow-lg shadow-cyan-600/20">
                      {updating ? <Loader2 className="w-5 h-5 animate-spin mr-2"/> : <Truck className="w-5 h-5 mr-2"/>} Deliver & Charge
                   </Button>
                 )}
@@ -192,9 +205,9 @@ export default function ManageLaundryOrderPage() {
            <div>
              <h2 className="text-lg font-bold mb-4">Items</h2>
              <div className="space-y-3">
-               {order.items?.map((item: any) => (
+               {displayItems(order.items).map((item: any) => (
                  <div key={item.id} className="flex justify-between items-center p-4 bg-slate-50 rounded-xl border border-slate-100">
-                    <span className="font-bold text-slate-800">{item.quantity}x {item.item?.name || 'Item'}</span>
+                    <span className="font-bold text-slate-800">{item.quantity}x {item.item?.name || item.itemName || 'Unnamed laundry item'}</span>
                     <span className="font-semibold text-slate-600">{formatCurrency(itemUnitPrice(item), order.currency)}</span>
                  </div>
                ))}
@@ -255,6 +268,26 @@ export default function ManageLaundryOrderPage() {
           )}
         </div>
       </div>
+
+      <Dialog open={deliveryConfirmationOpen} onOpenChange={setDeliveryConfirmationOpen}>
+        <DialogContent className="overflow-hidden rounded-3xl border-0 p-0 shadow-2xl sm:max-w-lg">
+          <div className="bg-gradient-to-br from-cyan-700 via-cyan-600 to-blue-700 px-6 py-7 text-white">
+            <div className="flex items-start gap-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/25"><Truck className="h-6 w-6" /></div>
+              <div><DialogTitle className="text-xl font-black text-white">Confirm laundry delivery</DialogTitle><DialogDescription className="mt-1 text-cyan-100">The order will be marked delivered and posted to the guest folio.</DialogDescription></div>
+            </div>
+          </div>
+          <div className="space-y-5 p-6">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="mb-3 flex items-center justify-between"><span className="text-xs font-bold uppercase tracking-wider text-slate-500">Order summary</span><span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700">READY</span></div>
+              <div className="space-y-2">{displayItems(order.items).map((item: any) => <div key={String(item.itemId || item.id)} className="flex justify-between gap-3 text-sm"><span className="font-medium text-slate-700">{item.quantity}× {item.item?.name || item.itemName || 'Laundry item'}</span><span className="font-semibold tabular-nums text-slate-900">{formatCurrency(item.totalPrice || itemUnitPrice(item) * item.quantity, order.currency)}</span></div>)}</div>
+              <div className="mt-4 flex items-center justify-between border-t border-slate-200 pt-3"><span className="font-bold text-slate-700">Charge to folio</span><span className="text-xl font-black tabular-nums text-cyan-700">{formatCurrency(amountValue(order.totalAmount), order.currency)}</span></div>
+            </div>
+            <div className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" /><p>This action records the delivery and creates the laundry charge. Confirm that the items have been handed to the guest.</p></div>
+          </div>
+          <DialogFooter className="border-t bg-white px-6 py-4 sm:justify-end"><Button variant="outline" onClick={() => setDeliveryConfirmationOpen(false)} disabled={updating}>Cancel</Button><Button className="bg-cyan-600 text-white hover:bg-cyan-700" onClick={handleDeliver} disabled={updating}>{updating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Truck className="mr-2 h-4 w-4" />}Confirm delivery & charge</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={paymentConfirmationOpen} onOpenChange={setPaymentConfirmationOpen}>
         <DialogContent className="sm:max-w-md rounded-2xl">

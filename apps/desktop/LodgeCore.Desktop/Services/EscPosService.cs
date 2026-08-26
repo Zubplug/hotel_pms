@@ -314,12 +314,15 @@ public class EscPosService
         var profile = new PrinterProfile { PaperWidth = printer.PaperWidth, HotelName = printer.HotelName };
         var builder = new EscPosBuilder(profile);
 
-        builder.PrintHeader("SHIFT SALES REPORT");
+        builder.PrintHeader(report.ShiftReference == null ? "SHIFT SALES REPORT" : "FRONT DESK SHIFT REPORT");
         builder.AddRow("Staff:", report.StaffName);
         builder.AddRow("Date:", report.PrintedAt.ToString("dd/MM/yyyy HH:mm"));
+        if (!string.IsNullOrWhiteSpace(report.ShiftReference)) builder.AddRow("Shift:", report.ShiftReference);
+        if (!string.IsNullOrWhiteSpace(report.Till)) builder.AddRow("Till:", report.Till);
         builder.AddDivider('-');
 
-        builder.AddRow("Total Orders", report.OrdersCount.ToString());
+        builder.AddRow(report.ShiftReference == null ? "Total Orders" : "Payments", report.ShiftReference == null ? report.OrdersCount.ToString() : report.PaymentsCount.ToString());
+        if (report.ShiftReference != null) builder.AddRow("Charges", report.ChargesCount.ToString());
         builder.AddDivider('-');
         
         string cur = report.Currency;
@@ -336,7 +339,30 @@ public class EscPosService
         
         builder.AddRow("Cash", $"{cur} {report.CashSales:N2}");
         builder.AddRow("Card", $"{cur} {report.CardSales:N2}");
+        if (report.ShiftReference != null) builder.AddRow("Bank Transfer", $"{cur} {report.BankTransferSales:N2}");
+        if (report.ShiftReference != null) builder.AddRow("Other Payments", $"{cur} {report.OtherPayments:N2}");
         builder.AddRow("Room Charges", $"{cur} {report.RoomCharges:N2}");
+        if (report.ShiftReference != null) builder.AddRow("Laundry Charges", $"{cur} {report.LaundryCharges:N2}");
+        if (report.ShiftReference != null) builder.AddRow("Other Charges", $"{cur} {report.OtherCharges:N2}");
+
+        if (report.ShiftReference != null)
+        {
+            builder.AddDivider('-');
+            builder.AddCommand(EscPosBuilder.AlignCenter);
+            builder.AddLine("CASH RECONCILIATION");
+            builder.AddCommand(EscPosBuilder.AlignLeft);
+            builder.AddRow("Opening Float", $"{cur} {report.ExpectedCash - report.CashSales - report.CashIn + report.CashDrops + report.PaidOuts + report.TransfersOut + report.CashRefunds:N2}");
+            builder.AddRow("Expected Cash", $"{cur} {report.ExpectedCash:N2}");
+            if (report.DeclaredCash.HasValue) builder.AddRow("Declared Cash", $"{cur} {report.DeclaredCash.Value:N2}");
+            if (report.Variance.HasValue) builder.AddRow("Variance", $"{cur} {report.Variance.Value:N2}");
+            builder.AddRow("Cash In", $"{cur} {report.CashIn:N2}");
+            builder.AddRow("Drops / Paid Out", $"{cur} {(report.CashDrops + report.PaidOuts + report.TransfersOut + report.CashRefunds):N2}");
+            builder.AddDivider('-');
+            builder.AddRow("Pending Sync", report.PendingSync.ToString());
+            builder.AddRow("Failed Sync", report.FailedSync.ToString());
+            builder.AddLine("Cashier signature: __________________");
+            builder.AddLine("Manager signature: __________________");
+        }
         
         builder.AddCommand(EscPosBuilder.CutPartial);
 

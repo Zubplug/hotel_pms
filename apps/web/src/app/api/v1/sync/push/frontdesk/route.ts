@@ -121,6 +121,18 @@ export async function POST(req: NextRequest) {
           }
         }
         const actorId = isUuid(operatorId) ? operatorId : device.id;
+        const sessionBoundEvents = new Set([
+          'ROOM_CHARGE', 'POST_CHARGE', 'POST_PAYMENT', 'ADVANCE_DEPOSIT',
+          'ADVANCE_DEPOSIT_REQUEST', 'CREDIT_ADJUSTMENT_REQUEST', 'ROOM_CREDIT', 'REFUND_REQUESTED'
+        ]);
+        if (sessionBoundEvents.has(eventType) && payload.frontdeskTransaction !== false) {
+          const frontdeskSessionId = payload.frontdeskSessionId;
+          if (!frontdeskSessionId) throw new Error('FRONTDESK_SHIFT_REQUIRED: Transaction has no cashier session.');
+          const frontdeskSession = await prisma.frontdeskSession.findUnique({ where: { id: frontdeskSessionId } });
+          if (!frontdeskSession || frontdeskSession.propertyId !== propertyId || frontdeskSession.status !== 'OPEN' || frontdeskSession.staffId !== actorId) {
+            throw new Error('FRONTDESK_SHIFT_CLOSED: Cashier session is missing, closed, or belongs to another receptionist.');
+          }
+        }
 
         // 1 & 2. Atomic Concurrency Control & Execution within a Single Transaction
         await prisma.$transaction(async (tx) => {
@@ -1158,7 +1170,8 @@ export async function POST(req: NextRequest) {
                });
                await tx.folioItem.deleteMany({ where: { folioId: folio.id, source: 'ROOM_CHARGE' } });
                await tx.folioItem.createMany({ data: roomItems as any[] });
-               const totals = calculateFolioTotals([...nonRoomItems, ...roomItems]);
+               const creditApplications = await tx.folioCreditApplication.findMany({ where: { folioId: folio.id }, select: { amount: true } });
+               const totals = calculateFolioTotals([...nonRoomItems, ...roomItems], creditApplications);
                await tx.folio.update({ where: { id: folio.id }, data: totals });
              }
           }
@@ -1539,7 +1552,11 @@ export async function POST(req: NextRequest) {
         
       } catch (err: any) {
         if (err.message === 'IDEMPOTENCY_DUPLICATE') {
-           if (err.existingEvent.syncConflict) {
+           // The duplicate marker may be reconstructed by Prisma/transaction
+           // wrappers without carrying the original event object. A duplicate
+           // is still safely idempotent in that case; only classify it as a
+           // conflict when the relation is actually present.
+           if (err.existingEvent?.syncConflict) {
              results.push({ id, status: 'CONFLICT', idempotencyKey, error: 'Already flagged as conflict.' });
            } else {
              results.push({ id, status: 'SYNCED', idempotencyKey });

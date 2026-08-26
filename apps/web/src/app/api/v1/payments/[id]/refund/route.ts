@@ -5,6 +5,7 @@ import { successResponse, errorResponse } from '@/lib/api-response';
 import { getUserPropertyIds } from '@/lib/property-access';
 import { encrypt } from '@/lib/encryption';
 import { getReducedStayEstimate } from '@/lib/refunds/reduced-stay';
+import { findActiveFrontdeskSession } from '@/lib/frontdesk/active-session';
 
 const ACTIVE_REQUEST_STATUSES = ['PENDING_APPROVAL', 'APPROVED', 'PROCESSING'] as const;
 
@@ -46,6 +47,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const allowedProperties = await getUserPropertyIds(session.user.id);
     if (!allowedProperties.includes(payment.propertyId)) {
       return errorResponse('FORBIDDEN', 'No access to this property', 403);
+    }
+    if (requestedMethod === 'CASH') {
+      const { session: activeFrontdeskSession } = await findActiveFrontdeskSession(session.user.id, payment.propertyId);
+      if (!activeFrontdeskSession) return errorResponse('CONFLICT', 'Open your front desk cashier session before requesting a cash refund.', 409);
     }
     if (payment.status !== 'COMPLETED') {
       return errorResponse('BAD_REQUEST', 'Only completed payments can be refunded', 400);

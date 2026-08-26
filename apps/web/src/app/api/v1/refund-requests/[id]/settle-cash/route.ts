@@ -42,6 +42,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       } });
       const staff = await tx.staff.findFirst({ where: { userId: user.id } });
       const activeSession = staff ? await tx.frontdeskSession.findFirst({ where: { propertyId: request.propertyId, staffId: staff.id, status: 'OPEN' } }) : null;
+      if (!activeSession || !staff) throw new Error('SHIFT_NOT_OPEN');
       if (activeSession && staff) {
         await tx.posCashMovement.create({
           data: {
@@ -74,6 +75,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (error.message === 'NOT_FOUND') return errorResponse('NOT_FOUND', 'Refund request not found', 404);
     if (error.message === 'FORBIDDEN') return errorResponse('FORBIDDEN', 'Access denied', 403);
     if (error.message === 'CONFLICT') return errorResponse('CONFLICT', 'Cash refund is no longer awaiting settlement', 409);
+    if (error.message === 'SHIFT_NOT_OPEN') return errorResponse('CONFLICT', 'Open your front desk cashier session before settling a cash refund.', 409);
     console.error('[Cash Refund Settlement]', error);
     return errorResponse('INTERNAL_ERROR', 'Unable to settle cash refund', 500);
   }

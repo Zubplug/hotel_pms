@@ -16,6 +16,17 @@ export default function LaundryOrdersPage() {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const itemSummary = (order: any) => {
+    const items = Array.isArray(order.items) ? order.items : [];
+    if (!items.length) return 'No items recorded';
+    const grouped = items.reduce((result: Record<string, number>, item: any) => {
+      const name = item.item?.name || item.itemName || 'Laundry item';
+      result[name] = (result[name] || 0) + Number(item.quantity || 0);
+      return result;
+    }, {});
+    return Object.entries(grouped).map(([name, quantity]) => `${quantity}× ${name}`).join(', ');
+  };
+
   useEffect(() => {
     if (!propertyId) return;
     setLoading(true);
@@ -65,6 +76,7 @@ export default function LaundryOrdersPage() {
                 <th className="px-6 py-4">Room</th>
                 <th className="px-6 py-4">Guest</th>
                 <th className="px-6 py-4">Service</th>
+                <th className="px-6 py-4">Items</th>
                 <th className="px-6 py-4">Status</th>
                 <th className="px-6 py-4">Total</th>
                 <th className="px-6 py-4 text-right">Actions</th>
@@ -72,7 +84,7 @@ export default function LaundryOrdersPage() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? (
-                <tr><td colSpan={6} className="text-center p-12"><Loader2 className="w-8 h-8 animate-spin mx-auto text-slate-300" /></td></tr>
+                <tr><td colSpan={7} className="text-center p-12"><Loader2 className="w-8 h-8 animate-spin mx-auto text-slate-300" /></td></tr>
               ) : orders.map(order => (
                 <tr key={order.id} className="hover:bg-cyan-50/50 transition-colors group">
                   <td className="px-6 py-5 font-bold text-slate-900 font-mono text-base">{order.room?.number || 'N/A'}</td>
@@ -82,6 +94,7 @@ export default function LaundryOrdersPage() {
                       : (order.guest ? `${order.guest.firstName} ${order.guest.lastName}` : 'Unknown')}
                   </td>
                   <td className="px-6 py-5 font-semibold text-slate-600">{order.serviceType.replace('_', ' ')}</td>
+                  <td className="max-w-xs px-6 py-5 font-medium text-slate-700"><p className="truncate" title={itemSummary(order)}>{itemSummary(order)}</p></td>
                   <td className="px-6 py-5">{renderStatus(order.status)}</td>
                   <td className="px-6 py-5 font-bold text-slate-900">{formatCurrency(Number(order.totalAmount), order.currency)}</td>
                   <td className="px-6 py-5 text-right">

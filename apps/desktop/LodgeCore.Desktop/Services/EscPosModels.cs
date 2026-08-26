@@ -115,7 +115,25 @@ public record ShiftReportData(
     decimal RoomCharges,
     decimal TotalDiscounts,
     string Currency,
-    DateTime PrintedAt
+    DateTime PrintedAt,
+    string? ShiftReference = null,
+    string? Till = null,
+    decimal ExpectedCash = 0,
+    decimal? DeclaredCash = null,
+    decimal? Variance = null,
+    decimal BankTransferSales = 0,
+    decimal OtherPayments = 0,
+    decimal LaundryCharges = 0,
+    decimal OtherCharges = 0,
+    decimal CashIn = 0,
+    decimal CashDrops = 0,
+    decimal PaidOuts = 0,
+    decimal TransfersOut = 0,
+    decimal CashRefunds = 0,
+    int PaymentsCount = 0,
+    int ChargesCount = 0,
+    int PendingSync = 0,
+    int FailedSync = 0
 );
 
 public record RegistrationCardData(

@@ -4,6 +4,7 @@ import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { getUserPropertyIds } from '@/lib/property-access';
 import { NotificationEngine } from '@/lib/notification-engine';
+import { findActiveFrontdeskSession, isFrontdeskCashierRole } from '@/lib/frontdesk/active-session';
 
 export async function POST(req: NextRequest) {
   try {
@@ -60,12 +61,9 @@ export async function POST(req: NextRequest) {
       return errorResponse('FORBIDDEN', 'No access to this property', 403);
     }
 
-    const staff = await prisma.staff.findFirst({ where: { userId: session.user.id } });
-    const activeFrontdeskSession = staff
-      ? await prisma.frontdeskSession.findFirst({ where: { id: frontdeskSessionId || undefined, propertyId: folio.propertyId, staffId: staff.id, status: 'OPEN' } })
-      : null;
+    const { staff, session: activeFrontdeskSession } = await findActiveFrontdeskSession(session.user.id, folio.propertyId, frontdeskSessionId);
     const role = String((session.user as any).role || '');
-    if (['RECEPTIONIST', 'FRONT_DESK', 'FRONT_DESK_MANAGER'].includes(role) && !activeFrontdeskSession) {
+    if ((staff || isFrontdeskCashierRole(role)) && !activeFrontdeskSession) {
       return errorResponse('CONFLICT', 'Open a front desk cashier session before posting a payment.', 409);
     }
 

@@ -404,6 +404,9 @@ public partial class MainPage : ContentPage
                 case "frontdesk.session.get":
                     responseData = await pmsInterop.GetFrontdeskSessionAsync(parameters?["propertyId"]?.ToString() ?? "");
                     break;
+                case "frontdesk.session.summary":
+                    responseData = await pmsInterop.GetFrontdeskSessionSummaryAsync(parameters?["sessionId"]?.ToString() ?? "");
+                    break;
                 case "frontdesk.cashAccounts.list":
                     responseData = await pmsInterop.GetFrontdeskCashAccountsAsync(parameters?["propertyId"]?.ToString() ?? "");
                     break;
@@ -418,6 +421,9 @@ public partial class MainPage : ContentPage
                     break;
                 case "frontdesk.session.close":
                     responseData = await pmsInterop.CloseFrontdeskSessionAsync(parameters?["sessionId"]?.ToString() ?? "", parameters?["declaredCash"]?.GetValue<decimal>() ?? 0);
+                    break;
+                case "frontdesk.session.reconcile":
+                    responseData = await pmsInterop.ReconcileFrontdeskSessionAsync(parameters?["sessionId"]?.ToString() ?? "", parameters?["decision"]?.ToString() ?? "", parameters?["notes"]?.ToString());
                     break;
                 case "keycards.encode":
                     var hardwareResponse = await hardwareInterop.EncodeCardAsync(

@@ -4,6 +4,7 @@ import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { hasPermission } from '@/lib/rbac';
 import { getUserPropertyIds } from '@/lib/property-access';
+import { findActiveFrontdeskSession } from '@/lib/frontdesk/active-session';
 
 const TRANSITIONS: Record<string, string[]> = {
   'PENDING': ['COLLECTED', 'CANCELLED'],
@@ -39,6 +40,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     const canManage = await hasPermission(session.user.id, 'laundry', 'update', order.propertyId);
     if (!canManage) return errorResponse('FORBIDDEN', 'Insufficient permissions', 403);
+
+    const { session: activeFrontdeskSession } = status === 'DELIVERED'
+      ? await findActiveFrontdeskSession(session.user.id, order.propertyId, body.frontdeskSessionId)
+      : { session: null };
+    if (status === 'DELIVERED' && !activeFrontdeskSession) {
+      return errorResponse('CONFLICT', 'Open your front desk cashier session before delivering and charging laundry.', 409);
+    }
 
     // Optimistic locking
     if (version !== undefined && order.version !== version) {

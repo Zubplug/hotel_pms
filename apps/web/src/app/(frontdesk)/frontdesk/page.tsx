@@ -282,9 +282,12 @@ export default function ReceptionistDashboardPage() {
           {/* DEPARTURES LIST */}
           <div className="bg-white rounded-3xl border border-slate-200/60 shadow-xl shadow-slate-200/40 flex flex-col overflow-hidden h-[600px]">
             <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center sticky top-0 z-10 backdrop-blur-md">
-              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <LogOut className="w-5 h-5 text-orange-600" /> Today's Departures
-              </h2>
+              <div>
+                <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                  <LogOut className="w-5 h-5 text-orange-600" /> Today's Departures
+                </h2>
+                <p className="mt-0.5 text-xs text-orange-700">Guests whose stays end and must check out today</p>
+              </div>
               <span className="bg-orange-100 text-orange-700 py-1 px-3 rounded-full text-xs font-bold">{departures.length}</span>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
@@ -320,6 +323,10 @@ export default function ReceptionistDashboardPage() {
                           ) : (
                             <span className="text-xs font-semibold text-red-600 flex items-center gap-1"><CreditCard className="w-3.5 h-3.5"/> {formatCurrency(dep.balance)} Due</span>
                           )}
+                        </div>
+                        <div className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-orange-700">
+                          <Clock className="h-3.5 w-3.5" />
+                          <span>{dep.stayEndsToday === false ? 'Departure scheduled' : 'Stay ends today'} · Check out by {dep.checkOutTime || '12:00'}</span>
                         </div>
                       </div>
 

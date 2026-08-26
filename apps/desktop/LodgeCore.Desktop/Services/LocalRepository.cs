@@ -745,13 +745,19 @@ public class LocalRepository
         return true;
     }
 
-    public async Task<bool> RecordChargeAsync(string folioId, decimal amount, string description, string userId, string deviceId, string? idempotencyKey = null)
+    public async Task<bool> RecordChargeAsync(string folioId, decimal amount, string description, string userId, string deviceId, string? idempotencyKey = null, bool requireFrontdeskSession = true)
     {
         var folio = await _dbContext.Folios.FindAsync(folioId);
         if (folio == null) return false;
 
         if (!string.IsNullOrEmpty(idempotencyKey) && CheckFolioIdempotency(folio, idempotencyKey))
             return true;
+
+        var frontdeskSession = requireFrontdeskSession
+            ? await GetActiveFrontdeskSessionAsync(folio.PropertyId, userId)
+            : null;
+        if (requireFrontdeskSession && frontdeskSession == null)
+            throw new InvalidOperationException("Open your front desk cashier session before posting a charge.");
 
         folio.TotalCharges += amount;
         var creditApplicationAmount = Math.Min(folio.AvailableCredit, amount);
@@ -771,6 +777,7 @@ public class LocalRepository
             description = description,
             type = "CHARGE",
             idempotencyKey = idempotencyKey,
+            frontdeskSessionId = frontdeskSession?.Id,
             createdAt = DateTime.UtcNow
         };
 
@@ -809,7 +816,9 @@ public class LocalRepository
                 originalBusinessDate = DateTime.UtcNow,
                 idempotencyKey,
                 creditApplicationAmount,
-                creditApplicationKey = creditApplicationAmount > 0 ? $"CREDIT_APPLICATION:{idempotencyKey ?? newItem.id}" : null
+                creditApplicationKey = creditApplicationAmount > 0 ? $"CREDIT_APPLICATION:{idempotencyKey ?? newItem.id}" : null,
+                frontdeskSessionId = frontdeskSession?.Id,
+                frontdeskTransaction = requireFrontdeskSession
             })
         });
 
@@ -821,13 +830,15 @@ public class LocalRepository
     {
         var folio = await _dbContext.Folios.FindAsync(folioId);
         if (folio == null) return false;
+        var creditSession = await GetActiveFrontdeskSessionAsync(folio.PropertyId, userId);
+        if (creditSession == null)
+            throw new InvalidOperationException("Open your front desk cashier session before posting a credit adjustment.");
         if (amount <= 0) throw new InvalidOperationException("Credit amount must be positive.");
         if (!string.IsNullOrEmpty(idempotencyKey) && CheckFolioIdempotency(folio, idempotencyKey)) return true;
         var property = await _dbContext.Properties.FindAsync(folio.PropertyId);
         if (property != null && amount >= property.CreditAdjustmentApprovalThreshold && property.OfflineHighValueDepositPolicy == "BLOCK")
             throw new InvalidOperationException("Credit adjustments are blocked while offline. Connect to the server for manager approval.");
         var requiresApproval = property != null && amount >= property.CreditAdjustmentApprovalThreshold && property.OfflineHighValueDepositPolicy == "ALLOW_WITH_APPROVAL";
-
         if (!requiresApproval) folio.AvailableCredit += amount;
         folio.UpdatedAt = DateTime.UtcNow;
         folio.IsDirty = true;
@@ -845,6 +856,7 @@ public class LocalRepository
             source = "ROOM_DOWNGRADE_CREDIT",
             status = requiresApproval ? "PENDING_APPROVAL" : "PENDING_SYNC",
             idempotencyKey,
+            frontdeskSessionId = creditSession.Id,
             createdAt = DateTime.UtcNow
         });
 
@@ -859,7 +871,7 @@ public class LocalRepository
             EventType = requiresApproval ? "CREDIT_ADJUSTMENT_REQUEST" : "ROOM_CREDIT",
             Sequence = folio.LocalSequence,
             IdempotencyKey = idempotencyKey ?? Guid.NewGuid().ToString(),
-            PayloadJson = JsonSerializer.Serialize(new { amount, description, currency = folio.Currency ?? "NGN", businessDate = DateTime.UtcNow, originalBusinessDate = DateTime.UtcNow, idempotencyKey, requiresApproval })
+            PayloadJson = JsonSerializer.Serialize(new { amount, description, currency = folio.Currency ?? "NGN", businessDate = DateTime.UtcNow, originalBusinessDate = DateTime.UtcNow, idempotencyKey, requiresApproval, frontdeskSessionId = creditSession?.Id })
         });
 
         await _dbContext.SaveChangesAsync();
@@ -869,6 +881,93 @@ public class LocalRepository
     public async Task<LocalFrontdeskSession?> GetActiveFrontdeskSessionAsync(string propertyId, string staffId)
     {
         return await _dbContext.FrontdeskSessions.FirstOrDefaultAsync(session => session.PropertyId == propertyId && session.StaffId == staffId && session.Status == "OPEN");
+    }
+
+    public async Task<object> GetFrontdeskSessionSummaryAsync(string sessionId)
+    {
+        var session = await _dbContext.FrontdeskSessions.FirstOrDefaultAsync(item => item.Id == sessionId);
+        if (session == null) throw new InvalidOperationException("Front desk session not found.");
+
+        var staff = await _dbContext.Staff.FirstOrDefaultAsync(item => item.Id == session.StaffId);
+        var account = await _dbContext.CashAccounts.FirstOrDefaultAsync(item => item.Id == session.CashAccountId);
+        var movements = await _dbContext.PosCashMovements
+            .Where(item => item.FrontdeskSessionId == sessionId || (item.FrontdeskSessionId == null && item.PropertyId == session.PropertyId && item.CreatedAt >= session.OpenedAt && item.CreatedAt <= (session.ClosedAt ?? DateTime.UtcNow)))
+            .OrderByDescending(item => item.CreatedAt)
+            .ToListAsync();
+
+        var folios = await _dbContext.Folios.Where(item => item.PropertyId == session.PropertyId).ToListAsync();
+        var rows = new List<Dictionary<string, object?>>();
+        decimal cashPayments = 0m, cardPayments = 0m, bankTransfers = 0m, otherPayments = 0m;
+        decimal roomCharges = 0m, laundryCharges = 0m, otherCharges = 0m;
+        int paymentCount = 0, chargeCount = 0;
+
+        foreach (var folio in folios)
+        {
+            if (string.IsNullOrWhiteSpace(folio.TransactionsJson)) continue;
+            try
+            {
+                using var document = JsonDocument.Parse(folio.TransactionsJson);
+                var root = document.RootElement;
+                if (root.TryGetProperty("payments", out var payments) && payments.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var payment in payments.EnumerateArray())
+                    {
+                        if (!payment.TryGetProperty("frontdeskSessionId", out var paymentSession) || paymentSession.GetString() != sessionId) continue;
+                        var amount = ReadDecimal(payment, "amount");
+                        var method = payment.TryGetProperty("method", out var methodValue) ? methodValue.GetString() ?? "OTHER" : "OTHER";
+                        var createdAt = payment.TryGetProperty("createdAt", out var dateValue) && DateTime.TryParse(dateValue.GetString(), out var parsedDate) ? parsedDate : folio.UpdatedAt;
+                        paymentCount++;
+                        if (method.Equals("CASH", StringComparison.OrdinalIgnoreCase)) cashPayments += amount;
+                        else if (method.Contains("CARD", StringComparison.OrdinalIgnoreCase) || method.Equals("POS", StringComparison.OrdinalIgnoreCase)) cardPayments += amount;
+                        else if (method.Contains("BANK", StringComparison.OrdinalIgnoreCase) || method.Contains("TRANSFER", StringComparison.OrdinalIgnoreCase)) bankTransfers += amount;
+                        else otherPayments += amount;
+                        rows.Add(new Dictionary<string, object?> { ["kind"] = "PAYMENT", ["date"] = createdAt, ["amount"] = amount, ["method"] = method, ["description"] = $"{method} payment", ["folioId"] = folio.Id });
+                    }
+                }
+
+                if (root.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var item in items.EnumerateArray())
+                    {
+                        if (!item.TryGetProperty("frontdeskSessionId", out var itemSession) || itemSession.GetString() != sessionId) continue;
+                        var type = item.TryGetProperty("type", out var typeValue) ? typeValue.GetString() ?? "CHARGE" : "CHARGE";
+                        if (!type.Equals("CHARGE", StringComparison.OrdinalIgnoreCase)) continue;
+                        var amount = Math.Abs(ReadDecimal(item, "amount"));
+                        var description = item.TryGetProperty("description", out var descriptionValue) ? descriptionValue.GetString() ?? "Front Desk charge" : "Front Desk charge";
+                        var createdAt = item.TryGetProperty("createdAt", out var dateValue) && DateTime.TryParse(dateValue.GetString(), out var parsedDate) ? parsedDate : folio.UpdatedAt;
+                        chargeCount++;
+                        if (description.Contains("LAUNDRY", StringComparison.OrdinalIgnoreCase)) laundryCharges += amount;
+                        else if (description.Contains("ROOM", StringComparison.OrdinalIgnoreCase)) roomCharges += amount;
+                        else otherCharges += amount;
+                        rows.Add(new Dictionary<string, object?> { ["kind"] = "CHARGE", ["date"] = createdAt, ["amount"] = amount, ["method"] = "FOLIO", ["description"] = description, ["folioId"] = folio.Id });
+                    }
+                }
+            }
+            catch (JsonException) { }
+        }
+
+        var cashRefunds = movements.Where(item => item.Type.Equals("REFUND", StringComparison.OrdinalIgnoreCase) || item.Type.Equals("REFUND_CASH", StringComparison.OrdinalIgnoreCase)).Sum(item => item.Amount);
+        var cashIn = movements.Where(item => item.Type.Equals("CASH_IN", StringComparison.OrdinalIgnoreCase) || item.Type.Equals("CASH_TRANSFER_IN", StringComparison.OrdinalIgnoreCase)).Sum(item => item.Amount);
+        var cashDrops = movements.Where(item => item.Type.Equals("CASH_DROP", StringComparison.OrdinalIgnoreCase)).Sum(item => item.Amount);
+        var paidOuts = movements.Where(item => item.Type.Equals("PAID_OUT", StringComparison.OrdinalIgnoreCase)).Sum(item => item.Amount);
+        var transfersOut = movements.Where(item => item.Type.Equals("CASH_TRANSFER_OUT", StringComparison.OrdinalIgnoreCase)).Sum(item => item.Amount);
+        foreach (var movement in movements)
+        {
+            rows.Add(new Dictionary<string, object?> { ["kind"] = "CASH_MOVEMENT", ["date"] = movement.CreatedAt, ["amount"] = movement.Amount, ["method"] = "CASH", ["description"] = movement.Notes ?? movement.ReasonCode, ["type"] = movement.Type, ["folioId"] = null });
+        }
+
+        var totalPayments = cashPayments + cardPayments + bankTransfers + otherPayments;
+        var totalCharges = roomCharges + laundryCharges + otherCharges;
+        var expectedCash = session.OpeningFloat + cashPayments + cashIn - cashDrops - paidOuts - transfersOut - cashRefunds;
+        return new
+        {
+            session = new { session.Id, session.ShiftReference, session.PropertyId, session.BusinessDate, session.Status, session.OpeningFloat, expectedCash, session.DeclaredCash, session.Variance, session.OpenedAt, session.ClosedAt, staffName = staff == null ? "Unknown cashier" : $"{staff.FirstName} {staff.LastName}".Trim(), till = account?.Name ?? "Assigned till" },
+            payments = new { count = paymentCount, cash = cashPayments, card = cardPayments, bankTransfer = bankTransfers, other = otherPayments, total = totalPayments },
+            charges = new { count = chargeCount, room = roomCharges, laundry = laundryCharges, other = otherCharges, total = totalCharges },
+            cash = new { openingFloat = session.OpeningFloat, cashIn, cashDrops, paidOuts, transfersOut, refunds = cashRefunds, expected = expectedCash, declared = session.DeclaredCash, variance = session.Variance ?? (session.DeclaredCash.HasValue ? session.DeclaredCash.Value - expectedCash : (decimal?)null) },
+            exceptions = new { pendingSync = await _dbContext.OutboxEvents.CountAsync(item => item.PropertyId == session.PropertyId && (item.Status == "PENDING" || item.Status == "FAILED" || item.Status == "CONFLICT") && item.CreatedAt >= session.OpenedAt), failedSync = await _dbContext.OutboxEvents.CountAsync(item => item.PropertyId == session.PropertyId && (item.Status == "FAILED" || item.Status == "CONFLICT") && item.CreatedAt >= session.OpenedAt) },
+            rows = rows.OrderByDescending(item => item["date"]).ToList()
+        };
     }
 
     public async Task<List<LocalCashAccount>> GetCashAccountsAsync(string propertyId)
@@ -1020,7 +1119,7 @@ public class LocalRepository
         {
             _dbContext.PosCashMovements.Add(new LocalPosCashMovement
             {
-                Id = Guid.NewGuid().ToString(), PropertyId = propertyId, DeviceId = deviceId, UserId = staffId,
+                Id = Guid.NewGuid().ToString(), PropertyId = propertyId, DeviceId = deviceId, FrontdeskSessionId = session.Id, UserId = staffId,
                 Amount = openingFloat, Type = "OPENING_FLOAT", SourceAccountId = cashAccountId, DestinationAccountId = cashAccountId,
                 ReasonCode = "OPEN_SHIFT", OperationId = $"FLOAT-{session.Id}", BusinessDate = session.BusinessDate, CreatedAt = now
             });
@@ -1040,7 +1139,7 @@ public class LocalRepository
         var session = await _dbContext.FrontdeskSessions.FirstOrDefaultAsync(item => item.Id == sessionId && item.StaffId == staffId);
         if (session == null) throw new InvalidOperationException("Front desk session not found.");
         if (session.Status != "OPEN") throw new InvalidOperationException($"Session is already {session.Status}.");
-        var movements = await _dbContext.PosCashMovements.Where(item => item.PropertyId == session.PropertyId && item.CreatedAt >= session.OpenedAt && item.CreatedAt <= DateTime.UtcNow).ToListAsync();
+            var movements = await _dbContext.PosCashMovements.Where(item => item.FrontdeskSessionId == session.Id || (item.FrontdeskSessionId == null && item.PropertyId == session.PropertyId && item.CreatedAt >= session.OpenedAt && item.CreatedAt <= DateTime.UtcNow)).ToListAsync();
         var expected = session.OpeningFloat + movements.Where(item => item.Type is "PAYMENT" or "CASH_TRANSFER_IN").Sum(item => item.Amount) - movements.Where(item => item.Type is "REFUND" or "PAID_OUT" or "CASH_DROP" or "CASH_TRANSFER_OUT").Sum(item => item.Amount);
         session.Status = "CLOSED"; session.DeclaredCash = declaredCash; session.SystemExpectedCash = expected; session.Variance = declaredCash - expected; session.ClosingAt = DateTime.UtcNow; session.ClosedAt = DateTime.UtcNow; session.UpdatedAt = DateTime.UtcNow;
         _dbContext.OutboxEvents.Add(new LocalOutboxEvent
@@ -1053,10 +1152,43 @@ public class LocalRepository
         return session;
     }
 
+    public async Task<LocalFrontdeskSession> ReconcileFrontdeskSessionAsync(string sessionId, string decision, string? notes, string staffId, string deviceId)
+    {
+        if (decision is not ("APPROVED" or "APPROVED_WITH_VARIANCE" or "REJECTED"))
+            throw new InvalidOperationException("Invalid reconciliation decision.");
+
+        var session = await _dbContext.FrontdeskSessions.FirstOrDefaultAsync(item => item.Id == sessionId);
+        if (session == null) throw new InvalidOperationException("Front desk session not found.");
+        if (session.Status is not ("CLOSED" or "UNDER_REVIEW"))
+            throw new InvalidOperationException($"Cannot reconcile session in status {session.Status}.");
+        if (decision == "APPROVED" && session.Variance.HasValue && Math.Abs(session.Variance.Value) > 0.01m)
+            throw new InvalidOperationException("A session with a cash variance must be approved with variance or rejected.");
+
+        session.Status = decision == "REJECTED" ? "UNDER_REVIEW" : "RECONCILED";
+        session.ReconciledAt = DateTime.UtcNow;
+        session.ReconciledBy = staffId;
+        session.ReconciliationDecision = decision;
+        session.ReconciliationNotes = notes;
+        session.UpdatedAt = DateTime.UtcNow;
+        _dbContext.OutboxEvents.Add(new LocalOutboxEvent
+        {
+            IdempotencyKey = $"frontdesk-reconcile:{session.Id}:{session.ReconciledAt:O}",
+            PropertyId = session.PropertyId, DeviceId = deviceId, OperatorId = staffId,
+            AggregateType = "FRONTDESK_SESSION", AggregateId = session.Id, EventType = "FRONTDESK_SESSION_RECONCILED", Sequence = 3,
+            PayloadJson = JsonSerializer.Serialize(new { sessionId, decision, notes, status = session.Status, reconciledAt = session.ReconciledAt })
+        });
+        await _dbContext.SaveChangesAsync();
+        return session;
+    }
+
     public async Task<bool> RecordPaymentAsync(string folioId, decimal amount, string method, string userId, string deviceId, string? idempotencyKey = null)
     {
         var folio = await _dbContext.Folios.FindAsync(folioId);
         if (folio == null) return false;
+
+        var frontdeskSession = await GetActiveFrontdeskSessionAsync(folio.PropertyId, userId);
+        if (frontdeskSession == null)
+            throw new InvalidOperationException("Open your front desk cashier session before posting a payment.");
 
         if (!string.IsNullOrEmpty(idempotencyKey) && CheckFolioIdempotency(folio, idempotencyKey))
             return true;
@@ -1073,7 +1205,6 @@ public class LocalRepository
         int eventVersion = folio.Version;
         folio.Version++;
 
-        var frontdeskSession = await GetActiveFrontdeskSessionAsync(folio.PropertyId, userId);
         var newPayment = new
         {
             id = Guid.NewGuid().ToString(),
@@ -1082,6 +1213,7 @@ public class LocalRepository
             type = "PAYMENT",
             status = "COMPLETED",
             idempotencyKey = idempotencyKey,
+            frontdeskSessionId = frontdeskSession.Id,
             createdAt = DateTime.UtcNow
         };
 
@@ -1094,6 +1226,7 @@ public class LocalRepository
             description = $"{method} payment",
             type = "PAYMENT",
             idempotencyKey = idempotencyKey,
+            frontdeskSessionId = frontdeskSession.Id,
             createdAt = DateTime.UtcNow
         };
 
@@ -1103,7 +1236,7 @@ public class LocalRepository
         {
             _dbContext.PosCashMovements.Add(new LocalPosCashMovement
             {
-                Id = Guid.NewGuid().ToString(), PropertyId = folio.PropertyId, DeviceId = deviceId, PosSessionId = null,
+                Id = Guid.NewGuid().ToString(), PropertyId = folio.PropertyId, DeviceId = deviceId, PosSessionId = null, FrontdeskSessionId = frontdeskSession.Id,
                 UserId = userId, Amount = amount, Type = "PAYMENT", SourceAccountId = frontdeskSession.CashAccountId,
                 DestinationAccountId = frontdeskSession.CashAccountId, ReasonCode = "FOLIO_PAYMENT", OperationId = $"FD-PAYMENT-{newPayment.id}",
                 BusinessDate = frontdeskSession.BusinessDate, CreatedAt = DateTime.UtcNow
@@ -1132,6 +1265,9 @@ public class LocalRepository
     {
         var folio = await _dbContext.Folios.FindAsync(folioId);
         if (folio == null) return false;
+        var frontdeskSession = await GetActiveFrontdeskSessionAsync(folio.PropertyId, userId);
+        if (frontdeskSession == null)
+            throw new InvalidOperationException("Open your front desk cashier session before posting an advance deposit.");
         if (amount <= 0) throw new InvalidOperationException("Deposit amount must be positive.");
         if (string.IsNullOrWhiteSpace(idempotencyKey)) throw new InvalidOperationException("Deposit requires an idempotency key.");
         if (CheckFolioIdempotency(folio, idempotencyKey)) return true;
@@ -1159,6 +1295,7 @@ public class LocalRepository
             type = "ADVANCE_DEPOSIT",
             status = requiresApproval ? "PENDING_APPROVAL" : "PENDING_SYNC",
             idempotencyKey,
+            frontdeskSessionId = frontdeskSession.Id,
             createdAt = DateTime.UtcNow
         });
 
@@ -1184,7 +1321,8 @@ public class LocalRepository
                 businessDate = DateTime.UtcNow,
                 originalBusinessDate = DateTime.UtcNow,
                 idempotencyKey,
-                requiresApproval
+                requiresApproval,
+                frontdeskSessionId = frontdeskSession.Id
             })
         });
 
@@ -1581,6 +1719,11 @@ public class LocalRepository
             ClosedAt TEXT NULL, ReconciledAt TEXT NULL, ReconciledBy TEXT NULL, ReconciliationDecision TEXT NULL,
             ReconciliationNotes TEXT NULL, CreatedAt TEXT NOT NULL, UpdatedAt TEXT NOT NULL
         );");
+        try
+        {
+            await _dbContext.Database.ExecuteSqlRawAsync("ALTER TABLE PosCashMovements ADD COLUMN FrontdeskSessionId TEXT NULL");
+        }
+        catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
         
         // Seed Stanzel Grand Resort for the pilot if it doesn't exist
         if (!await _dbContext.Properties.AnyAsync())
@@ -1614,10 +1757,16 @@ public class LocalRepository
 
     public async Task<LocalRefundRequest> QueueRefundRequestAsync(string paymentId, string propertyId, string reservationId, string folioId, decimal amount, string currency, string category, int reducedStayNights, string reason, string requestedMethod, string? bankAccountName, string? bankAccountNumber, string? bankName, string? bankCode, string userId, string deviceId)
     {
+        var refundSession = string.Equals(requestedMethod, "CASH", StringComparison.OrdinalIgnoreCase)
+            ? await GetActiveFrontdeskSessionAsync(propertyId, userId)
+            : null;
+        if (string.Equals(requestedMethod, "CASH", StringComparison.OrdinalIgnoreCase) && refundSession == null)
+            throw new InvalidOperationException("Open your front desk cashier session before requesting a cash refund.");
+
         var idempotencyKey = Guid.NewGuid().ToString();
         var request = new LocalRefundRequest { Id = Guid.NewGuid().ToString(), IdempotencyKey = idempotencyKey, PropertyId = propertyId, ReservationId = reservationId, FolioId = folioId, PaymentId = paymentId, RequestedAmount = amount, Currency = currency, RequestedMethod = requestedMethod, Category = category, Reason = reason, IsDirty = true };
         _dbContext.RefundRequests.Add(request);
-        _dbContext.OutboxEvents.Add(new LocalOutboxEvent { IdempotencyKey = idempotencyKey, PropertyId = propertyId, DeviceId = deviceId, OperatorId = userId, AggregateType = "PAYMENT", AggregateId = paymentId, EventType = "REFUND_REQUESTED", PayloadJson = JsonSerializer.Serialize(new { PaymentId = paymentId, PropertyId = propertyId, ReservationId = reservationId, FolioId = folioId, Amount = amount, Currency = currency, Category = category, ReducedStayNights = reducedStayNights, Reason = reason, RequestedMethod = requestedMethod, BankAccountName = bankAccountName, BankAccountNumber = bankAccountNumber, BankName = bankName, BankCode = bankCode, IdempotencyKey = idempotencyKey }) });
+        _dbContext.OutboxEvents.Add(new LocalOutboxEvent { IdempotencyKey = idempotencyKey, PropertyId = propertyId, DeviceId = deviceId, OperatorId = userId, AggregateType = "PAYMENT", AggregateId = paymentId, EventType = "REFUND_REQUESTED", PayloadJson = JsonSerializer.Serialize(new { PaymentId = paymentId, PropertyId = propertyId, ReservationId = reservationId, FolioId = folioId, Amount = amount, Currency = currency, Category = category, ReducedStayNights = reducedStayNights, Reason = reason, RequestedMethod = requestedMethod, BankAccountName = bankAccountName, BankAccountNumber = bankAccountNumber, BankName = bankName, BankCode = bankCode, IdempotencyKey = idempotencyKey, frontdeskSessionId = refundSession?.Id }) });
         await _dbContext.SaveChangesAsync();
         return request;
     }
@@ -1952,6 +2101,9 @@ public class LocalRepository
                 confirmationNumber = r.ConfirmationNumber,
                 roomName = room?.Number ?? "Unassigned",
                 roomTypeName = roomType?.Name ?? "",
+                checkOutDate = r.CheckOutDate,
+                checkOutTime = "12:00",
+                stayEndsToday = true,
                 balance = balance,
                 status = r.Status,
                 roomStatus = room?.Status ?? "UNKNOWN"
@@ -2108,7 +2260,8 @@ public class LocalRepository
                 $"POS Order #{order.OrderNumber}",
                 userId,
                 deviceId,
-                $"POS_ORDER:{order.Id}:FOLIO_CHARGE");
+                $"POS_ORDER:{order.Id}:FOLIO_CHARGE",
+                requireFrontdeskSession: false);
         }
         
         await _dbContext.SaveChangesAsync();
@@ -3952,12 +4105,14 @@ public class LocalRepository
         var reservationIds = orders.Where(o => !string.IsNullOrEmpty(o.ReservationId)).Select(o => o.ReservationId!).Distinct().ToList();
         var guestIds = orders.Where(o => !string.IsNullOrEmpty(o.GuestId)).Select(o => o.GuestId).Distinct().ToList();
         var roomIds = orders.Where(o => !string.IsNullOrEmpty(o.RoomId)).Select(o => o.RoomId!).Distinct().ToList();
+        var laundryItemIds = orders.SelectMany(o => o.Items).Select(item => item.ItemId).Where(id => !string.IsNullOrEmpty(id)).Distinct().ToList();
 
         var reservations = await _dbContext.Reservations.Where(r => reservationIds.Contains(r.Id)).ToListAsync();
         var resGuestIds = reservations.Select(r => r.GuestId).Where(id => !string.IsNullOrEmpty(id)).Select(id => id!).ToList();
         var allGuestIds = guestIds.Concat(resGuestIds).Distinct().ToList();
         var guests = await _dbContext.Guests.Where(g => allGuestIds.Contains(g.Id)).ToListAsync();
         var rooms = await _dbContext.Rooms.Where(r => roomIds.Contains(r.Id)).ToListAsync();
+        var laundryItems = await _dbContext.LaundryItems.Where(item => laundryItemIds.Contains(item.Id)).ToListAsync();
 
         var result = orders.Select(o => {
             var res = reservations.FirstOrDefault(r => r.Id == o.ReservationId);
@@ -3988,7 +4143,21 @@ public class LocalRepository
                 version = o.Version,
                 createdAt = o.CreatedAt,
                 updatedAt = o.UpdatedAt,
-                items = o.Items,
+                items = o.Items.Select(orderItem => {
+                    var laundryItem = laundryItems.FirstOrDefault(item => item.Id == orderItem.ItemId);
+                    return new {
+                        id = orderItem.Id,
+                        itemId = orderItem.ItemId,
+                        quantity = orderItem.Quantity,
+                        unitPrice = orderItem.UnitPrice,
+                        totalPrice = orderItem.TotalPrice,
+                        item = laundryItem != null ? new {
+                            id = laundryItem.Id,
+                            name = laundryItem.Name,
+                            category = laundryItem.Category
+                        } : null
+                    };
+                }).ToList(),
                 reservation = res != null ? new {
                     id = res.Id,
                     primaryGuest = resGuest != null ? new {
@@ -4189,6 +4358,9 @@ public class LocalRepository
         if (order.Status == "DELIVERED") return;
         if (order.Status != "READY")
             throw new InvalidOperationException($"Cannot deliver laundry order while it is {order.Status}. Mark it READY first.");
+        var frontdeskSession = await GetActiveFrontdeskSessionAsync(order.PropertyId, userId);
+        if (frontdeskSession == null)
+            throw new InvalidOperationException("Open your front desk cashier session before delivering laundry.");
         
         var previousStatus = order.Status;
         order.Status = "DELIVERED";
@@ -4220,6 +4392,7 @@ public class LocalRepository
                 folio.TotalCharges += order.TotalAmount;
                 var creditApplicationAmount = Math.Min(folio.AvailableCredit, order.TotalAmount);
                 folio.AvailableCredit -= creditApplicationAmount;
+                ApplyCreditToTransactionsJson(folio, creditApplicationAmount);
                 folio.UpdatedAt = DateTime.UtcNow;
                 folio.IsDirty = true;
                 folio.LocalSequence++;
@@ -4270,7 +4443,8 @@ public class LocalRepository
                         originalBusinessDate = DateTime.UtcNow, 
                         idempotencyKey = idempotencyKey,
                         creditApplicationAmount,
-                        creditApplicationKey = creditApplicationAmount > 0 ? $"CREDIT_APPLICATION:{idempotencyKey}" : null
+                        creditApplicationKey = creditApplicationAmount > 0 ? $"CREDIT_APPLICATION:{idempotencyKey}" : null,
+                        frontdeskSessionId = frontdeskSession.Id
                     })
                 });
             }

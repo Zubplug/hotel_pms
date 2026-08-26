@@ -153,7 +153,8 @@ export async function POST(
 
         // Recalculate folio totals
         const allItems = await tx.folioItem.findMany({ where: { folioId: folio.id } });
-        const totals = calculateFolioTotals(allItems);
+        const creditApplications = await tx.folioCreditApplication.findMany({ where: { folioId: folio.id }, select: { amount: true } });
+        const totals = calculateFolioTotals(allItems, creditApplications);
 
         await tx.folio.update({
           where: { id: folio.id },

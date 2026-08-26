@@ -640,6 +640,17 @@ public class OfflinePMSInterop
         catch (Exception ex) { return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions); }
     }
 
+    public async Task<string> GetFrontdeskSessionSummaryAsync(string sessionId)
+    {
+        try
+        {
+            await GetSecureContextAsync();
+            var summary = await _repo.GetFrontdeskSessionSummaryAsync(sessionId);
+            return JsonSerializer.Serialize(new { success = true, data = summary }, _jsonOptions);
+        }
+        catch (Exception ex) { return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions); }
+    }
+
     public async Task<string> GetFrontdeskCashAccountsAsync(string propertyId)
     {
         try
@@ -681,6 +692,17 @@ public class OfflinePMSInterop
         {
             var ctx = await GetSecureContextAsync();
             var session = await _repo.CloseFrontdeskSessionAsync(sessionId, declaredCash, ctx.UserId, ctx.DeviceId);
+            return JsonSerializer.Serialize(new { success = true, data = new { session } }, _jsonOptions);
+        }
+        catch (Exception ex) { return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions); }
+    }
+
+    public async Task<string> ReconcileFrontdeskSessionAsync(string sessionId, string decision, string? notes)
+    {
+        try
+        {
+            var ctx = await GetSecureContextAsync();
+            var session = await _repo.ReconcileFrontdeskSessionAsync(sessionId, decision, notes, ctx.UserId, ctx.DeviceId);
             return JsonSerializer.Serialize(new { success = true, data = new { session } }, _jsonOptions);
         }
         catch (Exception ex) { return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions); }

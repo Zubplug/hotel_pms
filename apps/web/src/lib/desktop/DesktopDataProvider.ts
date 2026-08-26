@@ -66,9 +66,11 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
   frontdesk: {
     listCashAccounts: async (propertyId: string) => invokeDesktop('frontdesk.cashAccounts.list', { propertyId }),
     getSession: async (propertyId: string) => invokeDesktop('frontdesk.session.get', { propertyId }),
+    getSessionSummary: async (sessionId: string) => invokeDesktop('frontdesk.session.summary', { sessionId }),
     getReport: async (propertyId: string, startDate: string, endDate: string) => invokeDesktop('frontdesk.report.get', { propertyId, startDate, endDate }),
     openSession: async (data: any) => invokeDesktop('frontdesk.session.open', data),
     closeSession: async (sessionId: string, declaredCash: number) => invokeDesktop('frontdesk.session.close', { sessionId, declaredCash }),
+    reconcileSession: async (sessionId: string, decision: string, notes?: string) => invokeDesktop('frontdesk.session.reconcile', { sessionId, decision, notes }),
   },
   properties: {
     list: () => invokeDesktop('properties.list')
@@ -78,7 +80,8 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
       const status = operationId.includes('FAILED') ? 'FAILED' : 'SUCCESS';
       const responseData = syncOperations.get(operationId);
       return { success: true, data: { operation: { status, command: { responseData } } } };
-    }
+    },
+    printShiftReport: async (data: any) => invokeDesktop('hardware.printShiftReport', { data })
   },
   dashboard: {
     async get(propertyId: string) {

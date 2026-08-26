@@ -40,6 +40,17 @@ export default function LaundryDashboard() {
   const washing = orders.filter(o => o.status === 'WASHING').length;
   const ready = orders.filter(o => o.status === 'READY').length;
 
+  const itemSummary = (order: any) => {
+    const items = Array.isArray(order.items) ? order.items : [];
+    if (!items.length) return 'No items recorded';
+    const grouped = items.reduce((result: Record<string, number>, item: any) => {
+      const name = item.item?.name || item.itemName || 'Laundry item';
+      result[name] = (result[name] || 0) + Number(item.quantity || 0);
+      return result;
+    }, {});
+    return Object.entries(grouped).map(([name, quantity]) => `${quantity}× ${name}`).join(', ');
+  };
+
   const renderStatus = (status: string) => {
     switch (status) {
       case 'PENDING':
@@ -160,6 +171,7 @@ export default function LaundryDashboard() {
                         <span className="text-slate-300 text-xs">•</span>
                         {renderStatus(order.status)}
                       </div>
+                      <p className="mt-2 truncate text-xs font-medium text-cyan-800" title={itemSummary(order)}>{itemSummary(order)}</p>
                     </div>
 
                     <div className="shrink-0 pl-2 border-l border-slate-100">
