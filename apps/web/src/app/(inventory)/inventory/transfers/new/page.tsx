@@ -69,11 +69,11 @@ export default function NewTransferPage() {
   return (
     <div className="max-w-4xl mx-auto px-6 py-8">
       <div className="flex items-center gap-3 mb-8">
-        <div className="p-2 bg-indigo-500/10 rounded-lg">
-          <ArrowLeftRight className="w-5 h-5 text-indigo-400" />
+        <div className="p-2 bg-blue-50 rounded-lg">
+          <ArrowLeftRight className="w-5 h-5 text-blue-600" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-white">New Stock Transfer</h1>
+          <h1 className="text-2xl font-bold text-slate-900">New Stock Transfer</h1>
           <p className="text-slate-400 text-sm mt-0.5">Move stock between warehouses</p>
         </div>
       </div>
@@ -89,7 +89,7 @@ export default function NewTransferPage() {
                 value={fromWarehouseId}
                 onChange={e => setFromWarehouseId(e.target.value)}
                 required
-                className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2.5 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
               >
                 <option value="">Select source warehouse</option>
                 {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
@@ -101,7 +101,7 @@ export default function NewTransferPage() {
                 value={toWarehouseId}
                 onChange={e => setToWarehouseId(e.target.value)}
                 required
-                className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2.5 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
               >
                 <option value="">Select destination warehouse</option>
                 {warehouses.filter(w => w.id !== fromWarehouseId).map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
@@ -115,7 +115,7 @@ export default function NewTransferPage() {
               onChange={e => setNotes(e.target.value)}
               rows={2}
               placeholder="Optional reason or notes..."
-              className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2.5 text-white text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+              className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2.5 text-slate-900 text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
             />
           </div>
         </div>
@@ -124,7 +124,7 @@ export default function NewTransferPage() {
         <div className="bg-slate-800 border border-slate-700 rounded-xl p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Items to Transfer</h2>
-            <button type="button" onClick={addLine} className="flex items-center gap-1.5 text-sm text-indigo-400 hover:text-indigo-300 font-medium">
+            <button type="button" onClick={addLine} className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 font-medium">
               <Plus className="w-4 h-4" /> Add Item
             </button>
           </div>
@@ -137,7 +137,7 @@ export default function NewTransferPage() {
                     value={line.stockItemId}
                     onChange={e => updateLine(i, 'stockItemId', e.target.value)}
                     required
-                    className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-2 text-white text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500/50"
+                    className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-2 text-slate-900 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500/50"
                   >
                     <option value="">Select item</option>
                     {fromItems.map(item => (
@@ -154,14 +154,14 @@ export default function NewTransferPage() {
                     onChange={e => updateLine(i, 'quantity', e.target.value)}
                     required
                     placeholder="Qty"
-                    className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-2 text-white text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500/50"
+                    className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-2 text-slate-900 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500/50"
                   />
                 </div>
                 <div className="col-span-2">
                   <select
                     value={line.unitOfMeasure}
                     onChange={e => updateLine(i, 'unitOfMeasure', e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-2 text-white text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500/50"
+                    className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-2 text-slate-900 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500/50"
                   >
                     {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                   </select>
@@ -172,7 +172,7 @@ export default function NewTransferPage() {
                     value={line.notes}
                     onChange={e => updateLine(i, 'notes', e.target.value)}
                     placeholder="Notes (optional)"
-                    className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-2 text-white text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500/50"
+                    className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-2 text-slate-900 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500/50"
                   />
                 </div>
                 <div className="col-span-1 flex justify-center">
@@ -188,7 +188,7 @@ export default function NewTransferPage() {
         </div>
 
         {error && (
-          <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3 text-red-400 text-sm">
+          <div className="bg-red-50 border border-red-500/30 rounded-lg px-4 py-3 text-red-600 text-sm">
             {error}
           </div>
         )}
@@ -200,7 +200,7 @@ export default function NewTransferPage() {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors disabled:opacity-60"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-slate-900 text-sm font-semibold transition-colors disabled:opacity-60"
           >
             {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
             {isSubmitting ? 'Creating...' : 'Create Transfer'}

@@ -50,11 +50,11 @@ export default function NewPurchaseOrderPage() {
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-white mb-2">Create Purchase Order</h1>
+        <h1 className="text-2xl font-bold text-slate-900 mb-2">Create Purchase Order</h1>
         <div className="flex items-center gap-4 text-sm font-medium">
-          <span className={step === 1 ? 'text-blue-400' : 'text-slate-400'}>1. Details</span>
+          <span className={step === 1 ? 'text-blue-600' : 'text-slate-400'}>1. Details</span>
           <ArrowRight className="w-4 h-4 text-slate-600" />
-          <span className={step === 2 ? 'text-blue-400' : 'text-slate-400'}>2. Line Items</span>
+          <span className={step === 2 ? 'text-blue-600' : 'text-slate-400'}>2. Line Items</span>
         </div>
       </div>
 
@@ -67,7 +67,7 @@ export default function NewPurchaseOrderPage() {
                 required
                 value={poData.supplierId}
                 onChange={e => setPoData({ ...poData, supplierId: e.target.value })}
-                className="w-full bg-slate-950 border border-slate-800 rounded-md px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                className="w-full bg-slate-950 border border-slate-800 rounded-md px-3 py-2 text-slate-900 focus:outline-none focus:border-blue-500"
               >
                 <option value="">Select a supplier...</option>
                 {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -79,7 +79,7 @@ export default function NewPurchaseOrderPage() {
                 type="date"
                 value={poData.expectedDate}
                 onChange={e => setPoData({ ...poData, expectedDate: e.target.value })}
-                className="w-full bg-slate-950 border border-slate-800 rounded-md px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                className="w-full bg-slate-950 border border-slate-800 rounded-md px-3 py-2 text-slate-900 focus:outline-none focus:border-blue-500"
               />
             </div>
             <div>
@@ -88,14 +88,14 @@ export default function NewPurchaseOrderPage() {
                 rows={3}
                 value={poData.notes}
                 onChange={e => setPoData({ ...poData, notes: e.target.value })}
-                className="w-full bg-slate-950 border border-slate-800 rounded-md px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                className="w-full bg-slate-950 border border-slate-800 rounded-md px-3 py-2 text-slate-900 focus:outline-none focus:border-blue-500"
               />
             </div>
             <div className="flex justify-end pt-4 border-t border-slate-800">
               <button
                 disabled={!poData.supplierId}
                 onClick={() => setStep(2)}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-md transition-colors text-sm font-medium disabled:opacity-50"
+                className="bg-blue-600 hover:bg-blue-700 text-slate-900 px-6 py-2 rounded-md transition-colors text-sm font-medium disabled:opacity-50"
               >
                 Next Step
               </button>
@@ -117,7 +117,7 @@ export default function NewPurchaseOrderPage() {
                             newItems[idx].stockItemId = e.target.value;
                             setItems(newItems);
                           }}
-                          className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-1.5 text-white text-sm"
+                          className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-1.5 text-slate-900 text-sm"
                         >
                           <option value="">Select item...</option>
                           {stockItems.map(si => <option key={si.id} value={si.id}>{si.name}</option>)}
@@ -133,7 +133,7 @@ export default function NewPurchaseOrderPage() {
                             newItems[idx].description = e.target.value;
                             setItems(newItems);
                           }}
-                          className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-1.5 text-white text-sm"
+                          className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-1.5 text-slate-900 text-sm"
                         />
                       </div>
                     </div>
@@ -149,7 +149,7 @@ export default function NewPurchaseOrderPage() {
                             newItems[idx].quantity = Number(e.target.value);
                             setItems(newItems);
                           }}
-                          className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-1.5 text-white text-sm"
+                          className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-1.5 text-slate-900 text-sm"
                         />
                       </div>
                       <div>
@@ -163,7 +163,7 @@ export default function NewPurchaseOrderPage() {
                             newItems[idx].uom = e.target.value;
                             setItems(newItems);
                           }}
-                          className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-1.5 text-white text-sm"
+                          className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-1.5 text-slate-900 text-sm"
                         />
                       </div>
                       <div>
@@ -177,7 +177,7 @@ export default function NewPurchaseOrderPage() {
                             newItems[idx].unitPrice = Number(e.target.value);
                             setItems(newItems);
                           }}
-                          className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-1.5 text-white text-sm"
+                          className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-1.5 text-slate-900 text-sm"
                         />
                       </div>
                     </div>
@@ -194,14 +194,14 @@ export default function NewPurchaseOrderPage() {
 
             <button
               onClick={() => setItems([...items, { stockItemId: '', description: '', quantity: 1, uom: '', unitPrice: 0 }])}
-              className="flex items-center gap-2 text-blue-400 hover:text-blue-300 text-sm font-medium"
+              className="flex items-center gap-2 text-blue-600 hover:text-blue-300 text-sm font-medium"
             >
               <Plus className="w-4 h-4" /> Add Line Item
             </button>
 
             <div className="flex items-center justify-between pt-6 border-t border-slate-800">
-              <div className="text-xl font-bold text-white">
-                Total: <span className="text-blue-400">${total.toFixed(2)}</span>
+              <div className="text-xl font-bold text-slate-900">
+                Total: <span className="text-blue-600">${total.toFixed(2)}</span>
               </div>
               <div className="flex gap-3">
                 <button
@@ -213,7 +213,7 @@ export default function NewPurchaseOrderPage() {
                 <button
                   disabled={loading || items.length === 0 || !items.every(i => i.stockItemId)}
                   onClick={handleSubmit}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-md transition-colors text-sm font-medium disabled:opacity-50"
+                  className="bg-blue-600 hover:bg-blue-700 text-slate-900 px-6 py-2 rounded-md transition-colors text-sm font-medium disabled:opacity-50"
                 >
                   {loading ? 'Submitting...' : 'Submit PO'}
                 </button>

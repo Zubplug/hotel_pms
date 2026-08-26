@@ -7,11 +7,11 @@ import Link from 'next/link';
 
 const STATUS_COLORS: Record<string, string> = {
   DRAFT: 'bg-gray-500/10 text-gray-400 border-gray-500/20',
-  SUBMITTED: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+  SUBMITTED: 'bg-blue-50 text-blue-600 border-blue-500/20',
   APPROVED: 'bg-green-500/10 text-green-400 border-green-500/20',
-  PARTIALLY_RECEIVED: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+  PARTIALLY_RECEIVED: 'bg-amber-50 text-amber-600 border-amber-500/20',
   RECEIVED: 'bg-teal-500/10 text-teal-400 border-teal-500/20',
-  REJECTED: 'bg-red-500/10 text-red-400 border-red-500/20',
+  REJECTED: 'bg-red-50 text-red-600 border-red-500/20',
   CANCELLED: 'bg-slate-500/10 text-slate-400 border-slate-500/20',
 };
 
@@ -44,7 +44,7 @@ export default async function PurchaseOrderDetailPage({ params }: { params: { id
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 flex items-start justify-between">
         <div>
           <div className="flex items-center gap-3 mb-2">
-            <h1 className="text-2xl font-bold text-white">{po.poNumber}</h1>
+            <h1 className="text-2xl font-bold text-slate-900">{po.poNumber}</h1>
             <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${STATUS_COLORS[po.status] || STATUS_COLORS.DRAFT}`}>
               {po.status}
             </span>
@@ -64,7 +64,7 @@ export default async function PurchaseOrderDetailPage({ params }: { params: { id
           </div>
           <div>
             <p className="text-xs font-medium text-slate-500">Expected Delivery</p>
-            <p className="text-sm font-semibold text-white">{po.expectedDate ? new Date(po.expectedDate).toLocaleDateString() : 'Not set'}</p>
+            <p className="text-sm font-semibold text-slate-900">{po.expectedDate ? new Date(po.expectedDate).toLocaleDateString() : 'Not set'}</p>
           </div>
         </div>
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex items-center gap-4">
@@ -73,7 +73,7 @@ export default async function PurchaseOrderDetailPage({ params }: { params: { id
           </div>
           <div>
             <p className="text-xs font-medium text-slate-500">Total Amount</p>
-            <p className="text-sm font-semibold text-white">{po.property?.baseCurrency} {po.totalAmount?.toNumber().toFixed(2) || '0.00'}</p>
+            <p className="text-sm font-semibold text-slate-900">{po.property?.baseCurrency} {po.totalAmount?.toNumber().toFixed(2) || '0.00'}</p>
           </div>
         </div>
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex items-center gap-4">
@@ -82,7 +82,7 @@ export default async function PurchaseOrderDetailPage({ params }: { params: { id
           </div>
           <div className="flex-1 overflow-hidden">
             <p className="text-xs font-medium text-slate-500">Notes</p>
-            <p className="text-sm font-medium text-white truncate">{po.notes || 'No notes'}</p>
+            <p className="text-sm font-medium text-slate-900 truncate">{po.notes || 'No notes'}</p>
           </div>
         </div>
       </div>
@@ -90,7 +90,7 @@ export default async function PurchaseOrderDetailPage({ params }: { params: { id
       {/* Line Items */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-800">
-          <h2 className="text-lg font-semibold text-white">Line Items</h2>
+          <h2 className="text-lg font-semibold text-slate-900">Line Items</h2>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm whitespace-nowrap">
@@ -108,7 +108,7 @@ export default async function PurchaseOrderDetailPage({ params }: { params: { id
             <tbody className="divide-y divide-slate-800">
               {po.items.map((item: any) => (
                 <tr key={item.id} className="hover:bg-slate-800/50 transition-colors">
-                  <td className="px-6 py-4 font-medium text-white">{item.description || 'Item'}</td>
+                  <td className="px-6 py-4 font-medium text-slate-900">{item.description || 'Item'}</td>
                   <td className="px-6 py-4 text-slate-400 max-w-[200px] truncate">{item.description || '-'}</td>
                   <td className="px-6 py-4 text-slate-300 text-right">{Number(item.quantity).toFixed(2)}</td>
                   <td className="px-6 py-4 text-slate-300">{item.unitOfMeasure}</td>
@@ -130,13 +130,13 @@ export default async function PurchaseOrderDetailPage({ params }: { params: { id
       {(po.grns || []).length > 0 && (
         <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
           <div className="px-6 py-4 border-b border-slate-800">
-            <h2 className="text-lg font-semibold text-white">Goods Received Notes (GRNs)</h2>
+            <h2 className="text-lg font-semibold text-slate-900">Goods Received Notes (GRNs)</h2>
           </div>
           <div className="divide-y divide-slate-800 p-4">
             {po.grns.map((grn: any) => (
               <div key={grn.id} className="flex items-center justify-between p-4 bg-slate-950/50 rounded-lg border border-slate-800 mb-2 last:mb-0">
                 <div>
-                  <Link href={`/inventory/grns/${grn.id}`} className="font-semibold text-blue-400 hover:text-blue-300 block mb-1">
+                  <Link href={`/inventory/grns/${grn.id}`} className="font-semibold text-blue-600 hover:text-blue-300 block mb-1">
                     {grn.grnNumber}
                   </Link>
                   <p className="text-xs text-slate-500">Received on {grn.receivedDate ? new Date(grn.receivedDate).toLocaleDateString() : 'N/A'}</p>
@@ -145,8 +145,8 @@ export default async function PurchaseOrderDetailPage({ params }: { params: { id
                   <span className="text-sm text-slate-400">{grn.items?.length || 0} items</span>
                   <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${
                     grn.status === 'POSTED' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
-                    grn.status === 'CANCELLED' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
-                    'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                    grn.status === 'CANCELLED' ? 'bg-red-50 text-red-600 border-red-500/20' :
+                    'bg-amber-50 text-amber-600 border-amber-500/20'
                   }`}>
                     {grn.status}
                   </span>

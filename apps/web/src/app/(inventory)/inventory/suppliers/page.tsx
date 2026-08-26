@@ -20,7 +20,7 @@ export default async function SuppliersPage() {
     <div className="p-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-white">Suppliers</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Suppliers</h1>
           <p className="text-slate-400 text-sm mt-1">Manage your inventory suppliers and vendors</p>
         </div>
         <AddSupplierDialog />
@@ -32,7 +32,7 @@ export default async function SuppliersPage() {
             <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mb-4">
               <Building2 className="w-8 h-8 text-slate-400" />
             </div>
-            <h3 className="text-lg font-medium text-white mb-1">No suppliers found</h3>
+            <h3 className="text-lg font-medium text-slate-900 mb-1">No suppliers found</h3>
             <p className="text-slate-400 text-sm max-w-sm">Get started by adding your first supplier to track purchase orders.</p>
           </div>
         ) : (
@@ -51,7 +51,7 @@ export default async function SuppliersPage() {
               <tbody className="divide-y divide-slate-800">
                 {suppliers.map((supplier) => (
                   <tr key={supplier.id} className="hover:bg-slate-800/50 transition-colors">
-                    <td className="px-6 py-4 font-medium text-white">{supplier.name}</td>
+                    <td className="px-6 py-4 font-medium text-slate-900">{supplier.name}</td>
                     <td className="px-6 py-4 text-slate-300">{supplier.contactName || '-'}</td>
                     <td className="px-6 py-4 text-slate-300">{supplier.email || '-'}</td>
                     <td className="px-6 py-4 text-slate-300">{supplier.phone || '-'}</td>

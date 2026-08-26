@@ -37,9 +37,21 @@ export function InventorySidebar() {
     { name: 'Reconciliation', href: '/inventory/reconciliation', icon: Scale, roles: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'STOCK_MANAGER'] },
   ];
 
-  const userInitials = session?.user?.email
-    ? session.user.email.slice(0, 2).toUpperCase()
-    : '??';
+  const getInitials = (name?: string | null, email?: string | null) => {
+    if (name) {
+      const parts = name.trim().split(' ');
+      if (parts.length >= 2) {
+        return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+      }
+      return name.slice(0, 2).toUpperCase();
+    }
+    if (email) {
+      return email.slice(0, 2).toUpperCase();
+    }
+    return '??';
+  };
+
+  const userInitials = getInitials(session?.user?.name, session?.user?.email);
 
   return (
     <aside className="w-64 bg-white border-r border-slate-200 flex flex-col h-screen text-slate-700">

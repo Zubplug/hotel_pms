@@ -34,7 +34,7 @@ export function PostGrnButton({ id }: { id: string }) {
     <button
       onClick={handlePost}
       disabled={loading}
-      className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors text-sm font-medium disabled:opacity-50"
+      className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-slate-900 px-4 py-2 rounded-md transition-colors text-sm font-medium disabled:opacity-50"
     >
       <Archive className="w-4 h-4" />
       {loading ? 'Posting...' : 'Post to Stock'}

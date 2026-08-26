@@ -28,7 +28,7 @@ export function POActionBar({ id, status, canApprove }: { id: string, status: st
 
   if (status === 'DRAFT') {
     return (
-      <button onClick={() => handleAction('submit')} disabled={loading} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors text-sm font-medium disabled:opacity-50">
+      <button onClick={() => handleAction('submit')} disabled={loading} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-slate-900 px-4 py-2 rounded-md transition-colors text-sm font-medium disabled:opacity-50">
         <Send className="w-4 h-4" /> Submit for Approval
       </button>
     );
@@ -40,7 +40,7 @@ export function POActionBar({ id, status, canApprove }: { id: string, status: st
         <button onClick={() => handleAction('reject')} disabled={loading} className="flex items-center gap-2 bg-red-600/10 hover:bg-red-600/20 text-red-500 px-4 py-2 rounded-md transition-colors text-sm font-medium disabled:opacity-50">
           <XCircle className="w-4 h-4" /> Reject
         </button>
-        <button onClick={() => handleAction('approve')} disabled={loading} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md transition-colors text-sm font-medium disabled:opacity-50">
+        <button onClick={() => handleAction('approve')} disabled={loading} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-slate-900 px-4 py-2 rounded-md transition-colors text-sm font-medium disabled:opacity-50">
           <CheckCircle2 className="w-4 h-4" /> Approve
         </button>
       </div>
@@ -49,7 +49,7 @@ export function POActionBar({ id, status, canApprove }: { id: string, status: st
 
   if (status === 'APPROVED' || status === 'PARTIALLY_RECEIVED') {
     return (
-      <button onClick={() => router.push(`/inventory/grns/new?poId=${id}`)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors text-sm font-medium">
+      <button onClick={() => router.push(`/inventory/grns/new?poId=${id}`)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-slate-900 px-4 py-2 rounded-md transition-colors text-sm font-medium">
         <FileInput className="w-4 h-4" /> Create GRN
       </button>
     );

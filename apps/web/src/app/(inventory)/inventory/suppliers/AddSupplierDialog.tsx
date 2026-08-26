@@ -39,7 +39,7 @@ export function AddSupplierDialog() {
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors text-sm font-medium"
+        className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-slate-900 px-4 py-2 rounded-md transition-colors text-sm font-medium"
       >
         <Plus className="w-4 h-4" />
         Add Supplier
@@ -49,39 +49,39 @@ export function AddSupplierDialog() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-lg shadow-xl w-full max-w-md overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-800 flex justify-between items-center">
-              <h2 className="text-lg font-semibold text-white">Add New Supplier</h2>
+              <h2 className="text-lg font-semibold text-slate-900">Add New Supplier</h2>
               <button onClick={() => setIsOpen(false)} className="text-slate-400 hover:text-white">&times;</button>
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-1">Name</label>
-                <input required name="name" type="text" className="w-full bg-slate-950 border border-slate-800 rounded-md px-3 py-2 text-white focus:outline-none focus:border-blue-500" />
+                <input required name="name" type="text" className="w-full bg-slate-950 border border-slate-800 rounded-md px-3 py-2 text-slate-900 focus:outline-none focus:border-blue-500" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-1">Contact Person</label>
-                <input name="contactPerson" type="text" className="w-full bg-slate-950 border border-slate-800 rounded-md px-3 py-2 text-white focus:outline-none focus:border-blue-500" />
+                <input name="contactPerson" type="text" className="w-full bg-slate-950 border border-slate-800 rounded-md px-3 py-2 text-slate-900 focus:outline-none focus:border-blue-500" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-1">Email</label>
-                  <input name="email" type="email" className="w-full bg-slate-950 border border-slate-800 rounded-md px-3 py-2 text-white focus:outline-none focus:border-blue-500" />
+                  <input name="email" type="email" className="w-full bg-slate-950 border border-slate-800 rounded-md px-3 py-2 text-slate-900 focus:outline-none focus:border-blue-500" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-1">Phone</label>
-                  <input name="phone" type="text" className="w-full bg-slate-950 border border-slate-800 rounded-md px-3 py-2 text-white focus:outline-none focus:border-blue-500" />
+                  <input name="phone" type="text" className="w-full bg-slate-950 border border-slate-800 rounded-md px-3 py-2 text-slate-900 focus:outline-none focus:border-blue-500" />
                 </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-1">Tax ID</label>
-                <input name="taxId" type="text" className="w-full bg-slate-950 border border-slate-800 rounded-md px-3 py-2 text-white focus:outline-none focus:border-blue-500" />
+                <input name="taxId" type="text" className="w-full bg-slate-950 border border-slate-800 rounded-md px-3 py-2 text-slate-900 focus:outline-none focus:border-blue-500" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-1">Address</label>
-                <textarea name="address" rows={2} className="w-full bg-slate-950 border border-slate-800 rounded-md px-3 py-2 text-white focus:outline-none focus:border-blue-500"></textarea>
+                <textarea name="address" rows={2} className="w-full bg-slate-950 border border-slate-800 rounded-md px-3 py-2 text-slate-900 focus:outline-none focus:border-blue-500"></textarea>
               </div>
               <div className="pt-4 flex justify-end gap-3">
                 <button type="button" onClick={() => setIsOpen(false)} className="px-4 py-2 text-sm font-medium text-slate-300 hover:text-white">Cancel</button>
-                <button type="submit" disabled={loading} className="px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-md disabled:opacity-50">
+                <button type="submit" disabled={loading} className="px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-slate-900 rounded-md disabled:opacity-50">
                   {loading ? 'Saving...' : 'Save Supplier'}
                 </button>
               </div>

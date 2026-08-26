@@ -6,9 +6,9 @@ import { Calendar, FileText, FileInput } from 'lucide-react';
 import { PostGrnButton } from './PostGrnButton';
 
 const STATUS_COLORS: Record<string, string> = {
-  DRAFT: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+  DRAFT: 'bg-amber-50 text-amber-600 border-amber-500/20',
   POSTED: 'bg-green-500/10 text-green-400 border-green-500/20',
-  CANCELLED: 'bg-red-500/10 text-red-400 border-red-500/20',
+  CANCELLED: 'bg-red-50 text-red-600 border-red-500/20',
 };
 
 export default async function GRNDetailPage({ params }: { params: { id: string } }) {
@@ -35,7 +35,7 @@ export default async function GRNDetailPage({ params }: { params: { id: string }
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 flex items-start justify-between">
         <div>
           <div className="flex items-center gap-3 mb-2">
-            <h1 className="text-2xl font-bold text-white">{grn.grnNumber}</h1>
+            <h1 className="text-2xl font-bold text-slate-900">{grn.grnNumber}</h1>
             <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${STATUS_COLORS[grn.status] || STATUS_COLORS.DRAFT}`}>
               {grn.status}
             </span>
@@ -61,7 +61,7 @@ export default async function GRNDetailPage({ params }: { params: { id: string }
       {/* Items Table */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-800">
-          <h2 className="text-lg font-semibold text-white">Received Items</h2>
+          <h2 className="text-lg font-semibold text-slate-900">Received Items</h2>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm whitespace-nowrap">
@@ -80,7 +80,7 @@ export default async function GRNDetailPage({ params }: { params: { id: string }
                 const lineTotal = item.receivedQuantity * Number(item.unitCost || 0);
                 return (
                   <tr key={item.id} className="hover:bg-slate-800/50 transition-colors">
-                    <td className="px-6 py-4 font-medium text-white">{item.stockItem?.name || 'Unknown'}</td>
+                    <td className="px-6 py-4 font-medium text-slate-900">{item.stockItem?.name || 'Unknown'}</td>
                     <td className="px-6 py-4 text-slate-400 max-w-[200px] truncate">{item.description || '-'}</td>
                     <td className="px-6 py-4 text-slate-300 text-right font-medium">{item.receivedQuantity}</td>
                     <td className="px-6 py-4 text-slate-300">{item.uom}</td>
@@ -92,8 +92,8 @@ export default async function GRNDetailPage({ params }: { params: { id: string }
             </tbody>
             <tfoot className="bg-slate-950/50 border-t border-slate-800">
               <tr>
-                <td colSpan={5} className="px-6 py-4 text-right font-semibold text-white">Grand Total:</td>
-                <td className="px-6 py-4 text-right font-bold text-blue-400 text-lg">
+                <td colSpan={5} className="px-6 py-4 text-right font-semibold text-slate-900">Grand Total:</td>
+                <td className="px-6 py-4 text-right font-bold text-blue-600 text-lg">
                   ${grandTotal.toFixed(2)}
                 </td>
               </tr>

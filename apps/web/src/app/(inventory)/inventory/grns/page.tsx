@@ -4,9 +4,9 @@ import Link from 'next/link';
 import { PackageSearch } from 'lucide-react';
 
 const STATUS_COLORS: Record<string, string> = {
-  DRAFT: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+  DRAFT: 'bg-amber-50 text-amber-600 border-amber-500/20',
   POSTED: 'bg-green-500/10 text-green-400 border-green-500/20',
-  CANCELLED: 'bg-red-500/10 text-red-400 border-red-500/20',
+  CANCELLED: 'bg-red-50 text-red-600 border-red-500/20',
 };
 
 export default async function GRNsPage() {
@@ -27,7 +27,7 @@ export default async function GRNsPage() {
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-white">Goods Received Notes</h1>
+        <h1 className="text-2xl font-bold text-slate-900">Goods Received Notes</h1>
         <p className="text-slate-400 text-sm mt-1">Track inventory receipts and incoming stock</p>
       </div>
 
@@ -37,7 +37,7 @@ export default async function GRNsPage() {
             <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mb-4">
               <PackageSearch className="w-8 h-8 text-slate-400" />
             </div>
-            <h3 className="text-lg font-medium text-white mb-1">No GRNs found</h3>
+            <h3 className="text-lg font-medium text-slate-900 mb-1">No GRNs found</h3>
             <p className="text-slate-400 text-sm max-w-sm">Receive items from approved purchase orders to generate a GRN.</p>
           </div>
         ) : (
@@ -56,10 +56,10 @@ export default async function GRNsPage() {
               <tbody className="divide-y divide-slate-800">
                 {grns.map((grn) => (
                   <tr key={grn.id} className="hover:bg-slate-800/50 transition-colors group">
-                    <td className="px-6 py-4 font-medium text-white">{grn.grnNumber}</td>
+                    <td className="px-6 py-4 font-medium text-slate-900">{grn.grnNumber}</td>
                     <td className="px-6 py-4">
                       {grn.purchaseOrder ? (
-                        <Link href={`/inventory/purchase-orders/${grn.purchaseOrderId}`} className="text-blue-400 hover:text-blue-300">
+                        <Link href={`/inventory/purchase-orders/${grn.purchaseOrderId}`} className="text-blue-600 hover:text-blue-300">
                           {grn.purchaseOrder.poNumber}
                         </Link>
                       ) : (
@@ -76,7 +76,7 @@ export default async function GRNsPage() {
                     <td className="px-6 py-4 text-right">
                       <Link
                         href={`/inventory/grns/${grn.id}`}
-                        className="text-blue-400 hover:text-blue-300 text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="text-blue-600 hover:text-blue-300 text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity"
                       >
                         View &rarr;
                       </Link>

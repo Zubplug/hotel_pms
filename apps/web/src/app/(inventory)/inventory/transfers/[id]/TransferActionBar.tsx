@@ -50,26 +50,26 @@ export default function TransferActionBar({ transferId, status, canApprove }: Pr
       <div className="flex flex-wrap gap-2">
         {status === 'DRAFT' && btn('Submit for Approval', <Send className="w-4 h-4" />,
           () => callAction('submit', 'Submit for Approval'),
-          'bg-blue-600 hover:bg-blue-500 text-white'
+          'bg-blue-600 hover:bg-blue-500 text-slate-900'
         )}
 
         {status === 'PENDING_APPROVAL' && canApprove && (
           <>
             {btn('Approve', <CheckCircle className="w-4 h-4" />,
               () => callAction('approve', 'Approve'),
-              'bg-green-600 hover:bg-green-500 text-white'
+              'bg-green-600 hover:bg-green-500 text-slate-900'
             )}
           </>
         )}
 
         {status === 'APPROVED' && canApprove && btn('Post to Stock', <PackageCheck className="w-4 h-4" />,
           () => callAction('post', 'Post to Stock', { operationId: crypto.randomUUID() }),
-          'bg-teal-600 hover:bg-teal-500 text-white'
+          'bg-teal-600 hover:bg-teal-500 text-slate-900'
         )}
       </div>
 
       {error && (
-        <div className="flex items-center gap-2 text-red-400 text-xs">
+        <div className="flex items-center gap-2 text-red-600 text-xs">
           <XCircle className="w-3.5 h-3.5" /> {error}
         </div>
       )}

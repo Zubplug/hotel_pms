@@ -5,11 +5,11 @@ import Link from 'next/link';
 
 const STATUS_COLORS: Record<string, string> = {
   DRAFT: 'bg-gray-500/10 text-gray-400 border-gray-500/20',
-  SUBMITTED: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+  SUBMITTED: 'bg-blue-50 text-blue-600 border-blue-500/20',
   APPROVED: 'bg-green-500/10 text-green-400 border-green-500/20',
-  PARTIALLY_RECEIVED: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+  PARTIALLY_RECEIVED: 'bg-amber-50 text-amber-600 border-amber-500/20',
   RECEIVED: 'bg-teal-500/10 text-teal-400 border-teal-500/20',
-  REJECTED: 'bg-red-500/10 text-red-400 border-red-500/20',
+  REJECTED: 'bg-red-50 text-red-600 border-red-500/20',
   CANCELLED: 'bg-slate-500/10 text-slate-400 border-slate-500/20',
 };
 
@@ -32,12 +32,12 @@ export default async function PurchaseOrdersPage() {
     <div className="p-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-white">Purchase Orders</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Purchase Orders</h1>
           <p className="text-slate-400 text-sm mt-1">Manage purchase orders and track deliveries</p>
         </div>
         <Link
           href="/inventory/purchase-orders/new"
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors text-sm font-medium"
+          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-slate-900 px-4 py-2 rounded-md transition-colors text-sm font-medium"
         >
           <Plus className="w-4 h-4" />
           New Purchase Order
@@ -50,7 +50,7 @@ export default async function PurchaseOrdersPage() {
             <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mb-4">
               <FileText className="w-8 h-8 text-slate-400" />
             </div>
-            <h3 className="text-lg font-medium text-white mb-1">No purchase orders</h3>
+            <h3 className="text-lg font-medium text-slate-900 mb-1">No purchase orders</h3>
             <p className="text-slate-400 text-sm max-w-sm">Create a purchase order to start replenishing your stock.</p>
           </div>
         ) : (
@@ -72,11 +72,11 @@ export default async function PurchaseOrdersPage() {
                 {pos.map((po) => (
                   <tr key={po.id} className="hover:bg-slate-800/50 transition-colors group">
                     <td className="px-6 py-4">
-                      <Link href={`/inventory/purchase-orders/${po.id}`} className="font-semibold text-blue-400 hover:text-blue-300">
+                      <Link href={`/inventory/purchase-orders/${po.id}`} className="font-semibold text-blue-600 hover:text-blue-300">
                         {po.poNumber}
                       </Link>
                     </td>
-                    <td className="px-6 py-4 text-white">{po.supplier.name}</td>
+                    <td className="px-6 py-4 text-slate-900">{po.supplier.name}</td>
                     <td className="px-6 py-4">
                       <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${STATUS_COLORS[po.status] || STATUS_COLORS.DRAFT}`}>
                         {po.status}
@@ -95,7 +95,7 @@ export default async function PurchaseOrdersPage() {
                     <td className="px-6 py-4 text-right">
                       <Link
                         href={`/inventory/purchase-orders/${po.id}`}
-                        className="text-blue-400 hover:text-blue-300 text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="text-blue-600 hover:text-blue-300 text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity"
                       >
                         View Details &rarr;
                       </Link>

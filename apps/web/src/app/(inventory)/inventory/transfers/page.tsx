@@ -8,10 +8,10 @@ export const dynamic = 'force-dynamic';
 
 const STATUS_STYLES: Record<string, string> = {
   DRAFT:            'bg-slate-700 text-slate-300',
-  PENDING_APPROVAL: 'bg-blue-500/20 text-blue-400 border border-blue-500/30',
+  PENDING_APPROVAL: 'bg-blue-500/20 text-blue-600 border border-blue-500/30',
   APPROVED:         'bg-green-500/20 text-green-400 border border-green-500/30',
   POSTED:           'bg-teal-500/20 text-teal-400 border border-teal-500/30',
-  CANCELLED:        'bg-red-500/20 text-red-400 border border-red-500/30',
+  CANCELLED:        'bg-red-500/20 text-red-600 border border-red-500/30',
 };
 
 export default async function TransfersPage() {
@@ -35,15 +35,15 @@ export default async function TransfersPage() {
     <div className="px-6 py-8">
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-indigo-500/10 rounded-lg">
-            <ArrowLeftRight className="w-5 h-5 text-indigo-400" />
+          <div className="p-2 bg-blue-50 rounded-lg">
+            <ArrowLeftRight className="w-5 h-5 text-blue-600" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-white">Stock Transfers</h1>
+            <h1 className="text-2xl font-bold text-slate-900">Stock Transfers</h1>
             <p className="text-slate-400 text-sm mt-0.5">{transfers.length} transfer(s) on record</p>
           </div>
         </div>
-        <Link href="/inventory/transfers/new" className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors">
+        <Link href="/inventory/transfers/new" className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-slate-900 text-sm font-semibold transition-colors">
           <Plus className="w-4 h-4" /> New Transfer
         </Link>
       </div>
@@ -66,7 +66,7 @@ export default async function TransfersPage() {
               <tr><td colSpan={7} className="px-4 py-12 text-center text-slate-500">No transfers found. Create your first transfer.</td></tr>
             ) : transfers.map(t => (
               <tr key={t.id} className="hover:bg-slate-700/30 transition-colors">
-                <td className="px-4 py-3 font-mono font-semibold text-white">{t.transferRef}</td>
+                <td className="px-4 py-3 font-mono font-semibold text-slate-900">{t.transferRef}</td>
                 <td className="px-4 py-3 text-slate-300">{t.fromWarehouse.name}</td>
                 <td className="px-4 py-3 text-slate-300">{t.toWarehouse.name}</td>
                 <td className="px-4 py-3 text-slate-400">{t._count.items} item(s)</td>
@@ -77,7 +77,7 @@ export default async function TransfersPage() {
                 </td>
                 <td className="px-4 py-3 text-slate-400">{new Date(t.createdAt).toLocaleDateString()}</td>
                 <td className="px-4 py-3">
-                  <Link href={`/inventory/transfers/${t.id}`} className="text-indigo-400 hover:text-indigo-300 text-xs font-medium">
+                  <Link href={`/inventory/transfers/${t.id}`} className="text-blue-600 hover:text-blue-700 text-xs font-medium">
                     View →
                   </Link>
                 </td>

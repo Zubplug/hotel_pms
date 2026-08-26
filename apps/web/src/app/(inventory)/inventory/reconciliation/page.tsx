@@ -81,18 +81,18 @@ export default function ReconciliationPage() {
   return (
     <div className="max-w-3xl mx-auto px-6 py-8">
       <div className="flex items-center gap-3 mb-8">
-        <div className="p-2 bg-amber-500/10 rounded-lg">
-          <ClipboardList className="w-5 h-5 text-amber-400" />
+        <div className="p-2 bg-amber-50 rounded-lg">
+          <ClipboardList className="w-5 h-5 text-amber-600" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-white">Stock Reconciliation</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Stock Reconciliation</h1>
           <p className="text-slate-400 text-sm mt-0.5">Submit a counted quantity for management approval</p>
         </div>
       </div>
 
       {/* Info Banner */}
-      <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 flex gap-3 mb-6">
-        <AlertTriangle className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
+      <div className="bg-blue-50 border border-blue-500/20 rounded-xl p-4 flex gap-3 mb-6">
+        <AlertTriangle className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
         <div className="text-sm text-blue-300">
           <span className="font-semibold">Approval Required. </span>
           Adjustments are not applied immediately. A Manager, CEO, or Super Admin must review and approve them before stock quantities change.
@@ -114,7 +114,7 @@ export default function ReconciliationPage() {
             value={selectedItemId}
             onChange={e => setSelectedItemId(e.target.value)}
             required
-            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2.5 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
           >
             <option value="">Choose an item to reconcile...</option>
             {items.map(item => (
@@ -130,17 +130,17 @@ export default function ReconciliationPage() {
           <div className="bg-slate-900/60 border border-slate-600 rounded-lg p-4 grid grid-cols-3 gap-4 text-sm">
             <div>
               <span className="text-slate-400 block text-xs uppercase tracking-wider mb-1">System Quantity</span>
-              <p className="text-2xl font-bold text-white">{systemQty!.toFixed(4)}</p>
+              <p className="text-2xl font-bold text-slate-900">{systemQty!.toFixed(4)}</p>
               <span className="text-slate-500 text-xs">{selectedItem.baseUnit}</span>
             </div>
             <div>
               <span className="text-slate-400 block text-xs uppercase tracking-wider mb-1">Warehouse</span>
-              <p className="text-white font-semibold mt-1">{selectedItem.warehouse?.name}</p>
+              <p className="text-slate-900 font-semibold mt-1">{selectedItem.warehouse?.name}</p>
             </div>
             {variance !== null && (
               <div>
                 <span className="text-slate-400 block text-xs uppercase tracking-wider mb-1">Variance</span>
-                <p className={`text-2xl font-bold ${variance === 0 ? 'text-green-400' : variance > 0 ? 'text-blue-400' : 'text-red-400'}`}>
+                <p className={`text-2xl font-bold ${variance === 0 ? 'text-green-400' : variance > 0 ? 'text-blue-600' : 'text-red-600'}`}>
                   {variance > 0 ? '+' : ''}{variance.toFixed(4)}
                 </p>
                 <span className="text-slate-500 text-xs">{variance === 0 ? 'No change' : variance > 0 ? 'Surplus' : 'Deficit'}</span>
@@ -161,7 +161,7 @@ export default function ReconciliationPage() {
             required
             disabled={!selectedItem}
             placeholder="Enter the actual counted quantity"
-            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2.5 text-white text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 disabled:opacity-40"
+            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2.5 text-slate-900 text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 disabled:opacity-40"
           />
         </div>
 
@@ -172,7 +172,7 @@ export default function ReconciliationPage() {
             value={reason}
             onChange={e => setReason(e.target.value)}
             required
-            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2.5 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
           >
             {ADJUSTMENT_REASONS.map(r => (
               <option key={r} value={r}>{r.replace(/_/g, ' ')}</option>
@@ -188,12 +188,12 @@ export default function ReconciliationPage() {
             onChange={e => setNotes(e.target.value)}
             rows={3}
             placeholder="Optional explanation for the adjustment..."
-            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2.5 text-white text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 resize-none"
+            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2.5 text-slate-900 text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 resize-none"
           />
         </div>
 
         {error && (
-          <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3 text-red-400 text-sm">
+          <div className="bg-red-50 border border-red-500/30 rounded-lg px-4 py-3 text-red-600 text-sm">
             {error}
           </div>
         )}
@@ -209,7 +209,7 @@ export default function ReconciliationPage() {
           <button
             type="submit"
             disabled={isSubmitting || !selectedItem || parsedActual === null || variance === 0}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-slate-900 text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ClipboardList className="w-4 h-4" />}
             {isSubmitting ? 'Submitting...' : 'Submit for Approval'}
