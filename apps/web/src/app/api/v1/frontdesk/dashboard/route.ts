@@ -28,7 +28,10 @@ export async function GET(req: NextRequest) {
     }).format(new Date()); // YYYY-MM-DD
     
     // Parse into UTC boundaries for the property's "Today"
-    const businessDate = new Date(`${todayString}T00:00:00.000Z`); // Used as Prisma @db.Date representation
+    const businessDate = new Date(`${todayString}T00:00:00.000Z`);
+    const nextBusinessDate = new Date(businessDate);
+    nextBusinessDate.setUTCDate(nextBusinessDate.getUTCDate() + 1);
+    const todayCheckout = { gte: businessDate, lt: nextBusinessDate };
 
     // 2. Fetch KPIs
     const [arrivalsCount, departuresCount, inHouseCount, hardwareAgent, rooms] = await Promise.all([
@@ -38,7 +41,7 @@ export async function GET(req: NextRequest) {
       }),
       // Departures: checked-in guests whose stay expires today
       prisma.reservation.count({
-        where: { propertyId, checkOut: businessDate, status: 'CHECKED_IN' }
+        where: { propertyId, checkOut: todayCheckout, status: 'CHECKED_IN' }
       }),
       // In-House: Currently Checked In
       prisma.reservation.count({
@@ -84,7 +87,7 @@ export async function GET(req: NextRequest) {
 
     // 4. Fetch Detailed Departures List
     const departures = await prisma.reservation.findMany({
-      where: { propertyId, checkOut: businessDate, status: 'CHECKED_IN' },
+      where: { propertyId, checkOut: todayCheckout, status: 'CHECKED_IN' },
       include: {
         primaryGuest: true,
         reservationRooms: { include: { room: true } },
@@ -124,7 +127,7 @@ export async function GET(req: NextRequest) {
         arrivalTime: property.checkInTime || '14:00', // Uses property config instead of hardcoded time
         checkOutDate: res.checkOut.toISOString(),
         checkOutTime: property.checkOutTime || '12:00',
-        stayEndsToday: res.status === 'CHECKED_IN' && res.checkOut.getTime() === businessDate.getTime(),
+        stayEndsToday: res.status === 'CHECKED_IN' && res.checkOut >= businessDate && res.checkOut < nextBusinessDate,
         balance,
         status: res.status,
         arrivalState: { label: arrivalStatus, color: arrivalColor },

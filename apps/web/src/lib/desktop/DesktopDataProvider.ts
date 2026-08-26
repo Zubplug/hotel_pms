@@ -373,18 +373,18 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     },
     getSessionContext: async (sessionId: string) => {
       const res = await invokeDesktop('pos.getSessionContext', { sessionId });
-      if (!res?.success || !res.data) return res;
+      if (!res?.success || !res.data?.id) {
+        return { success: false, data: null, error: 'No active POS shift found for this operator.' };
+      }
       
-      const settlementRes = await invokeDesktop('pos.getSessionSettlementDetails', { sessionId });
+      const activeSessionId = res.data.id;
+      const settlementRes = await invokeDesktop('pos.getSessionSettlementDetails', { sessionId: activeSessionId });
       
-      if (settlementRes?.success && settlementRes.data && res.data.posSession) {
+      if (settlementRes?.success && settlementRes.data) {
         return {
           success: true,
           data: {
-            ...res.data.posSession,
-            outlet: res.data.outlet,
-            terminal: res.data.terminal,
-            primaryOperator: res.data.operator, // Map operator to primaryOperator for Cloud parity
+            ...res.data,
             ...settlementRes.data
           }
         };

@@ -121,6 +121,8 @@ export function FolioSection({ reservation }: { reservation: any }) {
     );
   };
 
+  const transactionLabel = (type: string) => type.replaceAll('_', ' ');
+
   return (
     <>
       <Card className="mt-6 overflow-hidden rounded-2xl border-slate-200 bg-white shadow-lg shadow-slate-200/50">
@@ -205,14 +207,14 @@ export function FolioSection({ reservation }: { reservation: any }) {
               <div><h3 className="font-bold text-slate-900">Transaction history</h3><p className="text-xs text-slate-500">{ledgerItems.length} posted transaction{ledgerItems.length === 1 ? '' : 's'}</p></div>
               <span className="text-xs font-medium text-slate-500">All amounts in {folio.currency || 'NGN'}</span>
             </div>
-            <div className="hidden overflow-hidden rounded-xl border border-slate-200 md:block">
-            <table className="w-full table-fixed text-left text-sm">
+            <div className="hidden overflow-x-auto rounded-xl border border-slate-200 md:block">
+            <table className="w-full min-w-[820px] table-fixed text-left text-sm">
               <thead className="border-b bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500">
                 <tr>
-                  <th className="w-32 px-4 py-3">Date</th>
+                  <th className="w-36 px-4 py-3">Date</th>
                   <th className="px-4 py-3">Transaction</th>
-                  <th className="w-36 px-4 py-3 text-right">Amount</th>
-                  <th className="w-28 px-4 py-3 text-right">Actions</th>
+                  <th className="w-44 px-4 py-3 text-right">Amount</th>
+                  <th className="w-40 px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
@@ -232,19 +234,19 @@ export function FolioSection({ reservation }: { reservation: any }) {
                         <td className="whitespace-nowrap px-4 py-4 text-xs text-slate-500">
                           {format(new Date(item.createdAt), 'MMM d, h:mm a')}
                         </td>
-                        <td className="px-4 py-4">
+                        <td className="min-w-0 px-4 py-4">
                           <div className="flex min-w-0 items-center gap-2">
-                          <Badge variant={item.type === 'CHARGE' ? 'outline' : item.type === 'PAYMENT' ? 'default' : 'secondary'} className="shrink-0 text-[10px]">
-                            {item.type}
+                          <Badge variant={item.type === 'CHARGE' ? 'outline' : item.type === 'PAYMENT' ? 'default' : 'secondary'} className="shrink-0 whitespace-nowrap text-[10px]">
+                            {transactionLabel(item.type)}
                           </Badge>
-                          <p className="truncate font-medium text-slate-800" title={item.description}>{item.description}</p>
+                          <p className="min-w-0 flex-1 break-words font-medium leading-5 text-slate-800" title={item.description}>{item.description}</p>
                           {item.creditStatus && <Badge variant="secondary" className="shrink-0 text-[10px]">{item.creditStatus}</Badge>}
                           </div>
                         </td>
                         <td className={`whitespace-nowrap px-4 py-4 text-right font-bold tabular-nums ${isDebit ? 'text-slate-900' : 'text-emerald-700'}`}>
                           <span className="mr-1 text-xs font-medium text-slate-400">{isDebit ? '+' : '−'}</span>{formatCurrency(absAmount)}
                         </td>
-                        <td className="px-4 py-4"><div className="flex justify-end">{renderItemActions(item)}</div>
+                        <td className="w-40 px-4 py-4"><div className="flex justify-end">{renderItemActions(item)}</div>
                         </td>
                       </tr>
                     );

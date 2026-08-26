@@ -63,7 +63,7 @@ export function MySalesModal({ isOpen, onClose, operatorToken, staffName }: MySa
           cardSales: money(salesData.cardSales),
           roomCharges: money(salesData.roomCharges ?? salesData.roomChargeSales),
           totalDiscounts: money(salesData.totalDiscounts),
-          currency: 'USD', // or get from config if available
+          currency: salesData.currency || 'NGN',
           printedAt: new Date().toISOString()
         });
         

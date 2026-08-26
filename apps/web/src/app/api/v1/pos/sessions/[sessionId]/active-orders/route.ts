@@ -29,7 +29,8 @@ export async function GET(
     // Build the query where clause
     const where: any = {
       propertyId: payload.propertyId,
-      status: { in: ['SUBMITTED', 'IN_SERVICE'] }
+      status: { in: ['SUBMITTED', 'IN_SERVICE'] },
+      paymentStatus: { notIn: ['PAID', 'REFUNDED'] }
     };
 
     // Filter by outlet if token is outlet-bound

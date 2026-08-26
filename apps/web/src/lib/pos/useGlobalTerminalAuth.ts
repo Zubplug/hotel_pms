@@ -117,6 +117,18 @@ export function useGlobalTerminalAuth({
         const authRes = await provider.auth.login(selectedStaff.id, pinValue);
 
         if (!authRes.error && authRes.success) {
+          // A receptionist may have opened a Front Desk till before the terminal
+          // was locked or disconnected. Push that session and refresh its UI
+          // queries as soon as the operator is authenticated again.
+          if (selectedStaff.role?.toUpperCase() === 'RECEPTIONIST' || selectedStaff.role?.toUpperCase() === 'FRONT_DESK') {
+            try {
+              await provider.system?.forceSync?.();
+            } catch {
+              // Login remains available offline; the outbox will retry later.
+            }
+            await queryClient.invalidateQueries({ queryKey: ['frontdesk'] });
+            await queryClient.invalidateQueries({ queryKey: ['frontdesk-session'] });
+          }
           // Read back the terminal configuration to decide routing
           const statusRes = await provider.system?.getTerminalStatus?.();
           const mode = statusRes?.desktopMode || 'UNKNOWN';

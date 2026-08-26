@@ -11,6 +11,7 @@ namespace LodgeCore.Desktop.Security;
 
 public class SessionManager
 {
+    private const string DeviceIdKey = "LodgeCore_DeviceId";
     private readonly LocalDbContext _dbContext;
 
     public SessionManager(LocalDbContext dbContext)
@@ -43,7 +44,8 @@ public class SessionManager
             throw new Exception("No active POS outlet found for this property.");
 
         // Fetch device ID ahead of LINQ query to avoid expression tree await error
-        var deviceId = await Microsoft.Maui.Storage.SecureStorage.Default.GetAsync("DEVICE_ID") ?? "UNKNOWN_DEVICE";
+        var deviceId = await Microsoft.Maui.Storage.SecureStorage.Default.GetAsync(DeviceIdKey)
+                       ?? throw new InvalidOperationException("This terminal has no device identity. Re-provision the desktop terminal before using POS.");
 
         // Find if there's an active POS session for this specific operator or terminal
         var activeSession = await FindBankingSessionAsync(property, staff, deviceId);
@@ -59,7 +61,7 @@ public class SessionManager
         var newContext = new LocalOperatorContext
         {
             Id = Guid.NewGuid().ToString(),
-            DeviceId = await Microsoft.Maui.Storage.SecureStorage.Default.GetAsync("DEVICE_ID") ?? "UNKNOWN_DEVICE",
+            DeviceId = deviceId,
             PropertyId = property.Id,
             OutletId = outlet.Id,
             StaffId = staff.Id,
@@ -90,7 +92,8 @@ public class SessionManager
         if (outlet == null)
             throw new Exception("No active POS outlet found for this property.");
 
-        var deviceId = await Microsoft.Maui.Storage.SecureStorage.Default.GetAsync("DEVICE_ID") ?? "UNKNOWN_DEVICE";
+        var deviceId = await Microsoft.Maui.Storage.SecureStorage.Default.GetAsync(DeviceIdKey)
+                       ?? throw new InvalidOperationException("This terminal has no device identity. Re-provision the desktop terminal before using POS.");
         var activeSession = await FindBankingSessionAsync(property, staff, deviceId);
 
         var oldContexts = await _dbContext.OperatorContexts.Where(c => c.IsActive).ToListAsync();

@@ -10,7 +10,7 @@ import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 interface PrinterConfig {
   id: string;
   name: string;
-  printerRole: 'RECEIPT' | 'KITCHEN' | 'FRONTDESK';
+  printerRole: 'RECEIPT' | 'KITCHEN' | 'BAR' | 'FRONTDESK';
   connectionType: 'NETWORK' | 'USB' | 'SERIAL';
   devicePath: string;
   baudRate: number;
@@ -29,6 +29,7 @@ type TestStatus = 'idle' | 'testing' | 'success' | 'failed';
 const ROLES = [
   { value: 'RECEIPT', label: 'Receipt Printer', desc: 'Prints customer receipts at checkout', color: 'bg-blue-500' },
   { value: 'KITCHEN', label: 'Kitchen Printer', desc: 'Prints KOTs (Kitchen Order Tickets)', color: 'bg-orange-500' },
+  { value: 'BAR', label: 'Bar Printer', desc: 'Prints bar order requests for the barman', color: 'bg-amber-500' },
 ];
 
 const PAPER_WIDTHS = [
@@ -381,7 +382,7 @@ export function PrinterSettingsView({ onClose }: { onClose?: () => void } = {}) 
       const res = await invokeDesktop('hardware.getPrinters');
       if (res?.success) {
         const allPrinters: PrinterConfig[] = res.data ?? [];
-        setPrinters(allPrinters.filter(p => p.printerRole === 'RECEIPT' || p.printerRole === 'KITCHEN'));
+        setPrinters(allPrinters.filter(p => p.printerRole === 'RECEIPT' || p.printerRole === 'KITCHEN' || p.printerRole === 'BAR'));
       }
     } catch { /* ignore */ }
     setLoading(false);

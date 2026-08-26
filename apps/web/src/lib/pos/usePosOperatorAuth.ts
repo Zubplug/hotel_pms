@@ -161,14 +161,15 @@ export function usePosOperatorAuth({
 
       // Central cashier model — the central till hasn't been opened yet
       if (auth.requiresBank) {
+        localStorage.removeItem('lodgecore_pos_session_id');
         if (token) localStorage.setItem('lodgecore_pos_operator_token', token);
         onAuthenticated(operator, token, auth);
         return;
       }
 
       // Existing POS session — go straight in, no float needed
-      if (auth.posSessionId || auth.sessionId || existingSessionId) {
-        const sessionId = auth.posSessionId || auth.sessionId || existingSessionId;
+      if (auth.posSessionId || auth.sessionId) {
+        const sessionId = auth.posSessionId || auth.sessionId;
         localStorage.setItem('lodgecore_pos_session_id', sessionId);
         if (token) localStorage.setItem('lodgecore_pos_operator_token', token);
         onAuthenticated(operator, token, auth);
@@ -177,6 +178,7 @@ export function usePosOperatorAuth({
 
       // Server banking model with no active session — must open shift
       if (auth.bankingModel === 'SERVER_BANKING') {
+        localStorage.removeItem('lodgecore_pos_session_id');
         setVerifiedOperator(operator);
         setPendingToken(token);
         setStep('shift');
@@ -184,6 +186,9 @@ export function usePosOperatorAuth({
       }
 
       // All other models — directly in
+      if (!auth.posSessionId && !auth.sessionId) {
+        localStorage.removeItem('lodgecore_pos_session_id');
+      }
       if (token) localStorage.setItem('lodgecore_pos_operator_token', token);
       onAuthenticated(operator, token, auth);
     } catch (e: any) {

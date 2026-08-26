@@ -1724,6 +1724,7 @@ public class LocalRepository
             await _dbContext.Database.ExecuteSqlRawAsync("ALTER TABLE PosCashMovements ADD COLUMN FrontdeskSessionId TEXT NULL");
         }
         catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
+        await _dbContext.ApplyPosRoutingSchemaAsync();
         
         // Seed Stanzel Grand Resort for the pilot if it doesn't exist
         if (!await _dbContext.Properties.AnyAsync())
@@ -1734,7 +1735,7 @@ public class LocalRepository
                 Name = "Stanzel Grand Resort",
                 Code = "SGR",
                 City = "Los Angeles",
-                Currency = "USD",
+                Currency = "NGN",
                 Timezone = "America/Los_Angeles",
                 BusinessDate = DateTime.UtcNow.Date,
                 IsActive = true,
@@ -2021,9 +2022,8 @@ public class LocalRepository
 
     public async Task<object> GetDashboardAsync(string propertyId)
     {
-        var today = DateTime.UtcNow.Date; // Ideally we use property timezone, falling back to UTC here
-
         var property = await _dbContext.Properties.FirstOrDefaultAsync(p => p.Id == propertyId);
+        var today = property?.BusinessDate.Date ?? DateTime.UtcNow.Date;
 
         var reservations = await _dbContext.Reservations
             .Include(r => r.Guest)
@@ -2194,42 +2194,91 @@ public class LocalRepository
 
         if (order.Items.Any())
         {
-            var kot = new LocalPosKot
-            {
-                Id = Guid.NewGuid().ToString(),
-                OrderId = order.Id,
-                OutletId = order.OutletId,
-                DeviceId = deviceId,
-                CreatedBy = userId,
-                OrderNumber = order.OrderNumber,
-                KotNumber = $"{order.OrderNumber}-{Guid.NewGuid().ToString("N").Substring(0, 4)}",
-                Status = "PENDING",
-                PrintStatus = "QUEUED",
-                OperationId = operationId,
-                BusinessDate = order.BusinessDate,
-                TableNumber = order.TableNumber,
-                ServerName = userId,
-                FiredAt = DateTime.UtcNow,
-                CreatedAt = DateTime.UtcNow,
-                ItemIdsJson = JsonSerializer.Serialize(order.Items.Select(i => i.Id))
-            };
+            var productIds = order.Items
+                .Where(item => !string.IsNullOrWhiteSpace(item.ProductId))
+                .Select(item => item.ProductId!)
+                .Distinct()
+                .ToList();
+            var products = await _dbContext.PosProducts
+                .Where(product => productIds.Contains(product.Id))
+                .ToListAsync();
+            var categoryIds = products.Select(product => product.CategoryId).Distinct().ToList();
+            var categories = await _dbContext.ProductCategories
+                .Where(category => categoryIds.Contains(category.Id))
+                .ToDictionaryAsync(category => category.Id);
+            var productMap = products.ToDictionary(product => product.Id);
 
-            foreach (var item in order.Items)
+            string ResolveStation(LocalPosOrderItem item)
             {
-                item.KotId = kot.Id;
-                item.KitchenStatus = "PENDING";
-                item.SentToKitchenAt = kot.FiredAt;
+                if (item.ProductId != null && productMap.TryGetValue(item.ProductId, out var product))
+                {
+                    var station = product.ProductionStation;
+                    if (string.IsNullOrWhiteSpace(station) && categories.TryGetValue(product.CategoryId, out var category))
+                        station = category.ProductionStation;
+                    if (!string.IsNullOrWhiteSpace(station)) return station.Trim().ToUpperInvariant();
+                }
+                return "KITCHEN";
             }
 
-            order.Kots.Add(kot);
+            var stationGroups = order.Items
+                .GroupBy(ResolveStation)
+                .ToList();
+
+            foreach (var stationGroup in stationGroups)
+            {
+                var station = stationGroup.Key;
+                var requiresProductionTicket = station is "KITCHEN" or "BAR";
+                var firedAt = DateTime.UtcNow;
+
+                if (!requiresProductionTicket)
+                {
+                    foreach (var item in stationGroup)
+                    {
+                        item.KitchenStatus = "DIRECT";
+                        item.SentToKitchenAt = firedAt;
+                    }
+                    continue;
+                }
+
+                var kot = new LocalPosKot
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    OrderId = order.Id,
+                    OutletId = order.OutletId,
+                    DeviceId = deviceId,
+                    CreatedBy = userId,
+                    OrderNumber = order.OrderNumber,
+                    KotNumber = $"{order.OrderNumber}-{station}-{Guid.NewGuid().ToString("N").Substring(0, 4)}",
+                    Status = "PENDING",
+                    ProductionStation = station,
+                    PrintStatus = "QUEUED",
+                    OperationId = operationId,
+                    BusinessDate = order.BusinessDate,
+                    TableNumber = order.TableNumber,
+                    ServerName = userId,
+                    FiredAt = firedAt,
+                    CreatedAt = firedAt,
+                    ItemIdsJson = JsonSerializer.Serialize(stationGroup.Select(item => item.Id))
+                };
+
+                foreach (var item in stationGroup)
+                {
+                    item.KotId = kot.Id;
+                    item.KitchenStatus = "PENDING";
+                    item.SentToKitchenAt = firedAt;
+                }
+
+                order.Kots.Add(kot);
+            }
         }
 
         foreach (var kot in order.Kots)
         {
-            kot.Id = Guid.NewGuid().ToString();
+            if (string.IsNullOrWhiteSpace(kot.Id)) kot.Id = Guid.NewGuid().ToString();
             kot.OrderId = order.Id;
             kot.OperationId = operationId;
             kot.BusinessDate = order.BusinessDate;
+            if (string.IsNullOrWhiteSpace(kot.ProductionStation)) kot.ProductionStation = "KITCHEN";
         }
 
         _dbContext.PosOrders.Add(order);
@@ -2446,7 +2495,13 @@ public class LocalRepository
         var query = _dbContext.PosOrders
             .Include(o => o.Items)
             .Include(o => o.Checks)
-            .Where(o => o.SessionId == sessionId && o.Status != "CLOSED" && o.Status != "VOIDED");
+            .Where(o => o.SessionId == sessionId
+                && o.Status != "CLOSED"
+                && o.Status != "COMPLETED"
+                && o.Status != "PAID"
+                && o.Status != "VOIDED"
+                && o.Status != "CANCELLED"
+                && o.PaymentStatus != "PAID");
 
         if (filter == "my_orders" && !string.IsNullOrEmpty(staffId))
         {
@@ -2482,11 +2537,17 @@ public class LocalRepository
 
     public async Task<List<object>> GetWaiterTicketsAsync(string outletId, string staffId, string sessionId)
     {
-        var session = await _dbContext.PosSessions.FindAsync(sessionId);
-        var businessDate = session?.OpenedAt.Date ?? DateTime.UtcNow.Date;
+        var query = _dbContext.PosKots
+            .Where(k => k.OutletId == outletId && k.CreatedBy == staffId);
 
-        var kots = await _dbContext.PosKots
-            .Where(k => k.OutletId == outletId && k.CreatedBy == staffId && k.BusinessDate.Date == businessDate)
+        // Session ownership is authoritative. Date-only matching is unreliable
+        // around timezone boundaries and when local/cloud records are merged.
+        if (!string.IsNullOrWhiteSpace(sessionId))
+        {
+            query = query.Where(k => _dbContext.PosOrders.Any(o => o.Id == k.OrderId && o.SessionId == sessionId));
+        }
+
+        var kots = await query
             .OrderByDescending(k => k.CreatedAt)
             .ToListAsync();
 
@@ -2520,7 +2581,7 @@ public class LocalRepository
         return result;
     }
 
-    public async Task<(LocalPosOrder Order, LocalPosKot Kot)> FireItemsAsync(string orderId, List<LocalPosOrderItem> itemsToFire, string userId, string deviceId)
+    public async Task<(LocalPosOrder Order, List<LocalPosKot> Kots)> FireItemsAsync(string orderId, List<LocalPosOrderItem> itemsToFire, string userId, string deviceId)
     {
         var order = await _dbContext.PosOrders
             .Include(o => o.Items)
@@ -2535,11 +2596,12 @@ public class LocalRepository
             item.Id = Guid.NewGuid().ToString();
             item.OrderId = order.Id;
             item.CheckId = order.Checks?.FirstOrDefault(c => c.Status == "OPEN")?.Id;
-            item.KitchenStatus = "PENDING";
+            item.KitchenStatus = "DIRECT";
             item.CreatedAt = DateTime.UtcNow;
             
             _dbContext.PosOrderItems.Add(item);
             newItems.Add(item);
+            order.Items.Add(item);
 
             if (item.Modifiers != null)
             {
@@ -2557,31 +2619,65 @@ public class LocalRepository
         order.Total += newItems.Sum(i => i.Total);
         order.UpdatedAt = DateTime.UtcNow;
 
-        var kot = new LocalPosKot
-        {
-            Id = Guid.NewGuid().ToString(),
-            OrderId = order.Id,
-            OutletId = order.OutletId,
-            DeviceId = deviceId,
-            CreatedBy = userId,
-            OrderNumber = order.OrderNumber,
-            KotNumber = $"{order.OrderNumber}-{order.Kots?.Count + 1 ?? 1}",
-            TableNumber = order.TableNumber,
-            ServerName = "Server", // Ideally fetch server name
-            Status = "PENDING",
-            PrintStatus = "QUEUED",
-            OperationId = $"op_fire_{deviceId}_{DateTime.UtcNow.Ticks}",
-            BusinessDate = order.BusinessDate == default ? DateTime.UtcNow.Date : order.BusinessDate,
-            FiredAt = DateTime.UtcNow,
-            CreatedAt = DateTime.UtcNow,
-            ItemIdsJson = JsonSerializer.Serialize(newItems.Select(i => i.Id))
-        };
-        _dbContext.PosKots.Add(kot);
+        var productIds = newItems.Where(i => !string.IsNullOrWhiteSpace(i.ProductId)).Select(i => i.ProductId!).Distinct().ToList();
+        var products = await _dbContext.PosProducts.Where(p => productIds.Contains(p.Id)).ToListAsync();
+        var categoryIds = products.Select(p => p.CategoryId).Distinct().ToList();
+        var categories = await _dbContext.ProductCategories.Where(c => categoryIds.Contains(c.Id)).ToDictionaryAsync(c => c.Id);
+        var productMap = products.ToDictionary(p => p.Id);
 
-        AppendSyncEvent("POS_ORDER", order.Id, "ORDER_ITEMS_ADDED", new { order, kot }, deviceId, order.OutletId, order.SessionId, userId);
+        string ResolveStation(LocalPosOrderItem item)
+        {
+            if (item.ProductId != null && productMap.TryGetValue(item.ProductId, out var product))
+            {
+                var station = product.ProductionStation;
+                if (string.IsNullOrWhiteSpace(station) && categories.TryGetValue(product.CategoryId, out var category))
+                    station = category.ProductionStation;
+                if (!string.IsNullOrWhiteSpace(station)) return station.Trim().ToUpperInvariant();
+            }
+            return "KITCHEN";
+        }
+
+        var kots = new List<LocalPosKot>();
+        foreach (var stationGroup in newItems.GroupBy(ResolveStation))
+        {
+            var station = stationGroup.Key;
+            var firedAt = DateTime.UtcNow;
+            if (station is not ("KITCHEN" or "BAR"))
+            {
+                foreach (var item in stationGroup)
+                {
+                    item.KitchenStatus = "DIRECT";
+                    item.SentToKitchenAt = firedAt;
+                }
+                continue;
+            }
+
+            var kot = new LocalPosKot
+            {
+                Id = Guid.NewGuid().ToString(), OrderId = order.Id, OutletId = order.OutletId,
+                DeviceId = deviceId, CreatedBy = userId, OrderNumber = order.OrderNumber,
+                KotNumber = $"{order.OrderNumber}-{station}-{Guid.NewGuid().ToString("N").Substring(0, 4)}",
+                TableNumber = order.TableNumber, ServerName = "Server", Status = "PENDING",
+                ProductionStation = station, PrintStatus = "QUEUED",
+                OperationId = $"op_fire_{deviceId}_{DateTime.UtcNow.Ticks}",
+                BusinessDate = order.BusinessDate == default ? DateTime.UtcNow.Date : order.BusinessDate,
+                FiredAt = firedAt, CreatedAt = firedAt,
+                ItemIdsJson = JsonSerializer.Serialize(stationGroup.Select(i => i.Id))
+            };
+            foreach (var item in stationGroup)
+            {
+                item.KotId = kot.Id;
+                item.KitchenStatus = "PENDING";
+                item.SentToKitchenAt = firedAt;
+            }
+            _dbContext.PosKots.Add(kot);
+            kots.Add(kot);
+        }
+
+        AppendSyncEvent("POS_ORDER", order.Id, "ORDER_ITEMS_ADDED", new { order, kots }, deviceId, order.OutletId, order.SessionId, userId);
 
         await _dbContext.SaveChangesAsync();
-        return (order, kot);
+        return (order, kots);
     }
 
     /// <summary>
@@ -2762,6 +2858,8 @@ public class LocalRepository
         if (orderPayments + amount >= order.Total)
         {
             order.Status = "COMPLETED";
+            order.PaymentStatus = "PAID";
+            order.UpdatedAt = DateTime.UtcNow;
             AppendSyncEvent("POS_ORDER", order.Id, "ORDER_COMPLETED", new { status = "COMPLETED" }, deviceId, order.OutletId, order.SessionId, userId);
         }
 
@@ -3676,7 +3774,9 @@ public class LocalRepository
     public async Task<List<object>> GetProductionBatchesAsync(string outletId, string station)
     {
         var kots = await _dbContext.PosKots
-            .Where(k => k.OutletId == outletId && (k.Status == "PENDING" || k.Status == "ACKNOWLEDGED"))
+            .Where(k => k.OutletId == outletId
+                && k.ProductionStation == station
+                && (k.Status == "PENDING" || k.Status == "ACKNOWLEDGED"))
             .OrderBy(k => k.FiredAt)
             .ToListAsync();
 
@@ -3691,7 +3791,7 @@ public class LocalRepository
             {
                 id = k.Id,
                 batchNumber = k.KotNumber,
-                station = station,
+                station = k.ProductionStation,
                 status = k.Status,
                 firedAt = k.FiredAt,
                 order = new

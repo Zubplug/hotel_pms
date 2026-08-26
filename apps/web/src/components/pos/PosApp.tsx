@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Image from 'next/image';
 import {
   ShoppingCart, Search, Trash2, Plus, Minus, User, Utensils,
@@ -11,7 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { AppSwitcher } from '@/components/layout/AppSwitcher';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
-import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
+import { HardwareBridge, toReceiptPrintData } from '@/lib/desktop/HardwareBridge';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { formatCurrency } from '@/lib/utils';
 import { TerminalAuthScreen } from '@/components/pos/TerminalAuthScreen';
@@ -93,6 +93,7 @@ export default function PosApp() {
   // ── Operator ──────────────────────────────────────────────────────
   const [activeOperator, setActiveOperator] = useState<any | null>(null);
   const [operatorToken, setOperatorToken] = useState<string | null>(null);
+  const operatorSwitchOverride = useRef(false);
   const [showSwitchPad, setShowSwitchPad] = useState(false);
   const [showMySales, setShowMySales] = useState(false);
   const [showShiftBank, setShowShiftBank] = useState(false);
@@ -198,7 +199,7 @@ export default function PosApp() {
           }
         }
 
-        if (isDesktopMode && session?.user) {
+        if (isDesktopMode && session?.user && !operatorSwitchOverride.current) {
           const desktopUser = session.user as any;
           setActiveOperator({
             id: desktopUser.staffId || desktopUser.id,
@@ -582,9 +583,9 @@ export default function PosApp() {
           try {
              const receiptRes = await provider.pos.getReceipt(currentOrderId);
              if (receiptRes && receiptRes.data) {
-                await HardwareBridge.printReceipt(receiptRes.data);
+                await HardwareBridge.printReceipt(toReceiptPrintData(receiptRes.data));
              } else if (receiptRes && !receiptRes.error) {
-                await HardwareBridge.printReceipt(receiptRes as any);
+                await HardwareBridge.printReceipt(toReceiptPrintData(receiptRes));
              }
           } catch(e) {
              console.error('Auto receipt print failed', e);
@@ -728,6 +729,7 @@ export default function PosApp() {
     <AutoLockScreen
       isLocked={!activeOperator || showSwitchPad}
       onLock={() => {
+        operatorSwitchOverride.current = true;
         setActiveOperator(null);
         setOperatorToken(null);
         localStorage.removeItem('lodgecore_pos_operator_token');
@@ -746,7 +748,8 @@ export default function PosApp() {
           onOpenKitchen={() => setShowKitchenModal(true)}
           onOpenPrinterSettings={() => setShowPrinterSettings(true)}
           onOpenSyncCenter={() => setShowSyncCenter(true)}
-          onLock={() => { 
+          onLock={() => {
+            operatorSwitchOverride.current = true;
             setActiveOperator(null); 
             setOperatorToken(null);
             localStorage.removeItem('lodgecore_pos_operator_token');
@@ -1168,8 +1171,16 @@ export default function PosApp() {
         outletId={sessionContext?.outlet?.id || sessionContext?.outletId}
         onCancel={() => setShowSwitchPad(false)}
         onAuthenticated={(operator: any, token: string, authData?: any) => {
+          const normalizedOperator = {
+            ...operator,
+            id: operator?.id || operator?.Id,
+            firstName: operator?.firstName || operator?.FirstName || operator?.name || 'Operator',
+            lastName: operator?.lastName || operator?.LastName || '',
+            role: operator?.role || operator?.Role || operator?.position || operator?.Position || 'WAITER',
+          };
+          operatorSwitchOverride.current = true;
           if (authData?.bankingModel) setBankingModel(authData.bankingModel);
-          if (!activeOperator || activeOperator.id !== operator.id) {
+          if (!activeOperator || activeOperator.id !== normalizedOperator.id) {
             // Different operator logging in — clear cart context
             setCart([]);
             setCurrentOrderId(null);
@@ -1181,18 +1192,24 @@ export default function PosApp() {
           }
           
           // Ensure session ID is up to date in state
-          const newSessionId = localStorage.getItem('lodgecore_pos_session_id');
+          const newSessionId = authData?.posSessionId || authData?.sessionId || localStorage.getItem('lodgecore_pos_session_id');
           if (newSessionId && newSessionId !== posSessionId) {
             setPosSessionId(newSessionId);
             provider.pos.getSessionContext(newSessionId).then(res => {
               if (res.data) setSessionContext(res.data);
             });
+          } else if (!newSessionId) {
+            localStorage.removeItem('lodgecore_pos_session_id');
+            setPosSessionId('');
+            setSessionContext(null);
           }
 
-          setActiveOperator(operator);
+          setActiveOperator(normalizedOperator);
+          setOperatorToken(token || null);
           if (token) {
-            setOperatorToken(token);
             localStorage.setItem('lodgecore_pos_operator_token', token);
+          } else {
+            localStorage.removeItem('lodgecore_pos_operator_token');
           }
           setShowSwitchPad(false);
         }}

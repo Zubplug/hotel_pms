@@ -147,7 +147,7 @@ export function ReservationForm() {
   
   const formatter = selectedRoomType ? new Intl.NumberFormat('en-US', {
     style: 'currency',
-    currency: selectedRoomType.currency || 'USD',
+    currency: selectedRoomType.currency || 'NGN',
   }) : null;
 
   return (

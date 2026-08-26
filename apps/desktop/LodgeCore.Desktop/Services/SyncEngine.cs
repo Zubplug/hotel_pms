@@ -455,6 +455,25 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
         var identity = await GetSyncIdentityAsync(stoppingToken);
         if (identity == null) return;
 
+        // Older desktop builds wrote POS events with UNKNOWN_DEVICE because
+        // operator authentication read a different SecureStorage key. Rebind
+        // those still-pending local events to this terminal once, so they are
+        // not stranded by the terminal ownership filter below.
+        var legacyDeviceEvents = eligibleEvents
+            .Where(e => string.IsNullOrWhiteSpace(e.TerminalId)
+                || e.TerminalId.Equals("UNKNOWN_DEVICE", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        foreach (var evt in legacyDeviceEvents)
+        {
+            evt.TerminalId = identity.DeviceId;
+        }
+        if (legacyDeviceEvents.Any())
+        {
+            await dbContext.SaveChangesAsync(stoppingToken);
+            _logger.LogInformation("[PUSH-POS] Rebound {EventCount} legacy POS event(s) from UNKNOWN_DEVICE to {DeviceId}.",
+                legacyDeviceEvents.Count, identity.DeviceId);
+        }
+
         if (string.IsNullOrEmpty(identity.TerminalId))
         {
             _logger.LogWarning("[PUSH-POS] Skipping push: no registered terminal UUID is available. DeviceId={DeviceId} PropertyId={PropertyId}", identity.DeviceId, identity.PropertyId);
@@ -466,6 +485,10 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
         if (!eventsToPush.Any()) return;
 
         _logger.LogInformation("[PUSH-POS] Preparing {EventCount} events. PropertyId={PropertyId} TerminalId={TerminalId} DeviceId={DeviceId}", eventsToPush.Count, identity.PropertyId, identity.TerminalId, identity.DeviceId);
+        _lastPushAttemptAt = DateTime.UtcNow;
+        _lastPushEndpoint = $"{_httpClient.BaseAddress}pos/sync/push";
+        _lastPushBatchSize = eventsToPush.Count;
+        _lastPushHttpStatus = null;
 
         var token = await GetActiveTokenAsync();
         if (string.IsNullOrEmpty(token))
@@ -514,6 +537,7 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
             _logger.LogInformation("[PUSH-POS] Sending POST to {BaseAddress}pos/sync/push. EventIds={EventIds}", _httpClient.BaseAddress, string.Join(",", eventsToPush.Select(evt => evt.OperationId)));
             
             var response = await _httpClient.SendAsync(request, stoppingToken);
+            _lastPushHttpStatus = (int)response.StatusCode;
             var responseBody = await response.Content.ReadAsStringAsync(stoppingToken);
             _logger.LogInformation("[PUSH-POS] Server response HTTP {StatusCode}. Body={ResponseBody}", (int)response.StatusCode, responseBody.Length > 1000 ? responseBody[..1000] : responseBody);
             

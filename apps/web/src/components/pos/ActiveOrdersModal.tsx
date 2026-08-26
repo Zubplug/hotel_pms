@@ -35,7 +35,13 @@ export function ActiveOrdersModal({ isOpen, onClose, operatorToken, sessionId, s
     try {
       const res = await provider.pos.getActiveOrders(sessionId, operatorToken, filter);
       if (res.error) throw new Error(res.error);
-      setOrders(res.data || []);
+      // Keep the modal safe even while an older desktop/server response is
+      // still settling after payment. Completed orders belong in history,
+      // never in the resumable active-order list.
+      setOrders((res.data || []).filter((order: any) =>
+        !['COMPLETED', 'PAID', 'CLOSED', 'VOIDED', 'CANCELLED'].includes(String(order.status || '').toUpperCase())
+        && !['PAID', 'REFUNDED'].includes(String(order.paymentStatus || '').toUpperCase())
+      ));
     } catch (error: any) {
       toast.error(error.message || 'Failed to load active orders');
     } finally {

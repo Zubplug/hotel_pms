@@ -10,7 +10,7 @@ import { Printer, X, ShieldCheck, CheckCircle2 } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { QRCodeSVG } from 'qrcode.react';
 import { toast } from 'sonner';
-import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
+import { HardwareBridge, toReceiptPrintData } from '@/lib/desktop/HardwareBridge';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { Loader2 } from 'lucide-react';
 
@@ -33,10 +33,9 @@ export function ReceiptVerificationModal({ isOpen, onClose, order }: ReceiptVeri
     setIsPrinting(true);
     try {
       const receiptRes = await provider.pos.getReceipt(order.id);
-      const receiptData = receiptRes?.data || receiptRes;
+      const receiptData = toReceiptPrintData(receiptRes?.data || receiptRes, true);
       
       if (receiptData) {
-        receiptData.isReprint = true;
         await HardwareBridge.printReceipt(receiptData);
         toast.success('Reprint sent to hardware successfully');
       } else {

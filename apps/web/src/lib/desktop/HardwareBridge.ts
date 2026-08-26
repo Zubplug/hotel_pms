@@ -2,17 +2,21 @@ import { invokeDesktop } from './IpcBridge';
 
 export interface ReceiptData {
   orderNumber: string;
-  tableName?: string;
+  tableNumber?: string;
   items: { name: string; quantity: number; unitPrice: number; total: number; modifiers?: string[] }[];
   subtotal: number;
-  tax: number;
+  taxAmount: number;
+  serviceCharge?: number;
+  tipAmount?: number;
   total: number;
   paymentMethod: string;
-  cashTendered?: number;
-  change?: number;
-  operatorName: string;
+  currency: string;
+  serverName?: string;
   outletName: string;
+  propertyName?: string;
+  propertyAddress?: string;
   printedAt: string;
+  isReprint?: boolean;
 }
 
 export interface KitchenTicketData {
@@ -23,6 +27,42 @@ export interface KitchenTicketData {
   firedAt: string;
   operatorName: string;
   batchNumber: number;
+}
+
+/** Converts both the desktop audit receipt and the online order receipt into
+ * the stable printer payload. The desktop audit shape intentionally differs
+ * from the customer-facing print shape. */
+export function toReceiptPrintData(source: any, isReprint = false): ReceiptData {
+  const receipt = source?.data ?? source ?? {};
+  const payment = receipt.payments?.[receipt.payments.length - 1] ?? {};
+  const audit = receipt.auditChain ?? {};
+  const outlet = receipt.outlet ?? {};
+  const items = Array.isArray(receipt.items) ? receipt.items : [];
+
+  return {
+    orderNumber: receipt.orderNumber ?? receipt.id ?? 'UNKNOWN',
+    tableNumber: receipt.tableNumber ?? receipt.tableName,
+    items: items.map((item: any) => ({
+      name: item.productName ?? item.name ?? 'Item',
+      quantity: Number(item.quantity ?? 0),
+      unitPrice: Number(item.unitPrice ?? item.price ?? 0),
+      total: Number(item.total ?? 0),
+      modifiers: (item.modifiers ?? []).map((modifier: any) => modifier.name ?? modifier.Name ?? String(modifier)),
+    })),
+    subtotal: Number(receipt.subtotal ?? 0),
+    taxAmount: Number(receipt.taxAmount ?? receipt.tax ?? 0),
+    serviceCharge: Number(receipt.serviceCharge ?? 0),
+    tipAmount: Number(receipt.tipAmount ?? 0),
+    total: Number(receipt.total ?? 0),
+    paymentMethod: payment.method ?? receipt.paymentMethod ?? 'PAID',
+    currency: payment.currency ?? receipt.currency ?? 'NGN',
+    serverName: receipt.serverName ?? audit.serverName ?? 'POS Operator',
+    outletName: receipt.outletName ?? audit.outletName ?? outlet.name ?? 'LodgeCore POS',
+    propertyName: receipt.propertyName ?? audit.propertyName,
+    propertyAddress: receipt.propertyAddress ?? audit.propertyAddress,
+    printedAt: receipt.printedAt ?? new Date().toISOString(),
+    isReprint,
+  };
 }
 
 export interface KdsOrderData {

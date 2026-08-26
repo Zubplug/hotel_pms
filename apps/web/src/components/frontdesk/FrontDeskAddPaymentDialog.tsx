@@ -45,7 +45,7 @@ export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio, initialAm
         previousBalance: folio?.balance,
         remainingBalance: folio?.balance - Number(amount),
         cashierName: 'System',
-        currency: folio?.currency || 'USD',
+        currency: folio?.currency || 'NGN',
         propertyName: 'LodgeCore',
         printedAt: new Date().toISOString()
       });

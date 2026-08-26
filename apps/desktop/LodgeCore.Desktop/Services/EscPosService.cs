@@ -167,6 +167,7 @@ public class EscPosService
         builder.AddLine("I agree to the hotel terms and conditions.");
         builder.AddLineFeed(3);
         builder.AddLine("Signature: _______________________");
+        AddPrintFooter(builder, "Please retain this document", DateTime.UtcNow);
         builder.AddCommand(EscPosBuilder.CutPartial);
 
         return await SendToPrinterAsync(printer, builder.Build());
@@ -244,6 +245,7 @@ public class EscPosService
         builder.AddDivider('=');
         builder.AddCommand(EscPosBuilder.AlignCenter);
         builder.AddLine("Thank you for staying with us!");
+        AddPrintFooter(builder, "Thank you for staying with us", folio.PrintedAt);
         builder.AddCommand(EscPosBuilder.CutPartial);
 
         return await SendToPrinterAsync(printer, builder.Build());
@@ -297,6 +299,7 @@ public class EscPosService
         builder.AddDivider('=');
         builder.AddCommand(EscPosBuilder.AlignCenter);
         builder.AddLine("Thank you!");
+        AddPrintFooter(builder, "Payment recorded successfully", payment.PrintedAt);
         builder.AddCommand(EscPosBuilder.CutPartial);
 
         if (printer.OpenCashDrawer)
@@ -311,7 +314,7 @@ public class EscPosService
         if (printer == null)
             return (false, "No active RECEIPT printer configured.");
 
-        var profile = new PrinterProfile { PaperWidth = printer.PaperWidth, HotelName = printer.HotelName };
+        var profile = new PrinterProfile { PaperWidth = printer.PaperWidth, HotelName = printer.HotelName, HotelAddress = printer.HotelAddress };
         var builder = new EscPosBuilder(profile);
 
         builder.PrintHeader(report.ShiftReference == null ? "SHIFT SALES REPORT" : "FRONT DESK SHIFT REPORT");
@@ -364,6 +367,7 @@ public class EscPosService
             builder.AddLine("Manager signature: __________________");
         }
         
+        AddPrintFooter(builder, "Confidential shift accountability report", report.PrintedAt);
         builder.AddCommand(EscPosBuilder.CutPartial);
 
         return await SendToPrinterAsync(printer, builder.Build());
@@ -432,6 +436,7 @@ public class EscPosService
         if (printer.OpenCashDrawer)
             builder.AddCommand(EscPosBuilder.OpenDrawer);
 
+        AddPrintFooter(builder, "Thank you for your patronage", receipt.PrintedAt);
         builder.AddCommand(EscPosBuilder.CutPartial);
 
         return await SendToPrinterAsync(printer, builder.Build());
@@ -439,11 +444,12 @@ public class EscPosService
 
     public async Task<(bool success, string? error)> PrintKotAsync(KotData kot, string? outletId = null)
     {
-        var printer = await GetPrinterByRoleAsync("KITCHEN", outletId) 
+        var station = string.IsNullOrWhiteSpace(kot.Station) ? "KITCHEN" : kot.Station.Trim().ToUpperInvariant();
+        var printer = await GetPrinterByRoleAsync(station, outletId)
                       ?? await GetPrinterByRoleAsync("RECEIPT", outletId);
         
         if (printer == null)
-            return (false, "No active KITCHEN or RECEIPT printer configured.");
+            return (false, $"No active {station} or RECEIPT printer configured.");
 
         var builder = new EscPosBuilder(new PrinterProfile { PaperWidth = printer.PaperWidth });
 
@@ -453,7 +459,7 @@ public class EscPosService
         builder.AddCommand(EscPosBuilder.InvertOn);
         builder.AddCommand(EscPosBuilder.BoldOn);
         builder.AddCommand(EscPosBuilder.DoubleSize);
-        builder.AddLine("  KITCHEN ORDER  ");
+        builder.AddLine($"  {station} ORDER  ");
         builder.AddCommand(EscPosBuilder.NormalSize);
         builder.AddCommand(EscPosBuilder.BoldOff);
         builder.AddCommand(EscPosBuilder.InvertOff);
@@ -463,6 +469,7 @@ public class EscPosService
         builder.AddCommand(EscPosBuilder.BoldOn);
         builder.AddLine($"KOT#   : {kot.KotNumber}");
         builder.AddLine($"Order# : {kot.OrderNumber}");
+        builder.AddLine($"Type   : {kot.OrderType ?? "TABLE ORDER"}");
         
         builder.AddCommand(EscPosBuilder.DoubleSize);
         if (!string.IsNullOrEmpty(kot.TableNumber))
@@ -470,7 +477,9 @@ public class EscPosService
         builder.AddCommand(EscPosBuilder.NormalSize);
         builder.AddCommand(EscPosBuilder.BoldOff);
         
-        if (!string.IsNullOrEmpty(kot.ServerName)) builder.AddLine($"Server : {kot.ServerName}");
+        if (!string.IsNullOrEmpty(kot.ServerName)) builder.AddLine($"Waiter : {kot.ServerName}");
+        builder.AddLine($"Station: {station}");
+        builder.AddLine($"Ticket : {(kot.IsIncremental ? "NEW ITEMS" : "ORIGINAL ORDER")}");
         builder.AddLine($"Time   : {kot.FiredAt:HH:mm:ss}");
         builder.AddDivider('=');
 
@@ -507,6 +516,7 @@ public class EscPosService
         }
 
         builder.AddDivider('=');
+        AddPrintFooter(builder, "Production copy - do not duplicate", kot.FiredAt);
         builder.AddCommand(EscPosBuilder.CutPartial);
 
         return await SendToPrinterAsync(printer, builder.Build());
@@ -532,7 +542,7 @@ public class EscPosService
 
         builder.AddCommand(EscPosBuilder.AlignLeft);
         builder.AddLine($"Table: {kot.TableNumber ?? "Walk-in"}   Order: {kot.OrderNumber}");
-        builder.AddLine($"Server: {kot.ServerName}");
+        builder.AddLine($"Waiter: {kot.ServerName}");
         if (!string.IsNullOrEmpty(kot.KotNumber)) builder.AddLine($"Batch: {kot.KotNumber}");
         builder.AddDivider('-');
 
@@ -550,6 +560,7 @@ public class EscPosService
                 builder.AddLine($"    * {item.Notes}");
         }
 
+        AddPrintFooter(builder, "Waiter copy - retain for service", kot.FiredAt);
         builder.AddCommand(EscPosBuilder.CutPartial);
 
         return await SendToPrinterAsync(printer, builder.Build());
@@ -597,9 +608,23 @@ public class EscPosService
         builder.AddCommand(EscPosBuilder.AlignCenter);
         builder.AddLine("If you can read this, the printer is");
         builder.AddLine("successfully connected and working!");
+        AddPrintFooter(builder, "LodgeCore printer test", DateTime.UtcNow);
         builder.AddCommand(EscPosBuilder.CutPartial);
 
         return await SendToPrinterAsync(printer, builder.Build());
+    }
+
+    private static void AddPrintFooter(EscPosBuilder builder, string purpose, DateTime printedAt)
+    {
+        builder.AddDivider('=');
+        builder.AddCommand(EscPosBuilder.AlignCenter);
+        builder.AddCommand(EscPosBuilder.BoldOn);
+        builder.AddLine("LODGECORE PMS");
+        builder.AddCommand(EscPosBuilder.BoldOff);
+        builder.AddLine(purpose);
+        builder.AddLine($"Printed {printedAt:dd/MM/yyyy HH:mm}");
+        builder.AddLine("Computer-generated record");
+        builder.AddCommand(EscPosBuilder.AlignLeft);
     }
 
     public Task<List<string>> GetAvailablePrintersAsync()

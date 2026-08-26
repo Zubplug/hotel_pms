@@ -72,13 +72,20 @@ public class KotPrintService : BackgroundService
                     .Where(i => itemIds.Contains(i.Id))
                     .Include(i => i.Modifiers)
                     .ToListAsync(cancellationToken);
+                var order = await dbContext.PosOrders.FindAsync(new object[] { kot.OrderId }, cancellationToken);
+                var waiter = order?.ServerStaffId == null
+                    ? null
+                    : await dbContext.Staff.FindAsync(new object[] { order.ServerStaffId }, cancellationToken);
+                var waiterName = waiter == null
+                    ? kot.ServerName
+                    : $"{waiter.FirstName} {waiter.LastName}".Trim();
 
                 // Build the KotData DTO for the ESC/POS service
                 var kotData = new KotData(
                     KotNumber: kot.KotNumber,
                     OrderNumber: kot.OrderNumber,
                     TableNumber: kot.TableNumber,
-                    ServerName: kot.ServerName,
+                    ServerName: waiterName,
                     OutletName: await GetOutletNameAsync(dbContext, kot.OutletId),
                     Items: items.Select(i => new KotItem(
                         Name: i.ProductName,
@@ -87,10 +94,19 @@ public class KotPrintService : BackgroundService
                         Notes: null,
                         Modifiers: i.Modifiers.Select(m => m.Name).ToList()
                     )).ToList(),
-                    FiredAt: kot.FiredAt ?? kot.CreatedAt
+                    FiredAt: kot.FiredAt ?? kot.CreatedAt,
+                    Station: string.IsNullOrWhiteSpace(kot.ProductionStation) ? "KITCHEN" : kot.ProductionStation,
+                    OrderType: order?.OrderType,
+                    IsIncremental: order != null && order.Kots.Count(k => k.CreatedAt < kot.CreatedAt) > 0
                 );
 
                 var (success, error) = await _escPos.PrintKotAsync(kotData, kot.OutletId);
+                var (waiterCopySuccess, waiterCopyError) = await _escPos.PrintWaiterSlipAsync(kotData, kot.OutletId);
+                if (!waiterCopySuccess)
+                {
+                    _logger.LogWarning("Waiter copy for KOT {KotNumber} was not printed: {Error}",
+                        kot.KotNumber, waiterCopyError);
+                }
 
                 if (success)
                 {

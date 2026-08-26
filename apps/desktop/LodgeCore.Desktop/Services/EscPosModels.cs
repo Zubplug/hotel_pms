@@ -50,7 +50,10 @@ public record KotData(
     string? ServerName,
     string OutletName,
     List<KotItem> Items,
-    DateTime FiredAt
+    DateTime FiredAt,
+    string Station = "KITCHEN",
+    string? OrderType = null,
+    bool IsIncremental = false
 );
 
 public record KotItem(

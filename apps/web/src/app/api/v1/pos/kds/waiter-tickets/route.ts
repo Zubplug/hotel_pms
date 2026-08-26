@@ -37,7 +37,7 @@ export async function GET(req: Request) {
         firedByStaffId: payload.staffId,
         order: {
           outletId: outletId,
-          businessDate: session.businessDate,
+          sessionId: sessionId,
         }
       },
       include: {

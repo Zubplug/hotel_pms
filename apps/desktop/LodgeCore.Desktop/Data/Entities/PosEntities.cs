@@ -410,6 +410,7 @@ public class LocalPosKot
     public string CreatedBy { get; set; } = string.Empty;
     public string KotNumber { get; set; } = string.Empty;
     public string Status { get; set; } = "PENDING";
+    public string ProductionStation { get; set; } = "KITCHEN";
     public string PrintStatus { get; set; } = "QUEUED";
     public string? OperationId { get; set; }
     public DateTime BusinessDate { get; set; }

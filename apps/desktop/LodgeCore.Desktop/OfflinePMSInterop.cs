@@ -1556,13 +1556,39 @@ public class OfflinePMSInterop
             if (items == null || !items.Any()) throw new Exception("No items to fire");
 
             var posCtx = await _sessionManager.GetActiveContextAsync();
-            var (order, kot) = await _repo.FireItemsAsync(orderId, items, posCtx.StaffId, posCtx.DeviceId);
+            var (order, kots) = await _repo.FireItemsAsync(orderId, items, posCtx.StaffId, posCtx.DeviceId);
+            var waiter = await _repo.GetStaffByIdAsync(order.ServerStaffId ?? posCtx.StaffId);
+            var waiterName = waiter == null ? "Unknown waiter" : $"{waiter.FirstName} {waiter.LastName}".Trim();
+            var printableBatches = kots.Select(kot =>
+            {
+                var itemIds = JsonSerializer.Deserialize<List<string>>(kot.ItemIdsJson) ?? new List<string>();
+                return new
+                {
+                    kotNumber = kot.KotNumber,
+                    orderNumber = kot.OrderNumber,
+                    tableNumber = kot.TableNumber,
+                    serverName = waiterName,
+                    outletName = "",
+                    station = kot.ProductionStation,
+                    orderType = order.OrderType,
+                    isIncremental = true,
+                    firedAt = kot.FiredAt ?? kot.CreatedAt,
+                    items = order.Items.Where(i => itemIds.Contains(i.Id)).Select(i => new
+                    {
+                        name = i.ProductName,
+                        quantity = i.Quantity,
+                        course = i.Course,
+                        notes = (string?)null,
+                        modifiers = i.Modifiers.Select(m => m.Name).ToList()
+                    }).ToList()
+                };
+            }).ToList();
             
             return JsonSerializer.Serialize(new { 
                 success = true, 
                 data = new {
                     order = order,
-                    newBatches = new[] { kot }
+                    newBatches = printableBatches
                 }
             }, _jsonOptions);
         }
@@ -2005,18 +2031,23 @@ public class OfflinePMSInterop
     {
         try
         {
-            var desktopSession = await _authManager.GetSessionAsync();
-            if (desktopSession == null) throw new UnauthorizedAccessException("No active desktop session.");
-
-            var property = await _repo.GetPropertyAsync(desktopSession.PropertyId);
-            var staff = await _repo.GetStaffByIdAsync(desktopSession.UserId);
-            var terminal = await _repo.GetTerminalAsync(desktopSession.DeviceId);
+            var operatorContext = await _sessionManager.GetActiveContextAsync();
+            var property = await _repo.GetPropertyAsync(operatorContext.PropertyId);
+            var staff = await _repo.GetStaffByIdAsync(operatorContext.StaffId);
+            var terminal = await _repo.GetTerminalAsync(operatorContext.DeviceId);
             var outlet = terminal != null ? await _repo.GetOutletAsync(terminal.OutletId) : null;
-            var posSession = await _repo.GetSessionContextAsync(sessionId);
+            var posSession = string.IsNullOrWhiteSpace(sessionId) ? null : await _repo.GetSessionContextAsync(sessionId);
 
-            if (posSession == null)
+            // Never let a stale React/localStorage ID break shift-bank loading.
+            // The trusted C# operator context is authoritative after a waiter switch.
+            if (posSession == null && !string.IsNullOrWhiteSpace(operatorContext.SessionId))
             {
-                posSession = await _repo.GetActiveSessionForDeviceAsync(desktopSession.DeviceId);
+                posSession = await _repo.GetSessionContextAsync(operatorContext.SessionId);
+            }
+
+            if (posSession == null && !string.Equals(property?.BankingModel, "SERVER_BANKING", StringComparison.OrdinalIgnoreCase))
+            {
+                posSession = await _repo.GetActiveSessionForDeviceAsync(operatorContext.DeviceId);
             }
             
             // Fallback outlet to the session's outlet if terminal doesn't provide it
@@ -2025,32 +2056,36 @@ public class OfflinePMSInterop
                 outlet = await _repo.GetOutletAsync(posSession.OutletId);
             }
 
-            var settlementDetails = await _repo.GetSessionSettlementDetailsAsync(posSession?.Id ?? sessionId);
-
             var jsonDict = new Dictionary<string, object?>
             {
                 ["terminal"] = terminal,
                 ["outlet"] = outlet,
                 ["operator"] = staff,
                 ["primaryOperator"] = staff, // Important for shift bank mapping
-                ["permissions"] = desktopSession.Permissions,
+                ["permissions"] = staff == null ? Array.Empty<string>() : new[] { staff.Role },
                 ["businessDate"] = property?.BusinessDate.ToString("yyyy-MM-dd") ?? DateTime.UtcNow.ToString("yyyy-MM-dd"),
                 ["taxConfiguration"] = new { },
-                ["currency"] = property?.Currency ?? "USD",
-                
-                // Settlement properties
-                ["expectedCash"] = settlementDetails.ExpectedCash,
-                ["variance"] = settlementDetails.Variance,
-                ["openingBalance"] = settlementDetails.OpeningFloat,
-                ["cashSales"] = settlementDetails.CashSales,
-                ["cardSales"] = settlementDetails.CardSales,
-                ["totalSales"] = settlementDetails.TotalSales,
-                ["cashIn"] = settlementDetails.CashIn,
-                ["cashDrops"] = settlementDetails.CashDrops,
-                ["paidOuts"] = settlementDetails.PaidOuts,
-                ["cashPaidOut"] = settlementDetails.CashDrops + settlementDetails.PaidOuts + settlementDetails.TransfersOut,
-                ["cashRefunds"] = settlementDetails.CashRefunds
+                ["currency"] = property?.Currency ?? "NGN"
             };
+
+            if (posSession != null)
+            {
+                var settlementDetails = await _repo.GetSessionSettlementDetailsAsync(posSession.Id);
+                jsonDict["expectedCash"] = settlementDetails.ExpectedCash;
+                jsonDict["variance"] = settlementDetails.Variance;
+                jsonDict["openingBalance"] = settlementDetails.OpeningFloat;
+                jsonDict["cashSales"] = settlementDetails.CashSales;
+                jsonDict["cardSales"] = settlementDetails.CardSales;
+                jsonDict["bankTransferSales"] = settlementDetails.BankTransferSales;
+                jsonDict["roomChargeSales"] = settlementDetails.RoomChargeSales;
+                jsonDict["otherSales"] = settlementDetails.OtherSales;
+                jsonDict["totalSales"] = settlementDetails.TotalSales;
+                jsonDict["cashIn"] = settlementDetails.CashIn;
+                jsonDict["cashDrops"] = settlementDetails.CashDrops;
+                jsonDict["paidOuts"] = settlementDetails.PaidOuts;
+                jsonDict["cashPaidOut"] = settlementDetails.CashDrops + settlementDetails.PaidOuts + settlementDetails.TransfersOut;
+                jsonDict["cashRefunds"] = settlementDetails.CashRefunds;
+            }
 
             // Merge posSession properties into root of JSON dictionary
             if (posSession != null)
