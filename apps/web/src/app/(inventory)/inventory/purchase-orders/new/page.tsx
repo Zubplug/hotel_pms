@@ -52,17 +52,17 @@ export default function NewPurchaseOrderPage() {
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-slate-900 mb-2">Create Purchase Order</h1>
         <div className="flex items-center gap-4 text-sm font-medium">
-          <span className={step === 1 ? 'text-blue-600' : 'text-slate-400'}>1. Details</span>
+          <span className={step === 1 ? 'text-blue-600' : 'text-slate-500'}>1. Details</span>
           <ArrowRight className="w-4 h-4 text-slate-600" />
-          <span className={step === 2 ? 'text-blue-600' : 'text-slate-400'}>2. Line Items</span>
+          <span className={step === 2 ? 'text-blue-600' : 'text-slate-500'}>2. Line Items</span>
         </div>
       </div>
 
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+      <div className="bg-white border border-slate-800 rounded-xl p-6">
         {step === 1 ? (
           <div className="space-y-6">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Supplier</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Supplier</label>
               <select
                 required
                 value={poData.supplierId}
@@ -74,7 +74,7 @@ export default function NewPurchaseOrderPage() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Expected Delivery Date</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Expected Delivery Date</label>
               <input
                 type="date"
                 value={poData.expectedDate}
@@ -83,7 +83,7 @@ export default function NewPurchaseOrderPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Notes</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Notes</label>
               <textarea
                 rows={3}
                 value={poData.notes}
@@ -109,7 +109,7 @@ export default function NewPurchaseOrderPage() {
                   <div className="flex-1 space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-xs font-medium text-slate-400 mb-1">Stock Item</label>
+                        <label className="block text-xs font-medium text-slate-500 mb-1">Stock Item</label>
                         <select
                           value={item.stockItemId}
                           onChange={e => {
@@ -117,14 +117,14 @@ export default function NewPurchaseOrderPage() {
                             newItems[idx].stockItemId = e.target.value;
                             setItems(newItems);
                           }}
-                          className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-1.5 text-slate-900 text-sm"
+                          className="w-full bg-white border border-slate-300 rounded-md px-3 py-1.5 text-slate-900 text-sm"
                         >
                           <option value="">Select item...</option>
                           {stockItems.map(si => <option key={si.id} value={si.id}>{si.name}</option>)}
                         </select>
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-slate-400 mb-1">Description (Optional)</label>
+                        <label className="block text-xs font-medium text-slate-500 mb-1">Description (Optional)</label>
                         <input
                           type="text"
                           value={item.description}
@@ -133,13 +133,13 @@ export default function NewPurchaseOrderPage() {
                             newItems[idx].description = e.target.value;
                             setItems(newItems);
                           }}
-                          className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-1.5 text-slate-900 text-sm"
+                          className="w-full bg-white border border-slate-300 rounded-md px-3 py-1.5 text-slate-900 text-sm"
                         />
                       </div>
                     </div>
                     <div className="grid grid-cols-3 gap-4">
                       <div>
-                        <label className="block text-xs font-medium text-slate-400 mb-1">Quantity</label>
+                        <label className="block text-xs font-medium text-slate-500 mb-1">Quantity</label>
                         <input
                           type="number"
                           min="1"
@@ -149,11 +149,11 @@ export default function NewPurchaseOrderPage() {
                             newItems[idx].quantity = Number(e.target.value);
                             setItems(newItems);
                           }}
-                          className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-1.5 text-slate-900 text-sm"
+                          className="w-full bg-white border border-slate-300 rounded-md px-3 py-1.5 text-slate-900 text-sm"
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-slate-400 mb-1">UOM</label>
+                        <label className="block text-xs font-medium text-slate-500 mb-1">UOM</label>
                         <input
                           type="text"
                           placeholder="e.g. Box, Kg"
@@ -163,11 +163,11 @@ export default function NewPurchaseOrderPage() {
                             newItems[idx].uom = e.target.value;
                             setItems(newItems);
                           }}
-                          className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-1.5 text-slate-900 text-sm"
+                          className="w-full bg-white border border-slate-300 rounded-md px-3 py-1.5 text-slate-900 text-sm"
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-slate-400 mb-1">Unit Price</label>
+                        <label className="block text-xs font-medium text-slate-500 mb-1">Unit Price</label>
                         <input
                           type="number"
                           step="0.01"
@@ -177,7 +177,7 @@ export default function NewPurchaseOrderPage() {
                             newItems[idx].unitPrice = Number(e.target.value);
                             setItems(newItems);
                           }}
-                          className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-1.5 text-slate-900 text-sm"
+                          className="w-full bg-white border border-slate-300 rounded-md px-3 py-1.5 text-slate-900 text-sm"
                         />
                       </div>
                     </div>
@@ -206,7 +206,7 @@ export default function NewPurchaseOrderPage() {
               <div className="flex gap-3">
                 <button
                   onClick={() => setStep(1)}
-                  className="px-6 py-2 text-sm font-medium text-slate-300 hover:text-white"
+                  className="px-6 py-2 text-sm font-medium text-slate-700 hover:text-slate-900"
                 >
                   Back
                 </button>

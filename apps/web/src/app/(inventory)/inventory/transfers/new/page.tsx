@@ -74,34 +74,34 @@ export default function NewTransferPage() {
         </div>
         <div>
           <h1 className="text-2xl font-bold text-slate-900">New Stock Transfer</h1>
-          <p className="text-slate-400 text-sm mt-0.5">Move stock between warehouses</p>
+          <p className="text-slate-500 text-sm mt-0.5">Move stock between warehouses</p>
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Warehouse Selection */}
-        <div className="bg-slate-800 border border-slate-700 rounded-xl p-6">
-          <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-4">Transfer Route</h2>
+        <div className="bg-slate-50 border border-slate-300 rounded-xl p-6">
+          <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wider mb-4">Transfer Route</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="text-sm font-medium text-slate-300 mb-1.5 block">From Warehouse *</label>
+              <label className="text-sm font-medium text-slate-700 mb-1.5 block">From Warehouse *</label>
               <select
                 value={fromWarehouseId}
                 onChange={e => setFromWarehouseId(e.target.value)}
                 required
-                className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2.5 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2.5 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
               >
                 <option value="">Select source warehouse</option>
                 {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-sm font-medium text-slate-300 mb-1.5 block">To Warehouse *</label>
+              <label className="text-sm font-medium text-slate-700 mb-1.5 block">To Warehouse *</label>
               <select
                 value={toWarehouseId}
                 onChange={e => setToWarehouseId(e.target.value)}
                 required
-                className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2.5 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2.5 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
               >
                 <option value="">Select destination warehouse</option>
                 {warehouses.filter(w => w.id !== fromWarehouseId).map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
@@ -109,21 +109,21 @@ export default function NewTransferPage() {
             </div>
           </div>
           <div className="mt-4">
-            <label className="text-sm font-medium text-slate-300 mb-1.5 block">Notes</label>
+            <label className="text-sm font-medium text-slate-700 mb-1.5 block">Notes</label>
             <textarea
               value={notes}
               onChange={e => setNotes(e.target.value)}
               rows={2}
               placeholder="Optional reason or notes..."
-              className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2.5 text-slate-900 text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+              className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2.5 text-slate-900 text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
             />
           </div>
         </div>
 
         {/* Line Items */}
-        <div className="bg-slate-800 border border-slate-700 rounded-xl p-6">
+        <div className="bg-slate-50 border border-slate-300 rounded-xl p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Items to Transfer</h2>
+            <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">Items to Transfer</h2>
             <button type="button" onClick={addLine} className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 font-medium">
               <Plus className="w-4 h-4" /> Add Item
             </button>
@@ -131,13 +131,13 @@ export default function NewTransferPage() {
 
           <div className="space-y-3">
             {lines.map((line, i) => (
-              <div key={i} className="grid grid-cols-12 gap-2 items-center bg-slate-900/50 border border-slate-700 rounded-lg p-3">
+              <div key={i} className="grid grid-cols-12 gap-2 items-center bg-slate-900/50 border border-slate-300 rounded-lg p-3">
                 <div className="col-span-4">
                   <select
                     value={line.stockItemId}
                     onChange={e => updateLine(i, 'stockItemId', e.target.value)}
                     required
-                    className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-2 text-slate-900 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500/50"
+                    className="w-full bg-white border border-slate-300 rounded px-2 py-2 text-slate-900 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500/50"
                   >
                     <option value="">Select item</option>
                     {fromItems.map(item => (
@@ -154,14 +154,14 @@ export default function NewTransferPage() {
                     onChange={e => updateLine(i, 'quantity', e.target.value)}
                     required
                     placeholder="Qty"
-                    className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-2 text-slate-900 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500/50"
+                    className="w-full bg-white border border-slate-300 rounded px-2 py-2 text-slate-900 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500/50"
                   />
                 </div>
                 <div className="col-span-2">
                   <select
                     value={line.unitOfMeasure}
                     onChange={e => updateLine(i, 'unitOfMeasure', e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-2 text-slate-900 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500/50"
+                    className="w-full bg-white border border-slate-300 rounded px-2 py-2 text-slate-900 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500/50"
                   >
                     {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                   </select>
@@ -172,7 +172,7 @@ export default function NewTransferPage() {
                     value={line.notes}
                     onChange={e => updateLine(i, 'notes', e.target.value)}
                     placeholder="Notes (optional)"
-                    className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-2 text-slate-900 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500/50"
+                    className="w-full bg-white border border-slate-300 rounded px-2 py-2 text-slate-900 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500/50"
                   />
                 </div>
                 <div className="col-span-1 flex justify-center">
@@ -194,7 +194,7 @@ export default function NewTransferPage() {
         )}
 
         <div className="flex justify-end gap-3">
-          <button type="button" onClick={() => router.back()} className="px-5 py-2.5 rounded-lg border border-slate-600 text-slate-300 hover:text-white text-sm font-medium transition-colors">
+          <button type="button" onClick={() => router.back()} className="px-5 py-2.5 rounded-lg border border-slate-300 text-slate-700 hover:text-slate-900 text-sm font-medium transition-colors">
             Cancel
           </button>
           <button

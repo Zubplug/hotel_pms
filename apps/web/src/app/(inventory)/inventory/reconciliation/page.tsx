@@ -86,7 +86,7 @@ export default function ReconciliationPage() {
         </div>
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Stock Reconciliation</h1>
-          <p className="text-slate-400 text-sm mt-0.5">Submit a counted quantity for management approval</p>
+          <p className="text-slate-500 text-sm mt-0.5">Submit a counted quantity for management approval</p>
         </div>
       </div>
 
@@ -106,15 +106,15 @@ export default function ReconciliationPage() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-5 bg-slate-800 border border-slate-700 rounded-xl p-6">
+      <form onSubmit={handleSubmit} className="space-y-5 bg-slate-50 border border-slate-300 rounded-xl p-6">
         {/* Item selection */}
         <div>
-          <label className="text-sm font-medium text-slate-300 mb-1.5 block">Select Stock Item *</label>
+          <label className="text-sm font-medium text-slate-700 mb-1.5 block">Select Stock Item *</label>
           <select
             value={selectedItemId}
             onChange={e => setSelectedItemId(e.target.value)}
             required
-            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2.5 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+            className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2.5 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
           >
             <option value="">Choose an item to reconcile...</option>
             {items.map(item => (
@@ -127,19 +127,19 @@ export default function ReconciliationPage() {
 
         {/* System vs actual comparison */}
         {selectedItem && (
-          <div className="bg-slate-900/60 border border-slate-600 rounded-lg p-4 grid grid-cols-3 gap-4 text-sm">
+          <div className="bg-slate-900/60 border border-slate-300 rounded-lg p-4 grid grid-cols-3 gap-4 text-sm">
             <div>
-              <span className="text-slate-400 block text-xs uppercase tracking-wider mb-1">System Quantity</span>
+              <span className="text-slate-500 block text-xs uppercase tracking-wider mb-1">System Quantity</span>
               <p className="text-2xl font-bold text-slate-900">{systemQty!.toFixed(4)}</p>
               <span className="text-slate-500 text-xs">{selectedItem.baseUnit}</span>
             </div>
             <div>
-              <span className="text-slate-400 block text-xs uppercase tracking-wider mb-1">Warehouse</span>
+              <span className="text-slate-500 block text-xs uppercase tracking-wider mb-1">Warehouse</span>
               <p className="text-slate-900 font-semibold mt-1">{selectedItem.warehouse?.name}</p>
             </div>
             {variance !== null && (
               <div>
-                <span className="text-slate-400 block text-xs uppercase tracking-wider mb-1">Variance</span>
+                <span className="text-slate-500 block text-xs uppercase tracking-wider mb-1">Variance</span>
                 <p className={`text-2xl font-bold ${variance === 0 ? 'text-green-400' : variance > 0 ? 'text-blue-600' : 'text-red-600'}`}>
                   {variance > 0 ? '+' : ''}{variance.toFixed(4)}
                 </p>
@@ -151,7 +151,7 @@ export default function ReconciliationPage() {
 
         {/* Actual count */}
         <div>
-          <label className="text-sm font-medium text-slate-300 mb-1.5 block">Physically Counted Quantity *</label>
+          <label className="text-sm font-medium text-slate-700 mb-1.5 block">Physically Counted Quantity *</label>
           <input
             type="number"
             step="0.0001"
@@ -161,18 +161,18 @@ export default function ReconciliationPage() {
             required
             disabled={!selectedItem}
             placeholder="Enter the actual counted quantity"
-            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2.5 text-slate-900 text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 disabled:opacity-40"
+            className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2.5 text-slate-900 text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 disabled:opacity-40"
           />
         </div>
 
         {/* Reason */}
         <div>
-          <label className="text-sm font-medium text-slate-300 mb-1.5 block">Adjustment Reason *</label>
+          <label className="text-sm font-medium text-slate-700 mb-1.5 block">Adjustment Reason *</label>
           <select
             value={reason}
             onChange={e => setReason(e.target.value)}
             required
-            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2.5 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+            className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2.5 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
           >
             {ADJUSTMENT_REASONS.map(r => (
               <option key={r} value={r}>{r.replace(/_/g, ' ')}</option>
@@ -182,13 +182,13 @@ export default function ReconciliationPage() {
 
         {/* Notes */}
         <div>
-          <label className="text-sm font-medium text-slate-300 mb-1.5 block">Notes</label>
+          <label className="text-sm font-medium text-slate-700 mb-1.5 block">Notes</label>
           <textarea
             value={notes}
             onChange={e => setNotes(e.target.value)}
             rows={3}
             placeholder="Optional explanation for the adjustment..."
-            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2.5 text-slate-900 text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 resize-none"
+            className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2.5 text-slate-900 text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 resize-none"
           />
         </div>
 
@@ -202,7 +202,7 @@ export default function ReconciliationPage() {
           <button
             type="button"
             onClick={() => { setSelectedItemId(''); setActualQty(''); setNotes(''); setError(''); setSuccess(''); }}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-slate-600 text-slate-300 hover:text-white text-sm font-medium transition-colors"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-slate-300 text-slate-700 hover:text-slate-900 text-sm font-medium transition-colors"
           >
             <RefreshCw className="w-4 h-4" /> Reset
           </button>

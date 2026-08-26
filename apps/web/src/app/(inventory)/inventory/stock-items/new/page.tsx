@@ -115,7 +115,7 @@ export default function NewStockItemPage() {
           </div>
 
           <div className="pt-4 flex justify-end gap-3 border-t border-slate-200">
-            <Link href="/inventory/stock-items" className="px-4 py-2 text-sm font-medium text-slate-700 hover:text-white transition-colors">
+            <Link href="/inventory/stock-items" className="px-4 py-2 text-sm font-medium text-slate-700 hover:text-slate-900 transition-colors">
               Cancel
             </Link>
             <button disabled={loading} type="submit" className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-slate-900 text-sm font-medium rounded-md transition-colors disabled:opacity-50">

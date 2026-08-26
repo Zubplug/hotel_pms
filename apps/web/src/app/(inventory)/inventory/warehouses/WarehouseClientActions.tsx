@@ -50,7 +50,7 @@ export default function WarehouseClientActions() {
           <div className="bg-white border border-slate-200 rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="flex justify-between items-center p-4 border-b border-slate-200">
               <h2 className="text-lg font-semibold text-slate-900">Create New Warehouse</h2>
-              <button onClick={() => setIsOpen(false)} className="text-slate-500 hover:text-white transition-colors">
+              <button onClick={() => setIsOpen(false)} className="text-slate-500 hover:text-slate-900 transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -69,7 +69,7 @@ export default function WarehouseClientActions() {
               </div>
 
               <div className="pt-4 flex justify-end gap-3 mt-6 border-t border-slate-200 pt-4">
-                <button type="button" onClick={() => setIsOpen(false)} className="px-4 py-2 text-sm font-medium text-slate-700 hover:text-white transition-colors">
+                <button type="button" onClick={() => setIsOpen(false)} className="px-4 py-2 text-sm font-medium text-slate-700 hover:text-slate-900 transition-colors">
                   Cancel
                 </button>
                 <button disabled={loading} type="submit" className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-slate-900 text-sm font-medium rounded-md transition-colors disabled:opacity-50">

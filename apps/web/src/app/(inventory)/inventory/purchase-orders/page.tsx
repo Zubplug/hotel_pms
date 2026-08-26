@@ -10,7 +10,7 @@ const STATUS_COLORS: Record<string, string> = {
   PARTIALLY_RECEIVED: 'bg-amber-50 text-amber-600 border-amber-500/20',
   RECEIVED: 'bg-teal-500/10 text-teal-400 border-teal-500/20',
   REJECTED: 'bg-red-50 text-red-600 border-red-500/20',
-  CANCELLED: 'bg-slate-500/10 text-slate-400 border-slate-500/20',
+  CANCELLED: 'bg-slate-500/10 text-slate-500 border-slate-500/20',
 };
 
 export default async function PurchaseOrdersPage() {
@@ -33,7 +33,7 @@ export default async function PurchaseOrdersPage() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Purchase Orders</h1>
-          <p className="text-slate-400 text-sm mt-1">Manage purchase orders and track deliveries</p>
+          <p className="text-slate-500 text-sm mt-1">Manage purchase orders and track deliveries</p>
         </div>
         <Link
           href="/inventory/purchase-orders/new"
@@ -44,19 +44,19 @@ export default async function PurchaseOrdersPage() {
         </Link>
       </div>
 
-      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+      <div className="bg-white border border-slate-800 rounded-xl overflow-hidden">
         {pos.length === 0 ? (
           <div className="p-12 text-center flex flex-col items-center">
-            <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mb-4">
-              <FileText className="w-8 h-8 text-slate-400" />
+            <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+              <FileText className="w-8 h-8 text-slate-500" />
             </div>
             <h3 className="text-lg font-medium text-slate-900 mb-1">No purchase orders</h3>
-            <p className="text-slate-400 text-sm max-w-sm">Create a purchase order to start replenishing your stock.</p>
+            <p className="text-slate-500 text-sm max-w-sm">Create a purchase order to start replenishing your stock.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm whitespace-nowrap">
-              <thead className="bg-slate-950/50 text-slate-400 border-b border-slate-800">
+              <thead className="bg-slate-950/50 text-slate-500 border-b border-slate-800">
                 <tr>
                   <th className="px-6 py-4 font-medium">PO Number</th>
                   <th className="px-6 py-4 font-medium">Supplier</th>
@@ -82,14 +82,14 @@ export default async function PurchaseOrdersPage() {
                         {po.status}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-slate-300">
+                    <td className="px-6 py-4 text-slate-700">
                       {po.propertyId} {po.totalAmount?.toNumber().toFixed(2) || '0.00'}
                     </td>
-                    <td className="px-6 py-4 text-slate-300">{po._count?.items ?? 0}</td>
-                    <td className="px-6 py-4 text-slate-400">
+                    <td className="px-6 py-4 text-slate-700">{po._count?.items ?? 0}</td>
+                    <td className="px-6 py-4 text-slate-500">
                       {po.expectedDate ? new Date(po.expectedDate).toLocaleDateString() : '-'}
                     </td>
-                    <td className="px-6 py-4 text-slate-400">
+                    <td className="px-6 py-4 text-slate-500">
                       {new Date(po.createdAt).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-4 text-right">

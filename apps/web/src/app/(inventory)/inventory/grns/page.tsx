@@ -28,22 +28,22 @@ export default async function GRNsPage() {
     <div className="p-6 max-w-7xl mx-auto">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-slate-900">Goods Received Notes</h1>
-        <p className="text-slate-400 text-sm mt-1">Track inventory receipts and incoming stock</p>
+        <p className="text-slate-500 text-sm mt-1">Track inventory receipts and incoming stock</p>
       </div>
 
-      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+      <div className="bg-white border border-slate-800 rounded-xl overflow-hidden">
         {grns.length === 0 ? (
           <div className="p-12 text-center flex flex-col items-center">
-            <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mb-4">
-              <PackageSearch className="w-8 h-8 text-slate-400" />
+            <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+              <PackageSearch className="w-8 h-8 text-slate-500" />
             </div>
             <h3 className="text-lg font-medium text-slate-900 mb-1">No GRNs found</h3>
-            <p className="text-slate-400 text-sm max-w-sm">Receive items from approved purchase orders to generate a GRN.</p>
+            <p className="text-slate-500 text-sm max-w-sm">Receive items from approved purchase orders to generate a GRN.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm whitespace-nowrap">
-              <thead className="bg-slate-950/50 text-slate-400 border-b border-slate-800">
+              <thead className="bg-slate-950/50 text-slate-500 border-b border-slate-800">
                 <tr>
                   <th className="px-6 py-4 font-medium">GRN Number</th>
                   <th className="px-6 py-4 font-medium">Linked PO</th>
@@ -71,8 +71,8 @@ export default async function GRNsPage() {
                         {grn.status}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-slate-300">{grn._count.items}</td>
-                    <td className="px-6 py-4 text-slate-400">{new Date(grn.receivedDate).toLocaleDateString()}</td>
+                    <td className="px-6 py-4 text-slate-700">{grn._count.items}</td>
+                    <td className="px-6 py-4 text-slate-500">{new Date(grn.receivedDate).toLocaleDateString()}</td>
                     <td className="px-6 py-4 text-right">
                       <Link
                         href={`/inventory/grns/${grn.id}`}

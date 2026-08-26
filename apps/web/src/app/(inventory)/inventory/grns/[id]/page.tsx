@@ -32,7 +32,7 @@ export default async function GRNDetailPage({ params }: { params: { id: string }
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       {/* Header */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 flex items-start justify-between">
+      <div className="bg-white border border-slate-800 rounded-xl p-6 flex items-start justify-between">
         <div>
           <div className="flex items-center gap-3 mb-2">
             <h1 className="text-2xl font-bold text-slate-900">{grn.grnNumber}</h1>
@@ -40,7 +40,7 @@ export default async function GRNDetailPage({ params }: { params: { id: string }
               {grn.status}
             </span>
           </div>
-          <p className="text-slate-400 flex items-center gap-2">
+          <p className="text-slate-500 flex items-center gap-2">
             Received Date: {new Date(grn.receivedDate).toLocaleDateString()}
           </p>
         </div>
@@ -48,7 +48,7 @@ export default async function GRNDetailPage({ params }: { params: { id: string }
           {grn.purchaseOrder && (
             <Link 
               href={`/inventory/purchase-orders/${grn.purchaseOrderId}`}
-              className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm font-medium"
+              className="flex items-center gap-2 text-slate-500 hover:text-slate-900 transition-colors text-sm font-medium"
             >
               <FileText className="w-4 h-4" />
               PO: {grn.purchaseOrder.poNumber}
@@ -59,13 +59,13 @@ export default async function GRNDetailPage({ params }: { params: { id: string }
       </div>
 
       {/* Items Table */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+      <div className="bg-white border border-slate-800 rounded-xl overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-800">
           <h2 className="text-lg font-semibold text-slate-900">Received Items</h2>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm whitespace-nowrap">
-            <thead className="bg-slate-950/50 text-slate-400 border-b border-slate-800">
+            <thead className="bg-slate-950/50 text-slate-500 border-b border-slate-800">
               <tr>
                 <th className="px-6 py-4 font-medium">Stock Item</th>
                 <th className="px-6 py-4 font-medium">Description</th>
@@ -81,11 +81,11 @@ export default async function GRNDetailPage({ params }: { params: { id: string }
                 return (
                   <tr key={item.id} className="hover:bg-slate-800/50 transition-colors">
                     <td className="px-6 py-4 font-medium text-slate-900">{item.stockItem?.name || 'Unknown'}</td>
-                    <td className="px-6 py-4 text-slate-400 max-w-[200px] truncate">{item.description || '-'}</td>
-                    <td className="px-6 py-4 text-slate-300 text-right font-medium">{item.receivedQuantity}</td>
-                    <td className="px-6 py-4 text-slate-300">{item.uom}</td>
-                    <td className="px-6 py-4 text-slate-300 text-right">{Number(item.unitCost).toFixed(2)}</td>
-                    <td className="px-6 py-4 text-slate-300 text-right font-medium">{lineTotal.toFixed(2)}</td>
+                    <td className="px-6 py-4 text-slate-500 max-w-[200px] truncate">{item.description || '-'}</td>
+                    <td className="px-6 py-4 text-slate-700 text-right font-medium">{item.receivedQuantity}</td>
+                    <td className="px-6 py-4 text-slate-700">{item.uom}</td>
+                    <td className="px-6 py-4 text-slate-700 text-right">{Number(item.unitCost).toFixed(2)}</td>
+                    <td className="px-6 py-4 text-slate-700 text-right font-medium">{lineTotal.toFixed(2)}</td>
                   </tr>
                 );
               })}

@@ -34,7 +34,7 @@ export default async function StockItemsPage() {
         <div className="p-4 border-b border-slate-200 flex items-center gap-4">
           <div className="relative flex-1 max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-            <input type="text" placeholder="Search stock items..." className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-md text-sm text-slate-900 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            <input type="text" placeholder="Search stock items..." className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-md text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
           </div>
         </div>
 
@@ -53,7 +53,7 @@ export default async function StockItemsPage() {
             </thead>
             <tbody className="divide-y divide-slate-200">
               {stockItems.map((item) => (
-                <tr key={item.id} className="hover:bg-zinc-800/50 transition-colors group">
+                <tr key={item.id} className="hover:bg-slate-100 transition-colors group">
                   <td className="px-6 py-4 font-medium text-slate-900">{item.name}</td>
                   <td className="px-6 py-4 text-slate-500">
                     <div>{item.sku || '-'}</div>
@@ -68,10 +68,10 @@ export default async function StockItemsPage() {
                     <StockStatusBadge qty={Number(item.quantityOnHand)} reorderLevel={item.reorderLevel ? Number(item.reorderLevel) : null} />
                   </td>
                   <td className="px-6 py-4 text-right space-x-2">
-                    <Link href={`/inventory/stock-items/${item.id}`} className="inline-flex items-center justify-center w-8 h-8 rounded-md text-slate-500 hover:text-white hover:bg-zinc-800 transition-colors">
+                    <Link href={`/inventory/stock-items/${item.id}`} className="inline-flex items-center justify-center w-8 h-8 rounded-md text-slate-500 hover:text-slate-900 hover:bg-slate-200 transition-colors">
                       <Edit className="w-4 h-4" />
                     </Link>
-                    <button className="inline-flex items-center justify-center w-8 h-8 rounded-md text-slate-500 hover:text-blue-600 hover:bg-zinc-800 transition-colors" title="View Ledger">
+                    <button className="inline-flex items-center justify-center w-8 h-8 rounded-md text-slate-500 hover:text-blue-600 hover:bg-slate-200 transition-colors" title="View Ledger">
                       <Eye className="w-4 h-4" />
                     </button>
                   </td>

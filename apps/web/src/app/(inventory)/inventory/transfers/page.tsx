@@ -7,7 +7,7 @@ import { ArrowLeftRight, Plus } from 'lucide-react';
 export const dynamic = 'force-dynamic';
 
 const STATUS_STYLES: Record<string, string> = {
-  DRAFT:            'bg-slate-700 text-slate-300',
+  DRAFT:            'bg-slate-700 text-slate-700',
   PENDING_APPROVAL: 'bg-blue-500/20 text-blue-600 border border-blue-500/30',
   APPROVED:         'bg-green-500/20 text-green-400 border border-green-500/30',
   POSTED:           'bg-teal-500/20 text-teal-400 border border-teal-500/30',
@@ -40,7 +40,7 @@ export default async function TransfersPage() {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Stock Transfers</h1>
-            <p className="text-slate-400 text-sm mt-0.5">{transfers.length} transfer(s) on record</p>
+            <p className="text-slate-500 text-sm mt-0.5">{transfers.length} transfer(s) on record</p>
           </div>
         </div>
         <Link href="/inventory/transfers/new" className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-slate-900 text-sm font-semibold transition-colors">
@@ -48,16 +48,16 @@ export default async function TransfersPage() {
         </Link>
       </div>
 
-      <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
+      <div className="bg-slate-50 border border-slate-300 rounded-xl overflow-hidden">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-slate-700 bg-slate-900/50">
-              <th className="text-left px-4 py-3 text-slate-400 font-medium">Ref</th>
-              <th className="text-left px-4 py-3 text-slate-400 font-medium">From</th>
-              <th className="text-left px-4 py-3 text-slate-400 font-medium">To</th>
-              <th className="text-left px-4 py-3 text-slate-400 font-medium">Items</th>
-              <th className="text-left px-4 py-3 text-slate-400 font-medium">Status</th>
-              <th className="text-left px-4 py-3 text-slate-400 font-medium">Date</th>
+            <tr className="border-b border-slate-300 bg-slate-900/50">
+              <th className="text-left px-4 py-3 text-slate-500 font-medium">Ref</th>
+              <th className="text-left px-4 py-3 text-slate-500 font-medium">From</th>
+              <th className="text-left px-4 py-3 text-slate-500 font-medium">To</th>
+              <th className="text-left px-4 py-3 text-slate-500 font-medium">Items</th>
+              <th className="text-left px-4 py-3 text-slate-500 font-medium">Status</th>
+              <th className="text-left px-4 py-3 text-slate-500 font-medium">Date</th>
               <th className="px-4 py-3"></th>
             </tr>
           </thead>
@@ -67,15 +67,15 @@ export default async function TransfersPage() {
             ) : transfers.map(t => (
               <tr key={t.id} className="hover:bg-slate-700/30 transition-colors">
                 <td className="px-4 py-3 font-mono font-semibold text-slate-900">{t.transferRef}</td>
-                <td className="px-4 py-3 text-slate-300">{t.fromWarehouse.name}</td>
-                <td className="px-4 py-3 text-slate-300">{t.toWarehouse.name}</td>
-                <td className="px-4 py-3 text-slate-400">{t._count.items} item(s)</td>
+                <td className="px-4 py-3 text-slate-700">{t.fromWarehouse.name}</td>
+                <td className="px-4 py-3 text-slate-700">{t.toWarehouse.name}</td>
+                <td className="px-4 py-3 text-slate-500">{t._count.items} item(s)</td>
                 <td className="px-4 py-3">
-                  <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${STATUS_STYLES[t.status] || 'bg-slate-700 text-slate-300'}`}>
+                  <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${STATUS_STYLES[t.status] || 'bg-slate-700 text-slate-700'}`}>
                     {t.status.replace('_', ' ')}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-slate-400">{new Date(t.createdAt).toLocaleDateString()}</td>
+                <td className="px-4 py-3 text-slate-500">{new Date(t.createdAt).toLocaleDateString()}</td>
                 <td className="px-4 py-3">
                   <Link href={`/inventory/transfers/${t.id}`} className="text-blue-600 hover:text-blue-700 text-xs font-medium">
                     View →

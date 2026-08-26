@@ -29,7 +29,7 @@ export default async function WarehousesPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {warehouses.map((warehouse) => (
-          <div key={warehouse.id} className="bg-white border border-slate-200 rounded-lg p-6 hover:border-zinc-700 transition-colors group flex flex-col shadow-sm">
+          <div key={warehouse.id} className="bg-white border border-slate-200 rounded-lg p-6 hover:border-slate-300 transition-colors group flex flex-col shadow-sm">
             <div className="flex items-start justify-between mb-4">
               <div className="flex-1">
                 <div className="flex items-center gap-3 mb-1">
