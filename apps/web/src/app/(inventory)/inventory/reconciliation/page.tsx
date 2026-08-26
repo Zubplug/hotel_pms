@@ -127,7 +127,7 @@ export default function ReconciliationPage() {
 
         {/* System vs actual comparison */}
         {selectedItem && (
-          <div className="bg-slate-900/60 border border-slate-300 rounded-lg p-4 grid grid-cols-3 gap-4 text-sm">
+          <div className="bg-slate-50 border border-slate-300 rounded-lg p-4 grid grid-cols-3 gap-4 text-sm">
             <div>
               <span className="text-slate-500 block text-xs uppercase tracking-wider mb-1">System Quantity</span>
               <p className="text-2xl font-bold text-slate-900">{systemQty!.toFixed(4)}</p>

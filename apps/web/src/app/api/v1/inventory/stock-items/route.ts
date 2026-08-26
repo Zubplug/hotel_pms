@@ -14,6 +14,7 @@ export async function GET(request: Request) {
 
         const { searchParams } = new URL(request.url);
         const warehouseId = searchParams.get('warehouseId');
+        const categoryId = searchParams.get('categoryId');
         const search = searchParams.get('search');
         const isActiveStr = searchParams.get('isActive');
         const isActive = isActiveStr === 'false' ? false : true;
@@ -23,12 +24,27 @@ export async function GET(request: Request) {
 
         const where: any = { propertyId, isActive };
         if (warehouseId) where.warehouseId = warehouseId;
+        
+        const andConditions = [];
+        if (categoryId) {
+            andConditions.push({
+                OR: [
+                    { categoryId: categoryId },
+                    { posProduct: { categoryId: categoryId } }
+                ]
+            });
+        }
         if (search) {
-            where.OR = [
-                { name: { contains: search, mode: 'insensitive' } },
-                { sku: { contains: search, mode: 'insensitive' } },
-                { barcode: { contains: search, mode: 'insensitive' } },
-            ];
+            andConditions.push({
+                OR: [
+                    { name: { contains: search, mode: 'insensitive' } },
+                    { sku: { contains: search, mode: 'insensitive' } },
+                    { barcode: { contains: search, mode: 'insensitive' } },
+                ]
+            });
+        }
+        if (andConditions.length > 0) {
+            where.AND = andConditions;
         }
 
         const [items, total] = await Promise.all([
@@ -36,7 +52,11 @@ export async function GET(request: Request) {
                 where,
                 skip,
                 take: limit,
-                include: { warehouse: true },
+                include: { 
+                    warehouse: true,
+                    posProduct: { include: { category: true } },
+                    inventoryCategory: true
+                },
             }),
             prisma.stockItem.count({ where }),
         ]);

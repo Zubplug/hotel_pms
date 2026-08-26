@@ -131,7 +131,7 @@ export default function NewTransferPage() {
 
           <div className="space-y-3">
             {lines.map((line, i) => (
-              <div key={i} className="grid grid-cols-12 gap-2 items-center bg-slate-900/50 border border-slate-300 rounded-lg p-3">
+              <div key={i} className="grid grid-cols-12 gap-2 items-center bg-slate-50 border border-slate-300 rounded-lg p-3">
                 <div className="col-span-4">
                   <select
                     value={line.stockItemId}

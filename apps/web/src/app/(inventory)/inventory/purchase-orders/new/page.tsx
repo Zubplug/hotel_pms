@@ -58,7 +58,7 @@ export default function NewPurchaseOrderPage() {
         </div>
       </div>
 
-      <div className="bg-white border border-slate-800 rounded-xl p-6">
+      <div className="bg-white border border-slate-200 rounded-xl p-6">
         {step === 1 ? (
           <div className="space-y-6">
             <div>
@@ -67,7 +67,7 @@ export default function NewPurchaseOrderPage() {
                 required
                 value={poData.supplierId}
                 onChange={e => setPoData({ ...poData, supplierId: e.target.value })}
-                className="w-full bg-slate-950 border border-slate-800 rounded-md px-3 py-2 text-slate-900 focus:outline-none focus:border-blue-500"
+                className="w-full bg-white border border-slate-200 rounded-md px-3 py-2 text-slate-900 focus:outline-none focus:border-blue-500"
               >
                 <option value="">Select a supplier...</option>
                 {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -79,7 +79,7 @@ export default function NewPurchaseOrderPage() {
                 type="date"
                 value={poData.expectedDate}
                 onChange={e => setPoData({ ...poData, expectedDate: e.target.value })}
-                className="w-full bg-slate-950 border border-slate-800 rounded-md px-3 py-2 text-slate-900 focus:outline-none focus:border-blue-500"
+                className="w-full bg-white border border-slate-200 rounded-md px-3 py-2 text-slate-900 focus:outline-none focus:border-blue-500"
               />
             </div>
             <div>
@@ -88,10 +88,10 @@ export default function NewPurchaseOrderPage() {
                 rows={3}
                 value={poData.notes}
                 onChange={e => setPoData({ ...poData, notes: e.target.value })}
-                className="w-full bg-slate-950 border border-slate-800 rounded-md px-3 py-2 text-slate-900 focus:outline-none focus:border-blue-500"
+                className="w-full bg-white border border-slate-200 rounded-md px-3 py-2 text-slate-900 focus:outline-none focus:border-blue-500"
               />
             </div>
-            <div className="flex justify-end pt-4 border-t border-slate-800">
+            <div className="flex justify-end pt-4 border-t border-slate-200">
               <button
                 disabled={!poData.supplierId}
                 onClick={() => setStep(2)}
@@ -105,7 +105,7 @@ export default function NewPurchaseOrderPage() {
           <div className="space-y-6">
             <div className="space-y-4">
               {items.map((item, idx) => (
-                <div key={idx} className="flex gap-4 items-start p-4 bg-slate-950/50 rounded-lg border border-slate-800">
+                <div key={idx} className="flex gap-4 items-start p-4 bg-slate-50 rounded-lg border border-slate-200">
                   <div className="flex-1 space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
@@ -199,9 +199,9 @@ export default function NewPurchaseOrderPage() {
               <Plus className="w-4 h-4" /> Add Line Item
             </button>
 
-            <div className="flex items-center justify-between pt-6 border-t border-slate-800">
+            <div className="flex items-center justify-between pt-6 border-t border-slate-200">
               <div className="text-xl font-bold text-slate-900">
-                Total: <span className="text-blue-600">${total.toFixed(2)}</span>
+                Total: <span className="text-blue-600">₦{total.toFixed(2)}</span>
               </div>
               <div className="flex gap-3">
                 <button

@@ -15,7 +15,12 @@ export default async function StockItemsPage() {
 
   const stockItems = await prisma.stockItem.findMany({
     where: { propertyId: session.user.propertyId, isActive: true },
-    include: { warehouse: { select: { name: true } } }
+    include: { 
+      warehouse: { select: { name: true } },
+      inventoryCategory: { select: { name: true } },
+      posProduct: { select: { category: { select: { name: true } } } }
+    },
+    orderBy: { name: 'asc' }
   });
 
   return (
@@ -45,6 +50,7 @@ export default async function StockItemsPage() {
                 <th className="px-6 py-3 font-medium">Name</th>
                 <th className="px-6 py-3 font-medium">SKU / Barcode</th>
                 <th className="px-6 py-3 font-medium">Warehouse</th>
+                <th className="px-6 py-3 font-medium">Category</th>
                 <th className="px-6 py-3 font-medium text-right">Cost Price</th>
                 <th className="px-6 py-3 font-medium text-right">Qty on Hand</th>
                 <th className="px-6 py-3 font-medium text-center">Status</th>
@@ -60,8 +66,13 @@ export default async function StockItemsPage() {
                     <div className="text-xs text-slate-500">{item.barcode}</div>
                   </td>
                   <td className="px-6 py-4 text-slate-700">{item.warehouse?.name || '-'}</td>
+                  <td className="px-6 py-4 text-slate-700">
+                    <span className="inline-flex items-center rounded-md bg-slate-50 px-2 py-1 text-xs font-medium text-slate-600 ring-1 ring-inset ring-slate-500/10">
+                      {item.inventoryCategory?.name || item.posProduct?.category?.name || 'Uncategorized'}
+                    </span>
+                  </td>
                   <td className="px-6 py-4 text-right text-slate-700">
-                    ${item.costPrice?.toString() || '0.00'} <span className="text-slate-500 text-xs">/ {item.baseUnit}</span>
+                    ₦{item.costPrice?.toString() || '0.00'} <span className="text-slate-500 text-xs">/ {item.baseUnit}</span>
                   </td>
                   <td className="px-6 py-4 text-right font-medium text-slate-900">{item.quantityOnHand?.toString()}</td>
                   <td className="px-6 py-4 text-center">

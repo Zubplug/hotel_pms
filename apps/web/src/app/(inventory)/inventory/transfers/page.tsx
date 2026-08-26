@@ -51,7 +51,7 @@ export default async function TransfersPage() {
       <div className="bg-slate-50 border border-slate-300 rounded-xl overflow-hidden">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-slate-300 bg-slate-900/50">
+            <tr className="border-b border-slate-300 bg-slate-50">
               <th className="text-left px-4 py-3 text-slate-500 font-medium">Ref</th>
               <th className="text-left px-4 py-3 text-slate-500 font-medium">From</th>
               <th className="text-left px-4 py-3 text-slate-500 font-medium">To</th>

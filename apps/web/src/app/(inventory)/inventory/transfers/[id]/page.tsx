@@ -71,7 +71,7 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
 
       {/* Line Items */}
       <div className="bg-slate-50 border border-slate-300 rounded-xl overflow-hidden">
-        <div className="px-5 py-3 border-b border-slate-300 bg-slate-900/50">
+        <div className="px-5 py-3 border-b border-slate-300 bg-slate-50">
           <h2 className="font-semibold text-slate-900">Transfer Items</h2>
         </div>
         <table className="w-full text-sm">

@@ -26,7 +26,7 @@ export default async function SuppliersPage() {
         <AddSupplierDialog />
       </div>
 
-      <div className="bg-white border border-slate-800 rounded-xl overflow-hidden">
+      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
         {suppliers.length === 0 ? (
           <div className="p-12 text-center flex flex-col items-center">
             <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
@@ -38,7 +38,7 @@ export default async function SuppliersPage() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm whitespace-nowrap">
-              <thead className="bg-slate-950/50 text-slate-500 border-b border-slate-800">
+              <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
                 <tr>
                   <th className="px-6 py-4 font-medium">Name</th>
                   <th className="px-6 py-4 font-medium">Contact Person</th>
@@ -48,9 +48,9 @@ export default async function SuppliersPage() {
                   <th className="px-6 py-4 font-medium text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800">
+              <tbody className="divide-y divide-slate-200">
                 {suppliers.map((supplier) => (
-                  <tr key={supplier.id} className="hover:bg-slate-800/50 transition-colors">
+                  <tr key={supplier.id} className="hover:bg-slate-100 transition-colors">
                     <td className="px-6 py-4 font-medium text-slate-900">{supplier.name}</td>
                     <td className="px-6 py-4 text-slate-700">{supplier.contactName || '-'}</td>
                     <td className="px-6 py-4 text-slate-700">{supplier.email || '-'}</td>

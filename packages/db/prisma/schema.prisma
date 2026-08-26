@@ -129,6 +129,7 @@ model Property {
   laundryItems  LaundryItem[]
   laundryOrders LaundryOrder[]
   StockTransfer StockTransfer[]
+  inventoryCategories InventoryCategory[]
 }
 
 model Building {
@@ -1922,6 +1923,8 @@ model Warehouse {
   name       String
   location   String?
   isActive   Boolean  @default(true)
+  posOutletId String? @unique @db.Uuid
+  posOutlet   PosOutlet? @relation(fields: [posOutletId], references: [id])
 
   stockItems    StockItem[]
   transactions  StockTransaction[]
@@ -1934,12 +1937,35 @@ model Warehouse {
   updatedBy String?  @db.Uuid
 }
 
+model InventoryCategory {
+  id         String   @id @default(uuid()) @db.Uuid
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id])
+  name       String
+  isActive   Boolean  @default(true)
+
+  stockItems StockItem[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+  createdBy String?  @db.Uuid
+  updatedBy String?  @db.Uuid
+
+  @@unique([propertyId, name])
+}
+
 model StockItem {
   id          String    @id @default(uuid()) @db.Uuid
   propertyId  String    @db.Uuid
   property    Property  @relation(fields: [propertyId], references: [id])
   warehouseId String    @db.Uuid
   warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
+
+  posProductId String?     @db.Uuid
+  posProduct   PosProduct? @relation(fields: [posProductId], references: [id])
+  
+  categoryId       String?            @db.Uuid
+  inventoryCategory InventoryCategory? @relation(fields: [categoryId], references: [id])
 
   name     String
   sku      String?
@@ -1963,6 +1989,7 @@ model StockItem {
   updatedBy String?  @db.Uuid
 
   @@unique([propertyId, barcode])
+  @@unique([posProductId, warehouseId])
 }
 
 enum AdjustmentReason {
@@ -2176,6 +2203,7 @@ model PosOutlet {
   staffAccess StaffPosOutletAccess[]
   floorPlans  PosFloorPlan[]
   CashAccount CashAccount[]
+  warehouse   Warehouse?
 }
 
 model PosFloorPlan {
@@ -2243,6 +2271,7 @@ model PosProduct {
 
   ingredients RecipeIngredient[]
   modifiers   PosProductModifier[]
+  stockItems  StockItem[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
