@@ -47,9 +47,9 @@ export default async function StockItemDetailPage(props: { params: Promise<{ id:
           <Link href={`/inventory/reconciliation?item=${item.id}`} className="px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 font-medium text-sm rounded-md transition-colors">
             Adjust Stock
           </Link>
-          <button className="px-4 py-2 bg-indigo-600 text-slate-900 hover:bg-indigo-700 font-medium text-sm rounded-md transition-colors">
+          <Link href={`/inventory/stock-items/${item.id}/edit`} className="px-4 py-2 bg-indigo-600 text-white hover:bg-indigo-700 font-medium text-sm rounded-md transition-colors">
             Edit Item
-          </button>
+          </Link>
         </div>
       </div>
 

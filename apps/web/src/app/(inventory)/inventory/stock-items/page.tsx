@@ -79,7 +79,7 @@ export default async function StockItemsPage() {
                     <StockStatusBadge qty={Number(item.quantityOnHand)} reorderLevel={item.reorderLevel ? Number(item.reorderLevel) : null} />
                   </td>
                   <td className="px-6 py-4 text-right space-x-2">
-                    <Link href={`/inventory/stock-items/${item.id}`} className="inline-flex items-center justify-center w-8 h-8 rounded-md text-slate-500 hover:text-slate-900 hover:bg-slate-200 transition-colors">
+                    <Link href={`/inventory/stock-items/${item.id}/edit`} className="inline-flex items-center justify-center w-8 h-8 rounded-md text-slate-500 hover:text-slate-900 hover:bg-slate-200 transition-colors">
                       <Edit className="w-4 h-4" />
                     </Link>
                     <Link href={`/inventory/stock-items/${item.id}`} className="inline-flex items-center justify-center w-8 h-8 rounded-md text-slate-500 hover:text-blue-600 hover:bg-slate-200 transition-colors" title="View Details">
