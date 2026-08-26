@@ -5,7 +5,8 @@ import { hasInventoryPermission } from '@/lib/inventory/permissions';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+export async function GET(request: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
     try {
         const session = await auth();
         if (!session?.user) return NextResponse.json({ error: 'Unauthorized', data: null }, { status: 401 });
@@ -30,7 +31,8 @@ export async function GET(request: Request, { params }: { params: { id: string }
     }
 }
 
-export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+export async function PATCH(request: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
     try {
         const session = await auth();
         if (!session?.user) return NextResponse.json({ error: 'Unauthorized', data: null }, { status: 401 });
@@ -64,7 +66,8 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     }
 }
 
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+export async function DELETE(request: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
     try {
         const session = await auth();
         if (!session?.user) return NextResponse.json({ error: 'Unauthorized', data: null }, { status: 401 });

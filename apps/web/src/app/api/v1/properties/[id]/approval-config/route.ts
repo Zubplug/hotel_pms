@@ -15,9 +15,8 @@ export const dynamic = 'force-dynamic';
 // Returns the current approval flow config for a property.
 // Accessible by: SUPER_ADMIN, CEO, MANAGER (property scope).
 export async function GET(
-  _req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+  _req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const session = await auth();
     if (!session?.user) {
@@ -66,9 +65,8 @@ export async function GET(
 // Updates the approval flow config. Restricted to SUPER_ADMIN and CEO only.
 // Body: { approvalFlows: Partial<PropertyApprovalFlows> }
 export async function PATCH(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+  req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const session = await auth();
     if (!session?.user) {

@@ -4,7 +4,8 @@ import prisma from '@hotel-pms/db';
 import { canApprove } from '@/lib/approval-config';
 import { ProcurementService } from '@/lib/inventory/ProcurementService';
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const session = await auth();
     if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
