@@ -18,10 +18,6 @@ export async function GET(req: NextRequest) {
 
     const staffId = payload.staffId as string;
     const propertyId = payload.propertyId as string;
-    const property = await prisma.property.findUnique({
-      where: { id: propertyId },
-      select: { currency: true },
-    });
 
     const { searchParams } = new URL(req.url);
     const businessDateParam = searchParams.get('businessDate');
@@ -100,7 +96,7 @@ export async function GET(req: NextRequest) {
         cashSales,
         cardSales,
         roomCharges,
-        currency: property?.currency || 'NGN',
+        currency: 'NGN',
       } 
     });
   } catch (error) {
