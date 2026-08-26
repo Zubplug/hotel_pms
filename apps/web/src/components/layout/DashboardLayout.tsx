@@ -26,6 +26,13 @@ import {
   HandCoins,
   Shirt,
   BadgeDollarSign,
+  Package,
+  ShoppingCart,
+  Truck,
+  ArrowLeftRight,
+  Bell,
+  ClipboardList,
+  BarChart3,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -66,7 +73,24 @@ const ALL_NAV = [
   },
   { name: 'Cash Office', href: '/cash-office', icon: HandCoins, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'ACCOUNTANT'] },
   { name: 'Refunds', href: '/refunds', icon: BadgeDollarSign, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'FINANCE_MANAGER', 'ADMIN'] },
-  { name: 'Refunds', href: '/refunds', icon: BadgeDollarSign, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'FINANCE_MANAGER', 'ADMIN'] },
+  {
+    name: 'Inventory',
+    href: '/inventory',
+    icon: Package,
+    restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'STOCK_MANAGER', 'PROCUREMENT_MANAGER'],
+    children: [
+      { name: 'Overview',         href: '/inventory' },
+      { name: 'Stock Items',      href: '/inventory/stock-items' },
+      { name: 'Warehouses',       href: '/inventory/warehouses' },
+      { name: 'Suppliers',        href: '/inventory/suppliers',       restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'PROCUREMENT_MANAGER'] },
+      { name: 'Purchase Orders',  href: '/inventory/purchase-orders', restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'PROCUREMENT_MANAGER'] },
+      { name: 'Goods Received',   href: '/inventory/grns',            restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'STOCK_MANAGER', 'PROCUREMENT_MANAGER'] },
+      { name: 'Stock Transfers',  href: '/inventory/transfers',       restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'STOCK_MANAGER'] },
+      { name: 'Alerts',           href: '/inventory/alerts' },
+      { name: 'Reconciliation',   href: '/inventory/reconciliation',  restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'STOCK_MANAGER'] },
+      { name: 'Reports',          href: '/inventory/reports' },
+    ],
+  },
   { name: 'Settings', href: '/settings', icon: Settings, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER'] },
 ];
 
@@ -92,13 +116,25 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const role = (session?.user as any)?.role || 'STAFF';
   const isSuperAdmin = (session?.user as any)?.isSuperAdmin;
 
-  const navigation = ALL_NAV.filter(item => {
-    if (item.restrictedTo) {
-      if (isSuperAdmin) return true;
-      return item.restrictedTo.includes(role);
-    }
-    return true;
-  });
+  const navigation = ALL_NAV
+    .filter(item => {
+      if (item.restrictedTo) {
+        if (isSuperAdmin) return true;
+        return item.restrictedTo.includes(role);
+      }
+      return true;
+    })
+    .map(item => ({
+      ...item,
+      // Filter children by role too
+      children: item.children?.filter(child => {
+        if ((child as any).restrictedTo) {
+          if (isSuperAdmin) return true;
+          return (child as any).restrictedTo.includes(role);
+        }
+        return true;
+      }),
+    }));
 
   // Block render while session is resolving — prevents flash of admin content
   if (status === 'loading') {

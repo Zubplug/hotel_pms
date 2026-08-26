@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { verifyOperatorToken } from '@/lib/pos/operatorAuth';
 import { z } from 'zod';
+import { InventoryService } from '@/lib/inventory/InventoryService';
 
 const PaymentSchema = z.object({
   method: z.string(),
@@ -99,6 +100,17 @@ export async function POST(
 
       return { payment, order: updatedOrder };
     });
+
+    // If the order was just fully paid, trigger inventory deduction asynchronously
+    // outside the main transaction to prevent blocking the checkout UI if inventory logic is slow.
+    if (result.order.status === 'CLOSED') {
+      try {
+        await InventoryService.postSale(orderId, staffId || 'system', `op_sale_${orderId}_${result.payment.id}`);
+      } catch (inventoryError) {
+        // We log the error but don't fail the payment request, as the payment succeeded.
+        console.error(`[Inventory Error] Failed to deduct stock for POS Order ${orderId}:`, inventoryError);
+      }
+    }
 
     return NextResponse.json({ data: result, error: null }, { status: 201 });
   } catch (err: any) {

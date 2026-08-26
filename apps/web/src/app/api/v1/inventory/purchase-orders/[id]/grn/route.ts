@@ -1,0 +1,29 @@
+import { NextResponse } from 'next/server';
+import { auth } from '@/lib/auth';
+import { hasInventoryPermission } from '@/lib/inventory/permissions';
+import { ProcurementService } from '@/lib/inventory/ProcurementService';
+
+export async function POST(req: Request, { params }: { params: { id: string } }) {
+  try {
+    const session = await auth();
+    if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const { role, isSuperAdmin, id: userId } = session.user as any;
+    if (!hasInventoryPermission(role, 'inventory.receive', isSuperAdmin)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const body = await req.json();
+    const { items, deliveryNoteRef } = body;
+
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return NextResponse.json({ error: 'Items are required' }, { status: 400 });
+    }
+
+    const data = await ProcurementService.createGRN(params.id, userId, items, deliveryNoteRef);
+
+    return NextResponse.json({ data });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+  }
+}

@@ -9,11 +9,20 @@ import {
   ShieldCheck,
   Store,
   GitBranch,
-  Clock3
+  Clock3,
+  GitMerge
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 const settingsLinks = [
+  {
+    title: 'Approval Flows',
+    description: 'Configure which roles can approve POs, transfers, and stock adjustments.',
+    href: '/settings/approval-flows',
+    icon: GitMerge,
+    color: 'text-pink-500',
+    bgColor: 'bg-pink-500/10'
+  },
   {
     title: 'Refund Workflow',
     description: 'Configure property-specific refund thresholds, approval steps, roles, and staff.',

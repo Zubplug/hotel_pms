@@ -32,6 +32,7 @@ model Organization {
   roles         Role[]
   notifications Notification[]
   auditLogs     AuditLog[]
+  refundRequests RefundRequest[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -77,8 +78,10 @@ model Property {
   exchangeRates        ExchangeRate[]
   reservations         Reservation[]
   folios               Folio[]
+  folioCredits         FolioCredit[]
   payments             Payment[]
   refunds              Refund[]
+  refundRequests       RefundRequest[]
   taxes                Tax[]
   discounts            Discount[]
   housekeepingTasks    HousekeepingTask[]
@@ -113,12 +116,18 @@ model Property {
   syncConflicts        SyncConflict[]
   inventoryAlerts      InventoryAlert[]
   approvalRequests     ApprovalRequest[]
+  refundApprovalRules  RefundApprovalRule[]
+  frontdeskSessions    FrontdeskSession[]
+  cashAccounts         CashAccount[]
+  reconciliationExceptions ReconciliationException[]
 
-  createdAt   DateTime      @default(now()) @db.Timestamptz
-  updatedAt   DateTime      @updatedAt @db.Timestamptz
-  deletedAt   DateTime?     @db.Timestamptz
-  PosSession  PosSession[]
-  CashAccount CashAccount[]
+  createdAt     DateTime       @default(now()) @db.Timestamptz
+  updatedAt     DateTime       @updatedAt @db.Timestamptz
+  deletedAt     DateTime?      @db.Timestamptz
+  PosSession    PosSession[]
+  HotelEvent    HotelEvent[]
+  laundryItems  LaundryItem[]
+  laundryOrders LaundryOrder[]
 }
 
 model Building {
@@ -265,9 +274,10 @@ model Room {
   lockOperations    LockOperation[]
   statusHistory     RoomStatusHistory[]
 
-  createdAt DateTime  @default(now()) @db.Timestamptz
-  updatedAt DateTime  @updatedAt @db.Timestamptz
-  deletedAt DateTime? @db.Timestamptz
+  createdAt     DateTime       @default(now()) @db.Timestamptz
+  updatedAt     DateTime       @updatedAt @db.Timestamptz
+  deletedAt     DateTime?      @db.Timestamptz
+  laundryOrders LaundryOrder[]
 
   @@unique([propertyId, number])
 }
@@ -447,6 +457,12 @@ model NoShowPolicy {
   name        String
   chargeType  String // 'NONE' | 'FIRST_NIGHT' | 'FULL_STAY' | 'PERCENTAGE'
   chargeValue Decimal  @db.Decimal(18, 4)
+  cutoffTime String @default("02:00")
+  gracePeriodMinutes Int @default(0)
+  refundableUnusedNights Boolean @default(true)
+  allowReinstatement Boolean @default(true)
+  reinstatementRequiresApproval Boolean @default(true)
+  exceptionRequiresApproval Boolean @default(true)
 
   ratePlans    RatePlan[]
   reservations Reservation[]
@@ -509,9 +525,10 @@ model Guest {
   reservationGuests ReservationGuest[]
   lockCredentials   LockCredential[]
 
-  createdAt DateTime  @default(now()) @db.Timestamptz
-  updatedAt DateTime  @updatedAt @db.Timestamptz
-  deletedAt DateTime? @db.Timestamptz
+  createdAt     DateTime       @default(now()) @db.Timestamptz
+  updatedAt     DateTime       @updatedAt @db.Timestamptz
+  deletedAt     DateTime?      @db.Timestamptz
+  laundryOrders LaundryOrder[]
 }
 
 model GuestDocument {
@@ -593,6 +610,16 @@ model Reservation {
 
   noShowAt DateTime? @db.Timestamptz
   noShowBy String?   @db.Uuid // Staff ID
+  lateArrivalExpected Boolean @default(false)
+  lateArrivalNotes String?
+  lateArrivalAt DateTime? @db.Timestamptz
+  lateArrivalBy String? @db.Uuid
+  noShowAssessedAt DateTime? @db.Timestamptz
+  noShowChargeAmount Decimal? @db.Decimal(18, 4)
+  noShowRefundableAmount Decimal? @db.Decimal(18, 4)
+  reinstatedAt DateTime? @db.Timestamptz
+  reinstatedBy String? @db.Uuid
+  reinstatementReason String?
 
   version   Int    @default(1) // Optimistic locking
   createdBy String @db.Uuid // Staff ID
@@ -601,14 +628,17 @@ model Reservation {
   reservationRooms  ReservationRoom[]
   folios            Folio[]
   payments          Payment[]
+  folioCredits      FolioCredit[]
+  refundRequests    RefundRequest[]
   guestServiceReqs  GuestServiceRequest[]
   lockCredentials   LockCredential[]
   lockOperations    LockOperation[]
   priorities        ReservationPriority[]
 
-  createdAt DateTime  @default(now()) @db.Timestamptz
-  updatedAt DateTime  @updatedAt @db.Timestamptz
-  deletedAt DateTime? @db.Timestamptz
+  createdAt     DateTime       @default(now()) @db.Timestamptz
+  updatedAt     DateTime       @updatedAt @db.Timestamptz
+  deletedAt     DateTime?      @db.Timestamptz
+  laundryOrders LaundryOrder[]
 }
 
 model ReservationGuest {
@@ -678,15 +708,127 @@ model Folio {
 
   items     FolioItem[]
   payments  Payment[]
+  credits   FolioCredit[]
+  creditApplications FolioCreditApplication[]
   refunds   Refund[]
+  refundRequests RefundRequest[]
   posOrders PosOrder[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
 }
 
+model FolioCredit {
+  id              String       @id @default(uuid()) @db.Uuid
+  folioId         String       @db.Uuid
+  folio           Folio        @relation(fields: [folioId], references: [id])
+  reservationId   String?      @db.Uuid
+  reservation     Reservation? @relation(fields: [reservationId], references: [id])
+  propertyId      String       @db.Uuid
+  property        Property     @relation(fields: [propertyId], references: [id])
+
+  amount          Decimal      @db.Decimal(18, 4)
+  remainingAmount Decimal      @db.Decimal(18, 4)
+  currency        String
+  method          PaymentMethod
+  status          String       @default("AVAILABLE") // AVAILABLE | PARTIALLY_APPLIED | EXHAUSTED | REFUNDED
+  reference       String?
+  notes           String?
+  receivedBy      String       @db.Uuid
+  deviceId        String?
+  operationId     String?
+  idempotencyKey  String       @unique
+  businessDate    DateTime     @db.Date
+  approvalId      String?
+  approvalStatus  String       @default("NOT_REQUIRED") // NOT_REQUIRED | PENDING_APPROVAL | APPROVED | REJECTED
+
+  applications FolioCreditApplication[]
+  createdAt    DateTime @default(now()) @db.Timestamptz
+  updatedAt    DateTime @updatedAt @db.Timestamptz
+}
+
+model FolioCreditApplication {
+  id             String      @id @default(uuid()) @db.Uuid
+  creditId       String      @db.Uuid
+  credit         FolioCredit @relation(fields: [creditId], references: [id])
+  folioId        String      @db.Uuid
+  folio          Folio       @relation(fields: [folioId], references: [id])
+  amount         Decimal     @db.Decimal(18, 4)
+  currency       String
+  source         String
+  description    String
+  idempotencyKey String      @unique
+  appliedBy      String      @db.Uuid
+  deviceId       String?
+  businessDate   DateTime    @db.Date
+  approvalId     String?
+  createdAt      DateTime    @default(now()) @db.Timestamptz
+}
+
+model FinancialAuditLog {
+  id                    String   @id @default(uuid()) @db.Uuid
+  operationId           String
+  approvalId            String?
+  propertyId            String   @db.Uuid
+  reservationId         String?
+  folioId               String?
+  guestId               String?
+  creditId              String?
+  creditApplicationId   String?
+  transactionId         String?
+  operationType         String
+  amount                Decimal? @db.Decimal(18, 4)
+  currency              String?
+  operatorId            String?
+  operatorRole          String?
+  deviceId              String?
+  terminalId            String?
+  businessDate          DateTime @db.Date
+  reason                String?
+  balanceBefore         Decimal? @db.Decimal(18, 4)
+  balanceAfter          Decimal? @db.Decimal(18, 4)
+  approvalStatus        String
+  approverId            String?
+  approvedAt            DateTime? @db.Timestamptz
+  rejectionReason       String?
+  idempotencyKey        String   @unique
+  metadata              Json?
+  createdAt             DateTime @default(now()) @db.Timestamptz
+
+  @@index([propertyId, createdAt])
+  @@index([folioId, createdAt])
+  @@index([operationId])
+}
+
+model SupervisorOverride {
+  id             String   @id @default(uuid()) @db.Uuid
+  operationId    String
+  propertyId     String   @db.Uuid
+  reservationId  String?
+  folioId        String?
+  transactionId  String?
+  operatorId     String
+  supervisorId   String
+  operation      String
+  reason         String
+  amount         Decimal? @db.Decimal(18, 4)
+  currency       String?
+  deviceId       String?
+  terminalId     String?
+  approvalId     String?
+  businessDate   DateTime @db.Date
+  idempotencyKey String   @unique
+  createdAt      DateTime @default(now()) @db.Timestamptz
+
+  @@index([propertyId, createdAt])
+  @@index([operatorId, createdAt])
+  @@index([supervisorId, createdAt])
+}
+
 enum FolioItemSource {
   ROOM_CHARGE
+  ROOM_UPGRADE
+  ROOM_DOWNGRADE_CREDIT
   MANUAL
   POS
   RESTAURANT
@@ -758,6 +900,8 @@ model Payment {
   folio         Folio        @relation(fields: [folioId], references: [id])
   reservationId String?      @db.Uuid
   reservation   Reservation? @relation(fields: [reservationId], references: [id])
+  frontdeskSessionId String? @db.Uuid
+  frontdeskSession   FrontdeskSession? @relation(fields: [frontdeskSessionId], references: [id])
   propertyId    String       @db.Uuid
   property      Property     @relation(fields: [propertyId], references: [id])
 
@@ -765,6 +909,9 @@ model Payment {
   provider              String?
   providerTransactionId String?
   providerRef           String?
+  terminalId            String?
+  reference             String?
+  authorizationCode     String?
 
   amount       Decimal  @db.Decimal(18, 4)
   currency     String
@@ -787,9 +934,12 @@ model Payment {
   syncedAt             DateTime? @db.Timestamptz
 
   refunds Refund[]
+  refundRequests RefundRequest[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([frontdeskSessionId])
 }
 
 model Refund {
@@ -801,8 +951,12 @@ model Refund {
   propertyId String   @db.Uuid
   property   Property @relation(fields: [propertyId], references: [id])
 
+  refundRequestId String?        @unique @db.Uuid
+  refundRequest   RefundRequest? @relation(fields: [refundRequestId], references: [id])
+
   amount           Decimal @db.Decimal(18, 4)
   currency         String
+  method           String  @default("ORIGINAL_PAYMENT")
   reason           String
   authorizedBy     String  @db.Uuid
   providerRefundId String?
@@ -812,6 +966,102 @@ model Refund {
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
+}
+
+enum RefundRequestStatus {
+  PENDING_APPROVAL
+  APPROVED
+  PROCESSING
+  COMPLETED
+  REJECTED
+  FAILED
+  CANCELLED
+  EXPIRED
+}
+
+model RefundRequest {
+  id             String              @id @default(uuid()) @db.Uuid
+  organizationId String              @db.Uuid
+  propertyId     String              @db.Uuid
+  reservationId  String?             @db.Uuid
+  folioId        String              @db.Uuid
+  paymentId      String              @db.Uuid
+  guestId        String?             @db.Uuid
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  property     Property     @relation(fields: [propertyId], references: [id])
+  reservation  Reservation? @relation(fields: [reservationId], references: [id])
+  folio        Folio        @relation(fields: [folioId], references: [id])
+  payment      Payment      @relation(fields: [paymentId], references: [id])
+
+  requestedAmount Decimal             @db.Decimal(18, 4)
+  approvedAmount  Decimal?            @db.Decimal(18, 4)
+  currency        String
+  requestedMethod String              @default("ORIGINAL_PAYMENT")
+  approvedMethod  String?
+  bankAccountName String?
+  bankAccountNumberEncrypted String?
+  bankAccountLast4 String?
+  bankName        String?
+  bankCode        String?
+  category        String
+  reason          String
+  supportingNotes String?
+  status          RefundRequestStatus @default(PENDING_APPROVAL)
+
+  requestedById     String  @db.Uuid
+  currentApproverId String? @db.Uuid
+  approvalRoleId    String? @db.Uuid
+  currentApprovalStep Int @default(1)
+  requestedBy       User    @relation("RefundRequestedBy", fields: [requestedById], references: [id])
+  currentApprover   User?   @relation("RefundCurrentApprover", fields: [currentApproverId], references: [id])
+  approvalRole      Role?   @relation(fields: [approvalRoleId], references: [id])
+
+  idempotencyKey String  @unique
+  expiresAt      DateTime? @db.Timestamptz
+  createdAt      DateTime  @default(now()) @db.Timestamptz
+  updatedAt      DateTime  @updatedAt @db.Timestamptz
+
+  refund    Refund?
+  approvals RefundApproval[]
+
+  @@index([propertyId, status])
+  @@index([paymentId, status])
+  @@index([currentApproverId, status])
+}
+
+model RefundApproval {
+  id              String   @id @default(uuid()) @db.Uuid
+  refundRequestId String   @db.Uuid
+  approverId      String   @db.Uuid
+  decision        String
+  stepOrder       Int      @default(1)
+  comments        String?
+  decidedAt       DateTime @default(now()) @db.Timestamptz
+
+  refundRequest RefundRequest @relation(fields: [refundRequestId], references: [id])
+  approver      User          @relation("RefundApprover", fields: [approverId], references: [id])
+
+  @@index([refundRequestId, decidedAt])
+}
+
+model RefundApprovalRule {
+  id         String   @id @default(uuid()) @db.Uuid
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  stepOrder  Int
+  minAmount  Decimal? @db.Decimal(18, 4)
+  maxAmount  Decimal? @db.Decimal(18, 4)
+  roleId     String?  @db.Uuid
+  approverId String?  @db.Uuid
+  role       Role?    @relation("RefundRuleRole", fields: [roleId], references: [id], onDelete: SetNull)
+  approver   User?    @relation("RefundRuleApprover", fields: [approverId], references: [id], onDelete: SetNull)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now()) @db.Timestamptz
+  updatedAt  DateTime @updatedAt @db.Timestamptz
+
+  @@unique([propertyId, stepOrder])
+  @@index([propertyId, isActive])
 }
 
 model Tax {
@@ -1052,15 +1302,43 @@ enum SyncConflictStatus {
   REJECTED
 }
 
+model HotelEvent {
+  id             String   @id @default(uuid()) @db.Uuid
+  idempotencyKey String   @unique
+  propertyId     String   @db.Uuid
+  property       Property @relation(fields: [propertyId], references: [id])
+  deviceId       String?
+  operatorId     String?
+
+  aggregateType    String
+  aggregateId      String @db.Uuid
+  aggregateVersion Int
+
+  eventType  String
+  occurredAt DateTime @db.Timestamptz
+  sequence   Int?
+
+  payload   Json
+  createdAt DateTime @default(now()) @db.Timestamptz
+
+  syncConflict SyncConflict?
+
+  @@index([aggregateType, aggregateId, aggregateVersion])
+  @@index([propertyId])
+}
+
 model SyncConflict {
   id         String   @id @default(uuid()) @db.Uuid
   propertyId String   @db.Uuid
   property   Property @relation(fields: [propertyId], references: [id])
 
-  operationId String @unique
-  entityType  String
-  entityId    String
-  payload     Json
+  hotelEventId String     @unique @db.Uuid
+  hotelEvent   HotelEvent @relation(fields: [hotelEventId], references: [id])
+
+  aggregateType   String
+  aggregateId     String @db.Uuid
+  expectedVersion Int
+  receivedVersion Int
 
   conflictReason String
   status         SyncConflictStatus @default(PENDING)
@@ -1143,6 +1421,8 @@ model Staff {
   primaryPosSessions   PosSession[]           @relation("PosSessionPrimaryOperator")
   processedPosPayments PosPayment[]           @relation("PaymentProcessedBy")
   CashAccount          CashAccount[]
+  frontdeskSessions    FrontdeskSession[]
+  frontdeskAudits      FrontdeskSessionAudit[]
 }
 
 model StaffPosOutletAccess {
@@ -1179,6 +1459,10 @@ model User {
   updatedAt DateTime @updatedAt @db.Timestamptz
 
   roles                   UserRole[]
+  requestedRefunds        RefundRequest[] @relation("RefundRequestedBy")
+  assignedRefunds         RefundRequest[] @relation("RefundCurrentApprover")
+  refundApprovals         RefundApproval[] @relation("RefundApprover")
+  refundApprovalRules     RefundApprovalRule[] @relation("RefundRuleApprover")
   deviceTokens            DeviceToken[]
   notificationPreferences UserNotificationPreference[]
 }
@@ -1225,6 +1509,8 @@ model Role {
 
   permissions RolePermission[]
   users       UserRole[]
+  refundApprovalRequests RefundRequest[]
+  refundApprovalRules RefundApprovalRule[] @relation("RefundRuleRole")
 }
 
 model Permission {
@@ -1964,6 +2250,7 @@ enum PosSessionStatus {
 
 model PosSession {
   id       String    @id @default(uuid()) @db.Uuid
+  version  Int       @default(1)
   outletId String    @db.Uuid
   outlet   PosOutlet @relation(fields: [outletId], references: [id])
 
@@ -2012,6 +2299,10 @@ model PosSession {
 }
 
 enum PosCashMovementType {
+  OPENING_FLOAT
+  PAYMENT
+  REFUND
+  ADJUSTMENT
   PAID_OUT
   CASH_DROP
   CASH_TRANSFER_IN
@@ -2041,6 +2332,7 @@ model CashAccount {
 
   sourceMovements      PosCashMovement[] @relation("SourceAccount")
   destinationMovements PosCashMovement[] @relation("DestinationAccount")
+  frontdeskSessions    FrontdeskSession[]
 }
 
 model PosCashMovement {
@@ -2048,6 +2340,7 @@ model PosCashMovement {
   propertyId           String              @db.Uuid
   deviceId             String
   posSessionId         String?             @db.Uuid
+  frontdeskSessionId   String?             @db.Uuid
   userId               String              @db.Uuid
   amount               Decimal             @db.Decimal(18, 4)
   currency             String              @default("NGN")
@@ -2062,10 +2355,92 @@ model PosCashMovement {
   authorizedBy         String?             @db.Uuid
 
   session            PosSession? @relation(fields: [posSessionId], references: [id])
+  frontdeskSession   FrontdeskSession? @relation(fields: [frontdeskSessionId], references: [id])
   sourceAccount      CashAccount @relation("SourceAccount", fields: [sourceAccountId], references: [id])
   destinationAccount CashAccount @relation("DestinationAccount", fields: [destinationAccountId], references: [id])
 
   createdAt DateTime @default(now()) @db.Timestamptz
+
+  @@index([frontdeskSessionId])
+}
+
+enum FrontdeskSessionStatus {
+  OPEN
+  CLOSING
+  CLOSED
+  UNDER_REVIEW
+  RECONCILED
+  REOPEN_REQUESTED
+}
+
+model FrontdeskSession {
+  id                    String                 @id @default(uuid()) @db.Uuid
+  propertyId            String                 @db.Uuid
+  property              Property               @relation(fields: [propertyId], references: [id])
+  staffId               String                 @db.Uuid
+  staff                 Staff                  @relation(fields: [staffId], references: [id])
+  cashAccountId         String                 @db.Uuid
+  cashAccount           CashAccount            @relation(fields: [cashAccountId], references: [id])
+  shiftReference        String                 @unique
+  businessDate          DateTime               @db.Date
+  status                FrontdeskSessionStatus @default(OPEN)
+  openingFloat          Decimal                @default(0) @db.Decimal(18, 4)
+  systemExpectedCash   Decimal                @default(0) @db.Decimal(18, 4)
+  declaredCash          Decimal?               @db.Decimal(18, 4)
+  variance              Decimal?               @db.Decimal(18, 4)
+  openedAt              DateTime               @default(now()) @db.Timestamptz
+  closingAt             DateTime?              @db.Timestamptz
+  closedAt              DateTime?              @db.Timestamptz
+  reconciledAt          DateTime?              @db.Timestamptz
+  reconciledBy          String?                @db.Uuid
+  reconciliationDecision String?
+  reconciliationNotes   String?
+
+  payments              Payment[]
+  cashMovements         PosCashMovement[]
+  audits                FrontdeskSessionAudit[]
+  exceptions            ReconciliationException[]
+
+  createdAt             DateTime               @default(now()) @db.Timestamptz
+  updatedAt             DateTime               @updatedAt @db.Timestamptz
+
+  @@index([propertyId, businessDate])
+  @@index([staffId, status])
+  @@index([cashAccountId, status])
+}
+
+model FrontdeskSessionAudit {
+  id                  String           @id @default(uuid()) @db.Uuid
+  frontdeskSessionId  String           @db.Uuid
+  frontdeskSession    FrontdeskSession @relation(fields: [frontdeskSessionId], references: [id])
+  action              String
+  performedBy         String           @db.Uuid
+  performer           Staff            @relation(fields: [performedBy], references: [id])
+  notes               String?
+  metadata            Json?
+  createdAt           DateTime         @default(now()) @db.Timestamptz
+
+  @@index([frontdeskSessionId, createdAt])
+}
+
+model ReconciliationException {
+  id                 String           @id @default(uuid()) @db.Uuid
+  propertyId         String           @db.Uuid
+  property           Property         @relation(fields: [propertyId], references: [id])
+  frontdeskSessionId String           @db.Uuid
+  frontdeskSession   FrontdeskSession @relation(fields: [frontdeskSessionId], references: [id])
+  type               String
+  severity           String
+  amount             Decimal?         @db.Decimal(18, 4)
+  source             String
+  reason             String
+  status             String           @default("OPEN")
+  resolvedBy         String?          @db.Uuid
+  resolvedAt         DateTime?        @db.Timestamptz
+  createdAt          DateTime         @default(now()) @db.Timestamptz
+
+  @@index([propertyId, status])
+  @@index([frontdeskSessionId, status])
 }
 
 model PosSettlement {
@@ -2171,6 +2546,7 @@ enum PosOrderType {
 
 model PosOrder {
   id         String      @id @default(uuid()) @db.Uuid
+  version    Int         @default(1)
   propertyId String      @db.Uuid
   property   Property    @relation(fields: [propertyId], references: [id])
   outletId   String      @db.Uuid
@@ -2270,6 +2646,7 @@ model PosOrderItemModifier {
 
 model PosCheck {
   id      String   @id @default(uuid()) @db.Uuid
+  version Int      @default(1)
   orderId String   @db.Uuid
   order   PosOrder @relation(fields: [orderId], references: [id])
 
@@ -2476,6 +2853,7 @@ enum PosOperatorSessionStatus {
 
 model PosOperatorSession {
   id                   String                   @id @default(uuid()) @db.Uuid
+  version              Int                      @default(1)
   terminalId           String                   @db.Uuid
   terminal             PosTerminal              @relation(fields: [terminalId], references: [id])
   outletId             String                   @db.Uuid
@@ -2539,6 +2917,7 @@ model ApprovalRequest {
 
   reason  String
   details Json? // Detailed payload/snapshot of the request
+  idempotencyKey String? @unique
 
   expiresAt DateTime? @db.Timestamptz
 
@@ -2564,4 +2943,121 @@ model ApprovalMutation {
   completedAt DateTime? @db.Timestamptz
 
   @@index([idempotencyKey])
+}
+
+// -----------------------------------------------------------------------------
+// LAUNDRY MANAGEMENT
+// -----------------------------------------------------------------------------
+
+enum LaundryOrderStatus {
+  PENDING
+  COLLECTED
+  WASHING
+  READY
+  DELIVERED
+  CANCELLED
+}
+
+enum LaundryServiceType {
+  STANDARD
+  EXPRESS
+  SAME_DAY
+  DRY_CLEAN
+  IRON_ONLY
+  WASH_AND_FOLD
+}
+
+model LaundryItem {
+  id         String   @id @default(uuid()) @db.Uuid
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id])
+
+  name        String
+  category    String?
+  description String?
+  basePrice   Decimal @db.Decimal(18, 4)
+  currency    String  @default("NGN")
+  isActive    Boolean @default(true)
+
+  servicePricingRules Json?
+
+  orderItems LaundryOrderItem[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+}
+
+enum LaundryCustomerType {
+  IN_HOUSE
+  WALK_IN
+}
+
+model LaundryOrder {
+  id         String   @id @default(uuid()) @db.Uuid
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id])
+
+  customerType LaundryCustomerType @default(IN_HOUSE)
+
+  reservationId String?      @db.Uuid
+  reservation   Reservation? @relation(fields: [reservationId], references: [id])
+
+  roomId  String? @db.Uuid
+  room    Room?   @relation(fields: [roomId], references: [id])
+  guestId String? @db.Uuid
+  guest   Guest?  @relation(fields: [guestId], references: [id])
+
+  folioItemId String? @unique @db.Uuid
+
+  status      LaundryOrderStatus @default(PENDING)
+  serviceType LaundryServiceType @default(STANDARD)
+
+  totalAmount Decimal @db.Decimal(18, 4)
+  currency    String  @default("NGN")
+
+  specialNotes String?
+
+  requestedAt     DateTime  @default(now()) @db.Timestamptz
+  expectedReadyAt DateTime? @db.Timestamptz
+  collectedAt     DateTime? @db.Timestamptz
+  collectedBy     String?   @db.Uuid
+  readyAt         DateTime? @db.Timestamptz
+  deliveredAt     DateTime? @db.Timestamptz
+  deliveredBy     String?   @db.Uuid
+
+  version Int @default(1)
+
+  items         LaundryOrderItem[]
+  statusHistory LaundryOrderStatusHistory[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+}
+
+model LaundryOrderItem {
+  id             String       @id @default(uuid()) @db.Uuid
+  laundryOrderId String       @db.Uuid
+  order          LaundryOrder @relation(fields: [laundryOrderId], references: [id], onDelete: Cascade)
+
+  itemId String      @db.Uuid
+  item   LaundryItem @relation(fields: [itemId], references: [id])
+
+  quantity Int
+
+  unitPrice  Decimal @db.Decimal(18, 4)
+  totalPrice Decimal @db.Decimal(18, 4)
+}
+
+model LaundryOrderStatusHistory {
+  id             String       @id @default(uuid()) @db.Uuid
+  laundryOrderId String       @db.Uuid
+  order          LaundryOrder @relation(fields: [laundryOrderId], references: [id], onDelete: Cascade)
+
+  previousStatus LaundryOrderStatus?
+  newStatus      LaundryOrderStatus
+
+  changedBy String?  @db.Uuid
+  changedAt DateTime @default(now()) @db.Timestamptz
+  notes     String?
+  deviceId  String?
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma, { PosOrderStatus } from '@hotel-pms/db';
 import { z } from 'zod';
 import { verifyOperatorToken } from '@/lib/pos/operatorAuth';
+import { InventoryService } from '@/lib/inventory/InventoryService';
 
 const StatusSchema = z.object({
   status: z.nativeEnum(PosOrderStatus),
@@ -51,6 +52,14 @@ export async function PATCH(
         updatedAt: new Date(),
       }
     });
+
+    if (status === 'CLOSED' && order.status !== 'CLOSED') {
+      try {
+        await InventoryService.postSale(orderId, 'system', `op_sale_status_${orderId}`);
+      } catch (inventoryError) {
+        console.error(`[Inventory Error] Failed to deduct stock for POS Order ${orderId}:`, inventoryError);
+      }
+    }
 
     return NextResponse.json({ data: updatedOrder });
   } catch (error: any) {

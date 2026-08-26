@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@hotel-pms/db";
 import { randomUUID } from "crypto";
+import { InventoryService } from "@/lib/inventory/InventoryService";
 
 // Handle POS Sync Push supporting both Legacy SyncEvents and new HotelEvents
 export async function POST(req: NextRequest) {
@@ -339,6 +340,23 @@ export async function POST(req: NextRequest) {
                       data: { currentOrderId: null }
                   });
               }
+              // ─── INVENTORY HOOK for ORDER_UPDATED → CLOSED ────────────────
+              // Desktop sometimes uses ORDER_UPDATED with status=COMPLETED/CLOSED
+              // instead of emitting a dedicated ORDER_CLOSED event. Catch both.
+              if (newStatus === 'CLOSED' || newStatus === 'COMPLETED') {
+                (async () => {
+                  try {
+                    await InventoryService.postSale(
+                      event.aggregateId,
+                      event.operatorId || 'desktop-sync',
+                      `op_sale_desktop_${event.aggregateId}`
+                    );
+                  } catch (invErr) {
+                    console.error(`[Inventory] postSale failed for desktop ORDER_UPDATED(CLOSED) ${event.aggregateId}:`, invErr);
+                  }
+                })();
+              }
+              // ─────────────────────────────────────────────────────────────
           }
           else if (event.eventType === 'PAYMENT_RECORDED') {
               const method = payload.Method || payload.method || 'CASH';
@@ -392,6 +410,24 @@ export async function POST(req: NextRequest) {
                   where: { currentOrderId: event.aggregateId },
                   data: { currentOrderId: null }
               });
+              // ─── INVENTORY HOOK ───────────────────────────────────────────
+              // Deduct stock for all menu items with linked RecipeIngredients.
+              // Uses a deterministic operationId so if the SyncEngine retries
+              // this event it will be a no-op (idempotency guard inside postSale).
+              (async () => {
+                try {
+                  await InventoryService.postSale(
+                    event.aggregateId,
+                    event.operatorId || 'desktop-sync',
+                    `op_sale_desktop_${event.aggregateId}`
+                  );
+                } catch (invErr) {
+                  // Log only — we must NOT fail the sync push because of an
+                  // inventory error. The payment already succeeded on the terminal.
+                  console.error(`[Inventory] postSale failed for desktop ORDER_CLOSED ${event.aggregateId}:`, invErr);
+                }
+              })();
+              // ─────────────────────────────────────────────────────────────
           }
           else if (event.eventType === 'ORDER_ITEMS_ADDED') {
               const nestedOrder = payload.order || payload.Order;

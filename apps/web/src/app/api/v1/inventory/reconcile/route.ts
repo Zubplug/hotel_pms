@@ -1,81 +1,49 @@
 import { NextResponse } from 'next/server';
+import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
-import crypto from 'crypto';
+import { hasInventoryPermission } from '@/lib/inventory/permissions';
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { propertyId, stockItemId, physicalCount, reason, notes, userId } = body;
-
-    if (!propertyId || !stockItemId || physicalCount === undefined || !reason || !userId) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ data: null, error: 'Unauthorized' }, { status: 401 });
     }
 
-    const result = await prisma.$transaction(async (tx: any) => {
-      const stockItem = await tx.stockItem.findUnique({
-        where: { id: stockItemId }
-      });
+    const { role, propertyId, isSuperAdmin, id: userId } = session.user as any;
 
-      if (!stockItem) {
-        throw new Error('StockItem not found');
-      }
+    if (!hasInventoryPermission(role, 'inventory.adjust', isSuperAdmin)) {
+      return NextResponse.json({ data: null, error: 'Forbidden' }, { status: 403 });
+    }
 
-      const systemQuantity = Number(stockItem.quantityOnHand);
-      const variance = physicalCount - systemQuantity;
+    const body = await request.json();
+    const { stockItemId, warehouseId, currentQty, actualQty, reason, notes } = body;
+    
+    // Read the approval configuration for stock adjustments to save the required roles
+    const { getFlowConfig } = await import('@/lib/approval-config');
+    const adjustConfig = await getFlowConfig(propertyId, 'INVENTORY_ADJUSTMENT');
 
-      if (variance === 0) {
-        return { message: 'No variance to adjust' };
-      }
-
-      // Generate a deterministic operationId or use UUID
-      const operationId = `adj_${crypto.randomUUID()}`;
-
-      // Create Adjustment Transaction
-      const transaction = await tx.stockTransaction.create({
-        data: {
-          propertyId,
+    const approvalRequest = await prisma.approvalRequest.create({
+      data: {
+        propertyId,
+        type: 'INVENTORY_ADJUSTMENT',
+        status: 'PENDING',
+        requestedBy: userId,
+        reason: reason || 'Stock count adjustment',
+        details: {
           stockItemId,
-          source: 'ADJUSTMENT',
-          quantity: variance,
-          unitCost: stockItem.costPrice,
-          reference: 'PHYSICAL_COUNT',
-          notes: notes || 'Physical inventory reconciliation',
-          reason: reason,
-          businessDate: new Date(),
-          operationId: operationId,
-          userId: userId,
-          approvalId: userId // Assuming auto-approval for authorized users in Phase 1.2
-        }
-      });
-
-      // Update StockItem balance
-      await tx.stockItem.update({
-        where: { id: stockItemId },
-        data: { quantityOnHand: physicalCount }
-      });
-
-      // Resolve related Negative Stock Alert if balance is now >= 0
-      if (physicalCount >= 0) {
-        await tx.inventoryAlert.updateMany({
-          where: {
-            stockItemId,
-            status: 'OPEN',
-            type: 'NEGATIVE_STOCK'
-          },
-          data: {
-            status: 'RESOLVED',
-            resolvedBy: userId,
-            resolvedAt: new Date()
-          }
-        });
+          warehouseId,
+          currentQty,
+          actualQty,
+          reason,
+          notes,
+          requiredApproverRoles: adjustConfig.approverRoles
+        },
       }
-
-      return { transaction, variance };
     });
 
-    return NextResponse.json({ status: 'SUCCESS', data: result }, { status: 200 });
+    return NextResponse.json({ data: approvalRequest, error: null });
   } catch (error: any) {
-    console.error('Inventory reconcile error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ data: null, error: error.message || 'Internal Error' }, { status: 500 });
   }
 }
