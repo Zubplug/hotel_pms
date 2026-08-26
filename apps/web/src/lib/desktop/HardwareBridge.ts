@@ -38,9 +38,20 @@ export function toReceiptPrintData(source: any, isReprint = false): ReceiptData 
   const audit = receipt.auditChain ?? {};
   const outlet = receipt.outlet ?? {};
   const items = Array.isArray(receipt.items) ? receipt.items : [];
+  const orderId = String(receipt.orderNumber ?? receipt.OrderNumber ?? receipt.id ?? receipt.orderId ?? 'UNKNOWN');
+  const paymentReceiptNumber = payment.receiptNumber ?? payment.ReceiptNumber;
+  const paymentId = String(payment.id ?? payment.Id ?? '');
+  const receiptNumber = String(
+    paymentReceiptNumber ||
+    (paymentId ? `RCP-${paymentId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 12).toUpperCase()}` : '') ||
+    (orderId && orderId !== 'UNKNOWN' ? `RCP-${orderId.replace(/[^a-zA-Z0-9]/g, '').slice(-12).toUpperCase()}` : 'RCP-UNKNOWN')
+  );
 
   return {
-    orderNumber: receipt.orderNumber ?? receipt.id ?? 'UNKNOWN',
+    // The desktop print contract historically uses OrderNumber for the
+    // printed Receipt # field. Feed it the immutable receipt reference so
+    // legacy orders with a blank order number still print an auditable ID.
+    orderNumber: receiptNumber,
     tableNumber: receipt.tableNumber ?? receipt.tableName,
     items: items.map((item: any) => ({
       name: item.productName ?? item.name ?? 'Item',
@@ -54,7 +65,7 @@ export function toReceiptPrintData(source: any, isReprint = false): ReceiptData 
     serviceCharge: Number(receipt.serviceCharge ?? 0),
     tipAmount: Number(receipt.tipAmount ?? 0),
     total: Number(receipt.total ?? 0),
-    paymentMethod: payment.method ?? receipt.paymentMethod ?? 'PAID',
+    paymentMethod: payment.method ?? payment.Method ?? receipt.paymentMethod ?? 'PAID',
     currency: payment.currency ?? receipt.currency ?? 'NGN',
     serverName: receipt.serverName ?? audit.serverName ?? 'POS Operator',
     outletName: receipt.outletName ?? audit.outletName ?? outlet.name ?? 'LodgeCore POS',

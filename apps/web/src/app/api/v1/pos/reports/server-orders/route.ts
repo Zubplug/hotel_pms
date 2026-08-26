@@ -48,7 +48,14 @@ export async function GET(req: NextRequest) {
 
     let statusCondition = {};
     if (statusFilter !== 'all') {
-      statusCondition = { status: statusFilter.toUpperCase() };
+      const statuses = statusFilter.toLowerCase() === 'open'
+        ? ['SUBMITTED', 'IN_SERVICE']
+        : statusFilter.toLowerCase() === 'paid'
+          ? ['PAID', 'COMPLETED', 'CLOSED']
+          : statusFilter.toLowerCase() === 'voided'
+            ? ['VOIDED', 'CANCELLED']
+            : [statusFilter.toUpperCase()];
+      statusCondition = { status: { in: statuses } };
     }
 
     const orders = await prisma.posOrder.findMany({

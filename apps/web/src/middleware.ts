@@ -54,9 +54,15 @@ export default auth((req) => {
 
   // Public routes — no auth needed
   if (isPublic(nextUrl.pathname)) {
-    // If already logged in and hitting /login
+    // If already logged in and hitting /login, send to /hub.
+    // /hub will then smart-redirect based on role:
+    //   MANAGER / CEO / SUPER_ADMIN  → /dashboard
+    //   RECEPTIONIST / FRONT_DESK   → /frontdesk
+    //   STOCK_MANAGER / PROCUREMENT → /inventory
+    //   NIGHT_AUDITOR               → /night-audit
+    //   Single-cap staff            → their one workspace
+    //   Multi-cap staff             → hub tile picker
     if (nextUrl.pathname === '/login' && isLoggedIn) {
-      // Phase 1.5: Always redirect authenticated users to the Universal Hub
       return Response.redirect(new URL('/hub', nextUrl));
     }
     return;

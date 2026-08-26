@@ -56,7 +56,7 @@ public class OfflinePMSInterop
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+            return JsonSerializer.Serialize(new { success = false, error = ex.InnerException?.Message ?? ex.Message }, _jsonOptions);
         }
     }
 
@@ -1594,7 +1594,7 @@ public class OfflinePMSInterop
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+            return JsonSerializer.Serialize(new { success = false, error = ex.InnerException?.Message ?? ex.Message }, _jsonOptions);
         }
     }
 

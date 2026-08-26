@@ -20,14 +20,71 @@ import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
 
+/**
+ * Role-based landing page resolver.
+ * Returns the direct dashboard URL for single-purpose roles so they
+ * skip the hub tile-picker and land in their professional workspace.
+ * Multi-role users (e.g. MANAGER with many capabilities) stay on /hub.
+ */
+function getDirectLandingUrl(
+  role: string,
+  capabilities: string[],
+  isSuperAdmin: boolean
+): string | null {
+  // Super admins and management roles → Management Dashboard
+  if (
+    isSuperAdmin ||
+    ['CEO', 'SUPER_ADMIN', 'MANAGER'].includes(role)
+  ) {
+    return '/dashboard';
+  }
+
+  // Front desk roles → Front Desk workspace
+  if (['RECEPTIONIST', 'FRONT_DESK'].includes(role)) {
+    return '/frontdesk';
+  }
+
+  // Stock / Procurement roles → Inventory dashboard
+  if (['STOCK_MANAGER', 'PROCUREMENT_MANAGER'].includes(role)) {
+    return '/inventory';
+  }
+
+  // Night Auditors → Night Audit
+  if (role === 'NIGHT_AUDITOR') {
+    return '/night-audit';
+  }
+
+  // Single-capability staff (e.g. housekeeping-only, POS-only)
+  if (capabilities.length === 1) {
+    const singleCapMap: Record<string, string> = {
+      ACCESS_FRONT_DESK: '/frontdesk',
+      ACCESS_HOUSEKEEPING: '/housekeeping',
+      ACCESS_POS: '/pos',
+      ACCESS_INVENTORY: '/inventory',
+      ACCESS_MAINTENANCE: '/maintenance',
+      ACCESS_NIGHT_AUDIT: '/night-audit',
+    };
+    return singleCapMap[capabilities[0]] ?? null;
+  }
+
+  // Multi-capability staff → show hub tile picker
+  return null;
+}
+
 export default async function HubPage() {
   const session = await auth();
   if (!session?.user) {
     redirect('/login');
   }
 
-  const { id: userId, email, role, capabilities = [], propertyId } = session.user as any;
+  const { id: userId, email, role, capabilities = [], propertyId, isSuperAdmin } = session.user as any;
   const userName = session.user.name || email?.split('@')[0] || 'User';
+
+  // Smart role-based redirect — single-purpose roles skip the hub entirely
+  const directUrl = getDirectLandingUrl(role, capabilities, isSuperAdmin);
+  if (directUrl) {
+    redirect(directUrl);
+  }
 
   // Format business date (Today for now, could be fetched from Property settings)
   const businessDate = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -72,7 +129,7 @@ export default async function HubPage() {
     { cap: 'ACCESS_POS', label: 'POINT OF SALE', icon: UtensilsCrossed, href: '/pos', color: 'bg-emerald-600 hover:bg-emerald-700' },
     { cap: 'ACCESS_HOUSEKEEPING', label: 'HOUSEKEEPING', icon: Sparkles, href: '/housekeeping', color: 'bg-cyan-600 hover:bg-cyan-700' },
     { cap: 'ACCESS_CASH_MANAGEMENT', label: 'CASH MANAGEMENT', icon: Banknote, href: '/cash-management', color: 'bg-green-600 hover:bg-green-700' },
-    { cap: 'ACCESS_INVENTORY', label: 'INVENTORY', icon: Package, href: '/admin/inventory', color: 'bg-amber-600 hover:bg-amber-700' },
+    { cap: 'ACCESS_INVENTORY', label: 'INVENTORY', icon: Package, href: '/inventory', color: 'bg-amber-600 hover:bg-amber-700' },
     { cap: 'ACCESS_MAINTENANCE', label: 'MAINTENANCE', icon: Wrench, href: '/maintenance', color: 'bg-orange-600 hover:bg-orange-700' },
     { cap: 'ACCESS_MANAGEMENT', label: 'MANAGEMENT', icon: BarChart3, href: '/dashboard', color: 'bg-slate-700 hover:bg-slate-600' },
     { cap: 'ACCESS_NIGHT_AUDIT', label: 'NIGHT AUDIT', icon: Moon, href: '/night-audit', color: 'bg-purple-600 hover:bg-purple-700' },

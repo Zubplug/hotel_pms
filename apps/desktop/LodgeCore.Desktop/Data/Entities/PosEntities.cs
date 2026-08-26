@@ -39,6 +39,11 @@ public class LocalPosProduct
     public bool HasModifiers { get; set; }
     // Product-level station override; null means inherit from Category.ProductionStation
     public string? ProductionStation { get; set; }
+
+    // Effective station exposed to the desktop POS menu. This is derived from
+    // the product override and category, so it is not persisted locally.
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public string ResolvedStation { get; set; } = "KITCHEN";
 }
 
 public class LocalStockItem

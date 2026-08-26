@@ -557,7 +557,8 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                         else if (result.Rejected?.Contains(evt.OperationId) == true)
                         {
                             evt.Status = "FAILED";
-                            evt.ErrorMessage = "Rejected by cloud validation";
+                            evt.ErrorMessage = result.Results?.FirstOrDefault(r => r.Id == evt.OperationId)?.Error
+                                ?? "Rejected by cloud validation";
                         }
                         else if (result.Conflicts?.Contains(evt.OperationId) == true)
                         {
@@ -602,7 +603,15 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
         public List<string>? AlreadyProcessed { get; set; }
         public List<string>? Rejected { get; set; }
         public List<string>? Conflicts { get; set; }
+        public List<SyncPushResult>? Results { get; set; }
         public string? ServerCursor { get; set; }
+    }
+
+    private class SyncPushResult
+    {
+        public string? Id { get; set; }
+        public string? Status { get; set; }
+        public string? Error { get; set; }
     }
 
     private async Task PushKeycardAuditsAsync(CancellationToken stoppingToken)

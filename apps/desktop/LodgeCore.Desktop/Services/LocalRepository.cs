@@ -2350,12 +2350,36 @@ public class LocalRepository
     {
         var order = await _dbContext.PosOrders
             .Include(o => o.Items)
+            .Include(o => o.Checks)
             .FirstOrDefaultAsync(o => o.Id == orderId);
 
         if (order == null) throw new Exception("Order not found");
 
         var itemsToFire = order.Items.Where(i => itemIds.Contains(i.Id)).ToList();
         if (!itemsToFire.Any()) throw new Exception("No valid items selected for KOT");
+
+        var productIds = itemsToFire.Where(i => !string.IsNullOrWhiteSpace(i.ProductId)).Select(i => i.ProductId!).Distinct().ToList();
+        var products = await _dbContext.PosProducts.Where(p => productIds.Contains(p.Id)).ToListAsync();
+        var categoryIds = products.Select(p => p.CategoryId).Distinct().ToList();
+        var categories = await _dbContext.ProductCategories.Where(c => categoryIds.Contains(c.Id)).ToDictionaryAsync(c => c.Id);
+        var productMap = products.ToDictionary(p => p.Id);
+        string ResolveStation(LocalPosOrderItem item)
+        {
+            if (item.ProductId != null && productMap.TryGetValue(item.ProductId, out var product))
+            {
+                var station = product.ProductionStation;
+                if (string.IsNullOrWhiteSpace(station) && categories.TryGetValue(product.CategoryId, out var category))
+                    station = category.ProductionStation;
+                if (!string.IsNullOrWhiteSpace(station)) return station.Trim().ToUpperInvariant();
+            }
+            return "KITCHEN";
+        }
+        var stations = itemsToFire.Select(ResolveStation).Distinct().ToList();
+        if (stations.Count > 1)
+            throw new InvalidOperationException("Select Kitchen or Bar items separately when firing a manual KOT.");
+        var station = stations[0];
+        if (station is not ("KITCHEN" or "BAR"))
+            throw new InvalidOperationException("The selected items do not require a production ticket.");
 
         string operationId = $"op_kot_{deviceId}_{DateTime.UtcNow.Ticks}_{Guid.NewGuid().ToString("N").Substring(0, 8)}";
         
@@ -2366,12 +2390,14 @@ public class LocalRepository
             OutletId = order.OutletId,
             DeviceId = deviceId,
             CreatedBy = userId,
-            KotNumber = $"{order.OrderNumber}-{Guid.NewGuid().ToString("N").Substring(0, 4)}",
+            KotNumber = $"{order.OrderNumber}-{station}-{Guid.NewGuid().ToString("N").Substring(0, 4)}",
             Status = "PENDING",
+            ProductionStation = station,
             PrintStatus = "QUEUED",
             OperationId = operationId,
             BusinessDate = order.BusinessDate,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            ItemIdsJson = JsonSerializer.Serialize(itemsToFire.Select(i => i.Id))
         };
 
         _dbContext.PosKots.Add(kot);
@@ -2428,7 +2454,23 @@ public class LocalRepository
 
     public async Task<List<LocalPosProduct>> GetPosProductsAsync(string propertyId)
     {
-        return await _dbContext.PosProducts.Where(p => p.PropertyId == propertyId && p.IsActive).ToListAsync();
+        var products = await _dbContext.PosProducts
+            .Where(p => p.PropertyId == propertyId && p.IsActive)
+            .ToListAsync();
+        var categoryIds = products.Select(p => p.CategoryId).Where(id => !string.IsNullOrWhiteSpace(id)).Distinct().ToList();
+        var categories = await _dbContext.ProductCategories
+            .Where(c => categoryIds.Contains(c.Id))
+            .ToDictionaryAsync(c => c.Id);
+
+        foreach (var product in products)
+        {
+            product.ResolvedStation = (string.IsNullOrWhiteSpace(product.ProductionStation)
+                    ? (categories.TryGetValue(product.CategoryId, out var category) ? category.ProductionStation : null)
+                    : product.ProductionStation)
+                ?.Trim().ToUpperInvariant() ?? "KITCHEN";
+        }
+
+        return products;
     }
 
     public async Task<LocalPosSession> OpenPosSessionAsync(string propertyId, string outletId, string bankType, string bankingModel, decimal openingBalance, string userId, string deviceId)
@@ -2585,6 +2627,7 @@ public class LocalRepository
     {
         var order = await _dbContext.PosOrders
             .Include(o => o.Items)
+            .Include(o => o.Checks)
             .FirstOrDefaultAsync(o => o.Id == orderId);
 
         if (order == null) throw new Exception("Order not found");
@@ -3822,6 +3865,7 @@ public class LocalRepository
     {
         var query = _dbContext.PosOrders
             .Include(o => o.Items)
+            .Include(o => o.Payments)
             .Where(o => o.PropertyId == propertyId && o.ServerStaffId == staffId);
 
         if (!string.IsNullOrEmpty(sessionId))
@@ -3889,6 +3933,15 @@ public class LocalRepository
                 serverStaffId = o.ServerStaffId,
                 status = o.Status,
                 paymentStatus = o.PaymentStatus,
+                payments = o.Payments.Select(p => new {
+                    id = p.Id,
+                    method = p.Method,
+                    status = p.Status,
+                    amount = p.Amount,
+                    currency = p.Currency,
+                    paidAt = p.PaidAt,
+                    reference = p.Reference
+                }).ToList(),
                 displayName = o.DisplayName,
                 total = o.Total != 0m ? o.Total : calculatedTotal,
                 itemCount,

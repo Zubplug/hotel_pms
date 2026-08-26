@@ -107,28 +107,31 @@ export async function POST(req: NextRequest) {
              throw e;
           }
           
-          let updatedCount = 0;
+          // Legacy desktop SyncEvents do not carry aggregate versions. They
+          // are already ordered by the terminal sequence, so do not apply the
+          // newer OCC gate to them.
+          let updatedCount = isLegacy ? 1 : 0;
           
           // 2. Lock & Verify OCC Version
-          if (event.aggregateType === 'POS_ORDER') {
+          if (!isLegacy && event.aggregateType === 'POS_ORDER') {
              const res = await tx.posOrder.updateMany({
                where: { id: event.aggregateId, version: event.aggregateVersion },
                data: { version: { increment: 1 } }
              });
              updatedCount = res.count;
-          } else if (event.aggregateType === 'POS_SESSION' || event.aggregateType === 'POS_OPERATOR_SESSION') {
+          } else if (!isLegacy && (event.aggregateType === 'POS_SESSION' || event.aggregateType === 'POS_OPERATOR_SESSION')) {
              const res = await tx.posOperatorSession.updateMany({
                where: { id: event.aggregateId, version: event.aggregateVersion },
                data: { version: { increment: 1 } }
              });
              updatedCount = res.count;
-          } else if (event.aggregateType === 'POS_CHECK') {
+          } else if (!isLegacy && event.aggregateType === 'POS_CHECK') {
              const res = await tx.posCheck.updateMany({
                where: { id: event.aggregateId, version: event.aggregateVersion },
                data: { version: { increment: 1 } }
              });
              updatedCount = res.count;
-          } else if (event.aggregateType === 'POS_SETTLEMENT' || event.aggregateType === 'POS_CASH_MOVEMENT' || event.aggregateType === 'CASH_MOVEMENT') {
+          } else if (!isLegacy && (event.aggregateType === 'POS_SETTLEMENT' || event.aggregateType === 'POS_CASH_MOVEMENT' || event.aggregateType === 'CASH_MOVEMENT')) {
              const sId = payload.SessionId || payload.sessionId || payload.PosSessionId || payload.posSessionId;
              if (sId) {
                 const res = await tx.posOperatorSession.updateMany({
@@ -139,7 +142,7 @@ export async function POST(req: NextRequest) {
              } else {
                 updatedCount = 1;
              }
-          } else {
+          } else if (!isLegacy) {
              // For POS_PAYMENT, POS_ORDER_ITEM, POS_KOT the aggregate is usually the PosOrder. 
              // We map those to update the Order version.
              if (payload.OrderId || payload.orderId) {
@@ -257,7 +260,8 @@ export async function POST(req: NextRequest) {
                      }
                  }
                  
-                 await tx.posOrder.create({
+                 const orderItems = payload.Items || payload.items || [];
+                 const createdOrder = await tx.posOrder.create({
                      data: {
                          id: event.aggregateId,
                          propertyId: propertyId,
@@ -268,12 +272,58 @@ export async function POST(req: NextRequest) {
                          subtotal: payload.Subtotal || 0,
                          taxAmount: payload.TaxAmount || 0,
                          total: payload.Total || 0,
+                         orderType: payload.OrderType || payload.orderType || 'DINE_IN',
                          tableId: tableId,
                          businessDate: new Date(payload.BusinessDate || new Date()),
                          serverStaffId: event.operatorId,
-                         createdAt: new Date(event.occurredAt)
-                     }
+                         createdAt: new Date(event.occurredAt),
+                         items: {
+                           create: orderItems.map((item: any) => ({
+                             id: item.Id || item.id || crypto.randomUUID(),
+                             productId: item.ProductId || item.productId || null,
+                             productName: item.ProductName || item.productName || 'POS item',
+                             quantity: Number(item.Quantity ?? item.quantity ?? 0),
+                             unitPrice: Number(item.UnitPrice ?? item.unitPrice ?? 0),
+                             subtotal: Number(item.Subtotal ?? item.subtotal ?? item.Total ?? item.total ?? 0),
+                             taxRate: Number(item.TaxRate ?? item.taxRate ?? 0),
+                             taxAmount: Number(item.TaxAmount ?? item.taxAmount ?? 0),
+                             total: Number(item.Total ?? item.total ?? 0),
+                             course: item.Course ?? item.course ?? null,
+                             kitchenStatus: item.KitchenStatus || item.kitchenStatus || 'PENDING',
+                           }))
+                         }
+                     },
+                     include: { items: true }
                  });
+
+                 // Desktop ORDER_CREATED carries its KOTs inside the order
+                 // payload. Preserve each station when materializing them in
+                 // the cloud production queue.
+                 const orderKots = payload.Kots || payload.kots || [];
+                 for (const kot of orderKots) {
+                   const itemIds = JSON.parse(kot.ItemIdsJson || kot.itemIdsJson || '[]');
+                   const station = String(kot.ProductionStation || kot.productionStation || 'KITCHEN').toUpperCase();
+                   const batchItems = createdOrder.items.filter((item: any) => itemIds.includes(item.id));
+                   await tx.posProductionBatch.create({
+                     data: {
+                       id: kot.Id || kot.id || crypto.randomUUID(),
+                       orderId: event.aggregateId,
+                       batchNumber: 1,
+                       station,
+                       status: 'PENDING',
+                       firedAt: new Date(kot.FiredAt || kot.firedAt || event.occurredAt),
+                       firedByStaffId: event.operatorId,
+                       items: {
+                         create: batchItems.map((item: any) => ({
+                           orderItemId: item.id,
+                           productName: item.productName,
+                           quantity: item.quantity,
+                           course: item.course,
+                         }))
+                       }
+                     }
+                   });
+                 }
              }
           }
           else if (event.eventType === 'ORDER_UPDATED') {
@@ -344,57 +394,100 @@ export async function POST(req: NextRequest) {
               });
           }
           else if (event.eventType === 'ORDER_ITEMS_ADDED') {
-              const items = Array.isArray(payload) ? payload : (payload.Items || [payload]);
+              const nestedOrder = payload.order || payload.Order;
+              const nestedKots = payload.kots || payload.Kots || [];
+              const nestedItems = nestedOrder?.Items || nestedOrder?.items || [];
+              const nestedItemIds = new Set<string>(nestedKots.flatMap((kot: any) => {
+                try { return JSON.parse(kot.ItemIdsJson || kot.itemIdsJson || '[]'); } catch { return []; }
+              }));
+              const items = Array.isArray(payload)
+                ? payload
+                : (payload.Items || payload.items || (nestedItemIds.size
+                  ? nestedItems.filter((item: any) => nestedItemIds.has(item.Id || item.id))
+                  : nestedItems));
               for (const item of items) {
                   await tx.posOrderItem.create({
                       data: {
-                          id: item.Id || crypto.randomUUID(),
-                          orderId: item.OrderId || event.aggregateId,
-                          productId: item.ProductId,
-                          productName: item.ProductName,
-                          quantity: item.Quantity,
-                          unitPrice: item.UnitPrice,
-                          subtotal: item.Subtotal,
-                          discount: item.Discount || 0,
-                          taxRate: item.TaxRate || 0,
-                          taxAmount: item.TaxAmount || 0,
-                          total: item.Total,
-                          notes: item.Notes,
-                          course: item.Course
+                          id: item.Id || item.id || crypto.randomUUID(),
+                          orderId: item.OrderId || item.orderId || event.aggregateId,
+                          productId: item.ProductId || item.productId || null,
+                          productName: item.ProductName || item.productName || 'POS item',
+                          quantity: Number(item.Quantity ?? item.quantity ?? 0),
+                          unitPrice: Number(item.UnitPrice ?? item.unitPrice ?? 0),
+                          subtotal: Number(item.Subtotal ?? item.subtotal ?? item.Total ?? item.total ?? 0),
+                          discount: Number(item.Discount ?? item.discount ?? 0),
+                          taxRate: Number(item.TaxRate ?? item.taxRate ?? 0),
+                          taxAmount: Number(item.TaxAmount ?? item.taxAmount ?? 0),
+                          total: Number(item.Total ?? item.total ?? 0),
+                          notes: item.Notes || item.notes,
+                          course: item.Course ?? item.course ?? null
                       }
                   });
               }
               if (items.length > 0) {
-                  const orderId = items[0].OrderId || event.aggregateId;
+                  const orderId = items[0].OrderId || items[0].orderId || event.aggregateId;
                   const currentOrder = await tx.posOrder.findUnique({ where: { id: orderId } });
                   if (currentOrder) {
                       await tx.posOrder.update({
                           where: { id: orderId },
                           data: {
-                              subtotal: Number(currentOrder.subtotal) + items.reduce((sum: number, i: any) => sum + Number(i.Subtotal), 0),
-                              taxAmount: Number(currentOrder.taxAmount) + items.reduce((sum: number, i: any) => sum + Number(i.TaxAmount || 0), 0),
-                              total: Number(currentOrder.total) + items.reduce((sum: number, i: any) => sum + Number(i.Total), 0)
+                            subtotal: Number(currentOrder.subtotal) + items.reduce((sum: number, i: any) => sum + Number(i.Subtotal ?? i.subtotal ?? i.Total ?? i.total ?? 0), 0),
+                            taxAmount: Number(currentOrder.taxAmount) + items.reduce((sum: number, i: any) => sum + Number(i.TaxAmount ?? i.taxAmount ?? 0), 0),
+                            total: Number(currentOrder.total) + items.reduce((sum: number, i: any) => sum + Number(i.Total ?? i.total ?? 0), 0)
                           }
                       });
                   }
               }
+
+              for (const kot of nestedKots) {
+                let itemIds: string[] = [];
+                try { itemIds = JSON.parse(kot.ItemIdsJson || kot.itemIdsJson || '[]'); } catch { }
+                const station = String(kot.ProductionStation || kot.productionStation || 'KITCHEN').toUpperCase();
+                const batchItems = items.filter((item: any) => itemIds.includes(item.Id || item.id));
+                await tx.posProductionBatch.create({
+                  data: {
+                    id: kot.Id || kot.id || crypto.randomUUID(),
+                    orderId: event.aggregateId,
+                    batchNumber: 1,
+                    station,
+                    status: 'PENDING',
+                    firedAt: new Date(kot.FiredAt || kot.firedAt || event.occurredAt),
+                    firedByStaffId: event.operatorId,
+                    items: {
+                      create: batchItems.map((item: any) => ({
+                        orderItemId: item.Id || item.id,
+                        productName: item.ProductName || item.productName || 'POS item',
+                        quantity: Number(item.Quantity ?? item.quantity ?? 0),
+                        course: item.Course ?? item.course ?? null,
+                      }))
+                    }
+                  }
+                });
+              }
           }
           else if (event.eventType === 'KOT_CREATED') {
+              // Desktop KOT events are wrapped as { kot, itemIds } and use
+              // System.Text.Json property names. Accept both wrapped and flat
+              // payloads so BAR station data is not lost during sync.
+              const kot = payload.kot || payload.Kot || payload;
+              const rawItems = payload.items || payload.Items || kot.items || kot.Items || [];
+              const station = String(kot.productionStation || kot.ProductionStation
+                  || payload.station || payload.Station || 'KITCHEN').toUpperCase();
               await tx.posProductionBatch.create({
                   data: {
-                      id: payload.Id || crypto.randomUUID(),
-                      orderId: payload.OrderId || event.aggregateId,
-                      batchNumber: payload.BatchNumber || '1',
-                      station: payload.Station || "KITCHEN",
+                      id: kot.id || kot.Id || crypto.randomUUID(),
+                      orderId: kot.orderId || kot.OrderId || event.aggregateId,
+                      batchNumber: Number(kot.batchNumber || kot.BatchNumber || 1),
+                      station,
                       firedAt: new Date(event.occurredAt),
                       firedByStaffId: event.operatorId,
                       items: {
-                          create: (payload.Items || []).map((item: any) => ({
-                              id: item.Id || crypto.randomUUID(),
-                              orderItemId: item.OrderItemId,
-                              productName: item.ProductName,
-                              quantity: item.Quantity,
-                              course: item.Course
+                          create: rawItems.map((item: any) => ({
+                              id: item.id || item.Id || crypto.randomUUID(),
+                              orderItemId: item.orderItemId || item.OrderItemId,
+                              productName: item.productName || item.ProductName,
+                              quantity: item.quantity || item.Quantity,
+                              course: item.course || item.Course
                           }))
                       }
                   }

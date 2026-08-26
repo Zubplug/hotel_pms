@@ -74,15 +74,6 @@ public class EscPosService
                         (p.OutletId == null || p.OutletId == outletId))
             .FirstOrDefaultAsync();
 
-        if (printer == null)
-        {
-            // Fallback: If no exact role matches, just grab any active printer for this terminal.
-            // Many users only configure a single printer for everything.
-            printer = await db.PrinterConfigs
-                .Where(p => p.IsActive && (p.OutletId == null || p.OutletId == outletId))
-                .FirstOrDefaultAsync();
-        }
-
         return printer;
     }
 

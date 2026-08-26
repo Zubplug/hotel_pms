@@ -51,7 +51,13 @@ export function ReceiptVerificationModal({ isOpen, onClose, order }: ReceiptVeri
   if (!order) return null;
 
   const payment = order.payments?.[0];
-  const receiptId = payment?.receiptNumber || `RCP-${order.orderNumber.split('-')[1] || order.orderNumber}`;
+  const orderReference = String(order.orderNumber ?? order.id ?? 'UNKNOWN');
+  const paymentReference = payment?.receiptNumber ?? payment?.ReceiptNumber ?? payment?.id ?? payment?.Id;
+  const receiptId = paymentReference
+    ? String(paymentReference).startsWith('RCP-')
+      ? String(paymentReference)
+      : `RCP-${String(paymentReference).replace(/[^a-zA-Z0-9]/g, '').slice(0, 12).toUpperCase()}`
+    : `RCP-${orderReference.replace(/[^a-zA-Z0-9]/g, '').slice(-12).toUpperCase() || 'UNKNOWN'}`;
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>

@@ -142,8 +142,17 @@ public class LocalDbContext : DbContext
 
     public async Task ApplyPosRoutingSchemaAsync()
     {
-        try { await Database.ExecuteSqlRawAsync("ALTER TABLE PosKots ADD COLUMN ProductionStation TEXT NOT NULL DEFAULT 'KITCHEN'"); }
-        catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
+        var columns = new[]
+        {
+            "ALTER TABLE PosKots ADD COLUMN ProductionStation TEXT NOT NULL DEFAULT 'KITCHEN'",
+            "ALTER TABLE ProductCategories ADD COLUMN ProductionStation TEXT NOT NULL DEFAULT 'KITCHEN'",
+            "ALTER TABLE PosProducts ADD COLUMN ProductionStation TEXT NULL"
+        };
+        foreach (var sql in columns)
+        {
+            try { await Database.ExecuteSqlRawAsync(sql); }
+            catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
+        }
     }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)

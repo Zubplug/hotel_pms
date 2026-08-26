@@ -95,17 +95,35 @@ export function MyOrdersModal({ isOpen, onClose, operatorToken, staffName }: MyO
     try {
       const res = await provider.pos.getServerOrders(dateRange, statusFilter, undefined, operatorToken);
       if (res.error) throw new Error(res.error);
-      setOrders((res.data || []).map((order: any) => ({
-        ...order,
-        id: order.id ?? order.Id,
-        orderNumber: order.orderNumber ?? order.OrderNumber ?? '',
-        tableNumber: order.tableNumber ?? order.TableNumber ?? '',
-        displayName: order.displayName ?? order.DisplayName ?? '',
-        status: order.status ?? order.Status ?? '',
-        total: Number(order.total ?? order.Total ?? 0),
-        itemCount: Number(order.itemCount ?? order.items?.reduce((sum: number, item: any) => sum + Number(item.quantity || 0), 0) ?? 0),
-        createdAt: order.createdAt ?? order.CreatedAt ?? order.updatedAt ?? order.UpdatedAt ?? order.businessDate ?? order.BusinessDate,
-      })));
+      setOrders((res.data || []).map((order: any) => {
+        const id = String(order.id ?? order.Id ?? '');
+        const status = String(order.status ?? order.Status ?? '').toUpperCase();
+        const payments = order.payments ?? order.Payments ?? [];
+        const paymentStatus = String(order.paymentStatus ?? order.PaymentStatus ?? '').toUpperCase();
+        const total = Number(order.total ?? order.Total ?? 0);
+        const confirmedPayments = payments.filter((payment: any) =>
+          ['CONFIRMED', 'PAID', 'COMPLETED', 'SETTLED'].includes(String(payment.status ?? payment.Status ?? '').toUpperCase())
+        );
+        const paidAmount = confirmedPayments.reduce((sum: number, payment: any) => sum + Number(payment.amount ?? payment.Amount ?? 0), 0);
+        const isPaid = paymentStatus === 'PAID' || ['PAID', 'CLOSED', 'COMPLETED'].includes(status) || (total > 0 && paidAmount >= total);
+        const rawOrderNumber = order.orderNumber ?? order.OrderNumber ?? order.number ?? order.Number;
+
+        return {
+          ...order,
+          id,
+          // Older local orders may predate order-number generation. Keep them
+          // identifiable in the audit/history view instead of rendering "#".
+          orderNumber: String(rawOrderNumber || (id ? `OFF-${id.slice(0, 8).toUpperCase()}` : 'UNKNOWN')),
+          tableNumber: order.tableNumber ?? order.TableNumber ?? order.tableName ?? order.TableName ?? '',
+          displayName: order.displayName ?? order.DisplayName ?? '',
+          status: isPaid && !['VOIDED', 'CANCELLED'].includes(status) ? (status || 'PAID') : status,
+          paymentStatus: isPaid ? 'PAID' : paymentStatus || 'UNPAID',
+          payments,
+          total,
+          itemCount: Number(order.itemCount ?? order.ItemCount ?? order.items?.reduce((sum: number, item: any) => sum + Number(item.quantity ?? item.Quantity ?? 0), 0) ?? 0),
+          createdAt: order.createdAt ?? order.CreatedAt ?? order.updatedAt ?? order.UpdatedAt ?? order.businessDate ?? order.BusinessDate,
+        };
+      }));
     } catch (error: any) {
       toast.error(error.message || 'Failed to load orders');
     } finally {
@@ -129,9 +147,9 @@ export function MyOrdersModal({ isOpen, onClose, operatorToken, staffName }: MyO
 
   // Summary stats
   const totalRevenue = filteredOrders
-    .filter(o => o.status === 'PAID' || o.status === 'CLOSED')
+    .filter(o => o.paymentStatus === 'PAID' || o.status === 'PAID' || o.status === 'CLOSED' || o.status === 'COMPLETED')
     .reduce((s, o) => s + Number(o.total || 0), 0);
-  const paidCount   = filteredOrders.filter(o => o.status === 'PAID' || o.status === 'CLOSED').length;
+  const paidCount   = filteredOrders.filter(o => o.paymentStatus === 'PAID' || o.status === 'PAID' || o.status === 'CLOSED' || o.status === 'COMPLETED').length;
   const openCount   = filteredOrders.filter(o => o.status === 'SUBMITTED' || o.status === 'IN_SERVICE').length;
 
   const formatTime = (iso: string) => {
@@ -272,7 +290,8 @@ export function MyOrdersModal({ isOpen, onClose, operatorToken, staffName }: MyO
                   {filteredOrders.map((order, idx) => {
                     const cfg    = statusCfg(order.status);
                     const typCfg = TYPE_CONFIG[order.orderType] || TYPE_CONFIG['TABLE'];
-                    const payMethod = order.payments?.[0]?.method;
+                    const payMethod = order.payments?.[0]?.method ?? order.payments?.[0]?.Method;
+                    const isPaid = order.paymentStatus === 'PAID' || ['PAID', 'CLOSED', 'COMPLETED'].includes(order.status);
                     const isLoadingThis = isLoadingReceipt === order.id;
                     return (
                       <tr
@@ -320,11 +339,11 @@ export function MyOrdersModal({ isOpen, onClose, operatorToken, staffName }: MyO
 
                         {/* Payment */}
                         <td className="py-4 px-4">
-                          {payMethod ? (
+                          {isPaid ? (
                             <div className="flex items-center gap-1.5">
-                              {PAYMENT_ICON[payMethod] ?? <SlidersHorizontal className="w-3.5 h-3.5 text-slate-400" />}
-                              <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">
-                                {payMethod.replace('_', ' ')}
+                              {payMethod ? (PAYMENT_ICON[payMethod] ?? <SlidersHorizontal className="w-3.5 h-3.5 text-slate-400" />) : <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />}
+                              <span className="text-xs font-bold text-emerald-700 uppercase tracking-wide">
+                                {payMethod ? payMethod.replace('_', ' ') : 'Paid'}
                               </span>
                             </div>
                           ) : (
