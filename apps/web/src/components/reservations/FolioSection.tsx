@@ -1,42 +1,11 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
-
-// Auto-fits currency text to card width — no wrap, no cut, no ellipsis
-function FitAmount({ value, className }: { value: string; className?: string }) {
-  const ref = useRef<HTMLParagraphElement>(null);
-
-  const fit = useCallback(() => {
-    const el = ref.current;
-    if (!el) return;
-    el.style.fontSize = '1.125rem'; // reset to max (18px)
-    while (el.scrollWidth > el.clientWidth && parseFloat(el.style.fontSize) > 9) {
-      el.style.fontSize = `${(parseFloat(el.style.fontSize) - 0.5).toFixed(1)}px`;
-    }
-  }, [value]);
-
-  useEffect(() => {
-    fit();
-    const ro = new ResizeObserver(fit);
-    if (ref.current) ro.observe(ref.current);
-    return () => ro.disconnect();
-  }, [fit]);
-
-  return (
-    <p
-      ref={ref}
-      style={{ fontSize: '1.125rem' }}
-      className={`w-full overflow-hidden whitespace-nowrap font-bold leading-tight tabular-nums ${className ?? ''}`}
-    >
-      {value}
-    </p>
-  );
-}
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
-import { PlusCircle, Wallet, ArrowRightLeft, CornerDownRight, Printer, Receipt, TrendingDown, TrendingUp } from 'lucide-react';
+import { PlusCircle, Wallet, ArrowRightLeft, CornerDownRight, Printer, Receipt, TrendingUp } from 'lucide-react';
 import { AddPaymentDialog } from './AddPaymentDialog';
 import { RefundDialog } from './RefundDialog';
 import { FrontDeskAddPaymentDialog } from '../frontdesk/FrontDeskAddPaymentDialog';
@@ -75,6 +44,7 @@ export function FolioSection({ reservation }: { reservation: any }) {
   const isClosed = folio.status === 'CLOSED';
 
   const totalCharges = Number(folio.totalCharges || 0);
+  const totalPayments = Number(folio.totalPayments || 0);
   const outstandingBalance = Math.max(0, Number(folio.balance || 0));
   const availableCredit = Number(folio.availableCredit || 0);
   const ledgerItems = [
@@ -90,10 +60,71 @@ export function FolioSection({ reservation }: { reservation: any }) {
     })),
   ].sort((a: any, b: any) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
 
+  const findLinkedPayment = (item: any) => item.type === 'PAYMENT'
+    ? folio.payments.find((payment: any) =>
+      Math.abs(Number(payment.amount)) === Math.abs(Number(item.amount)) &&
+      Math.abs(new Date(payment.createdAt).getTime() - new Date(item.createdAt).getTime()) < 5000,
+    )
+    : null;
+
+  const renderItemActions = (item: any) => {
+    const linkedPayment = findLinkedPayment(item);
+    if (!linkedPayment) return null;
+
+    return (
+      <div className="flex flex-wrap items-center gap-1.5">
+        {(linkedPayment.status === 'COMPLETED' || linkedPayment.status === 'REFUNDED') && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs text-blue-700 hover:bg-blue-50 hover:text-blue-800"
+            onClick={async () => {
+              if (isFrontDesk) {
+                try {
+                  await HardwareBridge.printPaymentReceipt({
+                    receiptNumber: linkedPayment.reference || linkedPayment.id.substring(0, 8).toUpperCase(),
+                    guestName: reservation.primaryGuest ? `${reservation.primaryGuest.firstName} ${reservation.primaryGuest.lastName}` : 'Guest',
+                    roomNumber: formatRoomNumber(reservation.reservationRooms?.[0]?.room?.number) || 'N/A',
+                    folioNumber: folio.id.substring(0, 8).toUpperCase(),
+                    amountPaid: Math.abs(Number(linkedPayment.amount)),
+                    paymentMethod: linkedPayment.method || 'CASH',
+                    paymentReference: linkedPayment.reference,
+                    previousBalance: 0,
+                    remainingBalance: Number(folio.balance),
+                    cashierName: 'Staff',
+                    currency: folio.currency || 'NGN',
+                    propertyName: '',
+                    printedAt: new Date().toISOString(),
+                  });
+                } catch {
+                  window.open(`/frontdesk/payments/${linkedPayment.id}/receipt`, '_blank');
+                }
+              } else {
+                window.open(`/payments/${linkedPayment.id}/receipt`, '_blank');
+              }
+            }}
+          >
+            <Printer className="mr-1 h-3 w-3" /> Receipt
+          </Button>
+        )}
+        {linkedPayment.status === 'COMPLETED' && !isClosed && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+            onClick={() => setRefundPaymentId(linkedPayment.id)}
+          >
+            <CornerDownRight className="mr-1 h-3 w-3" /> Refund
+          </Button>
+        )}
+      </div>
+    );
+  };
+
   return (
     <>
       <Card className="mt-6 overflow-hidden rounded-2xl border-slate-200 bg-white shadow-lg shadow-slate-200/50">
-        <CardHeader className="flex flex-col gap-5 border-b border-slate-200 bg-gradient-to-br from-slate-900 via-slate-800 to-blue-900 px-5 py-5 text-white sm:px-6 lg:flex-row lg:items-center lg:justify-between">
+        <CardHeader className="flex flex-col gap-5 border-b border-slate-200 bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 px-5 py-5 text-white sm:px-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex min-w-0 items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/20">
               <Receipt className="h-5 w-5" />
@@ -141,140 +172,79 @@ export function FolioSection({ reservation }: { reservation: any }) {
           </div>
         </CardHeader>
         <CardContent className="p-0">
-          {/* Summary Banner */}
-          <div className="grid grid-cols-2 gap-3 border-b bg-slate-50/70 p-4 lg:grid-cols-4">
-            <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
-              <div className="mb-2 flex items-center justify-between gap-1">
-                <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-slate-500 sm:text-xs">Total Charges</p>
-                <TrendingUp className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+          <div className="border-b bg-slate-50 p-4 sm:p-6">
+            <div className={`rounded-2xl p-5 text-white shadow-sm ${outstandingBalance > 0 ? 'bg-gradient-to-br from-rose-600 to-red-700' : 'bg-gradient-to-br from-emerald-600 to-teal-700'}`}>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-white/75">{outstandingBalance > 0 ? 'Amount due' : 'Folio settled'}</p>
+                  <p className="mt-1 text-3xl font-black tracking-tight tabular-nums sm:text-4xl">{formatCurrency(outstandingBalance)}</p>
+                </div>
+                <Badge className="border-white/25 bg-white/15 px-3 py-1 text-white" variant="outline">
+                  {outstandingBalance > 0 ? 'Payment required' : 'No balance due'}
+                </Badge>
               </div>
-              <FitAmount value={formatCurrency(totalCharges)} className="text-slate-900" />
             </div>
-            <div className="min-w-0 overflow-hidden rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 shadow-sm sm:p-4">
-              <div className="mb-2 flex items-center justify-between gap-1">
-                <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-emerald-700 sm:text-xs">Total Payments</p>
-                <Wallet className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <div className="flex items-center gap-2 text-slate-500"><TrendingUp className="h-4 w-4" /><p className="text-xs font-bold uppercase tracking-wider">Charges</p></div>
+                <p className="mt-2 text-xl font-bold tabular-nums text-slate-900">{formatCurrency(totalCharges)}</p>
               </div>
-              <FitAmount value={formatCurrency(folio.totalPayments)} className="text-emerald-700" />
-            </div>
-            <div className={`min-w-0 overflow-hidden rounded-xl border p-3 shadow-sm sm:p-4 ${outstandingBalance > 0 ? 'border-rose-100 bg-rose-50/70' : 'border-slate-200 bg-white'}`}>
-              <div className="mb-2 flex items-center justify-between gap-1">
-                <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-slate-500 sm:text-xs">Outstanding</p>
-                <TrendingDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-4">
+                <div className="flex items-center gap-2 text-emerald-700"><Wallet className="h-4 w-4" /><p className="text-xs font-bold uppercase tracking-wider">Payments</p></div>
+                <p className="mt-2 text-xl font-bold tabular-nums text-emerald-700">{formatCurrency(totalPayments)}</p>
               </div>
-              <FitAmount value={formatCurrency(outstandingBalance)} className={outstandingBalance > 0 ? 'text-rose-700' : 'text-slate-900'} />
-            </div>
-            <div className="min-w-0 overflow-hidden rounded-xl border border-blue-100 bg-blue-50/70 p-3 shadow-sm sm:p-4">
-              <div className="mb-2 flex items-center justify-between gap-1">
-                <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-blue-700 sm:text-xs">Available Credit</p>
-                <CornerDownRight className="h-3.5 w-3.5 shrink-0 text-blue-600" />
+              <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-4">
+                <div className="flex items-center gap-2 text-blue-700"><CornerDownRight className="h-4 w-4" /><p className="text-xs font-bold uppercase tracking-wider">Credit available</p></div>
+                <p className="mt-2 text-xl font-bold tabular-nums text-blue-700">{formatCurrency(availableCredit)}</p>
               </div>
-              <FitAmount value={formatCurrency(availableCredit)} className="text-blue-700" />
             </div>
           </div>
 
-          {/* Ledger Table */}
           <div className="p-4 sm:p-6">
-            <div className="overflow-x-auto rounded-xl border border-slate-200">
-            <table className="w-full min-w-[900px] text-left text-sm">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div><h3 className="font-bold text-slate-900">Transaction history</h3><p className="text-xs text-slate-500">{ledgerItems.length} posted transaction{ledgerItems.length === 1 ? '' : 's'}</p></div>
+              <span className="text-xs font-medium text-slate-500">All amounts in {folio.currency || 'NGN'}</span>
+            </div>
+            <div className="hidden overflow-hidden rounded-xl border border-slate-200 md:block">
+            <table className="w-full table-fixed text-left text-sm">
               <thead className="border-b bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500">
                 <tr>
-                  <th className="px-6 py-3">Date</th>
-                  <th className="px-6 py-3">Type</th>
-                  <th className="px-6 py-3">Description</th>
-                  <th className="px-6 py-3 text-right">Debit (Charge)</th>
-                  <th className="px-6 py-3 text-right">Credit (Payment)</th>
-                  <th className="px-6 py-3 text-center">Actions</th>
+                  <th className="w-32 px-4 py-3">Date</th>
+                  <th className="px-4 py-3">Transaction</th>
+                  <th className="w-36 px-4 py-3 text-right">Amount</th>
+                  <th className="w-28 px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
                 {ledgerItems.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-8 text-center text-muted-foreground">
+                    <td colSpan={4} className="px-6 py-8 text-center text-muted-foreground">
                       No transactions recorded.
                     </td>
                   </tr>
                 ) : (
                   ledgerItems.map((item: any) => {
                     const isDebit = item.amount > 0;
-                    const isCredit = item.amount < 0;
                     const absAmount = Math.abs(item.amount);
-
-                    // Find if this folio item has a matching payment for refund button mapping
-                    // (Assuming 1 payment per payment FolioItem - heuristic for UI display)
-                    const linkedPayment = item.type === 'PAYMENT' 
-                      ? folio.payments.find((p: any) => Math.abs(p.amount) === absAmount && new Date(p.createdAt).getTime() - new Date(item.createdAt).getTime() < 5000)
-                      : null;
 
                     return (
                       <tr key={item.id} className="transition-colors hover:bg-blue-50/40">
-                        <td className="whitespace-nowrap px-6 py-4 text-slate-500">
+                        <td className="whitespace-nowrap px-4 py-4 text-xs text-slate-500">
                           {format(new Date(item.createdAt), 'MMM d, h:mm a')}
                         </td>
-                        <td className="px-6 py-4">
-                          <Badge variant={item.type === 'CHARGE' ? 'outline' : item.type === 'PAYMENT' ? 'default' : 'secondary'} className="text-[10px]">
+                        <td className="px-4 py-4">
+                          <div className="flex min-w-0 items-center gap-2">
+                          <Badge variant={item.type === 'CHARGE' ? 'outline' : item.type === 'PAYMENT' ? 'default' : 'secondary'} className="shrink-0 text-[10px]">
                             {item.type}
                           </Badge>
-                          {item.creditStatus && <Badge variant="secondary" className="ml-1 text-[10px]">{item.creditStatus}</Badge>}
-                        </td>
-                        <td className="max-w-[300px] truncate px-6 py-4 font-medium text-slate-800" title={item.description}>
-                          {item.description}
-                        </td>
-                        <td className="whitespace-nowrap px-6 py-4 text-right tabular-nums">
-                          {isDebit ? formatCurrency(absAmount) : '-'}
-                        </td>
-                        <td className="whitespace-nowrap px-6 py-4 text-right font-medium tabular-nums text-emerald-600">
-                          {isCredit ? formatCurrency(absAmount) : '-'}
-                        </td>
-                        <td className="min-w-[190px] px-6 py-4 text-center">
-                          <div className="flex flex-wrap justify-end gap-2">
-                          {linkedPayment && (linkedPayment.status === 'COMPLETED' || linkedPayment.status === 'REFUNDED') && (
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              className="h-7 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                              onClick={async () => {
-                                if (isFrontDesk) {
-                                  // Use native ESC/POS printing on desktop
-                                  try {
-                                    await HardwareBridge.printPaymentReceipt({
-                                      receiptNumber: linkedPayment.reference || linkedPayment.id.substring(0, 8).toUpperCase(),
-                                      guestName: reservation.primaryGuest ? `${reservation.primaryGuest.firstName} ${reservation.primaryGuest.lastName}` : 'Guest',
-                                      roomNumber: formatRoomNumber(reservation.reservationRooms?.[0]?.room?.number) || 'N/A',
-                                      folioNumber: folio.id.substring(0, 8).toUpperCase(),
-                                      amountPaid: Math.abs(Number(linkedPayment.amount)),
-                                      paymentMethod: linkedPayment.method || 'CASH',
-                                      paymentReference: linkedPayment.reference,
-                                      previousBalance: 0,
-                                      remainingBalance: Number(folio.balance),
-                                      cashierName: 'Staff',
-                                      currency: folio.currency || 'NGN',
-                                      propertyName: '',
-                                      printedAt: new Date().toISOString(),
-                                    });
-                                  } catch {
-                                    // Fallback to browser print if native fails
-                                    window.open(`/frontdesk/payments/${linkedPayment.id}/receipt`, '_blank');
-                                  }
-                                } else {
-                                  window.open(`/payments/${linkedPayment.id}/receipt`, '_blank');
-                                }
-                              }}
-                            >
-                              <Printer className="w-3 h-3 mr-1" /> Receipt
-                            </Button>
-                          )}
-                          {linkedPayment && linkedPayment.status === 'COMPLETED' && !isClosed && (
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              className="h-7 text-xs text-amber-600 hover:text-amber-700 hover:bg-amber-50"
-                              onClick={() => setRefundPaymentId(linkedPayment.id)}
-                            >
-                              <CornerDownRight className="w-3 h-3 mr-1" /> Refund
-                            </Button>
-                          )}
+                          <p className="truncate font-medium text-slate-800" title={item.description}>{item.description}</p>
+                          {item.creditStatus && <Badge variant="secondary" className="shrink-0 text-[10px]">{item.creditStatus}</Badge>}
                           </div>
+                        </td>
+                        <td className={`whitespace-nowrap px-4 py-4 text-right font-bold tabular-nums ${isDebit ? 'text-slate-900' : 'text-emerald-700'}`}>
+                          <span className="mr-1 text-xs font-medium text-slate-400">{isDebit ? '+' : '−'}</span>{formatCurrency(absAmount)}
+                        </td>
+                        <td className="px-4 py-4"><div className="flex justify-end">{renderItemActions(item)}</div>
                         </td>
                       </tr>
                     );
@@ -282,6 +252,16 @@ export function FolioSection({ reservation }: { reservation: any }) {
                 )}
               </tbody>
             </table>
+            </div>
+            <div className="space-y-3 md:hidden">
+              {ledgerItems.length === 0 ? <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">No transactions recorded.</div> : ledgerItems.map((item: any) => {
+                const isDebit = item.amount > 0;
+                const absAmount = Math.abs(item.amount);
+                return <div key={item.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="flex items-start justify-between gap-3"><div className="min-w-0"><Badge variant={item.type === 'CHARGE' ? 'outline' : item.type === 'PAYMENT' ? 'default' : 'secondary'} className="text-[10px]">{item.type}</Badge><p className="mt-2 font-semibold text-slate-900">{item.description}</p><p className="mt-1 text-xs text-slate-500">{format(new Date(item.createdAt), 'MMM d, yyyy · h:mm a')}</p></div><p className={`shrink-0 text-lg font-black tabular-nums ${isDebit ? 'text-slate-900' : 'text-emerald-700'}`}>{isDebit ? '+' : '−'}{formatCurrency(absAmount)}</p></div>
+                  <div className="mt-3 border-t pt-3">{renderItemActions(item)}</div>
+                </div>;
+              })}
             </div>
           </div>
         </CardContent>

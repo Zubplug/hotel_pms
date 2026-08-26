@@ -185,9 +185,20 @@ export async function POST(req: NextRequest) {
           // Authoritative Domain Routing
           if (aggregateType === 'FRONTDESK_SESSION' && eventType === 'FRONTDESK_SESSION_OPENED') {
              const sessionId = payload.sessionId || aggregateId;
+             // LocalRepository serializes nested session members with their C# names
+             // (BusinessDate / ShiftReference), while the explicitly named members are camelCase.
+             const businessDateValue = payload.businessDate ?? payload.BusinessDate;
+             const businessDate = new Date(businessDateValue);
+             const shiftReference = payload.shiftReference ?? payload.ShiftReference;
+             if (Number.isNaN(businessDate.getTime())) {
+               throw new Error('Invalid FRONTDESK_SESSION_OPENED payload: businessDate is required.');
+             }
+             if (!shiftReference) {
+               throw new Error('Invalid FRONTDESK_SESSION_OPENED payload: shiftReference is required.');
+             }
              const existingSession = await tx.frontdeskSession.findUnique({ where: { id: sessionId } });
              if (!existingSession) {
-               await tx.frontdeskSession.create({ data: { id: sessionId, propertyId, staffId: payload.staffId || actorId, cashAccountId: payload.cashAccountId, shiftReference: payload.shiftReference, businessDate: new Date(payload.businessDate), openingFloat: Number(payload.openingFloat || 0), systemExpectedCash: Number(payload.openingFloat || 0) } });
+               await tx.frontdeskSession.create({ data: { id: sessionId, propertyId, staffId: payload.staffId || actorId, cashAccountId: payload.cashAccountId, shiftReference, businessDate, openingFloat: Number(payload.openingFloat || 0), systemExpectedCash: Number(payload.openingFloat || 0) } });
                await tx.frontdeskSessionAudit.create({ data: { frontdeskSessionId: sessionId, action: 'OPENED', performedBy: actorId, notes: 'Offline session synchronized' } });
              }
           } else if (aggregateType === 'FRONTDESK_SESSION' && eventType === 'FRONTDESK_SESSION_CLOSED') {
