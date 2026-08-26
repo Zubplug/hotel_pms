@@ -14,13 +14,15 @@ import {
   Bell, 
   Scale, 
   LogOut,
-  ChevronLeft
+  Hotel
 } from 'lucide-react';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
+import { useLogout } from '@/hooks/useLogout';
 
 export function InventorySidebar() {
   const pathname = usePathname();
   const { data: session } = useLodgeCoreSession();
+  const logout = useLogout();
   const role = session?.user?.role as string | undefined;
   
   const links = [
@@ -35,15 +37,19 @@ export function InventorySidebar() {
     { name: 'Reconciliation', href: '/inventory/reconciliation', icon: Scale, roles: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'STOCK_MANAGER'] },
   ];
 
+  const userInitials = session?.user?.email
+    ? session.user.email.slice(0, 2).toUpperCase()
+    : '??';
+
   return (
-    <aside className="w-64 bg-zinc-950 border-r border-zinc-800 flex flex-col h-screen text-zinc-300">
-      <div className="h-16 flex items-center px-6 border-b border-zinc-800">
-        <div className="flex items-center gap-3 text-white">
-          <div className="bg-indigo-600 p-1.5 rounded-lg">
-            <Package className="w-5 h-5 text-white" />
+    <aside className="w-64 bg-white border-r border-slate-200 flex flex-col h-screen text-slate-700">
+      <div className="h-16 flex items-center px-6 border-b border-slate-200">
+        <Link href="/inventory" className="flex items-center gap-3 text-slate-900 group">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 shadow-sm transition-transform group-hover:scale-105">
+            <Hotel className="h-4 w-4 text-white" />
           </div>
           <span className="font-bold text-lg tracking-tight">Stock Pro</span>
-        </div>
+        </Link>
       </div>
       
       <div className="flex-1 py-6 px-3 overflow-y-auto space-y-1">
@@ -60,22 +66,38 @@ export function InventorySidebar() {
               href={link.href}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200
                 ${isActive 
-                  ? 'bg-indigo-600/10 text-indigo-400' 
-                  : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900/50'
+                  ? 'bg-blue-50 text-blue-700' 
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                 }`}
             >
-              <link.icon className={`w-4 h-4 ${isActive ? 'text-indigo-400' : 'text-zinc-500'}`} />
+              <link.icon className={`w-4 h-4 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
               {link.name}
             </Link>
           );
         })}
       </div>
       
-      <div className="p-4 border-t border-zinc-800">
-        <Link href="/dashboard" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-zinc-400 hover:text-white hover:bg-zinc-900/50 transition-all">
-          <ChevronLeft className="w-4 h-4" />
-          Back to PMS
-        </Link>
+      <div className="p-4 border-t border-slate-200">
+        <div className="flex items-center gap-3 mb-4 px-2">
+          <div className="h-10 w-10 shrink-0 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-sm font-bold text-slate-700">
+            {userInitials}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-slate-900 truncate">
+              {session?.user?.name || session?.user?.email}
+            </p>
+            <p className="text-xs text-slate-500 capitalize truncate">
+              {(role || 'Staff').toLowerCase().replace('_', ' ')}
+            </p>
+          </div>
+        </div>
+        <button 
+          onClick={() => logout()}
+          className="flex w-full items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-all"
+        >
+          <LogOut className="w-4 h-4" />
+          Sign Out
+        </button>
       </div>
     </aside>
   );

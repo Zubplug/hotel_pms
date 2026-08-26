@@ -94,39 +94,39 @@ export default async function InventoryDashboardPage() {
       
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-white mb-1">Operations Dashboard</h1>
-        <p className="text-zinc-400">Real-time overview of inventory and procurement activities.</p>
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900 mb-1">Operations Dashboard</h1>
+        <p className="text-slate-500">Real-time overview of inventory and procurement activities.</p>
       </div>
 
       {/* Primary KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard 
           title="Total Stock Value" 
-          value={`$${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+          value={`₦${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
           subtitle="Across all warehouses"
           icon={CreditCard}
-          color="bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+          color="bg-emerald-50 text-emerald-600 border-emerald-200"
         />
         <KPICard 
           title="Items Tracked" 
           value={stockItems.length.toString()}
           subtitle={`${itemsInStock} items currently in stock`}
           icon={Package}
-          color="bg-blue-500/10 text-blue-400 border-blue-500/20"
+          color="bg-blue-50 text-blue-600 border-blue-200"
         />
         <KPICard 
           title="Critical Stock" 
           value={(lowStockItems.length + outOfStockItems.length).toString()}
           subtitle={`${outOfStockItems.length} out of stock`}
           icon={AlertTriangle}
-          color="bg-red-500/10 text-red-400 border-red-500/20"
+          color="bg-red-50 text-red-600 border-red-200"
         />
         <KPICard 
           title="Pending Approvals" 
           value={(pendingPOs.length + pendingTransfers.length + pendingReconciliations.length).toString()}
           subtitle="POs, Transfers, Adjustments"
           icon={Scale}
-          color="bg-amber-500/10 text-amber-400 border-amber-500/20"
+          color="bg-amber-50 text-amber-600 border-amber-200"
         />
       </div>
 
@@ -135,47 +135,47 @@ export default async function InventoryDashboardPage() {
         
         {/* Left Column: Attention Required */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-zinc-900/50 backdrop-blur-md border border-zinc-800 rounded-xl overflow-hidden shadow-xl">
-            <div className="px-6 py-4 border-b border-zinc-800 flex justify-between items-center bg-zinc-900/80">
-              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+            <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50/50">
+              <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
                 <AlertCircle className="w-5 h-5 text-amber-500" />
                 Attention Required
               </h2>
             </div>
             
-            <div className="divide-y divide-zinc-800/50">
+            <div className="divide-y divide-slate-100">
               {outOfStockItems.slice(0, 3).map(item => (
-                <div key={item.id} className="p-4 px-6 flex items-center justify-between hover:bg-zinc-800/20 transition-colors">
+                <div key={item.id} className="p-4 px-6 flex items-center justify-between hover:bg-slate-50 transition-colors">
                   <div>
-                    <p className="text-sm font-medium text-white">{item.name}</p>
-                    <p className="text-xs text-zinc-400">Out of Stock • {item.warehouse.name}</p>
+                    <p className="text-sm font-medium text-slate-900">{item.name}</p>
+                    <p className="text-xs text-slate-500">Out of Stock • {item.warehouse.name}</p>
                   </div>
-                  <Link href={`/inventory/stock-items/${item.id}`} className="text-xs font-semibold text-indigo-400 hover:text-indigo-300">View</Link>
+                  <Link href={`/inventory/stock-items/${item.id}`} className="text-xs font-semibold text-blue-600 hover:text-blue-700">View</Link>
                 </div>
               ))}
               
               {pendingPOs.slice(0, 3).map(po => (
-                <div key={po.id} className="p-4 px-6 flex items-center justify-between hover:bg-zinc-800/20 transition-colors">
+                <div key={po.id} className="p-4 px-6 flex items-center justify-between hover:bg-slate-50 transition-colors">
                   <div>
-                    <p className="text-sm font-medium text-white">PO {po.poNumber} — {po.supplier.name}</p>
-                    <p className="text-xs text-zinc-400">Pending • Expected {po.expectedDate ? new Date(po.expectedDate).toLocaleDateString() : 'N/A'}</p>
+                    <p className="text-sm font-medium text-slate-900">PO {po.poNumber} — {po.supplier.name}</p>
+                    <p className="text-xs text-slate-500">Pending • Expected {po.expectedDate ? new Date(po.expectedDate).toLocaleDateString() : 'N/A'}</p>
                   </div>
-                  <Link href={`/inventory/purchase-orders/${po.id}`} className="text-xs font-semibold text-indigo-400 hover:text-indigo-300">Review</Link>
+                  <Link href={`/inventory/purchase-orders/${po.id}`} className="text-xs font-semibold text-blue-600 hover:text-blue-700">Review</Link>
                 </div>
               ))}
 
               {pendingTransfers.slice(0, 3).map(tr => (
-                <div key={tr.id} className="p-4 px-6 flex items-center justify-between hover:bg-zinc-800/20 transition-colors">
+                <div key={tr.id} className="p-4 px-6 flex items-center justify-between hover:bg-slate-50 transition-colors">
                   <div>
-                    <p className="text-sm font-medium text-white">Transfer {tr.transferRef}</p>
-                    <p className="text-xs text-zinc-400">{tr.fromWarehouse.name} → {tr.toWarehouse.name}</p>
+                    <p className="text-sm font-medium text-slate-900">Transfer {tr.transferRef}</p>
+                    <p className="text-xs text-slate-500">{tr.fromWarehouse.name} → {tr.toWarehouse.name}</p>
                   </div>
-                  <Link href={`/inventory/transfers/${tr.id}`} className="text-xs font-semibold text-indigo-400 hover:text-indigo-300">Review</Link>
+                  <Link href={`/inventory/transfers/${tr.id}`} className="text-xs font-semibold text-blue-600 hover:text-blue-700">Review</Link>
                 </div>
               ))}
 
               {outOfStockItems.length === 0 && pendingPOs.length === 0 && pendingTransfers.length === 0 && (
-                <div className="p-8 text-center text-zinc-500 text-sm">
+                <div className="p-8 text-center text-slate-500 text-sm">
                   All clear. No urgent items require attention.
                 </div>
               )}
@@ -185,27 +185,27 @@ export default async function InventoryDashboardPage() {
 
         {/* Right Column: Recent Activity */}
         <div className="space-y-6">
-          <div className="bg-zinc-900/50 backdrop-blur-md border border-zinc-800 rounded-xl overflow-hidden shadow-xl">
-            <div className="px-5 py-4 border-b border-zinc-800 bg-zinc-900/80">
-              <h2 className="text-md font-semibold text-white flex items-center gap-2">
-                <RefreshCw className="w-4 h-4 text-zinc-400" />
+          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+            <div className="px-5 py-4 border-b border-slate-200 bg-slate-50/50">
+              <h2 className="text-md font-semibold text-slate-900 flex items-center gap-2">
+                <RefreshCw className="w-4 h-4 text-slate-400" />
                 Recent Activity
               </h2>
             </div>
             <div className="p-4 space-y-4">
               {recentActivity.map(txn => (
                 <div key={txn.id} className="flex items-start gap-3">
-                  <div className={`mt-0.5 p-1.5 rounded-md ${Number(txn.quantity) > 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                  <div className={`mt-0.5 p-1.5 rounded-md ${Number(txn.quantity) > 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
                     {Number(txn.quantity) > 0 ? <LogIn className="w-3 h-3" /> : <LogOut className="w-3 h-3" />}
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-zinc-200">{txn.stockItem.name}</p>
-                    <p className="text-xs text-zinc-500 capitalize">{txn.source.toLowerCase()} • {Number(txn.quantity) > 0 ? '+' : ''}{Number(txn.quantity).toString()}</p>
+                    <p className="text-sm font-medium text-slate-900">{txn.stockItem.name}</p>
+                    <p className="text-xs text-slate-500 capitalize">{txn.source.toLowerCase()} • {Number(txn.quantity) > 0 ? '+' : ''}{Number(txn.quantity).toString()}</p>
                   </div>
                 </div>
               ))}
               {recentActivity.length === 0 && (
-                <p className="text-xs text-zinc-500 text-center py-4">No recent transactions</p>
+                <p className="text-xs text-slate-500 text-center py-4">No recent transactions</p>
               )}
             </div>
           </div>
@@ -218,17 +218,17 @@ export default async function InventoryDashboardPage() {
 
 function KPICard({ title, value, subtitle, icon: Icon, color }: any) {
   return (
-    <div className="bg-zinc-900/40 backdrop-blur-xl border border-zinc-800/80 rounded-2xl p-5 shadow-lg relative overflow-hidden group hover:border-zinc-700 transition-colors">
-      <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-        <Icon className="w-24 h-24 transform translate-x-4 -translate-y-4 text-zinc-400" />
+    <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm relative overflow-hidden group hover:border-slate-300 transition-colors">
+      <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+        <Icon className="w-24 h-24 transform translate-x-4 -translate-y-4 text-slate-900" />
       </div>
       <div className="relative z-10">
         <div className={`inline-flex p-2 rounded-xl border ${color} mb-4`}>
           <Icon className="w-5 h-5" />
         </div>
-        <h3 className="text-zinc-400 text-sm font-medium">{title}</h3>
-        <p className="text-3xl font-bold text-white mt-1 mb-1 tracking-tight">{value}</p>
-        <p className="text-xs text-zinc-500">{subtitle}</p>
+        <h3 className="text-slate-500 text-sm font-medium">{title}</h3>
+        <p className="text-3xl font-bold text-slate-900 mt-1 mb-1 tracking-tight">{value}</p>
+        <p className="text-xs text-slate-500">{subtitle}</p>
       </div>
     </div>
   );
