@@ -82,9 +82,9 @@ export default async function StockItemsPage() {
                     <Link href={`/inventory/stock-items/${item.id}`} className="inline-flex items-center justify-center w-8 h-8 rounded-md text-slate-500 hover:text-slate-900 hover:bg-slate-200 transition-colors">
                       <Edit className="w-4 h-4" />
                     </Link>
-                    <button className="inline-flex items-center justify-center w-8 h-8 rounded-md text-slate-500 hover:text-blue-600 hover:bg-slate-200 transition-colors" title="View Ledger">
+                    <Link href={`/inventory/stock-items/${item.id}`} className="inline-flex items-center justify-center w-8 h-8 rounded-md text-slate-500 hover:text-blue-600 hover:bg-slate-200 transition-colors" title="View Details">
                       <Eye className="w-4 h-4" />
-                    </button>
+                    </Link>
                   </td>
                 </tr>
               ))}
