@@ -13,7 +13,7 @@ export default function NewStockItemPage() {
   useEffect(() => {
     fetch('/api/v1/inventory/warehouses')
       .then((res) => res.json())
-      .then((data) => setWarehouses(data))
+      .then((data) => setWarehouses(data.data || []))
       .catch((err) => console.error('Failed to fetch warehouses', err));
   }, []);
 

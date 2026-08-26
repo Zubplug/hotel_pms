@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import Link from 'next/link';
 import { Building2 } from 'lucide-react';
 import WarehouseClientActions from './WarehouseClientActions';
+import EditWarehouseDialog from './EditWarehouseDialog';
 
 export default async function WarehousesPage() {
   const session = await auth();
@@ -32,11 +33,14 @@ export default async function WarehousesPage() {
           <div key={warehouse.id} className="bg-white border border-slate-200 rounded-lg p-6 hover:border-slate-300 transition-colors group flex flex-col shadow-sm">
             <div className="flex items-start justify-between mb-4">
               <div className="flex-1">
-                <div className="flex items-center gap-3 mb-1">
-                  <div className="p-2 bg-slate-50 rounded-md text-slate-500 group-hover:text-blue-600 group-hover:bg-blue-50 transition-colors">
-                    <Building2 className="w-5 h-5" />
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-slate-50 rounded-md text-slate-500 group-hover:text-blue-600 group-hover:bg-blue-50 transition-colors">
+                      <Building2 className="w-5 h-5" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-slate-900">{warehouse.name}</h3>
                   </div>
-                  <h3 className="text-lg font-semibold text-slate-900">{warehouse.name}</h3>
+                  <EditWarehouseDialog warehouse={{ id: warehouse.id, name: warehouse.name, location: warehouse.location }} />
                 </div>
                 <p className="text-sm text-slate-500 pl-11">{warehouse.location || 'No location set'}</p>
               </div>

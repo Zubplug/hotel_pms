@@ -20,8 +20,8 @@ export default function NewPurchaseOrderPage() {
   const [items, setItems] = useState([{ stockItemId: '', description: '', quantity: 1, uom: '', unitPrice: 0 }]);
 
   useEffect(() => {
-    fetch('/api/v1/inventory/suppliers').then(r => r.json()).then(setSuppliers);
-    fetch('/api/v1/inventory/stock-items').then(r => r.json()).then(setStockItems);
+    fetch('/api/v1/inventory/suppliers').then(r => r.json()).then(r => setSuppliers(r.data || []));
+    fetch('/api/v1/inventory/stock-items').then(r => r.json()).then(r => setStockItems(r.data?.items || []));
   }, []);
 
   const total = items.reduce((sum, item) => sum + (Number(item.quantity) * Number(item.unitPrice)), 0);
