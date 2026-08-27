@@ -133,7 +133,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           bankCode: requestedMethod === 'BANK_TRANSFER' ? bankCode || null : null,
           category,
           reason,
-          supportingNotes: body.supportingNotes ? String(body.supportingNotes) : null,
+          supportingNotes: [
+            body.supportingNotes ? String(body.supportingNotes) : null,
+            category === 'REDUCED_STAY' ? `Reduced stay nights: ${reducedStayNights}` : null,
+          ].filter(Boolean).join('\n') || null,
           requestedById: session.user.id,
           currentApproverId: candidate?.userId,
           approvalRoleId: role?.id,

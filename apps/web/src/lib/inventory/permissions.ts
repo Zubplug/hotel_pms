@@ -19,8 +19,20 @@ export const INVENTORY_PERMISSIONS = {
   // Approving a stock adjustment
   'inventory.adjust.approve': ['CEO', 'SUPER_ADMIN', 'MANAGER'],
   
-  // Creating a GRN and posting stock receipts
+  // Creating a GRN and submitting it
   'inventory.receive': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'STOCK_MANAGER', 'PROCUREMENT_MANAGER'],
+  
+  // Approving a submitted GRN
+  'inventory.approve': ['CEO', 'SUPER_ADMIN', 'MANAGER'],
+
+  // Posting an approved GRN to stock
+  'inventory.post': ['CEO', 'SUPER_ADMIN', 'MANAGER'],
+
+  // Cancelling a draft or submitted GRN
+  'inventory.cancel': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'STOCK_MANAGER', 'PROCUREMENT_MANAGER'],
+
+  // Reversing a posted GRN (exceptional operation)
+  'inventory.reverse': ['CEO', 'SUPER_ADMIN'],
   
   // Creating a stock transfer
   'inventory.transfer': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'STOCK_MANAGER'],

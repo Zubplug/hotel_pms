@@ -1473,9 +1473,14 @@ public class LocalRepository
             .FirstOrDefaultAsync(r => r.Id == reservationId);
         if (res == null || res.Status != "CHECKED_IN") return false;
 
-        if (res.Folio != null && res.Folio.OutstandingBalance > 0)
+        if (res.Folio != null && res.Folio.NetBalance > 0.01m)
         {
-            throw new InvalidOperationException("Cannot check out with an outstanding balance.");
+            throw new InvalidOperationException($"Cannot check out with an outstanding balance of {res.Folio.NetBalance:N2}. Settle the folio first.");
+        }
+
+        if (res.Folio != null && res.Folio.NetBalance < -0.01m)
+        {
+            throw new InvalidOperationException($"Cannot check out with a guest credit of {Math.Abs(res.Folio.NetBalance):N2}. Process a refund first.");
         }
 
         res.Status = "CHECKED_OUT";
@@ -1964,7 +1969,7 @@ public class LocalRepository
             reservationId = reservation.Id,
             checkIn = reservation.CheckInDate,
             checkOut = reservation.CheckOutDate,
-            folioBalance = reservation.Folio != null ? reservation.Folio.TotalCharges - reservation.Folio.TotalPayments : 0,
+            folioBalance = reservation.Folio?.NetBalance ?? 0,
             currency = "NGN", // Hardcoded for now based on UI
             room = new { number = room.Number },
             guest = reservation.Guest != null ? new
@@ -3530,11 +3535,15 @@ public class LocalRepository
         return audit;
     }
 
-    public async Task<List<LocalStaff>> GetActiveStaffAsync(string propertyId)
+    public async Task<List<LocalStaff>> GetActiveStaffAsync(string propertyId, string? roleScope = null)
     {
-        return await _dbContext.Staff
+        var staff = await _dbContext.Staff
             .Where(s => s.PropertyId == propertyId && s.IsActive && s.HasPosAccess)
             .ToListAsync();
+        if (string.IsNullOrWhiteSpace(roleScope)) return staff;
+        var roles = roleScope.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return staff.Where(s => roles.Contains(s.Role)).ToList();
     }
 
     public async Task<LocalStaff?> AuthenticateOperatorAsync(string staffId, string pin, string propertyId)

@@ -21,6 +21,7 @@ export async function GET(req: NextRequest) {
       where: {
         propertyAccess: { has: propertyId },
         isActive: true,
+        position: { in: ['WAITER', 'WAITRESS', 'CASHIER'] },
       },
       select: {
         id: true,

@@ -12,10 +12,10 @@ import { cn, generateUUID } from '@/lib/utils';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { getReducedStayEstimate } from '@/lib/refunds/reduced-stay';
 
-export function FrontDeskRefundDialog({ open, onOpenChange, folio, reservation, paymentId }: { open: boolean, onOpenChange: (open: boolean) => void, folio: any, reservation: any, paymentId: string }) {
+export function FrontDeskRefundDialog({ open, onOpenChange, folio, reservation, paymentId, initialCategory = 'MANUAL_ADJUSTMENT' }: { open: boolean, onOpenChange: (open: boolean) => void, folio: any, reservation: any, paymentId: string, initialCategory?: string }) {
   const [amount, setAmount] = useState<string>('');
   const [reason, setReason] = useState('');
-  const [category, setCategory] = useState('MANUAL_ADJUSTMENT');
+  const [category, setCategory] = useState(initialCategory);
   const [reducedStayNightsInput, setReducedStayNightsInput] = useState('1');
   const [refundMethod, setRefundMethod] = useState('ORIGINAL_PAYMENT');
   const [bankAccountName, setBankAccountName] = useState('');

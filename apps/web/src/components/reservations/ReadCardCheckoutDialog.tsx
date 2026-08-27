@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { formatCurrency } from '@/lib/utils';
-import { CreditCard, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { CreditCard, Loader2, AlertCircle, CheckCircle2, Wallet } from 'lucide-react';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
 interface ReadCardCheckoutDialogProps {
@@ -122,6 +122,11 @@ export function ReadCardCheckoutDialog({ open, onOpenChange, propertyId }: ReadC
     }
   };
 
+  const balance = Number(reservation?.balance ?? reservation?.folioBalance ?? 0);
+  const isUnpaid = balance > 0.01;
+  const hasGuestCredit = balance < -0.01;
+  const isFolioSettled = !isUnpaid && !hasGuestCredit;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
@@ -158,16 +163,24 @@ export function ReadCardCheckoutDialog({ open, onOpenChange, propertyId }: ReadC
                 <p className="text-sm text-muted-foreground">Room {reservation.room?.number}</p>
                 <div className="mt-3 pt-3 border-t flex justify-between">
                   <span className="text-sm font-medium">Folio Balance:</span>
-                  <span className={`text-sm font-bold ${reservation.balance !== 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                    {formatCurrency(reservation.balance)}
+                  <span className={`text-sm font-bold ${isUnpaid ? 'text-red-600' : hasGuestCredit ? 'text-amber-600' : 'text-emerald-600'}`}>
+                    {formatCurrency(Math.abs(balance))}
                   </span>
                 </div>
               </div>
 
-              {reservation.balance !== 0 && (
-                <div className="bg-red-50 text-red-700 p-3 rounded-md flex gap-2 text-sm">
-                  <AlertCircle className="h-5 w-5 shrink-0" />
-                  <p>Guest has an outstanding balance. Please settle the folio before checking out.</p>
+              {!isFolioSettled && (
+                <div className={`${isUnpaid ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-800'} p-3 rounded-md flex gap-2 text-sm`}>
+                  {isUnpaid ? <AlertCircle className="h-5 w-5 shrink-0" /> : <Wallet className="h-5 w-5 shrink-0" />}
+                  <p>{isUnpaid
+                    ? `Guest owes ${formatCurrency(balance)}. Settle the folio before checking out.`
+                    : `Guest has ${formatCurrency(Math.abs(balance))} credit. Process a refund before checking out.`}</p>
+                </div>
+              )}
+              {isFolioSettled && (
+                <div className="bg-emerald-50 text-emerald-700 p-3 rounded-md flex gap-2 text-sm">
+                  <CheckCircle2 className="h-5 w-5 shrink-0" />
+                  <p>Folio settled. Guest is cleared for checkout.</p>
                 </div>
               )}
             </div>
@@ -194,7 +207,7 @@ export function ReadCardCheckoutDialog({ open, onOpenChange, propertyId }: ReadC
           {step === 'CONFIRMING' && (
             <>
               <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button onClick={handleCheckout} disabled={reservation?.balance !== 0}>
+              <Button onClick={handleCheckout} disabled={!isFolioSettled}>
                 Confirm Checkout
               </Button>
             </>

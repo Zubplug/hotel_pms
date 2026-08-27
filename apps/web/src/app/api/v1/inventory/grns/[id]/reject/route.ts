@@ -14,18 +14,13 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
 
     const { role, propertyId, isSuperAdmin, id: userId } = session.user as any;
 
-    if (!hasInventoryPermission(role, 'inventory.post', isSuperAdmin)) {
+    if (!hasInventoryPermission(role, 'inventory.approve', isSuperAdmin)) {
       return NextResponse.json({ data: null, error: 'Forbidden' }, { status: 403 });
     }
-
-    const body = await request.json();
-    const { operationId } = body;
     
-    if (!operationId) {
-      return NextResponse.json({ data: null, error: 'operationId is required' }, { status: 400 });
-    }
+    const body = await request.json();
+    const reason = body.reason || 'No reason provided';
 
-    // Verify it belongs to property
     const grn = await prisma.goodsReceivedNote.findFirst({
       where: { id: params.id, propertyId }
     });
@@ -34,7 +29,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       return NextResponse.json({ data: null, error: 'Not Found' }, { status: 404 });
     }
 
-    const result = await InventoryService.postReceipt(params.id, userId, operationId);
+    const result = await InventoryService.rejectReceipt(params.id, userId, reason);
 
     return NextResponse.json({ data: result, error: null });
   } catch (error: any) {

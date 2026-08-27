@@ -173,7 +173,7 @@ public partial class MainPage : ContentPage
                     );
                     break;
                 case "auth.getActiveStaff":
-                    responseData = await pmsInterop.GetActiveStaffAsync();
+                    responseData = await pmsInterop.GetActiveStaffAsync(parameters?["roleScope"]?.ToString());
                     break;
                 case "auth.login":
                     responseData = await pmsInterop.LoginAsync(
@@ -676,7 +676,7 @@ public partial class MainPage : ContentPage
                         parameters?["operatorToken"]?.ToString() ?? "");
                     break;
                 case "pos.getActiveStaff":
-                    responseData = await pmsInterop.GetActiveStaffAsync(parameters?["propertyId"]?.ToString() ?? "");
+                    responseData = await pmsInterop.GetActiveStaffAsync(parameters?["propertyId"]?.ToString() ?? "", "WAITER,WAITRESS,CASHIER");
                     break;
                 case "pos.getCategories":
                     responseData = await pmsInterop.GetCategoriesAsync(parameters?["propertyId"]?.ToString() ?? "");

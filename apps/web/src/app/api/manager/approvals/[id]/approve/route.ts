@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { resolveUser } from '@/lib/resolve-user';
 import { PaystackProvider } from '@/lib/payment-providers/paystack';
+import { applyRefundToFolio } from '@/lib/refunds/settle-refund';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -264,11 +265,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           idempotencyKey: `refund-request:${current.id}`
         } });
         if (completed) {
-          const folio = await tx.folio.findUnique({ where: { id: result.folioId } });
-          if (!folio) throw new Error('NOT_FOUND');
-          const updatedFolio = await tx.folio.updateMany({ where: { id: folio.id, version: folio.version }, data: { version: { increment: 1 }, totalPayments: { decrement: result.amount }, balance: { increment: result.amount } } });
-          if (updatedFolio.count !== 1) throw new Error('CONFLICT');
-          await tx.folioItem.create({ data: { folioId: folio.id, businessDate: new Date(), type: 'REFUND', source: 'MANUAL', description: `Refund request ${current.id}`, quantity: 1, unitAmount: result.amount, amount: result.amount, currency: result.currency, baseAmount: result.amount, postedBy: user.id } });
+          await applyRefundToFolio(tx, current, result.amount, user.id);
+          await tx.folioItem.create({ data: { folioId: result.folioId, businessDate: new Date(), type: 'REFUND', source: 'MANUAL', description: `Refund request ${current.id}`, quantity: 1, unitAmount: result.amount, amount: result.amount, currency: result.currency, baseAmount: result.amount, postedBy: user.id } });
           const totalRefunded = result.committedRefunded + result.amount;
           await tx.payment.update({ where: { id: result.paymentId }, data: { status: totalRefunded >= Number(current.payment.amount) ? 'REFUNDED' : 'PARTIALLY_REFUNDED' } });
         }
@@ -305,6 +303,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (err.message === 'REFUND_REQUIRES_CANCELLED_RESERVATION') return errorResponse('BAD_REQUEST', 'The reservation is no longer cancelled.', 400);
     if (err.message === 'INVALID_REFUND_METHOD') return errorResponse('BAD_REQUEST', 'Invalid refund settlement method.', 400);
     if (err.message === 'BANK_DETAILS_REQUIRED') return errorResponse('BAD_REQUEST', 'Bank details are required for a bank transfer refund.', 400);
+    if (err.message === 'REDUCED_STAY_METADATA_MISSING' || err.message === 'REDUCED_STAY_CHARGES_UNAVAILABLE' || err.message === 'REDUCED_STAY_CHARGES_CHANGED') return errorResponse('CONFLICT', 'The unused room nights changed; review this reduced-stay refund before approving it.', 409);
     if (err.message === 'CONFLICT') return errorResponse('CONFLICT', 'Approval request is no longer pending', 409);
 
     return errorResponse('INTERNAL_ERROR', 'Unexpected error processing approval', 500);

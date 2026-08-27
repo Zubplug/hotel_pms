@@ -399,6 +399,17 @@ export async function POST(req: NextRequest) {
              
           }
           else if (eventType === 'CHECK_OUT') {
+             // Desktop checkouts are queued while offline, so enforce the same
+             // financial rule again when the event reaches the cloud. This must
+             // happen inside the transaction before changing reservation/room state.
+             const folios = await tx.folio.findMany({
+               where: { reservationId: aggregateId, propertyId },
+               select: { balance: true }
+             });
+             const totalBalance = folios.reduce((sum: number, folio: any) => sum + Number(folio.balance), 0);
+             if (totalBalance > 0.01) throw new Error('PAYMENT_REQUIRED');
+             if (totalBalance < -0.01) throw new Error('REFUND_REQUIRED');
+
              await tx.reservation.update({
                where: { id: aggregateId },
                data: { status: 'CHECKED_OUT' }
@@ -719,8 +730,8 @@ export async function POST(req: NextRequest) {
              const requestedMethod = String(payload.requestedMethod || payload.refundMethod || 'ORIGINAL_PAYMENT').toUpperCase();
              if (!['CASH', 'BANK_TRANSFER', 'ORIGINAL_PAYMENT'].includes(requestedMethod)) throw new Error('Invalid refund method');
              const category = String(payload.category || 'MANUAL_ADJUSTMENT').toUpperCase();
+             const reducedStayNights = Number(payload.reducedStayNights ?? payload.ReducedStayNights);
              if (category === 'REDUCED_STAY') {
-               const reducedStayNights = Number(payload.reducedStayNights ?? payload.ReducedStayNights);
                const roomChargeTotal = payment.folio.items.filter(item => item.source === 'ROOM_CHARGE' && item.type === 'CHARGE' && !item.voidedAt).reduce((sum, item) => sum + Number(item.amount), 0);
                const estimate = getReducedStayEstimate({ checkIn: payment.reservation?.checkIn, checkOut: payment.reservation?.checkOut, status: payment.reservation?.status, roomChargeTotal });
                if (!Number.isInteger(reducedStayNights) || reducedStayNights <= 0 || reducedStayNights > estimate.availableNights || Math.abs(amount - reducedStayNights * estimate.nightlyRoomAmount) > 0.01) throw new Error('Invalid reduced-stay refund calculation');
@@ -737,7 +748,9 @@ export async function POST(req: NextRequest) {
                  bankAccountLast4: requestedMethod === 'BANK_TRANSFER' && bankAccountNumber ? bankAccountNumber.slice(-4) : null,
                  bankName: requestedMethod === 'BANK_TRANSFER' ? payload.bankName || null : null,
                  bankCode: requestedMethod === 'BANK_TRANSFER' ? payload.bankCode || null : null,
-                 category, reason: payload.reason || 'Offline refund request', requestedById: requesterId, idempotencyKey,
+                 category, reason: payload.reason || 'Offline refund request',
+                 supportingNotes: [payload.supportingNotes || null, category === 'REDUCED_STAY' ? `Reduced stay nights: ${reducedStayNights}` : null].filter(Boolean).join('\n') || null,
+                 requestedById: requesterId, idempotencyKey,
                  expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
                } });
                await tx.approvalRequest.create({ data: { propertyId, type: 'REFUND', status: 'PENDING', requestedBy: requesterId, amount, currency: request.currency, reason: request.reason, expiresAt: request.expiresAt, details: { refundRequestId: request.id, category: request.category, requestedAmount: amount, requestedMethod, stepOrder: 1 } } });

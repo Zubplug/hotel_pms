@@ -1052,6 +1052,80 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                 }
             }
 
+            // ---- Recover active Front Desk sessions ----------------------
+            // The pull endpoint always includes OPEN sessions so a clean
+            // reinstall can restore the receptionist's till and its cash
+            // movements. Upsert by immutable IDs to remain idempotent.
+            if (root.TryGetProperty("frontdeskSessions", out var frontdeskSessions) && frontdeskSessions.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var sessionEl in frontdeskSessions.EnumerateArray())
+                {
+                    var sessionId = sessionEl.TryGetProperty("id", out var sid) ? sid.GetString() : null;
+                    var sessionPropertyId = sessionEl.TryGetProperty("propertyId", out var spid) ? spid.GetString() : propertyId;
+                    if (string.IsNullOrWhiteSpace(sessionId) || sessionPropertyId != propertyId) continue;
+
+                    var localSession = await dbContext.FrontdeskSessions.FirstOrDefaultAsync(s => s.Id == sessionId, stoppingToken);
+                    if (localSession == null)
+                    {
+                        localSession = new LodgeCore.Desktop.Data.Entities.LocalFrontdeskSession { Id = sessionId };
+                        dbContext.FrontdeskSessions.Add(localSession);
+                    }
+
+                    localSession.PropertyId = propertyId;
+                    localSession.StaffId = sessionEl.TryGetProperty("staffId", out var staffId) ? staffId.GetString() ?? "" : localSession.StaffId;
+                    localSession.CashAccountId = sessionEl.TryGetProperty("cashAccountId", out var cashAccountId) ? cashAccountId.GetString() ?? "" : localSession.CashAccountId;
+                    localSession.ShiftReference = sessionEl.TryGetProperty("shiftReference", out var shiftReference) ? shiftReference.GetString() ?? "" : localSession.ShiftReference;
+                    localSession.Status = sessionEl.TryGetProperty("status", out var sessionStatus) ? sessionStatus.GetString() ?? "OPEN" : "OPEN";
+
+                    if (sessionEl.TryGetProperty("businessDate", out var businessDate) && DateTime.TryParse(businessDate.GetString(), out var parsedBusinessDate)) localSession.BusinessDate = parsedBusinessDate;
+                    if (sessionEl.TryGetProperty("openingFloat", out var openingFloat) && decimal.TryParse(openingFloat.ToString(), out var parsedOpeningFloat)) localSession.OpeningFloat = parsedOpeningFloat;
+                    if (sessionEl.TryGetProperty("systemExpectedCash", out var expectedCash) && decimal.TryParse(expectedCash.ToString(), out var parsedExpectedCash)) localSession.SystemExpectedCash = parsedExpectedCash;
+                    if (sessionEl.TryGetProperty("declaredCash", out var declaredCash) && declaredCash.ValueKind != System.Text.Json.JsonValueKind.Null && decimal.TryParse(declaredCash.ToString(), out var parsedDeclaredCash)) localSession.DeclaredCash = parsedDeclaredCash;
+                    if (sessionEl.TryGetProperty("variance", out var variance) && variance.ValueKind != System.Text.Json.JsonValueKind.Null && decimal.TryParse(variance.ToString(), out var parsedVariance)) localSession.Variance = parsedVariance;
+                    if (sessionEl.TryGetProperty("openedAt", out var openedAt) && DateTime.TryParse(openedAt.GetString(), out var parsedOpenedAt)) localSession.OpenedAt = parsedOpenedAt;
+                    if (sessionEl.TryGetProperty("closingAt", out var closingAt) && closingAt.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(closingAt.GetString(), out var parsedClosingAt)) localSession.ClosingAt = parsedClosingAt;
+                    if (sessionEl.TryGetProperty("closedAt", out var closedAt) && closedAt.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(closedAt.GetString(), out var parsedClosedAt)) localSession.ClosedAt = parsedClosedAt;
+                    if (sessionEl.TryGetProperty("reconciledAt", out var reconciledAt) && reconciledAt.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(reconciledAt.GetString(), out var parsedReconciledAt)) localSession.ReconciledAt = parsedReconciledAt;
+                    localSession.ReconciledBy = sessionEl.TryGetProperty("reconciledBy", out var reconciledBy) && reconciledBy.ValueKind != System.Text.Json.JsonValueKind.Null ? reconciledBy.GetString() : localSession.ReconciledBy;
+                    localSession.ReconciliationDecision = sessionEl.TryGetProperty("reconciliationDecision", out var reconciliationDecision) && reconciliationDecision.ValueKind != System.Text.Json.JsonValueKind.Null ? reconciliationDecision.GetString() : localSession.ReconciliationDecision;
+                    localSession.ReconciliationNotes = sessionEl.TryGetProperty("reconciliationNotes", out var reconciliationNotes) && reconciliationNotes.ValueKind != System.Text.Json.JsonValueKind.Null ? reconciliationNotes.GetString() : localSession.ReconciliationNotes;
+                    localSession.CreatedAt = sessionEl.TryGetProperty("createdAt", out var createdAt) && DateTime.TryParse(createdAt.GetString(), out var parsedCreatedAt) ? parsedCreatedAt : localSession.CreatedAt;
+                    localSession.UpdatedAt = sessionEl.TryGetProperty("updatedAt", out var updatedAt) && DateTime.TryParse(updatedAt.GetString(), out var parsedUpdatedAt) ? parsedUpdatedAt : DateTime.UtcNow;
+
+                    if (sessionEl.TryGetProperty("cashMovements", out var movements) && movements.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    {
+                        foreach (var movementEl in movements.EnumerateArray())
+                        {
+                            var movementId = movementEl.TryGetProperty("id", out var mid) ? mid.GetString() : null;
+                            if (string.IsNullOrWhiteSpace(movementId)) continue;
+                            var movement = await dbContext.PosCashMovements.FirstOrDefaultAsync(m => m.Id == movementId, stoppingToken);
+                            if (movement == null)
+                            {
+                                movement = new LodgeCore.Desktop.Data.Entities.LocalPosCashMovement { Id = movementId };
+                                dbContext.PosCashMovements.Add(movement);
+                            }
+                            movement.PropertyId = propertyId;
+                            movement.DeviceId = movementEl.TryGetProperty("deviceId", out var movementDevice) ? movementDevice.GetString() ?? "" : movement.DeviceId;
+                            movement.FrontdeskSessionId = sessionId;
+                            movement.PosSessionId = movementEl.TryGetProperty("posSessionId", out var posSessionId) && posSessionId.ValueKind != System.Text.Json.JsonValueKind.Null ? posSessionId.GetString() : movement.PosSessionId;
+                            movement.UserId = movementEl.TryGetProperty("userId", out var movementUser) ? movementUser.GetString() ?? "" : movement.UserId;
+                            movement.Amount = movementEl.TryGetProperty("amount", out var movementAmount) && decimal.TryParse(movementAmount.ToString(), out var parsedAmount) ? parsedAmount : movement.Amount;
+                            movement.Currency = movementEl.TryGetProperty("currency", out var movementCurrency) ? movementCurrency.GetString() ?? "NGN" : movement.Currency;
+                            movement.Type = movementEl.TryGetProperty("type", out var movementType) ? movementType.ToString() : movement.Type;
+                            movement.SourceAccountId = movementEl.TryGetProperty("sourceAccountId", out var sourceAccount) ? sourceAccount.GetString() ?? "" : movement.SourceAccountId;
+                            movement.DestinationAccountId = movementEl.TryGetProperty("destinationAccountId", out var destinationAccount) ? destinationAccount.GetString() ?? "" : movement.DestinationAccountId;
+                            movement.ReasonCode = movementEl.TryGetProperty("reasonCode", out var reasonCode) ? reasonCode.GetString() ?? "" : movement.ReasonCode;
+                            movement.Notes = movementEl.TryGetProperty("notes", out var movementNotes) && movementNotes.ValueKind != System.Text.Json.JsonValueKind.Null ? movementNotes.GetString() : movement.Notes;
+                            movement.ReceiptReference = movementEl.TryGetProperty("receiptReference", out var receiptReference) && receiptReference.ValueKind != System.Text.Json.JsonValueKind.Null ? receiptReference.GetString() : movement.ReceiptReference;
+                            movement.OperationId = movementEl.TryGetProperty("operationId", out var operationId) ? operationId.GetString() ?? "" : movement.OperationId;
+                            movement.BusinessDate = movementEl.TryGetProperty("businessDate", out var movementDate) && movementDate.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(movementDate.GetString(), out var parsedMovementDate) ? parsedMovementDate : movement.BusinessDate;
+                            movement.AuthorizedBy = movementEl.TryGetProperty("authorizedBy", out var authorizedBy) && authorizedBy.ValueKind != System.Text.Json.JsonValueKind.Null ? authorizedBy.GetString() : movement.AuthorizedBy;
+                            movement.CreatedAt = movementEl.TryGetProperty("createdAt", out var movementCreatedAt) && DateTime.TryParse(movementCreatedAt.GetString(), out var parsedMovementCreatedAt) ? parsedMovementCreatedAt : movement.CreatedAt;
+                        }
+                    }
+                }
+            }
+
             // 4. Reservations
             if (root.TryGetProperty("reservations", out var resArray))
             {

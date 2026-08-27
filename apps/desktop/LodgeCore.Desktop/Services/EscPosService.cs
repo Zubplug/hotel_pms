@@ -177,69 +177,70 @@ public class EscPosService
             HotelName = printer.HotelName ?? folio.PropertyName,
             HotelAddress = printer.HotelAddress ?? folio.PropertyAddress
         };
-        var builder = new EscPosBuilder(profile);
         int w = profile.PaperWidth;
+        byte[] BuildCopy(string copyLabel)
+        {
+            var builder = new EscPosBuilder(profile);
+            builder.PrintHeader($"GUEST FOLIO - {copyLabel}");
 
-        builder.PrintHeader("GUEST FOLIO");
-
-        builder.AddCommand(EscPosBuilder.BoldOn);
-        builder.AddLine(folio.GuestName);
-        builder.AddCommand(EscPosBuilder.BoldOff);
-        builder.AddRow("Room:", folio.RoomNumber);
-        builder.AddRow("Folio:", folio.FolioNumber);
-        builder.AddRow("Arrival:", folio.ArrivalDate.ToString("dd MMM yyyy"));
-        builder.AddRow("Depart:", folio.DepartureDate.ToString("dd MMM yyyy"));
+            builder.AddCommand(EscPosBuilder.BoldOn);
+            builder.AddLine(folio.GuestName);
+            builder.AddCommand(EscPosBuilder.BoldOff);
+            builder.AddRow("Copy:", copyLabel);
+            builder.AddRow("Room:", folio.RoomNumber);
+            builder.AddRow("Folio:", folio.FolioNumber);
+            builder.AddRow("Arrival:", folio.ArrivalDate.ToString("dd MMM yyyy"));
+            builder.AddRow("Depart:", folio.DepartureDate.ToString("dd MMM yyyy"));
         
-        builder.AddDivider('-');
+            builder.AddDivider('-');
 
         // Dynamic columns based on width
         int dateW = 7;
         int descW = w - 21; // 7 + 7 + 7 = 21 for DR and CR and space
         int amtW = 7;
-        builder.AddCommand(EscPosBuilder.BoldOn);
-        builder.Add4ColRow("DATE", "DESCRIPTION", "DR", "CR", dateW, descW, amtW, amtW);
-        builder.AddCommand(EscPosBuilder.BoldOff);
-        builder.AddDivider('-');
+            builder.AddCommand(EscPosBuilder.BoldOn);
+            builder.Add4ColRow("DATE", "DESCRIPTION", "DR", "CR", dateW, descW, amtW, amtW);
+            builder.AddCommand(EscPosBuilder.BoldOff);
+            builder.AddDivider('-');
 
-        foreach (var t in folio.Transactions)
-        {
-            string dateStr = t.Date.ToString("dd MMM");
-            string drStr = t.DebitAmount > 0 ? t.DebitAmount.ToString("N0") : "";
-            string crStr = t.CreditAmount > 0 ? t.CreditAmount.ToString("N0") : "";
+            foreach (var t in folio.Transactions)
+            {
+                string dateStr = t.Date.ToString("dd MMM");
+                string drStr = t.DebitAmount > 0 ? t.DebitAmount.ToString("N0") : "";
+                string crStr = t.CreditAmount > 0 ? t.CreditAmount.ToString("N0") : "";
             
-            builder.Add4ColRow(dateStr, t.Description, drStr, crStr, dateW, descW, amtW, amtW);
+                builder.Add4ColRow(dateStr, t.Description, drStr, crStr, dateW, descW, amtW, amtW);
+            }
+
+            builder.AddDivider('-');
+        
+            builder.AddRow("Total Charges", $"{folio.Currency} {folio.TotalCharges:N0}");
+            builder.AddRow("Total Payments", $"{folio.Currency} {folio.TotalPayments:N0}");
+            builder.AddLineFeed();
+        
+            builder.AddCommand(EscPosBuilder.BoldOn);
+            builder.AddCommand(EscPosBuilder.DoubleSize);
+            if (folio.BalanceDue == 0)
+                builder.AddRow("BALANCE", "0", true);
+            else if (folio.BalanceDue < 0)
+                builder.AddRow("CREDIT", $"{folio.Currency} {Math.Abs(folio.BalanceDue):N0}", true);
+            else
+                builder.AddRow("BALANCE DUE", $"{folio.Currency} {folio.BalanceDue:N0}", true);
+            builder.AddCommand(EscPosBuilder.NormalSize);
+            builder.AddCommand(EscPosBuilder.BoldOff);
+        
+            builder.AddDivider('=');
+            builder.AddCommand(EscPosBuilder.AlignCenter);
+            builder.AddLine("Thank you for staying with us!");
+            AddPrintFooter(builder, "Thank you for staying with us", folio.PrintedAt);
+            builder.AddCommand(EscPosBuilder.CutPartial);
+            return builder.Build();
         }
 
-        builder.AddDivider('-');
-        
-        builder.AddRow("Total Charges", $"{folio.Currency} {folio.TotalCharges:N0}");
-        builder.AddRow("Total Payments", $"{folio.Currency} {folio.TotalPayments:N0}");
-        builder.AddLineFeed();
-        
-        builder.AddCommand(EscPosBuilder.BoldOn);
-        builder.AddCommand(EscPosBuilder.DoubleSize);
-        if (folio.BalanceDue == 0)
-        {
-            builder.AddRow("BALANCE", "0", true);
-        }
-        else if (folio.BalanceDue < 0)
-        {
-            builder.AddRow("CREDIT", $"{folio.Currency} {Math.Abs(folio.BalanceDue):N0}", true);
-        }
-        else
-        {
-            builder.AddRow("BALANCE DUE", $"{folio.Currency} {folio.BalanceDue:N0}", true);
-        }
-        builder.AddCommand(EscPosBuilder.NormalSize);
-        builder.AddCommand(EscPosBuilder.BoldOff);
-        
-        builder.AddDivider('=');
-        builder.AddCommand(EscPosBuilder.AlignCenter);
-        builder.AddLine("Thank you for staying with us!");
-        AddPrintFooter(builder, "Thank you for staying with us", folio.PrintedAt);
-        builder.AddCommand(EscPosBuilder.CutPartial);
-
-        return await SendToPrinterAsync(printer, builder.Build());
+        var customerCopy = await SendToPrinterAsync(printer, BuildCopy("CUSTOMER COPY"));
+        if (!customerCopy.success)
+            return customerCopy;
+        return await SendToPrinterAsync(printer, BuildCopy("STAFF COPY"));
     }
 
     public async Task<(bool success, string? error)> PrintPaymentReceiptAsync(PaymentReceiptData payment, string? outletId = null)
@@ -255,48 +256,54 @@ public class EscPosService
             HotelName = printer.HotelName ?? payment.PropertyName,
             HotelAddress = printer.HotelAddress ?? payment.PropertyAddress
         };
-        var builder = new EscPosBuilder(profile);
+        byte[] BuildCopy(string copyLabel, bool openCashDrawer)
+        {
+            var builder = new EscPosBuilder(profile);
+            builder.PrintHeader($"PAYMENT RECEIPT - {copyLabel}");
 
-        builder.PrintHeader("PAYMENT RECEIPT");
+            builder.AddRow("Receipt #:", payment.ReceiptNumber);
+            builder.AddRow("Date:", payment.PrintedAt.ToString("dd/MM/yyyy HH:mm"));
+            builder.AddRow("Guest:", payment.GuestName);
+            builder.AddRow("Room:", payment.RoomNumber);
+            builder.AddRow("Folio #:", payment.FolioNumber);
+            builder.AddRow("Cashier:", payment.CashierName);
+            builder.AddRow("Copy:", copyLabel);
+            builder.AddDivider('-');
 
-        builder.AddRow("Receipt #:", payment.ReceiptNumber);
-        builder.AddRow("Date:", payment.PrintedAt.ToString("dd/MM/yyyy HH:mm"));
-        builder.AddRow("Guest:", payment.GuestName);
-        builder.AddRow("Room:", payment.RoomNumber);
-        builder.AddRow("Folio #:", payment.FolioNumber);
-        builder.AddRow("Cashier:", payment.CashierName);
-        builder.AddDivider('-');
-
-        builder.AddRow("Payment Method:", payment.PaymentMethod);
-        if (!string.IsNullOrEmpty(payment.PaymentReference))
-            builder.AddRow("Reference:", payment.PaymentReference);
+            builder.AddRow("Payment Method:", payment.PaymentMethod);
+            if (!string.IsNullOrEmpty(payment.PaymentReference))
+                builder.AddRow("Reference:", payment.PaymentReference);
         
-        builder.AddLineFeed();
-        builder.AddCommand(EscPosBuilder.BoldOn);
-        builder.AddCommand(EscPosBuilder.DoubleSize);
-        builder.AddRow("AMOUNT PAID", $"{payment.Currency} {payment.AmountPaid:N0}", true);
-        builder.AddCommand(EscPosBuilder.NormalSize);
-        builder.AddCommand(EscPosBuilder.BoldOff);
-        builder.AddLineFeed();
+            builder.AddLineFeed();
+            builder.AddCommand(EscPosBuilder.BoldOn);
+            builder.AddCommand(EscPosBuilder.DoubleSize);
+            builder.AddRow("AMOUNT PAID", $"{payment.Currency} {payment.AmountPaid:N0}", true);
+            builder.AddCommand(EscPosBuilder.NormalSize);
+            builder.AddCommand(EscPosBuilder.BoldOff);
+            builder.AddLineFeed();
         
-        builder.AddDivider('-');
-        builder.AddCommand(EscPosBuilder.AlignCenter);
-        builder.AddLine("Folio Summary");
-        builder.AddCommand(EscPosBuilder.AlignLeft);
-        builder.AddRow("Previous Balance:", $"{payment.Currency} {payment.PreviousBalance:N0}");
-        builder.AddRow("Amount Paid:", $"{payment.Currency} {payment.AmountPaid:N0}");
-        builder.AddRow("Remaining Balance:", $"{payment.Currency} {payment.RemainingBalance:N0}");
+            builder.AddDivider('-');
+            builder.AddCommand(EscPosBuilder.AlignCenter);
+            builder.AddLine("Folio Summary");
+            builder.AddCommand(EscPosBuilder.AlignLeft);
+            builder.AddRow("Previous Balance:", $"{payment.Currency} {payment.PreviousBalance:N0}");
+            builder.AddRow("Amount Paid:", $"{payment.Currency} {payment.AmountPaid:N0}");
+            builder.AddRow("Remaining Balance:", $"{payment.Currency} {payment.RemainingBalance:N0}");
         
-        builder.AddDivider('=');
-        builder.AddCommand(EscPosBuilder.AlignCenter);
-        builder.AddLine("Thank you!");
-        AddPrintFooter(builder, "Payment recorded successfully", payment.PrintedAt);
-        builder.AddCommand(EscPosBuilder.CutPartial);
+            builder.AddDivider('=');
+            builder.AddCommand(EscPosBuilder.AlignCenter);
+            builder.AddLine("Thank you!");
+            if (openCashDrawer)
+                builder.AddCommand(EscPosBuilder.OpenDrawer);
+            AddPrintFooter(builder, "Payment recorded successfully", payment.PrintedAt);
+            builder.AddCommand(EscPosBuilder.CutPartial);
+            return builder.Build();
+        }
 
-        if (printer.OpenCashDrawer)
-            builder.AddCommand(EscPosBuilder.OpenDrawer);
-
-        return await SendToPrinterAsync(printer, builder.Build());
+        var customerCopy = await SendToPrinterAsync(printer, BuildCopy("CUSTOMER COPY", printer.OpenCashDrawer));
+        if (!customerCopy.success)
+            return customerCopy;
+        return await SendToPrinterAsync(printer, BuildCopy("STAFF COPY", false));
     }
 
     public async Task<(bool success, string? error)> PrintShiftReportAsync(ShiftReportData report, string? outletId = null)
@@ -375,62 +382,69 @@ public class EscPosService
             HotelName = printer.HotelName ?? receipt.PropertyName,
             HotelAddress = printer.HotelAddress ?? receipt.PropertyAddress
         };
-        var builder = new EscPosBuilder(profile);
-
-        builder.PrintHeader(receipt.IsReprint ? "*** REPRINT ***" : "SALES RECEIPT");
-
-        builder.AddRow("Receipt #:", receipt.OrderNumber);
-        builder.AddRow("Outlet:", receipt.OutletName);
-        if (!string.IsNullOrEmpty(receipt.TableNumber)) builder.AddRow("Table:", receipt.TableNumber);
-        if (!string.IsNullOrEmpty(receipt.ServerName)) builder.AddRow("Server:", receipt.ServerName);
-        if (!string.IsNullOrEmpty(receipt.GuestName)) builder.AddRow("Guest:", receipt.GuestName);
-        builder.AddRow("Date:", receipt.PrintedAt.ToString("dd/MM/yyyy HH:mm"));
-        builder.AddDivider('-');
-
-        builder.AddCommand(EscPosBuilder.BoldOn);
-        builder.AddRow("ITEM", "TOTAL");
-        builder.AddCommand(EscPosBuilder.BoldOff);
-        builder.AddDivider('-');
-
-        foreach (var item in receipt.Items)
+        byte[] BuildCopy(string copyLabel, bool openCashDrawer)
         {
-            string itemLine = $"{item.Quantity:0.##}x {item.Name}";
-            string totalStr = $"{receipt.Currency} {item.Total:N2}";
-            builder.AddRow(itemLine, totalStr);
+            var builder = new EscPosBuilder(profile);
+            builder.PrintHeader(receipt.IsReprint ? $"*** REPRINT - {copyLabel} ***" : $"SALES RECEIPT - {copyLabel}");
 
-            if (item.Modifiers != null)
-                foreach (var mod in item.Modifiers)
-                    builder.AddLine($"  + {mod}");
+            builder.AddRow("Receipt #:", receipt.OrderNumber);
+            builder.AddRow("Outlet:", receipt.OutletName);
+            builder.AddRow("Copy:", copyLabel);
+            if (!string.IsNullOrEmpty(receipt.TableNumber)) builder.AddRow("Table:", receipt.TableNumber);
+            if (!string.IsNullOrEmpty(receipt.ServerName)) builder.AddRow("Server:", receipt.ServerName);
+            if (!string.IsNullOrEmpty(receipt.GuestName)) builder.AddRow("Guest:", receipt.GuestName);
+            builder.AddRow("Date:", receipt.PrintedAt.ToString("dd/MM/yyyy HH:mm"));
+            builder.AddDivider('-');
+
+            builder.AddCommand(EscPosBuilder.BoldOn);
+            builder.AddRow("ITEM", "TOTAL");
+            builder.AddCommand(EscPosBuilder.BoldOff);
+            builder.AddDivider('-');
+
+            foreach (var item in receipt.Items)
+            {
+                string itemLine = $"{item.Quantity:0.##}x {item.Name}";
+                string totalStr = $"{receipt.Currency} {item.Total:N2}";
+                builder.AddRow(itemLine, totalStr);
+
+                if (item.Modifiers != null)
+                    foreach (var mod in item.Modifiers)
+                        builder.AddLine($"  + {mod}");
+            }
+
+            builder.AddDivider('-');
+
+            string cur = receipt.Currency;
+            builder.AddRow("Subtotal", $"{cur} {receipt.Subtotal:N2}");
+            if (receipt.TaxAmount > 0) builder.AddRow("Tax", $"{cur} {receipt.TaxAmount:N2}");
+            if (receipt.ServiceCharge > 0) builder.AddRow("Service Charge", $"{cur} {receipt.ServiceCharge:N2}");
+            if (receipt.TipAmount > 0) builder.AddRow("Tip", $"{cur} {receipt.TipAmount:N2}");
+
+            builder.AddLineFeed();
+            builder.AddCommand(EscPosBuilder.BoldOn);
+            builder.AddCommand(EscPosBuilder.DoubleSize);
+            builder.AddRow("TOTAL", $"{cur} {receipt.Total:N2}", true);
+            builder.AddCommand(EscPosBuilder.NormalSize);
+            builder.AddCommand(EscPosBuilder.BoldOff);
+        
+            builder.AddRow("Payment", receipt.PaymentMethod);
+            builder.AddDivider('=');
+
+            builder.AddCommand(EscPosBuilder.AlignCenter);
+            builder.AddLine("Thank you for your patronage!");
+
+            if (openCashDrawer)
+                builder.AddCommand(EscPosBuilder.OpenDrawer);
+
+            AddPrintFooter(builder, "Thank you for your patronage", receipt.PrintedAt);
+            builder.AddCommand(EscPosBuilder.CutPartial);
+            return builder.Build();
         }
 
-        builder.AddDivider('-');
-
-        string cur = receipt.Currency;
-        builder.AddRow("Subtotal", $"{cur} {receipt.Subtotal:N2}");
-        if (receipt.TaxAmount > 0) builder.AddRow("Tax", $"{cur} {receipt.TaxAmount:N2}");
-        if (receipt.ServiceCharge > 0) builder.AddRow("Service Charge", $"{cur} {receipt.ServiceCharge:N2}");
-        if (receipt.TipAmount > 0) builder.AddRow("Tip", $"{cur} {receipt.TipAmount:N2}");
-
-        builder.AddLineFeed();
-        builder.AddCommand(EscPosBuilder.BoldOn);
-        builder.AddCommand(EscPosBuilder.DoubleSize);
-        builder.AddRow("TOTAL", $"{cur} {receipt.Total:N2}", true);
-        builder.AddCommand(EscPosBuilder.NormalSize);
-        builder.AddCommand(EscPosBuilder.BoldOff);
-        
-        builder.AddRow("Payment", receipt.PaymentMethod);
-        builder.AddDivider('=');
-
-        builder.AddCommand(EscPosBuilder.AlignCenter);
-        builder.AddLine("Thank you for your patronage!");
-
-        if (printer.OpenCashDrawer)
-            builder.AddCommand(EscPosBuilder.OpenDrawer);
-
-        AddPrintFooter(builder, "Thank you for your patronage", receipt.PrintedAt);
-        builder.AddCommand(EscPosBuilder.CutPartial);
-
-        return await SendToPrinterAsync(printer, builder.Build());
+        var customerCopy = await SendToPrinterAsync(printer, BuildCopy("CUSTOMER COPY", printer.OpenCashDrawer));
+        if (!customerCopy.success)
+            return customerCopy;
+        return await SendToPrinterAsync(printer, BuildCopy("STAFF COPY", false));
     }
 
     public async Task<(bool success, string? error)> PrintKotAsync(KotData kot, string? outletId = null)

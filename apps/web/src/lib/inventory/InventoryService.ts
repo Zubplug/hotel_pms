@@ -2,7 +2,68 @@ import prisma, { StockTransactionSource } from '@hotel-pms/db';
 
 export class InventoryService {
   /**
-   * Post a Goods Received Note (GRN) to stock.
+   * Submit a DRAFT GRN for approval.
+   */
+  static async submitReceipt(grnId: string, actorId: string) {
+    const grn = await prisma.goodsReceivedNote.findUnique({ where: { id: grnId } });
+    if (!grn) throw new Error('GRN not found');
+    if (grn.status !== 'DRAFT') throw new Error('Only DRAFT GRNs can be submitted');
+
+    return await prisma.goodsReceivedNote.update({
+      where: { id: grnId },
+      data: {
+        status: 'SUBMITTED',
+        submittedBy: actorId,
+        submittedAt: new Date(),
+        updatedBy: actorId,
+        updatedAt: new Date()
+      }
+    });
+  }
+
+  /**
+   * Approve a SUBMITTED GRN.
+   */
+  static async approveReceipt(grnId: string, actorId: string) {
+    const grn = await prisma.goodsReceivedNote.findUnique({ where: { id: grnId } });
+    if (!grn) throw new Error('GRN not found');
+    if (grn.status !== 'SUBMITTED') throw new Error('Only SUBMITTED GRNs can be approved');
+
+    return await prisma.goodsReceivedNote.update({
+      where: { id: grnId },
+      data: {
+        status: 'APPROVED',
+        approvedBy: actorId,
+        approvedAt: new Date(),
+        updatedBy: actorId,
+        updatedAt: new Date()
+      }
+    });
+  }
+
+  /**
+   * Reject a SUBMITTED GRN.
+   */
+  static async rejectReceipt(grnId: string, actorId: string, reason: string) {
+    const grn = await prisma.goodsReceivedNote.findUnique({ where: { id: grnId } });
+    if (!grn) throw new Error('GRN not found');
+    if (grn.status !== 'SUBMITTED') throw new Error('Only SUBMITTED GRNs can be rejected');
+
+    return await prisma.goodsReceivedNote.update({
+      where: { id: grnId },
+      data: {
+        status: 'REJECTED',
+        rejectedBy: actorId,
+        rejectedAt: new Date(),
+        rejectedReason: reason,
+        updatedBy: actorId,
+        updatedAt: new Date()
+      }
+    });
+  }
+
+  /**
+   * Post an APPROVED Goods Received Note (GRN) to stock.
    * Atomically increases quantityOnHand, creates StockTransaction(s), and marks GRN as POSTED.
    * If tied to a PO, increments receivedQty on the PO.
    */
@@ -22,7 +83,7 @@ export class InventoryService {
       });
 
       if (!grn) throw new Error('GRN not found');
-      if (grn.status !== 'DRAFT') throw new Error('GRN is not in DRAFT status');
+      if (grn.status !== 'APPROVED') throw new Error('GRN must be APPROVED to post to stock');
 
       const property = await tx.property.findUnique({ where: { id: grn.propertyId } });
       const currency = property?.baseCurrency || 'NGN';
@@ -63,6 +124,11 @@ export class InventoryService {
         if (grn.purchaseOrderId && grn.purchaseOrder) {
           const poItem = grn.purchaseOrder.items.find((p: any) => p.stockItemId === stockItem.id);
           if (poItem) {
+            const freshPoItem = await tx.purchaseOrderItem.findUnique({ where: { id: poItem.id } });
+            const remaining = Number(freshPoItem.quantity) - Number(freshPoItem.receivedQty);
+            if (Number(qtyToReceive) > remaining) {
+              throw new Error(`Over-receiving is not permitted. Item: ${stockItem.name}, Remaining: ${remaining}`);
+            }
             await tx.purchaseOrderItem.update({
               where: { id: poItem.id },
               data: {
@@ -73,11 +139,27 @@ export class InventoryService {
         }
       }
 
+      // Update PO Status if applicable
+      if (grn.purchaseOrderId) {
+        const updatedPoItems = await tx.purchaseOrderItem.findMany({ where: { purchaseOrderId: grn.purchaseOrderId } });
+        const allReceived = updatedPoItems.every((item: any) => Number(item.receivedQty) >= Number(item.quantity));
+        await tx.purchaseOrder.update({
+          where: { id: grn.purchaseOrderId },
+          data: {
+            status: allReceived ? 'RECEIVED' : 'PARTIALLY_RECEIVED',
+            updatedBy: actorId,
+            updatedAt: new Date()
+          }
+        });
+      }
+
       // Mark GRN as POSTED
       const updatedGrn = await tx.goodsReceivedNote.update({
         where: { id: grn.id },
         data: {
           status: 'POSTED',
+          postedBy: actorId,
+          postedAt: new Date(),
           updatedBy: actorId
         }
       });

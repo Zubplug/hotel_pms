@@ -2,7 +2,7 @@ export interface LodgeCoreDataProvider {
   auth: {
     getSession: () => Promise<any>;
     provisionDevice: (deviceToken: string) => Promise<any>;
-    getActiveStaff: () => Promise<any>;
+    getActiveStaff: (roleScope?: string) => Promise<any>;
     login: (staffId: string, pin: string, bankingModel?: string) => Promise<{ success: boolean; error?: string; posSessionId?: string; bankingModel?: string }>;
     logout?: () => Promise<any>;
     lock?: () => Promise<any>;

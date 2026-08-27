@@ -195,7 +195,7 @@ public class OfflinePMSInterop
         }
     }
 
-    public async Task<string> GetActiveStaffAsync()
+    public async Task<string> GetActiveStaffAsync(string? roleScope = null)
     {
         try
         {
@@ -220,7 +220,7 @@ public class OfflinePMSInterop
                 System.Diagnostics.Debug.WriteLine($"[GetActiveStaffAsync] Fallback propertyId: {propertyId}");
             }
             
-            var staff = await _repo.GetActiveStaffAsync(propertyId);
+            var staff = await _repo.GetActiveStaffAsync(propertyId, roleScope);
             System.Diagnostics.Debug.WriteLine($"[GetActiveStaffAsync] Retrieved {staff?.Count ?? 0} staff members from local database.");
             
             // SECURITY: Never expose PosPinHash or sensitive sync fields to the React UI
@@ -504,7 +504,7 @@ public class OfflinePMSInterop
                         ? new { id = r.Guest.Id, firstName = r.Guest.FirstName, lastName = r.Guest.LastName, phone = r.Guest.Phone } 
                         : new { id = "unknown", firstName = "Unknown", lastName = "Guest", phone = (string?)"" },
                     reservationRooms = new[] { new { roomId = roomId, room = new { id = roomId, number = roomNumber, status = assignedRoom?.Room?.Status ?? "AVAILABLE" }, roomType = new { name = roomTypeName }, checkIn = r.CheckInDate, checkOut = r.CheckOutDate } },
-                    folio = new { balance = r.Folio?.OutstandingBalance ?? 0, currency = r.Folio?.Currency ?? r.Currency ?? "NGN" },
+                    folio = new { balance = r.Folio?.OutstandingBalance ?? 0, netBalance = r.Folio?.NetBalance ?? 0, currency = r.Folio?.Currency ?? r.Currency ?? "NGN" },
                     isDirty = r.IsDirty
                 };
             });
@@ -916,6 +916,7 @@ public class OfflinePMSInterop
                         id = f?.Id,
                         status = f?.Status ?? "OPEN",
                         balance = f?.OutstandingBalance ?? 0,
+                        netBalance = f?.NetBalance ?? 0,
                         totalCharges = f?.TotalCharges ?? 0,
                         totalPayments = f?.TotalPayments ?? 0,
                         availableCredit = f?.AvailableCredit ?? 0,
@@ -1953,11 +1954,11 @@ public class OfflinePMSInterop
         }
     }
 
-    public async Task<string> GetActiveStaffAsync(string propertyId)
+    public async Task<string> GetActiveStaffAsync(string propertyId, string? roleScope = null)
     {
         try
         {
-            var res = await _repo.GetActiveStaffAsync(propertyId);
+            var res = await _repo.GetActiveStaffAsync(propertyId, roleScope);
             return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
         catch (Exception ex)

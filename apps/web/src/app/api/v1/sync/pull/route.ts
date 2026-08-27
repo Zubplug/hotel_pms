@@ -85,6 +85,15 @@ export async function GET(req: NextRequest) {
       orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     });
 
+    // Active Front Desk sessions are always included so a reinstalled desktop
+    // can recover an open till even when its incremental cursor is current.
+    const frontdeskSessions = await prisma.frontdeskSession.findMany({
+      where: { propertyId, status: 'OPEN' },
+      include: { cashMovements: true },
+      take: limit,
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+    });
+
     // ---- Fetch Data -----------------------------------------------------
     // To support pagination across multiple tables, we fetch up to `limit` from EACH table,
     // then merge, sort by updatedAt, and slice the overall list to `limit`.
@@ -419,6 +428,7 @@ export async function GET(req: NextRequest) {
       
       property:   propertyPayload,
       cashAccounts,
+      frontdeskSessions,
       staff:      staffWithPermissions,
       rooms:      finalRooms,
       roomTypes:  finalRoomTypes,

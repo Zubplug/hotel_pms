@@ -12,6 +12,7 @@ import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
+import { FrontDeskRefundDialog } from './FrontDeskRefundDialog';
 
 interface FrontDeskQuickCheckoutDialogProps {
   open: boolean;
@@ -28,6 +29,7 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
   const [errorMsg, setErrorMsg] = useState('');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [reservation, setReservation] = useState<any>(null);
+  const [refundPaymentId, setRefundPaymentId] = useState<string | null>(null);
 
   // Reset state when opened and hydrate list/detail reservations before confirmation.
   useEffect(() => {
@@ -36,6 +38,7 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
     let cancelled = false;
     const loadReservation = async () => {
       setErrorMsg('');
+      setRefundPaymentId(null);
       if (!initialReservation) {
         setReservation(null);
         setStep('IDLE');
@@ -185,15 +188,33 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
     }
   };
 
-  const balance = reservation?.folios?.[0]?.balance || 0;
-  const isUnpaid = balance > 0;
+  const balance = (reservation?.folios || []).reduce((total: number, folio: any) => (
+    total + Number(folio?.netBalance ?? folio?.balance ?? 0)
+  ), 0);
+  const isUnpaid = balance > 0.01;
+  const hasGuestCredit = balance < -0.01;
+  const isFolioSettled = !isUnpaid && !hasGuestCredit;
+  const creditRefundSource = (reservation?.folios || [])
+    .map((folio: any) => ({
+      folio,
+      payment: (folio?.payments || []).find((candidate: any) => {
+        if (candidate?.status !== 'COMPLETED') return false;
+        const refunded = (candidate.refunds || [])
+          .filter((refund: any) => refund?.status !== 'FAILED')
+          .reduce((total: number, refund: any) => total + Number(refund?.amount || 0), 0);
+        return Number(candidate.amount || 0) - refunded > 0.01;
+      })
+    }))
+    .find((source: any) => source.payment);
+  const creditRefundPayment = creditRefundSource?.payment;
   
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(amount);
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px] p-0 overflow-hidden rounded-3xl border-0 shadow-2xl flex flex-col max-h-[90vh]">
         
         <div className="bg-slate-900 px-8 py-6 text-white shrink-0">
@@ -278,6 +299,29 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
                       </Button>
                     </div>
                   </div>
+                ) : hasGuestCredit ? (
+                  <div className="bg-amber-50 rounded-xl p-4 border border-amber-100 flex items-start gap-3">
+                    <Wallet className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-amber-900 font-bold">Guest Credit</p>
+                      <p className="text-amber-700 text-sm mt-1 mb-2">Refund {formatCurrency(Math.abs(balance))} or resolve the credit before checkout.</p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full rounded-lg border-amber-300 text-amber-900 hover:bg-amber-100"
+                        onClick={() => {
+                          if (creditRefundPayment) {
+                            setRefundPaymentId(creditRefundPayment.id);
+                            onOpenChange(false);
+                          } else {
+                            onOpenChange(false);
+                          }
+                        }}
+                      >
+                        {creditRefundPayment ? 'Start Credit Refund' : 'View Folio for Refund'}
+                      </Button>
+                    </div>
+                  </div>
                 ) : (
                   <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100 flex items-center gap-3">
                     <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
@@ -296,8 +340,8 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
                 <Button 
                   className="flex-1 h-12 rounded-xl font-bold shadow-sm"
                   onClick={handleCheckout} 
-                  disabled={isUnpaid}
-                  variant={isUnpaid ? "secondary" : "default"}
+                  disabled={!isFolioSettled}
+                  variant={!isFolioSettled ? "secondary" : "default"}
                 >
                   Confirm Checkout
                 </Button>
@@ -355,5 +399,16 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
         </div>
       </DialogContent>
     </Dialog>
+      {refundPaymentId && reservation?.folios?.[0] && (
+      <FrontDeskRefundDialog
+        open
+        onOpenChange={(isOpen) => { if (!isOpen) setRefundPaymentId(null); }}
+        paymentId={refundPaymentId}
+        folio={creditRefundSource?.folio}
+        reservation={reservation}
+        initialCategory="FOLIO_CREDIT_BALANCE"
+      />
+      )}
+    </>
   );
 }

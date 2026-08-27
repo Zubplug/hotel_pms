@@ -48,10 +48,12 @@ export function usePosOperatorAuth({
   isOpen,
   outletId,
   onAuthenticated,
+  allowedRoles = ['WAITER', 'WAITRESS', 'CASHIER'],
 }: {
   isOpen: boolean;
   outletId?: string;
   onAuthenticated: (operator: StaffProfile, token: string, authData?: any) => void;
+  allowedRoles?: string[];
 }): UsePosOperatorAuthResult {
   const { provider, isDesktopMode } = useLodgeCoreProvider();
   const { data: session } = useLodgeCoreSession();
@@ -73,11 +75,14 @@ export function usePosOperatorAuth({
     try {
       let res: any;
       if (isDesktopMode) {
-        res = await provider.auth.getActiveStaff();
+        res = await provider.auth.getActiveStaff(allowedRoles.join(','));
       } else if (propertyId) {
         res = await provider.pos.getActiveStaff(propertyId);
       }
-      if (res?.data) setStaff(res.data);
+      if (res?.data) {
+        const roles = new Set(allowedRoles.map(role => role.toUpperCase()));
+        setStaff(res.data.filter((member: StaffProfile) => roles.has(String(member.role || member.position || '').toUpperCase())));
+      }
     } catch (e) {
       console.error('[PosOperatorAuth] Failed to load staff', e);
     } finally {

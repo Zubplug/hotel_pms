@@ -2110,8 +2110,11 @@ model PurchaseOrderItem {
 
 enum GoodsReceivedNoteStatus {
   DRAFT
+  SUBMITTED
+  APPROVED
   POSTED
   CANCELLED
+  REJECTED
 }
 
 model GoodsReceivedNote {
@@ -2134,6 +2137,16 @@ model GoodsReceivedNote {
   updatedAt DateTime @updatedAt @db.Timestamptz
   createdBy String?  @db.Uuid
   updatedBy String?  @db.Uuid
+
+  submittedBy    String?   @db.Uuid
+  submittedAt    DateTime? @db.Timestamptz
+  approvedBy     String?   @db.Uuid
+  approvedAt     DateTime? @db.Timestamptz
+  rejectedBy     String?   @db.Uuid
+  rejectedAt     DateTime? @db.Timestamptz
+  rejectedReason String?
+  postedBy       String?   @db.Uuid
+  postedAt       DateTime? @db.Timestamptz
 }
 
 enum InventoryAlertStatus {

@@ -100,23 +100,33 @@ export class ProcurementService {
         throw new Error('PO must be APPROVED or PARTIALLY_RECEIVED to create a GRN');
       }
 
-      // Generate GRN Number
-      const grnCount = await tx.goodsReceivedNote.count({ where: { propertyId: po.propertyId } });
-      const grnNumber = `GRN-${String(grnCount + 1).padStart(5, '0')}`;
+      const validItems = [];
+      for (const input of items) {
+        if (Number(input.receivedQty) <= 0) continue; // Skip zero/negative quantities
 
-      const validItems = items.map(input => {
         const poItem = po.items.find((i: any) => i.id === input.poItemId);
         if (!poItem) throw new Error(`PO Item ${input.poItemId} not found on this PO`);
         if (!poItem.stockItemId) throw new Error(`PO Item ${input.poItemId} is missing a stockItemId`);
         
-        return {
+        const remainingQty = Number(poItem.quantity) - Number(poItem.receivedQty);
+        if (Number(input.receivedQty) > remainingQty) {
+          throw new Error(`Cannot receive ${input.receivedQty} for ${poItem.description}. Only ${remainingQty} remaining.`);
+        }
+
+        validItems.push({
           stockItemId: poItem.stockItemId,
           description: poItem.description,
           receivedQty: input.receivedQty,
           unitOfMeasure: poItem.unitOfMeasure,
           unitCost: input.unitCost,
-        };
-      });
+        });
+      }
+
+      if (validItems.length === 0) {
+        throw new Error('Cannot create an empty GRN. No valid received quantities provided.');
+      }
+      const grnCount = await tx.goodsReceivedNote.count({ where: { propertyId: po.propertyId } });
+      const grnNumber = `GRN-${String(grnCount + 1).padStart(5, '0')}`;
 
       const grn = await tx.goodsReceivedNote.create({
         data: {

@@ -50,6 +50,7 @@ type TerminalAuthScreenGlobalProps = {
   onAuthenticated: (desktopMode: string) => void;
   onCancel?: () => void;
   outletId?: string;
+  allowedRoles?: string[];
 };
 
 type TerminalAuthScreenPosProps = {
@@ -59,6 +60,7 @@ type TerminalAuthScreenPosProps = {
   onAuthenticated: (operator: StaffProfile, token: string, authData?: any) => void;
   onCancel?: () => void;
   outletId?: string;
+  allowedRoles?: string[];
 };
 
 type TerminalAuthScreenProps = TerminalAuthScreenGlobalProps | TerminalAuthScreenPosProps;
@@ -87,6 +89,7 @@ function GlobalAuthShell(props: TerminalAuthScreenGlobalProps) {
   const auth = useGlobalTerminalAuth({
     isOpen: props.isOpen,
     onAuthenticated: props.onAuthenticated,
+    allowedRoles: props.allowedRoles,
   });
 
   const title =
@@ -161,6 +164,7 @@ function PosOperatorAuthShell(props: TerminalAuthScreenPosProps) {
     isOpen: props.isOpen,
     outletId: props.outletId,
     onAuthenticated: props.onAuthenticated,
+    allowedRoles: props.allowedRoles,
   });
 
   const title =

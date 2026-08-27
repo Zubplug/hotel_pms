@@ -3,6 +3,7 @@ import prisma from '@hotel-pms/db';
 import crypto from 'crypto';
 import { errorResponse, successResponse } from '@/lib/api-response';
 import { resolveUser } from '@/lib/resolve-user';
+import { applyRefundToFolio } from '@/lib/refunds/settle-refund';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -19,8 +20,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       if (!user.isSuperAdmin && !user.allowedProperties.includes(request.propertyId)) throw new Error('FORBIDDEN');
       if (request.approvedMethod !== 'BANK_TRANSFER' || request.status !== 'APPROVED') throw new Error('CONFLICT');
       const amount = Number(request.approvedAmount || request.requestedAmount);
-      const folioUpdate = await tx.folio.updateMany({ where: { id: request.folioId, version: request.folio.version }, data: { version: { increment: 1 }, totalPayments: { decrement: amount }, balance: { increment: amount } } });
-      if (folioUpdate.count !== 1) throw new Error('CONFLICT');
+      await applyRefundToFolio(tx, request, amount, user.id);
       const refund = await tx.refund.create({ data: { refundRequestId: request.id, paymentId: request.paymentId, folioId: request.folioId, propertyId: request.propertyId, amount, currency: request.currency, method: 'BANK_TRANSFER', reason: request.reason, authorizedBy: user.id, providerRefundId: `bank-transfer:${reference}`, status: 'COMPLETED', idempotencyKey: `refund-request:${request.id}` } });
       await tx.folioItem.create({ data: { folioId: request.folioId, businessDate: new Date(), type: 'REFUND', source: 'MANUAL', description: `Bank transfer refund ${reference}`, quantity: 1, unitAmount: amount, amount, currency: request.currency, baseAmount: amount, postedBy: user.id } });
       const refunded = await tx.refund.aggregate({ where: { paymentId: request.paymentId, status: { not: 'FAILED' } }, _sum: { amount: true } });
@@ -35,6 +35,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (error.message === 'NOT_FOUND') return errorResponse('NOT_FOUND', 'Refund request not found', 404);
     if (error.message === 'FORBIDDEN') return errorResponse('FORBIDDEN', 'Access denied', 403);
     if (error.message === 'CONFLICT') return errorResponse('CONFLICT', 'Bank refund is no longer awaiting settlement', 409);
+    if (error.message === 'REDUCED_STAY_METADATA_MISSING' || error.message === 'REDUCED_STAY_CHARGES_UNAVAILABLE' || error.message === 'REDUCED_STAY_CHARGES_CHANGED') return errorResponse('CONFLICT', 'The unused room nights changed; review this reduced-stay refund before settling it.', 409);
     console.error('[Bank Refund Settlement]', error);
     return errorResponse('INTERNAL_ERROR', 'Unable to settle bank refund', 500);
   }

@@ -3,6 +3,7 @@ import prisma from '@hotel-pms/db';
 import crypto from 'crypto';
 import { errorResponse, successResponse } from '@/lib/api-response';
 import { resolveUser } from '@/lib/resolve-user';
+import { applyRefundToFolio } from '@/lib/refunds/settle-refund';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -20,11 +21,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       if (request.approvedMethod !== 'CASH' || request.status !== 'APPROVED') throw new Error('CONFLICT');
 
       const amount = Number(request.approvedAmount || request.requestedAmount);
-      const folioUpdate = await tx.folio.updateMany({
-        where: { id: request.folioId, version: request.folio.version },
-        data: { version: { increment: 1 }, totalPayments: { decrement: amount }, balance: { increment: amount } }
-      });
-      if (folioUpdate.count !== 1) throw new Error('CONFLICT');
+      await applyRefundToFolio(tx, request, amount, user.id);
 
       const refund = await tx.refund.create({ data: {
         refundRequestId: request.id,
@@ -75,6 +72,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (error.message === 'NOT_FOUND') return errorResponse('NOT_FOUND', 'Refund request not found', 404);
     if (error.message === 'FORBIDDEN') return errorResponse('FORBIDDEN', 'Access denied', 403);
     if (error.message === 'CONFLICT') return errorResponse('CONFLICT', 'Cash refund is no longer awaiting settlement', 409);
+    if (error.message === 'REDUCED_STAY_METADATA_MISSING' || error.message === 'REDUCED_STAY_CHARGES_UNAVAILABLE' || error.message === 'REDUCED_STAY_CHARGES_CHANGED') return errorResponse('CONFLICT', 'The unused room nights changed; review this reduced-stay refund before settling it.', 409);
     if (error.message === 'SHIFT_NOT_OPEN') return errorResponse('CONFLICT', 'Open your front desk cashier session before settling a cash refund.', 409);
     console.error('[Cash Refund Settlement]', error);
     return errorResponse('INTERNAL_ERROR', 'Unable to settle cash refund', 500);

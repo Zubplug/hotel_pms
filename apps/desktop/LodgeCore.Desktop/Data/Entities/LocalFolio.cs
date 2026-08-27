@@ -44,8 +44,8 @@ public class LocalFolio
         return value.ValueKind == JsonValueKind.String && decimal.TryParse(value.GetString(), out var text) ? text : 0m;
     }
 
-    public decimal OutstandingBalance => Math.Max(0m, TotalCharges - TotalPayments - AppliedCreditAmount);
-    public decimal NetBalance => OutstandingBalance;
+    public decimal NetBalance => TotalCharges - TotalPayments - AppliedCreditAmount;
+    public decimal OutstandingBalance => Math.Max(0m, NetBalance);
     public string? Currency { get; set; }
 
     // Storing transactions as JSON string for simplicity offline, or we could make a separate table

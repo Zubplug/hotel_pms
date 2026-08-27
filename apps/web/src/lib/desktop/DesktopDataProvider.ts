@@ -24,8 +24,8 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     provisionDevice: async (deviceToken: string) => {
       return invokeDesktop('auth.provisionDevice', { deviceToken });
     },
-    getActiveStaff: async () => {
-      return invokeDesktop('auth.getActiveStaff');
+    getActiveStaff: async (roleScope?: string) => {
+      return invokeDesktop('auth.getActiveStaff', { roleScope });
     },
     login: async (staffId: string, pin: string, bankingModel?: string) => {
       return invokeDesktop('auth.login', { staffId, pin, bankingModel });
