@@ -52,7 +52,7 @@ export class CostControlService {
     for (const ingredient of activeVersion.ingredients) {
       const stockItem = ingredient.stockItem;
       const recipeUOM = ingredient.unitOfMeasure;
-      const stockUOM = stockItem.unitOfMeasure; // assuming StockItem has unitOfMeasure
+      const stockUOM = stockItem.baseUnit;
 
       const ratio = getConversionRatio(recipeUOM, stockUOM);
       
