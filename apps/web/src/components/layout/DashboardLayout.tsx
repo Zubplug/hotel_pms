@@ -64,14 +64,14 @@ const ALL_NAV = [
     icon: FileText,
     children: [
       { name: 'Shift / Cashier', href: '/reports/shift' },
-      { name: 'Receivables', href: '/reports/receivables', restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'ACCOUNTANT'] },
-      { name: 'Gateway', href: '/reports/gateway', restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'ACCOUNTANT'] },
+      { name: 'Receivables', href: '/reports/receivables', restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'ACCOUNTANT', 'GENERAL_CASHIER'] },
+      { name: 'Gateway', href: '/reports/gateway', restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'ACCOUNTANT', 'GENERAL_CASHIER'] },
       { name: 'Housekeeping', href: '/reports/housekeeping' },
       { name: 'Maintenance', href: '/reports/maintenance' },
       { name: 'Room Status', href: '/reports/room-status' },
     ]
   },
-  { name: 'Cash Office', href: '/cash-office', icon: HandCoins, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'ACCOUNTANT'] },
+  { name: 'Cash Office', href: '/cash-office', icon: HandCoins, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'ACCOUNTANT', 'GENERAL_CASHIER'] },
   { name: 'Refunds', href: '/refunds', icon: BadgeDollarSign, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'FINANCE_MANAGER', 'ADMIN'] },
 
   { name: 'Settings', href: '/settings', icon: Settings, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER'] },
