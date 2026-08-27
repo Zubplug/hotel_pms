@@ -24,7 +24,7 @@ const TILES = [
   { cap: 'ACCESS_FRONT_DESK', label: 'Front Desk', icon: Building2, href: '/frontdesk' },
   { cap: 'ACCESS_POS', label: 'Point of Sale', icon: UtensilsCrossed, href: '/pos' },
   { cap: 'ACCESS_HOUSEKEEPING', label: 'Housekeeping', icon: Sparkles, href: '/housekeeping' },
-  { cap: 'ACCESS_CASH_MANAGEMENT', label: 'Cash Management', icon: Banknote, href: '/cash-management' },
+  { cap: 'ACCESS_CASH_MANAGEMENT', label: 'Cash Office', icon: Banknote, href: '/cash-office' },
   { cap: 'ACCESS_INVENTORY', label: 'Inventory', icon: Package, href: '/admin/inventory' },
   { cap: 'ACCESS_MAINTENANCE', label: 'Maintenance', icon: Wrench, href: '/maintenance' },
   { cap: 'ACCESS_MANAGEMENT', label: 'Management', icon: BarChart3, href: '/dashboard' },
