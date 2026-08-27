@@ -3,7 +3,9 @@ import path from 'path';
 import { execSync } from 'child_process';
 
 const dirsToHide = [
+  { src: path.join(process.cwd(), 'src/app/(admin)'), dest: path.join(process.cwd(), 'src/app/_admin_group') },
   { src: path.join(process.cwd(), 'src/app/(dashboard)'), dest: path.join(process.cwd(), 'src/app/_dashboard') },
+  { src: path.join(process.cwd(), 'src/app/(inventory)'), dest: path.join(process.cwd(), 'src/app/_inventory') },
   { src: path.join(process.cwd(), 'src/app/hub'), dest: path.join(process.cwd(), 'src/app/_hub') },
   { src: path.join(process.cwd(), 'src/app/admin'), dest: path.join(process.cwd(), 'src/app/_admin') }
 ];
