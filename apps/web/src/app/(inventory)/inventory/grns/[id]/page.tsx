@@ -31,13 +31,19 @@ export default async function GRNDetailPage({ params }: { params: Promise<{ id: 
     include: {
       property: { select: { baseCurrency: true } },
       purchaseOrder: { include: { supplier: true } },
-      items: { include: { stockItem: true } },
+      items: true,
     }
   }) as any;
 
   if (!grn || grn.propertyId !== session.user.propertyId) {
     notFound();
   }
+
+  const stockItems = await prisma.stockItem.findMany({
+    where: { id: { in: grn.items.map((item: any) => item.stockItemId) } },
+    select: { id: true, name: true, sku: true, warehouseId: true },
+  });
+  const stockItemById = new Map(stockItems.map(item => [item.id, item]));
 
   const grandTotal = grn.items.reduce((sum: number, item: any) => sum + (Number(item.receivedQty) * Number(item.unitCost || 0)), 0);
   const totalItems = grn.items.length;
@@ -136,7 +142,7 @@ export default async function GRNDetailPage({ params }: { params: Promise<{ id: 
               id={grn.id} 
               status={grn.status}
               itemCount={totalItems} 
-              warehouseName={grn.items[0]?.stockItem?.warehouseId ? 'Destination Warehouse' : 'Stock'} 
+              warehouseName={stockItems[0]?.warehouseId ? 'Destination Warehouse' : 'Stock'}
               canReceive={canReceive}
               canApprove={canApprove}
               canPost={canPost}
@@ -171,12 +177,13 @@ export default async function GRNDetailPage({ params }: { params: Promise<{ id: 
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white">
               {grn.items.map((item: any) => {
+                const stockItem = stockItemById.get(item.stockItemId);
                 const lineTotal = Number(item.receivedQty) * Number(item.unitCost || 0);
                 return (
                   <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="px-6 py-4">
-                      <p className="font-medium text-slate-900">{item.stockItem?.name || 'Unknown Item'}</p>
-                      {item.stockItem?.sku && <p className="text-xs text-slate-400 font-mono mt-0.5">{item.stockItem.sku}</p>}
+                        <p className="font-medium text-slate-900">{stockItem?.name || 'Unknown Item'}</p>
+                      {stockItem?.sku && <p className="text-xs text-slate-400 font-mono mt-0.5">{stockItem.sku}</p>}
                     </td>
                     <td className="px-6 py-4 text-slate-500 max-w-[200px] truncate">{item.description || '-'}</td>
                     <td className="px-6 py-4 text-slate-900 text-right font-semibold">

@@ -79,7 +79,7 @@ export class InventoryService {
     return await prisma.$transaction(async (tx: any) => {
       const grn = await tx.goodsReceivedNote.findUnique({
         where: { id: grnId },
-        include: { items: { include: { stockItem: true } }, purchaseOrder: { include: { items: true } } }
+        include: { items: true, purchaseOrder: { include: { items: true } } }
       });
 
       if (!grn) throw new Error('GRN not found');
@@ -87,12 +87,15 @@ export class InventoryService {
 
       const property = await tx.property.findUnique({ where: { id: grn.propertyId } });
       const currency = property?.baseCurrency || 'NGN';
+      const stockItems = await tx.stockItem.findMany({ where: { id: { in: grn.items.map((item: any) => item.stockItemId) } } });
 
       for (const item of grn.items) {
         const qtyToReceive = item.receivedQty;
         if (qtyToReceive.lte(0)) continue;
 
         // 1. Update StockItem
+        const existingStockItem = stockItems.find((candidate: any) => candidate.id === item.stockItemId);
+        if (!existingStockItem) throw new Error(`Stock item not found: ${item.stockItemId}`);
         const stockItem = await tx.stockItem.update({
           where: { id: item.stockItemId },
           data: {

@@ -19,9 +19,7 @@ export default async function NewGRNPage(props: { searchParams: Promise<{ poId?:
     include: {
       supplier: true,
       items: {
-        include: {
-          stockItem: true
-        }
+        select: { id: true, stockItemId: true, description: true, quantity: true, receivedQty: true, unitPrice: true, unitOfMeasure: true }
       }
     }
   }) as any;
