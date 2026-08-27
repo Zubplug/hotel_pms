@@ -54,6 +54,11 @@ function getDirectLandingUrl(
     return '/night-audit';
   }
 
+  // Cashiers → Cash Office
+  if (role === 'GENERAL_CASHIER') {
+    return '/cash-office';
+  }
+
   // Single-capability staff (e.g. housekeeping-only, POS-only)
   if (capabilities.length === 1) {
     const singleCapMap: Record<string, string> = {
