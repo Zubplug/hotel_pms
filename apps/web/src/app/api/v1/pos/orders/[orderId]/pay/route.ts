@@ -9,6 +9,7 @@ const PaymentSchema = z.object({
   amount: z.number().positive(),
   currency: z.string().default('NGN'),
   checkId: z.string().nullish(),
+  inventoryOverrideApprovalId: z.string().uuid().nullish(),
 });
 
 // POST /api/v1/pos/orders/[orderId]/pay
@@ -25,7 +26,7 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid payment data' }, { status: 400 });
     }
 
-    const { method, amount, currency, checkId } = parsed.data;
+    const { method, amount, currency, checkId, inventoryOverrideApprovalId } = parsed.data;
 
     // Optional: verify token
     let sessionId = null;
@@ -74,6 +75,7 @@ export async function POST(
       
       let updatedOrder: typeof order = order;
       if (orderPaidSoFar >= Number(order.total)) {
+        await InventoryService.commitSaleInTransaction(tx, orderId, staffId || 'system', `op_sale_${orderId}_${payment.id}`, inventoryOverrideApprovalId || undefined);
         updatedOrder = await tx.posOrder.update({
           where: { id: orderId },
           data: {
@@ -100,17 +102,6 @@ export async function POST(
 
       return { payment, order: updatedOrder };
     });
-
-    // If the order was just fully paid, trigger inventory deduction asynchronously
-    // outside the main transaction to prevent blocking the checkout UI if inventory logic is slow.
-    if (result.order.status === 'CLOSED') {
-      try {
-        await InventoryService.postSale(orderId, staffId || 'system', `op_sale_${orderId}_${result.payment.id}`);
-      } catch (inventoryError) {
-        // We log the error but don't fail the payment request, as the payment succeeded.
-        console.error(`[Inventory Error] Failed to deduct stock for POS Order ${orderId}:`, inventoryError);
-      }
-    }
 
     return NextResponse.json({ data: result, error: null }, { status: 201 });
   } catch (err: any) {

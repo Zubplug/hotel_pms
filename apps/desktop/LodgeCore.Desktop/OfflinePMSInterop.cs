@@ -1642,6 +1642,14 @@ public class OfflinePMSInterop
             decimal amount = paymentData.ContainsKey("amount") ? decimal.Parse(paymentData["amount"]?.ToString() ?? "0") : 0;
             string currency = paymentData.ContainsKey("currency") ? paymentData["currency"]?.ToString() ?? fallbackCurrency : fallbackCurrency;
             string? checkId = paymentData.ContainsKey("checkId") ? paymentData["checkId"]?.ToString() : null;
+            string? supervisorPin = paymentData.ContainsKey("supervisorPin") ? paymentData["supervisorPin"]?.ToString() : null;
+            string? authorizerId = null;
+            if (!string.IsNullOrWhiteSpace(supervisorPin))
+            {
+                var authorizer = await _repo.ValidateSupervisorPinAsync(supervisorPin, posCtx.PropertyId);
+                if (authorizer == null) throw new UnauthorizedAccessException("Invalid manager PIN");
+                authorizerId = authorizer.Id;
+            }
             
             // AUTHORIZATION CHECK
             if (string.IsNullOrEmpty(posCtx.SessionId))
@@ -1656,7 +1664,7 @@ public class OfflinePMSInterop
                 }
             }
 
-            var res = await _repo.PayOrderAsync(orderId, method, amount, currency, checkId ?? "", posCtx.StaffId, posCtx.DeviceId);
+            var res = await _repo.PayOrderAsync(orderId, method, amount, currency, checkId ?? "", posCtx.StaffId, posCtx.DeviceId, authorizerId);
             return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
         catch (Exception ex)

@@ -14,7 +14,9 @@ import {
   Bell, 
   Scale, 
   LogOut,
-  Hotel
+  Hotel,
+  ClipboardList,
+  Activity
 } from 'lucide-react';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { useLogout } from '@/hooks/useLogout';
@@ -34,7 +36,9 @@ export function InventorySidebar() {
     { name: 'Transfers', href: '/inventory/transfers', icon: ArrowRightLeft, roles: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'STOCK_MANAGER'] },
     { name: 'Suppliers', href: '/inventory/suppliers', icon: Users, roles: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'PROCUREMENT_MANAGER', 'STOCK_MANAGER'] },
     { name: 'Alerts', href: '/inventory/alerts', icon: Bell },
-    { name: 'Reconciliation', href: '/inventory/reconciliation', icon: Scale, roles: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'STOCK_MANAGER'] },
+    { name: 'Stocktakes', href: '/inventory/stocktakes', icon: ClipboardList, roles: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'STOCK_MANAGER'] },
+    { name: 'Cost Control', href: '/inventory/cost-control', icon: Activity, roles: ['CEO', 'SUPER_ADMIN', 'MANAGER'] },
+    { name: 'Ad-Hoc Adjustment', href: '/inventory/reconciliation', icon: Scale, roles: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'STOCK_MANAGER'] },
   ];
 
   const getInitials = (name?: string | null, email?: string | null) => {

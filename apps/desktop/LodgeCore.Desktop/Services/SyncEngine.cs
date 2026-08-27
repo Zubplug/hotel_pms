@@ -1476,6 +1476,8 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                         ? (tr.ValueKind == System.Text.Json.JsonValueKind.Number ? tr.GetDecimal() : (tr.ValueKind == System.Text.Json.JsonValueKind.String && decimal.TryParse(tr.GetString(), out var dt) ? dt : 0m)) 
                         : 0m;
                     prod.IsActive = el.TryGetProperty("isActive", out var ia) && ia.GetBoolean();
+                    prod.InventoryMode = el.TryGetProperty("inventoryMode", out var im) && im.ValueKind != System.Text.Json.JsonValueKind.Null
+                        ? im.GetString() ?? "NON_STOCK" : "NON_STOCK";
                     // Product-level station override (null = inherit from category)
                     prod.ProductionStation = el.TryGetProperty("productionStation", out var pps) && pps.ValueKind != System.Text.Json.JsonValueKind.Null
                         ? pps.GetString() : null;
@@ -1517,6 +1519,73 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                 {
                     var stale = await dbContext.PosProducts.Where(p => p.PropertyId == propertyId && !incomingIds.Contains(p.Id)).ToListAsync(stoppingToken);
                     if (stale.Any() && !isIncremental) dbContext.PosProducts.RemoveRange(stale);
+                }
+            }
+
+            // 8b. Laundry Items
+            // 8a. Inventory quantities and active recipe versions used by the
+            // offline POS. These are deliberately applied before the menu is
+            // consumed so stock availability is calculated from one snapshot.
+            if (root.TryGetProperty("stockItems", out var stockItemsArray) && stockItemsArray.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var el in stockItemsArray.EnumerateArray())
+                {
+                    var id = el.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
+                    var itemPropertyId = el.TryGetProperty("propertyId", out var propertyEl) ? propertyEl.GetString() : null;
+                    if (string.IsNullOrWhiteSpace(id) || itemPropertyId != propertyId) continue;
+
+                    var item = await dbContext.StockItems.FirstOrDefaultAsync(x => x.Id == id, stoppingToken);
+                    if (item == null)
+                    {
+                        item = new LocalStockItem { Id = id, PropertyId = propertyId };
+                        dbContext.StockItems.Add(item);
+                    }
+                    item.Name = el.TryGetProperty("name", out var nameEl) ? nameEl.GetString() ?? "" : "";
+                    item.BaseUnit = el.TryGetProperty("baseUnit", out var unitEl) ? unitEl.GetString() ?? "" : "";
+                    item.CostPrice = ReadDecimal(el, "costPrice");
+                    item.QuantityOnHand = ReadDecimal(el, "quantityOnHand");
+                    item.ReorderLevel = el.TryGetProperty("reorderLevel", out var reorderEl) && reorderEl.ValueKind != JsonValueKind.Null ? ReadDecimal(reorderEl) : null;
+                    item.IsActive = !el.TryGetProperty("isActive", out var activeEl) || activeEl.ValueKind == JsonValueKind.True;
+                    item.UpdatedAt = el.TryGetProperty("updatedAt", out var updatedEl) && DateTime.TryParse(updatedEl.GetString(), out var updatedAt) ? updatedAt : DateTime.UtcNow;
+                }
+            }
+
+            if (root.TryGetProperty("recipes", out var recipesArray) && recipesArray.ValueKind == JsonValueKind.Array)
+            {
+                var incomingIngredientIds = new HashSet<string>();
+                foreach (var recipe in recipesArray.EnumerateArray())
+                {
+                    var productId = recipe.TryGetProperty("posProductId", out var productEl) ? productEl.GetString() : null;
+                    if (string.IsNullOrWhiteSpace(productId)) continue;
+                    if (!recipe.TryGetProperty("versions", out var versions) || versions.ValueKind != JsonValueKind.Array) continue;
+                    foreach (var version in versions.EnumerateArray())
+                    {
+                        var versionId = version.TryGetProperty("id", out var versionIdEl) ? versionIdEl.GetString() : null;
+                        if (string.IsNullOrWhiteSpace(versionId) || !version.TryGetProperty("ingredients", out var ingredients) || ingredients.ValueKind != JsonValueKind.Array) continue;
+                        foreach (var ingredient in ingredients.EnumerateArray())
+                        {
+                            var ingredientId = ingredient.TryGetProperty("id", out var ingredientIdEl) ? ingredientIdEl.GetString() : null;
+                            var stockItemId = ingredient.TryGetProperty("stockItemId", out var stockIdEl) ? stockIdEl.GetString() : null;
+                            if (string.IsNullOrWhiteSpace(ingredientId) || string.IsNullOrWhiteSpace(stockItemId)) continue;
+                            incomingIngredientIds.Add(ingredientId);
+                            var local = await dbContext.RecipeIngredients.FirstOrDefaultAsync(x => x.Id == ingredientId, stoppingToken);
+                            if (local == null)
+                            {
+                                local = new LocalRecipeIngredient { Id = ingredientId };
+                                dbContext.RecipeIngredients.Add(local);
+                            }
+                            local.ProductId = productId;
+                            local.RecipeVersionId = versionId;
+                            local.StockItemId = stockItemId;
+                            local.Quantity = ReadDecimal(ingredient, "quantity");
+                            local.UnitOfMeasure = ingredient.TryGetProperty("unitOfMeasure", out var measureEl) ? measureEl.GetString() ?? "" : "";
+                        }
+                    }
+                }
+                if (!isIncremental && incomingIngredientIds.Count > 0)
+                {
+                    var staleIngredients = await dbContext.RecipeIngredients.Where(i => !incomingIngredientIds.Contains(i.Id)).ToListAsync(stoppingToken);
+                    if (staleIngredients.Count > 0) dbContext.RecipeIngredients.RemoveRange(staleIngredients);
                 }
             }
 
@@ -2670,6 +2739,17 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                 break;
             }
         }
+    }
+
+    private static decimal ReadDecimal(JsonElement element, string propertyName)
+    {
+        return element.TryGetProperty(propertyName, out var value) ? ReadDecimal(value) : 0m;
+    }
+
+    private static decimal ReadDecimal(JsonElement value)
+    {
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetDecimal(out var number)) return number;
+        return value.ValueKind == JsonValueKind.String && decimal.TryParse(value.GetString(), out var parsed) ? parsed : 0m;
     }
 
     private void ClearIsDirtyIfSafe(LocalDbContext dbContext, LodgeCore.Desktop.Data.Entities.LocalOutboxEvent evt)

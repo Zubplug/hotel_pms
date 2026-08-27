@@ -44,6 +44,15 @@ export async function PATCH(
     // Optional: Validate state transition. 
     // E.g. Cannot transition from COMPLETED to OPEN.
 
+    if (status === 'VOIDED' && order.status !== 'VOIDED') {
+      try {
+        await InventoryService.restoreSale(orderId, 'system', `op_restore_voided_${orderId}`);
+      } catch (inventoryError) {
+        console.error(`[Inventory Error] Failed to restore stock for POS ${status} ${orderId}:`, inventoryError);
+        return NextResponse.json({ error: 'Order status was not changed because inventory restoration failed' }, { status: 409 });
+      }
+    }
+
     const updatedOrder = await prisma.posOrder.update({
       where: { id: orderId },
       data: {
@@ -60,7 +69,6 @@ export async function PATCH(
         console.error(`[Inventory Error] Failed to deduct stock for POS Order ${orderId}:`, inventoryError);
       }
     }
-
     return NextResponse.json({ data: updatedOrder });
   } catch (error: any) {
     console.error(`[PATCH /api/v1/pos/orders/[orderId]/status]`, error);

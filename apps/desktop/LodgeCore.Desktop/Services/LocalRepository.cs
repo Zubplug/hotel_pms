@@ -2323,9 +2323,15 @@ public class LocalRepository
     }
     public async Task<LocalPosOrder> UpdateOrderStatusAsync(string orderId, string status, string reason, string userId, string deviceId)
     {
-        var order = await _dbContext.PosOrders.FirstOrDefaultAsync(o => o.Id == orderId);
+        var order = await _dbContext.PosOrders
+            .Include(o => o.Items)
+            .FirstOrDefaultAsync(o => o.Id == orderId);
         if (order == null) throw new Exception("Order not found");
 
+        if ((status == "CANCELLED" || status == "VOIDED") && order.Status != "CANCELLED" && order.Status != "VOIDED")
+        {
+            await RestoreLocalSaleAsync(order, userId, deviceId, $"op_restore_{status.ToLowerInvariant()}_{order.Id}");
+        }
         order.Status = status;
         if (!string.IsNullOrEmpty(reason))
         {
@@ -2473,6 +2479,38 @@ public class LocalRepository
                     ? (categories.TryGetValue(product.CategoryId, out var category) ? category.ProductionStation : null)
                     : product.ProductionStation)
                 ?.Trim().ToUpperInvariant() ?? "KITCHEN";
+
+            if (!string.Equals(product.InventoryMode, "STOCK", StringComparison.OrdinalIgnoreCase))
+            {
+                product.StockStatus = "NON_STOCK";
+                continue;
+            }
+
+            var ingredients = await _dbContext.RecipeIngredients
+                .Where(i => i.ProductId == product.Id)
+                .ToListAsync();
+            product.HasInventoryMapping = ingredients.Count > 0;
+            if (!product.HasInventoryMapping)
+            {
+                product.StockStatus = "UNMAPPED";
+                product.AvailableStock = 0;
+                continue;
+            }
+
+            var stockIds = ingredients.Select(i => i.StockItemId).Distinct().ToList();
+            var stock = await _dbContext.StockItems
+                .Where(s => stockIds.Contains(s.Id))
+                .ToDictionaryAsync(s => s.Id);
+            var available = ingredients
+                .GroupBy(i => i.StockItemId)
+                .Select(group => stock.TryGetValue(group.Key, out var item)
+                    ? item.QuantityOnHand / group.Sum(i => i.Quantity)
+                    : 0m)
+                .DefaultIfEmpty(0m)
+                .Min();
+            product.AvailableStock = Math.Max(0m, available);
+            product.StockStatus = available <= 0m ? "OUT_OF_STOCK" :
+                available <= 5m ? "LOW_STOCK" : "IN_STOCK";
         }
 
         return products;
@@ -2856,9 +2894,11 @@ public class LocalRepository
         return await _dbContext.Staff.FirstOrDefaultAsync(s => s.Id == staffId);
     }
 
-    public async Task<LocalPosPayment> PayOrderAsync(string orderId, string method, decimal amount, string currency, string checkId, string userId, string deviceId)
+    public async Task<LocalPosPayment> PayOrderAsync(string orderId, string method, decimal amount, string currency, string checkId, string userId, string deviceId, string? authorizerId = null)
     {
-        var order = await _dbContext.PosOrders.FirstOrDefaultAsync(o => o.Id == orderId);
+        var order = await _dbContext.PosOrders
+            .Include(o => o.Items)
+            .FirstOrDefaultAsync(o => o.Id == orderId);
         if (order == null) throw new Exception("Order not found");
 
         var payment = new LocalPosPayment
@@ -2905,6 +2945,7 @@ public class LocalRepository
         var orderPayments = orderPaymentAmounts.Sum();
         if (orderPayments + amount >= order.Total)
         {
+            await CommitLocalSaleAsync(order, userId, deviceId, authorizerId);
             order.Status = "COMPLETED";
             order.PaymentStatus = "PAID";
             order.UpdatedAt = DateTime.UtcNow;
@@ -2913,6 +2954,62 @@ public class LocalRepository
 
         await _dbContext.SaveChangesAsync();
         return payment;
+    }
+
+    private async Task CommitLocalSaleAsync(LocalPosOrder order, string userId, string deviceId, string? authorizerId)
+    {
+        if (await _dbContext.StockTransactions.AnyAsync(t => t.ReferenceId == order.Id && t.Source == "SALE")) return;
+        var productIds = order.Items.Where(i => !string.IsNullOrWhiteSpace(i.ProductId)).Select(i => i.ProductId!).Distinct().ToList();
+        var stockProducts = await _dbContext.PosProducts.Where(p => productIds.Contains(p.Id) && p.InventoryMode == "STOCK").ToListAsync();
+        var requirements = new Dictionary<string, decimal>();
+        foreach (var product in stockProducts)
+        {
+            var quantity = order.Items.Where(i => i.ProductId == product.Id).Sum(i => i.Quantity);
+            var ingredients = await _dbContext.RecipeIngredients.Where(i => i.ProductId == product.Id).ToListAsync();
+            if (ingredients.Count == 0) throw new Exception($"Inventory mapping is missing for {product.Name}");
+            foreach (var ingredient in ingredients)
+                requirements[ingredient.StockItemId] = requirements.GetValueOrDefault(ingredient.StockItemId) + ingredient.Quantity * quantity;
+        }
+        foreach (var entry in requirements)
+        {
+            var stock = await _dbContext.StockItems.FindAsync(entry.Key);
+            if (stock == null || !stock.IsActive) throw new Exception("Inventory item is unavailable");
+            if (stock.QuantityOnHand < entry.Value && string.IsNullOrWhiteSpace(authorizerId))
+                throw new Exception($"Insufficient stock for {stock.Name}. Manager approval is required to continue.");
+            var before = stock.QuantityOnHand;
+            stock.QuantityOnHand -= entry.Value;
+            _dbContext.StockTransactions.Add(new LocalStockTransaction
+            {
+                Id = Guid.NewGuid().ToString(), PropertyId = order.PropertyId, StockItemId = stock.Id,
+                TransactionType = "SALE", Source = "SALE", Quantity = -entry.Value, UnitCost = stock.CostPrice,
+                TotalValue = -entry.Value * stock.CostPrice, ReferenceId = order.Id,
+                OperationId = $"op_sale_{deviceId}_{order.Id}_{stock.Id}", UserId = userId,
+                Notes = before < entry.Value ? $"NEGATIVE STOCK AUTHORIZED BY {authorizerId}" : null,
+                BusinessDate = order.BusinessDate
+            });
+        }
+    }
+
+    private async Task RestoreLocalSaleAsync(LocalPosOrder order, string userId, string deviceId, string operationId)
+    {
+        var sales = await _dbContext.StockTransactions.Where(t => t.ReferenceId == order.Id && t.Source == "SALE").ToListAsync();
+        foreach (var sale in sales)
+        {
+            var reversalId = $"{operationId}_{sale.StockItemId}";
+            if (await _dbContext.StockTransactions.AnyAsync(t => t.OperationId == reversalId)) continue;
+            var stock = await _dbContext.StockItems.FindAsync(sale.StockItemId);
+            if (stock == null) continue;
+            var quantity = Math.Abs(sale.Quantity);
+            var before = stock.QuantityOnHand;
+            stock.QuantityOnHand += quantity;
+            _dbContext.StockTransactions.Add(new LocalStockTransaction
+            {
+                Id = Guid.NewGuid().ToString(), PropertyId = order.PropertyId, StockItemId = stock.Id,
+                TransactionType = "RESTORE", Source = "POS_VOID", Quantity = quantity, UnitCost = stock.CostPrice,
+                TotalValue = quantity * stock.CostPrice, ReferenceId = order.Id, OperationId = reversalId,
+                UserId = userId, Notes = "Stock restored for cancelled or voided order", BusinessDate = order.BusinessDate
+            });
+        }
     }
 
     public async Task<LocalPosSettlement> SettleSessionAsync(string sessionId, decimal actualCash, string operatorId, string? authorizerId, string deviceId)

@@ -5,6 +5,7 @@ import { successResponse, errorResponse } from '@/lib/api-response';
 import { resolveUser } from '@/lib/resolve-user';
 import { PaystackProvider } from '@/lib/payment-providers/paystack';
 import { applyRefundToFolio } from '@/lib/refunds/settle-refund';
+import { InventoryService } from '@/lib/inventory/InventoryService';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -36,7 +37,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
       if (approval.type === 'REFUND') {
         if (approval.status !== 'PENDING') throw new Error('CONFLICT');
-        const details = (approval.details || {}) as { refundRequestId?: string; approverId?: string; approverRoleId?: string; posRefund?: boolean; orderId?: string; amount?: number; method?: string };
+          const details = (approval.details || {}) as { refundRequestId?: string; approverId?: string; approverRoleId?: string; posRefund?: boolean; orderId?: string; amount?: number; method?: string };
         if (details.approverId && details.approverId !== user.id) {
           throw new Error('ASSIGNED_APPROVER_REQUIRED');
         }
@@ -62,6 +63,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
               paidAt: new Date()
             }
           });
+          await InventoryService.restoreSaleForRefund(tx, order.id, amount, user.id, `pos-refund:${approval.id}`);
           const updated = await tx.approvalRequest.update({ where: { id: approval.id }, data: { status: 'APPROVED', reviewedBy: user.id, reviewedAt: new Date() } });
           return { status: 'COMPLETED', approval: updated };
         }

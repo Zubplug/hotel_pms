@@ -85,7 +85,7 @@ export default function ReconciliationPage() {
           <ClipboardList className="w-5 h-5 text-amber-600" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Stock Reconciliation</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Stock Adjustment (Ad-Hoc)</h1>
           <p className="text-slate-500 text-sm mt-0.5">Submit a counted quantity for management approval</p>
         </div>
       </div>

@@ -335,26 +335,29 @@ export async function POST(req: NextRequest) {
               
               const newStatus = payload.status || payload.Status;
               if (newStatus === 'CLOSED' || newStatus === 'CANCELLED' || newStatus === 'VOIDED') {
-                  await tx.posTable.updateMany({
-                      where: { currentOrderId: event.aggregateId },
-                      data: { currentOrderId: null }
-                  });
+                await tx.posTable.updateMany({
+                  where: { currentOrderId: event.aggregateId },
+                  data: { currentOrderId: null }
+                });
+              }
+              if (newStatus === 'CANCELLED' || newStatus === 'VOIDED') {
+                await InventoryService.restoreSale(
+                  event.aggregateId,
+                  event.operatorId || 'desktop-sync',
+                  `op_restore_${newStatus.toLowerCase()}_${event.aggregateId}`,
+                  tx
+                );
               }
               // ─── INVENTORY HOOK for ORDER_UPDATED → CLOSED ────────────────
               // Desktop sometimes uses ORDER_UPDATED with status=COMPLETED/CLOSED
               // instead of emitting a dedicated ORDER_CLOSED event. Catch both.
               if (newStatus === 'CLOSED' || newStatus === 'COMPLETED') {
-                (async () => {
-                  try {
-                    await InventoryService.postSale(
-                      event.aggregateId,
-                      event.operatorId || 'desktop-sync',
-                      `op_sale_desktop_${event.aggregateId}`
-                    );
-                  } catch (invErr) {
-                    console.error(`[Inventory] postSale failed for desktop ORDER_UPDATED(CLOSED) ${event.aggregateId}:`, invErr);
-                  }
-                })();
+                await InventoryService.commitSaleInTransaction(
+                  tx,
+                  event.aggregateId,
+                  event.operatorId || 'desktop-sync',
+                  `op_sale_desktop_${event.aggregateId}`
+                );
               }
               // ─────────────────────────────────────────────────────────────
           }
@@ -401,7 +404,7 @@ export async function POST(req: NextRequest) {
                 }
               });
           }
-          else if (event.eventType === 'ORDER_CLOSED') {
+          else if (event.eventType === 'ORDER_CLOSED' || event.eventType === 'ORDER_COMPLETED') {
               await tx.posOrder.update({
                   where: { id: event.aggregateId },
                   data: { status: "CLOSED", updatedAt: new Date() }
@@ -414,19 +417,12 @@ export async function POST(req: NextRequest) {
               // Deduct stock for all menu items with linked RecipeIngredients.
               // Uses a deterministic operationId so if the SyncEngine retries
               // this event it will be a no-op (idempotency guard inside postSale).
-              (async () => {
-                try {
-                  await InventoryService.postSale(
-                    event.aggregateId,
-                    event.operatorId || 'desktop-sync',
-                    `op_sale_desktop_${event.aggregateId}`
-                  );
-                } catch (invErr) {
-                  // Log only — we must NOT fail the sync push because of an
-                  // inventory error. The payment already succeeded on the terminal.
-                  console.error(`[Inventory] postSale failed for desktop ORDER_CLOSED ${event.aggregateId}:`, invErr);
-                }
-              })();
+              await InventoryService.commitSaleInTransaction(
+                tx,
+                event.aggregateId,
+                event.operatorId || 'desktop-sync',
+                `op_sale_desktop_${event.aggregateId}`
+              );
               // ─────────────────────────────────────────────────────────────
           }
           else if (event.eventType === 'ORDER_ITEMS_ADDED') {

@@ -1,6 +1,127 @@
 import prisma, { StockTransactionSource } from '@hotel-pms/db';
 
 export class InventoryService {
+  /** Restore every committed ingredient for a cancelled/voided order. */
+  static async restoreSale(posOrderId: string, actorId: string, operationId: string, txOverride?: any) {
+    const restore = async (tx: any) => {
+      const committed = await tx.stockTransaction.findMany({ where: { reference: posOrderId, source: 'SALE' } });
+      for (const sale of committed) {
+        const reversalOperation = `${operationId}_${sale.stockItemId}`;
+        const alreadyRestored = await tx.stockTransaction.findUnique({ where: { operationId: reversalOperation } });
+        if (alreadyRestored) continue;
+        const quantity = Math.abs(Number(sale.quantity));
+        const stock = await tx.stockItem.findUnique({ where: { id: sale.stockItemId } });
+        if (!stock) throw new Error(`Inventory item not found for reversal: ${sale.stockItemId}`);
+        const updated = await tx.stockItem.update({ where: { id: stock.id }, data: { quantityOnHand: { increment: quantity } } });
+        await tx.stockTransaction.create({
+          data: {
+            propertyId: sale.propertyId, stockItemId: sale.stockItemId, source: 'POS_VOID', quantity,
+            unitCost: stock.costPrice, quantityBefore: stock.quantityOnHand, quantityAfter: updated.quantityOnHand,
+            totalValue: quantity * Number(stock.costPrice), currency: sale.currency, warehouseId: stock.warehouseId,
+            reference: posOrderId, notes: `Inventory restored for cancelled/voided order ${posOrderId}`,
+            operationId: reversalOperation, userId: actorId, businessDate: new Date(),
+          },
+        });
+      }
+      return { success: true, restoredCount: committed.length };
+    };
+    return txOverride ? restore(txOverride) : prisma.$transaction(restore);
+  }
+
+  /** Commit a sale inside the caller's transaction. This is the final
+   * concurrency-safe gate before an order is closed/paid. */
+  static async commitSaleInTransaction(tx: any, posOrderId: string, actorId: string, operationId: string, overrideApprovalId?: string) {
+    const existing = await tx.stockTransaction.findFirst({ where: { operationId: { startsWith: operationId }, source: 'SALE' } });
+    if (existing) return { success: true, message: 'Sale already deducted' };
+
+    const order = await tx.posOrder.findUnique({
+      where: { id: posOrderId },
+      include: { items: { include: { product: { include: { recipe: { include: { versions: { where: { isActive: true }, include: { ingredients: true } } } } } } } } },
+    });
+    if (!order) throw new Error('POS Order not found');
+
+    const requirements = new Map<string, number>();
+    for (const item of order.items) {
+      if (item.product?.inventoryMode !== 'STOCK') continue;
+      const ingredients = item.product.recipe?.versions?.[0]?.ingredients || [];
+      if (!ingredients.length) throw new Error(`Inventory mapping is missing for ${item.productName}`);
+      for (const recipe of ingredients) {
+        requirements.set(recipe.stockItemId, (requirements.get(recipe.stockItemId) || 0) + Number(recipe.quantity) * Number(item.quantity));
+      }
+    }
+
+    const property = await tx.property.findUnique({ where: { id: order.propertyId } });
+    const currency = property?.baseCurrency || 'NGN';
+    for (const [stockItemId, required] of requirements) {
+      const stock = await tx.stockItem.findUnique({ where: { id: stockItemId } });
+      if (!stock || !stock.isActive) throw new Error('Inventory item is unavailable');
+      const updated = await tx.stockItem.updateMany({
+        where: { id: stockItemId, isActive: true, quantityOnHand: { gte: required } },
+        data: { quantityOnHand: { decrement: required } },
+      });
+      if (updated.count !== 1) {
+        if (!overrideApprovalId) throw new Error(`Insufficient stock for ${stock.name}`);
+        const approval = await tx.approvalRequest.findUnique({ where: { id: overrideApprovalId } });
+        const details = (approval?.details || {}) as any;
+        if (!approval || approval.propertyId !== order.propertyId || approval.type !== 'INVENTORY_NEGATIVE_STOCK' || approval.status !== 'APPROVED' || details.orderId !== order.id) {
+          throw new Error(`Manager approval is invalid for negative stock on ${stock.name}`);
+        }
+        const forced = await tx.stockItem.updateMany({ where: { id: stockItemId, isActive: true }, data: { quantityOnHand: { decrement: required } } });
+        if (forced.count !== 1) throw new Error(`Unable to apply approved stock override for ${stock.name}`);
+        const forcedAfter = await tx.stockItem.findUnique({ where: { id: stockItemId } });
+        await tx.stockTransaction.create({
+          data: {
+            propertyId: order.propertyId, stockItemId, source: 'SALE', quantity: -required,
+            unitCost: stock.costPrice, quantityBefore: Number(stock.quantityOnHand), quantityAfter: Number(forcedAfter?.quantityOnHand || 0),
+            totalValue: -required * Number(stock.costPrice), currency, warehouseId: stock.warehouseId, reference: order.id,
+            operationId: `${operationId}_${stockItemId}`, userId: actorId, approvalId: overrideApprovalId,
+            notes: `Negative stock authorized by manager approval ${overrideApprovalId}`, businessDate: order.businessDate || new Date(),
+          },
+        });
+        continue;
+      }
+      const after = await tx.stockItem.findUnique({ where: { id: stockItemId } });
+      await tx.stockTransaction.create({
+        data: {
+          propertyId: order.propertyId, stockItemId, source: 'SALE', quantity: -required,
+          unitCost: stock.costPrice, quantityBefore: Number(stock.quantityOnHand),
+          quantityAfter: Number(after?.quantityOnHand || 0), totalValue: -required * Number(stock.costPrice),
+          currency, warehouseId: stock.warehouseId, reference: order.id,
+          operationId: `${operationId}_${stockItemId}`, userId: actorId || order.serverStaffId || null,
+          businessDate: order.businessDate || new Date(),
+        },
+      });
+    }
+    return { success: true };
+  }
+
+  /** Restore the quantity represented by an approved POS refund. The ratio is
+   * based on the refunded amount and order total, and every reversal is
+   * idempotent and auditable. Item-level quantities can be added later without
+   * changing the ledger contract. */
+  static async restoreSaleForRefund(tx: any, posOrderId: string, refundAmount: number, actorId: string, operationId: string) {
+    const order = await tx.posOrder.findUnique({ where: { id: posOrderId }, select: { total: true } });
+    if (!order || Number(order.total) <= 0) throw new Error('POS order is unavailable for inventory refund');
+    const ratio = Math.min(1, Math.max(0, refundAmount / Number(order.total)));
+    const sales = await tx.stockTransaction.findMany({ where: { reference: posOrderId, source: 'SALE' } });
+    for (const sale of sales) {
+      const reversalOperation = `${operationId}_${sale.stockItemId}`;
+      if (await tx.stockTransaction.findUnique({ where: { operationId: reversalOperation } })) continue;
+      const quantity = Math.abs(Number(sale.quantity)) * ratio;
+      if (quantity <= 0) continue;
+      const stock = await tx.stockItem.findUnique({ where: { id: sale.stockItemId } });
+      if (!stock) throw new Error(`Inventory item not found for refund: ${sale.stockItemId}`);
+      const updated = await tx.stockItem.update({ where: { id: stock.id }, data: { quantityOnHand: { increment: quantity } } });
+      await tx.stockTransaction.create({ data: {
+        propertyId: sale.propertyId, stockItemId: sale.stockItemId, source: 'POS_REFUND', quantity,
+        unitCost: stock.costPrice, quantityBefore: stock.quantityOnHand, quantityAfter: updated.quantityOnHand,
+        totalValue: quantity * Number(stock.costPrice), currency: sale.currency, warehouseId: stock.warehouseId,
+        reference: posOrderId, notes: `Stock restored for POS refund ${operationId} (${(ratio * 100).toFixed(2)}%)`,
+        operationId: reversalOperation, userId: actorId, businessDate: new Date(),
+      } });
+    }
+  }
+
   /**
    * Submit a DRAFT GRN for approval.
    */
@@ -315,70 +436,9 @@ export class InventoryService {
    */
   static async postSale(posOrderId: string, actorId?: string, operationId?: string) {
     const fallbackOpId = operationId || `op_sale_${posOrderId}`;
-
-    // Idempotency check
-    const existingTx = await prisma.stockTransaction.findFirst({
-      where: { operationId: fallbackOpId, source: 'SALE' }
-    });
-    if (existingTx) {
-      return { success: true, message: 'Sale already deducted' };
-    }
-
-    return await prisma.$transaction(async (tx: any) => {
-      const order = await tx.posOrder.findUnique({
-        where: { id: posOrderId },
-        include: { items: { include: { product: { include: { recipeIngredients: true } } } } }
-      });
-
-      if (!order) throw new Error('POS Order not found');
-
-      const property = await tx.property.findUnique({ where: { id: order.propertyId } });
-      const currency = property?.baseCurrency || 'NGN';
-
-      for (const orderItem of order.items) {
-        if (!orderItem.product || !orderItem.product.recipeIngredients) continue;
-
-        const orderQty = orderItem.quantity; // E.g. 2 Burgers
-
-        for (const recipe of orderItem.product.recipeIngredients) {
-          const totalConsumption = recipe.quantity.mul(orderQty); // 2 Burgers * 1 Bun = 2 Buns
-
-          const stockItem = await tx.stockItem.findUnique({
-            where: { id: recipe.stockItemId }
-          });
-
-          if (!stockItem) continue;
-
-          const updatedStock = await tx.stockItem.update({
-            where: { id: stockItem.id },
-            data: {
-              quantityOnHand: { decrement: totalConsumption }
-            }
-          });
-
-          await tx.stockTransaction.create({
-            data: {
-              propertyId: order.propertyId,
-              stockItemId: stockItem.id,
-              source: 'SALE' as StockTransactionSource,
-              quantity: totalConsumption.mul(-1),
-              unitCost: stockItem.costPrice,
-              quantityBefore: stockItem.quantityOnHand,
-              quantityAfter: updatedStock.quantityOnHand,
-              totalValue: totalConsumption.mul(stockItem.costPrice).mul(-1),
-              currency,
-              warehouseId: stockItem.warehouseId,
-              reference: order.id,
-              operationId: `${fallbackOpId}_${orderItem.id}_${recipe.id}`,
-              userId: actorId || order.serverStaffId || null,
-              businessDate: order.businessDate || new Date(),
-            }
-          });
-        }
-      }
-
-      return { success: true };
-    });
+    return prisma.$transaction((tx: any) =>
+      InventoryService.commitSaleInTransaction(tx, posOrderId, actorId || 'system', fallbackOpId)
+    );
   }
 
   /**

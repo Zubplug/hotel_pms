@@ -131,6 +131,8 @@ model Property {
   laundryOrders LaundryOrder[]
   StockTransfer StockTransfer[]
   inventoryCategories InventoryCategory[]
+  stocktakes          Stocktake[]
+  recipes             Recipe[]
 }
 
 model Building {
@@ -1931,6 +1933,7 @@ model Warehouse {
   transactions  StockTransaction[]
   transfersFrom StockTransfer[]    @relation("TransferFrom")
   transfersTo   StockTransfer[]    @relation("TransferTo")
+  stocktakes    Stocktake[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -1946,6 +1949,7 @@ model InventoryCategory {
   isActive   Boolean  @default(true)
 
   stockItems StockItem[]
+  stocktakes Stocktake[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -1964,7 +1968,7 @@ model StockItem {
 
   posProductId String?     @db.Uuid
   posProduct   PosProduct? @relation(fields: [posProductId], references: [id])
-  
+
   categoryId       String?            @db.Uuid
   inventoryCategory InventoryCategory? @relation(fields: [categoryId], references: [id])
 
@@ -1984,6 +1988,7 @@ model StockItem {
   alerts            InventoryAlert[]
   transferItems     StockTransferItem[]
   costAdjustments   CostAdjustment[]
+  stocktakeItems    StocktakeItem[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -2281,10 +2286,11 @@ model PosProduct {
   price             Decimal            @db.Decimal(18, 4)
   taxRate           Decimal            @default(0) @db.Decimal(5, 2)
   isActive          Boolean            @default(true)
+  inventoryMode     String             @default("NON_STOCK") // NON_STOCK | STOCK
   image             String?
   productionStation ProductionStation?
 
-  ingredients RecipeIngredient[]
+  recipe      Recipe?
   modifiers   PosProductModifier[]
   stockItems  StockItem[]
 
@@ -2306,12 +2312,43 @@ model PosProductModifier {
   createdAt DateTime @default(now()) @db.Timestamptz
 }
 
+model Recipe {
+  id          String   @id @default(uuid()) @db.Uuid
+  propertyId  String   @db.Uuid
+  property    Property @relation(fields: [propertyId], references: [id])
+
+  posProductId String  @unique @db.Uuid
+  posProduct   PosProduct @relation(fields: [posProductId], references: [id])
+
+  targetMargin Decimal @default(70) @db.Decimal(5, 2)
+  isActive    Boolean @default(true)
+
+  versions    RecipeVersion[]
+
+  createdAt   DateTime @default(now()) @db.Timestamptz
+  updatedAt   DateTime @updatedAt @db.Timestamptz
+}
+
+model RecipeVersion {
+  id          String   @id @default(uuid()) @db.Uuid
+  recipeId    String   @db.Uuid
+  recipe      Recipe   @relation(fields: [recipeId], references: [id])
+
+  versionName String
+  isActive    Boolean @default(true)
+
+  ingredients RecipeIngredient[]
+
+  createdAt   DateTime @default(now()) @db.Timestamptz
+  updatedAt   DateTime @updatedAt @db.Timestamptz
+}
+
 model RecipeIngredient {
-  id          String     @id @default(uuid()) @db.Uuid
-  productId   String     @db.Uuid
-  product     PosProduct @relation(fields: [productId], references: [id])
-  stockItemId String     @db.Uuid
-  stockItem   StockItem  @relation(fields: [stockItemId], references: [id])
+  id              String         @id @default(uuid()) @db.Uuid
+  recipeVersionId String         @db.Uuid
+  recipeVersion   RecipeVersion  @relation(fields: [recipeVersionId], references: [id])
+  stockItemId     String         @db.Uuid
+  stockItem       StockItem      @relation(fields: [stockItemId], references: [id])
 
   quantity      Decimal       @db.Decimal(18, 4)
   unitOfMeasure UnitOfMeasure
@@ -3215,4 +3252,69 @@ model CostAdjustment {
   approvedAt    DateTime?            @db.Timestamptz
   rejectedBy    String?              @db.Uuid
   rejectedReason String?
+}
+
+enum StocktakeStatus {
+  DRAFT
+  COUNTING
+  SUBMITTED
+  REJECTED
+  APPROVED
+  COMPLETED
+  CANCELLED
+}
+
+model Stocktake {
+  id          String   @id @default(uuid()) @db.Uuid
+  propertyId  String   @db.Uuid
+  property    Property @relation(fields: [propertyId], references: [id])
+
+  warehouseId String   @db.Uuid
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
+
+  categoryId  String?  @db.Uuid
+  category    InventoryCategory? @relation(fields: [categoryId], references: [id])
+
+  stocktakeRef String @unique
+  status      StocktakeStatus @default(DRAFT)
+  notes       String?
+
+  totalShortageValue Decimal @default(0) @db.Decimal(18, 4)
+  totalOverageValue  Decimal @default(0) @db.Decimal(18, 4)
+  netVarianceValue   Decimal @default(0) @db.Decimal(18, 4)
+
+  items StocktakeItem[]
+
+  createdBy   String?   @db.Uuid
+  startedBy   String?   @db.Uuid
+  submittedBy String?   @db.Uuid
+  approvedBy  String?   @db.Uuid
+  rejectedBy  String?   @db.Uuid
+  completedBy String?   @db.Uuid
+
+  startedAt   DateTime? @db.Timestamptz
+  submittedAt DateTime? @db.Timestamptz
+  approvedAt  DateTime? @db.Timestamptz
+  rejectedAt  DateTime? @db.Timestamptz
+  completedAt DateTime? @db.Timestamptz
+
+  createdAt   DateTime  @default(now()) @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @db.Timestamptz
+}
+
+model StocktakeItem {
+  id          String    @id @default(uuid()) @db.Uuid
+  stocktakeId String    @db.Uuid
+  stocktake   Stocktake @relation(fields: [stocktakeId], references: [id])
+
+  stockItemId String    @db.Uuid
+  stockItem   StockItem @relation(fields: [stockItemId], references: [id])
+
+  expectedQty   Decimal @db.Decimal(18, 4)
+  countedQty    Decimal? @db.Decimal(18, 4)
+  variance      Decimal? @db.Decimal(18, 4)
+  costAtCount   Decimal @db.Decimal(18, 4)
+  varianceValue Decimal? @db.Decimal(18, 4)
+
+  transactionId String? @db.Uuid
 }

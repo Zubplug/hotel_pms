@@ -14,7 +14,7 @@ export async function PATCH(
     if (!productId) return errorResponse('BAD_REQUEST', 'Product ID is required', 400);
 
     const body = await req.json();
-    const { productionStation, name, price, isActive } = body;
+    const { productionStation, name, price, isActive, inventoryMode } = body;
 
     // Validate productionStation if provided (null means "inherit from category")
     const validStations = ['KITCHEN', 'BAR', 'DIRECT', 'NONE'];
@@ -31,6 +31,10 @@ export async function PATCH(
     if (name !== undefined) data.name = name;
     if (price !== undefined) data.price = price;
     if (isActive !== undefined) data.isActive = isActive;
+    if (inventoryMode !== undefined) {
+      if (!['STOCK', 'NON_STOCK'].includes(String(inventoryMode).toUpperCase())) return errorResponse('BAD_REQUEST', 'inventoryMode must be STOCK or NON_STOCK', 400);
+      data.inventoryMode = String(inventoryMode).toUpperCase();
+    }
 
     if (Object.keys(data).length === 0) {
       return errorResponse('BAD_REQUEST', 'No fields to update', 400);

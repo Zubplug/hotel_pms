@@ -172,6 +172,27 @@ export async function GET(req: NextRequest) {
       orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     });
 
+    // Inventory is pulled as first-class POS configuration. Stock quantities
+    // use the normal cursor; active recipe versions are included on every pull
+    // so ingredient edits cannot be missed when only the recipe ingredient row
+    // changed and its parent version timestamp did not.
+    const stockItems = await prisma.stockItem.findMany({
+      where: buildWhere({ propertyId }),
+      take: limit,
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+    });
+    const recipes = await prisma.recipe.findMany({
+      where: { propertyId, isActive: true },
+      include: {
+        versions: {
+          where: { isActive: true },
+          include: { ingredients: true },
+        },
+      },
+      take: limit,
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+    });
+
     const posFloorPlans = await prisma.posFloorPlan.findMany({
       where: buildOutletWhere({ outletId: { in: outletIds }, isActive: true }),
       take: limit,
@@ -438,6 +459,8 @@ export async function GET(req: NextRequest) {
       posOutlets: finalOutlets,
       posCategories: finalCategories,
       posProducts: finalProducts,
+      stockItems,
+      recipes,
       posFloorPlans: finalFloorPlans,
       posTables:  finalTables,
       posSessions: finalPosSessions,

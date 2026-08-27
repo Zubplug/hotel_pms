@@ -262,6 +262,7 @@ export default function PosApp() {
   // Cart helpers
   // ─────────────────────────────────────────────────────────────────
   const addToCart = useCallback((product: any, modifiers: OrderItemModifier[] = []) => {
+    if (product.stockStatus === 'OUT_OF_STOCK' || product.stockStatus === 'UNMAPPED') return;
     const modifierTotal = modifiers.reduce((s, m) => s + Number(m.price || 0), 0);
     const effectivePrice = Number(product.price) + modifierTotal;
     const itemId = `${product.id}_${Date.now()}`;
@@ -904,6 +905,8 @@ export default function PosApp() {
                           onDecrement={() => handleProductDecrement(p.id)}
                           onClick={() => handleProductTap(p)}
                           emoji={emoji}
+                          disabled={p.stockStatus === 'OUT_OF_STOCK' || p.stockStatus === 'UNMAPPED'}
+                          stockStatus={p.stockStatus}
                         />
                       );
                     })}

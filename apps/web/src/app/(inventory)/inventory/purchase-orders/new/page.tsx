@@ -215,7 +215,7 @@ export default function NewPurchaseOrderPage() {
                   onClick={handleSubmit}
                   className="bg-blue-600 hover:bg-blue-700 text-slate-900 px-6 py-2 rounded-md transition-colors text-sm font-medium disabled:opacity-50"
                 >
-                  {loading ? 'Submitting...' : 'Submit PO'}
+                  {loading ? 'Saving Draft...' : 'Save Draft PO'}
                 </button>
               </div>
             </div>

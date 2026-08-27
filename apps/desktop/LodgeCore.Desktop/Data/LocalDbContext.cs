@@ -147,6 +147,15 @@ public class LocalDbContext : DbContext
             "ALTER TABLE PosKots ADD COLUMN ProductionStation TEXT NOT NULL DEFAULT 'KITCHEN'",
             "ALTER TABLE ProductCategories ADD COLUMN ProductionStation TEXT NOT NULL DEFAULT 'KITCHEN'",
             "ALTER TABLE PosProducts ADD COLUMN ProductionStation TEXT NULL"
+            ,"ALTER TABLE PosProducts ADD COLUMN InventoryMode TEXT NOT NULL DEFAULT 'NON_STOCK'"
+            ,"ALTER TABLE StockItems ADD COLUMN QuantityOnHand TEXT NOT NULL DEFAULT '0'"
+            ,"ALTER TABLE StockItems ADD COLUMN ReorderLevel TEXT NULL"
+            ,"ALTER TABLE StockItems ADD COLUMN IsActive INTEGER NOT NULL DEFAULT 1"
+            ,"ALTER TABLE StockItems ADD COLUMN UpdatedAt TEXT NOT NULL DEFAULT '1970-01-01T00:00:00Z'"
+            ,"ALTER TABLE RecipeIngredients ADD COLUMN RecipeVersionId TEXT NULL"
+            ,"ALTER TABLE StockTransactions ADD COLUMN OperationId TEXT NULL"
+            ,"ALTER TABLE StockTransactions ADD COLUMN UserId TEXT NULL"
+            ,"ALTER TABLE StockTransactions ADD COLUMN Notes TEXT NULL"
         };
         foreach (var sql in columns)
         {

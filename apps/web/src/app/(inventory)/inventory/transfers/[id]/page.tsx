@@ -84,9 +84,9 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
               <th className="text-left px-4 py-3 text-slate-500 font-medium">Notes</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-700/50">
+          <tbody className="divide-y divide-slate-200">
             {transfer.items.map(item => (
-              <tr key={item.id} className="hover:bg-slate-700/20">
+              <tr key={item.id} className="hover:bg-slate-100/50 transition-colors">
                 <td className="px-4 py-3 text-slate-900 font-medium">{item.stockItem.name}</td>
                 <td className="px-4 py-3 text-slate-700">{Number(item.stockItem.quantityOnHand).toFixed(2)}</td>
                 <td className="px-4 py-3 font-semibold text-blue-600">{Number(item.quantity).toFixed(2)}</td>

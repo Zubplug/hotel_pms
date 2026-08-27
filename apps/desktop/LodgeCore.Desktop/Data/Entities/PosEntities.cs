@@ -11,6 +11,7 @@ public class LocalPosOutlet
     public string Name { get; set; } = string.Empty;
     public string Type { get; set; } = string.Empty;
     public bool IsActive { get; set; }
+    public string InventoryMode { get; set; } = "NON_STOCK";
     public int? AutoLockSeconds { get; set; }
 }
 
@@ -44,6 +45,13 @@ public class LocalPosProduct
     // the product override and category, so it is not persisted locally.
     [System.ComponentModel.DataAnnotations.Schema.NotMapped]
     public string ResolvedStation { get; set; } = "KITCHEN";
+
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public string StockStatus { get; set; } = "NON_STOCK";
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public decimal? AvailableStock { get; set; }
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public bool HasInventoryMapping { get; set; }
 }
 
 public class LocalStockItem
@@ -53,12 +61,17 @@ public class LocalStockItem
     public string Name { get; set; } = string.Empty;
     public string BaseUnit { get; set; } = string.Empty;
     public decimal CostPrice { get; set; }
+    public decimal QuantityOnHand { get; set; }
+    public decimal? ReorderLevel { get; set; }
+    public bool IsActive { get; set; } = true;
+    public DateTime UpdatedAt { get; set; }
 }
 
 public class LocalRecipeIngredient
 {
     [Key] public string Id { get; set; } = string.Empty;
     public string ProductId { get; set; } = string.Empty;
+    public string? RecipeVersionId { get; set; }
     public string StockItemId { get; set; } = string.Empty;
     public decimal Quantity { get; set; }
     public string UnitOfMeasure { get; set; } = string.Empty;
@@ -232,6 +245,9 @@ public class LocalStockTransaction
     public decimal TotalValue { get; set; }
     public string Source { get; set; } = string.Empty;
     public string? ReferenceId { get; set; }
+    public string? OperationId { get; set; }
+    public string? UserId { get; set; }
+    public string? Notes { get; set; }
     public DateTime BusinessDate { get; set; }
 }
 

@@ -15,6 +15,8 @@ interface ProductCardStepperProps {
   onDecrement: () => void;
   onClick: () => void;
   emoji: string;
+  disabled?: boolean;
+  stockStatus?: string;
 }
 
 export function ProductCardStepper({
@@ -24,12 +26,14 @@ export function ProductCardStepper({
   onDecrement,
   onClick,
   emoji,
+  disabled = false,
+  stockStatus,
 }: ProductCardStepperProps) {
   const isSelected = quantity > 0;
 
   return (
     <div
-      className={`relative group flex flex-col bg-white rounded-xl border transition-all duration-150 overflow-hidden select-none ${
+      className={`relative group flex flex-col bg-white rounded-xl border transition-all duration-150 overflow-hidden select-none ${disabled ? 'opacity-65' : ''} ${
         isSelected
           ? 'border-indigo-400 shadow-md ring-1 ring-indigo-400/50'
           : 'border-slate-200 hover:border-indigo-300 hover:shadow-sm'
@@ -44,6 +48,7 @@ export function ProductCardStepper({
 
       {/* Tap target — emoji + name + price */}
       <button
+        disabled={disabled}
         onClick={onClick}
         className="flex-1 flex flex-col items-center justify-center text-center px-2 pt-3 pb-2 gap-1.5 focus:outline-none touch-manipulation"
       >
@@ -56,6 +61,7 @@ export function ProductCardStepper({
         <p className="font-black text-indigo-600 text-xs">
           {formatCurrency(product.price)}
         </p>
+        {disabled && <span className="text-[10px] font-black uppercase tracking-wide text-rose-600">{stockStatus === 'UNMAPPED' ? 'Inventory not mapped' : 'Out of stock'}</span>}
       </button>
 
       {/* Stepper */}
@@ -63,6 +69,7 @@ export function ProductCardStepper({
         {isSelected ? (
           <div className="flex items-center justify-between bg-white rounded-lg px-1 py-0.5 border border-slate-200">
             <button
+              disabled={disabled}
               onClick={e => { e.stopPropagation(); onDecrement(); }}
               className="w-7 h-7 flex items-center justify-center rounded-md bg-slate-100 text-slate-600 hover:bg-rose-50 hover:text-rose-500 active:scale-95 transition-all touch-manipulation"
             >
@@ -80,6 +87,7 @@ export function ProductCardStepper({
           </div>
         ) : (
           <button
+            disabled={disabled}
             onClick={e => { e.stopPropagation(); onIncrement(); }}
             className="w-full py-1.5 rounded-lg bg-white text-indigo-600 font-bold text-[11px] hover:bg-indigo-600 hover:text-white active:scale-95 flex items-center justify-center gap-1 border border-slate-200 hover:border-indigo-600 transition-all touch-manipulation"
           >
