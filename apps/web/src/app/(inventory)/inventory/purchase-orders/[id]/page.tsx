@@ -15,12 +15,13 @@ const STATUS_COLORS: Record<string, string> = {
   CANCELLED: 'bg-slate-500/10 text-slate-500 border-slate-500/20',
 };
 
-export default async function PurchaseOrderDetailPage({ params }: { params: { id: string } }) {
+export default async function PurchaseOrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const session = await auth();
   if (!session?.user?.propertyId) return <div>No property selected</div>;
 
   const po = await prisma.purchaseOrder.findUnique({
-    where: { id: params.id },
+    where: { id },
     include: {
       supplier: true,
       items: true,

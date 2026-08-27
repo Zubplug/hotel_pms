@@ -11,12 +11,13 @@ const STATUS_COLORS: Record<string, string> = {
   CANCELLED: 'bg-red-50 text-red-600 border-red-500/20',
 };
 
-export default async function GRNDetailPage({ params }: { params: { id: string } }) {
+export default async function GRNDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const session = await auth();
   if (!session?.user?.propertyId) return <div>No property selected</div>;
 
   const grn = await prisma.goodsReceivedNote.findUnique({
-    where: { id: params.id },
+    where: { id },
     include: {
       purchaseOrder: { select: { poNumber: true, id: true } },
       items: true,
