@@ -93,13 +93,25 @@ export class InventoryService {
         const qtyToReceive = item.receivedQty;
         if (qtyToReceive.lte(0)) continue;
 
-        // 1. Update StockItem
+        // 1. Update StockItem with MAC
         const existingStockItem = stockItems.find((candidate: any) => candidate.id === item.stockItemId);
         if (!existingStockItem) throw new Error(`Stock item not found: ${item.stockItemId}`);
+
+        const currentQty = Number(existingStockItem.quantityOnHand);
+        const currentCost = Number(existingStockItem.costPrice);
+        const receivedQty = Number(item.receivedQty);
+        const receivedCost = Number(item.unitCost);
+
+        const currentTotalValue = currentQty * currentCost;
+        const receivedTotalValue = receivedQty * receivedCost;
+        const newTotalQty = currentQty + receivedQty;
+        const newMac = newTotalQty > 0 ? (currentTotalValue + receivedTotalValue) / newTotalQty : currentCost;
+
         const stockItem = await tx.stockItem.update({
           where: { id: item.stockItemId },
           data: {
-            quantityOnHand: { increment: qtyToReceive }
+            quantityOnHand: { increment: item.receivedQty },
+            costPrice: newMac
           }
         });
 
@@ -364,6 +376,69 @@ export class InventoryService {
           });
         }
       }
+
+      return { success: true };
+    });
+  }
+
+  /**
+   * Approve a Cost Adjustment Request
+   * Revalues the inventory and creates a financial StockTransaction without changing quantity.
+   */
+  static async approveCostAdjustment(adjustmentId: string, actorId: string, operationId: string) {
+    return await prisma.$transaction(async (tx: any) => {
+      const adjustment = await tx.costAdjustment.findUnique({
+        where: { id: adjustmentId },
+        include: { stockItem: true }
+      });
+
+      if (!adjustment) throw new Error('Cost adjustment not found');
+      if (adjustment.status !== 'SUBMITTED') throw new Error('Cost adjustment must be SUBMITTED to approve');
+
+      const stockItem = adjustment.stockItem;
+      const qty = Number(stockItem.quantityOnHand);
+      const oldCost = Number(adjustment.oldCost);
+      const newCost = Number(adjustment.proposedCost);
+      const valueDifference = (newCost - oldCost) * qty;
+
+      // 1. Mark adjustment as APPROVED
+      await tx.costAdjustment.update({
+        where: { id: adjustmentId },
+        data: {
+          status: 'APPROVED',
+          approvedBy: actorId,
+          approvedAt: new Date()
+        }
+      });
+
+      // 2. Update StockItem Cost Price
+      await tx.stockItem.update({
+        where: { id: stockItem.id },
+        data: { costPrice: newCost }
+      });
+
+      // 3. Create Audit Ledger (zero quantity, but captures value shift)
+      const property = await tx.property.findUnique({ where: { id: adjustment.propertyId } });
+      const currency = property?.baseCurrency || 'NGN';
+
+      await tx.stockTransaction.create({
+        data: {
+          propertyId: adjustment.propertyId,
+          stockItemId: stockItem.id,
+          source: 'ADJUSTMENT', // Using standard ADJUSTMENT for Cost valuation shifts
+          quantity: 0,
+          unitCost: newCost,
+          quantityBefore: qty,
+          quantityAfter: qty,
+          totalValue: valueDifference,
+          currency,
+          warehouseId: stockItem.warehouseId,
+          operationId,
+          userId: actorId,
+          businessDate: new Date(),
+          notes: `Cost Revaluation: ${adjustment.reason}`
+        }
+      });
 
       return { success: true };
     });

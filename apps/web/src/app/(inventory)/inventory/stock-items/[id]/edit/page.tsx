@@ -29,7 +29,6 @@ export default function EditStockItemPage(props: { params: Promise<{ id: string 
       name: formData.get('name'),
       sku: formData.get('sku'),
       barcode: formData.get('barcode'),
-      costPrice: parseFloat(formData.get('costPrice') as string),
       reorderLevel: formData.get('reorderLevel') ? parseInt(formData.get('reorderLevel') as string) : null,
       isActive: formData.get('isActive') === 'on',
     };
@@ -109,8 +108,11 @@ export default function EditStockItemPage(props: { params: Promise<{ id: string 
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="costPrice" className="text-sm font-medium text-slate-800">Cost Price *</label>
-              <input required id="costPrice" name="costPrice" type="number" step="0.01" min="0" defaultValue={item.costPrice} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="0.00" />
+              <label className="text-sm font-medium text-slate-800">Current Valuation Cost (MAC)</label>
+              <div className="w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-md text-slate-500 font-medium flex items-center justify-between cursor-not-allowed">
+                <span>{Number(item.costPrice).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                <span className="text-xs text-slate-400 font-normal">System Computed</span>
+              </div>
             </div>
 
             <div className="space-y-2">

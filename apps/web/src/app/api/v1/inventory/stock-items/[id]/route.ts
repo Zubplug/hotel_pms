@@ -40,7 +40,7 @@ export async function PATCH(request: Request, props: { params: Promise<{ id: str
         if (!hasInventoryPermission(role, 'inventory.manage', isSuperAdmin)) return NextResponse.json({ error: 'Forbidden', data: null }, { status: 403 });
 
         const body = await request.json();
-        const { name, sku, barcode, costPrice, reorderLevel, isActive } = body;
+        const { name, sku, barcode, reorderLevel, isActive } = body;
 
         const existing = await prisma.stockItem.findFirst({
             where: { id: params.id, propertyId },
@@ -54,7 +54,6 @@ export async function PATCH(request: Request, props: { params: Promise<{ id: str
                 ...(name !== undefined && { name }),
                 ...(sku !== undefined && { sku }),
                 ...(barcode !== undefined && { barcode }),
-                ...(costPrice !== undefined && { costPrice: parseFloat(costPrice) }),
                 ...(reorderLevel !== undefined && { reorderLevel: parseFloat(reorderLevel) }),
                 ...(isActive !== undefined && { isActive }),
             },

@@ -3185,3 +3185,32 @@ model StockTransferItem {
   unitOfMeasure UnitOfMeasure
   notes         String?
 }
+
+enum CostAdjustmentStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+model CostAdjustment {
+  id            String               @id @default(uuid()) @db.Uuid
+  propertyId    String               @db.Uuid
+  property      Property             @relation(fields: [propertyId], references: [id])
+  stockItemId   String               @db.Uuid
+  stockItem     StockItem            @relation(fields: [stockItemId], references: [id])
+
+  oldCost       Decimal              @db.Decimal(18, 4)
+  proposedCost  Decimal              @db.Decimal(18, 4)
+  reason        String
+  referenceDoc  String?
+  status        CostAdjustmentStatus @default(DRAFT)
+
+  createdAt     DateTime             @default(now()) @db.Timestamptz
+  submittedBy   String?              @db.Uuid
+  submittedAt   DateTime?            @db.Timestamptz
+  approvedBy    String?              @db.Uuid
+  approvedAt    DateTime?            @db.Timestamptz
+  rejectedBy    String?              @db.Uuid
+  rejectedReason String?
+}

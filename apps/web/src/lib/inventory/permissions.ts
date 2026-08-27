@@ -19,6 +19,12 @@ export const INVENTORY_PERMISSIONS = {
   // Approving a stock adjustment
   'inventory.adjust.approve': ['CEO', 'SUPER_ADMIN', 'MANAGER'],
   
+  // Creating a cost adjustment request (exceptional valuation changes)
+  'inventory.cost.adjust': ['CEO', 'SUPER_ADMIN', 'MANAGER'],
+  
+  // Approving a cost adjustment request
+  'inventory.cost.approve': ['CEO', 'SUPER_ADMIN'],
+  
   // Creating a GRN and submitting it
   'inventory.receive': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'STOCK_MANAGER', 'PROCUREMENT_MANAGER'],
   
