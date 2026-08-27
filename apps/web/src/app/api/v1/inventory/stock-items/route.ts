@@ -75,7 +75,7 @@ export async function POST(request: Request) {
         if (!hasInventoryPermission(role, 'inventory.manage', isSuperAdmin)) return NextResponse.json({ error: 'Forbidden', data: null }, { status: 403 });
 
         const body = await request.json();
-        const { warehouseId, name, sku, barcode, baseUnit, costPrice, reorderLevel, isActive = true } = body;
+        const { warehouseId, name, sku, barcode, baseUnit, reorderLevel, isActive = true } = body;
 
         const warehouse = await prisma.warehouse.findFirst({
             where: { id: warehouseId, propertyId },
@@ -93,7 +93,7 @@ export async function POST(request: Request) {
                 sku,
                 barcode,
                 baseUnit,
-                costPrice: parseFloat(costPrice),
+                costPrice: 0, // Default to 0, MAC computes actual cost on first GRN
                 reorderLevel: reorderLevel ? parseFloat(reorderLevel) : null,
                 isActive,
             },

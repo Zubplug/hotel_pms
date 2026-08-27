@@ -120,6 +120,7 @@ model Property {
   frontdeskSessions        FrontdeskSession[]
   cashAccounts             CashAccount[]
   reconciliationExceptions ReconciliationException[]
+  costAdjustments          CostAdjustment[]
 
   createdAt     DateTime        @default(now()) @db.Timestamptz
   updatedAt     DateTime        @updatedAt @db.Timestamptz
@@ -1982,6 +1983,7 @@ model StockItem {
   transactions      StockTransaction[]
   alerts            InventoryAlert[]
   transferItems     StockTransferItem[]
+  costAdjustments   CostAdjustment[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz

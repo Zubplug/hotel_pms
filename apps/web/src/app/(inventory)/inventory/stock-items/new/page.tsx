@@ -29,7 +29,6 @@ export default function NewStockItemPage() {
       sku: formData.get('sku'),
       barcode: formData.get('barcode'),
       baseUnit: formData.get('baseUnit'),
-      costPrice: parseFloat(formData.get('costPrice') as string),
       reorderLevel: formData.get('reorderLevel') ? parseInt(formData.get('reorderLevel') as string) : null,
     };
 
@@ -104,8 +103,11 @@ export default function NewStockItemPage() {
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="costPrice" className="text-sm font-medium text-slate-800">Cost Price *</label>
-              <input required id="costPrice" name="costPrice" type="number" step="0.01" min="0" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="0.00" />
+              <label className="text-sm font-medium text-slate-800">Initial Cost Price</label>
+              <div className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-slate-500 font-medium flex items-center justify-between cursor-not-allowed">
+                <span>0.00</span>
+                <span className="text-xs text-slate-400 font-normal">Calculated upon first receipt (MAC)</span>
+              </div>
             </div>
 
             <div className="space-y-2">
