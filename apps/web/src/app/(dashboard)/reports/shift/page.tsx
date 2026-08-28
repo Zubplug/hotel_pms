@@ -51,7 +51,7 @@ export default function ShiftReportPage() {
     return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
   };
 
-  const methods = ['CASH', 'POS', 'PAYMENT_GATEWAY', 'CARD', 'BANK_TRANSFER'];
+  const methods = report?.summary ? Object.keys(report.summary) : ['CASH', 'POS', 'PAYMENT_GATEWAY', 'CARD', 'BANK_TRANSFER', 'CHEQUE', 'ROOM_CHARGE', 'OTHER'];
   let totalGross = 0;
   let totalRefunds = 0;
   let totalNet = 0;
@@ -151,6 +151,19 @@ export default function ShiftReportPage() {
       ) : (
         <>
           <div className="grid grid-cols-1 gap-6">
+            {report?.cashierTotals && (
+              <Card>
+                <CardHeader><CardTitle>Enterprise cashier control totals</CardTitle></CardHeader>
+                <CardContent className="grid grid-cols-2 gap-4 md:grid-cols-5">
+                  <div><p className="text-xs text-muted-foreground">Gross receipts</p><p className="text-xl font-bold">{formatCurrency(report.cashierTotals.gross)}</p></div>
+                  <div><p className="text-xs text-muted-foreground">Refunds</p><p className="text-xl font-bold text-red-600">{formatCurrency(report.cashierTotals.refunds)}</p></div>
+                  <div><p className="text-xs text-muted-foreground">Net receipts</p><p className="text-xl font-bold text-emerald-700">{formatCurrency(report.cashierTotals.net)}</p></div>
+                  <div><p className="text-xs text-muted-foreground">POS shifts</p><p className="text-xl font-bold">{report.cashierTotals.posSessions}</p></div>
+                  <div><p className="text-xs text-muted-foreground">POS cash</p><p className="text-xl font-bold">{formatCurrency(report.cashierTotals.posCash)}</p></div>
+                  <div><p className="text-xs text-muted-foreground">Pending sync conflicts</p><p className={`text-xl font-bold ${report.cashierTotals.pendingSyncConflicts ? 'text-amber-600' : 'text-emerald-700'}`}>{report.cashierTotals.pendingSyncConflicts}</p></div>
+                </CardContent>
+              </Card>
+            )}
             <Card>
               <CardHeader>
                 <CardTitle>Method Summary</CardTitle>
@@ -167,11 +180,11 @@ export default function ShiftReportPage() {
                   </TableHeader>
                   <TableBody>
                     {methods.map((method) => {
-                      const stats = report?.summary?.[method] || { payments: 0, refunds: 0, net: 0 };
+                      const stats = report?.summary?.[method] || { count: 0, refundCount: 0, payments: 0, refunds: 0, net: 0 };
                       if (stats.payments === 0 && stats.refunds === 0) return null;
                       return (
                         <TableRow key={method}>
-                          <TableCell className="font-medium">{method.replace('_', ' ')}</TableCell>
+                              <TableCell className="font-medium">{method.replaceAll('_', ' ')} <span className="text-xs text-muted-foreground">({stats.count} / {stats.refundCount} refunds)</span></TableCell>
                           <TableCell className="text-right">{formatCurrency(stats.payments)}</TableCell>
                           <TableCell className="text-right text-red-600">{formatCurrency(stats.refunds)}</TableCell>
                           <TableCell className={`text-right font-bold ${method === 'CASH' ? 'text-green-700 bg-green-50/50' : ''}`}>

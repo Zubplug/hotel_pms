@@ -422,10 +422,10 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
       return apiFetchResult(`/api/v1/pos/cash-office/overview?propertyId=${propertyId}`);
     },
     getPendingHandovers: async (propertyId: string) => {
-      return apiFetchResult(`/api/v1/pos/cash-office/handovers?propertyId=${propertyId}`);
+      return apiFetchResult(`/api/v1/pos/cash-office/handovers/pending?propertyId=${propertyId}`);
     },
     getSafeLedger: async (propertyId: string) => {
-      return apiFetchResult(`/api/v1/pos/cash-office/ledger?propertyId=${propertyId}`);
+      return apiFetchResult(`/api/v1/pos/cash-office/safe?propertyId=${propertyId}`);
     },
     openSafe: async (propertyId: string, amount: number, managerPin: string) => {
       return apiFetchResult(`/api/v1/pos/cash-office/open-safe`, {

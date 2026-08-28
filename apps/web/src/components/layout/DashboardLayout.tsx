@@ -72,7 +72,7 @@ const ALL_NAV = [
       { name: 'Room Status', href: '/reports/room-status' },
     ]
   },
-  { name: 'Cash Office', href: '/cash-office', icon: HandCoins, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'ACCOUNTANT', 'GENERAL_CASHIER'] },
+  { name: 'Cash Management', href: '/cash-management', icon: HandCoins, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'ACCOUNTANT', 'GENERAL_CASHIER'] },
   { name: 'Refunds', href: '/refunds', icon: BadgeDollarSign, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'FINANCE_MANAGER', 'ADMIN'] },
 
   { name: 'Settings', href: '/settings', icon: Settings, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER'] },

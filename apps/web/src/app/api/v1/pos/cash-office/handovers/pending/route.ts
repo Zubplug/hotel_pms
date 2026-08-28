@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
+import { getUserPropertyIds } from '@/lib/property-access';
 
 export async function GET(req: NextRequest) {
   try {
@@ -16,6 +17,11 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Property ID is required' }, { status: 400 });
     }
 
+    const allowed = await getUserPropertyIds(session.user.id);
+    if (!allowed.includes(propertyId)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const pendingHandovers = await prisma.posSettlement.findMany({
       where: {
         propertyId,
@@ -28,7 +34,12 @@ export async function GET(req: NextRequest) {
             openedBy: true,
             status: true,
             bankType: true,
-            deviceId: true
+            deviceId: true,
+            outlet: { select: { id: true, name: true } },
+            primaryOperator: { select: { id: true, firstName: true, lastName: true, position: true } },
+            payments: { orderBy: { createdAt: 'desc' } },
+            cashMovements: { orderBy: { createdAt: 'desc' } },
+            orders: { select: { id: true, orderNumber: true, total: true, status: true, paymentStatus: true } }
           }
         }
       },

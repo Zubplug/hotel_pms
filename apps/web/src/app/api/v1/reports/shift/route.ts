@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
       paymentWhere.receivedBy = targetUserId;
     }
 
-    // 1. Fetch Gross Payments
+    // 1. Fetch Front Desk gross payments
     const payments = await prisma.payment.findMany({
       where: paymentWhere,
       include: {
@@ -69,7 +69,7 @@ export async function GET(req: NextRequest) {
       }
     });
 
-    // 2. Fetch Refunds
+    // 2. Fetch Front Desk refunds
     const refundWhere: any = {
       propertyId,
       createdAt: dateFilter,
@@ -96,11 +96,35 @@ export async function GET(req: NextRequest) {
       }
     });
 
+    // POS sessions are part of the cashier's accountability packet as well.
+    // Keep them in this report instead of forcing General Cashier to reconcile
+    // POS and Front Desk through separate, incomplete screens.
+    const posSessions = await prisma.posSession.findMany({
+      where: {
+        propertyId,
+        businessDate: dateFilter,
+        ...(targetUserId ? { openedBy: targetUserId } : {}),
+      },
+      orderBy: [{ businessDate: 'desc' }, { openedAt: 'desc' }],
+      include: {
+        outlet: { select: { id: true, name: true } },
+        primaryOperator: { select: { id: true, firstName: true, lastName: true, position: true } },
+        orders: { select: { id: true, orderNumber: true, total: true, status: true, paymentStatus: true, createdAt: true, closedAt: true } },
+        payments: { orderBy: { createdAt: 'desc' } },
+        cashMovements: { orderBy: { createdAt: 'desc' } },
+        settlements: { orderBy: { settledAt: 'desc' }, take: 1 },
+      },
+    });
+    const syncConflicts = await prisma.syncConflict.count({
+      where: { propertyId, createdAt: dateFilter, status: 'PENDING' },
+    });
+
     // 3. Aggregate Gross, Refunds, and Net by PaymentMethod
-    const aggregation: Record<string, { payments: number, refunds: number, net: number }> = {};
+    const aggregation: Record<string, { count: number, refundCount: number, payments: number, refunds: number, net: number }> = {};
 
     for (const p of payments) {
-      if (!aggregation[p.method]) aggregation[p.method] = { payments: 0, refunds: 0, net: 0 };
+      if (!aggregation[p.method]) aggregation[p.method] = { count: 0, refundCount: 0, payments: 0, refunds: 0, net: 0 };
+      aggregation[p.method].count += 1;
       const amount = Number(p.amount);
       aggregation[p.method].payments += amount;
       aggregation[p.method].net += amount;
@@ -108,11 +132,82 @@ export async function GET(req: NextRequest) {
 
     for (const r of refunds) {
       const method = r.method || r.payment.method;
-      if (!aggregation[method]) aggregation[method] = { payments: 0, refunds: 0, net: 0 };
+      if (!aggregation[method]) aggregation[method] = { count: 0, refundCount: 0, payments: 0, refunds: 0, net: 0 };
+      aggregation[method].refundCount += 1;
       const amount = Number(r.amount);
       aggregation[method].refunds += amount;
       aggregation[method].net -= amount;
     }
+
+    const posAggregation: Record<string, { count: number; gross: number; refunds: number; net: number }> = {};
+    const posRows = posSessions.flatMap((posSession: any) => posSession.payments.map((payment: any) => ({
+      id: payment.id,
+      type: 'POS_PAYMENT',
+      date: payment.createdAt,
+      sessionId: posSession.id,
+      outlet: posSession.outlet?.name || 'POS',
+      shiftReference: posSession.id,
+      orderId: payment.orderId,
+      orderNumber: posSession.orders.find((order: any) => order.id === payment.orderId)?.orderNumber || null,
+      method: payment.method,
+      amount: Number(payment.amount),
+      currency: payment.currency,
+      status: payment.status,
+      operatorId: payment.processedById || posSession.openedBy,
+      businessDate: posSession.businessDate,
+    })));
+
+    for (const row of posRows.filter((row: any) => ['CONFIRMED', 'PAID'].includes(row.status))) {
+      const method = row.method || 'OTHER';
+      if (!posAggregation[method]) posAggregation[method] = { count: 0, gross: 0, refunds: 0, net: 0 };
+      posAggregation[method].count += 1;
+      posAggregation[method].gross += row.amount;
+      posAggregation[method].net += row.amount;
+    }
+
+    const posCash = posSessions.reduce((sum: number, item: any) => sum + Number(item.cashSales || 0), 0);
+    const posCard = posSessions.reduce((sum: number, item: any) => sum + item.payments.filter((p: any) => ['CARD', 'CARD_OFFLINE', 'POS'].includes(p.method)).reduce((s: number, p: any) => s + Number(p.amount), 0), 0);
+    const posBankTransfer = posSessions.reduce((sum: number, item: any) => sum + item.payments.filter((p: any) => p.method === 'BANK_TRANSFER').reduce((s: number, p: any) => s + Number(p.amount), 0), 0);
+    const posTotal = posSessions.reduce((sum: number, item: any) => sum + item.payments.filter((p: any) => ['CONFIRMED', 'PAID'].includes(p.status)).reduce((s: number, p: any) => s + Number(p.amount), 0), 0);
+    const posRefunds = posSessions.reduce((sum: number, item: any) => sum + Number(item.cashRefunds || 0), 0);
+
+    const shifts = posSessions.map((item: any) => {
+      const settlement = item.settlements[0] || null;
+      const movementTotal = (type: string) => item.cashMovements.filter((movement: any) => movement.type === type).reduce((sum: number, movement: any) => sum + Number(movement.amount), 0);
+      return {
+        id: item.id,
+        type: 'POS',
+        businessDate: item.businessDate,
+        status: item.status,
+        outlet: item.outlet,
+        operator: item.primaryOperator,
+        deviceId: item.deviceId,
+        openedAt: item.openedAt,
+        closedAt: item.closedAt,
+        bankingModel: item.bankingModel,
+        bankType: item.bankType,
+        openingFloat: Number(item.openingCash),
+        expectedCash: Number(item.expectedCash),
+        declaredCash: item.actualCash == null ? null : Number(item.actualCash),
+        variance: item.variance == null ? null : Number(item.variance),
+        orderCount: item.orders.length,
+        completedOrders: item.orders.filter((order: any) => order.status === 'CLOSED').length,
+        voidedOrders: item.orders.filter((order: any) => order.status === 'VOIDED').length,
+        paymentCount: item.payments.length,
+        paymentTotals: item.payments.reduce((result: Record<string, number>, payment: any) => {
+          result[payment.method] = (result[payment.method] || 0) + Number(payment.amount);
+          return result;
+        }, {}),
+        cashMovements: {
+          cashIn: movementTotal('CASH_TRANSFER_IN') + movementTotal('CASH_IN'),
+          cashDrops: movementTotal('CASH_DROP'),
+          paidOuts: movementTotal('PAID_OUT'),
+          transfersOut: movementTotal('CASH_TRANSFER_OUT'),
+          refunds: movementTotal('REFUND') + movementTotal('REFUND_CASH'),
+        },
+        settlement,
+      };
+    });
 
     // 4. Audit Log the report access
     await prisma.auditLog.create({
@@ -138,7 +233,23 @@ export async function GET(req: NextRequest) {
       endDate,
       userId: targetUserId || 'ALL',
       summary: aggregation,
-      items: { payments, refunds }
+      cashierTotals: {
+        frontDeskGross: payments.reduce((sum, payment) => sum + Number(payment.amount), 0),
+        frontDeskRefunds: refunds.reduce((sum, refund) => sum + Number(refund.amount), 0),
+        posGross: posTotal,
+        posRefunds,
+        gross: payments.reduce((sum, payment) => sum + Number(payment.amount), 0) + posTotal,
+        refunds: refunds.reduce((sum, refund) => sum + Number(refund.amount), 0) + posRefunds,
+        net: payments.reduce((sum, payment) => sum + Number(payment.amount), 0) + posTotal - refunds.reduce((sum, refund) => sum + Number(refund.amount), 0) - posRefunds,
+        posPaymentMethods: posAggregation,
+        posCash,
+        posCard,
+        posBankTransfer,
+        posSessions: posSessions.length,
+        pendingSyncConflicts: syncConflicts,
+      },
+      items: { payments, refunds, posPayments: posRows },
+      shifts,
     }, 200);
 
   } catch (err: any) {

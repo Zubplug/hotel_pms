@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
+import { getUserPropertyIds } from '@/lib/property-access';
 
 export async function GET(req: NextRequest) {
   try {
@@ -15,6 +16,9 @@ export async function GET(req: NextRequest) {
     if (!propertyId) {
       return NextResponse.json({ error: 'Property ID is required' }, { status: 400 });
     }
+
+    const allowed = await getUserPropertyIds(session.user.id);
+    if (!allowed.includes(propertyId)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const safeAccount = await prisma.cashAccount.findFirst({
       where: {
@@ -40,9 +44,7 @@ export async function GET(req: NextRequest) {
           { destinationAccountId: safeAccount.id }
         ]
       },
-      orderBy: {
-        amount: 'desc' // Just a fallback, would normally order by timestamp if createdAt existed, assuming UUID or amount for now, let's just sort by posSessionId or id if no timestamp
-      },
+      orderBy: { createdAt: 'desc' },
       take: 50
     });
 

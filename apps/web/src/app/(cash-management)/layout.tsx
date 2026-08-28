@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import React from 'react';
 import { CashManagementLayout } from '@/components/layout/CashManagementLayout';
 
-const ALLOWED = ['CEO', 'SUPER_ADMIN', 'MANAGER', 'GENERAL_CASHIER'];
+const ALLOWED = ['CEO', 'SUPER_ADMIN', 'MANAGER', 'GENERAL_CASHIER', 'ACCOUNTANT'];
 
 export default async function CashierRootLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
