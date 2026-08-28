@@ -634,7 +634,10 @@ public class OfflinePMSInterop
         try
         {
             var ctx = await GetSecureContextAsync();
-            var session = await _repo.GetActiveFrontdeskSessionAsync(propertyId, ctx.UserId);
+            // Return the latest report session, including CLOSED, UNDER_REVIEW,
+            // and RECONCILED states so operators can see what happened to their
+            // submitted shift after the till was closed.
+            var session = await _repo.GetLatestFrontdeskSessionAsync(propertyId, ctx.UserId);
             return JsonSerializer.Serialize(new { success = true, data = new { session } }, _jsonOptions);
         }
         catch (Exception ex) { return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions); }

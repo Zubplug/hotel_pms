@@ -883,6 +883,15 @@ public class LocalRepository
         return await _dbContext.FrontdeskSessions.FirstOrDefaultAsync(session => session.PropertyId == propertyId && session.StaffId == staffId && session.Status == "OPEN");
     }
 
+    public async Task<LocalFrontdeskSession?> GetLatestFrontdeskSessionAsync(string propertyId, string staffId)
+    {
+        return await _dbContext.FrontdeskSessions
+            .Where(session => session.PropertyId == propertyId && session.StaffId == staffId)
+            .OrderByDescending(session => session.UpdatedAt)
+            .ThenByDescending(session => session.CreatedAt)
+            .FirstOrDefaultAsync();
+    }
+
     public async Task<object> GetFrontdeskSessionSummaryAsync(string sessionId)
     {
         var session = await _dbContext.FrontdeskSessions.FirstOrDefaultAsync(item => item.Id == sessionId);
