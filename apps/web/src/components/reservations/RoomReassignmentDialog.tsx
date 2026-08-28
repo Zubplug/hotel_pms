@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2 } from 'lucide-react';
 import { formatRoomNumber } from '@/lib/format-room';
+import { toast } from 'sonner';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
 export function RoomReassignmentDialog({ open, onOpenChange, reservation }: { open: boolean; onOpenChange: (open: boolean) => void; reservation: any }) {
   const { propertyId } = useProperty();
@@ -23,6 +25,7 @@ export function RoomReassignmentDialog({ open, onOpenChange, reservation }: { op
   const [selectedRoomId, setSelectedRoomId] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { provider } = useLodgeCoreProvider();
 
   // Fetch Room Types
   const { data: roomTypes } = useQuery({
@@ -65,6 +68,17 @@ export function RoomReassignmentDialog({ open, onOpenChange, reservation }: { op
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.message || 'Failed to reassign room');
+
+      if (reservation.status === 'CHECKED_IN') {
+        const encodeResult = await provider.keycards.encode(selectedRoomId, '', reservation.id);
+        if (!encodeResult?.success || encodeResult?.error) {
+          toast.error(encodeResult?.error?.message || encodeResult?.error || 'Room reassigned, but card encoding failed. Use Retry Card.');
+        } else {
+          toast.success('Room reassigned and new room card encoding started.');
+        }
+      } else {
+        toast.success('Room reassigned successfully. Encode the room card during check-in.');
+      }
       
       queryClient.invalidateQueries({ queryKey: ['reservation', reservation.id] });
       queryClient.invalidateQueries({ queryKey: ['reservations'] });

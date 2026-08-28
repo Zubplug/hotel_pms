@@ -116,7 +116,7 @@ export function FrontDeskReassignRoomDialog({ reservation, open, onOpenChange }:
     if (!encodeResult?.success || encodeResult?.error) {
       toast.error(encodeResult?.error?.message || encodeResult?.error || 'Room changed, but new room card encoding failed. Use Retry Card.');
     } else {
-      toast.success('Payment received and new room card encoding started.');
+      toast.success('New room card encoding started.');
     }
     queryClient.invalidateQueries({ queryKey: ['reservation', reservation.id] });
   };
