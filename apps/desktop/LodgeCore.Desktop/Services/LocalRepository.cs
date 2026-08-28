@@ -1521,8 +1521,8 @@ public class LocalRepository
                 ?? await _dbContext.Rooms.FirstOrDefaultAsync(r => r.Id == checkoutRoomId);
             if (room != null)
             {
-                room.Status = "DIRTY";
-                room.HousekeepingStatus = "PENDING";
+                room.Status = "CLEANING";
+                room.HousekeepingStatus = "CLEANING";
                 room.IsOccupied = false;
                 room.UpdatedAt = DateTime.UtcNow;
             }
@@ -1533,7 +1533,7 @@ public class LocalRepository
                 RoomId = checkoutRoomId,
                 RoomNumber = room?.Number ?? res.RoomNumber ?? "",
                 TaskType = "CLEANING",
-                Status = "PENDING"
+                Status = "CLEANING"
             };
             _dbContext.HousekeepingTasks.Add(cleaningTask);
 
@@ -1998,10 +1998,42 @@ public class LocalRepository
         var room = await _dbContext.Rooms.FirstOrDefaultAsync(r => r.Id == roomId);
         if (room == null) throw new Exception("Room not found");
 
+        newStatus = newStatus.ToUpperInvariant();
+        if (room.Status.Equals("DIRTY", StringComparison.OrdinalIgnoreCase) && newStatus == "AVAILABLE")
+            throw new InvalidOperationException("A Dirty room must be cleaned and inspected by housekeeping before it becomes Available.");
+
         room.Status = newStatus;
         // If it's CLEAN or DIRTY, also update HousekeepingStatus to match cloud behavior if necessary.
         if (newStatus == "CLEAN" || newStatus == "DIRTY") {
-            room.HousekeepingStatus = newStatus;
+            room.HousekeepingStatus = newStatus == "DIRTY" ? "PENDING" : newStatus;
+        }
+
+        if (newStatus == "DIRTY")
+        {
+            var cleaningTask = new LocalHousekeepingTask
+            {
+                PropertyId = room.PropertyId,
+                RoomId = room.Id,
+                RoomNumber = room.Number,
+                TaskType = "INSPECTION",
+                Status = "PENDING",
+                Notes = "Room marked Dirty and requires housekeeping attention."
+            };
+            _dbContext.HousekeepingTasks.Add(cleaningTask);
+            _dbContext.OutboxEvents.Add(new LocalOutboxEvent
+            {
+                Id = Guid.NewGuid().ToString(),
+                PropertyId = room.PropertyId,
+                DeviceId = "System",
+                OperatorId = "System",
+                AggregateType = "HOUSEKEEPING_TASK",
+                AggregateId = cleaningTask.Id,
+                AggregateVersion = 1,
+                EventType = "CREATE",
+                Sequence = 1,
+                PayloadJson = JsonSerializer.Serialize(cleaningTask),
+                CreatedAt = DateTime.UtcNow
+            });
         }
         
         room.UpdatedAt = DateTime.UtcNow;

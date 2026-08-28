@@ -46,9 +46,19 @@ export async function PATCH(
     if (!canManage) return errorResponse('FORBIDDEN', 'Only reception or management can update housekeeping tasks', 403);
 
     // Determine target status
-    let targetStatus = status || task.status;
+    const requestedStatus = status ? String(status).toUpperCase() : undefined;
+    let targetStatus = requestedStatus || task.status;
     if (!status && assignedTo && task.status === 'PENDING') {
       targetStatus = 'ASSIGNED'; // Auto-transition on assignment
+    }
+
+    if (isReceptionist) {
+      if (assignedTo !== undefined) {
+        return errorResponse('FORBIDDEN', 'Reception can only inspect completed housekeeping tasks', 403);
+      }
+      if (targetStatus !== 'INSPECTED' || task.status !== 'CLEAN') {
+        return errorResponse('FORBIDDEN', 'Reception can only move a CLEAN task to INSPECTED once', 403);
+      }
     }
 
     // Validate State Machine

@@ -238,6 +238,7 @@ export default function HousekeepingDashboard() {
 
   // ── guard: permissions ──
   const role = String((session?.user as any)?.role || '').toUpperCase();
+  const isReceptionist = role === 'RECEPTIONIST' || role === 'FRONT_DESK';
   const capabilities = ((session?.user as any)?.capabilities || []) as string[];
   const canManage =
     ['RECEPTIONIST', 'FRONT_DESK', 'MANAGER', 'ADMIN'].includes(role) ||
@@ -397,7 +398,9 @@ export default function HousekeepingDashboard() {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {tasks.map((task) => {
-                    const nextOptions = STATUS_NEXT[task.status] || [];
+                    const nextOptions = isReceptionist
+                      ? (task.status === 'CLEAN' ? ['INSPECTED'] : [])
+                      : (STATUS_NEXT[task.status] || []);
                     const isManaging = managingTaskId === task.id;
                     const isSaving = savingTaskId === task.id;
 

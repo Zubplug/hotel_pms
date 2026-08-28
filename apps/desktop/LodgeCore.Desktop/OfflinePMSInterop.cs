@@ -786,6 +786,10 @@ public class OfflinePMSInterop
         try
         {
             var ctx = await GetSecureContextAsync();
+            var session = await _authManager.GetSessionAsync();
+            var isReceptionist = session?.Role is "RECEPTIONIST" or "FRONT_DESK";
+            if (isReceptionist && !string.Equals(status, "INSPECTED", StringComparison.OrdinalIgnoreCase))
+                throw new UnauthorizedAccessException("Reception can only inspect completed housekeeping tasks.");
             var success = await _repo.UpdateHousekeepingTaskStatusAsync(taskId, status, ctx.UserId, ctx.DeviceId);
             return JsonSerializer.Serialize(new { success }, _jsonOptions);
         }

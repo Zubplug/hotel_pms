@@ -17,7 +17,7 @@ const TRANSITIONS: Record<RoomStatus, RoomStatus[]> = {
   AVAILABLE: ['RESERVED', 'MAINTENANCE', 'BLOCKED', 'OUT_OF_ORDER', 'OUT_OF_SERVICE', 'DIRTY'],
   RESERVED: ['OCCUPIED', 'AVAILABLE', 'DIRTY', 'MAINTENANCE'],
   OCCUPIED: ['DIRTY', 'MAINTENANCE', 'AVAILABLE'], // Added AVAILABLE for quick checkout overrides
-  DIRTY: ['CLEANING', 'AVAILABLE', 'MAINTENANCE', 'CLEAN'], // Added CLEAN for quick overrides
+  DIRTY: ['CLEANING', 'MAINTENANCE', 'CLEAN'],
   CLEANING: ['CLEAN', 'DIRTY', 'MAINTENANCE'],
   CLEAN: ['INSPECTED', 'DIRTY', 'AVAILABLE', 'MAINTENANCE'], // Added AVAILABLE for fast-tracking
   INSPECTED: ['AVAILABLE', 'DIRTY', 'MAINTENANCE'],
@@ -33,10 +33,7 @@ export function isValidTransition(from: RoomStatus, to: RoomStatus, override = f
 }
 
 export function getAllowedTransitions(from: RoomStatus): RoomStatus[] {
-  // Return all common statuses plus any strictly allowed ones to populate dropdowns easily
-  const common = ['AVAILABLE', 'CLEAN', 'DIRTY', 'MAINTENANCE'] as RoomStatus[];
-  const specific = TRANSITIONS[from] ?? [];
-  return Array.from(new Set([...common, ...specific]));
+  return TRANSITIONS[from] ?? [];
 }
 
 export type { RoomStatus };

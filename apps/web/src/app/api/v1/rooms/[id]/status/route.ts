@@ -25,6 +25,14 @@ export async function POST(req: NextRequest, { params }: Params) {
     const body = await req.json();
     const { newStatus, reason, source, referenceId } = roomStatusTransitionSchema.parse(body);
 
+    if (newStatus === 'AVAILABLE' && room.status === 'DIRTY') {
+      return errorResponse(
+        'HOUSEKEEPING_REQUIRED',
+        'A Dirty room must be cleaned and inspected by housekeeping before it becomes Available.',
+        422
+      );
+    }
+
     // STATE MACHINE ENFORCEMENT — server-side, non-bypassable
     if (!isValidTransition(room.status, newStatus)) {
       return errorResponse(
@@ -35,13 +43,16 @@ export async function POST(req: NextRequest, { params }: Params) {
     }
 
     // Execute in a transaction to keep room + history in sync
-    const [updatedRoom] = await prisma.$transaction([
-      prisma.room.update({
+    const updatedRoom = await prisma.$transaction(async (tx) => {
+      const updated = await tx.room.update({
         where: { id },
-        data: { status: newStatus },
+        data: {
+          status: newStatus,
+          ...(newStatus === 'DIRTY' ? { housekeepingStatus: 'PENDING' } : {}),
+        },
         include: { roomType: true, building: true, floor: true },
-      }),
-      prisma.roomStatusHistory.create({
+      });
+      await tx.roomStatusHistory.create({
         data: {
           roomId: id,
           propertyId: room.propertyId,
@@ -52,8 +63,23 @@ export async function POST(req: NextRequest, { params }: Params) {
           changedBy: session.user.id,
           reason,
         },
-      }),
-    ]);
+      });
+      if (newStatus === 'DIRTY') {
+        await tx.housekeepingTask.create({
+          data: {
+            propertyId: room.propertyId,
+            roomId: room.id,
+            type: 'INSPECTION',
+            priority: 'NORMAL',
+            status: 'PENDING',
+            businessDate: new Date(new Date().setUTCHours(0, 0, 0, 0)),
+            idempotencyKey: `ROOM_DIRTY_${room.id}_${Date.now()}`,
+            notes: reason || 'Room marked Dirty and requires housekeeping attention.',
+          },
+        });
+      }
+      return updated;
+    });
 
     const property = await prisma.property.findUnique({ where: { id: room.propertyId }, select: { organizationId: true } });
     await createAuditLog({

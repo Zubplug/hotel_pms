@@ -60,7 +60,7 @@ export async function POST(
         data: { status: 'CHECKED_OUT' },
       });
 
-      // 3. Mark room(s) as DIRTY and Create Housekeeping Tasks
+      // 3. Start room cleaning and create housekeeping tasks
       const businessDate = new Date();
       businessDate.setUTCHours(0, 0, 0, 0); // Simplified business date
       
@@ -90,21 +90,22 @@ export async function POST(
 
           await tx.room.update({
             where: { id: rr.room.id },
-            data: { status: 'DIRTY', housekeepingStatus: 'PENDING' },
+            data: { status: 'CLEANING', housekeepingStatus: 'CLEANING' },
           });
 
           // Idempotency: upsert by unique idempotencyKey
           const idempotencyKey = `CHECKOUT_${id}_${rr.room.id}`;
           const hskTask = await tx.housekeepingTask.upsert({
             where: { idempotencyKey },
-            update: {},
+            update: { status: 'CLEANING', startedAt: new Date() },
             create: {
               idempotencyKey,
               propertyId: reservation.propertyId,
               roomId: rr.room.id,
               type: 'CHECKOUT',
               priority,
-              status: 'PENDING',
+              status: 'CLEANING',
+              startedAt: new Date(),
               businessDate,
               notes: priority === 'HIGH' ? 'Back-to-back arrival expected today.' : null
             }
