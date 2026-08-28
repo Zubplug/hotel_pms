@@ -295,7 +295,7 @@ export async function POST(req: NextRequest) {
                          propertyId: propertyId,
                          outletId: payload.OutletId || terminal.outletId,
                          sessionId: isUuid(payload.SessionId) ? payload.SessionId : null,
-                         orderNumber: payload.OrderNumber,
+                         orderNumber: payload.OrderNumber || `ORD-${event.aggregateId.split('-')[0].toUpperCase()}`,
                          status: payload.Status || 'SUBMITTED',
                          subtotal: payload.Subtotal || 0,
                          taxAmount: payload.TaxAmount || 0,
