@@ -25,10 +25,10 @@ export async function POST(req: NextRequest, { params }: Params) {
     const body = await req.json();
     const { newStatus, reason, source, referenceId } = roomStatusTransitionSchema.parse(body);
 
-    if (newStatus === 'AVAILABLE' && room.status === 'DIRTY') {
+    if (newStatus === 'AVAILABLE' && ['DIRTY', 'MAINTENANCE', 'OUT_OF_ORDER'].includes(room.status)) {
       return errorResponse(
         'HOUSEKEEPING_REQUIRED',
-        'A Dirty room must be cleaned and inspected by housekeeping before it becomes Available.',
+        'This room must be cleared by maintenance and/or housekeeping before it becomes Available.',
         422
       );
     }

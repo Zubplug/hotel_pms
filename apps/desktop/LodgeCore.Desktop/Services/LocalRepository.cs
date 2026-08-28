@@ -1664,6 +1664,31 @@ public class LocalRepository
                 room.MaintenanceStatus = "RESOLVED";
                 room.HousekeepingStatus = "PENDING";
                 room.UpdatedAt = DateTime.UtcNow;
+
+                var housekeepingTask = new LocalHousekeepingTask
+                {
+                    PropertyId = ticket.PropertyId,
+                    RoomId = room.Id,
+                    RoomNumber = room.Number,
+                    TaskType = "INSPECTION",
+                    Status = "PENDING",
+                    Notes = "Maintenance resolved; housekeeping must clean and inspect the room before release."
+                };
+                _dbContext.HousekeepingTasks.Add(housekeepingTask);
+                _dbContext.OutboxEvents.Add(new LocalOutboxEvent
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    PropertyId = ticket.PropertyId,
+                    DeviceId = deviceId,
+                    OperatorId = userId,
+                    AggregateType = "HOUSEKEEPING_TASK",
+                    AggregateId = housekeepingTask.Id,
+                    AggregateVersion = 1,
+                    EventType = "CREATE",
+                    Sequence = 1,
+                    PayloadJson = JsonSerializer.Serialize(housekeepingTask),
+                    CreatedAt = DateTime.UtcNow
+                });
             }
         }
 
@@ -1999,8 +2024,8 @@ public class LocalRepository
         if (room == null) throw new Exception("Room not found");
 
         newStatus = newStatus.ToUpperInvariant();
-        if (room.Status.Equals("DIRTY", StringComparison.OrdinalIgnoreCase) && newStatus == "AVAILABLE")
-            throw new InvalidOperationException("A Dirty room must be cleaned and inspected by housekeeping before it becomes Available.");
+        if (newStatus == "AVAILABLE" && new[] { "DIRTY", "MAINTENANCE", "OUT_OF_ORDER" }.Contains(room.Status.ToUpperInvariant()))
+            throw new InvalidOperationException("This room must be cleared by maintenance and/or housekeeping before it becomes Available.");
 
         room.Status = newStatus;
         // If it's CLEAN or DIRTY, also update HousekeepingStatus to match cloud behavior if necessary.

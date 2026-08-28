@@ -81,24 +81,37 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
       // If resolving a ticket that put the room out of order, transition to DIRTY / PENDING
       if (status === 'RESOLVED' && ticket.roomId) {
         const room = await tx.room.findUnique({ where: { id: ticket.roomId } });
-        // Only change room status if it is currently OUT_OF_ORDER
-        if (room && room.status === 'OUT_OF_ORDER') {
-          // Check if there are other OPEN/IN_PROGRESS CRITICAL tickets for this room
-          const otherCriticalTickets = await tx.maintenanceTicket.count({
+        // A resolved maintenance issue still requires housekeeping clearance.
+        if (room && ['OUT_OF_ORDER', 'MAINTENANCE'].includes(room.status)) {
+          const otherActiveTickets = await tx.maintenanceTicket.count({
             where: {
               roomId: room.id,
-              priority: 'CRITICAL',
               status: { in: ['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'WAITING_PARTS'] },
               id: { not: ticket.id }
             }
           });
 
-          if (otherCriticalTickets === 0) {
+          if (otherActiveTickets === 0) {
             await tx.room.update({
               where: { id: room.id },
               data: {
                 status: 'DIRTY',
                 housekeepingStatus: 'PENDING' // Requires inspection/cleaning before available
+              }
+            });
+
+            await tx.housekeepingTask.upsert({
+              where: { idempotencyKey: `MAINTENANCE_${ticket.id}` },
+              update: { status: 'PENDING' },
+              create: {
+                idempotencyKey: `MAINTENANCE_${ticket.id}`,
+                propertyId: ticket.propertyId,
+                roomId: room.id,
+                type: 'INSPECTION',
+                priority: 'HIGH',
+                status: 'PENDING',
+                businessDate: new Date(new Date().setUTCHours(0, 0, 0, 0)),
+                notes: 'Maintenance resolved; housekeeping must clean and inspect the room before release.'
               }
             });
 

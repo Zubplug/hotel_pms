@@ -123,8 +123,8 @@ export async function POST(req: NextRequest) {
         }
       });
 
-      // Handle CRITICAL issue logic automatically putting room OUT_OF_ORDER
-      if (priority === 'CRITICAL' && roomId) {
+      // Restricted maintenance issues take the room out of service until resolved.
+      if ((priority === 'CRITICAL' || body.requiresRoomRestriction === true) && roomId) {
         const room = await tx.room.findUnique({ where: { id: roomId } });
         if (room && room.status !== 'OUT_OF_ORDER') {
           const oldStatus = room.status;
