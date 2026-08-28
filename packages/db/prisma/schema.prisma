@@ -122,14 +122,14 @@ model Property {
   reconciliationExceptions ReconciliationException[]
   costAdjustments          CostAdjustment[]
 
-  createdAt     DateTime        @default(now()) @db.Timestamptz
-  updatedAt     DateTime        @updatedAt @db.Timestamptz
-  deletedAt     DateTime?       @db.Timestamptz
-  PosSession    PosSession[]
-  HotelEvent    HotelEvent[]
-  laundryItems  LaundryItem[]
-  laundryOrders LaundryOrder[]
-  StockTransfer StockTransfer[]
+  createdAt           DateTime            @default(now()) @db.Timestamptz
+  updatedAt           DateTime            @updatedAt @db.Timestamptz
+  deletedAt           DateTime?           @db.Timestamptz
+  PosSession          PosSession[]
+  HotelEvent          HotelEvent[]
+  laundryItems        LaundryItem[]
+  laundryOrders       LaundryOrder[]
+  StockTransfer       StockTransfer[]
   inventoryCategories InventoryCategory[]
   stocktakes          Stocktake[]
   recipes             Recipe[]
@@ -1920,13 +1920,13 @@ model Supplier {
 }
 
 model Warehouse {
-  id         String   @id @default(uuid()) @db.Uuid
-  propertyId String   @db.Uuid
-  property   Property @relation(fields: [propertyId], references: [id])
-  name       String
-  location   String?
-  isActive   Boolean  @default(true)
-  posOutletId String? @unique @db.Uuid
+  id          String     @id @default(uuid()) @db.Uuid
+  propertyId  String     @db.Uuid
+  property    Property   @relation(fields: [propertyId], references: [id])
+  name        String
+  location    String?
+  isActive    Boolean    @default(true)
+  posOutletId String?    @unique @db.Uuid
   posOutlet   PosOutlet? @relation(fields: [posOutletId], references: [id])
 
   stockItems    StockItem[]
@@ -1969,7 +1969,7 @@ model StockItem {
   posProductId String?     @db.Uuid
   posProduct   PosProduct? @relation(fields: [posProductId], references: [id])
 
-  categoryId       String?            @db.Uuid
+  categoryId        String?            @db.Uuid
   inventoryCategory InventoryCategory? @relation(fields: [categoryId], references: [id])
 
   name     String
@@ -2290,14 +2290,15 @@ model PosProduct {
   image             String?
   productionStation ProductionStation?
 
-  recipe      Recipe?
-  modifiers   PosProductModifier[]
-  stockItems  StockItem[]
+  recipe     Recipe?
+  modifiers  PosProductModifier[]
+  stockItems StockItem[]
 
-  createdAt DateTime @default(now()) @db.Timestamptz
-  updatedAt DateTime @updatedAt @db.Timestamptz
-  createdBy String?  @db.Uuid
-  updatedBy String?  @db.Uuid
+  createdAt    DateTime       @default(now()) @db.Timestamptz
+  updatedAt    DateTime       @updatedAt @db.Timestamptz
+  createdBy    String?        @db.Uuid
+  updatedBy    String?        @db.Uuid
+  PosOrderItem PosOrderItem[]
 }
 
 model PosProductModifier {
@@ -2313,42 +2314,42 @@ model PosProductModifier {
 }
 
 model Recipe {
-  id          String   @id @default(uuid()) @db.Uuid
-  propertyId  String   @db.Uuid
-  property    Property @relation(fields: [propertyId], references: [id])
+  id         String   @id @default(uuid()) @db.Uuid
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id])
 
-  posProductId String  @unique @db.Uuid
+  posProductId String     @unique @db.Uuid
   posProduct   PosProduct @relation(fields: [posProductId], references: [id])
 
   targetMargin Decimal @default(70) @db.Decimal(5, 2)
-  isActive    Boolean @default(true)
+  isActive     Boolean @default(true)
 
-  versions    RecipeVersion[]
+  versions RecipeVersion[]
 
-  createdAt   DateTime @default(now()) @db.Timestamptz
-  updatedAt   DateTime @updatedAt @db.Timestamptz
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
 }
 
 model RecipeVersion {
-  id          String   @id @default(uuid()) @db.Uuid
-  recipeId    String   @db.Uuid
-  recipe      Recipe   @relation(fields: [recipeId], references: [id])
+  id       String @id @default(uuid()) @db.Uuid
+  recipeId String @db.Uuid
+  recipe   Recipe @relation(fields: [recipeId], references: [id])
 
   versionName String
   isActive    Boolean @default(true)
 
   ingredients RecipeIngredient[]
 
-  createdAt   DateTime @default(now()) @db.Timestamptz
-  updatedAt   DateTime @updatedAt @db.Timestamptz
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
 }
 
 model RecipeIngredient {
-  id              String         @id @default(uuid()) @db.Uuid
-  recipeVersionId String         @db.Uuid
-  recipeVersion   RecipeVersion  @relation(fields: [recipeVersionId], references: [id])
-  stockItemId     String         @db.Uuid
-  stockItem       StockItem      @relation(fields: [stockItemId], references: [id])
+  id              String        @id @default(uuid()) @db.Uuid
+  recipeVersionId String        @db.Uuid
+  recipeVersion   RecipeVersion @relation(fields: [recipeVersionId], references: [id])
+  stockItemId     String        @db.Uuid
+  stockItem       StockItem     @relation(fields: [stockItemId], references: [id])
 
   quantity      Decimal       @db.Decimal(18, 4)
   unitOfMeasure UnitOfMeasure
@@ -2717,10 +2718,11 @@ model PosOrder {
 }
 
 model PosOrderItem {
-  id          String   @id @default(uuid()) @db.Uuid
-  orderId     String   @db.Uuid
-  order       PosOrder @relation(fields: [orderId], references: [id])
-  productId   String?  @db.Uuid
+  id          String      @id @default(uuid()) @db.Uuid
+  orderId     String      @db.Uuid
+  order       PosOrder    @relation(fields: [orderId], references: [id])
+  productId   String?     @db.Uuid
+  product     PosProduct? @relation(fields: [productId], references: [id])
   productName String
 
   quantity  Decimal @db.Decimal(18, 4)
@@ -3233,24 +3235,24 @@ enum CostAdjustmentStatus {
 }
 
 model CostAdjustment {
-  id            String               @id @default(uuid()) @db.Uuid
-  propertyId    String               @db.Uuid
-  property      Property             @relation(fields: [propertyId], references: [id])
-  stockItemId   String               @db.Uuid
-  stockItem     StockItem            @relation(fields: [stockItemId], references: [id])
+  id          String    @id @default(uuid()) @db.Uuid
+  propertyId  String    @db.Uuid
+  property    Property  @relation(fields: [propertyId], references: [id])
+  stockItemId String    @db.Uuid
+  stockItem   StockItem @relation(fields: [stockItemId], references: [id])
 
-  oldCost       Decimal              @db.Decimal(18, 4)
-  proposedCost  Decimal              @db.Decimal(18, 4)
-  reason        String
-  referenceDoc  String?
-  status        CostAdjustmentStatus @default(DRAFT)
+  oldCost      Decimal              @db.Decimal(18, 4)
+  proposedCost Decimal              @db.Decimal(18, 4)
+  reason       String
+  referenceDoc String?
+  status       CostAdjustmentStatus @default(DRAFT)
 
-  createdAt     DateTime             @default(now()) @db.Timestamptz
-  submittedBy   String?              @db.Uuid
-  submittedAt   DateTime?            @db.Timestamptz
-  approvedBy    String?              @db.Uuid
-  approvedAt    DateTime?            @db.Timestamptz
-  rejectedBy    String?              @db.Uuid
+  createdAt      DateTime  @default(now()) @db.Timestamptz
+  submittedBy    String?   @db.Uuid
+  submittedAt    DateTime? @db.Timestamptz
+  approvedBy     String?   @db.Uuid
+  approvedAt     DateTime? @db.Timestamptz
+  rejectedBy     String?   @db.Uuid
   rejectedReason String?
 }
 
@@ -3265,19 +3267,19 @@ enum StocktakeStatus {
 }
 
 model Stocktake {
-  id          String   @id @default(uuid()) @db.Uuid
-  propertyId  String   @db.Uuid
-  property    Property @relation(fields: [propertyId], references: [id])
+  id         String   @id @default(uuid()) @db.Uuid
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id])
 
-  warehouseId String   @db.Uuid
+  warehouseId String    @db.Uuid
   warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
 
-  categoryId  String?  @db.Uuid
-  category    InventoryCategory? @relation(fields: [categoryId], references: [id])
+  categoryId String?            @db.Uuid
+  category   InventoryCategory? @relation(fields: [categoryId], references: [id])
 
-  stocktakeRef String @unique
-  status      StocktakeStatus @default(DRAFT)
-  notes       String?
+  stocktakeRef String          @unique
+  status       StocktakeStatus @default(DRAFT)
+  notes        String?
 
   totalShortageValue Decimal @default(0) @db.Decimal(18, 4)
   totalOverageValue  Decimal @default(0) @db.Decimal(18, 4)
@@ -3285,12 +3287,12 @@ model Stocktake {
 
   items StocktakeItem[]
 
-  createdBy   String?   @db.Uuid
-  startedBy   String?   @db.Uuid
-  submittedBy String?   @db.Uuid
-  approvedBy  String?   @db.Uuid
-  rejectedBy  String?   @db.Uuid
-  completedBy String?   @db.Uuid
+  createdBy   String? @db.Uuid
+  startedBy   String? @db.Uuid
+  submittedBy String? @db.Uuid
+  approvedBy  String? @db.Uuid
+  rejectedBy  String? @db.Uuid
+  completedBy String? @db.Uuid
 
   startedAt   DateTime? @db.Timestamptz
   submittedAt DateTime? @db.Timestamptz
@@ -3298,8 +3300,8 @@ model Stocktake {
   rejectedAt  DateTime? @db.Timestamptz
   completedAt DateTime? @db.Timestamptz
 
-  createdAt   DateTime  @default(now()) @db.Timestamptz
-  updatedAt   DateTime  @updatedAt @db.Timestamptz
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
 }
 
 model StocktakeItem {
@@ -3310,10 +3312,10 @@ model StocktakeItem {
   stockItemId String    @db.Uuid
   stockItem   StockItem @relation(fields: [stockItemId], references: [id])
 
-  expectedQty   Decimal @db.Decimal(18, 4)
+  expectedQty   Decimal  @db.Decimal(18, 4)
   countedQty    Decimal? @db.Decimal(18, 4)
   variance      Decimal? @db.Decimal(18, 4)
-  costAtCount   Decimal @db.Decimal(18, 4)
+  costAtCount   Decimal  @db.Decimal(18, 4)
   varianceValue Decimal? @db.Decimal(18, 4)
 
   transactionId String? @db.Uuid

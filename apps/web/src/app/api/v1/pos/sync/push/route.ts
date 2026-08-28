@@ -123,7 +123,8 @@ export async function POST(req: NextRequest) {
           // Legacy desktop SyncEvents do not carry aggregate versions. They
           // are already ordered by the terminal sequence, so do not apply the
           // newer OCC gate to them.
-          let updatedCount = isLegacy ? 1 : 0;
+          const isCreationEvent = ['ORDER_CREATED', 'POS_SESSION_STARTED', 'POS_OPERATOR_SESSION_STARTED'].includes(event.eventType);
+          let updatedCount = (isLegacy || isCreationEvent) ? 1 : 0;
           
           // 2. Lock & Verify OCC Version
           if (!isLegacy && event.aggregateType === 'POS_ORDER') {
