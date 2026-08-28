@@ -104,17 +104,17 @@ export function FolioSection({ reservation }: { reservation: any }) {
               }
             }}
           >
-            <Printer className="mr-1 h-3 w-3" /> Receipt
+            <Printer className="mr-1 h-3 w-3" /> Reprint receipt
           </Button>
         )}
-        {linkedPayment.status === 'COMPLETED' && !isClosed && (
+        {linkedPayment.status === 'COMPLETED' && (
           <Button
             variant="ghost"
             size="sm"
             className="h-7 px-2 text-xs text-amber-700 hover:bg-amber-50 hover:text-amber-800"
             onClick={() => setRefundPaymentId(linkedPayment.id)}
           >
-            <CornerDownRight className="mr-1 h-3 w-3" /> Refund
+            <CornerDownRight className="mr-1 h-3 w-3" /> Refund payment
           </Button>
         )}
       </div>
