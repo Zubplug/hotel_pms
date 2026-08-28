@@ -35,15 +35,17 @@ export async function assertPropertyAccess(
   if (!user) throw new ForbiddenError('User not found');
   if (user.isSuperAdmin) return; // super admins access everything
 
-  // Check via staff.propertyAccess array
-  const staff = await prisma.staff.findFirst({
-    where: { userId },
-    select: { propertyAccess: true },
-  });
+  const [staff, userRoles] = await Promise.all([
+    prisma.staff.findFirst({ where: { userId }, select: { propertyAccess: true } }),
+    prisma.userRole.findMany({ where: { userId }, select: { propertyId: true, role: { select: { organizationId: true } } } }),
+  ]);
 
-  if (!staff) throw new ForbiddenError();
-
-  const hasAccess = staff.propertyAccess.includes(propertyId);
+  const rolePropertyIds = userRoles.filter(role => role.propertyId).map(role => role.propertyId as string);
+  const organizationIds = Array.from(new Set(userRoles.filter(role => !role.propertyId).map(role => role.role.organizationId)));
+  const organizationPropertyIds = organizationIds.length
+    ? (await prisma.property.findMany({ where: { organizationId: { in: organizationIds } }, select: { id: true } })).map(property => property.id)
+    : [];
+  const hasAccess = [...(staff?.propertyAccess ?? []), ...rolePropertyIds, ...organizationPropertyIds].includes(propertyId);
   if (!hasAccess) throw new ForbiddenError();
 }
 
@@ -57,7 +59,7 @@ export async function getUserPropertyIds(
 ): Promise<string[]> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { isSuperAdmin: true },
+    select: { isSuperAdmin: true, roles: { select: { propertyId: true, role: { select: { organizationId: true } } } } },
   });
 
   if (!user) return [];
@@ -74,6 +76,10 @@ export async function getUserPropertyIds(
     where: { userId },
     select: { propertyAccess: true },
   });
-
-  return staff?.propertyAccess ?? [];
+  const directPropertyIds = user.roles.filter(role => role.propertyId).map(role => role.propertyId as string);
+  const organizationIds = Array.from(new Set(user.roles.filter(role => !role.propertyId).map(role => role.role.organizationId)));
+  const organizationPropertyIds = organizationIds.length
+    ? (await prisma.property.findMany({ where: { organizationId: { in: organizationIds } }, select: { id: true } })).map(property => property.id)
+    : [];
+  return Array.from(new Set([...(staff?.propertyAccess ?? []), ...directPropertyIds, ...organizationPropertyIds]));
 }
