@@ -143,9 +143,11 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
           <Link href="/frontdesk/cashier" className="hidden md:inline-flex rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted hover:text-foreground">
             Cashier Shift
           </Link>
-          <Link href="/frontdesk/reconciliation" className="hidden md:inline-flex rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted hover:text-foreground">
-            Reconciliation
-          </Link>
+          {role !== 'RECEPTIONIST' && (
+            <Link href="/frontdesk/reconciliation" className="hidden md:inline-flex rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted hover:text-foreground">
+              Reconciliation
+            </Link>
+          )}
           <Link href="/frontdesk/housekeeping" className="hidden md:inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted hover:text-foreground">
             <Brush className="h-4 w-4" />
             Housekeeping
