@@ -21,6 +21,8 @@ export default function SettlementPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [shiftStatus, setShiftStatus] = useState('OPEN');
+  const [reportStatus, setReportStatus] = useState('OPEN');
 
   const [showAuthPad, setShowAuthPad] = useState(false);
 
@@ -31,6 +33,8 @@ export default function SettlementPage() {
         const res = await provider.pos.getSessionSettlementDetails(sessionId);
         if (!res.error && res.data) {
           setExpectedCash(res.data.expectedCash);
+          setShiftStatus(res.data.session?.status || 'OPEN');
+          setReportStatus(res.data.settlement?.status || res.data.session?.status || 'OPEN');
         } else {
           setError(res.error || 'Failed to fetch settlement details.');
         }
@@ -66,6 +70,8 @@ export default function SettlementPage() {
     try {
       const res = await provider.pos.settleSession(sessionId, actualCash, (session?.user as any)?.id, authorizerId);
       if (!res.error) {
+        setShiftStatus(res.data?.session?.status || 'RECONCILIATION_REQUIRED');
+        setReportStatus(res.data?.status || 'PENDING_HANDOVER');
         setSuccess(true);
       } else {
         setError(res.error || 'Failed to settle session.');
@@ -87,10 +93,14 @@ export default function SettlementPage() {
           <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6">
             <CheckCircle2 className="w-10 h-10 text-emerald-600" />
           </div>
-          <h2 className="text-2xl font-bold text-slate-800 mb-2">Session Settled</h2>
+          <h2 className="text-2xl font-bold text-slate-800 mb-2">Shift Report Submitted</h2>
           <p className="text-slate-500 mb-8">
-            Your POS session has been closed successfully. The data will sync to the cloud automatically.
+            Your shift has been closed and submitted for cashier or manager review. The data will sync automatically when online.
           </p>
+          <div className="mb-8 rounded-xl border bg-slate-50 p-4 text-left">
+            <div className="flex items-center justify-between text-sm"><span className="text-slate-500">Shift status</span><span className="font-semibold text-slate-800">{shiftStatus.replaceAll('_', ' ')}</span></div>
+            <div className="mt-2 flex items-center justify-between text-sm"><span className="text-slate-500">Report status</span><span className="font-semibold text-indigo-700">{reportStatus.replaceAll('_', ' ')}</span></div>
+          </div>
           <Button 
             onClick={() => window.location.href = '/pos/start-shift'}
             className="w-full h-14 text-base font-semibold bg-slate-900 hover:bg-slate-800 rounded-xl"
