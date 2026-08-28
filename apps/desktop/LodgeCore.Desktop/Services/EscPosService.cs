@@ -643,7 +643,7 @@ public class EscPosService
         return Task.FromResult(list);
     }
 
-    private async Task<(bool, string?)> SendToPrinterAsync(LocalPrinterConfig printer, byte[] data)
+    private async Task<(bool success, string? error)> SendToPrinterAsync(LocalPrinterConfig printer, byte[] data)
     {
         try
         {

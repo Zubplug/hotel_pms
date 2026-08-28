@@ -38,6 +38,7 @@ public class LocalPosProduct
     public decimal TaxRate { get; set; }
     public bool IsActive { get; set; }
     public bool HasModifiers { get; set; }
+    public string InventoryMode { get; set; } = "NON_STOCK";
     // Product-level station override; null means inherit from Category.ProductionStation
     public string? ProductionStation { get; set; }
 
