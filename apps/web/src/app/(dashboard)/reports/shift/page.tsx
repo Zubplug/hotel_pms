@@ -22,6 +22,10 @@ export default function ShiftReportPage() {
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [userId, setUserId] = useState<string>('ALL');
   const [shiftId, setShiftId] = useState<string | null>(null);
+  const [decision, setDecision] = useState('APPROVED');
+  const [approvalNotes, setApprovalNotes] = useState('');
+  const [approvalState, setApprovalState] = useState('');
+  const [approving, setApproving] = useState(false);
 
   useEffect(() => {
     setShiftId(new URLSearchParams(window.location.search).get('shiftId'));
@@ -52,6 +56,31 @@ export default function ShiftReportPage() {
     queryFn: fetchShiftReport,
     enabled: !!propertyId,
   });
+
+  const selectedShift = shiftId ? report?.shifts?.[0] : null;
+  const needsApproval = selectedShift && (selectedShift.type === 'FRONT_DESK'
+    ? ['CLOSED', 'UNDER_REVIEW'].includes(selectedShift.status)
+    : selectedShift.settlementStatus === 'PENDING_HANDOVER');
+  const approveShift = async () => {
+    if (!selectedShift || !shiftId) return;
+    setApproving(true);
+    setApprovalState('');
+    try {
+      const response = await fetch(`/api/v1/reports/shift/${encodeURIComponent(shiftId)}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ decision, notes: approvalNotes }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || 'Unable to approve shift');
+      setApprovalState(decision === 'REJECTED' ? 'Shift returned for review.' : 'Shift approved and reconciled.');
+      window.location.reload();
+    } catch (approvalError) {
+      setApprovalState(approvalError instanceof Error ? approvalError.message : 'Unable to approve shift');
+    } finally {
+      setApproving(false);
+    }
+  };
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
@@ -228,6 +257,18 @@ export default function ShiftReportPage() {
                 </CardContent>
               </Card>;
             })()}
+            {needsApproval && <Card className="border-indigo-200 bg-indigo-50/40">
+              <CardHeader><CardTitle>Cashier review and approval</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-muted-foreground">Review the complete shift analysis above before approving this closed shift for reconciliation.</p>
+                <div className="flex flex-col gap-3 md:flex-row md:items-end">
+                  <div><label className="text-sm font-medium">Decision</label><select value={decision} onChange={event => setDecision(event.target.value)} className="mt-1 h-10 rounded-md border bg-background px-3 text-sm"><option value="APPROVED">Approve</option><option value="APPROVED_WITH_VARIANCE">Approve with variance</option><option value="REJECTED">Return for review</option></select></div>
+                  <div className="flex-1"><label className="text-sm font-medium">Notes</label><Input value={approvalNotes} onChange={event => setApprovalNotes(event.target.value)} placeholder="Optional review notes" /></div>
+                  <Button onClick={approveShift} disabled={approving}>{approving ? 'Submitting…' : 'Submit decision'}</Button>
+                </div>
+                {approvalState && <p className="text-sm font-medium text-indigo-700">{approvalState}</p>}
+              </CardContent>
+            </Card>}
 
             <Card>
               <CardHeader>

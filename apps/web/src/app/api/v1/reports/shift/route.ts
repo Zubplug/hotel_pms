@@ -213,6 +213,7 @@ export async function GET(req: NextRequest) {
         type: 'POS',
         businessDate: item.businessDate,
         status: item.status,
+        settlementStatus: settlement?.status || null,
         outlet: item.outlet,
         operator: item.primaryOperator,
         deviceId: item.deviceId,
