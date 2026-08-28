@@ -67,9 +67,59 @@ export function FolioSection({ reservation }: { reservation: any }) {
     )
     : null;
 
+  const printFolio = async () => {
+    const transactions = ledgerItems.map((entry: any) => ({
+      date: new Date(entry.createdAt || 0).toISOString(),
+      description: entry.description || transactionLabel(entry.type),
+      reference: entry.reference || null,
+      debitAmount: Number(entry.amount || 0) > 0 ? Number(entry.amount) : 0,
+      creditAmount: Number(entry.amount || 0) < 0 ? Math.abs(Number(entry.amount)) : 0,
+      runningBalance: 0,
+    }));
+    const guestName = reservation.primaryGuest
+      ? `${reservation.primaryGuest.firstName} ${reservation.primaryGuest.lastName}`
+      : 'Guest';
+    const roomNumber = formatRoomNumber(reservation.reservationRooms?.[0]?.room?.number) || 'N/A';
+
+    if (isFrontDesk && HardwareBridge.isAvailable()) {
+      const result = await HardwareBridge.printGuestFolio({
+        folioId: folio.id,
+        guestName,
+        version: Number(folio.version || 1),
+        details: {
+          guestName,
+          roomNumber,
+          folioNumber: folio.id.substring(0, 8).toUpperCase(),
+          arrivalDate: reservation.checkIn,
+          departureDate: reservation.checkOut,
+          transactions,
+          totalCharges,
+          totalPayments,
+          balanceDue: Number(folio.balance || 0),
+          currency: folio.currency || 'NGN',
+          propertyName: reservation.property?.name || '',
+          printedAt: new Date().toISOString(),
+        },
+      });
+      if (!result?.error) return;
+    }
+    window.print();
+  };
+
   const renderItemActions = (item: any) => {
     const linkedPayment = findLinkedPayment(item);
-    if (!linkedPayment) return null;
+    if (!linkedPayment) {
+      return (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2 text-xs text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+          onClick={printFolio}
+        >
+          <Printer className="mr-1 h-3 w-3" /> Print folio
+        </Button>
+      );
+    }
 
     return (
       <div className="flex flex-wrap items-center gap-1.5">
