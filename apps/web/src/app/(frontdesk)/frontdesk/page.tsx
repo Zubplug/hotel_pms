@@ -33,11 +33,9 @@ import {
   Briefcase,
   ArrowRight,
   Info,
-  Printer,
   Shirt,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { ReceptionistShiftStartReport } from '@/components/frontdesk/ReceptionistShiftStartReport';
 
 export default function ReceptionistDashboardPage() {
   const router = useRouter();
@@ -55,7 +53,6 @@ export default function ReceptionistDashboardPage() {
   const [openingFloat, setOpeningFloat] = useState('0');
   const [startingShift, setStartingShift] = useState(false);
   const [shiftError, setShiftError] = useState('');
-  const [showShiftStartReport, setShowShiftStartReport] = useState(false);
 
   const { data: res, isLoading } = useQuery({
     queryKey: ['frontdesk', 'dashboard', propertyId],
@@ -161,7 +158,6 @@ export default function ReceptionistDashboardPage() {
           <DialogFooter><Button variant="outline" onClick={() => setShowStartShift(false)}>Later</Button><Button onClick={startShift} disabled={startingShift || !cashAccountId}>{startingShift ? 'Starting shift…' : 'Start cashier shift'}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
-      {dashboardData && <ReceptionistShiftStartReport open={showShiftStartReport} onOpenChange={setShowShiftStartReport} dashboardData={dashboardData} propertyId={propertyId} />}
       <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
         
         {/* Sync Status Banner */}
@@ -217,10 +213,6 @@ export default function ReceptionistDashboardPage() {
                 <span className="font-bold text-sm">Laundry</span>
               </Button>
 
-              <Button onClick={() => setShowShiftStartReport(true)} variant="outline" className="h-20 md:h-24 md:w-36 rounded-2xl bg-violet-50 hover:bg-violet-100 text-violet-900 border-violet-100 shadow hover:shadow-md hover:-translate-y-1 transition-all flex flex-col gap-2 group">
-                <Printer className="w-6 h-6 md:w-7 md:h-7 text-violet-600 group-hover:scale-110 transition-transform" />
-                <span className="font-bold text-sm">Shift Report</span>
-              </Button>
 
             </div>
         </div>
