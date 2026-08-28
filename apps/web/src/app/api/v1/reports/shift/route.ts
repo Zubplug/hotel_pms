@@ -48,11 +48,23 @@ export async function GET(req: NextRequest) {
       lte: new Date(endDate)
     };
 
+    const selectedFrontdeskSession = shiftId
+      ? await prisma.frontdeskSession.findFirst({ where: { id: shiftId, propertyId }, select: { id: true } })
+      : null;
+
     const paymentWhere: any = {
       propertyId,
-      createdAt: dateFilter,
       status: { in: ['COMPLETED', 'PARTIALLY_REFUNDED', 'REFUNDED'] }
     };
+    if (selectedFrontdeskSession) {
+      paymentWhere.frontdeskSessionId = shiftId;
+    } else if (!shiftId) {
+      paymentWhere.createdAt = dateFilter;
+    } else {
+      // POS payments live in PosPayment; prevent unrelated front-desk
+      // payments from appearing in a POS shift report.
+      paymentWhere.id = '__NO_FRONTDESK_PAYMENT_FOR_POS_SHIFT__';
+    }
     
     if (targetUserId) {
       paymentWhere.receivedBy = targetUserId;
@@ -75,9 +87,15 @@ export async function GET(req: NextRequest) {
     // 2. Fetch Front Desk refunds
     const refundWhere: any = {
       propertyId,
-      createdAt: dateFilter,
       status: 'COMPLETED'
     };
+    if (selectedFrontdeskSession) {
+      refundWhere.payment = { frontdeskSessionId: shiftId };
+    } else if (!shiftId) {
+      refundWhere.createdAt = dateFilter;
+    } else {
+      refundWhere.id = '__NO_FRONTDESK_REFUND_FOR_POS_SHIFT__';
+    }
     if (targetUserId) {
       refundWhere.authorizedBy = targetUserId;
     }
