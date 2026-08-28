@@ -603,6 +603,46 @@ public class EscPosService
         return await SendToPrinterAsync(printer, builder.Build());
     }
 
+    public async Task<(bool success, string? error)> PrintLaundryCustomerDocumentsAsync(LaundryTicketData ticket, string? outletId = null)
+    {
+        var printer = await GetPrinterByRoleAsync("RECEIPT", outletId)
+                      ?? await GetPrinterByRoleAsync("FRONTDESK", outletId);
+        if (printer == null)
+            return (false, "No active RECEIPT or FRONTDESK printer configured for customer laundry documents.");
+
+        var results = new List<(bool success, string? error)>();
+        foreach (var title in new[] { "CUSTOMER RECEIPT", "COLLECTION SLIP" })
+        {
+            var builder = new EscPosBuilder(new PrinterProfile { PaperWidth = printer.PaperWidth });
+            builder.AddCommand(EscPosBuilder.Init);
+            builder.AddCommand(EscPosBuilder.AlignCenter);
+            builder.AddCommand(EscPosBuilder.BoldOn);
+            builder.AddCommand(EscPosBuilder.DoubleSize);
+            builder.AddLine(title);
+            builder.AddCommand(EscPosBuilder.NormalSize);
+            builder.AddCommand(EscPosBuilder.BoldOff);
+            builder.AddCommand(EscPosBuilder.AlignLeft);
+            builder.AddLine($"Order  : {ticket.OrderNumber}");
+            if (!string.IsNullOrWhiteSpace(ticket.GuestName)) builder.AddLine($"Guest  : {ticket.GuestName}");
+            if (!string.IsNullOrWhiteSpace(ticket.RoomNumber)) builder.AddLine($"Room   : {ticket.RoomNumber}");
+            builder.AddLine($"Service: {ticket.ServiceType}");
+            builder.AddDivider('=');
+            foreach (var item in ticket.Items) builder.AddLine($"{item.Quantity:0.##}x {item.Name}");
+            builder.AddDivider('=');
+            builder.AddRow("Total", $"{ticket.Currency} {ticket.Total:N2}");
+            builder.AddLineFeed();
+            builder.AddCommand(EscPosBuilder.AlignCenter);
+            builder.AddLine(title == "COLLECTION SLIP" ? "Present this slip when collecting." : "Keep this receipt for your records.");
+            AddPrintFooter(builder, "Laundry customer copy", ticket.RequestedAt);
+            builder.AddCommand(EscPosBuilder.CutPartial);
+            results.Add(await SendToPrinterAsync(printer, builder.Build()));
+            if (!results[^1].success) break;
+        }
+
+        var errors = string.Join(" | ", results.Select(r => r.error).Where(e => !string.IsNullOrWhiteSpace(e)));
+        return (results.All(r => r.success), string.IsNullOrWhiteSpace(errors) ? null : errors);
+    }
+
     public async Task<(bool success, string message)> TestConnectionAsync(string ip, int port = 9100)
     {
         try

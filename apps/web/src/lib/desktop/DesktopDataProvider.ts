@@ -82,7 +82,8 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
       return { success: true, data: { operation: { status, command: { responseData } } } };
     },
     printShiftReport: async (data: any) => invokeDesktop('hardware.printShiftReport', { data }),
-    printLaundryTicket: async (ticket: any) => invokeDesktop('hardware.printLaundryTicket', { ticket })
+    printLaundryTicket: async (ticket: any) => invokeDesktop('hardware.printLaundryTicket', { ticket }),
+    printLaundryDocuments: async (ticket: any) => invokeDesktop('hardware.printLaundryDocuments', { ticket })
   },
   dashboard: {
     async get(propertyId: string) {

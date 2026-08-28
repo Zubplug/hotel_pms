@@ -160,7 +160,7 @@ export default function NewLaundryOrderPage() {
 
     if (!res.error) {
       const orderId = res.data?.id || res.data?.data?.id;
-      if (orderId && provider.hardware.printLaundryTicket) {
+      if (orderId && provider.hardware.printLaundryDocuments) {
         const selected = Object.entries(selectedItems)
           .filter(([_, qty]) => qty > 0)
           .map(([itemId, quantity]) => ({
@@ -173,7 +173,7 @@ export default function NewLaundryOrderPage() {
           const item = items.find((candidate: any) => candidate.id === line.itemId);
           return sum + (Number(item?.basePrice || 0) * Number(line.quantity) * multiplier);
         }, 0);
-        await provider.hardware.printLaundryTicket({
+        await provider.hardware.printLaundryDocuments({
           orderNumber: String(orderId).slice(0, 8).toUpperCase(),
           guestName: customerType === 'IN_HOUSE'
             ? `${selectedReservation.primaryGuest?.firstName || ''} ${selectedReservation.primaryGuest?.lastName || ''}`.trim()

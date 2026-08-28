@@ -33,6 +33,7 @@ export interface LodgeCoreDataProvider {
     poll(operationId: string): Promise<any>;
     printShiftReport?(data: any): Promise<any>;
     printLaundryTicket?(data: any): Promise<any>;
+    printLaundryDocuments?(data: any): Promise<any>;
   };
   dashboard: {
     get(propertyId: string): Promise<any>;

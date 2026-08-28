@@ -88,8 +88,8 @@ export default function ManageLaundryOrderPage() {
   };
 
   const handlePrint = async () => {
-    if (!order || !provider.hardware.printLaundryTicket) return;
-    const result = await provider.hardware.printLaundryTicket({
+    if (!order || !provider.hardware.printLaundryDocuments) return;
+    const result = await provider.hardware.printLaundryDocuments({
       orderNumber: String(order.id).slice(0, 8).toUpperCase(),
       guestName: `${order.reservation?.primaryGuest?.firstName || order.guest?.firstName || ''} ${order.reservation?.primaryGuest?.lastName || order.guest?.lastName || ''}`.trim(),
       roomNumber: order.room?.number || null,
@@ -183,7 +183,7 @@ export default function ManageLaundryOrderPage() {
             </h1>
           </div>
           <div className="text-right">
-            {provider.hardware.printLaundryTicket && (
+            {provider.hardware.printLaundryDocuments && (
               <Button onClick={handlePrint} variant="outline" size="sm" className="mb-2 rounded-xl">
                 <Printer className="w-4 h-4 mr-2" /> Print ticket
               </Button>

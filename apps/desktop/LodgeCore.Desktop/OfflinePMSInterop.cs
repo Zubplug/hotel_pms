@@ -2452,6 +2452,28 @@ public class OfflinePMSInterop
         }
     }
 
+    public async Task<string> PrintLaundryDocumentsAsync(string ticketDataJson)
+    {
+        try
+        {
+            var ctx = await GetSecureContextAsync();
+            await _repo.LogHardwareEventAsync(ctx.UserId, ctx.DeviceId, "LAUNDRY_DOCUMENTS_PRINT", ticketDataJson);
+            var ticket = JsonSerializer.Deserialize<LaundryTicketData>(ticketDataJson,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            if (ticket == null)
+                return JsonSerializer.Serialize(new { success = false, error = "Invalid laundry ticket data" }, _jsonOptions);
+
+            var laundry = await _escPos.PrintLaundryTicketAsync(ticket, ctx.OutletId);
+            var customer = await _escPos.PrintLaundryCustomerDocumentsAsync(ticket, ctx.OutletId);
+            var errors = string.Join(" | ", new[] { laundry.error, customer.error }.Where(e => !string.IsNullOrWhiteSpace(e)));
+            return JsonSerializer.Serialize(new { success = laundry.success && customer.success, error = string.IsNullOrWhiteSpace(errors) ? null : errors }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
     // ── Printer Configuration Management ──────────────────────────────────────
 
     public async Task<string> GetPrintersAsync()
