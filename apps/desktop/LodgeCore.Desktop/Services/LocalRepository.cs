@@ -2150,6 +2150,7 @@ public class LocalRepository
             return new {
                 id = r.Id,
                 guestName = r.Guest != null ? $"{r.Guest.FirstName} {r.Guest.LastName}" : "Unknown",
+                guestPhone = r.Guest?.Phone ?? "",
                 confirmationNumber = r.ConfirmationNumber,
                 roomName = room?.Number ?? "Unassigned",
                 roomTypeName = roomType?.Name ?? "",
@@ -2169,6 +2170,7 @@ public class LocalRepository
             return new {
                 id = r.Id,
                 guestName = r.Guest != null ? $"{r.Guest.FirstName} {r.Guest.LastName}" : "Unknown",
+                guestPhone = r.Guest?.Phone ?? "",
                 confirmationNumber = r.ConfirmationNumber,
                 roomName = room?.Number ?? "Unassigned",
                 roomTypeName = roomType?.Name ?? "",

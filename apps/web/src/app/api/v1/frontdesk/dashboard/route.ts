@@ -121,6 +121,7 @@ export async function GET(req: NextRequest) {
       return {
         id: res.id,
         guestName: res.primaryGuest ? `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}` : 'Unknown',
+        guestPhone: res.primaryGuest?.phone || '',
         confirmationNumber: res.confirmationNumber,
         roomName: res.reservationRooms?.[0]?.room?.number || 'Unassigned',
         roomTypeName: res.reservationRooms?.[0]?.room?.roomType?.name || '',
