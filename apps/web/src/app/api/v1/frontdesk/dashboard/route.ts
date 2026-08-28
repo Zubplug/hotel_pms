@@ -97,7 +97,7 @@ export async function GET(req: NextRequest) {
 
     const formatGuestList = (resList: any[]) => resList.map(res => {
       const folio = res.folios?.[0];
-      const balance = folio ? Math.abs(Number(folio.balance || 0)) : null;
+      const balance = folio ? Number(folio.balance || 0) : null;
       
       let arrivalStatus = 'Ready';
       let arrivalColor = 'green';
