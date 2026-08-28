@@ -110,6 +110,11 @@ export async function POST(req: NextRequest) {
       // Legacy payloads may contain an operation ID in operatorId. Staff
       // foreign keys are UUIDs, so never pass an opaque legacy ID through.
       const operatorId = isUuid(event.operatorId) ? event.operatorId : null;
+      if (!isUuid(event.aggregateId)) {
+        rejected.push(event.id);
+        results.push({ id: event.id, status: 'FAILED', idempotencyKey: event.idempotencyKey, error: 'Invalid POS aggregate ID; expected a UUID.' });
+        continue;
+      }
 
       try {
         const payload = typeof event.payloadJson === 'string' ? JSON.parse(event.payloadJson || '{}') : event.payloadJson;
@@ -289,7 +294,7 @@ export async function POST(req: NextRequest) {
                          id: event.aggregateId,
                          propertyId: propertyId,
                          outletId: payload.OutletId || terminal.outletId,
-                         sessionId: payload.SessionId,
+                         sessionId: isUuid(payload.SessionId) ? payload.SessionId : null,
                          orderNumber: payload.OrderNumber,
                          status: payload.Status || 'SUBMITTED',
                          subtotal: payload.Subtotal || 0,
@@ -407,7 +412,7 @@ export async function POST(req: NextRequest) {
                       status: "CONFIRMED",
                       operationId: event.idempotencyKey,
                       businessDate: new Date(payload.BusinessDate || payload.businessDate || new Date()),
-                      sessionId: payload.SessionId || payload.sessionId || null,
+                      sessionId: isUuid(payload.SessionId || payload.sessionId) ? (payload.SessionId || payload.sessionId) : null,
                       processedById: isUuid(payload.processedById) ? payload.processedById : operatorId,
                       createdAt: new Date(event.occurredAt)
                   }
@@ -464,6 +469,11 @@ export async function POST(req: NextRequest) {
               // ─────────────────────────────────────────────────────────────
           }
           else if (event.eventType === 'ORDER_ITEMS_ADDED') {
+              const parentOrderId = event.aggregateId;
+              const parentOrder = await tx.posOrder.findUnique({ where: { id: parentOrderId }, select: { id: true } });
+              if (!parentOrder) {
+                  throw new Error(`RETRYABLE_ORDER_NOT_FOUND: POS order ${parentOrderId} has not reached the cloud yet`);
+              }
               const nestedOrder = payload.order || payload.Order;
               const nestedKots = payload.kots || payload.Kots || [];
               const nestedItems = nestedOrder?.Items || nestedOrder?.items || [];
@@ -543,10 +553,15 @@ export async function POST(req: NextRequest) {
               const rawItems = payload.items || payload.Items || kot.items || kot.Items || [];
               const station = String(kot.productionStation || kot.ProductionStation
                   || payload.station || payload.Station || 'KITCHEN').toUpperCase();
+              const kotOrderId = kot.orderId || kot.OrderId || event.aggregateId;
+              const kotOrder = await tx.posOrder.findUnique({ where: { id: kotOrderId }, select: { id: true } });
+              if (!kotOrder) {
+                  throw new Error(`RETRYABLE_ORDER_NOT_FOUND: POS order ${kotOrderId} has not reached the cloud yet`);
+              }
               await tx.posProductionBatch.create({
                   data: {
                       id: kot.id || kot.Id || crypto.randomUUID(),
-                      orderId: kot.orderId || kot.OrderId || event.aggregateId,
+                      orderId: kotOrderId,
                       batchNumber: Number(kot.batchNumber || kot.BatchNumber || 1),
                       station,
                       firedAt: new Date(event.occurredAt),
@@ -576,7 +591,7 @@ export async function POST(req: NextRequest) {
                   const session = await tx.posOperatorSession.findUnique({
                       where: { id: payload.SessionId || payload.sessionId }
                   });
-                  if (!session) throw new Error(`PosSession ${payload.SessionId} not found`);
+                  if (!session) throw new Error(`RETRYABLE_SESSION_NOT_FOUND: POS session ${payload.SessionId || payload.sessionId} has not reached the cloud yet`);
 
                   await tx.posSettlement.create({
                       data: {
@@ -621,7 +636,7 @@ export async function POST(req: NextRequest) {
                       where: { id: payload.PosSessionId || payload.posSessionId }
                   });
                   if (!session) {
-                      throw new Error(`Session ${payload.PosSessionId} not found for cash movement`);
+                      throw new Error(`RETRYABLE_SESSION_NOT_FOUND: POS session ${payload.PosSessionId || payload.posSessionId} has not reached the cloud yet`);
                   }
 
                   await tx.posCashMovement.create({
