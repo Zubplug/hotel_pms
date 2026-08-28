@@ -67,6 +67,9 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
     async getSession(propertyId: string) {
       return apiFetch(`/api/v1/frontdesk/sessions?propertyId=${encodeURIComponent(propertyId)}`);
     },
+    async getSessionSummary(sessionId: string) {
+      return apiFetch(`/api/v1/frontdesk/sessions/${encodeURIComponent(sessionId)}/summary`);
+    },
     async getReport(propertyId: string, startDate: string, endDate: string) {
       const params = new URLSearchParams({ propertyId, startDate, endDate });
       return apiFetch(`/api/v1/reports/frontdesk-reconciliation?${params}`);

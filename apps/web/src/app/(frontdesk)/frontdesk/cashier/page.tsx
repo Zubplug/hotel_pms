@@ -52,7 +52,7 @@ export default function FrontdeskCashierPage() {
     setAccounts(nextAccounts);
     setAccountId(value => value || nextAccounts[0]?.id || '');
     setCurrent(nextSession);
-    if (isDesktopMode && nextSession && provider.frontdesk.getSessionSummary) {
+    if (nextSession && provider.frontdesk.getSessionSummary) {
       const summaryData = await provider.frontdesk.getSessionSummary(nextSession.id);
       setSummary(summaryData.data || null);
     } else {

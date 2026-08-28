@@ -27,7 +27,7 @@ export default async function GeneralCashierDashboardPage() {
     }
   });
 
-  const [safeAccount, revenue, frontDeskRevenue, pettyCash, pendingApprovals, recentPosShifts, recentFrontDeskShifts] = await Promise.all([
+  const [safeAccount, revenue, frontDeskRevenue, pettyCash, pendingApprovals, recentPosShifts, activeFrontDeskShifts, recentFrontDeskShifts] = await Promise.all([
     prisma.cashAccount.findFirst({ where: { propertyId, type: 'SAFE', isActive: true }, select: { balance: true } }),
     prisma.posPayment.aggregate({
       where: { order: { propertyId }, businessDate, status: 'CONFIRMED', amount: { gt: 0 } },
@@ -48,6 +48,11 @@ export default async function GeneralCashierDashboardPage() {
       include: { outlet: true, primaryOperator: true, settlements: { orderBy: { settledAt: 'desc' }, take: 1 }, payments: true, cashMovements: true, orders: { select: { status: true } } },
     }),
     prisma.frontdeskSession.findMany({
+      where: { propertyId, businessDate, status: 'OPEN' },
+      orderBy: { updatedAt: 'desc' }, take: 20,
+      include: { staff: true, cashAccount: true, payments: true, cashMovements: true, exceptions: true },
+    }),
+    prisma.frontdeskSession.findMany({
       where: { propertyId, businessDate, status: { in: ['CLOSING', 'CLOSED', 'UNDER_REVIEW', 'RECONCILED'] } },
       orderBy: { updatedAt: 'desc' }, take: 20,
       include: { staff: true, cashAccount: true, payments: true, cashMovements: true, exceptions: true },
@@ -58,7 +63,12 @@ export default async function GeneralCashierDashboardPage() {
   const todayRevenue = Number(revenue._sum?.amount || 0) + Number(frontDeskRevenue._sum?.amount || 0);
   const cashInDrawer = Number(safeAccount?.balance || 0);
   const pettyCashPayouts = Number(pettyCash._sum?.amount || 0);
-  const pendingDrops = activeOutletShifts.length;
+  const pendingDrops = activeOutletShifts.length + activeFrontDeskShifts.length;
+  const frontDeskExpected = (shift: (typeof activeFrontDeskShifts)[number]) => {
+    const cashPayments = shift.payments.filter((payment: any) => payment.method === 'CASH' && ['COMPLETED', 'PARTIALLY_REFUNDED'].includes(payment.status)).reduce((sum: number, payment: any) => sum + Number(payment.amount || 0), 0);
+    const movement = (types: string[]) => shift.cashMovements.filter((item: any) => types.includes(item.type)).reduce((sum: number, item: any) => sum + Number(item.amount || 0), 0);
+    return Number(shift.openingFloat) + cashPayments + movement(['CASH_IN', 'CASH_TRANSFER_IN']) - movement(['REFUND', 'REFUND_CASH', 'PAID_OUT', 'CASH_DROP', 'CASH_TRANSFER_OUT']);
+  };
   const methodTotals = [...recentPosShifts.flatMap(shift => shift.payments), ...recentFrontDeskShifts.flatMap(shift => shift.payments)].filter((payment: any) => ['CONFIRMED', 'PAID', 'COMPLETED', 'PARTIALLY_REFUNDED'].includes(payment.status)).reduce((result: Record<string, number>, payment: any) => {
     result[payment.method] = (result[payment.method] || 0) + Number(payment.amount || 0);
     return result;
@@ -125,12 +135,18 @@ export default async function GeneralCashierDashboardPage() {
               </div>
             ))}
             
-            {activeOutletShifts.length === 0 && (
+            {activeOutletShifts.length === 0 && activeFrontDeskShifts.length === 0 && (
               <div className="p-12 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center text-slate-400">
                 <CheckCircle2 className="w-12 h-12 mb-4 text-emerald-400" />
                 <p>All outlets are closed and reconciled.</p>
               </div>
             )}
+            {activeFrontDeskShifts.map(shift => (
+              <div key={shift.id} className="bg-white p-6 rounded-xl border shadow-sm flex items-center justify-between">
+                <div><h3 className="font-bold text-slate-900">{shift.cashAccount.name}</h3><div className="text-sm text-slate-500 mt-1">Front Desk: {shift.staff.firstName} {shift.staff.lastName} · Opened: {shift.openedAt.toLocaleTimeString()}</div></div>
+                <div className="text-right"><div className="text-sm text-emerald-600 font-medium mb-1">Active</div><div className="text-sm text-slate-600">Expected {formatCurrency(frontDeskExpected(shift), currency)}</div><div className="text-xs text-slate-400">Opening {formatCurrency(Number(shift.openingFloat), currency)}</div></div>
+              </div>
+            ))}
           </div>
 
           <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
