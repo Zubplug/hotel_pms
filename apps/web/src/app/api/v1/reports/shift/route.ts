@@ -29,11 +29,13 @@ export async function GET(req: NextRequest) {
     const capabilities = (session.user as any).capabilities || [];
 
     // Role-based restrictions
-    if (!capabilities.includes('ACCESS_REPORTS') && !capabilities.includes('ACCESS_MANAGEMENT')) {
+    const reportRoles = ['CEO', 'SUPER_ADMIN', 'MANAGER', 'ADMIN', 'ACCOUNTANT', 'GENERAL_CASHIER'];
+    if (!capabilities.includes('ACCESS_REPORTS') && !capabilities.includes('ACCESS_MANAGEMENT') && !reportRoles.includes(String(userRole).toUpperCase())) {
       return errorResponse('FORBIDDEN', 'Insufficient permissions for shift reporting', 403);
     }
 
-    if (!capabilities.includes('ACCESS_MANAGEMENT')) {
+    const canViewAllUsers = capabilities.includes('ACCESS_MANAGEMENT') || ['CEO', 'SUPER_ADMIN', 'MANAGER', 'ADMIN', 'ACCOUNTANT', 'GENERAL_CASHIER'].includes(String(userRole).toUpperCase());
+    if (!canViewAllUsers) {
       // Staff without management capability can only see their own transactions
       targetUserId = session.user.id;
     } else {
