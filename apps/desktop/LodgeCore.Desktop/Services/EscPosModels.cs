@@ -64,6 +64,20 @@ public record KotItem(
     List<string>? Modifiers
 );
 
+public record LaundryTicketData(
+    string OrderNumber,
+    string? GuestName,
+    string? RoomNumber,
+    string ServiceType,
+    List<LaundryTicketItem> Items,
+    decimal Total,
+    string Currency,
+    DateTime RequestedAt,
+    bool IsReprint = false
+);
+
+public record LaundryTicketItem(string Name, decimal Quantity);
+
 // ── NEW DTOs ───────────────────────────────────────────────────
 
 public record GuestFolioData(

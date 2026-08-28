@@ -571,6 +571,38 @@ public class EscPosService
         return await SendToPrinterAsync(printer, builder.Build());
     }
 
+    public async Task<(bool success, string? error)> PrintLaundryTicketAsync(LaundryTicketData ticket, string? outletId = null)
+    {
+        var printer = await GetPrinterByRoleAsync("LAUNDRY", outletId)
+                      ?? await GetPrinterByRoleAsync("FRONTDESK", outletId)
+                      ?? await GetPrinterByRoleAsync("RECEIPT", outletId);
+        if (printer == null)
+            return (false, "No active LAUNDRY, FRONTDESK, or RECEIPT printer configured.");
+
+        var builder = new EscPosBuilder(new PrinterProfile { PaperWidth = printer.PaperWidth });
+        builder.AddCommand(EscPosBuilder.Init);
+        builder.AddCommand(EscPosBuilder.AlignCenter);
+        builder.AddCommand(EscPosBuilder.BoldOn);
+        builder.AddCommand(EscPosBuilder.DoubleSize);
+        builder.AddLine(ticket.IsReprint ? "LAUNDRY REPRINT" : "LAUNDRY TICKET");
+        builder.AddCommand(EscPosBuilder.NormalSize);
+        builder.AddCommand(EscPosBuilder.BoldOff);
+        builder.AddCommand(EscPosBuilder.AlignLeft);
+        builder.AddLine($"Order  : {ticket.OrderNumber}");
+        if (!string.IsNullOrWhiteSpace(ticket.GuestName)) builder.AddLine($"Guest  : {ticket.GuestName}");
+        if (!string.IsNullOrWhiteSpace(ticket.RoomNumber)) builder.AddLine($"Room   : {ticket.RoomNumber}");
+        builder.AddLine($"Service: {ticket.ServiceType}");
+        builder.AddLine($"Time   : {ticket.RequestedAt:dd/MM/yyyy HH:mm}");
+        builder.AddDivider('=');
+        foreach (var item in ticket.Items)
+            builder.AddLine($"{item.Quantity:0.##}x {item.Name}");
+        builder.AddDivider('=');
+        builder.AddRow("Total", $"{ticket.Currency} {ticket.Total:N2}");
+        AddPrintFooter(builder, "Laundry operations copy", ticket.RequestedAt);
+        builder.AddCommand(EscPosBuilder.CutPartial);
+        return await SendToPrinterAsync(printer, builder.Build());
+    }
+
     public async Task<(bool success, string message)> TestConnectionAsync(string ip, int port = 9100)
     {
         try

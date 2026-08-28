@@ -159,6 +159,33 @@ export default function NewLaundryOrderPage() {
     const res = await provider.laundry.createOrder(payload);
 
     if (!res.error) {
+      const orderId = res.data?.id || res.data?.data?.id;
+      if (orderId && provider.hardware.printLaundryTicket) {
+        const selected = Object.entries(selectedItems)
+          .filter(([_, qty]) => qty > 0)
+          .map(([itemId, quantity]) => ({
+            itemId,
+            name: items.find((item: any) => item.id === itemId)?.name || 'Laundry item',
+            quantity,
+          }));
+        const multiplier = serviceType === 'EXPRESS' ? 1.5 : serviceType === 'DRY_CLEAN' ? 2 : 1;
+        const total = selected.reduce((sum, line) => {
+          const item = items.find((candidate: any) => candidate.id === line.itemId);
+          return sum + (Number(item?.basePrice || 0) * Number(line.quantity) * multiplier);
+        }, 0);
+        await provider.hardware.printLaundryTicket({
+          orderNumber: String(orderId).slice(0, 8).toUpperCase(),
+          guestName: customerType === 'IN_HOUSE'
+            ? `${selectedReservation.primaryGuest?.firstName || ''} ${selectedReservation.primaryGuest?.lastName || ''}`.trim()
+            : `${walkInDetails.firstName} ${walkInDetails.lastName}`.trim(),
+          roomNumber: customerType === 'IN_HOUSE' ? selectedReservation.reservationRooms?.[0]?.room?.number : null,
+          serviceType,
+          items: selected,
+          total,
+          currency: 'NGN',
+          requestedAt: new Date().toISOString(),
+        });
+      }
       router.push('/laundry');
     } else {
       alert(res.error || 'Failed to create order');

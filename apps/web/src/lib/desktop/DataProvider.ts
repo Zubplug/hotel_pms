@@ -32,6 +32,7 @@ export interface LodgeCoreDataProvider {
   hardware: {
     poll(operationId: string): Promise<any>;
     printShiftReport?(data: any): Promise<any>;
+    printLaundryTicket?(data: any): Promise<any>;
   };
   dashboard: {
     get(propertyId: string): Promise<any>;

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useProperty } from '@/components/PropertyProvider';
 import { Button } from '@/components/ui/button';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Loader2, Shirt, CheckCircle2, Clock, Truck, CreditCard, Banknote, Receipt, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Loader2, Shirt, CheckCircle2, Clock, Truck, CreditCard, Banknote, Receipt, AlertTriangle, Printer } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -87,6 +87,22 @@ export default function ManageLaundryOrderPage() {
     }
   };
 
+  const handlePrint = async () => {
+    if (!order || !provider.hardware.printLaundryTicket) return;
+    const result = await provider.hardware.printLaundryTicket({
+      orderNumber: String(order.id).slice(0, 8).toUpperCase(),
+      guestName: `${order.reservation?.primaryGuest?.firstName || order.guest?.firstName || ''} ${order.reservation?.primaryGuest?.lastName || order.guest?.lastName || ''}`.trim(),
+      roomNumber: order.room?.number || null,
+      serviceType: order.serviceType,
+      items: displayItems(order.items).map((item: any) => ({ name: item.item?.name || item.itemName || 'Laundry item', quantity: item.quantity })),
+      total: amountValue(order.totalAmount),
+      currency: order.currency || 'NGN',
+      requestedAt: order.requestedAt || order.createdAt,
+      isReprint: true,
+    });
+    if (result?.error) alert(result.error);
+  };
+
   const handleDeliver = async () => {
     if (!order) return;
     setDeliveryConfirmationOpen(false);
@@ -167,6 +183,11 @@ export default function ManageLaundryOrderPage() {
             </h1>
           </div>
           <div className="text-right">
+            {provider.hardware.printLaundryTicket && (
+              <Button onClick={handlePrint} variant="outline" size="sm" className="mb-2 rounded-xl">
+                <Printer className="w-4 h-4 mr-2" /> Print ticket
+              </Button>
+            )}
             <p className="text-sm font-bold text-slate-500">Total</p>
             <p className="text-2xl font-black text-cyan-700">{formatCurrency(amountValue(order.totalAmount), order.currency)}</p>
           </div>

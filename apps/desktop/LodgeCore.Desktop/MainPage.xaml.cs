@@ -215,6 +215,10 @@ public partial class MainPage : ContentPage
                     responseData = await pmsInterop.PrintKitchenTicketAsync(
                         System.Text.Json.JsonSerializer.Serialize(parameters?["ticket"]));
                     break;
+                case "hardware.printLaundryTicket":
+                    responseData = await pmsInterop.PrintLaundryTicketAsync(
+                        System.Text.Json.JsonSerializer.Serialize(parameters?["ticket"]));
+                    break;
                 case "hardware.printRegistrationCard":
                     responseData = await pmsInterop.PrintRegistrationCardAsync(
                         System.Text.Json.JsonSerializer.Serialize(parameters?["data"]));
