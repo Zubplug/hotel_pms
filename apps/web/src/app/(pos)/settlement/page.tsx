@@ -5,6 +5,7 @@ import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { CheckCircle2, Calculator, AlertTriangle, UserCheck, Scale } from 'lucide-react';
 import { TerminalAuthScreen } from '@/components/pos/TerminalAuthScreen';
 
@@ -25,6 +26,7 @@ export default function SettlementPage() {
   const [reportStatus, setReportStatus] = useState('OPEN');
 
   const [showAuthPad, setShowAuthPad] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -54,12 +56,14 @@ export default function SettlementPage() {
     e.preventDefault();
     if (expectedCash === null) return;
     
-    // Variance requires supervisor approval
-    if (variance !== 0) {
-      setShowAuthPad(true);
-    } else {
-      executeSettlement();
-    }
+    setShowConfirm(true);
+  };
+
+  const confirmSettlement = () => {
+    setShowConfirm(false);
+    // Variance requires supervisor approval after the operator confirms.
+    if (variance !== 0) setShowAuthPad(true);
+    else executeSettlement();
   };
 
   const executeSettlement = async (authorizerId?: string) => {
@@ -118,6 +122,13 @@ export default function SettlementPage() {
 
   return (
     <div className="flex flex-col items-center justify-center h-full bg-slate-50 p-6">
+      <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Confirm shift submission</DialogTitle><DialogDescription>Are you sure you want to close and submit this POS shift? The till will be locked and the report will be sent for review.</DialogDescription></DialogHeader>
+          <div className="rounded-lg bg-slate-50 p-3 text-sm"><div className="flex justify-between"><span className="text-slate-500">Expected cash</span><span className="font-semibold">{formatMoney(expectedCash || 0)}</span></div><div className="mt-1 flex justify-between"><span className="text-slate-500">Counted cash</span><span className="font-semibold">{formatMoney(actualCash)}</span></div><div className="mt-1 flex justify-between"><span className="text-slate-500">Variance</span><span className={`font-semibold ${variance === 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{formatMoney(variance)}</span></div></div>
+          <DialogFooter><Button variant="outline" onClick={() => setShowConfirm(false)}>Go back</Button><Button onClick={confirmSettlement}>Confirm and submit</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
       <div className="w-full max-w-2xl bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
         
         <div className="p-8 border-b border-slate-100 text-center bg-slate-900 text-white">

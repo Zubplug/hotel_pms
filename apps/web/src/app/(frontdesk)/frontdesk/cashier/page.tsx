@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertTriangle, Banknote, CheckCircle2, FileText, Loader2, LockKeyhole, PlayCircle, Printer, ShieldCheck, WalletCards } from 'lucide-react';
 
 type FrontdeskSession = { id: string; shiftReference: string; status: string; openingFloat: number; systemExpectedCash: number; cashAccount?: { id: string; name: string } };
@@ -37,6 +38,8 @@ export default function FrontdeskCashierPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+  const [showCloseSuccess, setShowCloseSuccess] = useState(false);
 
   const load = async () => {
     if (!propertyId) return;
@@ -82,9 +85,15 @@ export default function FrontdeskCashierPage() {
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Operation failed'); } finally { setBusy(false); }
   };
 
-  const closeSession = () => run(() => isDesktopMode
-    ? provider.frontdesk.closeSession(current!.id, Number(declaredCash))
-    : fetch(`/api/v1/frontdesk/sessions/${current!.id}/close`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ declaredCash: Number(declaredCash) }) }).then(response => response.json()));
+  const closeSession = () => run(async () => {
+      const result = await (isDesktopMode
+      ? provider.frontdesk.closeSession(current!.id, Number(declaredCash))
+      : fetch(`/api/v1/frontdesk/sessions/${current!.id}/close`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ declaredCash: Number(declaredCash) }) }).then(response => response.json()));
+    if (result && typeof result === 'object' && 'error' in result && result.error) throw new Error(typeof result.error === 'string' ? result.error : JSON.stringify(result.error));
+    setShowCloseConfirm(false);
+    setShowCloseSuccess(true);
+    return result;
+  });
 
   const openSession = () => run(() => isDesktopMode
     ? provider.frontdesk.openSession({ propertyId, cashAccountId: accountId, openingFloat: Number(openingFloat) })
@@ -136,6 +145,20 @@ export default function FrontdeskCashierPage() {
   if (loading) return <div className="flex justify-center p-16"><Loader2 className="animate-spin" /></div>;
 
   return <div className="mx-auto max-w-6xl space-y-6 pb-10">
+    <Dialog open={showCloseConfirm} onOpenChange={setShowCloseConfirm}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Confirm shift submission</DialogTitle><DialogDescription>Are you sure you want to close and submit this Front Desk shift? The till will be locked and the report will be sent for cashier or manager review.</DialogDescription></DialogHeader>
+        <div className="rounded-lg bg-slate-50 p-3 text-sm"><div className="flex justify-between"><span className="text-slate-500">Expected cash</span><span className="font-semibold">{money(summary?.cash.expected || 0)}</span></div><div className="mt-1 flex justify-between"><span className="text-slate-500">Counted cash</span><span className="font-semibold">{money(Number(declaredCash) || 0)}</span></div><div className="mt-1 flex justify-between"><span className="text-slate-500">Variance</span><span className={`font-semibold ${Number(declaredCash) - Number(summary?.cash.expected || 0) === 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{money((Number(declaredCash) || 0) - Number(summary?.cash.expected || 0))}</span></div></div>
+        <DialogFooter><Button variant="outline" onClick={() => setShowCloseConfirm(false)}>Go back</Button><Button onClick={closeSession} disabled={busy}>Confirm and submit</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+    <Dialog open={showCloseSuccess} onOpenChange={setShowCloseSuccess}>
+      <DialogContent>
+        <DialogHeader><DialogTitle className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-emerald-600" />Shift submitted successfully</DialogTitle><DialogDescription>Your Front Desk shift has been closed and sent for review.</DialogDescription></DialogHeader>
+        <div className="rounded-lg border bg-emerald-50 p-4 text-sm text-emerald-900"><div className="flex justify-between"><span>Shift reference</span><span className="font-semibold">{current?.shiftReference}</span></div><div className="mt-1 flex justify-between"><span>Report status</span><span className="font-semibold">CLOSED</span></div></div>
+        <DialogFooter><Button onClick={() => setShowCloseSuccess(false)}>Continue</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
     <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
       <div><h1 className="text-3xl font-bold tracking-tight">Front Desk Cashier</h1><p className="mt-1 text-muted-foreground">Review every transaction, reconcile the till, and close the shift with a signed audit trail.</p></div>
       {summary && <Button variant="outline" onClick={printReport} disabled={!isDesktopMode || busy}><Printer className="mr-2 h-4 w-4" />Print End-of-Shift Report</Button>}
@@ -160,7 +183,7 @@ export default function FrontdeskCashierPage() {
 
         <Card><CardHeader><CardTitle>Cash reconciliation</CardTitle></CardHeader><CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><SummaryRow label="Opening float" value={money(summary.cash.openingFloat)} /><SummaryRow label="Cash received" value={money(summary.payments.cash)} /><SummaryRow label="Cash in" value={money(summary.cash.cashIn)} /><SummaryRow label="Refunds / drops / paid out" value={money(summary.cash.refunds + summary.cash.cashDrops + summary.cash.paidOuts + summary.cash.transfersOut)} /><SummaryRow label="Expected cash" value={money(summary.cash.expected)} strong /><SummaryRow label="Declared cash" value={summary.cash.declared == null ? 'Not declared' : money(summary.cash.declared)} /><SummaryRow label="Variance" value={summary.cash.variance == null ? '—' : money(summary.cash.variance)} strong valueClass={varianceTone} /></CardContent></Card>
 
-        <Card><CardHeader className="flex flex-row items-center justify-between"><CardTitle>Close and submit shift</CardTitle><Badge variant={summary.exceptions.failedSync ? 'destructive' : 'secondary'}>{summary.exceptions.failedSync ? `${summary.exceptions.failedSync} failed sync` : 'No sync failures'}</Badge></CardHeader><CardContent className="space-y-4"><p className="text-sm text-muted-foreground">Count the physical till, enter the exact amount, then close the session. The system will lock Front Desk transactions and send the report for reconciliation.</p><div className="flex flex-col gap-3 sm:flex-row sm:items-end"><div><label className="text-sm font-medium">Physical cash counted</label><Input value={declaredCash} onChange={event => setDeclaredCash(event.target.value)} placeholder="0.00" type="number" /></div><Button disabled={busy || !declaredCash || current.status !== 'OPEN'} onClick={closeSession}><LockKeyhole className="mr-2 h-4 w-4" />Close and submit shift</Button></div></CardContent></Card>
+        <Card><CardHeader className="flex flex-row items-center justify-between"><CardTitle>Close and submit shift</CardTitle><Badge variant={summary.exceptions.failedSync ? 'destructive' : 'secondary'}>{summary.exceptions.failedSync ? `${summary.exceptions.failedSync} failed sync` : 'No sync failures'}</Badge></CardHeader><CardContent className="space-y-4"><p className="text-sm text-muted-foreground">Count the physical till, enter the exact amount, then close the session. The system will lock Front Desk transactions and send the report for reconciliation.</p><div className="flex flex-col gap-3 sm:flex-row sm:items-end"><div><label className="text-sm font-medium">Physical cash counted</label><Input value={declaredCash} onChange={event => setDeclaredCash(event.target.value)} placeholder="0.00" type="number" /></div><Button disabled={busy || !declaredCash || current.status !== 'OPEN'} onClick={() => setShowCloseConfirm(true)}><LockKeyhole className="mr-2 h-4 w-4" />Close and submit shift</Button></div></CardContent></Card>
 
         <Card><CardHeader><CardTitle>Recent session activity</CardTitle></CardHeader><CardContent><div className="divide-y rounded-md border">{summary.rows.slice(0, 8).map((row, index) => <div key={`${row.date}-${index}`} className="flex items-center justify-between gap-4 px-4 py-3 text-sm"><div><p className="font-medium">{row.description || row.kind}</p><p className="text-xs text-muted-foreground">{dateTime(row.date)} · {row.method || '—'}</p></div><span className="font-semibold">{money(row.amount)}</span></div>)}{summary.rows.length === 0 && <p className="p-6 text-center text-sm text-muted-foreground">No session activity recorded yet.</p>}</div></CardContent></Card>
       </>}
