@@ -127,48 +127,50 @@ export async function POST(req: NextRequest) {
           let updatedCount = (isLegacy || isCreationEvent) ? 1 : 0;
           
           // 2. Lock & Verify OCC Version
-          if (!isLegacy && event.aggregateType === 'POS_ORDER') {
-             const res = await tx.posOrder.updateMany({
-               where: { id: event.aggregateId, version: event.aggregateVersion },
-               data: { version: { increment: 1 } }
-             });
-             updatedCount = res.count;
-          } else if (!isLegacy && (event.aggregateType === 'POS_SESSION' || event.aggregateType === 'POS_OPERATOR_SESSION')) {
-             const res = await tx.posOperatorSession.updateMany({
-               where: { id: event.aggregateId, version: event.aggregateVersion },
-               data: { version: { increment: 1 } }
-             });
-             updatedCount = res.count;
-          } else if (!isLegacy && event.aggregateType === 'POS_CHECK') {
-             const res = await tx.posCheck.updateMany({
-               where: { id: event.aggregateId, version: event.aggregateVersion },
-               data: { version: { increment: 1 } }
-             });
-             updatedCount = res.count;
-          } else if (!isLegacy && (event.aggregateType === 'POS_SETTLEMENT' || event.aggregateType === 'POS_CASH_MOVEMENT' || event.aggregateType === 'CASH_MOVEMENT')) {
-             const sId = payload.SessionId || payload.sessionId || payload.PosSessionId || payload.posSessionId;
-             if (sId) {
-                const res = await tx.posOperatorSession.updateMany({
-                  where: { id: sId, version: event.aggregateVersion },
-                  data: { version: { increment: 1 } }
-                });
-                updatedCount = res.count;
+          if (!isLegacy && !isCreationEvent) {
+             if (event.aggregateType === 'POS_ORDER') {
+               const res = await tx.posOrder.updateMany({
+                 where: { id: event.aggregateId, version: event.aggregateVersion },
+                 data: { version: { increment: 1 } }
+               });
+               updatedCount = res.count;
+             } else if (event.aggregateType === 'POS_SESSION' || event.aggregateType === 'POS_OPERATOR_SESSION') {
+               const res = await tx.posOperatorSession.updateMany({
+                 where: { id: event.aggregateId, version: event.aggregateVersion },
+                 data: { version: { increment: 1 } }
+               });
+               updatedCount = res.count;
+             } else if (event.aggregateType === 'POS_CHECK') {
+               const res = await tx.posCheck.updateMany({
+                 where: { id: event.aggregateId, version: event.aggregateVersion },
+                 data: { version: { increment: 1 } }
+               });
+               updatedCount = res.count;
+             } else if (event.aggregateType === 'POS_SETTLEMENT' || event.aggregateType === 'POS_CASH_MOVEMENT' || event.aggregateType === 'CASH_MOVEMENT') {
+               const sId = payload.SessionId || payload.sessionId || payload.PosSessionId || payload.posSessionId;
+               if (sId) {
+                  const res = await tx.posOperatorSession.updateMany({
+                    where: { id: sId, version: event.aggregateVersion },
+                    data: { version: { increment: 1 } }
+                  });
+                  updatedCount = res.count;
+               } else {
+                  updatedCount = 1;
+               }
              } else {
-                updatedCount = 1;
-             }
-          } else if (!isLegacy) {
-             // For POS_PAYMENT, POS_ORDER_ITEM, POS_KOT the aggregate is usually the PosOrder. 
-             // We map those to update the Order version.
-             if (payload.OrderId || payload.orderId) {
-                const oId = payload.OrderId || payload.orderId;
-                const res = await tx.posOrder.updateMany({
-                  where: { id: oId, version: event.aggregateVersion },
-                  data: { version: { increment: 1 } }
-                });
-                updatedCount = res.count;
-             } else {
-                // No OCC for this specific non-aggregate entity (e.g. unknown payload)
-                updatedCount = 1; 
+               // For POS_PAYMENT, POS_ORDER_ITEM, POS_KOT the aggregate is usually the PosOrder. 
+               // We map those to update the Order version.
+               if (payload.OrderId || payload.orderId) {
+                  const oId = payload.OrderId || payload.orderId;
+                  const res = await tx.posOrder.updateMany({
+                    where: { id: oId, version: event.aggregateVersion },
+                    data: { version: { increment: 1 } }
+                  });
+                  updatedCount = res.count;
+               } else {
+                  // No OCC for this specific non-aggregate entity (e.g. unknown payload)
+                  updatedCount = 1; 
+               }
              }
           }
 
