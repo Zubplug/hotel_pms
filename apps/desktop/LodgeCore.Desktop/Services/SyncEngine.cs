@@ -1797,6 +1797,10 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     table.Capacity = el.TryGetProperty("capacity", out var cap) && cap.ValueKind == System.Text.Json.JsonValueKind.Number ? cap.GetInt32() : 4;
                     table.PositionX = el.TryGetProperty("positionX", out var px) && px.ValueKind == System.Text.Json.JsonValueKind.Number ? px.GetInt32() : 0;
                     table.PositionY = el.TryGetProperty("positionY", out var py) && py.ValueKind == System.Text.Json.JsonValueKind.Number ? py.GetInt32() : 0;
+                    table.CurrentOrderId = el.TryGetProperty("currentOrderId", out var currentOrder)
+                        && currentOrder.ValueKind != System.Text.Json.JsonValueKind.Null
+                        ? currentOrder.GetString()
+                        : null;
                     table.IsActive = el.TryGetProperty("isActive", out var ia) ? ia.GetBoolean() : true;
                 }
 
