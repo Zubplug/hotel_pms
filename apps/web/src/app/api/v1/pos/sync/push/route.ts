@@ -343,6 +343,10 @@ export async function POST(req: NextRequest) {
              }
           }
           else if (event.eventType === 'ORDER_UPDATED') {
+              const existingOrder = await tx.posOrder.findUnique({ where: { id: event.aggregateId }, select: { id: true } });
+              if (!existingOrder) {
+                  throw new Error(`RETRYABLE_ORDER_NOT_FOUND: POS order ${event.aggregateId} has not reached the cloud yet`);
+              }
               await tx.posOrder.update({
                   where: { id: event.aggregateId },
                   data: { status: payload.status || payload.Status, notes: payload.notes || payload.Notes, updatedAt: new Date() }
@@ -428,6 +432,10 @@ export async function POST(req: NextRequest) {
               });
           }
           else if (event.eventType === 'ORDER_CLOSED' || event.eventType === 'ORDER_COMPLETED') {
+              const existingOrder = await tx.posOrder.findUnique({ where: { id: event.aggregateId }, select: { id: true } });
+              if (!existingOrder) {
+                  throw new Error(`RETRYABLE_ORDER_NOT_FOUND: POS order ${event.aggregateId} has not reached the cloud yet`);
+              }
               await tx.posOrder.update({
                   where: { id: event.aggregateId },
                   data: { status: "CLOSED", updatedAt: new Date() }
