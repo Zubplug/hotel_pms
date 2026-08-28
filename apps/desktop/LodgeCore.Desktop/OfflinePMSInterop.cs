@@ -2168,9 +2168,11 @@ public class OfflinePMSInterop
             var posCtx = await _sessionManager.GetActiveContextAsync();
             string targetSession = string.IsNullOrEmpty(sessionId) ? posCtx.SessionId : sessionId;
             var details = await _repo.GetSessionSettlementDetailsAsync(targetSession);
+            var session = await _repo.GetSessionContextAsync(targetSession);
             return JsonSerializer.Serialize(new { 
                 success = true, 
                 data = new {
+                    session,
                     expectedCash = details.ExpectedCash,
                     variance = details.Variance,
                     openingBalance = details.OpeningFloat,
@@ -2216,11 +2218,12 @@ public class OfflinePMSInterop
             var posCtx = await _sessionManager.GetActiveContextAsync();
             // Enforce identity
             var settlement = await _repo.SettleSessionAsync(posCtx.SessionId, actualCash, posCtx.StaffId, authorizerId, posCtx.DeviceId);
+            var closedSession = await _repo.GetSessionContextAsync(posCtx.SessionId);
             
             // Log out the operator securely after settling
             await _sessionManager.ClearOperatorSessionAsync();
             
-            return JsonSerializer.Serialize(new { success = true, data = settlement }, _jsonOptions);
+            return JsonSerializer.Serialize(new { success = true, data = new { settlement, session = closedSession, status = closedSession?.Status } }, _jsonOptions);
         }
         catch (Exception ex)
         {
