@@ -67,11 +67,6 @@ export default async function GeneralCashierDashboardPage() {
   const cashInDrawer = Number(safeAccount?.balance || 0);
   const pettyCashPayouts = Number(pettyCash._sum?.amount || 0);
   const pendingDrops = activeOutletShifts.length + activeFrontDeskShifts.length;
-  const frontDeskExpected = (shift: (typeof activeFrontDeskShifts)[number]) => {
-    const cashPayments = shift.payments.filter((payment: any) => payment.method === 'CASH' && ['COMPLETED', 'PARTIALLY_REFUNDED'].includes(payment.status)).reduce((sum: number, payment: any) => sum + Number(payment.amount || 0), 0);
-    const movement = (types: string[]) => shift.cashMovements.filter((item: any) => types.includes(item.type)).reduce((sum: number, item: any) => sum + Number(item.amount || 0), 0);
-    return Number(shift.openingFloat) + cashPayments + movement(['CASH_IN', 'CASH_TRANSFER_IN']) - movement(['REFUND', 'REFUND_CASH', 'PAID_OUT', 'CASH_DROP', 'CASH_TRANSFER_OUT']);
-  };
   const methodTotals = [...recentPosShifts.flatMap(shift => shift.payments), ...recentFrontDeskShifts.flatMap(shift => shift.payments)].filter((payment: any) => ['CONFIRMED', 'PAID', 'COMPLETED', 'PARTIALLY_REFUNDED'].includes(payment.status)).reduce((result: Record<string, number>, payment: any) => {
     result[payment.method] = (result[payment.method] || 0) + Number(payment.amount || 0);
     return result;
@@ -146,8 +141,14 @@ export default async function GeneralCashierDashboardPage() {
             )}
             {activeFrontDeskShifts.map(shift => (
               <div key={shift.id} className="bg-white p-6 rounded-xl border shadow-sm flex items-center justify-between">
-                <div><h3 className="font-bold text-slate-900">{shift.cashAccount.name}</h3><div className="text-sm text-slate-500 mt-1">Front Desk: {shift.staff.firstName} {shift.staff.lastName} · Opened: {shift.openedAt.toLocaleTimeString()}</div></div>
-                <div className="text-right"><div className={`text-sm font-medium mb-1 ${shift.status === 'CLOSING' ? 'text-amber-600' : 'text-emerald-600'}`}>{shift.status === 'CLOSING' ? 'Till drop pending' : 'Active'}</div><div className="text-sm text-slate-600">Expected {formatCurrency(frontDeskExpected(shift), currency)}</div><div className="text-xs text-slate-400">Opening {formatCurrency(Number(shift.openingFloat), currency)}</div></div>
+                <div>
+                  <h3 className="font-bold text-slate-900">{shift.cashAccount.name}</h3>
+                  <div className="text-sm text-slate-500 mt-1">Cashier: {shift.staff.firstName} {shift.staff.lastName} · Opened: {shift.openedAt.toLocaleTimeString()}</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm text-slate-500 mb-2">Status: <span className={`font-medium ${shift.status === 'CLOSING' ? 'text-amber-600' : 'text-emerald-600'}`}>{shift.status === 'CLOSING' ? 'Till drop pending' : 'Active'}</span></div>
+                  <Link href="/reports/shift" className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-slate-50">Review shift</Link>
+                </div>
               </div>
             ))}
           </div>
