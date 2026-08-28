@@ -1,10 +1,12 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useProperty } from '@/components/PropertyProvider';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { FrontDeskCheckInDialog } from '@/components/frontdesk/FrontDeskCheckInDialog';
@@ -46,6 +48,12 @@ export default function ReceptionistDashboardPage() {
   const [checkOutReservation, setCheckOutReservation] = useState<any | null>(null);
   const [quickCheckoutOpen, setQuickCheckoutOpen] = useState(false);
   const [readCardOpen, setReadCardOpen] = useState(false);
+  const [showStartShift, setShowStartShift] = useState(false);
+  const [cashAccounts, setCashAccounts] = useState<any[]>([]);
+  const [cashAccountId, setCashAccountId] = useState('');
+  const [openingFloat, setOpeningFloat] = useState('0');
+  const [startingShift, setStartingShift] = useState(false);
+  const [shiftError, setShiftError] = useState('');
 
   const { data: res, isLoading } = useQuery({
     queryKey: ['frontdesk', 'dashboard', propertyId],
@@ -56,6 +64,45 @@ export default function ReceptionistDashboardPage() {
     enabled: !!propertyId,
     refetchInterval: 10000,
   });
+
+  const { data: cashierSession } = useQuery({
+    queryKey: ['frontdesk', 'cashier-session', propertyId],
+    queryFn: () => provider.frontdesk.getSession(propertyId!),
+    enabled: !!propertyId,
+    refetchInterval: 10000,
+  });
+
+  const userRole = String((session?.user as any)?.role || '').toUpperCase();
+  const currentCashierSession = cashierSession?.data?.sessions?.[0] || cashierSession?.data?.session || null;
+
+  useEffect(() => {
+    if (userRole === 'RECEPTIONIST' && cashierSession && !currentCashierSession) setShowStartShift(true);
+  }, [userRole, cashierSession, currentCashierSession]);
+
+  useEffect(() => {
+    if (!showStartShift || !propertyId) return;
+    void provider.frontdesk.listCashAccounts(propertyId).then(result => {
+      const accounts = result?.data || result || [];
+      setCashAccounts(accounts);
+      setCashAccountId(value => value || accounts[0]?.id || '');
+    }).catch(error => setShiftError(error instanceof Error ? error.message : 'Unable to load tills'));
+  }, [showStartShift, propertyId, provider.frontdesk]);
+
+  const startShift = async () => {
+    if (!propertyId || !cashAccountId) return;
+    setStartingShift(true);
+    setShiftError('');
+    try {
+      const result = await provider.frontdesk.openSession({ propertyId, cashAccountId, openingFloat: Number(openingFloat) || 0 });
+      if (result?.error) throw new Error(typeof result.error === 'string' ? result.error : JSON.stringify(result.error));
+      setShowStartShift(false);
+      router.push('/frontdesk/cashier');
+    } catch (error) {
+      setShiftError(error instanceof Error ? error.message : 'Unable to start cashier shift');
+    } finally {
+      setStartingShift(false);
+    }
+  };
 
   if (!propertyId) {
     return (
@@ -98,6 +145,20 @@ export default function ReceptionistDashboardPage() {
 
   return (
     <div className="min-h-[calc(100vh-4rem)] p-4 md:p-8 bg-slate-50/50 pb-20">
+      <Dialog open={showStartShift} onOpenChange={setShowStartShift}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Start your cashier shift</DialogTitle>
+            <DialogDescription>No active Front Desk cashier session was found for your account. Select your till and enter the opening float to begin today’s shift.</DialogDescription>
+          </DialogHeader>
+          {shiftError && <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{shiftError}</div>}
+          <div className="space-y-4">
+            <div><label className="text-sm font-medium">Cashier till</label><select value={cashAccountId} onChange={event => setCashAccountId(event.target.value)} className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm"><option value="">Select a till</option>{cashAccounts.map(account => <option key={account.id} value={account.id}>{account.name} · {account.type}</option>)}</select></div>
+            <div><label className="text-sm font-medium">Opening float</label><Input type="number" min="0" step="0.01" value={openingFloat} onChange={event => setOpeningFloat(event.target.value)} placeholder="0.00" /></div>
+          </div>
+          <DialogFooter><Button variant="outline" onClick={() => setShowStartShift(false)}>Later</Button><Button onClick={startShift} disabled={startingShift || !cashAccountId}>{startingShift ? 'Starting shift…' : 'Start cashier shift'}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
       <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
         
         {/* Sync Status Banner */}
