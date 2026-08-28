@@ -58,14 +58,7 @@ export async function POST(req: NextRequest) {
       }
     });
 
-    // 3. Ensure the POS schema is ready before taking the terminal snapshot.
-    // This keeps provisioning resilient when a deployment was released before
-    // the migration runner applied the inventory-mode column.
-    await prisma.$executeRawUnsafe(
-      `ALTER TABLE "PosProduct" ADD COLUMN IF NOT EXISTS "inventoryMode" TEXT NOT NULL DEFAULT 'NON_STOCK'`
-    );
-
-    // 4. Snapshot datasets
+    // 3. Snapshot datasets
     const staff = await prisma.staff.findMany({
       where: { organizationId: adminStaff.organizationId },
       select: { id: true, firstName: true, lastName: true }
@@ -75,7 +68,7 @@ export async function POST(req: NextRequest) {
     const products = await prisma.posProduct.findMany({ where: { propertyId } });
     const outlet = await prisma.posOutlet.findUnique({ where: { id: outletId } });
 
-    // 5. Return Snapshot
+    // 4. Return Snapshot
     return NextResponse.json({
       success: true,
       data: {
