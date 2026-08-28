@@ -16,7 +16,24 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       include: {
         staff: { select: { id: true, firstName: true, lastName: true, position: true } },
         cashAccount: { select: { id: true, name: true, type: true } },
-        payments: { orderBy: { createdAt: 'desc' }, include: { folio: { include: { reservation: { select: { id: true, confirmationNumber: true, reservationRooms: { include: { room: { select: { number: true, displayName: true } } } } } }, guest: { select: { firstName: true, lastName: true } }, items: true } } },
+        payments: {
+          orderBy: { createdAt: 'desc' },
+          include: {
+            folio: {
+              include: {
+                reservation: {
+                  select: {
+                    id: true,
+                    confirmationNumber: true,
+                    reservationRooms: { include: { room: { select: { number: true, displayName: true } } } },
+                  },
+                },
+                guest: { select: { firstName: true, lastName: true } },
+                items: true,
+              },
+            },
+          },
+        },
         cashMovements: { orderBy: { createdAt: 'desc' } },
         exceptions: { orderBy: { createdAt: 'desc' } },
       },
