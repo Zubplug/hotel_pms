@@ -14,6 +14,7 @@ export async function GET(req: NextRequest) {
     const propertyId = searchParams.get('propertyId');
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
+    const shiftId = searchParams.get('shiftId');
     let targetUserId = searchParams.get('userId');
 
     if (!propertyId || !startDate || !endDate) {
@@ -104,7 +105,7 @@ export async function GET(req: NextRequest) {
     const posSessions = await prisma.posSession.findMany({
       where: {
         propertyId,
-        businessDate: dateFilter,
+        ...(shiftId ? { id: shiftId } : { businessDate: dateFilter }),
         ...(targetUserId ? { openedBy: targetUserId } : {}),
       },
       orderBy: [{ businessDate: 'desc' }, { openedAt: 'desc' }],
@@ -115,6 +116,19 @@ export async function GET(req: NextRequest) {
         payments: { orderBy: { createdAt: 'desc' } },
         cashMovements: { orderBy: { createdAt: 'desc' } },
         settlements: { orderBy: { settledAt: 'desc' }, take: 1 },
+      },
+    });
+    const frontdeskSessions = await prisma.frontdeskSession.findMany({
+      where: {
+        propertyId,
+        ...(shiftId ? { id: shiftId } : { businessDate: dateFilter }),
+      },
+      orderBy: { openedAt: 'desc' },
+      include: {
+        staff: { select: { id: true, firstName: true, lastName: true, position: true } },
+        cashAccount: { select: { id: true, name: true, type: true } },
+        payments: true,
+        cashMovements: true,
       },
     });
     const syncConflicts = await prisma.syncConflict.count({
@@ -173,7 +187,7 @@ export async function GET(req: NextRequest) {
     const posTotal = posSessions.reduce((sum: number, item: any) => sum + item.payments.filter((p: any) => ['CONFIRMED', 'PAID'].includes(p.status)).reduce((s: number, p: any) => s + Number(p.amount), 0), 0);
     const posRefunds = posSessions.reduce((sum: number, item: any) => sum + Number(item.cashRefunds || 0), 0);
 
-    const shifts = posSessions.map((item: any) => {
+    const posShiftRows = posSessions.map((item: any) => {
       const settlement = item.settlements[0] || null;
       const movementTotal = (type: string) => item.cashMovements.filter((movement: any) => movement.type === type).reduce((sum: number, movement: any) => sum + Number(movement.amount), 0);
       return {
@@ -210,6 +224,38 @@ export async function GET(req: NextRequest) {
         settlement,
       };
     });
+    const frontdeskShiftRows = frontdeskSessions.map((item: any) => {
+      const movementTotal = (types: string[]) => item.cashMovements.filter((movement: any) => types.includes(movement.type)).reduce((sum: number, movement: any) => sum + Number(movement.amount), 0);
+      const cashPayments = item.payments.filter((payment: any) => payment.method === 'CASH' && ['COMPLETED', 'PARTIALLY_REFUNDED'].includes(payment.status)).reduce((sum: number, payment: any) => sum + Number(payment.amount), 0);
+      const expectedCash = Number(item.openingFloat) + cashPayments + movementTotal(['CASH_IN', 'CASH_TRANSFER_IN']) - movementTotal(['REFUND', 'REFUND_CASH', 'PAID_OUT', 'CASH_DROP', 'CASH_TRANSFER_OUT']);
+      return {
+        id: item.id,
+        type: 'FRONT_DESK',
+        businessDate: item.businessDate,
+        status: item.status,
+        till: item.cashAccount,
+        operator: item.staff,
+        openedAt: item.openedAt,
+        closedAt: item.closedAt,
+        openingFloat: Number(item.openingFloat),
+        expectedCash,
+        declaredCash: item.declaredCash == null ? null : Number(item.declaredCash),
+        variance: item.variance == null ? null : Number(item.variance),
+        paymentCount: item.payments.length,
+        paymentTotals: item.payments.reduce((result: Record<string, number>, payment: any) => {
+          result[payment.method] = (result[payment.method] || 0) + Number(payment.amount);
+          return result;
+        }, {}),
+        cashMovements: {
+          cashIn: movementTotal(['CASH_TRANSFER_IN', 'CASH_IN']),
+          cashDrops: movementTotal(['CASH_DROP']),
+          paidOuts: movementTotal(['PAID_OUT']),
+          transfersOut: movementTotal(['CASH_TRANSFER_OUT']),
+          refunds: movementTotal(['REFUND', 'REFUND_CASH']),
+        },
+      };
+    });
+    const shifts = [...posShiftRows, ...frontdeskShiftRows];
 
     // 4. Audit Log the report access
     await prisma.auditLog.create({
@@ -234,6 +280,7 @@ export async function GET(req: NextRequest) {
       startDate,
       endDate,
       userId: targetUserId || 'ALL',
+      shiftId,
       summary: aggregation,
       cashierTotals: {
         frontDeskGross: payments.reduce((sum, payment) => sum + Number(payment.amount), 0),

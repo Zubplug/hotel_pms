@@ -21,6 +21,11 @@ export default function ShiftReportPage() {
   
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [userId, setUserId] = useState<string>('ALL');
+  const [shiftId, setShiftId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setShiftId(new URLSearchParams(window.location.search).get('shiftId'));
+  }, []);
 
   // We could fetch users here for the dropdown, but for brevity we'll just allow "All Users" or "My Shift"
   // since the backend securely overrides `userId` to the session.user.id if they are a STAFF member anyway.
@@ -31,6 +36,7 @@ export default function ShiftReportPage() {
     const end = endOfDay(new Date(date)).toISOString();
     
     let url = `/api/v1/reports/shift?propertyId=${propertyId}&startDate=${start}&endDate=${end}`;
+    if (shiftId) url += `&shiftId=${encodeURIComponent(shiftId)}`;
     if (userId !== 'ALL') {
       url += `&userId=${userId}`;
     }
@@ -42,7 +48,7 @@ export default function ShiftReportPage() {
   };
 
   const { data: report, isLoading, error } = useQuery({
-    queryKey: ['shiftReport', propertyId, date, userId],
+    queryKey: ['shiftReport', propertyId, date, userId, shiftId],
     queryFn: fetchShiftReport,
     enabled: !!propertyId,
   });
@@ -204,6 +210,24 @@ export default function ShiftReportPage() {
                 </Table>
               </CardContent>
             </Card>
+            {shiftId && report?.shifts?.[0] && (() => {
+              const shift = report.shifts[0];
+              const operator = shift.operator ? `${shift.operator.firstName} ${shift.operator.lastName}` : 'Unknown operator';
+              const location = shift.type === 'POS' ? shift.outlet?.name : shift.till?.name;
+              return <Card>
+                <CardHeader><CardTitle>Shift details</CardTitle></CardHeader>
+                <CardContent className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                  <div><p className="text-xs text-muted-foreground">Type / location</p><p className="font-semibold">{shift.type} · {location || 'Till'}</p></div>
+                  <div><p className="text-xs text-muted-foreground">Cashier</p><p className="font-semibold">{operator}</p></div>
+                  <div><p className="text-xs text-muted-foreground">Status</p><p className="font-semibold">{shift.status}</p></div>
+                  <div><p className="text-xs text-muted-foreground">Opened</p><p className="font-semibold">{format(new Date(shift.openedAt), 'PPpp')}</p></div>
+                  <div><p className="text-xs text-muted-foreground">Opening float</p><p className="font-semibold">{formatCurrency(shift.openingFloat)}</p></div>
+                  <div><p className="text-xs text-muted-foreground">Expected cash</p><p className="font-semibold">{formatCurrency(shift.expectedCash)}</p></div>
+                  <div><p className="text-xs text-muted-foreground">Declared cash</p><p className="font-semibold">{shift.declaredCash == null ? 'Not declared' : formatCurrency(shift.declaredCash)}</p></div>
+                  <div><p className="text-xs text-muted-foreground">Variance</p><p className="font-semibold">{shift.variance == null ? '—' : formatCurrency(shift.variance)}</p></div>
+                </CardContent>
+              </Card>;
+            })()}
 
             <Card>
               <CardHeader>

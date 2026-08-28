@@ -128,7 +128,7 @@ export default async function GeneralCashierDashboardPage() {
                 </div>
                 <div className="text-right">
                   <div className="text-sm text-slate-500 mb-2">Status: <span className="text-emerald-600 font-medium">Active</span></div>
-                  <Link href="/reports/shift" className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-slate-50">Review shift</Link>
+                  <Link href={`/reports/shift?shiftId=${encodeURIComponent(shift.id)}`} className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-slate-50">Review shift</Link>
                 </div>
               </div>
             ))}
@@ -147,7 +147,7 @@ export default async function GeneralCashierDashboardPage() {
                 </div>
                 <div className="text-right">
                   <div className="text-sm text-slate-500 mb-2">Status: <span className={`font-medium ${shift.status === 'CLOSING' ? 'text-amber-600' : 'text-emerald-600'}`}>{shift.status === 'CLOSING' ? 'Till drop pending' : 'Active'}</span></div>
-                  <Link href="/reports/shift" className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-slate-50">Review shift</Link>
+                  <Link href={`/reports/shift?shiftId=${encodeURIComponent(shift.id)}`} className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-slate-50">Review shift</Link>
                 </div>
               </div>
             ))}
