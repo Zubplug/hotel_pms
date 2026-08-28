@@ -2,8 +2,21 @@
 
 import React from 'react';
 import { InventorySidebar } from './InventorySidebar';
+import { CashManagementLayout } from './CashManagementLayout';
+import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 
 export function InventoryLayout({ children }: { children: React.ReactNode }) {
+  const { data: session } = useLodgeCoreSession();
+  const role = (session?.user as any)?.role;
+
+  if (role === 'GENERAL_CASHIER') {
+    return (
+      <CashManagementLayout>
+        {children}
+      </CashManagementLayout>
+    );
+  }
+
   return (
     <div className="flex h-screen bg-slate-50 text-slate-900 overflow-hidden font-sans">
       <InventorySidebar />

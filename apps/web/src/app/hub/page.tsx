@@ -56,7 +56,7 @@ function getDirectLandingUrl(
 
   // Cashiers → Cash Office
   if (role === 'GENERAL_CASHIER') {
-    return '/cash-office';
+    return '/cash-management';
   }
 
   // Single-capability staff (e.g. housekeeping-only, POS-only)

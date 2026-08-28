@@ -21,15 +21,26 @@ import { useSession } from 'next-auth/react';
 import { useLock } from '@/components/auth/LockProvider';
 
 const TILES = [
-  { cap: 'ACCESS_FRONT_DESK', label: 'Front Desk', icon: Building2, href: '/frontdesk' },
-  { cap: 'ACCESS_POS', label: 'Point of Sale', icon: UtensilsCrossed, href: '/pos' },
-  { cap: 'ACCESS_HOUSEKEEPING', label: 'Housekeeping', icon: Sparkles, href: '/housekeeping' },
-  { cap: 'ACCESS_CASH_MANAGEMENT', label: 'Cash Office', icon: Banknote, href: '/cash-office' },
-  { cap: 'ACCESS_INVENTORY', label: 'Inventory', icon: Package, href: '/admin/inventory' },
-  { cap: 'ACCESS_MAINTENANCE', label: 'Maintenance', icon: Wrench, href: '/maintenance' },
-  { cap: 'ACCESS_MANAGEMENT', label: 'Management', icon: BarChart3, href: '/dashboard' },
-  { cap: 'ACCESS_NIGHT_AUDIT', label: 'Night Audit', icon: Moon, href: '/night-audit' },
-  { cap: 'ACCESS_SYNC_CENTER', label: 'Sync Center', icon: RefreshCw, href: '/sync-center' },
+  { cap: ['ACCESS_FRONT_DESK'], label: 'Front Desk', icon: Building2, href: '/frontdesk' },
+  { cap: ['ACCESS_POS'], label: 'Point of Sale', icon: UtensilsCrossed, href: '/pos' },
+  { cap: ['ACCESS_HOUSEKEEPING'], label: 'Housekeeping', icon: Sparkles, href: '/housekeeping' },
+  { cap: ['ACCESS_CASH_MANAGEMENT'], label: 'Cash Management', icon: Banknote, href: '/cash-management' },
+  { 
+    cap: [
+      'ACCESS_INVENTORY', 
+      'inventory.cost.view', 
+      'inventory.recipe.manage',
+      'inventory.stocktake.view',
+      'inventory.grn.view'
+    ], 
+    label: 'Inventory', 
+    icon: Package, 
+    href: '/inventory' 
+  },
+  { cap: ['ACCESS_MAINTENANCE'], label: 'Maintenance', icon: Wrench, href: '/maintenance' },
+  { cap: ['ACCESS_MANAGEMENT'], label: 'Management', icon: BarChart3, href: '/dashboard' },
+  { cap: ['ACCESS_NIGHT_AUDIT'], label: 'Night Audit', icon: Moon, href: '/night-audit' },
+  { cap: ['ACCESS_SYNC_CENTER'], label: 'Sync Center', icon: RefreshCw, href: '/sync-center' },
 ];
 
 export function AppSwitcher() {
@@ -38,9 +49,12 @@ export function AppSwitcher() {
   const { lock } = useLock();
 
   const capabilities = (session?.user as any)?.capabilities || [];
+  const isSuperAdmin = (session?.user as any)?.isSuperAdmin;
   
   // Exclude modules they don't have access to
-  const availableTiles = TILES.filter(t => capabilities.includes(t.cap));
+  const availableTiles = TILES.filter(t => 
+    isSuperAdmin || t.cap.some(c => capabilities.includes(c))
+  );
 
   return (
     <>
