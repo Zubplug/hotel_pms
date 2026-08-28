@@ -48,7 +48,7 @@ export function FrontDeskReassignRoomDialog({ reservation, open, onOpenChange }:
     queryFn: async () => {
       const res = await provider.rooms.getAvailable(reservation.propertyId, '', checkIn, checkOut);
       if (!res.success) throw new Error(res.error?.message || res.error || 'Failed to fetch rooms');
-      return res.data;
+      return (res.data || []).filter((room: any) => room.status === 'AVAILABLE');
     },
     enabled: open && !!checkIn && !!checkOut,
   });

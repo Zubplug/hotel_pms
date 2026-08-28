@@ -33,7 +33,7 @@ export function RoomReassignmentDialog({ open, onOpenChange, reservation }: { op
     queryFn: async () => {
       const res = await fetch(`/api/v1/room-types?propertyId=${propertyId}&pageSize=100`);
       const data = await res.json();
-      return data.data;
+      return (data.data || []).filter((room: any) => room.status === 'AVAILABLE');
     },
     enabled: !!propertyId && open,
   });

@@ -35,6 +35,7 @@ export async function GET(req: NextRequest) {
     const availableRooms = await prisma.room.findMany({
       where: {
         propertyId,
+        isActive: true,
         ...(roomTypeId ? { roomTypeId } : {}),
         // Reservations may only be assigned to rooms explicitly marked available.
         status: 'AVAILABLE',
