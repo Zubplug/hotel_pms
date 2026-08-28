@@ -68,7 +68,14 @@ export async function POST(req: NextRequest) {
     const conflicts: string[] = [];
     let lastSequenceNumber = 0;
 
-    for (const rawEvent of body.events) {
+    // Desktop normally sends sequence order, but older clients can batch
+    // events from multiple local writes. Enforce the causal order at the API
+    // boundary so an order is materialized before its payment/completion.
+    const orderedEvents = [...body.events].sort((a: any, b: any) =>
+      Number(a.sequenceNumber ?? a.sequence ?? 0) - Number(b.sequenceNumber ?? b.sequence ?? 0)
+    );
+
+    for (const rawEvent of orderedEvents) {
       const isLegacy = !!rawEvent.operationId;
       
       // Compatibility Layer: Map Legacy SyncEvent to HotelEvent envelope
