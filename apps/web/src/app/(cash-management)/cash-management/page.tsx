@@ -48,12 +48,15 @@ export default async function GeneralCashierDashboardPage() {
       include: { outlet: true, primaryOperator: true, settlements: { orderBy: { settledAt: 'desc' }, take: 1 }, payments: true, cashMovements: true, orders: { select: { status: true } } },
     }),
     prisma.frontdeskSession.findMany({
-      where: { propertyId, businessDate, status: 'OPEN' },
+      // Active tills must remain visible even when a session was opened around
+      // a business-date/timezone boundary. CLOSING sessions are still pending
+      // till drops and belong in this section until reconciled.
+      where: { propertyId, status: { in: ['OPEN', 'CLOSING'] } },
       orderBy: { updatedAt: 'desc' }, take: 20,
       include: { staff: true, cashAccount: true, payments: true, cashMovements: true, exceptions: true },
     }),
     prisma.frontdeskSession.findMany({
-      where: { propertyId, businessDate, status: { in: ['CLOSING', 'CLOSED', 'UNDER_REVIEW', 'RECONCILED'] } },
+      where: { propertyId, status: { in: ['CLOSED', 'UNDER_REVIEW', 'RECONCILED'] } },
       orderBy: { updatedAt: 'desc' }, take: 20,
       include: { staff: true, cashAccount: true, payments: true, cashMovements: true, exceptions: true },
     }),
@@ -144,7 +147,7 @@ export default async function GeneralCashierDashboardPage() {
             {activeFrontDeskShifts.map(shift => (
               <div key={shift.id} className="bg-white p-6 rounded-xl border shadow-sm flex items-center justify-between">
                 <div><h3 className="font-bold text-slate-900">{shift.cashAccount.name}</h3><div className="text-sm text-slate-500 mt-1">Front Desk: {shift.staff.firstName} {shift.staff.lastName} · Opened: {shift.openedAt.toLocaleTimeString()}</div></div>
-                <div className="text-right"><div className="text-sm text-emerald-600 font-medium mb-1">Active</div><div className="text-sm text-slate-600">Expected {formatCurrency(frontDeskExpected(shift), currency)}</div><div className="text-xs text-slate-400">Opening {formatCurrency(Number(shift.openingFloat), currency)}</div></div>
+                <div className="text-right"><div className={`text-sm font-medium mb-1 ${shift.status === 'CLOSING' ? 'text-amber-600' : 'text-emerald-600'}`}>{shift.status === 'CLOSING' ? 'Till drop pending' : 'Active'}</div><div className="text-sm text-slate-600">Expected {formatCurrency(frontDeskExpected(shift), currency)}</div><div className="text-xs text-slate-400">Opening {formatCurrency(Number(shift.openingFloat), currency)}</div></div>
               </div>
             ))}
           </div>
