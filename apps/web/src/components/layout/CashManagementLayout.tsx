@@ -126,7 +126,7 @@ export function CashManagementLayout({ children }: { children: React.ReactNode }
 
       <div className="mt-auto border-t p-4">
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
+          <DropdownMenuTrigger>
             <Button variant="ghost" className="w-full justify-start gap-3 px-2 hover:bg-muted/60 h-auto py-2">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary font-semibold text-xs">
                 {userInitials}
@@ -143,10 +143,8 @@ export function CashManagementLayout({ children }: { children: React.ReactNode }
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56" sideOffset={8}>
-            <DropdownMenuItem asChild>
-              <Link href="/profile" className="w-full cursor-pointer">
-                My Profile
-              </Link>
+            <DropdownMenuItem onClick={() => router.push('/profile')}>
+              My Profile
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem

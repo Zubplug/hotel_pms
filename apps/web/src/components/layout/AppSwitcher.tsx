@@ -96,7 +96,7 @@ export function AppSwitcher() {
 
               {availableTiles.map(tile => (
                 <Link 
-                  key={tile.cap} 
+                  key={tile.href}
                   href={tile.href} 
                   onClick={() => setIsOpen(false)}
                   className="flex flex-col items-center justify-center p-4 rounded-xl hover:bg-slate-700 border border-transparent hover:border-slate-600 transition-colors group"

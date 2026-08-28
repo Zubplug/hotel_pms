@@ -10,7 +10,7 @@ export default async function GeneralCashierDashboardPage() {
     where: { status: 'OPEN' },
     include: {
       outlet: true,
-      staff: true
+      primaryOperator: true
     }
   });
 
@@ -61,7 +61,7 @@ export default async function GeneralCashierDashboardPage() {
               <div key={shift.id} className="bg-white p-6 rounded-xl border shadow-sm flex items-center justify-between">
                 <div>
                   <h3 className="font-bold text-slate-900">{shift.outlet.name}</h3>
-                  <div className="text-sm text-slate-500 mt-1">Cashier: {shift.staff?.firstName || 'System'} • Opened: {shift.openedAt.toLocaleTimeString()}</div>
+                  <div className="text-sm text-slate-500 mt-1">Cashier: {shift.primaryOperator ? `${shift.primaryOperator.firstName} ${shift.primaryOperator.lastName}` : 'System'} • Opened: {shift.openedAt.toLocaleTimeString()}</div>
                 </div>
                 <div className="text-right">
                   <div className="text-sm text-slate-500 mb-2">Status: <span className="text-emerald-600 font-medium">Active</span></div>
