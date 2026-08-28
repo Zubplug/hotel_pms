@@ -429,7 +429,8 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
         var dbContext = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
 
         var deadEvents = await dbContext.SyncEvents
-            .Where(e => (e.Status == "PENDING" || e.Status == "FAILED") && e.AttemptCount >= 5)
+            .Where(e => (e.Status == "PENDING" || e.Status == "FAILED") && e.AttemptCount >= 5
+                && (e.ErrorMessage == null || !e.ErrorMessage.StartsWith("TRANSIENT:")))
             .ToListAsync(stoppingToken);
         if (deadEvents.Any())
         {
@@ -557,8 +558,16 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                         else if (result.Rejected?.Contains(evt.OperationId) == true)
                         {
                             evt.Status = "FAILED";
-                            evt.ErrorMessage = result.Results?.FirstOrDefault(r => r.Id == evt.OperationId)?.Error
+                            var rejectionError = result.Results?.FirstOrDefault(r => r.Id == evt.OperationId)?.Error
                                 ?? "Rejected by cloud validation";
+                            evt.ErrorMessage = rejectionError.StartsWith("RETRYABLE_", StringComparison.OrdinalIgnoreCase)
+                                ? $"TRANSIENT: {rejectionError}"
+                                : rejectionError;
+                        }
+                        else if (result.Results?.FirstOrDefault(r => r.Id == evt.OperationId)?.Status == "RETRY")
+                        {
+                            evt.Status = "FAILED";
+                            evt.ErrorMessage = $"TRANSIENT: {result.Results.First(r => r.Id == evt.OperationId).Error ?? "Cloud requested a retry"}";
                         }
                         else if (result.Conflicts?.Contains(evt.OperationId) == true)
                         {
@@ -588,7 +597,7 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
             foreach (var evt in eventsToPush)
             {
                 evt.Status = "FAILED";
-                evt.ErrorMessage = ex.Message;
+                evt.ErrorMessage = $"TRANSIENT: {ex.Message}";
             }
             await dbContext.SaveChangesAsync(stoppingToken);
             throw;

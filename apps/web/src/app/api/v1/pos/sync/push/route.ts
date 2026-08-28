@@ -3,6 +3,14 @@ import prisma from "@hotel-pms/db";
 import { randomUUID } from "crypto";
 import { InventoryService } from "@/lib/inventory/InventoryService";
 
+// Legacy desktop SyncEvents use operation IDs such as `op_<device>_<ticks>`,
+// while HotelEvent.id is a PostgreSQL UUID. Keep the legacy ID as the
+// idempotency key, but generate a separate UUID for the database primary key.
+function isUuid(value: unknown): value is string {
+  return typeof value === "string"
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
 // Handle POS Sync Push supporting both Legacy SyncEvents and new HotelEvents
 export async function POST(req: NextRequest) {
   const requestId = randomUUID();
@@ -91,6 +99,10 @@ export async function POST(req: NextRequest) {
         sequence: rawEvent.sequence,
         payloadJson: typeof rawEvent.payload === 'string' ? rawEvent.payload : JSON.stringify(rawEvent.payload || {})
       };
+      const hotelEventId = isUuid(event.id) ? event.id : randomUUID();
+      // Legacy payloads may contain an operation ID in operatorId. Staff
+      // foreign keys are UUIDs, so never pass an opaque legacy ID through.
+      const operatorId = isUuid(event.operatorId) ? event.operatorId : null;
 
       try {
         const payload = typeof event.payloadJson === 'string' ? JSON.parse(event.payloadJson || '{}') : event.payloadJson;
@@ -197,8 +209,8 @@ export async function POST(req: NextRequest) {
                          deviceId: payload.DeviceId || event.deviceId,
                          bankingModel: payload.BankingModel || 'SERVER_BANKING',
                          bankType: payload.BankType || 'SERVER',
-                         primaryOperatorId: payload.PrimaryOperatorId || event.operatorId,
-                         openedBy: payload.UserId || event.operatorId,
+                         primaryOperatorId: isUuid(payload.PrimaryOperatorId) ? payload.PrimaryOperatorId : operatorId,
+                         openedBy: isUuid(payload.UserId) ? payload.UserId : operatorId,
                          status: payload.Status || 'OPEN',
                          businessDate: new Date(payload.OpenedAt || event.occurredAt),
                          openingCash: payload.OpeningCash || 0,
@@ -216,7 +228,7 @@ export async function POST(req: NextRequest) {
                          id: event.aggregateId,
                          terminalId: event.deviceId,
                          outletId: terminal.outletId,
-                         operatorId: event.operatorId,
+                         operatorId,
                          status: "ACTIVE",
                          startedAt: new Date(event.occurredAt)
                      }
@@ -276,7 +288,7 @@ export async function POST(req: NextRequest) {
                          orderType: payload.OrderType || payload.orderType || 'DINE_IN',
                          tableId: tableId,
                          businessDate: new Date(payload.BusinessDate || new Date()),
-                         serverStaffId: event.operatorId,
+                         serverStaffId: operatorId,
                          createdAt: new Date(event.occurredAt),
                          items: {
                            create: orderItems.map((item: any) => ({
@@ -313,7 +325,7 @@ export async function POST(req: NextRequest) {
                        station,
                        status: 'PENDING',
                        firedAt: new Date(kot.FiredAt || kot.firedAt || event.occurredAt),
-                       firedByStaffId: event.operatorId,
+                       firedByStaffId: operatorId,
                        items: {
                          create: batchItems.map((item: any) => ({
                            orderItemId: item.id,
@@ -363,10 +375,18 @@ export async function POST(req: NextRequest) {
           }
           else if (event.eventType === 'PAYMENT_RECORDED') {
               const method = payload.Method || payload.method || 'CASH';
+              const orderId = payload.OrderId || payload.orderId || event.aggregateId;
+              const order = await tx.posOrder.findUnique({ where: { id: orderId }, select: { id: true } });
+              if (!order) {
+                  // A payment cannot be applied safely until ORDER_CREATED has
+                  // been accepted. Leave it retryable instead of dead-lettering
+                  // it with a misleading foreign-key error.
+                  throw new Error(`RETRYABLE_ORDER_NOT_FOUND: POS order ${orderId} has not reached the cloud yet`);
+              }
               await tx.posPayment.create({
                   data: {
                       id: payload.Id || payload.id || crypto.randomUUID(), // If entityId was the order, payment needs its own ID
-                      orderId: payload.OrderId || payload.orderId || event.aggregateId,
+                      orderId,
                       amount: payload.Amount ?? payload.amount,
                       method: method,
                       currency: payload.Currency || payload.currency || 'NGN',
@@ -374,7 +394,7 @@ export async function POST(req: NextRequest) {
                       operationId: event.idempotencyKey,
                       businessDate: new Date(payload.BusinessDate || payload.businessDate || new Date()),
                       sessionId: payload.SessionId || payload.sessionId || null,
-                      processedById: event.operatorId || payload.processedById || null,
+                      processedById: isUuid(payload.processedById) ? payload.processedById : operatorId,
                       createdAt: new Date(event.occurredAt)
                   }
               });
@@ -389,7 +409,7 @@ export async function POST(req: NextRequest) {
                   propertyId: event.propertyId,
                   type: 'REFUND',
                   status: 'PENDING',
-                  requestedBy: event.operatorId,
+                  requestedBy: operatorId,
                   amount,
                   currency: payload.Currency || payload.currency || 'NGN',
                   reason: payload.Reason || payload.reason || 'POS refund request',
@@ -484,7 +504,7 @@ export async function POST(req: NextRequest) {
                     station,
                     status: 'PENDING',
                     firedAt: new Date(kot.FiredAt || kot.firedAt || event.occurredAt),
-                    firedByStaffId: event.operatorId,
+                    firedByStaffId: operatorId,
                     items: {
                       create: batchItems.map((item: any) => ({
                         orderItemId: item.Id || item.id,
@@ -512,7 +532,7 @@ export async function POST(req: NextRequest) {
                       batchNumber: Number(kot.batchNumber || kot.BatchNumber || 1),
                       station,
                       firedAt: new Date(event.occurredAt),
-                      firedByStaffId: event.operatorId,
+                      firedByStaffId: operatorId,
                       items: {
                           create: rawItems.map((item: any) => ({
                               id: item.id || item.Id || crypto.randomUUID(),
@@ -547,13 +567,13 @@ export async function POST(req: NextRequest) {
                           propertyId: propertyId,
                           outletId: session.outletId,
                           deviceId: payload.DeviceId || payload.deviceId || event.deviceId,
-                          sessionOwnerId: payload.SessionOwnerId || payload.sessionOwnerId || session.operatorId,
-                          operatorId: payload.OperatorId || payload.operatorId || event.operatorId,
+                          sessionOwnerId: isUuid(payload.SessionOwnerId || payload.sessionOwnerId) ? (payload.SessionOwnerId || payload.sessionOwnerId) : session.operatorId,
+                          operatorId: isUuid(payload.OperatorId || payload.operatorId) ? (payload.OperatorId || payload.operatorId) : operatorId,
                           businessDate: payload.BusinessDate ? new Date(payload.BusinessDate) : session.startedAt,
                           expectedCash: Number(payload.ExpectedCash ?? payload.expectedCash ?? 0),
                           actualCash: Number(payload.ActualCash ?? payload.actualCash ?? 0),
                           variance: Number(payload.Variance ?? payload.variance ?? 0),
-                          authorizerId: payload.AuthorizerId || payload.authorizerId || null,
+                          authorizerId: isUuid(payload.AuthorizerId || payload.authorizerId) ? (payload.AuthorizerId || payload.authorizerId) : null,
                           settledAt: payload.SettledAt ? new Date(payload.SettledAt) : new Date(event.occurredAt),
                           status: payload.Status || 'SETTLED',
                           operationId,
@@ -567,7 +587,7 @@ export async function POST(req: NextRequest) {
                           actualCash: Number(payload.ActualCash ?? payload.actualCash ?? 0),
                           variance: Number(payload.Variance ?? payload.variance ?? 0),
                           closedAt: payload.SettledAt ? new Date(payload.SettledAt) : new Date(event.occurredAt),
-                          closedBy: payload.OperatorId || payload.operatorId || null,
+                          closedBy: isUuid(payload.OperatorId || payload.operatorId) ? (payload.OperatorId || payload.operatorId) : operatorId,
                       }
                   });
               }
@@ -592,12 +612,12 @@ export async function POST(req: NextRequest) {
                           propertyId: propertyId,
                           posSessionId: session.id,
                           deviceId: payload.DeviceId || payload.deviceId || event.deviceId,
-                          userId: payload.UserId || payload.userId || event.operatorId,
+                          userId: isUuid(payload.UserId || payload.userId) ? (payload.UserId || payload.userId) : operatorId,
                           amount: Number(payload.Amount ?? payload.amount ?? 0),
                           type: payload.Type || payload.type || 'CASH_IN',
                           reasonCode: payload.ReasonCode || payload.reasonCode || 'MANUAL',
                           operationId,
-                          authorizedBy: payload.AuthorizedBy || payload.authorizedBy || null,
+                          authorizedBy: isUuid(payload.AuthorizedBy || payload.authorizedBy) ? (payload.AuthorizedBy || payload.authorizedBy) : null,
                       }
                   });
               }
@@ -606,11 +626,11 @@ export async function POST(req: NextRequest) {
           // 4. Save Immutable HotelEvent
           await tx.hotelEvent.create({
             data: {
-              id: event.id,
+              id: hotelEventId,
               idempotencyKey: event.idempotencyKey,
               propertyId: event.propertyId,
               deviceId: event.deviceId,
-              operatorId: event.operatorId,
+              operatorId,
               aggregateType: event.aggregateType,
               aggregateId: event.aggregateId,
               aggregateVersion: event.aggregateVersion,
@@ -653,11 +673,11 @@ export async function POST(req: NextRequest) {
              await prisma.$transaction(async (tx2: any) => {
                 const ev = await tx2.hotelEvent.create({
                   data: {
-                    id: event.id,
+                    id: hotelEventId,
                     idempotencyKey: event.idempotencyKey,
                     propertyId: event.propertyId,
                     deviceId: event.deviceId,
-                    operatorId: event.operatorId,
+                    operatorId,
                     aggregateType: event.aggregateType,
                     aggregateId: event.aggregateId,
                     aggregateVersion: event.aggregateVersion,
@@ -687,6 +707,9 @@ export async function POST(req: NextRequest) {
              rejected.push(event.id);
              results.push({ id: event.id, status: 'FAILED', idempotencyKey: event.idempotencyKey, error: 'Failed to record conflict state.' });
            }
+        } else if (err.message?.startsWith('RETRYABLE_')) {
+           rejected.push(event.id);
+           results.push({ id: event.id, status: 'RETRY', idempotencyKey: event.idempotencyKey, error: err.message });
         } else {
            console.error(`Error processing POS event ${event.id}:`, err);
            rejected.push(event.id);
