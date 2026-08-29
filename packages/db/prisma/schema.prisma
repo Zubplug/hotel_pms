@@ -72,6 +72,7 @@ model Property {
 
   cashVarianceGeneralCashierLimit Decimal?                  @db.Decimal(18, 4)
   cashVarianceFinanceManagerLimit Decimal?                  @db.Decimal(18, 4)
+  cashVarianceNightAuditTolerance Decimal?                  @db.Decimal(18, 4)
   cashHandovers                   CashHandover[]
   bankDeposits                    BankDeposit[]
   buildings                       Building[]
@@ -887,10 +888,12 @@ model FolioItem {
   // Late Posting & Audit Fields
   deviceId             String?
   operationId          String?
-  isLatePosting        Boolean   @default(false)
+  isLatePosting        Boolean     @default(false)
   latePostingReason    String?
-  originalBusinessDate DateTime? @db.Date
-  syncedAt             DateTime? @db.Timestamptz
+  originalBusinessDate DateTime?   @db.Date
+  syncedAt             DateTime?   @db.Timestamptz
+  nightAuditRunId      String?     @db.Uuid
+  nightAudit           NightAudit? @relation(fields: [nightAuditRunId], references: [id])
 
   createdAt DateTime @default(now()) @db.Timestamptz
 }
@@ -1136,10 +1139,11 @@ model NightAudit {
   property     Property @relation(fields: [propertyId], references: [id])
   businessDate DateTime @db.Date
 
-  status      String // 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED'
-  startedAt   DateTime? @db.Timestamptz
-  completedAt DateTime? @db.Timestamptz
-  runBy       String?   @db.Uuid // Staff ID, null if automated
+  status       String // 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED'
+  startedAt    DateTime? @db.Timestamptz
+  completedAt  DateTime? @db.Timestamptz
+  runBy        String?   @db.Uuid // Staff ID, null if automated
+  runReference String?   @unique
 
   roomChargesPosted Int     @default(0)
   totalRoomRevenue  Decimal @default(0) @db.Decimal(18, 4)
@@ -1161,7 +1165,21 @@ model NightAudit {
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
 
+  folioItems       FolioItem[]
+  acknowledgements NightAuditAcknowledgement[]
+
   @@unique([propertyId, businessDate])
+}
+
+model NightAuditAcknowledgement {
+  id             String     @id @default(uuid()) @db.Uuid
+  nightAuditId   String     @db.Uuid
+  nightAudit     NightAudit @relation(fields: [nightAuditId], references: [id])
+  userId         String     @db.Uuid // Staff ID
+  warningType    String
+  reason         String
+  comment        String?
+  acknowledgedAt DateTime   @default(now()) @db.Timestamptz
 }
 
 model OccupancySnapshot {
