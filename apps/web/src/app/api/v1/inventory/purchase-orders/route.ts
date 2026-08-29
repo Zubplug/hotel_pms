@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
-import prisma from '@hotel-pms/db';
+import prisma, { UnitOfMeasure } from '@hotel-pms/db';
 import { hasInventoryPermission } from '@/lib/inventory/permissions';
 
 export const dynamic = 'force-dynamic';
@@ -63,8 +63,8 @@ export async function POST(req: Request) {
       const quantity = Number(item.quantity) || 0;
       const unitPrice = Number(item.unitPrice) || 0;
       const amount = quantity * unitPrice;
-      const unitOfMeasure = String(item.unitOfMeasure || item.uom || '').toUpperCase();
-      if (!['KG', 'GRAM', 'LITRE', 'ML', 'PIECE', 'BOX', 'BOTTLE', 'PACK'].includes(unitOfMeasure)) {
+      const unitOfMeasure = String(item.unitOfMeasure || item.uom || '').toUpperCase() as UnitOfMeasure;
+      if (!Object.values(UnitOfMeasure).includes(unitOfMeasure)) {
         throw new Error(`Invalid unit of measure for ${item.description || 'line item'}`);
       }
       totalAmount += amount;
