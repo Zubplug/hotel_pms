@@ -18,13 +18,17 @@ export default async function TransfersPage() {
   const session = await auth();
   if (!session?.user) redirect('/login');
 
-  const { propertyId } = session.user as any;
+  const { propertyId, role, staffId } = session.user as any;
+
+  const outletHeadFilter = String(role).toUpperCase() === 'OUTLET_HEAD' && staffId
+    ? { toWarehouse: { posOutlet: { staffAccess: { some: { staffId } } } } }
+    : {};
 
   const transfers = await prisma.stockTransfer.findMany({
-    where: { propertyId },
+    where: { propertyId, ...outletHeadFilter },
     include: {
       fromWarehouse: { select: { name: true } },
-      toWarehouse: { select: { name: true, posOutlet: { select: { name: true } } } },
+      toWarehouse: { select: { name: true, posOutlet: { select: { id: true, name: true } } } },
       _count: { select: { items: true } },
     },
     orderBy: { createdAt: 'desc' },

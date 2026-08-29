@@ -35,7 +35,9 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
 
   if (!transfer || transfer.propertyId !== propertyId) notFound();
 
-  const canApprove = isSuperAdmin || ['CEO', 'SUPER_ADMIN', 'MANAGER'].includes(role);
+  const isOutletIssue = Boolean(transfer.toWarehouse.posOutletId);
+  const canApprove = isSuperAdmin || ['CEO', 'SUPER_ADMIN', 'MANAGER'].includes(role) ||
+    (isOutletIssue && ['STOCK_KEEPER', 'STOCK_MANAGER'].includes(String(role).toUpperCase()));
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-8 space-y-6">

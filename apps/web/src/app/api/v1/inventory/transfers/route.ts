@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { UnitOfMeasure } from '@hotel-pms/db';
 import { hasInventoryPermission } from '@/lib/inventory/permissions';
+import { InventoryService } from '@/lib/inventory/InventoryService';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,8 +20,12 @@ export async function GET(request: Request) {
       return NextResponse.json({ data: null, error: 'Forbidden' }, { status: 403 });
     }
 
+    const { staffId } = session.user as any;
+    const outletHeadFilter = String(role).toUpperCase() === 'OUTLET_HEAD' && staffId
+      ? { toWarehouse: { posOutlet: { staffAccess: { some: { staffId } } } } }
+      : {};
     const transfers = await prisma.stockTransfer.findMany({
-      where: { propertyId },
+      where: { propertyId, ...outletHeadFilter },
       include: {
         fromWarehouse: { select: { name: true } },
         toWarehouse: { select: { name: true } },
@@ -42,7 +47,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ data: null, error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { role, propertyId, isSuperAdmin, id: userId } = session.user as any;
+    const { role, propertyId, isSuperAdmin, id: userId, staffId } = session.user as any;
+    const normalizedRole = String(role || '').toUpperCase();
 
     if (!hasInventoryPermission(role, 'inventory.transfer', isSuperAdmin)) {
       return NextResponse.json({ data: null, error: 'Forbidden' }, { status: 403 });
@@ -75,6 +81,19 @@ export async function POST(request: Request) {
     if (issueToOutlet && !destinationWarehouse?.posOutlet) {
       return NextResponse.json({ data: null, error: 'Issue-to-outlet transfers must target an outlet warehouse' }, { status: 400 });
     }
+    if (String(role).toUpperCase() === 'OUTLET_HEAD') {
+      if (!issueToOutlet || !destinationWarehouse?.posOutlet || !staffId) {
+        return NextResponse.json({ data: null, error: 'Outlet heads can only request stock for their assigned outlet' }, { status: 403 });
+      }
+      const outletAccess = await prisma.staffPosOutletAccess.findUnique({
+        where: { staffId_outletId: { staffId, outletId: destinationWarehouse.posOutlet.id } },
+      });
+      if (!outletAccess) {
+        return NextResponse.json({ data: null, error: 'You are not assigned to this outlet' }, { status: 403 });
+      }
+    }
+
+    const autoPostOutletIssue = issueToOutlet && ['STOCK_KEEPER', 'STOCK_MANAGER'].includes(normalizedRole);
 
     const stockItemIds = items.map((item: any) => item.stockItemId);
     const sourceItems = await prisma.stockItem.findMany({
@@ -109,7 +128,8 @@ export async function POST(request: Request) {
         fromWarehouseId,
         toWarehouseId,
         notes,
-        status: 'DRAFT',
+        status: autoPostOutletIssue ? 'APPROVED' : 'DRAFT',
+        ...(autoPostOutletIssue && { approvedBy: userId, approvedAt: new Date() }),
         requestedBy: userId,
         items: {
           create: items.map((item: any) => ({
@@ -124,6 +144,11 @@ export async function POST(request: Request) {
         items: true,
       }
     });
+
+    if (autoPostOutletIssue) {
+      const result = await InventoryService.postTransfer(transfer.id, userId, crypto.randomUUID());
+      return NextResponse.json({ data: (result as any).transfer || transfer, error: null });
+    }
 
     return NextResponse.json({ data: transfer, error: null });
   } catch (error: any) {

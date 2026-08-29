@@ -3,12 +3,14 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeftRight, Plus, Trash2, ChevronRight, Loader2, Send } from 'lucide-react';
+import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 
 interface Warehouse { id: string; name: string; posOutlet?: { id: string; name: string } | null; }
 interface StockItem { id: string; name: string; baseUnit: string; quantityOnHand: number; warehouseId: string; }
 
 export default function NewTransferPage() {
   const router = useRouter();
+  const { data: session } = useLodgeCoreSession();
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
   const [fromWarehouseId, setFromWarehouseId] = useState('');
@@ -69,6 +71,7 @@ export default function NewTransferPage() {
 
   const UNITS = ['KG', 'GRAM', 'LITRE', 'ML', 'PIECE', 'BOX', 'BOTTLE', 'PACK'];
   const destinationWarehouses = warehouses.filter(w => w.id !== fromWarehouseId && (!issueToOutlet || w.posOutlet));
+  const autoPostOutletIssue = issueToOutlet && ['STOCK_KEEPER', 'STOCK_MANAGER'].includes(String(session?.user?.role || '').toUpperCase());
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-8">
@@ -78,7 +81,7 @@ export default function NewTransferPage() {
         </div>
         <div>
           <h1 className="text-2xl font-bold text-slate-900">{issueToOutlet ? 'Issue Stock to Outlet' : 'New Stock Transfer'}</h1>
-          <p className="text-slate-500 text-sm mt-0.5">{issueToOutlet ? 'Send approved stock from a warehouse to a POS outlet' : 'Move stock between warehouses'}</p>
+          <p className="text-slate-500 text-sm mt-0.5">{issueToOutlet ? (autoPostOutletIssue ? 'Issue stock directly to a POS outlet' : 'Request stock from a warehouse for a POS outlet') : 'Move stock between warehouses'}</p>
         </div>
       </div>
 
@@ -212,7 +215,7 @@ export default function NewTransferPage() {
             className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-slate-900 text-sm font-semibold transition-colors disabled:opacity-60"
           >
             {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
-            {isSubmitting ? 'Creating...' : 'Create Transfer'}
+            {isSubmitting ? 'Processing...' : autoPostOutletIssue ? 'Issue Stock Now' : 'Create Transfer'}
           </button>
         </div>
       </form>

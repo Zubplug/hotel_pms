@@ -22,6 +22,21 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       return NextResponse.json({ data: null, error: 'Transfer not found' }, { status: 404 });
     }
 
+    const transferDetails = await prisma.stockTransfer.findUnique({
+      where: { id: params.id },
+      include: { toWarehouse: { select: { posOutletId: true } } },
+    });
+    const isOutletIssue = Boolean(transferDetails?.toWarehouse.posOutletId);
+    const isStockIssuer = ['STOCK_KEEPER', 'STOCK_MANAGER'].includes(String(role).toUpperCase());
+    if (isOutletIssue && isStockIssuer) {
+      const updated = await prisma.stockTransfer.updateMany({
+        where: { id: params.id, propertyId, status: 'PENDING_APPROVAL' },
+        data: { status: 'APPROVED', approvedBy: userId, approvedAt: new Date() },
+      });
+      if (!updated.count) return NextResponse.json({ data: null, error: 'Transfer is not pending approval' }, { status: 400 });
+      return NextResponse.json({ data: { success: true }, error: null });
+    }
+
     const guard = await canApprove({
       flowType: 'STOCK_TRANSFER',
       propertyId: transferCheck.propertyId,

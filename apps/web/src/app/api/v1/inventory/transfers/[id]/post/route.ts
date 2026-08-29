@@ -14,10 +14,6 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
 
     const { role, propertyId, isSuperAdmin, id: userId } = session.user as any;
 
-    if (!hasInventoryPermission(role, 'inventory.transfer.approve', isSuperAdmin)) {
-      return NextResponse.json({ data: null, error: 'Forbidden' }, { status: 403 });
-    }
-
     const body = await request.json();
     const { operationId } = body;
     
@@ -33,6 +29,9 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     if (!transfer) {
       return NextResponse.json({ data: null, error: 'Not Found' }, { status: 404 });
     }
+
+    const canIssue = hasInventoryPermission(role, 'inventory.transfer.issue', isSuperAdmin);
+    if (!canIssue) return NextResponse.json({ data: null, error: 'Forbidden' }, { status: 403 });
 
     const result = await InventoryService.postTransfer(params.id, userId, operationId);
 

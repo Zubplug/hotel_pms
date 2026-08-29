@@ -41,10 +41,13 @@ export const INVENTORY_PERMISSIONS = {
   'inventory.reverse': ['CEO', 'SUPER_ADMIN'],
 
   // Creating a stock transfer
-  'inventory.transfer': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'INVENTORY_MANAGER', 'STOCK_KEEPER', 'STOCK_MANAGER'],
+  'inventory.transfer': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'INVENTORY_MANAGER', 'OUTLET_HEAD', 'STOCK_KEEPER', 'STOCK_MANAGER'],
 
   // Approving a stock transfer
   'inventory.transfer.approve': ['CEO', 'SUPER_ADMIN', 'MANAGER'],
+
+  // Issuing approved stock to an outlet is performed by stock control staff.
+  'inventory.transfer.issue': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'STOCK_KEEPER', 'STOCK_MANAGER'],
 
   // Creating/managing a stocktake worksheet
   'inventory.stocktake': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'INVENTORY_MANAGER', 'STOCK_MANAGER', 'STOCK_KEEPER'],

@@ -13,14 +13,17 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
       return NextResponse.json({ data: null, error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { role, propertyId, isSuperAdmin } = session.user as any;
+    const { role, propertyId, isSuperAdmin, staffId } = session.user as any;
 
     if (!hasInventoryPermission(role, 'inventory.transfer', isSuperAdmin)) {
       return NextResponse.json({ data: null, error: 'Forbidden' }, { status: 403 });
     }
 
+    const outletHeadFilter = String(role).toUpperCase() === 'OUTLET_HEAD' && staffId
+      ? { toWarehouse: { posOutlet: { staffAccess: { some: { staffId } } } } }
+      : {};
     const transfer = await prisma.stockTransfer.findFirst({
-      where: { id: params.id, propertyId },
+      where: { id: params.id, propertyId, ...outletHeadFilter },
       include: {
         fromWarehouse: true,
         toWarehouse: true,
