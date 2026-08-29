@@ -87,7 +87,7 @@ export class ShiftControlService {
     } else {
       const shift = await tx.posSession.findUnique({ where: { id: shiftId } });
       if (!shift) throw new ShiftControlError('Shift not found', 'NOT_FOUND', 404);
-      return Number(shift.openingFloat || 0) + Number(shift.cashSales || 0) + Number(shift.cashIn || 0) - Number(shift.cashRefunds || 0) - Number(shift.cashOut || 0);
+      return Number(shift.openingCash || 0) + Number(shift.cashSales || 0) + Number(shift.cashIn || 0) - Number(shift.cashRefunds || 0) - Number(shift.cashOut || 0);
     }
   }
 

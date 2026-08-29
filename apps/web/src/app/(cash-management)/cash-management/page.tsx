@@ -142,11 +142,15 @@ export default async function GeneralCashierDashboardPage() {
   );
   const openedByStaff = posOpenedByIds.length
     ? await prisma.staff.findMany({
-        where: { id: { in: posOpenedByIds } },
-        select: { id: true, firstName: true, lastName: true },
+        where: { OR: [{ id: { in: posOpenedByIds } }, { userId: { in: posOpenedByIds } }] },
+        select: { id: true, userId: true, firstName: true, lastName: true },
       })
     : [];
-  const openedByStaffMap = new Map(openedByStaff.map((staff) => [staff.id, staff]));
+  const openedByStaffMap = new Map();
+  openedByStaff.forEach((staff) => {
+    openedByStaffMap.set(staff.id, staff);
+    if (staff.userId) openedByStaffMap.set(staff.userId, staff);
+  });
 
   const queueItems = [
     ...pendingReviewPosShifts.map((shift) => ({
@@ -160,9 +164,9 @@ export default async function GeneralCashierDashboardPage() {
           : 'Unassigned operator';
       })(),
       status: shift.controlStatus || 'SUBMITTED',
-      expected: Number(shift.expectedCash),
+      expected: Number(shift.openingCash || 0) + Number(shift.cashSales || 0) + Number(shift.cashIn || 0) - Number(shift.cashRefunds || 0) - Number(shift.cashOut || 0),
       declared: shift.actualCash == null ? null : Number(shift.actualCash),
-      variance: shift.variance == null ? null : Number(shift.variance),
+      variance: shift.actualCash == null ? null : Number(shift.actualCash) - (Number(shift.openingCash || 0) + Number(shift.cashSales || 0) + Number(shift.cashIn || 0) - Number(shift.cashRefunds || 0) - Number(shift.cashOut || 0)),
       updatedAt: shift.updatedAt,
     })),
     ...pendingReviewFrontDeskShifts.map((shift) => ({
