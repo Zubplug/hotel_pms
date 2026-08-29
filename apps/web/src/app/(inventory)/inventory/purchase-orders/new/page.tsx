@@ -35,10 +35,13 @@ export default function NewPurchaseOrderPage() {
         body: JSON.stringify({ ...poData, items })
       });
       if (res.ok) {
-        const { id } = await res.json();
+        const { data } = await res.json();
+        const id = data?.id;
+        if (!id) throw new Error('PO was saved without an id');
         router.push(`/inventory/purchase-orders/${id}`);
       } else {
-        alert('Failed to create PO');
+        const body = await res.json().catch(() => null);
+        alert(body?.error || 'Failed to create PO');
       }
     } catch (e) {
       console.error(e);
@@ -154,9 +157,7 @@ export default function NewPurchaseOrderPage() {
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-slate-500 mb-1">UOM</label>
-                        <input
-                          type="text"
-                          placeholder="e.g. Box, Kg"
+                        <select
                           value={item.uom}
                           onChange={e => {
                             const newItems = [...items];
@@ -164,7 +165,12 @@ export default function NewPurchaseOrderPage() {
                             setItems(newItems);
                           }}
                           className="w-full bg-white border border-slate-300 rounded-md px-3 py-1.5 text-slate-900 text-sm"
-                        />
+                        >
+                          <option value="">Select unit...</option>
+                          {['KG', 'GRAM', 'LITRE', 'ML', 'PIECE', 'BOX', 'BOTTLE', 'PACK'].map(unit => (
+                            <option key={unit} value={unit}>{unit}</option>
+                          ))}
+                        </select>
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-slate-500 mb-1">Unit Price</label>
@@ -211,7 +217,7 @@ export default function NewPurchaseOrderPage() {
                   Back
                 </button>
                 <button
-                  disabled={loading || items.length === 0 || !items.every(i => i.stockItemId)}
+                  disabled={loading || items.length === 0 || !items.every(i => i.stockItemId && i.uom)}
                   onClick={handleSubmit}
                   className="bg-blue-600 hover:bg-blue-700 text-slate-900 px-6 py-2 rounded-md transition-colors text-sm font-medium disabled:opacity-50"
                 >

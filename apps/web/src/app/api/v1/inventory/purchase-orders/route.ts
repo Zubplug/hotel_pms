@@ -63,12 +63,16 @@ export async function POST(req: Request) {
       const quantity = Number(item.quantity) || 0;
       const unitPrice = Number(item.unitPrice) || 0;
       const amount = quantity * unitPrice;
+      const unitOfMeasure = String(item.unitOfMeasure || item.uom || '').toUpperCase();
+      if (!['KG', 'GRAM', 'LITRE', 'ML', 'PIECE', 'BOX', 'BOTTLE', 'PACK'].includes(unitOfMeasure)) {
+        throw new Error(`Invalid unit of measure for ${item.description || 'line item'}`);
+      }
       totalAmount += amount;
       return {
         stockItemId: item.stockItemId,
         description: item.description,
         quantity,
-        unitOfMeasure: item.unitOfMeasure,
+        unitOfMeasure,
         unitPrice,
         totalPrice: amount,
       };

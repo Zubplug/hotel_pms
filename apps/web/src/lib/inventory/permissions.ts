@@ -8,7 +8,7 @@
  */
 export const INVENTORY_PERMISSIONS = {
   // Read access across the inventory dashboard
-  'inventory.read': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'STOCK_MANAGER', 'PROCUREMENT_MANAGER'],
+  'inventory.read': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'INVENTORY_MANAGER', 'STOCK_MANAGER', 'PROCUREMENT_MANAGER'],
 
   // Managing stock items, warehouses, and general inventory master data
   'inventory.manage': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'STOCK_MANAGER'],
@@ -59,7 +59,8 @@ export const INVENTORY_PERMISSIONS = {
   'procurement.supplier.manage': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'STOCK_MANAGER', 'STOCK_KEEPER', 'PROCUREMENT_MANAGER'],
 
   // Creating and submitting POs
-  'procurement.po.create': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'PROCUREMENT_MANAGER'],
+  // Stock staff may prepare/save draft POs; approval remains restricted below.
+  'procurement.po.create': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'INVENTORY_MANAGER', 'STOCK_MANAGER', 'STOCK_KEEPER', 'PROCUREMENT_MANAGER'],
 
   // Approving a PO - explicitly excludes PROCUREMENT_MANAGER for separation of duties
   'procurement.po.approve': ['CEO', 'SUPER_ADMIN', 'MANAGER'],
