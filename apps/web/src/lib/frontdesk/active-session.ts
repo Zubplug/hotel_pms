@@ -9,7 +9,8 @@ export async function findActiveFrontdeskSession(userId: string, propertyId: str
       ...(sessionId ? { id: sessionId } : {}),
       propertyId,
       staffId: staff.id,
-      status: 'OPEN'
+      status: 'OPEN',
+      controlStatus: 'OPEN'
     },
     select: { id: true, propertyId: true, staffId: true, cashAccountId: true, businessDate: true, status: true }
   });

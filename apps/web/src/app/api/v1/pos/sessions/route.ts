@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
     const result = await prisma.$transaction(async (tx: any) => {
       if (bankingModel === 'SERVER_BANKING') {
         const existingBank = await tx.posSession.findFirst({
-          where: { propertyId, outletId, primaryOperatorId: staffId, status: 'OPEN', bankType: 'SERVER' }
+          where: { propertyId, outletId, primaryOperatorId: staffId, status: 'OPEN', controlStatus: 'OPEN', bankType: 'SERVER' }
         });
         if (existingBank) return existingBank; // Idempotent logic per Waiter
       } else {
@@ -104,6 +104,7 @@ export async function POST(req: NextRequest) {
             propertyId,
             outletId: outlet.id,
             status: 'OPEN',
+            controlStatus: 'OPEN',
             bankType: 'CENTRAL',
             bankingModel: 'CENTRAL_CASHIER'
           },

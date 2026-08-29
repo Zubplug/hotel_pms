@@ -10,13 +10,15 @@ type PendingHandoversModalProps = {
   onClose: () => void;
   provider: any;
   propertyId: string;
+  onHandoverComplete?: () => void;
 };
 
 export function PendingHandoversModal({
   isOpen,
   onClose,
   provider,
-  propertyId
+  propertyId,
+  onHandoverComplete,
 }: PendingHandoversModalProps) {
   const [shifts, setShifts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -68,6 +70,7 @@ export function PendingHandoversModal({
         toast.success('Handover initiated successfully. Please deliver your cash to the General Cashier.');
         // Remove this shift from the list locally to update UI
         setShifts(prev => prev.filter(s => s.id !== sessionId));
+        onHandoverComplete?.();
       } else {
         toast.error(data.error || 'Failed to initiate handover');
       }

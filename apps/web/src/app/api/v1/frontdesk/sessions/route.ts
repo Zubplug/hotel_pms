@@ -47,9 +47,9 @@ export async function POST(req: NextRequest) {
     const floatValue = Number(openingFloat) || 0;
     const shiftReference = `FD-${businessDate.toISOString().slice(0, 10).replace(/-/g, '')}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
     const created = await prisma.$transaction(async tx => {
-      const existingStaff = await tx.frontdeskSession.findFirst({ where: { propertyId, staffId: staff.id, status: { in: ['OPEN', 'CLOSING'] } } });
+      const existingStaff = await tx.frontdeskSession.findFirst({ where: { propertyId, staffId: staff.id, status: { in: ['OPEN', 'CLOSING'] }, controlStatus: 'OPEN' } });
       if (existingStaff) throw new Error('STAFF_SESSION_EXISTS');
-      const existingTill = await tx.frontdeskSession.findFirst({ where: { propertyId, cashAccountId, status: { in: ['OPEN', 'CLOSING'] } } });
+      const existingTill = await tx.frontdeskSession.findFirst({ where: { propertyId, cashAccountId, status: { in: ['OPEN', 'CLOSING'] }, controlStatus: 'OPEN' } });
       if (existingTill) throw new Error('TILL_SESSION_EXISTS');
       const frontdeskSession = await tx.frontdeskSession.create({ data: { propertyId, staffId: staff.id, cashAccountId, shiftReference, businessDate, openingFloat: floatValue, systemExpectedCash: floatValue } });
       if (floatValue > 0) {

@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertTriangle, ArrowRightLeft, Banknote, CheckCircle2, FileText, Loader2, LockKeyhole, PlayCircle, Printer, ShieldCheck, WalletCards } from 'lucide-react';
+import { useLogout } from '@/hooks/useLogout';
 
 type FrontdeskSession = { id: string; shiftReference: string; status: string; controlStatus?: string; openingFloat: number; systemExpectedCash: number; cashAccount?: { id: string; name: string } };
 type CashAccount = { id: string; name: string; type: string; balance: number };
@@ -27,6 +28,7 @@ const dateTime = (value?: string | null) => value ? new Date(value).toLocaleStri
 export default function FrontdeskCashierPage() {
   const { propertyId } = useProperty();
   const { provider, isDesktopMode } = useLodgeCoreProvider();
+  const logout = useLogout();
   const [accounts, setAccounts] = useState<CashAccount[]>([]);
   const [current, setCurrent] = useState<FrontdeskSession | null>(null);
   const [summary, setSummary] = useState<ShiftSummary | null>(null);
@@ -219,7 +221,7 @@ export default function FrontdeskCashierPage() {
     {current?.status === 'CLOSED' && ['SUBMITTED', 'UNDER_REVIEW'].includes(effectiveControlStatus) && <Card className="border-amber-200 bg-amber-50"><CardHeader><CardTitle className="text-amber-900">Awaiting management review</CardTitle></CardHeader><CardContent><p className="text-sm text-amber-800">This shift has been submitted. General Cashier or Finance will review it; Front Desk staff cannot approve their own shift.</p></CardContent></Card>}
 
     {current?.status === 'CLOSED' && (effectiveControlStatus === 'APPROVED' || effectiveControlStatus === 'APPROVED_WITH_VARIANCE') && <Card className="border-indigo-200 bg-indigo-50"><CardHeader><CardTitle className="text-indigo-900">Initiate Cash Handover</CardTitle></CardHeader><CardContent><p className="text-sm text-indigo-700">Your shift has been approved by management. Please initiate the handover process to formally transfer the physical cash to the General Cashier.</p><div className="mt-4 flex justify-end"><Button className="bg-indigo-600 hover:bg-indigo-700 text-white" disabled={busy} onClick={initiateHandover}><ArrowRightLeft className="mr-2 h-4 w-4" />Initiate Handover</Button></div></CardContent></Card>}
-    <Dialog open={showHandoverSuccess} onOpenChange={setShowHandoverSuccess}><DialogContent><DialogHeader><DialogTitle className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-emerald-600" />Handover initiated</DialogTitle><DialogDescription>Your approved shift is now waiting for the General Cashier to receive the physical cash.</DialogDescription></DialogHeader><div className="rounded-lg border bg-emerald-50 p-4 text-sm text-emerald-900"><div className="flex justify-between"><span>Shift reference</span><span className="font-semibold">{current?.shiftReference}</span></div><div className="mt-1 flex justify-between"><span>Next status</span><span className="font-semibold">HANDOVER PENDING</span></div></div><DialogFooter><Button onClick={() => setShowHandoverSuccess(false)}>Continue</Button></DialogFooter></DialogContent></Dialog>
+    <Dialog open={showHandoverSuccess} onOpenChange={setShowHandoverSuccess}><DialogContent><DialogHeader><DialogTitle className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-emerald-600" />Handover initiated</DialogTitle><DialogDescription>Your approved shift is now waiting for the General Cashier to receive the physical cash.</DialogDescription></DialogHeader><div className="rounded-lg border bg-emerald-50 p-4 text-sm text-emerald-900"><div className="flex justify-between"><span>Shift reference</span><span className="font-semibold">{current?.shiftReference}</span></div><div className="mt-1 flex justify-between"><span>Next status</span><span className="font-semibold">HANDOVER PENDING</span></div></div><DialogFooter><Button onClick={() => logout()}>Log out and start next shift</Button></DialogFooter></DialogContent></Dialog>
   </div>;
 }
 

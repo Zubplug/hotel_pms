@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
 
     if (bankingModel === 'SERVER_BANKING') {
       const openSession = await prisma.posSession.findFirst({
-        where: { propertyId, outletId, primaryOperatorId: staff.id, status: 'OPEN', bankType: 'SERVER' },
+        where: { propertyId, outletId, primaryOperatorId: staff.id, status: 'OPEN', controlStatus: 'OPEN', bankType: 'SERVER' },
         orderBy: { openedAt: 'desc' }
       });
       if (openSession) {
@@ -111,6 +111,7 @@ export async function POST(req: NextRequest) {
           propertyId,
           outletId,
           status: 'OPEN',
+          controlStatus: 'OPEN',
           bankType: 'CENTRAL',
           bankingModel: 'CENTRAL_CASHIER'
         },

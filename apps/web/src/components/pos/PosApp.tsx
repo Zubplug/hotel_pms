@@ -1274,6 +1274,16 @@ export default function PosApp() {
           onClose={() => setShowHandovers(false)}
           provider={provider}
           propertyId={propertyId}
+          onHandoverComplete={() => {
+            setActiveOperator(null);
+            setOperatorToken(null);
+            setPosSessionId('');
+            setCart([]);
+            localStorage.removeItem('lodgecore_pos_operator_token');
+            localStorage.removeItem('lodgecore_pos_session_id');
+            setShowHandovers(false);
+            setShowSwitchPad(true);
+          }}
         />
       )}
 
