@@ -35,6 +35,8 @@ const CASH_MANAGEMENT_NAV = [
       { name: 'Cash Handovers', href: '/handovers' },
       { name: 'Bank Deposits', href: '/deposits' },
       { name: 'Receivables', href: '/reports/receivables' },
+      { name: 'POS Menu & Prices', href: '/admin/pos/menu' },
+      { name: 'Price Approvals', href: '/admin/pos/price-approvals' },
       { name: 'Gateway', href: '/reports/gateway' },
     ],
   },
