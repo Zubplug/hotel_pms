@@ -17,7 +17,17 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ha
     const handover = await prisma.cashHandover.findUnique({ where: { id: handoverId }, select: { propertyId: true } });
     if (!handover) return NextResponse.json({ error: 'Handover not found' }, { status: 404 });
     if (!(await getUserPropertyIds(actor.user.id)).includes(handover.propertyId)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    const staff = await prisma.staff.findFirst({ where: { userId: actor.user.id, isActive: true }, select: { id: true } });
+    const userRec = await prisma.user.findUnique({ where: { id: actor.user.id }, select: { staffId: true } });
+    const staff = await prisma.staff.findFirst({ 
+      where: { 
+        OR: [
+          { userId: actor.user.id },
+          ...(userRec?.staffId ? [{ id: userRec.staffId }] : [])
+        ],
+        isActive: true
+      }, 
+      select: { id: true } 
+    });
     if (!staff) return NextResponse.json({ error: 'Staff record not found' }, { status: 401 });
 
     const result = await CashHandoverService.receiveHandover({
