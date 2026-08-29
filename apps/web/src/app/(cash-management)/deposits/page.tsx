@@ -3,9 +3,8 @@ import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { getUserPropertyIds } from '@/lib/property-access';
 import { DepositActionButton } from './deposit-action-button';
-import { CreateDepositButton } from './create-deposit-button';
 import { ensureCashierControlAccounts } from '@/lib/services/cash-account-service';
-import { Landmark, Plus, ArrowRight } from 'lucide-react';
+import { Landmark } from 'lucide-react';
 
 const statusMeta: Record<string, { label: string; classes: string }> = {
   RECONCILED: { label: 'Reconciled', classes: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
@@ -19,44 +18,22 @@ export default async function DepositsPage() {
   if (!actor?.user) redirect('/login');
 
   const allowedProperties = await getUserPropertyIds(actor.user.id);
-  const [deposits, handedOverPos, handedOverFrontdesk] = await Promise.all([
-    prisma.bankDeposit.findMany({
-      where: { propertyId: { in: allowedProperties } },
-      orderBy: { createdAt: 'desc' },
-      include: {
-        property: { select: { name: true } },
-        allocations: {
-          include: {
-            posSession: { select: { controlStatus: true } },
-            frontdeskSession: { select: { status: true } },
-          },
+  const deposits = await prisma.bankDeposit.findMany({
+    where: { propertyId: { in: allowedProperties } },
+    orderBy: { createdAt: 'desc' },
+    include: {
+      property: { select: { name: true } },
+      allocations: {
+        include: {
+          posSession: { select: { controlStatus: true } },
+          frontdeskSession: { select: { status: true } },
         },
       },
-    }),
-    prisma.posSession.findMany({
-      where: {
-        propertyId: { in: allowedProperties },
-        controlStatus: 'HANDED_OVER',
-        bankDepositAllocations: { none: {} },
-      },
-      select: { id: true, propertyId: true },
-    }),
-    prisma.frontdeskSession.findMany({
-      where: {
-        propertyId: { in: allowedProperties },
-        controlStatus: 'HANDED_OVER',
-        bankDepositAllocations: { none: {} },
-      },
-      select: { id: true, propertyId: true },
-    }),
-  ]);
+    },
+  });
   const controlAccounts = await Promise.all(
     allowedProperties.map((propertyId) => ensureCashierControlAccounts(propertyId))
   );
-
-  const canCreate =
-    allowedProperties.length === 1 &&
-    (handedOverPos.length > 0 || handedOverFrontdesk.length > 0);
 
   const selectedControlAccounts = allowedProperties.length === 1 ? controlAccounts[0] : [];
   const generalCashierSafe = selectedControlAccounts?.find((account) => account.type === 'SAFE');
@@ -73,17 +50,9 @@ export default async function DepositsPage() {
               Create, submit, and reconcile deposits after physical cash handover.
             </p>
           </div>
-          {canCreate && (
-            <CreateDepositButton
-              propertyId={allowedProperties[0]}
-              posSessionIds={handedOverPos
-                .filter((s) => s.propertyId === allowedProperties[0])
-                .map((s) => s.id)}
-              frontdeskSessionIds={handedOverFrontdesk
-                .filter((s) => s.propertyId === allowedProperties[0])
-                .map((s) => s.id)}
-            />
-          )}
+          <div className="text-xs text-slate-400 sm:text-right">
+            Deposits are prepared automatically after handover.
+          </div>
         </div>
       </div>
 

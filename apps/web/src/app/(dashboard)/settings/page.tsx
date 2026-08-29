@@ -12,6 +12,7 @@ import {
   Clock3,
   GitMerge,
   Landmark,
+  ReceiptText,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -23,6 +24,14 @@ const settingsLinks = [
     icon: Landmark,
     color: 'text-emerald-600',
     bgColor: 'bg-emerald-500/10'
+  },
+  {
+    title: 'Expense Configuration',
+    description: 'Define expense categories, debit accounts, and cost centres available to cashiers.',
+    href: '/settings/expense-configuration',
+    icon: ReceiptText,
+    color: 'text-indigo-600',
+    bgColor: 'bg-indigo-500/10'
   },
   {
     title: 'Approval Flows',

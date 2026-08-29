@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     if (!actor.staffId) return NextResponse.json({ error: 'Staff record not found' }, { status: 401 });
     const body = await request.json();
     if (!body.propertyId || !actor.propertyIds.includes(body.propertyId)) return NextResponse.json({ error: 'Invalid property' }, { status: 403 });
-    const expense = await CashExpenseService.create({ propertyId: body.propertyId, requestedBy: actor.staffId, amount: Number(body.amount), currency: body.currency, category: String(body.category || ''), description: String(body.description || ''), payee: String(body.payee || ''), receiptUrl: body.receiptUrl, costCenter: body.costCenter });
+    const expense = await CashExpenseService.create({ propertyId: body.propertyId, requestedBy: actor.staffId, amount: Number(body.amount), currency: body.currency, categoryId: String(body.categoryId || ''), description: String(body.description || ''), payee: String(body.payee || ''), receiptUrl: body.receiptUrl, costCenterId: body.costCenterId ? String(body.costCenterId) : undefined });
     return NextResponse.json({ data: expense }, { status: 201 });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Unable to create expense' }, { status: error.status || 500 });

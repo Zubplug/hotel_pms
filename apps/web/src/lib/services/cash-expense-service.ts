@@ -11,11 +11,11 @@ type ExpenseInput = {
   requestedBy: string;
   amount: number;
   currency?: string;
-  category: string;
+  categoryId: string;
   description: string;
   payee: string;
   receiptUrl?: string;
-  costCenter?: string;
+  costCenterId?: string;
 };
 
 export class CashExpenseService {
@@ -31,11 +31,18 @@ export class CashExpenseService {
     if (!Number.isFinite(input.amount) || input.amount <= 0) {
       throw new ShiftControlError('Expense amount must be greater than zero.', 'BAD_REQUEST');
     }
-    for (const [label, value] of Object.entries({ category: input.category, description: input.description, payee: input.payee })) {
+    for (const [label, value] of Object.entries({ categoryId: input.categoryId, description: input.description, payee: input.payee })) {
       if (!value?.trim()) throw new ShiftControlError(`${label} is required.`, 'BAD_REQUEST');
     }
 
     return prisma.$transaction(async (tx) => {
+      const category = await tx.expenseCategory.findFirst({ where: { id: input.categoryId, propertyId: input.propertyId, isActive: true } });
+      if (!category) throw new ShiftControlError('Select an active expense category configured for this property.', 'BAD_REQUEST');
+      let costCenter: { id: string; name: string } | null = null;
+      if (input.costCenterId) {
+        costCenter = await tx.costCenter.findFirst({ where: { id: input.costCenterId, propertyId: input.propertyId, isActive: true }, select: { id: true, name: true } });
+        if (!costCenter) throw new ShiftControlError('Select an active cost centre configured for this property.', 'BAD_REQUEST');
+      }
       const expense = await tx.cashExpense.create({
         data: {
           propertyId: input.propertyId,
@@ -43,11 +50,13 @@ export class CashExpenseService {
           status: 'PENDING_APPROVAL',
           amount: input.amount,
           currency: input.currency || 'NGN',
-          category: input.category.trim(),
+          category: category.name,
+          categoryId: category.id,
           description: input.description.trim(),
           payee: input.payee.trim(),
           receiptUrl: input.receiptUrl?.trim() || null,
-          costCenter: input.costCenter?.trim() || null,
+          costCenter: costCenter?.name || null,
+          costCenterId: costCenter?.id || null,
           requestedBy: input.requestedBy,
         },
       });
@@ -128,7 +137,8 @@ export class CashExpenseService {
           operationId: `expense-paid-${expense.id}`,
         },
       });
-      await tx.cashExpenseJournal.create({ data: { expenseId: expense.id, debitAccount: `EXPENSE:${expense.category}`, creditAccount: 'CASH:GENERAL_CASHIER_SAFE', amount, currency: expense.currency, postedBy: cashierId } });
+      const category = await tx.expenseCategory.findUnique({ where: { id: expense.categoryId! }, select: { debitAccount: true } });
+      await tx.cashExpenseJournal.create({ data: { expenseId: expense.id, debitAccount: category?.debitAccount || `EXPENSE:${expense.category}`, creditAccount: 'CASH:GENERAL_CASHIER_SAFE', amount, currency: expense.currency, postedBy: cashierId } });
       await this.audit(tx, expense.id, cashierId, 'PAID', `Paid from ${safe.name}`);
       return updated;
     });
