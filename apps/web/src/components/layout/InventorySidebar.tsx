@@ -66,7 +66,8 @@ export function InventorySidebar({ onNavigate }: InventorySidebarProps) {
   const { data: session } = useLodgeCoreSession();
   const logout = useLogout();
   const router = useRouter();
-  const role = String(session?.user?.role || '').toUpperCase();
+  const rawRole = String(session?.user?.role || '').toUpperCase();
+  const role = rawRole === 'STOCK_KEEPER' ? 'STOCK_MANAGER' : rawRole;
   const userInitials = getInitials(session?.user?.name, session?.user?.email);
   const userDisplay = session?.user?.name || session?.user?.email || '';
 

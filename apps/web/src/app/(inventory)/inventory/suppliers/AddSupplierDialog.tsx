@@ -13,7 +13,11 @@ export function AddSupplierDialog() {
     e.preventDefault();
     setLoading(true);
     const formData = new FormData(e.currentTarget);
-    const data = Object.fromEntries(formData.entries());
+    const data = {
+      ...Object.fromEntries(formData.entries()),
+      contactName: formData.get('contactName'),
+      taxIdentifier: formData.get('taxIdentifier'),
+    };
 
     try {
       const res = await fetch('/api/v1/inventory/suppliers', {
@@ -59,7 +63,7 @@ export function AddSupplierDialog() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Contact Person</label>
-                <input name="contactPerson" type="text" className="w-full bg-white border border-slate-200 rounded-md px-3 py-2 text-slate-900 focus:outline-none focus:border-blue-500" />
+                <input name="contactName" type="text" className="w-full bg-white border border-slate-200 rounded-md px-3 py-2 text-slate-900 focus:outline-none focus:border-blue-500" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -73,7 +77,7 @@ export function AddSupplierDialog() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Tax ID</label>
-                <input name="taxId" type="text" className="w-full bg-white border border-slate-200 rounded-md px-3 py-2 text-slate-900 focus:outline-none focus:border-blue-500" />
+                    <input name="taxIdentifier" type="text" className="w-full bg-white border border-slate-200 rounded-md px-3 py-2 text-slate-900 focus:outline-none focus:border-blue-500" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Address</label>

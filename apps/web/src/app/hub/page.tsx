@@ -45,7 +45,7 @@ function getDirectLandingUrl(
   }
 
   // Stock / Procurement roles → Inventory dashboard
-  if (['STOCK_MANAGER', 'PROCUREMENT_MANAGER'].includes(role)) {
+  if (['STOCK_MANAGER', 'STOCK_KEEPER', 'PROCUREMENT_MANAGER'].includes(role)) {
     return '/inventory';
   }
 

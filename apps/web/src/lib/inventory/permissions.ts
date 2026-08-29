@@ -56,7 +56,7 @@ export const INVENTORY_PERMISSIONS = {
   'inventory.report': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'STOCK_MANAGER', 'PROCUREMENT_MANAGER'],
 
   // Managing suppliers
-  'procurement.supplier.manage': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'PROCUREMENT_MANAGER'],
+  'procurement.supplier.manage': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'STOCK_MANAGER', 'STOCK_KEEPER', 'PROCUREMENT_MANAGER'],
 
   // Creating and submitting POs
   'procurement.po.create': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'PROCUREMENT_MANAGER'],
@@ -73,12 +73,15 @@ export const INVENTORY_PERMISSIONS = {
  * Super Admins bypass checks.
  */
 export function hasInventoryPermission(role: string, permission: keyof typeof INVENTORY_PERMISSIONS, isSuperAdmin?: boolean): boolean {
-  if (isSuperAdmin || role === 'SUPER_ADMIN') {
+  const normalizedRole = String(role || '').toUpperCase();
+  const effectiveRole = normalizedRole === 'STOCK_KEEPER' ? 'STOCK_MANAGER' : normalizedRole;
+
+  if (isSuperAdmin || effectiveRole === 'SUPER_ADMIN') {
     return true;
   }
 
   const allowedRoles = INVENTORY_PERMISSIONS[permission];
   if (!allowedRoles) return false;
 
-  return allowedRoles.includes(role);
+  return allowedRoles.includes(effectiveRole);
 }

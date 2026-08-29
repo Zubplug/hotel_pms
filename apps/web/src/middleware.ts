@@ -40,7 +40,7 @@ const PUBLIC_PATHS = ['/login', '/api/auth', '/api/v1/hardware', '/api/manager',
 const MANAGEMENT_ROLES = ['CEO', 'SUPER_ADMIN', 'MANAGER', 'ADMIN', 'ACCOUNTANT'];
 const POS_ROLES = ['WAITER', 'WAITRESS', 'CASHIER', 'POS', 'POS_OPERATOR'];
 const FRONT_DESK_ROLES = ['RECEPTIONIST', 'FRONT_DESK'];
-const INVENTORY_ROLES = ['STOCK_MANAGER', 'PROCUREMENT_MANAGER'];
+const INVENTORY_ROLES = ['STOCK_MANAGER', 'STOCK_KEEPER', 'PROCUREMENT_MANAGER'];
 
 function hasModuleAccess(req: any, pathname: string): { allowed: boolean; redirectTo?: string } {
   const user = req.auth?.user as any;
