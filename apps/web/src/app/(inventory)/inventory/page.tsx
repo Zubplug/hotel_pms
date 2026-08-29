@@ -15,6 +15,10 @@ import {
   ShoppingCart,
   ArrowRight,
   TrendingUp,
+  Warehouse,
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  BarChart3,
 } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -41,11 +45,12 @@ export default async function InventoryDashboardPage() {
         quantityOnHand: true,
         reorderLevel: true,
         costPrice: true,
+        stockType: true,
         warehouse: { select: { name: true } },
       },
     }),
     prisma.purchaseOrder.findMany({
-      where: { propertyId, status: { in: ['SUBMITTED', 'APPROVED'] } },
+      where: { propertyId, status: 'SUBMITTED' },
       select: {
         id: true,
         poNumber: true,
@@ -55,16 +60,17 @@ export default async function InventoryDashboardPage() {
       },
     }),
     prisma.goodsReceivedNote.findMany({
-      where: { propertyId, status: 'DRAFT' },
+      where: { propertyId, status: { in: ['DRAFT', 'SUBMITTED', 'APPROVED'] } },
       select: {
         id: true,
         grnNumber: true,
+        status: true,
         receivedDate: true,
         purchaseOrder: { select: { poNumber: true } },
       },
     }),
     prisma.stockTransfer.findMany({
-      where: { propertyId, status: { in: ['DRAFT', 'PENDING_APPROVAL', 'APPROVED'] } },
+      where: { propertyId, status: 'PENDING_APPROVAL' },
       select: {
         id: true,
         transferRef: true,
@@ -78,9 +84,9 @@ export default async function InventoryDashboardPage() {
       select: { id: true, status: true, requestedAt: true },
     }),
     prisma.stockTransaction.findMany({
-      where: { propertyId },
-      orderBy: { id: 'desc' },
-      take: 6,
+      where: { propertyId, timestamp: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } },
+      orderBy: { timestamp: 'desc' },
+      take: 200,
       include: { stockItem: { select: { name: true } } },
     }),
   ]);
@@ -104,12 +110,39 @@ export default async function InventoryDashboardPage() {
   });
 
   const totalPending =
-    pendingPOs.length + pendingTransfers.length + pendingReconciliations.length;
+    pendingPOs.length + pendingGRNs.length + pendingTransfers.length + pendingReconciliations.length;
   const criticalStock = lowStockItems.length + outOfStockItems.length;
+  const attentionCount = criticalStock + pendingPOs.length + pendingGRNs.length + pendingTransfers.length + pendingReconciliations.length;
   const allClear =
-    outOfStockItems.length === 0 &&
-    pendingPOs.length === 0 &&
-    pendingTransfers.length === 0;
+    attentionCount === 0;
+
+  const warehouseStats = Object.values(stockItems.reduce<Record<string, {
+    name: string;
+    value: number;
+    itemCount: number;
+    critical: number;
+  }>>((summary, item) => {
+    const name = item.warehouse.name;
+    const entry = summary[name] || { name, value: 0, itemCount: 0, critical: 0 };
+    const quantity = Number(item.quantityOnHand);
+    const reorder = item.reorderLevel === null ? null : Number(item.reorderLevel);
+    entry.value += quantity * Number(item.costPrice);
+    entry.itemCount += 1;
+    if (quantity <= 0 || (reorder !== null && quantity <= reorder)) entry.critical += 1;
+    summary[name] = entry;
+    return summary;
+  }, {})).sort((a, b) => b.value - a.value);
+  const receipts30d = recentActivity.filter(txn => Number(txn.quantity) > 0).reduce((sum, txn) => sum + Number(txn.totalValue || 0), 0);
+  const issues30d = recentActivity.filter(txn => Number(txn.quantity) < 0).reduce((sum, txn) => sum + Math.abs(Number(txn.totalValue || 0)), 0);
+  const movementCount30d = recentActivity.length;
+  const stockTypeStats = Object.values(stockItems.reduce<Record<string, { label: string; value: number; itemCount: number }>>((summary, item) => {
+    const label = item.stockType.replace('_', ' ');
+    const entry = summary[item.stockType] || { label, value: 0, itemCount: 0 };
+    entry.value += Number(item.quantityOnHand) * Number(item.costPrice);
+    entry.itemCount += 1;
+    summary[item.stockType] = entry;
+    return summary;
+  }, {})).sort((a, b) => b.value - a.value);
 
   const kpiCards = [
     {
@@ -202,7 +235,7 @@ export default async function InventoryDashboardPage() {
               </div>
               {!allClear && (
                 <span className="inline-flex items-center justify-center min-w-[24px] h-6 px-2 rounded-full bg-amber-500 text-white text-xs font-bold">
-                  {outOfStockItems.length + pendingPOs.length + pendingTransfers.length}
+                  {attentionCount}
                 </span>
               )}
             </div>
@@ -264,7 +297,22 @@ export default async function InventoryDashboardPage() {
                 </div>
               ))}
 
-              {pendingTransfers.slice(0, 2).map((tr) => (
+                  {pendingGRNs.slice(0, 3).map((grn) => (
+                    <div key={grn.id} className="flex items-center justify-between px-6 py-3.5 hover:bg-slate-50/70 transition-colors">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-800">GRN {grn.grnNumber}</p>
+                        <p className="text-xs text-emerald-600 mt-0.5 flex items-center gap-1">
+                          <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                          {grn.status} · {grn.purchaseOrder?.poNumber || 'Direct receipt'}
+                        </p>
+                      </div>
+                      <Link href={`/inventory/grns/${grn.id}`} className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors">
+                        Review <ArrowRight className="h-3 w-3" />
+                      </Link>
+                    </div>
+                  ))}
+
+                  {pendingTransfers.slice(0, 2).map((tr) => (
                 <div key={tr.id} className="flex items-center justify-between px-6 py-3.5 hover:bg-slate-50/70 transition-colors">
                   <div>
                     <p className="text-sm font-semibold text-slate-800">Transfer {tr.transferRef}</p>
@@ -301,7 +349,7 @@ export default async function InventoryDashboardPage() {
               <h2 className="text-base font-semibold text-slate-900">Recent Activity</h2>
             </div>
             <div className="p-4 space-y-3">
-              {recentActivity.map((txn) => {
+              {recentActivity.slice(0, 6).map((txn) => {
                 const isIn = Number(txn.quantity) > 0;
                 return (
                   <div key={txn.id} className="flex items-start gap-3">
@@ -325,6 +373,47 @@ export default async function InventoryDashboardPage() {
               {recentActivity.length === 0 && (
                 <p className="text-xs text-slate-400 text-center py-6">No recent transactions</p>
               )}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-100"><Package className="h-4 w-4 text-indigo-500" /><h2 className="text-base font-semibold text-slate-900">Stock by Type</h2></div>
+            <div className="divide-y divide-slate-100">
+              {stockTypeStats.slice(0, 6).map((type) => (
+                <div key={type.label} className="flex items-center justify-between px-5 py-3">
+                  <div><p className="text-sm font-semibold text-slate-800 capitalize">{type.label.toLowerCase()}</p><p className="text-xs text-slate-500">{type.itemCount} tracked items</p></div>
+                  <p className="text-sm font-bold text-slate-900">₦{type.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+                </div>
+              ))}
+              {stockTypeStats.length === 0 && <p className="px-5 py-8 text-sm text-slate-400">No stock classification yet.</p>}
+            </div>
+          </div>
+        </div>
+
+        {/* Operational analysis */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+              <div className="flex items-center gap-2"><Warehouse className="h-4 w-4 text-indigo-500" /><h2 className="text-base font-semibold text-slate-900">Warehouse Analysis</h2></div>
+              <Link href="/inventory/warehouses" className="text-xs font-semibold text-indigo-600 hover:text-indigo-800">View warehouses</Link>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {warehouseStats.slice(0, 5).map((warehouse) => (
+                <div key={warehouse.name} className="flex items-center justify-between px-6 py-3.5">
+                  <div><p className="text-sm font-semibold text-slate-800">{warehouse.name}</p><p className="text-xs text-slate-500">{warehouse.itemCount} tracked items · {warehouse.critical} critical</p></div>
+                  <p className="text-sm font-bold text-slate-900">₦{warehouse.value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                </div>
+              ))}
+              {warehouseStats.length === 0 && <p className="px-6 py-8 text-sm text-slate-400">No warehouse stock recorded.</p>}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-100"><BarChart3 className="h-4 w-4 text-slate-500" /><h2 className="text-base font-semibold text-slate-900">30-Day Movement</h2></div>
+            <div className="p-5 space-y-4">
+              <div className="flex items-center justify-between"><span className="flex items-center gap-2 text-sm text-slate-600"><ArrowUpFromLine className="h-4 w-4 text-emerald-500" />Receipts</span><span className="font-bold text-emerald-700">₦{receipts30d.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span></div>
+              <div className="flex items-center justify-between"><span className="flex items-center gap-2 text-sm text-slate-600"><ArrowDownToLine className="h-4 w-4 text-red-500" />Issues / usage</span><span className="font-bold text-red-600">₦{issues30d.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span></div>
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-between"><span className="text-sm text-slate-500">Transactions recorded</span><span className="font-bold text-slate-900">{movementCount30d}</span></div>
             </div>
           </div>
         </div>

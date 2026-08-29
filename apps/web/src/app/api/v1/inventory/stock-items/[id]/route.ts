@@ -3,6 +3,8 @@ import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { hasInventoryPermission } from '@/lib/inventory/permissions';
 
+const STOCK_ITEM_TYPES = ['SELLABLE', 'RAW_MATERIAL', 'CONSUMABLE', 'CLEANING', 'HOUSEKEEPING', 'ASSET', 'PACKAGING'] as const;
+
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request, props: { params: Promise<{ id: string }> }) {
@@ -40,7 +42,11 @@ export async function PATCH(request: Request, props: { params: Promise<{ id: str
         if (!hasInventoryPermission(role, 'inventory.manage', isSuperAdmin)) return NextResponse.json({ error: 'Forbidden', data: null }, { status: 403 });
 
         const body = await request.json();
-        const { name, sku, barcode, reorderLevel, isActive } = body;
+        const { name, sku, barcode, stockType, reorderLevel, isActive } = body;
+
+        if (stockType !== undefined && !STOCK_ITEM_TYPES.includes(stockType)) {
+            return NextResponse.json({ error: 'Invalid stock type', data: null }, { status: 400 });
+        }
 
         const existing = await prisma.stockItem.findFirst({
             where: { id: params.id, propertyId },
@@ -54,6 +60,7 @@ export async function PATCH(request: Request, props: { params: Promise<{ id: str
                 ...(name !== undefined && { name }),
                 ...(sku !== undefined && { sku }),
                 ...(barcode !== undefined && { barcode }),
+                ...(stockType !== undefined && { stockType }),
                 ...(reorderLevel !== undefined && { reorderLevel: parseFloat(reorderLevel) }),
                 ...(isActive !== undefined && { isActive }),
             },

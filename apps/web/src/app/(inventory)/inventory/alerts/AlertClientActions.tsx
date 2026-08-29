@@ -19,6 +19,9 @@ export default function AlertClientActions({ alertId, initialStatus }: { alertId
         if (action === 'resolve') {
           router.refresh();
         }
+      } else {
+        const data = await res.json().catch(() => null);
+        alert(data?.error || 'Failed to update alert');
       }
     } catch (err) {
       console.error('Failed to update alert', err);

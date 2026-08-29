@@ -5,7 +5,10 @@ import { Truck, Calendar, FileText, ArrowRight } from 'lucide-react';
 
 const STATUS_META: Record<string, { label: string; classes: string }> = {
   DRAFT:     { label: 'Draft',     classes: 'bg-amber-50 text-amber-700 border-amber-200' },
+  SUBMITTED: { label: 'Submitted', classes: 'bg-blue-50 text-blue-700 border-blue-200' },
+  APPROVED:  { label: 'Approved', classes: 'bg-purple-50 text-purple-700 border-purple-200' },
   POSTED:    { label: 'Posted',    classes: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  REJECTED:  { label: 'Rejected',  classes: 'bg-red-50 text-red-700 border-red-200' },
   CANCELLED: { label: 'Cancelled', classes: 'bg-slate-100 text-slate-600 border-slate-200' },
 };
 

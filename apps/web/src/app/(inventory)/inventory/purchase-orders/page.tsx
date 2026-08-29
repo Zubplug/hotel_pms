@@ -13,16 +13,25 @@ const STATUS_META: Record<string, { label: string; classes: string }> = {
   CANCELLED:          { label: 'Cancelled',           classes: 'bg-slate-100 text-slate-500 border-slate-200' },
 };
 
-export default async function PurchaseOrdersPage() {
+export default async function PurchaseOrdersPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const session = await auth();
   const propertyId = session?.user?.propertyId;
   if (!propertyId) return <div>No property selected</div>;
 
+  const requestedStatus = (await searchParams).status;
+  const status = requestedStatus && ['DRAFT', 'SUBMITTED', 'APPROVED', 'PARTIALLY_RECEIVED', 'RECEIVED', 'REJECTED', 'CANCELLED'].includes(requestedStatus)
+    ? requestedStatus
+    : undefined;
+
   const pos = await prisma.purchaseOrder.findMany({
-    where: { propertyId },
-    include: { supplier: true, _count: { select: { items: true } } },
+    where: { propertyId, ...(status ? { status: status as any } : {}) },
+    include: { supplier: true, items: { select: { stockItemId: true } }, _count: { select: { items: true } } },
     orderBy: { createdAt: 'desc' },
-  });
+  }) as any[];
+
+  const stockItemIds = Array.from(new Set(pos.flatMap((po) => po.items.map((item: any) => item.stockItemId).filter(Boolean))));
+  const stockItems = await prisma.stockItem.findMany({ where: { id: { in: stockItemIds } }, select: { id: true, stockType: true } });
+  const stockTypeById = new Map(stockItems.map((item) => [item.id, item.stockType]));
 
   return (
     <div className="min-h-full">
@@ -31,7 +40,7 @@ export default async function PurchaseOrdersPage() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-white tracking-tight">Purchase Orders</h1>
-            <p className="text-slate-400 text-sm mt-1">Manage purchase orders and track supplier deliveries.</p>
+            <p className="text-slate-400 text-sm mt-1">{status === 'SUBMITTED' ? 'Review purchase orders waiting for stage-1 approval.' : 'Manage purchase orders and track supplier deliveries.'}</p>
           </div>
           <Link
             href="/inventory/purchase-orders/new"
@@ -47,10 +56,16 @@ export default async function PurchaseOrdersPage() {
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="flex items-center gap-2 px-6 py-4 border-b border-slate-100 bg-slate-50/60">
             <FileText className="h-4 w-4 text-slate-500" />
-            <span className="text-sm font-semibold text-slate-700">All Purchase Orders</span>
+            <span className="text-sm font-semibold text-slate-700">{status === 'SUBMITTED' ? 'Submitted for Approval' : 'All Purchase Orders'}</span>
             <span className="ml-1 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-slate-200 text-slate-600 text-xs font-bold">
               {pos.length}
             </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 px-6 py-3 border-b border-slate-100">
+            <Link href="/inventory/purchase-orders" className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${!status ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>All</Link>
+            <Link href="/inventory/purchase-orders?status=SUBMITTED" className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${status === 'SUBMITTED' ? 'bg-amber-500 text-white' : 'bg-amber-50 text-amber-700 hover:bg-amber-100'}`}>Pending Approval</Link>
+            <Link href="/inventory/purchase-orders?status=APPROVED" className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${status === 'APPROVED' ? 'bg-emerald-500 text-white' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}>Approved</Link>
           </div>
 
           {pos.length === 0 ? (
@@ -106,6 +121,9 @@ export default async function PurchaseOrdersPage() {
                           <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-slate-100 text-slate-600 text-xs font-bold">
                             {po._count?.items ?? 0}
                           </span>
+                          {(Array.from(new Set(po.items.map((item: any) => stockTypeById.get(item.stockItemId) || 'CONSUMABLE'))) as string[]).map((type) => (
+                            <span key={type} className="ml-1 inline-flex rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 capitalize">{type.replace('_', ' ').toLowerCase()}</span>
+                          ))}
                         </td>
                         <td className="px-6 py-4 text-right text-slate-500 whitespace-nowrap">
                           {po.expectedDate ? new Date(po.expectedDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}

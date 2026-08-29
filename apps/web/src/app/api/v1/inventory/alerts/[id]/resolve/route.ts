@@ -13,7 +13,7 @@ export async function PATCH(request: Request, props: { params: Promise<{ id: str
 
     const { role, propertyId, isSuperAdmin, id: userId } = session.user as any;
 
-    if (!hasInventoryPermission(role, 'inventory.manage', isSuperAdmin)) {
+    if (!hasInventoryPermission(role, 'inventory.alert.resolve', isSuperAdmin)) {
       return NextResponse.json({ data: null, error: 'Forbidden' }, { status: 403 });
     }
 

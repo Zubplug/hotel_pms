@@ -8,10 +8,12 @@
  */
 export const INVENTORY_PERMISSIONS = {
   // Read access across the inventory dashboard
-  'inventory.read': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'INVENTORY_MANAGER', 'STOCK_MANAGER', 'PROCUREMENT_MANAGER'],
+  'inventory.read': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'GENERAL_CASHIER', 'INVENTORY_MANAGER', 'STOCK_MANAGER', 'PROCUREMENT_MANAGER'],
 
   // Managing stock items, warehouses, and general inventory master data
   'inventory.manage': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'STOCK_MANAGER'],
+
+  'inventory.alert.resolve': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'INVENTORY_MANAGER', 'STOCK_KEEPER', 'STOCK_MANAGER'],
 
   // Creating a stock adjustment (creates an ApprovalRequest)
   'inventory.adjust': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'STOCK_MANAGER'],
@@ -26,7 +28,7 @@ export const INVENTORY_PERMISSIONS = {
   'inventory.cost.approve': ['CEO', 'SUPER_ADMIN'],
 
   // Creating a GRN and submitting it
-  'inventory.receive': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'STOCK_MANAGER', 'PROCUREMENT_MANAGER'],
+  'inventory.receive': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'INVENTORY_MANAGER', 'STOCK_KEEPER', 'STOCK_MANAGER', 'PROCUREMENT_MANAGER'],
 
   // Approving a submitted GRN
   'inventory.approve': ['CEO', 'SUPER_ADMIN', 'MANAGER'],
@@ -66,7 +68,10 @@ export const INVENTORY_PERMISSIONS = {
   'procurement.po.create': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'INVENTORY_MANAGER', 'STOCK_MANAGER', 'STOCK_KEEPER', 'PROCUREMENT_MANAGER'],
 
   // Approving a PO - explicitly excludes PROCUREMENT_MANAGER for separation of duties
-  'procurement.po.approve': ['CEO', 'SUPER_ADMIN', 'MANAGER'],
+  'procurement.po.approve': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'GENERAL_CASHIER'],
+
+  // Stage-1 reviewers may correct submitted PO lines before approval.
+  'procurement.po.adjust': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'GENERAL_CASHIER'],
 
   // Cancelling an approved PO
   'procurement.po.cancel': ['CEO', 'SUPER_ADMIN', 'MANAGER'],

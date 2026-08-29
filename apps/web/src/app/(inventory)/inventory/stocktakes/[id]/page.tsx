@@ -246,7 +246,7 @@ export default function StocktakeDetailPage(props: { params: Promise<{ id: strin
                 const variance = item.variance ? parseFloat(item.variance) : 0;
                 return (
                   <tr key={item.id} className="hover:bg-slate-50 transition-colors group">
-                    <td className="px-6 py-4 font-medium text-slate-900">{item.stockItem.name}</td>
+                    <td className="px-6 py-4"><p className="font-medium text-slate-900">{item.stockItem.name}</p><p className="text-xs text-indigo-600 capitalize">{(item.stockItem.stockType || 'CONSUMABLE').replace('_', ' ').toLowerCase()}</p></td>
                     <td className="px-6 py-4 text-slate-500">{item.stockItem.sku || '-'}</td>
                     <td className="px-6 py-4 text-slate-500">{item.stockItem.baseUnit}</td>
                     

@@ -2,10 +2,14 @@ import prisma from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
 import AlertClientActions from './AlertClientActions';
 import { AlertCircle, AlertTriangle, Bell } from 'lucide-react';
+import Link from 'next/link';
+import { InventoryAlertService } from '@/lib/inventory/InventoryAlertService';
 
 export default async function InventoryAlertsPage() {
   const session = await auth();
   if (!session?.user?.propertyId) return null;
+
+  await InventoryAlertService.sync(session.user.propertyId);
 
   const alerts = await prisma.inventoryAlert.findMany({
     where: {
@@ -71,7 +75,8 @@ export default async function InventoryAlertsPage() {
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <h3 className="font-semibold text-slate-900">{alert.stockItem.name}</h3>
+                      <Link href={`/inventory/stock-items/${alert.stockItemId}`} className="font-semibold text-slate-900 hover:text-indigo-700">{alert.stockItem.name}</Link>
+                      <span className="ml-2 text-xs text-indigo-600 capitalize">{(alert.stockItem.stockType || 'CONSUMABLE').replace('_', ' ').toLowerCase()}</span>
                       <span
                         className={`px-2 py-0.5 text-[10px] font-bold uppercase rounded-md border ${
                           alert.status === 'OPEN'

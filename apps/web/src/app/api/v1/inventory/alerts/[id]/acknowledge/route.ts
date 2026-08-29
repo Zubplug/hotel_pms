@@ -18,7 +18,7 @@ export async function PATCH(request: Request, props: { params: Promise<{ id: str
     }
 
     const alert = await prisma.inventoryAlert.updateMany({
-      where: { id: params.id, propertyId },
+      where: { id: params.id, propertyId, status: 'OPEN' },
       data: {
         status: 'ACKNOWLEDGED' as any,
         acknowledgedBy: userId,

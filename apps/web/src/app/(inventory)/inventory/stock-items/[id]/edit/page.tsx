@@ -29,6 +29,7 @@ export default function EditStockItemPage(props: { params: Promise<{ id: string 
       name: formData.get('name'),
       sku: formData.get('sku'),
       barcode: formData.get('barcode'),
+      stockType: formData.get('stockType'),
       reorderLevel: formData.get('reorderLevel') ? parseInt(formData.get('reorderLevel') as string) : null,
       isActive: formData.get('isActive') === 'on',
     };
@@ -105,6 +106,19 @@ export default function EditStockItemPage(props: { params: Promise<{ id: string 
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-800">Base Unit (Read-only)</label>
               <input type="text" disabled defaultValue={item.baseUnit} className="w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-md text-slate-500 cursor-not-allowed" />
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="stockType" className="text-sm font-medium text-slate-800">Stock Type *</label>
+              <select required id="stockType" name="stockType" defaultValue={item.stockType || 'CONSUMABLE'} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <option value="SELLABLE">Sellable / Resale</option>
+                <option value="RAW_MATERIAL">Raw Material / Production</option>
+                <option value="CONSUMABLE">General Consumable</option>
+                <option value="CLEANING">Cleaning</option>
+                <option value="HOUSEKEEPING">Housekeeping</option>
+                <option value="ASSET">Asset / Durable Equipment</option>
+                <option value="PACKAGING">Packaging</option>
+              </select>
             </div>
 
             <div className="space-y-2">

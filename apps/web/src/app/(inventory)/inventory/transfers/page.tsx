@@ -14,18 +14,27 @@ const STATUS_META: Record<string, { label: string; classes: string }> = {
   CANCELLED:        { label: 'Cancelled',        classes: 'bg-red-50 text-red-700 border-red-200' },
 };
 
-export default async function TransfersPage() {
+export default async function TransfersPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
   const session = await auth();
   if (!session?.user) redirect('/login');
 
   const { propertyId, role, staffId } = session.user as any;
+  const view = (await searchParams).view;
 
-  const outletHeadFilter = String(role).toUpperCase() === 'OUTLET_HEAD' && staffId
-    ? { toWarehouse: { posOutlet: { staffAccess: { some: { staffId } } } } }
+  const isOutletHead = String(role).toUpperCase() === 'OUTLET_HEAD';
+  const outletHeadFilter = isOutletHead && staffId
+    ? { posOutlet: { staffAccess: { some: { staffId } } } }
+    : undefined;
+  const outletRequestFilter = view === 'outlet-requests'
+    ? { posOutlet: { isNot: null } }
+    : undefined;
+  const toWarehouseFilter = outletHeadFilter || outletRequestFilter
+    ? { toWarehouse: { ...(outletHeadFilter || {}), ...(outletRequestFilter || {}) } }
     : {};
+  const statusFilter = view === 'outlet-requests' ? { status: 'PENDING_APPROVAL' as const } : {};
 
   const transfers = await prisma.stockTransfer.findMany({
-    where: { propertyId, ...outletHeadFilter },
+    where: { propertyId, ...toWarehouseFilter, ...statusFilter },
     include: {
       fromWarehouse: { select: { name: true } },
       toWarehouse: { select: { name: true, posOutlet: { select: { id: true, name: true } } } },
@@ -42,7 +51,7 @@ export default async function TransfersPage() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-white tracking-tight">Stock Transfers</h1>
-            <p className="text-slate-400 text-sm mt-1">Move stock between warehouses and track transfer approvals.</p>
+            <p className="text-slate-400 text-sm mt-1">{view === 'outlet-requests' ? 'Review stock requests submitted by outlet heads.' : 'Move stock between warehouses and track transfer approvals.'}</p>
           </div>
           <Link
             href="/inventory/transfers/new"
@@ -58,6 +67,12 @@ export default async function TransfersPage() {
             <Send className="h-4 w-4" />
             Issue to Outlet
           </Link>
+          <Link
+            href={view === 'outlet-requests' ? '/inventory/transfers' : '/inventory/transfers?view=outlet-requests'}
+            className="inline-flex items-center gap-2 bg-white/10 text-white hover:bg-white/20 border border-white/20 px-4 py-2 rounded-lg text-sm font-semibold self-start sm:self-auto"
+          >
+            {view === 'outlet-requests' ? 'All Transfers' : 'Outlet Requests'}
+          </Link>
         </div>
       </div>
 
@@ -65,7 +80,7 @@ export default async function TransfersPage() {
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="flex items-center gap-2 px-6 py-4 border-b border-slate-100 bg-slate-50/60">
             <ArrowLeftRight className="h-4 w-4 text-slate-500" />
-            <span className="text-sm font-semibold text-slate-700">All Transfers</span>
+            <span className="text-sm font-semibold text-slate-700">{view === 'outlet-requests' ? 'Outlet Requests Pending Approval' : 'All Transfers'}</span>
             <span className="ml-1 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-slate-200 text-slate-600 text-xs font-bold">
               {transfers.length}
             </span>
@@ -103,7 +118,9 @@ export default async function TransfersPage() {
                       <tr key={t.id} className="hover:bg-slate-50/70 transition-colors group">
                         <td className="px-6 py-4 font-mono text-xs font-bold text-slate-800">{t.transferRef}</td>
                         <td className="px-6 py-4 text-slate-700">{t.fromWarehouse.name}</td>
-                        <td className="px-6 py-4 text-slate-700">{t.toWarehouse.posOutlet?.name || t.toWarehouse.name}</td>
+                        <td className="px-6 py-4 text-slate-700">
+                          {t.toWarehouse.posOutlet ? <><span className="font-semibold text-emerald-700">Outlet:</span> {t.toWarehouse.posOutlet.name}</> : t.toWarehouse.name}
+                        </td>
                         <td className="px-6 py-4 text-right">
                           <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-slate-100 text-slate-600 text-xs font-bold">
                             {t._count.items}

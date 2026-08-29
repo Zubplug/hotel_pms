@@ -12,6 +12,7 @@ interface StockItem {
   baseUnit: string;
   warehouseId: string;
   warehouse: { name: string };
+  stockType?: string;
 }
 
 const ADJUSTMENT_REASONS = [
@@ -134,7 +135,7 @@ export default function ReconciliationPage() {
               <option value="">Choose an item to adjust…</option>
               {items.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {item.name} {item.sku ? `(${item.sku})` : ''} — {item.warehouse?.name}
+                  {item.name} · {(item.stockType || 'CONSUMABLE').replace('_', ' ')} {item.sku ? `(${item.sku})` : ''} — {item.warehouse?.name}
                 </option>
               ))}
             </select>

@@ -4,6 +4,8 @@ import { notFound } from 'next/navigation';
 import { Building2, Calendar, DollarSign, FileText } from 'lucide-react';
 import { POActionBar } from './ActionBar';
 import Link from 'next/link';
+import { hasInventoryPermission } from '@/lib/inventory/permissions';
+import { POItemsEditor } from './POItemsEditor';
 
 const STATUS_COLORS: Record<string, string> = {
   DRAFT: 'bg-gray-500/10 text-gray-400 border-gray-500/20',
@@ -34,10 +36,28 @@ export default async function PurchaseOrderDetailPage({ params }: { params: Prom
     notFound();
   }
 
+  const stockItems = await prisma.stockItem.findMany({
+    where: { id: { in: po.items.map((item: any) => item.stockItemId).filter(Boolean) } },
+    select: { id: true, name: true, stockType: true },
+  });
+  const stockItemById = new Map(stockItems.map((item) => [item.id, item]));
+
   // Check if user has PO approval permission
   const userRole = (session.user as any)?.role || '';
   const isSuperAdmin = (session.user as any)?.isSuperAdmin;
-  const canApprove = isSuperAdmin || ['CEO', 'SUPER_ADMIN', 'MANAGER'].includes(userRole);
+  const canApprove = hasInventoryPermission(userRole, 'procurement.po.approve', isSuperAdmin);
+  const canAdjust = po.status === 'SUBMITTED' && hasInventoryPermission(userRole, 'procurement.po.adjust', isSuperAdmin);
+  const editorItems = po.items.map((item: any) => ({
+    id: item.id,
+    description: item.description || '',
+    quantity: Number(item.quantity),
+    unitOfMeasure: item.unitOfMeasure,
+    unitPrice: Number(item.unitPrice || 0),
+    totalPrice: Number(item.totalPrice || 0),
+    receivedQty: Number(item.receivedQty || 0),
+    stockItemName: stockItemById.get(item.stockItemId)?.name || item.description || 'Unknown item',
+    stockType: stockItemById.get(item.stockItemId)?.stockType || 'CONSUMABLE',
+  }));
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -88,44 +108,7 @@ export default async function PurchaseOrderDetailPage({ params }: { params: Prom
         </div>
       </div>
 
-      {/* Line Items */}
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-200">
-          <h2 className="text-lg font-semibold text-slate-900">Line Items</h2>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm whitespace-nowrap">
-            <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
-              <tr>
-                <th className="px-6 py-4 font-medium">Item</th>
-                <th className="px-6 py-4 font-medium">Description</th>
-                <th className="px-6 py-4 font-medium text-right">Qty</th>
-                <th className="px-6 py-4 font-medium">UOM</th>
-                <th className="px-6 py-4 font-medium text-right">Unit Price</th>
-                <th className="px-6 py-4 font-medium text-right">Total</th>
-                <th className="px-6 py-4 font-medium text-right">Received</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200">
-              {po.items.map((item: any) => (
-                <tr key={item.id} className="hover:bg-slate-100 transition-colors">
-                  <td className="px-6 py-4 font-medium text-slate-900">{item.description || 'Item'}</td>
-                  <td className="px-6 py-4 text-slate-500 max-w-[200px] truncate">{item.description || '-'}</td>
-                  <td className="px-6 py-4 text-slate-700 text-right">{Number(item.quantity).toFixed(2)}</td>
-                  <td className="px-6 py-4 text-slate-700">{item.unitOfMeasure}</td>
-                  <td className="px-6 py-4 text-slate-700 text-right">{Number(item.unitPrice || 0).toFixed(2)}</td>
-                  <td className="px-6 py-4 text-slate-700 text-right">{Number(item.totalPrice || 0).toFixed(2)}</td>
-                  <td className="px-6 py-4 text-right">
-                    <span className="inline-flex items-center justify-center px-2 py-0.5 rounded text-xs font-medium bg-slate-50 text-slate-700">
-                      {Number(item.receivedQty || 0).toFixed(2)}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <POItemsEditor poId={po.id} items={editorItems} editable={canAdjust} currency={po.property?.baseCurrency || 'NGN'} />
 
       {/* GRNs */}
       {(po.grns || []).length > 0 && (

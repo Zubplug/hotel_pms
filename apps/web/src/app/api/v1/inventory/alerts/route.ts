@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { hasInventoryPermission } from '@/lib/inventory/permissions';
+import { InventoryAlertService } from '@/lib/inventory/InventoryAlertService';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +18,8 @@ export async function GET(request: Request) {
     if (!hasInventoryPermission(role, 'inventory.read', isSuperAdmin)) {
       return NextResponse.json({ data: null, error: 'Forbidden' }, { status: 403 });
     }
+
+    await InventoryAlertService.sync(propertyId);
 
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status') || 'OPEN';

@@ -3,6 +3,19 @@ import { auth } from '@/lib/auth';
 import Link from 'next/link';
 import { Boxes, Plus, Edit, Eye } from 'lucide-react';
 
+const STOCK_TYPE_FILTERS = [
+  { value: '', label: 'All types' },
+  { value: 'SELLABLE', label: 'Sellable' },
+  { value: 'RAW_MATERIAL', label: 'Raw materials' },
+  { value: 'CONSUMABLE', label: 'Consumables' },
+  { value: 'CLEANING', label: 'Cleaning' },
+  { value: 'HOUSEKEEPING', label: 'Housekeeping' },
+  { value: 'ASSET', label: 'Assets' },
+  { value: 'PACKAGING', label: 'Packaging' },
+] as const;
+
+const stockTypeLabel = (value: string) => STOCK_TYPE_FILTERS.find((type) => type.value === value)?.label || value;
+
 function StockStatusBadge({ qty, reorderLevel }: { qty: number; reorderLevel: number | null }) {
   if (qty <= 0)
     return (
@@ -26,12 +39,14 @@ function StockStatusBadge({ qty, reorderLevel }: { qty: number; reorderLevel: nu
   );
 }
 
-export default async function StockItemsPage() {
+export default async function StockItemsPage({ searchParams }: { searchParams: Promise<{ type?: string }> }) {
   const session = await auth();
   if (!session?.user?.propertyId) return null;
+  const params = await searchParams;
+  const selectedType = STOCK_TYPE_FILTERS.some((type) => type.value === params.type) ? params.type : '';
 
   const stockItems = await prisma.stockItem.findMany({
-    where: { propertyId: session.user.propertyId, isActive: true },
+    where: { propertyId: session.user.propertyId, isActive: true, ...(selectedType ? { stockType: selectedType as any } : {}) },
     include: {
       warehouse: { select: { name: true } },
       inventoryCategory: { select: { name: true } },
@@ -65,11 +80,18 @@ export default async function StockItemsPage() {
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/60">
             <div className="flex items-center gap-2">
               <Boxes className="h-4 w-4 text-slate-500" />
-              <span className="text-sm font-semibold text-slate-700">All Stock Items</span>
+              <span className="text-sm font-semibold text-slate-700">{selectedType ? stockTypeLabel(selectedType) : 'All Stock Items'}</span>
               <span className="ml-1 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-slate-200 text-slate-600 text-xs font-bold">
                 {stockItems.length}
               </span>
             </div>
+          </div>
+          <div className="flex flex-wrap gap-2 px-6 py-3 border-b border-slate-100">
+            {STOCK_TYPE_FILTERS.map((type) => (
+              <Link key={type.value || 'all'} href={type.value ? `/inventory/stock-items?type=${type.value}` : '/inventory/stock-items'} className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${selectedType === type.value ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                {type.label}
+              </Link>
+            ))}
           </div>
 
           {stockItems.length === 0 ? (
@@ -85,12 +107,12 @@ export default async function StockItemsPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50/80 border-b border-slate-100">
-                    {['Name', 'SKU / Barcode', 'Warehouse', 'Category', 'Cost Price', 'Qty on Hand', 'Status', ''].map(
+                    {['Name', 'SKU / Barcode', 'Warehouse', 'Type', 'Category', 'Cost Price', 'Qty on Hand', 'Status', ''].map(
                       (h, i) => (
                         <th
                           key={i}
                           className={`px-6 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider ${
-                            i >= 4 ? 'text-right' : 'text-left'
+                            i >= 5 ? 'text-right' : 'text-left'
                           }`}
                         >
                           {h}
@@ -108,6 +130,11 @@ export default async function StockItemsPage() {
                         {item.barcode && <p className="text-xs text-slate-400">{item.barcode}</p>}
                       </td>
                       <td className="px-6 py-4 text-slate-600">{item.warehouse?.name || '—'}</td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex items-center rounded-lg px-2.5 py-1 text-xs font-semibold ${item.stockType === 'SELLABLE' ? 'bg-emerald-100 text-emerald-700' : item.stockType === 'ASSET' ? 'bg-purple-100 text-purple-700' : item.stockType === 'CLEANING' || item.stockType === 'HOUSEKEEPING' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700'}`}>
+                          {stockTypeLabel(item.stockType)}
+                        </span>
+                      </td>
                       <td className="px-6 py-4">
                         <span className="inline-flex items-center rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
                           {item.inventoryCategory?.name ||

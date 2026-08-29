@@ -51,7 +51,7 @@ export interface PropertyApprovalFlows {
 export const DEFAULT_APPROVAL_FLOWS: PropertyApprovalFlows = {
   PURCHASE_ORDER: {
     enabled: true,
-    approverRoles: ['CEO', 'SUPER_ADMIN', 'MANAGER'],
+    approverRoles: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'GENERAL_CASHIER'],
     steps: 1,
     minAmount: 0,
     selfApproveBlocked: true,
@@ -84,6 +84,7 @@ export const APPROVABLE_ROLES: string[] = [
   'STOCK_MANAGER',
   'PROCUREMENT_MANAGER',
   'ACCOUNTANT',
+  'GENERAL_CASHIER',
 ];
 
 // ─── Reader ───────────────────────────────────────────────────────────────────

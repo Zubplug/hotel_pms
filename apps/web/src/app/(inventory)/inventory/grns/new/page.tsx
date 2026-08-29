@@ -38,6 +38,12 @@ export default async function NewGRNPage(props: { searchParams: Promise<{ poId?:
     );
   }
 
+  const stockItems = await prisma.stockItem.findMany({
+    where: { id: { in: po.items.map((item: any) => item.stockItemId).filter(Boolean) } },
+    select: { id: true, name: true, stockType: true },
+  });
+  const stockItemById = new Map(stockItems.map((item) => [item.id, item]));
+
   const itemsWithRemaining = po.items.map((item: any) => ({
     id: item.id,
     stockItemId: item.stockItemId,
@@ -47,6 +53,8 @@ export default async function NewGRNPage(props: { searchParams: Promise<{ poId?:
     remainingQty: Number(item.quantity) - Number(item.receivedQty),
     unitCost: Number(item.unitPrice),
     uom: item.unitOfMeasure,
+    stockItemName: stockItemById.get(item.stockItemId)?.name || item.description,
+    stockType: stockItemById.get(item.stockItemId)?.stockType || 'CONSUMABLE',
   }));
 
   return (

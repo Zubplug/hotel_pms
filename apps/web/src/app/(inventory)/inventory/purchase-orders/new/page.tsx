@@ -123,7 +123,7 @@ export default function NewPurchaseOrderPage() {
                           className="w-full bg-white border border-slate-300 rounded-md px-3 py-1.5 text-slate-900 text-sm"
                         >
                           <option value="">Select item...</option>
-                          {stockItems.map(si => <option key={si.id} value={si.id}>{si.name}</option>)}
+                          {stockItems.map(si => <option key={si.id} value={si.id}>{si.name} · {(si.stockType || 'CONSUMABLE').replace('_', ' ')}</option>)}
                         </select>
                       </div>
                       <div>

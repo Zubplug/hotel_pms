@@ -27,7 +27,7 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
       toWarehouse:   true,
       items: {
         include: {
-          stockItem: { select: { name: true, baseUnit: true, quantityOnHand: true } }
+          stockItem: { select: { name: true, stockType: true, baseUnit: true, quantityOnHand: true } }
         }
       },
     },
@@ -51,7 +51,7 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
             </span>
           </div>
           <p className="text-slate-500 text-sm mt-1">
-            {transfer.fromWarehouse.name} → {transfer.toWarehouse.name}
+            {transfer.fromWarehouse.name} → {transfer.toWarehouse.posOutlet ? `Outlet: ${transfer.toWarehouse.posOutlet.name}` : transfer.toWarehouse.name}
           </p>
         </div>
         <TransferActionBar transferId={transfer.id} status={transfer.status} canApprove={canApprove} />
@@ -60,7 +60,7 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
       {/* Info */}
       <div className="bg-slate-50 border border-slate-300 rounded-xl p-5 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
         <div><span className="text-slate-500">From</span><p className="text-slate-900 font-medium mt-0.5">{transfer.fromWarehouse.name}</p></div>
-        <div><span className="text-slate-500">To</span><p className="text-slate-900 font-medium mt-0.5">{transfer.toWarehouse.name}</p></div>
+        <div><span className="text-slate-500">To</span><p className="text-slate-900 font-medium mt-0.5">{transfer.toWarehouse.posOutlet ? `Outlet: ${transfer.toWarehouse.posOutlet.name}` : transfer.toWarehouse.name}</p></div>
         <div><span className="text-slate-500">Created</span><p className="text-slate-900 font-medium mt-0.5">{new Date(transfer.createdAt).toLocaleDateString()}</p></div>
         {transfer.postedAt && <div><span className="text-slate-500">Posted</span><p className="text-teal-400 font-medium mt-0.5">{new Date(transfer.postedAt).toLocaleDateString()}</p></div>}
       </div>
@@ -89,7 +89,7 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
           <tbody className="divide-y divide-slate-200">
             {transfer.items.map(item => (
               <tr key={item.id} className="hover:bg-slate-100/50 transition-colors">
-                <td className="px-4 py-3 text-slate-900 font-medium">{item.stockItem.name}</td>
+                <td className="px-4 py-3"><p className="text-slate-900 font-medium">{item.stockItem.name}</p><p className="text-xs text-indigo-600 capitalize">{(item.stockItem.stockType || 'CONSUMABLE').replace('_', ' ').toLowerCase()}</p></td>
                 <td className="px-4 py-3 text-slate-700">{Number(item.stockItem.quantityOnHand).toFixed(2)}</td>
                 <td className="px-4 py-3 font-semibold text-blue-600">{Number(item.quantity).toFixed(2)}</td>
                 <td className="px-4 py-3 text-slate-500">{item.unitOfMeasure}</td>

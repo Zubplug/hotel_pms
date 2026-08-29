@@ -22,7 +22,7 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
         category: { select: { name: true } },
         items: {
           include: {
-            stockItem: { select: { name: true, sku: true, baseUnit: true } }
+            stockItem: { select: { name: true, sku: true, baseUnit: true, stockType: true } }
           },
           orderBy: { stockItem: { name: 'asc' } }
         }

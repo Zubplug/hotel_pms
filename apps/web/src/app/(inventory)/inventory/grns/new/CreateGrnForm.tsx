@@ -13,6 +13,8 @@ type Item = {
   remainingQty: number;
   unitCost: number;
   uom: string;
+  stockItemName: string;
+  stockType: string;
 };
 
 export function CreateGrnForm({ poId, items }: { poId: string, items: Item[] }) {
@@ -98,8 +100,9 @@ export function CreateGrnForm({ poId, items }: { poId: string, items: Item[] }) 
               {items.map((item) => (
                 <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
                   <td className="px-6 py-4">
-                    <p className="font-medium text-slate-900">{item.description}</p>
-                    <p className="text-xs text-slate-500">{item.uom}</p>
+                    <p className="font-medium text-slate-900">{item.stockItemName}</p>
+                    <p className="text-xs text-indigo-600 capitalize">{item.stockType.replace('_', ' ').toLowerCase()}</p>
+                    <p className="text-xs text-slate-500">{item.description} · {item.uom}</p>
                   </td>
                   <td className="px-6 py-4 text-right text-slate-700">{item.quantity}</td>
                   <td className="px-6 py-4 text-right text-slate-700">{item.receivedQty}</td>

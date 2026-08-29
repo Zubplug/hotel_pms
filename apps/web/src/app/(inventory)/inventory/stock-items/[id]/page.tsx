@@ -29,6 +29,7 @@ export default async function StockItemDetailPage(props: { params: Promise<{ id:
   });
 
   const categoryName = item.inventoryCategory?.name || item.posProduct?.category?.name || 'Uncategorized';
+  const stockTypeLabel = item.stockType.replace('_', ' ');
   const totalValue = Number(item.quantityOnHand) * Number(item.costPrice);
 
   return (
@@ -89,8 +90,8 @@ export default async function StockItemDetailPage(props: { params: Promise<{ id:
             <Activity className="w-6 h-6" />
           </div>
           <div>
-            <p className="text-sm font-medium text-slate-500">Category</p>
-            <p className="text-lg font-bold text-slate-900 mt-1 truncate">{categoryName}</p>
+            <p className="text-sm font-medium text-slate-500">Stock Type</p>
+            <p className="text-lg font-bold text-slate-900 mt-1 truncate">{stockTypeLabel}</p>
           </div>
         </div>
       </div>
@@ -107,6 +108,10 @@ export default async function StockItemDetailPage(props: { params: Promise<{ id:
               <div className="flex justify-between border-b border-slate-100 pb-2">
                 <span className="text-slate-500">Barcode</span>
                 <span className="font-medium text-slate-900">{item.barcode || 'N/A'}</span>
+              </div>
+              <div className="flex justify-between border-b border-slate-100 pb-2">
+                <span className="text-slate-500">Category</span>
+                <span className="font-medium text-slate-900">{categoryName}</span>
               </div>
               <div className="flex justify-between border-b border-slate-100 pb-2">
                 <span className="text-slate-500">Reorder Level</span>

@@ -29,6 +29,7 @@ export default function NewStockItemPage() {
       sku: formData.get('sku'),
       barcode: formData.get('barcode'),
       baseUnit: formData.get('baseUnit'),
+      stockType: formData.get('stockType'),
       reorderLevel: formData.get('reorderLevel') ? parseInt(formData.get('reorderLevel') as string) : null,
     };
 
@@ -100,6 +101,20 @@ export default function NewStockItemPage() {
                   <option key={unit} value={unit}>{unit}</option>
                 ))}
               </select>
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="stockType" className="text-sm font-medium text-slate-800">Stock Type *</label>
+              <select required id="stockType" name="stockType" defaultValue="CONSUMABLE" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <option value="SELLABLE">Sellable / Resale</option>
+                <option value="RAW_MATERIAL">Raw Material / Production</option>
+                <option value="CONSUMABLE">General Consumable</option>
+                <option value="CLEANING">Cleaning</option>
+                <option value="HOUSEKEEPING">Housekeeping</option>
+                <option value="ASSET">Asset / Durable Equipment</option>
+                <option value="PACKAGING">Packaging</option>
+              </select>
+              <p className="text-xs text-slate-500">Use this for reporting and stock-purpose tracking.</p>
             </div>
 
             <div className="space-y-2">

@@ -41,7 +41,7 @@ export default async function GRNDetailPage({ params }: { params: Promise<{ id: 
 
   const stockItems = await prisma.stockItem.findMany({
     where: { id: { in: grn.items.map((item: any) => item.stockItemId) } },
-    select: { id: true, name: true, sku: true, warehouseId: true },
+    select: { id: true, name: true, sku: true, stockType: true, warehouseId: true, warehouse: { select: { name: true } } },
   });
   const stockItemById = new Map(stockItems.map(item => [item.id, item]));
 
@@ -142,7 +142,7 @@ export default async function GRNDetailPage({ params }: { params: Promise<{ id: 
               id={grn.id} 
               status={grn.status}
               itemCount={totalItems} 
-              warehouseName={stockItems[0]?.warehouseId ? 'Destination Warehouse' : 'Stock'}
+              warehouseName={stockItems[0]?.warehouse?.name || 'Stock'}
               canReceive={canReceive}
               canApprove={canApprove}
               canPost={canPost}
@@ -183,6 +183,7 @@ export default async function GRNDetailPage({ params }: { params: Promise<{ id: 
                   <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="px-6 py-4">
                         <p className="font-medium text-slate-900">{stockItem?.name || 'Unknown Item'}</p>
+                      {stockItem?.stockType && <p className="text-xs text-indigo-600 capitalize">{stockItem.stockType.replace('_', ' ').toLowerCase()}</p>}
                       {stockItem?.sku && <p className="text-xs text-slate-400 font-mono mt-0.5">{stockItem.sku}</p>}
                     </td>
                     <td className="px-6 py-4 text-slate-500 max-w-[200px] truncate">{item.description || '-'}</td>

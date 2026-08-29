@@ -1894,6 +1894,16 @@ enum UnitOfMeasure {
   PACK
 }
 
+enum StockItemType {
+  SELLABLE
+  RAW_MATERIAL
+  CONSUMABLE
+  CLEANING
+  HOUSEKEEPING
+  ASSET
+  PACKAGING
+}
+
 model UnitOfMeasureConversion {
   id         String        @id @default(uuid()) @db.Uuid
   propertyId String        @db.Uuid
@@ -1983,6 +1993,7 @@ model StockItem {
   sku      String?
   barcode  String?
   baseUnit UnitOfMeasure
+  stockType StockItemType @default(CONSUMABLE)
 
   costPrice      Decimal  @default(0) @db.Decimal(18, 4)
   quantityOnHand Decimal  @default(0) @db.Decimal(18, 4)

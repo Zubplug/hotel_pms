@@ -101,25 +101,33 @@ export class ProcurementService {
       }
 
       const validItems = [];
+      const seenPoItems = new Set<string>();
       for (const input of items) {
-        if (Number(input.receivedQty) <= 0) continue; // Skip zero/negative quantities
+        const receivedQty = Number(input.receivedQty);
+        const unitCost = Number(input.unitCost);
+        if (!Number.isFinite(receivedQty) || receivedQty < 0 || !Number.isFinite(unitCost) || unitCost < 0) {
+          throw new Error('Received quantity and unit cost must be valid non-negative numbers');
+        }
+        if (receivedQty === 0) continue;
 
         const poItem = po.items.find((i: any) => i.id === input.poItemId);
         if (!poItem) throw new Error(`PO Item ${input.poItemId} not found on this PO`);
+        if (seenPoItems.has(input.poItemId)) throw new Error(`PO Item ${input.poItemId} was provided more than once`);
         if (!poItem.stockItemId) throw new Error(`PO Item ${input.poItemId} is missing a stockItemId`);
         
         const remainingQty = Number(poItem.quantity) - Number(poItem.receivedQty);
-        if (Number(input.receivedQty) > remainingQty) {
-          throw new Error(`Cannot receive ${input.receivedQty} for ${poItem.description}. Only ${remainingQty} remaining.`);
+        if (receivedQty > remainingQty) {
+          throw new Error(`Cannot receive ${receivedQty} for ${poItem.description}. Only ${remainingQty} remaining.`);
         }
 
         validItems.push({
           stockItemId: poItem.stockItemId,
           description: poItem.description,
-          receivedQty: input.receivedQty,
+          receivedQty,
           unitOfMeasure: poItem.unitOfMeasure,
-          unitCost: input.unitCost,
+          unitCost,
         });
+        seenPoItems.add(input.poItemId);
       }
 
       if (validItems.length === 0) {

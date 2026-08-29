@@ -3,6 +3,8 @@ import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { hasInventoryPermission } from '@/lib/inventory/permissions';
 
+const STOCK_ITEM_TYPES = ['SELLABLE', 'RAW_MATERIAL', 'CONSUMABLE', 'CLEANING', 'HOUSEKEEPING', 'ASSET', 'PACKAGING'] as const;
+
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
@@ -15,6 +17,7 @@ export async function GET(request: Request) {
         const { searchParams } = new URL(request.url);
         const warehouseId = searchParams.get('warehouseId');
         const categoryId = searchParams.get('categoryId');
+        const stockType = searchParams.get('stockType');
         const search = searchParams.get('search');
         const isActiveStr = searchParams.get('isActive');
         const isActive = isActiveStr === 'false' ? false : true;
@@ -24,6 +27,7 @@ export async function GET(request: Request) {
 
         const where: any = { propertyId, isActive };
         if (warehouseId) where.warehouseId = warehouseId;
+        if (stockType && STOCK_ITEM_TYPES.includes(stockType as typeof STOCK_ITEM_TYPES[number])) where.stockType = stockType;
         
         const andConditions = [];
         if (categoryId) {
@@ -75,7 +79,11 @@ export async function POST(request: Request) {
         if (!hasInventoryPermission(role, 'inventory.manage', isSuperAdmin)) return NextResponse.json({ error: 'Forbidden', data: null }, { status: 403 });
 
         const body = await request.json();
-        const { warehouseId, name, sku, barcode, baseUnit, reorderLevel, isActive = true } = body;
+        const { warehouseId, name, sku, barcode, baseUnit, stockType = 'CONSUMABLE', reorderLevel, isActive = true } = body;
+
+        if (!STOCK_ITEM_TYPES.includes(stockType)) {
+            return NextResponse.json({ error: 'Invalid stock type', data: null }, { status: 400 });
+        }
 
         const warehouse = await prisma.warehouse.findFirst({
             where: { id: warehouseId, propertyId },
@@ -93,6 +101,7 @@ export async function POST(request: Request) {
                 sku,
                 barcode,
                 baseUnit,
+                stockType,
                 costPrice: 0, // Default to 0, MAC computes actual cost on first GRN
                 reorderLevel: reorderLevel ? parseFloat(reorderLevel) : null,
                 isActive,

@@ -6,7 +6,7 @@ import { ArrowLeftRight, Plus, Trash2, ChevronRight, Loader2, Send } from 'lucid
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 
 interface Warehouse { id: string; name: string; posOutlet?: { id: string; name: string } | null; }
-interface StockItem { id: string; name: string; baseUnit: string; quantityOnHand: number; warehouseId: string; }
+interface StockItem { id: string; name: string; stockType?: string; baseUnit: string; quantityOnHand: number; warehouseId: string; }
 
 export default function NewTransferPage() {
   const router = useRouter();
@@ -153,7 +153,7 @@ export default function NewTransferPage() {
                   >
                     <option value="">Select item</option>
                     {fromItems.map(item => (
-                      <option key={item.id} value={item.id}>{item.name} (Qty: {Number(item.quantityOnHand).toFixed(2)})</option>
+                      <option key={item.id} value={item.id}>{item.name} · {(item.stockType || 'CONSUMABLE').replace('_', ' ')} (Qty: {Number(item.quantityOnHand).toFixed(2)})</option>
                     ))}
                   </select>
                 </div>
