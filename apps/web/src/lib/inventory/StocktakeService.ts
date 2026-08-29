@@ -33,6 +33,8 @@ export class StocktakeService {
         if (variance !== 0) {
           const costAtCount = item.costAtCount.toNumber();
           const varianceValue = variance * costAtCount;
+          const quantityBefore = item.stockItem.quantityOnHand.toNumber();
+          const quantityAfter = quantityBefore + variance;
 
           if (variance > 0) totalOverageValue += varianceValue;
           if (variance < 0) totalShortageValue += Math.abs(varianceValue);
@@ -49,9 +51,11 @@ export class StocktakeService {
               totalValue: varianceValue,
               reference: stocktake.stocktakeRef,
               notes: `Stocktake variance`,
-              operationId,
+              operationId: `${operationId}_${item.stockItemId}`,
               userId: actorId,
               businessDate: new Date(),
+              quantityBefore,
+              quantityAfter,
             }
           });
 

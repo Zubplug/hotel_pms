@@ -47,7 +47,7 @@ export const INVENTORY_PERMISSIONS = {
   'inventory.transfer.approve': ['CEO', 'SUPER_ADMIN', 'MANAGER'],
 
   // Creating/managing a stocktake worksheet
-  'inventory.stocktake': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'STOCK_MANAGER'],
+  'inventory.stocktake': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'INVENTORY_MANAGER', 'STOCK_MANAGER', 'STOCK_KEEPER'],
 
   // Approving a completed stocktake
   'inventory.stocktake.approve': ['CEO', 'SUPER_ADMIN', 'MANAGER'],

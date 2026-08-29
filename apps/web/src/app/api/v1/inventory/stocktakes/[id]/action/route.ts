@@ -37,12 +37,15 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       if (!hasManage || stocktake.status !== 'COUNTING') {
         return NextResponse.json({ error: 'Cannot submit', data: null }, { status: 400 });
       }
+
+      if (stocktake.items.some(item => item.countedQty === null)) {
+        return NextResponse.json({ error: 'Complete every physical count before submitting', data: null }, { status: 400 });
+      }
       
       // Calculate variances
       const updates = stocktake.items.map(item => {
         const expectedQty = item.expectedQty.toNumber();
-        const countedQty = item.countedQty ? item.countedQty.toNumber() : expectedQty; // Default to expected if left blank? Or error? Let's assume blank means 0. Wait, strict inventory control requires entering 0. 
-        const actualCounted = item.countedQty ? item.countedQty.toNumber() : 0;
+        const actualCounted = item.countedQty!.toNumber();
         const variance = actualCounted - expectedQty;
         const costAtCount = item.costAtCount.toNumber();
         const varianceValue = variance * costAtCount;

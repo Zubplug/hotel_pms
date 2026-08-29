@@ -51,6 +51,9 @@ export async function PATCH(request: Request, props: { params: Promise<{ id: str
 
     const body = await request.json();
     const { counts } = body; // Array of { itemId: string, countedQty: number | null }
+    if (!Array.isArray(counts)) {
+      return NextResponse.json({ error: 'Counts must be an array', data: null }, { status: 400 });
+    }
 
     // Ensure it's in COUNTING state
     const stocktake = await prisma.stocktake.findUnique({
@@ -61,10 +64,18 @@ export async function PATCH(request: Request, props: { params: Promise<{ id: str
       return NextResponse.json({ error: 'Stocktake must be in COUNTING status to update counts', data: null }, { status: 400 });
     }
 
+    const invalidCount = counts.find((count: any) =>
+      typeof count.itemId !== 'string' ||
+      (count.countedQty !== null && (!Number.isFinite(Number(count.countedQty)) || Number(count.countedQty) < 0))
+    );
+    if (invalidCount) {
+      return NextResponse.json({ error: 'Every count must be a non-negative number or blank', data: null }, { status: 400 });
+    }
+
     // Update each item in a transaction
     await prisma.$transaction(
       counts.map((c: any) => 
-        prisma.stocktakeItem.update({
+        prisma.stocktakeItem.updateMany({
           where: { id: c.itemId, stocktakeId: params.id },
           data: { countedQty: c.countedQty }
         })

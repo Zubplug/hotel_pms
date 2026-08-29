@@ -18,7 +18,7 @@ export default function NewStocktakePage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    fetch('/api/v1/inventory/warehouses?limit=100').then(r => r.json()).then(r => setWarehouses(r.data?.items || []));
+    fetch('/api/v1/inventory/warehouses?limit=100').then(r => r.json()).then(r => setWarehouses(r.data || []));
     fetch('/api/v1/inventory/categories?limit=100').then(r => r.json()).then(r => setCategories(r.data?.items || []));
   }, []);
 

@@ -45,7 +45,8 @@ export default function StocktakeDetailPage(props: { params: Promise<{ id: strin
     
     // If submitting, we must save counts first
     if (action === 'submit') {
-      await saveCounts(false);
+      const saved = await saveCounts(false);
+      if (!saved) return;
     }
 
     setActioning(action);
@@ -78,11 +79,19 @@ export default function StocktakeDetailPage(props: { params: Promise<{ id: strin
       body: JSON.stringify({ counts: payload }),
     });
 
-    if (res.ok && showNotification) {
+    if (!res.ok) {
+      const json = await res.json().catch(() => null);
+      alert(json?.error || 'Failed to save counts');
+      setSaving(false);
+      return false;
+    }
+
+    if (showNotification) {
       // Could show a toast here
       await fetchData();
     }
     setSaving(false);
+    return true;
   };
 
   if (loading) return <div className="p-12 text-center text-slate-500">Loading stocktake...</div>;

@@ -56,15 +56,20 @@ export async function POST(request: Request) {
     const count = await prisma.stocktake.count({ where: { propertyId } });
     const stocktakeRef = `STK-${String(count + 1).padStart(5, '0')}`;
 
-    // Get all items that should be part of this snapshot
-    const itemWhere: any = { propertyId, warehouseId, isActive: true };
-    if (categoryId) itemWhere.inventoryCategoryId = categoryId; // Wait, let's check field name for category in StockItem
+    const warehouse = await prisma.warehouse.findFirst({ where: { id: warehouseId, propertyId, isActive: true } });
+    if (!warehouse) {
+      return NextResponse.json({ error: 'Warehouse not found', data: null }, { status: 404 });
+    }
 
-    // Let's verify field name first
-    // It's usually `categoryId` or `inventoryCategoryId`. We'll just fetch items based on categoryId if provided.
-    
-    // I'll fix this in a moment if needed by inspecting the schema again. 
-    // Wait, in schema.prisma, StockItem has `categoryId String? @db.Uuid`. Let's assume it's categoryId.
+    if (categoryId) {
+      const category = await prisma.inventoryCategory.findFirst({ where: { id: categoryId, propertyId, isActive: true } });
+      if (!category) {
+        return NextResponse.json({ error: 'Category not found', data: null }, { status: 404 });
+      }
+    }
+
+    // Get all items that should be part of this snapshot.
+    const itemWhere: any = { propertyId, warehouseId, isActive: true };
     if (categoryId) itemWhere.categoryId = categoryId;
 
     const itemsToCount = await prisma.stockItem.findMany({
