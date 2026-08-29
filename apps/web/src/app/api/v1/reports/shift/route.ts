@@ -133,6 +133,8 @@ export async function GET(req: NextRequest) {
         orders: { select: { id: true, orderNumber: true, total: true, status: true, paymentStatus: true, createdAt: true, closedAt: true } },
         payments: { orderBy: { createdAt: 'desc' } },
         cashMovements: { orderBy: { createdAt: 'desc' } },
+        receiptAudits: { orderBy: { createdAt: 'desc' } },
+        authorizationAudits: { orderBy: { createdAt: 'desc' } },
         settlements: { orderBy: { settledAt: 'desc' }, take: 1 },
         controlAudits: { orderBy: { createdAt: 'desc' } },
       },
@@ -191,6 +193,30 @@ export async function GET(req: NextRequest) {
       status: payment.status,
       operatorId: payment.processedById || posSession.openedBy,
       businessDate: posSession.businessDate,
+      reference: payment.reference || payment.gatewayTransactionId || payment.operationId || null,
+      receiptAudits: posSession.receiptAudits.filter((receipt: any) => receipt.orderId === payment.orderId),
+    })));
+
+    const posOrders = posSessions.flatMap((posSession: any) => posSession.orders.map((order: any) => ({
+      ...order,
+      sessionId: posSession.id,
+      outlet: posSession.outlet,
+      operatorId: posSession.primaryOperator?.id || posSession.openedBy,
+    })));
+    const posCashMovements = posSessions.flatMap((posSession: any) => posSession.cashMovements.map((movement: any) => ({
+      ...movement,
+      sessionId: posSession.id,
+      outlet: posSession.outlet,
+    })));
+    const posReceiptAudits = posSessions.flatMap((posSession: any) => posSession.receiptAudits.map((receipt: any) => ({
+      ...receipt,
+      sessionId: posSession.id,
+      outlet: posSession.outlet,
+    })));
+    const posAuthorizationAudits = posSessions.flatMap((posSession: any) => posSession.authorizationAudits.map((audit: any) => ({
+      ...audit,
+      sessionId: posSession.id,
+      outlet: posSession.outlet,
     })));
 
     for (const row of posRows.filter((row: any) => ['CONFIRMED', 'PAID'].includes(row.status))) {
@@ -286,6 +312,11 @@ export async function GET(req: NextRequest) {
         shiftControlAudits: item.shiftControlAudits,
       };
     });
+    const frontdeskCashMovements = frontdeskSessions.flatMap((session: any) => session.cashMovements.map((movement: any) => ({
+      ...movement,
+      sessionId: session.id,
+      till: session.cashAccount,
+    })));
     const shifts = [...posShiftRows, ...frontdeskShiftRows];
 
     // 4. Audit Log the report access
@@ -328,7 +359,7 @@ export async function GET(req: NextRequest) {
         posSessions: posSessions.length,
         pendingSyncConflicts: syncConflicts,
       },
-      items: { payments, refunds, posPayments: posRows },
+      items: { payments, refunds, posPayments: posRows, posOrders, posCashMovements, frontdeskCashMovements, posReceiptAudits, posAuthorizationAudits },
       shifts,
     }, 200);
 

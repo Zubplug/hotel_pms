@@ -17,8 +17,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ shi
     
     const reviewNotes = typeof notes === 'string' ? notes.trim() : '';
 
-    const staff = await prisma.staff.findFirst({ where: { userId: actorUserId }, select: { id: true } });
+    const userRec = await prisma.user.findUnique({ where: { id: actorUserId }, select: { staffId: true } });
+    const staff = await prisma.staff.findFirst({ 
+      where: { 
+        OR: [
+          { userId: actorUserId },
+          ...(userRec?.staffId ? [{ id: userRec.staffId }] : [])
+        ]
+      }, 
+      select: { id: true } 
+    });
+
     if (!staff) return errorResponse('UNAUTHORIZED', 'Reviewer staff record not found', 401);
+    const reviewerId = staff.id;
 
     // Determine shift type and verify property access
     let type: 'POS' | 'FRONT_DESK';
@@ -41,11 +52,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ shi
 
     let updated;
     if (decision === 'APPROVED') {
-      updated = await ShiftControlService.approveShift(type, shiftId, staff.id);
+      updated = await ShiftControlService.approveShift(type, shiftId, reviewerId);
     } else if (decision === 'APPROVED_WITH_VARIANCE') {
-      updated = await ShiftControlService.approveShiftWithVariance(type, shiftId, staff.id, role, reasonCode, reviewNotes);
+      updated = await ShiftControlService.approveShiftWithVariance(type, shiftId, reviewerId, role, reasonCode, reviewNotes);
     } else if (decision === 'REJECTED') {
-      updated = await ShiftControlService.returnShift(type, shiftId, staff.id, reviewNotes);
+      updated = await ShiftControlService.returnShift(type, shiftId, reviewerId, reviewNotes);
     } else {
       return errorResponse('BAD_REQUEST', 'Invalid approval decision', 400);
     }

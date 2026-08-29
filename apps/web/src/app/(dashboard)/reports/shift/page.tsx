@@ -195,6 +195,7 @@ export default function ShiftReportPage() {
         id: p.id, type: 'PAYMENT', date: p.createdAt, method: p.method,
         amount: Number(p.amount), guest: p.folio?.reservation?.primaryGuest,
         reservationId: p.folio?.reservation?.id, staffId: p.receivedBy, status: p.status,
+        reference: p.receiptNumber || p.reference || p.providerTransactionId || p.id,
       })
     );
     report.items.refunds.forEach((r: any) =>
@@ -202,8 +203,48 @@ export default function ShiftReportPage() {
         id: r.id, type: 'REFUND', date: r.createdAt, method: r.payment?.method,
         amount: -Number(r.amount), guest: r.payment?.folio?.reservation?.primaryGuest,
         reservationId: r.payment?.folio?.reservation?.id, staffId: r.authorizedBy, status: r.status,
+        reference: r.payment?.receiptNumber || r.payment?.reference || r.id,
       })
     );
+    report.items.posPayments?.forEach((p: any) =>
+      transactions.push({
+        id: p.id,
+        type: 'POS PAYMENT',
+        date: p.date,
+        method: p.method,
+        amount: Number(p.amount),
+        orderNumber: p.orderNumber,
+        staffId: p.operatorId,
+        status: p.status,
+        reference: p.reference || p.id,
+      })
+    );
+    report.items.posCashMovements?.forEach((movement: any) => {
+      const inflow = ['OPENING_FLOAT', 'CASH_IN', 'CASH_TRANSFER_IN'].includes(movement.type);
+      transactions.push({
+        id: movement.id,
+        type: 'POS CASH MOVEMENT',
+        date: movement.createdAt,
+        method: movement.type,
+        amount: inflow ? Number(movement.amount) : -Number(movement.amount),
+        staffId: movement.userId,
+        status: 'RECORDED',
+        reference: movement.receiptReference || movement.operationId || movement.id,
+      });
+    });
+    report.items.frontdeskCashMovements?.forEach((movement: any) => {
+      const inflow = ['CASH_IN', 'CASH_TRANSFER_IN'].includes(movement.type);
+      transactions.push({
+        id: movement.id,
+        type: 'FRONT DESK CASH MOVEMENT',
+        date: movement.createdAt,
+        method: movement.type,
+        amount: inflow ? Number(movement.amount) : -Number(movement.amount),
+        staffId: movement.userId,
+        status: 'RECORDED',
+        reference: movement.receiptReference || movement.operationId || movement.id,
+      });
+    });
     transactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }
 
@@ -598,7 +639,7 @@ export default function ShiftReportPage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="bg-slate-50/80 border-b border-slate-100">
-                        {['Time', 'Type', 'Method', 'Guest', 'Reservation', 'Staff', 'Status', 'Amount'].map(
+                        {['Time', 'Type', 'Method', 'Guest / Order', 'Receipt / Reference', 'Staff', 'Status', 'Amount'].map(
                           (h, i) => (
                             <th
                               key={i}
@@ -621,13 +662,17 @@ export default function ShiftReportPage() {
                           <td className="px-5 py-3.5">
                             <span
                               className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-bold border ${
-                                t.type === 'PAYMENT'
+                                t.type === 'PAYMENT' || t.type === 'POS PAYMENT'
                                   ? 'bg-blue-50 text-blue-700 border-blue-200'
-                                  : 'bg-red-50 text-red-700 border-red-200'
+                                  : t.type === 'POS CASH MOVEMENT' || t.type === 'FRONT DESK CASH MOVEMENT'
+                                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                    : 'bg-red-50 text-red-700 border-red-200'
                               }`}
                             >
-                              {t.type === 'PAYMENT' ? (
+                              {t.type === 'PAYMENT' || t.type === 'POS PAYMENT' ? (
                                 <CreditCard className="h-3 w-3" />
+                              ) : t.type === 'POS CASH MOVEMENT' || t.type === 'FRONT DESK CASH MOVEMENT' ? (
+                                <Banknote className="h-3 w-3" />
                               ) : (
                                 <XCircle className="h-3 w-3" />
                               )}
@@ -638,17 +683,21 @@ export default function ShiftReportPage() {
                           <td className="px-5 py-3.5 text-slate-600 uppercase text-xs font-semibold tracking-wide">
                             {t.method || '—'}
                           </td>
-                          {/* Guest */}
+                          {/* Guest / order */}
                           <td className="px-5 py-3.5 text-slate-700">
-                            {t.guest?.firstName
+                            {t.orderNumber ? (
+                              <span className="font-mono text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md">
+                                Order {t.orderNumber}
+                              </span>
+                            ) : t.guest?.firstName
                               ? `${t.guest.firstName} ${t.guest.lastName}`
                               : <span className="text-slate-400">—</span>}
                           </td>
-                          {/* Reservation */}
+                          {/* Receipt / reference */}
                           <td className="px-5 py-3.5">
-                            {t.reservationId ? (
-                              <span className="font-mono text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md">
-                                {t.reservationId.slice(0, 8).toUpperCase()}
+                            {t.reference ? (
+                              <span className="font-mono text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md" title={t.reference}>
+                                {t.reference.length > 18 ? `${t.reference.slice(0, 18)}…` : t.reference}
                               </span>
                             ) : <span className="text-slate-400">—</span>}
                           </td>
@@ -686,6 +735,60 @@ export default function ShiftReportPage() {
                 </div>
               )}
             </div>
+
+            {/* ─── POS Receipt & Authorization Evidence ─── */}
+            {((report?.items?.posReceiptAudits?.length ?? 0) > 0 || (report?.items?.posAuthorizationAudits?.length ?? 0) > 0) && (
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="bg-slate-50/60 border-b border-slate-100 px-6 py-4 flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4 text-slate-500" />
+                  <div>
+                    <h2 className="text-sm font-semibold text-slate-700">POS Audit Evidence</h2>
+                    <p className="text-xs text-slate-400 mt-0.5">Receipt printing and authorization activity attached to this shift.</p>
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-slate-50/80 border-b border-slate-100">
+                        {['Time', 'Evidence', 'Reference', 'Device / Staff', 'Reason'].map((heading) => (
+                          <th key={heading} className="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap">
+                            {heading}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {[
+                        ...(report?.items?.posReceiptAudits || []).map((audit: any) => ({
+                          id: `receipt-${audit.id}`,
+                          date: audit.createdAt,
+                          evidence: `Receipt ${String(audit.type).replaceAll('_', ' ')}`,
+                          reference: audit.operationId || audit.orderId || audit.id,
+                          deviceStaff: `${audit.deviceId || '—'} / ${audit.userId || '—'}`,
+                          reason: audit.reason || `Print count: ${audit.printCount ?? 1}`,
+                        })),
+                        ...(report?.items?.posAuthorizationAudits || []).map((audit: any) => ({
+                          id: `authorization-${audit.id}`,
+                          date: audit.createdAt,
+                          evidence: `Authorization ${audit.action}`,
+                          reference: audit.operationId || audit.id,
+                          deviceStaff: `${audit.deviceId || '—'} / ${audit.authorizedBy || audit.requestedBy || '—'}`,
+                          reason: audit.reason || '—',
+                        })),
+                      ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((evidence) => (
+                        <tr key={evidence.id} className="hover:bg-slate-50/70 transition-colors">
+                          <td className="px-5 py-3.5 font-mono text-xs text-slate-500 whitespace-nowrap">{format(new Date(evidence.date), 'dd MMM yyyy HH:mm:ss')}</td>
+                          <td className="px-5 py-3.5 font-semibold text-slate-700">{evidence.evidence}</td>
+                          <td className="px-5 py-3.5"><span className="font-mono text-xs text-slate-500" title={evidence.reference}>{evidence.reference.slice(0, 18)}{evidence.reference.length > 18 ? '…' : ''}</span></td>
+                          <td className="px-5 py-3.5"><span className="font-mono text-xs text-slate-500" title={evidence.deviceStaff}>{evidence.deviceStaff.slice(0, 24)}{evidence.deviceStaff.length > 24 ? '…' : ''}</span></td>
+                          <td className="px-5 py-3.5 text-slate-600">{evidence.reason}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>
