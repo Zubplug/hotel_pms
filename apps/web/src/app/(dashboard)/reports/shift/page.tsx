@@ -164,7 +164,7 @@ export default function ShiftReportPage() {
       Number(shift.variance || 0),
     ]);
     const csv = [
-      ['Type', 'Shift', 'Status', 'Operator', 'Expected Cash', 'Declared Cash', 'Variance'],
+      ['Type', 'Shift', 'Status', 'Operator', 'Expected Handover', 'Declared Cash', 'Variance'],
       ...rows,
     ]
       .map((row) =>
@@ -223,19 +223,6 @@ export default function ShiftReportPage() {
       transactions.push({
         id: movement.id,
         type: 'POS CASH MOVEMENT',
-        date: movement.createdAt,
-        method: movement.type,
-        amount: inflow ? Number(movement.amount) : -Number(movement.amount),
-        staffId: movement.userId,
-        status: 'RECORDED',
-        reference: movement.receiptReference || movement.operationId || movement.id,
-      });
-    });
-    report.items.frontdeskCashMovements?.forEach((movement: any) => {
-      const inflow = ['CASH_IN', 'CASH_TRANSFER_IN'].includes(movement.type);
-      transactions.push({
-        id: movement.id,
-        type: 'FRONT DESK CASH MOVEMENT',
         date: movement.createdAt,
         method: movement.type,
         amount: inflow ? Number(movement.amount) : -Number(movement.amount),
@@ -314,7 +301,7 @@ export default function ShiftReportPage() {
                 <div className="bg-slate-50/60 border-b border-slate-100 px-6 py-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Banknote className="h-4 w-4 text-slate-500" />
-                    <h2 className="text-sm font-semibold text-slate-700">Cash Reconciliation</h2>
+                    <h2 className="text-sm font-semibold text-slate-700">Payment Handover &amp; Reconciliation</h2>
                   </div>
                   <StatusChip status={selectedShift.controlStatus || selectedShift.status} />
                 </div>
@@ -372,7 +359,7 @@ export default function ShiftReportPage() {
                 <div className="border-t border-slate-100 grid grid-cols-2 md:grid-cols-4 divide-x divide-slate-100">
                   {[
                     { label: 'Opening Float', value: fmt(Number(selectedShift.openingFloat ?? 0)), icon: Banknote, color: 'text-slate-700' },
-                    { label: 'Expected Cash', value: fmt(Number(selectedShift.expectedCash ?? 0)), icon: TrendingUp, color: 'text-blue-700', sub: 'Server recalculated' },
+                    { label: 'Expected Cash Handover', value: fmt(Number(selectedShift.expectedCash ?? 0)), icon: TrendingUp, color: 'text-blue-700', sub: 'Physical cash only' },
                     { label: 'Declared Cash', value: selectedShift.declaredCash == null ? 'Not declared' : fmt(Number(selectedShift.declaredCash)), icon: ShieldCheck, color: 'text-slate-700' },
                     {
                       label: 'Variance',
@@ -396,6 +383,26 @@ export default function ShiftReportPage() {
                       </div>
                     );
                   })}
+                </div>
+                <div className="border-t border-slate-100 px-6 py-5">
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <div>
+                      <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Receipts to hand over</h3>
+                      <p className="text-xs text-slate-400 mt-1">Completed collections grouped by payment method.</p>
+                    </div>
+                    <span className="text-xs font-semibold text-slate-500">
+                      {fmt(Object.values(selectedShift.paymentTotals ?? {}).reduce((sum: number, value: any) => sum + Number(value || 0), 0))}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                    {Object.entries(selectedShift.paymentTotals ?? {}).map(([method, amount]: [string, any]) => (
+                      <div key={method} className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{method.replace(/_/g, ' ')}</p>
+                        <p className="mt-1 text-sm font-bold text-slate-800">{fmt(Number(amount || 0))}</p>
+                      </div>
+                    ))}
+                    {Object.keys(selectedShift.paymentTotals ?? {}).length === 0 && <p className="text-sm text-slate-400">No completed payment receipts recorded.</p>}
+                  </div>
                 </div>
               </div>
             )}
@@ -663,14 +670,14 @@ export default function ShiftReportPage() {
                               className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-bold border ${
                                 t.type === 'PAYMENT' || t.type === 'POS PAYMENT'
                                   ? 'bg-blue-50 text-blue-700 border-blue-200'
-                                  : t.type === 'POS CASH MOVEMENT' || t.type === 'FRONT DESK CASH MOVEMENT'
+                                  : t.type === 'POS CASH MOVEMENT'
                                     ? 'bg-amber-50 text-amber-700 border-amber-200'
                                     : 'bg-red-50 text-red-700 border-red-200'
                               }`}
                             >
                               {t.type === 'PAYMENT' || t.type === 'POS PAYMENT' ? (
                                 <CreditCard className="h-3 w-3" />
-                              ) : t.type === 'POS CASH MOVEMENT' || t.type === 'FRONT DESK CASH MOVEMENT' ? (
+                              ) : t.type === 'POS CASH MOVEMENT' ? (
                                 <Banknote className="h-3 w-3" />
                               ) : (
                                 <XCircle className="h-3 w-3" />

@@ -261,7 +261,7 @@ export async function GET(req: NextRequest) {
         completedOrders: item.orders.filter((order: any) => order.status === 'CLOSED').length,
         voidedOrders: item.orders.filter((order: any) => order.status === 'VOIDED').length,
         paymentCount: item.payments.length,
-        paymentTotals: item.payments.reduce((result: Record<string, number>, payment: any) => {
+        paymentTotals: item.payments.filter((payment: any) => ['CONFIRMED', 'PAID'].includes(payment.status)).reduce((result: Record<string, number>, payment: any) => {
           result[payment.method] = (result[payment.method] || 0) + Number(payment.amount);
           return result;
         }, {}),
@@ -298,7 +298,7 @@ export async function GET(req: NextRequest) {
         declaredCash: item.declaredCash == null ? null : Number(item.declaredCash),
         variance: item.variance == null ? null : Number(item.variance),
         paymentCount: item.payments.length,
-        paymentTotals: item.payments.reduce((result: Record<string, number>, payment: any) => {
+        paymentTotals: item.payments.filter((payment: any) => ['COMPLETED', 'PARTIALLY_REFUNDED'].includes(payment.status)).reduce((result: Record<string, number>, payment: any) => {
           result[payment.method] = (result[payment.method] || 0) + Number(payment.amount);
           return result;
         }, {}),
