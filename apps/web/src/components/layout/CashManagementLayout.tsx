@@ -35,8 +35,8 @@ const CASH_MANAGEMENT_NAV = [
       { name: 'Cash Handovers', href: '/handovers' },
       { name: 'Bank Deposits', href: '/deposits' },
       { name: 'Receivables', href: '/reports/receivables' },
-      { name: 'POS Menu & Prices', href: '/admin/pos/menu' },
-      { name: 'Price Approvals', href: '/admin/pos/price-approvals' },
+      { name: 'POS Menu & Prices', href: '/cashier/menu' },
+      { name: 'Price Approvals', href: '/cashier/price-approvals', roles: ['ACCOUNTANT', 'FINANCE_MANAGER', 'MANAGER', 'CEO', 'SUPER_ADMIN'] },
       { name: 'Gateway', href: '/reports/gateway' },
     ],
   },
@@ -113,6 +113,7 @@ export function CashManagementLayout({ children }: { children: React.ReactNode }
             {section.children.map((item) => {
               const isActive =
                 pathname === item.href || pathname?.startsWith(`${item.href}/`);
+              if ((item as any).roles && !(item as any).roles.includes(String((session.user as any).role || '').toUpperCase())) return null;
               return (
                 <Link
                   key={item.name}

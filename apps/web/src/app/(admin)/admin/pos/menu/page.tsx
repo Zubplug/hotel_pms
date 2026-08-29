@@ -505,7 +505,7 @@ export default function MenuManagerPage() {
                 Manage categories, products, and production station routing
               </p>
             </div>
-            <Link href="/admin/pos/price-approvals" className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-100">Price approvals</Link>
+            <Link href="/cashier/price-approvals" className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-100">Price approvals</Link>
           </div>
           {/* Station overview pills */}
           <div className="hidden lg:flex items-center gap-2">
