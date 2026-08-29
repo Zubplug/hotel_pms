@@ -118,9 +118,8 @@ export default function ShiftReportPage() {
         selectedShift.settlementStatus === 'PENDING_HANDOVER');
 
   const shiftVariance = selectedShift
-    ? selectedShift.declaredCash != null
-      ? Number(selectedShift.declaredCash) - Number(selectedShift.expectedCash)
-      : 0
+    ? (selectedShift.declaredCash != null ? Number(selectedShift.declaredCash) : 0) -
+      (selectedShift.expectedCash != null ? Number(selectedShift.expectedCash) : 0)
     : 0;
 
   const approveShift = async () => {

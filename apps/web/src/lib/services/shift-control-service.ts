@@ -116,7 +116,7 @@ export class ShiftControlService {
       const declared = type === 'POS' ? Number(shift.actualCash || 0) : Number(shift.declaredCash || 0);
       const variance = declared - expected;
       
-      if (variance !== 0) {
+      if (Math.abs(variance) > 0.01) {
         throw new ShiftControlError('A shift with a variance cannot be approved normally. Use approve-with-variance.', 'CONFLICT', 409);
       }
 
@@ -166,7 +166,7 @@ export class ShiftControlService {
       const variance = declared - expected;
       const absVariance = Math.abs(variance);
 
-      if (variance === 0) {
+      if (absVariance <= 0.01) {
         throw new ShiftControlError('Approve with variance requires a non-zero variance', 'BAD_REQUEST');
       }
 
