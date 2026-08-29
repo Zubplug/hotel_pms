@@ -118,6 +118,8 @@ export default async function HandoversPage() {
                         key={i}
                         className={`px-6 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap ${
                           i >= 2 ? 'text-right' : 'text-left'
+                        } ${
+                          i === 8 ? 'sticky right-0 bg-slate-50/90 backdrop-blur-sm border-l border-slate-100 z-10 shadow-[-4px_0_12px_rgba(0,0,0,0.02)]' : ''
                         }`}
                       >
                         {h}
@@ -175,7 +177,7 @@ export default async function HandoversPage() {
                             minute: '2-digit',
                           })}
                         </td>
-                        <td className="px-6 py-4 text-right">
+                        <td className="px-6 py-4 text-right sticky right-0 bg-white border-l border-slate-100 shadow-[-4px_0_12px_rgba(0,0,0,0.02)]">
                           <ReceiveHandoverButton
                             handoverId={h.id}
                             currentStatus={h.status}
