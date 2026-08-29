@@ -15,6 +15,7 @@ export async function GET(request: Request) {
         const warehouses = await prisma.warehouse.findMany({
             where: { propertyId },
             include: {
+                posOutlet: { select: { id: true, name: true, type: true } },
                 _count: {
                     select: { stockItems: true },
                 },

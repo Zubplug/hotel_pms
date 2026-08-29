@@ -2,7 +2,7 @@ import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import prisma from '@hotel-pms/db';
 import Link from 'next/link';
-import { ArrowLeftRight, Plus, ArrowRight } from 'lucide-react';
+import { ArrowLeftRight, Plus, ArrowRight, Send } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,7 +24,7 @@ export default async function TransfersPage() {
     where: { propertyId },
     include: {
       fromWarehouse: { select: { name: true } },
-      toWarehouse: { select: { name: true } },
+      toWarehouse: { select: { name: true, posOutlet: { select: { name: true } } } },
       _count: { select: { items: true } },
     },
     orderBy: { createdAt: 'desc' },
@@ -46,6 +46,13 @@ export default async function TransfersPage() {
           >
             <Plus className="h-4 w-4" />
             New Transfer
+          </Link>
+          <Link
+            href="/inventory/transfers/new?issue=outlet"
+            className="inline-flex items-center gap-2 bg-emerald-500 text-white hover:bg-emerald-600 px-4 py-2 rounded-lg text-sm font-semibold shadow-sm self-start sm:self-auto"
+          >
+            <Send className="h-4 w-4" />
+            Issue to Outlet
           </Link>
         </div>
       </div>
@@ -92,7 +99,7 @@ export default async function TransfersPage() {
                       <tr key={t.id} className="hover:bg-slate-50/70 transition-colors group">
                         <td className="px-6 py-4 font-mono text-xs font-bold text-slate-800">{t.transferRef}</td>
                         <td className="px-6 py-4 text-slate-700">{t.fromWarehouse.name}</td>
-                        <td className="px-6 py-4 text-slate-700">{t.toWarehouse.name}</td>
+                        <td className="px-6 py-4 text-slate-700">{t.toWarehouse.posOutlet?.name || t.toWarehouse.name}</td>
                         <td className="px-6 py-4 text-right">
                           <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-slate-100 text-slate-600 text-xs font-bold">
                             {t._count.items}

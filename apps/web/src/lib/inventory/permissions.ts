@@ -41,7 +41,7 @@ export const INVENTORY_PERMISSIONS = {
   'inventory.reverse': ['CEO', 'SUPER_ADMIN'],
 
   // Creating a stock transfer
-  'inventory.transfer': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'STOCK_MANAGER'],
+  'inventory.transfer': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'INVENTORY_MANAGER', 'STOCK_KEEPER', 'STOCK_MANAGER'],
 
   // Approving a stock transfer
   'inventory.transfer.approve': ['CEO', 'SUPER_ADMIN', 'MANAGER'],

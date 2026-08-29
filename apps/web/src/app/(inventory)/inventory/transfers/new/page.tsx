@@ -2,9 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeftRight, Plus, Trash2, ChevronRight, Loader2 } from 'lucide-react';
+import { ArrowLeftRight, Plus, Trash2, ChevronRight, Loader2, Send } from 'lucide-react';
 
-interface Warehouse { id: string; name: string; }
+interface Warehouse { id: string; name: string; posOutlet?: { id: string; name: string } | null; }
 interface StockItem { id: string; name: string; baseUnit: string; quantityOnHand: number; warehouseId: string; }
 
 export default function NewTransferPage() {
@@ -14,18 +14,20 @@ export default function NewTransferPage() {
   const [fromWarehouseId, setFromWarehouseId] = useState('');
   const [toWarehouseId, setToWarehouseId] = useState('');
   const [notes, setNotes] = useState('');
-  const [lines, setLines] = useState([{ stockItemId: '', quantity: '', unitOfMeasure: 'UNIT', notes: '' }]);
+  const [lines, setLines] = useState([{ stockItemId: '', quantity: '', unitOfMeasure: 'PIECE', notes: '' }]);
+  const [issueToOutlet, setIssueToOutlet] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     fetch('/api/v1/inventory/warehouses').then(r => r.json()).then(r => setWarehouses(r.data?.warehouses || r.data || []));
     fetch('/api/v1/inventory/stock-items?limit=200').then(r => r.json()).then(r => setStockItems(r.data?.items || []));
+    setIssueToOutlet(new URLSearchParams(window.location.search).get('issue') === 'outlet');
   }, []);
 
   const fromItems = stockItems.filter(i => !fromWarehouseId || i.warehouseId === fromWarehouseId);
 
-  const addLine = () => setLines(l => [...l, { stockItemId: '', quantity: '', unitOfMeasure: 'UNIT', notes: '' }]);
+  const addLine = () => setLines(l => [...l, { stockItemId: '', quantity: '', unitOfMeasure: 'PIECE', notes: '' }]);
   const removeLine = (i: number) => setLines(l => l.filter((_, idx) => idx !== i));
   const updateLine = (i: number, field: string, value: string) =>
     setLines(l => l.map((ln, idx) => idx === i ? { ...ln, [field]: value } : ln));
@@ -46,6 +48,7 @@ export default function NewTransferPage() {
         fromWarehouseId,
         toWarehouseId,
         notes,
+        issueToOutlet,
         items: lines.map(l => ({
           stockItemId: l.stockItemId,
           quantity: parseFloat(l.quantity),
@@ -64,17 +67,18 @@ export default function NewTransferPage() {
     }
   }
 
-  const UNITS = ['UNIT', 'KG', 'GRAM', 'LITRE', 'ML', 'PIECE', 'DOZEN', 'BOX', 'CARTON'];
+  const UNITS = ['KG', 'GRAM', 'LITRE', 'ML', 'PIECE', 'BOX', 'BOTTLE', 'PACK'];
+  const destinationWarehouses = warehouses.filter(w => w.id !== fromWarehouseId && (!issueToOutlet || w.posOutlet));
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-8">
       <div className="flex items-center gap-3 mb-8">
         <div className="p-2 bg-blue-50 rounded-lg">
-          <ArrowLeftRight className="w-5 h-5 text-blue-600" />
+          {issueToOutlet ? <Send className="w-5 h-5 text-emerald-600" /> : <ArrowLeftRight className="w-5 h-5 text-blue-600" />}
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">New Stock Transfer</h1>
-          <p className="text-slate-500 text-sm mt-0.5">Move stock between warehouses</p>
+          <h1 className="text-2xl font-bold text-slate-900">{issueToOutlet ? 'Issue Stock to Outlet' : 'New Stock Transfer'}</h1>
+          <p className="text-slate-500 text-sm mt-0.5">{issueToOutlet ? 'Send approved stock from a warehouse to a POS outlet' : 'Move stock between warehouses'}</p>
         </div>
       </div>
 
@@ -104,7 +108,7 @@ export default function NewTransferPage() {
                 className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2.5 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
               >
                 <option value="">Select destination warehouse</option>
-                {warehouses.filter(w => w.id !== fromWarehouseId).map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                {destinationWarehouses.map(w => <option key={w.id} value={w.id}>{w.posOutlet ? `${w.posOutlet.name} (Outlet)` : w.name}</option>)}
               </select>
             </div>
           </div>
@@ -135,7 +139,12 @@ export default function NewTransferPage() {
                 <div className="col-span-4">
                   <select
                     value={line.stockItemId}
-                    onChange={e => updateLine(i, 'stockItemId', e.target.value)}
+                    onChange={e => {
+                      const selected = fromItems.find(item => item.id === e.target.value);
+                      setLines(current => current.map((entry, index) => index === i
+                        ? { ...entry, stockItemId: e.target.value, unitOfMeasure: selected?.baseUnit || entry.unitOfMeasure }
+                        : entry));
+                    }}
                     required
                     className="w-full bg-white border border-slate-300 rounded px-2 py-2 text-slate-900 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500/50"
                   >
