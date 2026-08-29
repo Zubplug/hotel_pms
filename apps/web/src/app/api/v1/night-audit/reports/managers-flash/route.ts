@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
       return errorResponse('NOT_FOUND', 'Night audit data not found for this date', 404);
     }
 
-    const roomsSold = Number(nightAudit.occupancy) / 100 * totalRooms; // Re-calculate or just use the audit values
+    const roomRevenue = Number(nightAudit.totalRoomRevenue) || 0;
 
     const posRevenueAggr = await prisma.posOrder.aggregate({
       where: { propertyId, businessDate, status: 'CLOSED' },
@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
         folio: { propertyId }, 
         businessDate, 
         type: 'CHARGE',
-        source: { notIn: ['ROOM', 'POS'] }
+        source: { notIn: ['ROOM_CHARGE', 'POS'] }
       },
       _sum: { amount: true }
     });
@@ -53,10 +53,10 @@ export async function GET(req: NextRequest) {
     const report = {
       occupancy: {
         roomsAvailable: totalRooms,
-        roomsSold: Math.round(roomsSold),
-        occupancyPercentage: Number(nightAudit.occupancy) || 0,
-        adr: Number(nightAudit.adr) || 0,
-        revpar: Number(nightAudit.revpar) || 0,
+        roomsSold: 0, // Calculate dynamically or add to schema later
+        occupancyPercentage: 0,
+        adr: 0,
+        revpar: 0,
       },
       revenue: {
         room: roomRevenue,

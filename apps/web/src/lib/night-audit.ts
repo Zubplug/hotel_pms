@@ -2,7 +2,6 @@ import prisma from '@hotel-pms/db';
 import { getPropertyBusinessDate, getNextBusinessDate } from '@/lib/date-utils';
 import crypto from 'crypto';
 import { NotificationEngine } from '@/lib/notification-engine';
-import { getSystemIntegrity } from './night-audit-service';
 
 const BATCH_SIZE = 50;
 
