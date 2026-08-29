@@ -59,31 +59,24 @@ export class ShiftControlService {
 
   static async recalculateExpectedCash(tx: any, type: 'POS' | 'FRONT_DESK', shiftId: string): Promise<number> {
     if (type === 'FRONT_DESK') {
-      const shift = await tx.frontdeskSession.findUnique({ where: { id: shiftId } });
+      const shift = await tx.frontdeskSession.findUnique({ 
+        where: { id: shiftId },
+        include: { payments: true, cashMovements: true }
+      });
       if (!shift) throw new ShiftControlError('Shift not found', 'NOT_FOUND', 404);
       
-      const cashPayments = await tx.payment.aggregate({
-        where: {
-          receivedBy: shift.staffId,
-          propertyId: shift.propertyId,
-          method: 'CASH',
-          status: 'COMPLETED',
-          createdAt: { gte: shift.openedAt, lte: shift.closedAt || new Date() }
-        },
-        _sum: { amount: true }
-      });
+      const cashPayments = shift.payments
+        .filter((p: any) => p.method === 'CASH' && ['COMPLETED', 'PARTIALLY_REFUNDED'].includes(p.status))
+        .reduce((sum: number, p: any) => sum + Number(p.amount), 0);
 
-      const cashRefunds = await tx.refund.aggregate({
-        where: {
-          authorizedBy: shift.staffId,
-          payment: { method: 'CASH' },
-          status: 'COMPLETED',
-          createdAt: { gte: shift.openedAt, lte: shift.closedAt || new Date() }
-        },
-        _sum: { amount: true }
-      });
+      const movementTotal = (types: string[]) => shift.cashMovements
+        .filter((m: any) => types.includes(m.type))
+        .reduce((sum: number, m: any) => sum + Number(m.amount), 0);
 
-      return Number(shift.openingFloat || 0) + Number(cashPayments._sum.amount || 0) - Number(cashRefunds._sum.amount || 0);
+      const cashIn = movementTotal(['CASH_IN', 'CASH_TRANSFER_IN']);
+      const cashOut = movementTotal(['REFUND', 'REFUND_CASH', 'PAID_OUT', 'CASH_DROP', 'CASH_TRANSFER_OUT']);
+
+      return Number(shift.openingFloat || 0) + cashPayments + cashIn - cashOut;
     } else {
       const shift = await tx.posSession.findUnique({ where: { id: shiftId } });
       if (!shift) throw new ShiftControlError('Shift not found', 'NOT_FOUND', 404);
