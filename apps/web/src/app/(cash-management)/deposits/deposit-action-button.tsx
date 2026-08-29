@@ -18,18 +18,35 @@ type DialogState = 'submit' | 'verify' | 'success' | 'error' | null;
 
 export function DepositActionButton({
   depositId,
+  propertyId,
   currentStatus,
 }: {
   depositId: string;
+  propertyId: string;
   currentStatus: string;
 }) {
   const [dialog, setDialog] = useState<DialogState>(null);
   const [bankReference, setBankReference] = useState('');
+  const [bankAccountId, setBankAccountId] = useState('');
+  const [bankAccounts, setBankAccounts] = useState<Array<{ id: string; name: string; bankName?: string | null; accountNumber?: string | null }>>([]);
+  const [bankReceiptUrl, setBankReceiptUrl] = useState('');
   const [confirmedAmount, setConfirmedAmount] = useState('');
   const [notes, setNotes] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+
+  const openSubmit = async () => {
+    setDialog('submit');
+    try {
+      const response = await fetch(`/api/v1/financial-control/bank-accounts?propertyId=${encodeURIComponent(propertyId)}`);
+      const body = await response.json();
+      if (response.ok) {
+        setBankAccounts(body.data || []);
+        setBankAccountId((body.data || [])[0]?.id || '');
+      }
+    } catch { /* The submit dialog will show the validation error if unavailable. */ }
+  };
 
   if (!['PENDING_HANDOVER', 'DEPOSITED'].includes(currentStatus)) return null;
 
@@ -43,6 +60,8 @@ export function DepositActionButton({
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 bankReference: bankReference.trim() || undefined,
+                bankAccountId: bankAccountId || undefined,
+                bankReceiptUrl: bankReceiptUrl.trim() || undefined,
               }),
             })
           : await (async () => {
@@ -80,7 +99,7 @@ export function DepositActionButton({
         size="sm"
         variant={isSubmit ? 'default' : 'outline'}
         disabled={loading}
-        onClick={() => setDialog(isSubmit ? 'submit' : 'verify')}
+        onClick={() => isSubmit ? openSubmit() : setDialog('verify')}
         className="gap-1.5 text-xs font-semibold"
       >
         {loading ? (
@@ -107,17 +126,20 @@ export function DepositActionButton({
                 </DialogDescription>
               </DialogHeader>
               <div className="py-2">
-                <Input
-                  value={bankReference}
-                  onChange={(e) => setBankReference(e.target.value)}
-                  placeholder="Bank reference / receipt number (optional)"
-                />
+                <div className="space-y-3">
+                  <select value={bankAccountId} onChange={(e) => setBankAccountId(e.target.value)} className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm">
+                    <option value="">Select configured bank account</option>
+                    {bankAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}{account.accountNumber ? ` · ${account.accountNumber}` : ''}</option>)}
+                  </select>
+                  <Input value={bankReference} onChange={(e) => setBankReference(e.target.value)} placeholder="Bank reference / receipt number" />
+                  <Input value={bankReceiptUrl} onChange={(e) => setBankReceiptUrl(e.target.value)} placeholder="Deposit receipt URL (optional)" />
+                </div>
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setDialog(null)}>
                   Cancel
                 </Button>
-                <Button onClick={submit} disabled={loading} className="gap-2">
+                <Button onClick={submit} disabled={loading || !bankAccountId} className="gap-2">
                   {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                   {loading ? 'Submitting…' : 'Confirm Submission'}
                 </Button>

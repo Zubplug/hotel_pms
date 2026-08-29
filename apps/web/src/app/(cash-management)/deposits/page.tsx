@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { getUserPropertyIds } from '@/lib/property-access';
 import { DepositActionButton } from './deposit-action-button';
 import { CreateDepositButton } from './create-deposit-button';
+import { ensureCashierControlAccounts } from '@/lib/services/cash-account-service';
 import { Landmark, Plus, ArrowRight } from 'lucide-react';
 
 const statusMeta: Record<string, { label: string; classes: string }> = {
@@ -49,10 +50,17 @@ export default async function DepositsPage() {
       select: { id: true, propertyId: true },
     }),
   ]);
+  const controlAccounts = await Promise.all(
+    allowedProperties.map((propertyId) => ensureCashierControlAccounts(propertyId))
+  );
 
   const canCreate =
     allowedProperties.length === 1 &&
     (handedOverPos.length > 0 || handedOverFrontdesk.length > 0);
+
+  const selectedControlAccounts = allowedProperties.length === 1 ? controlAccounts[0] : [];
+  const generalCashierSafe = selectedControlAccounts?.find((account) => account.type === 'SAFE');
+  const cashInTransit = selectedControlAccounts?.find((account) => account.type === 'CASH_IN_TRANSIT');
 
   return (
     <div className="min-h-full">
@@ -80,6 +88,22 @@ export default async function DepositsPage() {
       </div>
 
       <div className="px-6 py-7 max-w-screen-xl mx-auto">
+        {allowedProperties.length === 1 && generalCashierSafe && cashInTransit && (
+          <div className="mb-6 grid gap-3 md:grid-cols-2">
+            {[
+              { account: generalCashierSafe, label: 'General Cashier Safe', detail: 'Central custody for received handovers', tone: 'border-indigo-200 bg-indigo-50/60 text-indigo-700' },
+              { account: cashInTransit, label: 'Cash in Transit', detail: 'Cash staged for banking and reconciliation', tone: 'border-amber-200 bg-amber-50/60 text-amber-700' },
+            ].map(({ account, label, detail, tone }) => (
+              <div key={account.id} className={`flex items-center justify-between rounded-2xl border px-5 py-4 ${tone}`}>
+                <div>
+                  <p className="text-sm font-semibold">{label}</p>
+                  <p className="mt-0.5 text-xs opacity-75">{detail}</p>
+                </div>
+                <p className="text-lg font-bold">₦{Number(account.balance).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           {/* Table header bar */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/60">
@@ -171,7 +195,7 @@ export default async function DepositsPage() {
                           })}
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <DepositActionButton depositId={d.id} currentStatus={d.status} />
+                          <DepositActionButton depositId={d.id} propertyId={d.propertyId} currentStatus={d.status} />
                         </td>
                       </tr>
                     );

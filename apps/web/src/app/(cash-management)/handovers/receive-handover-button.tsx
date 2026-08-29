@@ -108,7 +108,7 @@ export function ReceiveHandoverButton({
                   Payment Handover Received Successfully
                 </DialogTitle>
                 <DialogDescription>
-                  The linked shift is now operationally complete and marked as Handed Over.
+                  The cash is now in General Cashier custody and a pending bank deposit was created automatically.
                 </DialogDescription>
               </DialogHeader>
               <DialogFooter>

@@ -139,6 +139,7 @@ model Property {
   inventoryCategories InventoryCategory[]
   stocktakes          Stocktake[]
   recipes             Recipe[]
+  cashExpenses        CashExpense[]
 }
 
 model Building {
@@ -2583,6 +2584,9 @@ model CashAccount {
   outlet     PosOutlet? @relation(fields: [outletId], references: [id])
   name       String
   type       String // e.g. SAFE, SERVER_BANK, STATION_BANK, EMERGENCY_BANK, BANK_ACCOUNT, EXTERNAL
+  bankName   String?
+  accountNumber String?
+  isDefault  Boolean  @default(false)
   balance    Decimal    @default(0) @db.Decimal(18, 4)
   ownerId    String?    @db.Uuid
   owner      Staff?     @relation(fields: [ownerId], references: [id])
@@ -2593,6 +2597,72 @@ model CashAccount {
   sourceMovements      PosCashMovement[]  @relation("SourceAccount")
   destinationMovements PosCashMovement[]  @relation("DestinationAccount")
   frontdeskSessions    FrontdeskSession[]
+  cashExpenses         CashExpense[]
+  bankDeposits         BankDeposit[]
+}
+
+// Controlled operating expenses paid from the General Cashier Safe.
+// This is the operational expense subledger; future GL posting can consume
+// the journal entry created at payment time.
+model CashExpense {
+  id              String   @id @default(uuid()) @db.Uuid
+  propertyId      String   @db.Uuid
+  property        Property @relation(fields: [propertyId], references: [id])
+  expenseReference String  @unique
+  status          String   @default("PENDING_APPROVAL")
+  amount          Decimal  @db.Decimal(18, 4)
+  currency        String   @default("NGN")
+  category        String
+  description     String
+  payee           String
+  receiptUrl      String?
+  costCenter      String?
+  requestedBy     String   @db.Uuid
+  approvedBy      String?  @db.Uuid
+  paidBy          String?  @db.Uuid
+  cashAccountId   String?  @db.Uuid
+  approvalNotes   String?
+  rejectionReason String?
+  requestedAt     DateTime @default(now()) @db.Timestamptz
+  approvedAt      DateTime? @db.Timestamptz
+  rejectedAt      DateTime? @db.Timestamptz
+  paidAt          DateTime? @db.Timestamptz
+  createdAt       DateTime @default(now()) @db.Timestamptz
+  updatedAt       DateTime @updatedAt @db.Timestamptz
+
+  cashAccount CashAccount?       @relation(fields: [cashAccountId], references: [id])
+  journal     CashExpenseJournal?
+  audits      CashExpenseAudit[]
+
+  @@index([propertyId, status])
+  @@index([propertyId, createdAt])
+}
+
+model CashExpenseJournal {
+  id              String      @id @default(uuid()) @db.Uuid
+  expenseId       String      @unique @db.Uuid
+  expense         CashExpense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  debitAccount    String
+  creditAccount   String
+  amount          Decimal     @db.Decimal(18, 4)
+  currency        String
+  postedBy        String      @db.Uuid
+  postedAt        DateTime    @default(now()) @db.Timestamptz
+
+  @@index([postedAt])
+}
+
+model CashExpenseAudit {
+  id          String      @id @default(uuid()) @db.Uuid
+  expenseId   String      @db.Uuid
+  expense     CashExpense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  action      String
+  performedBy String      @db.Uuid
+  notes       String?
+  metadata    Json?
+  createdAt   DateTime    @default(now()) @db.Timestamptz
+
+  @@index([expenseId, createdAt])
 }
 
 model PosCashMovement {
@@ -3605,6 +3675,7 @@ model BankDeposit {
   difference          Decimal?          @db.Decimal(18, 4)
   bankName            String?
   bankAccount         String?
+  bankAccountId       String?           @db.Uuid
   depositDate         DateTime?
 
   createdById    String  @db.Uuid
@@ -3624,6 +3695,7 @@ model BankDeposit {
 
   allocations BankDepositAllocation[]
   property    Property                @relation(fields: [propertyId], references: [id])
+  bankCashAccount CashAccount?         @relation(fields: [bankAccountId], references: [id])
 }
 
 model BankDepositAllocation {

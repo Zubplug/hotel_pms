@@ -10,11 +10,20 @@ import {
   Store,
   GitBranch,
   Clock3,
-  GitMerge
+  GitMerge,
+  Landmark,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 const settingsLinks = [
+  {
+    title: 'Property Bank Accounts',
+    description: 'Configure the bank accounts General Cashier can select for deposits.',
+    href: '/settings/financial-accounts',
+    icon: Landmark,
+    color: 'text-emerald-600',
+    bgColor: 'bg-emerald-500/10'
+  },
   {
     title: 'Approval Flows',
     description: 'Configure which roles can approve POs, transfers, and stock adjustments.',

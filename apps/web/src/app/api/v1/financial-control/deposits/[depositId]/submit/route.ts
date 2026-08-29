@@ -18,11 +18,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ de
     const staff = await prisma.staff.findFirst({ where: { userId: actor.user.id, isActive: true }, select: { id: true } });
     if (!staff) return NextResponse.json({ error: 'Staff record not found' }, { status: 401 });
     const body = await request.json();
-    const { bankReceiptUrl, bankReference } = body;
+    const { bankAccountId, bankReceiptUrl, bankReference } = body;
 
     const result = await BankDepositService.submitDeposit({
       depositId,
       staffId: staff.id,
+      bankAccountId,
       bankReceiptUrl,
       bankReference
     });

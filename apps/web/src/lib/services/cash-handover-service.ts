@@ -1,6 +1,7 @@
 import prisma from '@hotel-pms/db';
 import crypto from 'crypto';
 import { ShiftControlError } from './shift-control-service';
+import { ensureCashierControlAccountsForClient } from './cash-account-service';
 
 export class CashHandoverService {
   /**
@@ -146,8 +147,8 @@ export class CashHandoverService {
       const handover = await tx.cashHandover.findUnique({
         where: { id: params.handoverId },
         include: {
-          posSessions: { select: { id: true, controlStatus: true } },
-          frontdeskSessions: { select: { id: true, status: true } }
+          posSessions: { select: { id: true, controlStatus: true, actualCash: true, outletId: true, bankingModel: true, businessDate: true, outlet: { select: { name: true } } } },
+          frontdeskSessions: { select: { id: true, status: true, declaredCash: true, cashAccountId: true, businessDate: true } }
         }
       });
 
@@ -166,6 +167,74 @@ export class CashHandoverService {
           notes: params.notes ? `${handover.notes || ''}\n[Received]: ${params.notes}` : handover.notes
         }
       });
+
+      const controlAccounts = await ensureCashierControlAccountsForClient(tx, handover.propertyId);
+      const safeAccount = controlAccounts.find((account: any) => account.type === 'SAFE');
+      if (!safeAccount) throw new ShiftControlError('General Cashier Safe account is unavailable.', 'INTERNAL_ERROR', 500);
+
+      // Post the custody transfer at the moment the physical handover is
+      // accepted. Each session gets its own movement for a traceable audit.
+      for (const session of handover.frontdeskSessions) {
+        const amount = Number(session.declaredCash || 0);
+        if (amount <= 0) continue;
+        await tx.cashAccount.update({ where: { id: session.cashAccountId }, data: { balance: { decrement: amount } } });
+        await tx.cashAccount.update({ where: { id: safeAccount.id }, data: { balance: { increment: amount } } });
+        await tx.posCashMovement.create({
+          data: {
+            propertyId: handover.propertyId,
+            deviceId: 'web-cash-management',
+            frontdeskSessionId: session.id,
+            userId: params.receiverId,
+            amount,
+            type: 'CASH_TRANSFER_IN',
+            sourceAccountId: session.cashAccountId,
+            destinationAccountId: safeAccount.id,
+            reasonCode: 'CASH_HANDOVER_RECEIVED',
+            receiptReference: handover.handoverReference,
+            operationId: `handover-received-${handover.id}-${session.id}`,
+            businessDate: session.businessDate,
+          },
+        });
+      }
+
+      for (const session of handover.posSessions) {
+        const amount = Number(session.actualCash || 0);
+        if (amount <= 0) continue;
+        const sourceType = session.bankingModel === 'SERVER_BANKING' ? 'SERVER_BANK' : 'STATION_BANK';
+        let sourceAccount = await tx.cashAccount.findFirst({
+          where: { propertyId: handover.propertyId, outletId: session.outletId, type: sourceType, isActive: true },
+        });
+        if (!sourceAccount) {
+          sourceAccount = await tx.cashAccount.create({
+            data: {
+              propertyId: handover.propertyId,
+              outletId: session.outletId,
+              name: `${sourceType === 'SERVER_BANK' ? 'Server Bank' : 'Station Bank'} – ${session.outlet.name}`,
+              type: sourceType,
+              balance: 0,
+              isActive: true,
+            },
+          });
+        }
+        await tx.cashAccount.update({ where: { id: sourceAccount.id }, data: { balance: { decrement: amount } } });
+        await tx.cashAccount.update({ where: { id: safeAccount.id }, data: { balance: { increment: amount } } });
+        await tx.posCashMovement.create({
+          data: {
+            propertyId: handover.propertyId,
+            deviceId: 'web-cash-management',
+            posSessionId: session.id,
+            userId: params.receiverId,
+            amount,
+            type: 'CASH_TRANSFER_IN',
+            sourceAccountId: sourceAccount.id,
+            destinationAccountId: safeAccount.id,
+            reasonCode: 'CASH_HANDOVER_RECEIVED',
+            receiptReference: handover.handoverReference,
+            operationId: `handover-received-${handover.id}-${session.id}`,
+            businessDate: session.businessDate,
+          },
+        });
+      }
 
       // Update linked shifts to HANDED_OVER
       if (handover.posSessions.length > 0) {
@@ -190,6 +259,35 @@ export class CashHandoverService {
         for (const session of handover.frontdeskSessions) {
           await this.audit(tx, handover.propertyId, params.receiverId, undefined, session.id, 'CASH_RECEIVED', session.status, 'HANDED_OVER', { handoverId: handover.id });
         }
+      }
+
+      // A received handover is automatically prepared as a pending deposit.
+      // The bank submission remains manual so the General Cashier can confirm
+      // the bank, reference, receipt, and any approved expense deductions.
+      const allocations: Array<{ posSessionId?: string; frontdeskSessionId?: string; allocatedAmount: number }> = [
+        ...handover.posSessions.map((session) => ({ posSessionId: session.id, allocatedAmount: Number(session.actualCash || 0) })),
+        ...handover.frontdeskSessions.map((session) => ({ frontdeskSessionId: session.id, allocatedAmount: Number(session.declaredCash || 0) })),
+      ];
+      const deposit = await tx.bankDeposit.create({
+        data: {
+          id: crypto.randomUUID(),
+          propertyId: handover.propertyId,
+          depositReference: `DEP-${Date.now()}-${crypto.randomBytes(2).toString('hex').toUpperCase()}`,
+          expectedAmount: handover.amount,
+          status: 'PENDING_HANDOVER',
+          createdById: params.receiverId,
+          allocations: { create: allocations.map((allocation) => ({ ...allocation, id: crypto.randomUUID() })) },
+        },
+      });
+      if (handover.posSessions.length > 0) {
+        await tx.posSession.updateMany({ where: { id: { in: handover.posSessions.map((session) => session.id) } }, data: { controlStatus: 'DEPOSIT_PENDING' } });
+      }
+      if (handover.frontdeskSessions.length > 0) {
+        await tx.frontdeskSession.updateMany({ where: { id: { in: handover.frontdeskSessions.map((session) => session.id) } }, data: { status: 'DEPOSIT_PENDING' } });
+      }
+      for (const allocation of allocations) {
+        if (allocation.posSessionId) await this.audit(tx, handover.propertyId, params.receiverId, allocation.posSessionId, undefined, 'DEPOSIT_PREPARED', 'HANDED_OVER', 'DEPOSIT_PENDING', { depositId: deposit.id });
+        if (allocation.frontdeskSessionId) await this.audit(tx, handover.propertyId, params.receiverId, undefined, allocation.frontdeskSessionId, 'DEPOSIT_PREPARED', 'HANDED_OVER', 'DEPOSIT_PENDING', { depositId: deposit.id });
       }
 
       return updated;
