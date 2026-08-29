@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { Loader2, Pencil, X, Check, ChevronRight, ListFilter, Utensils } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
+import Link from 'next/link';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -206,20 +207,21 @@ function ProductEditModal({
   product: Product;
   categoryStation: ProductionStation;
   onClose: () => void;
-  onSave: (station: ProductionStation | null) => Promise<void>;
+  onSave: (station: ProductionStation | null, price: number) => Promise<void>;
 }) {
   const [selected, setSelected] = useState<ProductionStation | 'INHERIT'>(
     product.productionStation ?? 'INHERIT'
   );
   const [saving, setSaving] = useState(false);
+  const [price, setPrice] = useState(String(product.price));
 
   const initialValue = product.productionStation ?? 'INHERIT';
-  const hasChanged = selected !== initialValue;
+  const hasChanged = selected !== initialValue || Number(price) !== Number(product.price);
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      await onSave(selected === 'INHERIT' ? null : selected);
+      await onSave(selected === 'INHERIT' ? null : selected, Number(price));
       onClose();
     } finally {
       setSaving(false);
@@ -234,7 +236,7 @@ function ProductEditModal({
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b bg-slate-50">
           <div>
-            <h3 className="text-base font-semibold text-slate-900">Production Station Override</h3>
+            <h3 className="text-base font-semibold text-slate-900">Product Settings</h3>
             <p className="text-sm text-slate-500 mt-0.5">
               Product: <span className="font-medium text-slate-700">{product.name}</span>
             </p>
@@ -245,6 +247,12 @@ function ProductEditModal({
           >
             <X className="w-4 h-4" />
           </button>
+        </div>
+
+        <div className="px-6 pt-5">
+          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500">Selling price</label>
+          <input type="number" min="0" step="0.01" value={price} onChange={(event) => setPrice(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+          <p className="mt-1 text-xs text-slate-400">Cashier changes are sent to Accountant review, then Manager approval before going live.</p>
         </div>
 
         {/* Options */}
@@ -433,19 +441,30 @@ export default function MenuManagerPage() {
   };
 
   // PATCH product
-  const handleSaveProductStation = async (station: ProductionStation | null) => {
+  const handleSaveProductStation = async (station: ProductionStation | null, price: number) => {
     if (!editingProduct) return;
+    const role = String((session?.user as any)?.role || '').toUpperCase();
+    if (['GENERAL_CASHIER', 'CASHIER', 'FRONT_DESK_CASHIER'].includes(role) && price !== Number(editingProduct.price)) {
+      const request = await fetch(`/api/v1/pos/products/${editingProduct.id}/price-request`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ price, reason: `Selling price change requested for ${editingProduct.name}` }),
+      });
+      const requestBody = await request.json();
+      if (!request.ok) throw new Error(requestBody.error || 'Failed to submit price request');
+      showToast(`Price request sent for Accountant review`);
+      return;
+    }
     const res = await fetch(`/api/v1/pos/products/${editingProduct.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ productionStation: station }),
+      body: JSON.stringify({ productionStation: station, ...(price !== Number(editingProduct.price) ? { price } : {}) }),
     });
     if (!res.ok) throw new Error('Failed to update product');
     const json = await res.json();
     setProducts((prev) =>
       prev.map((p) => (p.id === editingProduct.id ? { ...p, ...json.data } : p))
     );
-    showToast(`Updated station for "${editingProduct.name}"`);
+    showToast(`Updated product settings for "${editingProduct.name}"`);
   };
 
   // Station breakdown counts
@@ -486,6 +505,7 @@ export default function MenuManagerPage() {
                 Manage categories, products, and production station routing
               </p>
             </div>
+            <Link href="/admin/pos/price-approvals" className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-100">Price approvals</Link>
           </div>
           {/* Station overview pills */}
           <div className="hidden lg:flex items-center gap-2">

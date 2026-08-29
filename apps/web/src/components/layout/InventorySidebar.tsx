@@ -12,7 +12,6 @@ import {
   ArrowRightLeft,
   Users,
   Bell,
-  Scale,
   ClipboardList,
   Activity,
   Hotel,
@@ -44,7 +43,6 @@ const NAV_LINKS = [
   { name: 'Alerts',           href: '/inventory/alerts',               icon: Bell },
   { name: 'Stocktakes',       href: '/inventory/stocktakes',           icon: ClipboardList,  roles: ['CEO','SUPER_ADMIN','MANAGER','GENERAL_CASHIER','INVENTORY_MANAGER','STOCK_KEEPER','STOCK_MANAGER'] },
   { name: 'Cost Control',     href: '/inventory/cost-control',         icon: Activity,       roles: ['CEO','SUPER_ADMIN','MANAGER','GENERAL_CASHIER'] },
-  { name: 'Variance Analysis',href: '/inventory/reconciliation',       icon: Scale,          roles: ['CEO','SUPER_ADMIN','MANAGER','GENERAL_CASHIER','STOCK_MANAGER'] },
 ];
 
 function getInitials(name?: string | null, email?: string | null) {

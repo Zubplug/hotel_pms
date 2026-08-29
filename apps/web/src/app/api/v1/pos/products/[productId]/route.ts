@@ -15,6 +15,13 @@ export async function PATCH(
 
     const body = await req.json();
     const { productionStation, name, price, isActive, inventoryMode } = body;
+    const role = String((session.user as any).role || '').toUpperCase();
+    if (price !== undefined && !['MANAGER', 'ADMIN', 'CEO', 'SUPER_ADMIN'].includes(role) && !(session.user as any).isSuperAdmin) {
+      return errorResponse('FORBIDDEN', 'Selling price changes require the approval workflow', 403);
+    }
+    if (['GENERAL_CASHIER', 'CASHIER', 'FRONT_DESK_CASHIER'].includes(role) && Object.keys(body).some((key) => key !== 'price')) {
+      return errorResponse('FORBIDDEN', 'Cashiers may only request selling-price changes', 403);
+    }
 
     // Validate productionStation if provided (null means "inherit from category")
     const validStations = ['KITCHEN', 'BAR', 'DIRECT', 'NONE'];

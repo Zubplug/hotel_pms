@@ -46,7 +46,6 @@ const CASH_MANAGEMENT_NAV = [
       { name: 'Recipes', href: '/inventory/cost-control/recipes' },
       { name: 'Stocktakes', href: '/inventory/stocktakes' },
       { name: 'GRNs', href: '/inventory/grns' },
-      { name: 'Variance Analysis', href: '/inventory/reconciliation' },
     ],
   },
 ];
