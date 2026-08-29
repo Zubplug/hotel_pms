@@ -60,6 +60,13 @@ export class CashHandoverService {
         totalAmount += Number(shift.declaredCash || 0);
       }
       
+      // Ensure primaryOperatorId is a Staff ID (POS might store User ID in openedBy)
+      let handedOverByStaffId = params.creatorId;
+      if (primaryOperatorId) {
+        const staff = await tx.staff.findFirst({ where: { OR: [{ id: primaryOperatorId }, { userId: primaryOperatorId }] } });
+        if (staff) handedOverByStaffId = staff.id;
+      }
+      
       if (posSessions.length === 0 && fdSessions.length === 0) {
         throw new ShiftControlError('Must provide at least one shift to handover.', 'BAD_REQUEST');
       }
@@ -72,7 +79,7 @@ export class CashHandoverService {
           handoverReference: `HO-${Date.now()}-${crypto.randomBytes(2).toString('hex').toUpperCase()}`,
           idempotencyKey: params.idempotencyKey,
           amount: totalAmount,
-          handedOverById: primaryOperatorId || params.creatorId,
+          handedOverById: handedOverByStaffId,
           safeReference: params.safeReference,
           notes: params.notes,
           status: 'PENDING',

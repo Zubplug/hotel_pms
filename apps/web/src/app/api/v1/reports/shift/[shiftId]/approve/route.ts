@@ -61,6 +61,31 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ shi
       return errorResponse('BAD_REQUEST', 'Invalid approval decision', 400);
     }
 
+    if (decision === 'APPROVED' || decision === 'APPROVED_WITH_VARIANCE') {
+      try {
+        const { CashHandoverService } = await import('@/lib/services/cash-handover-service');
+        const posSessionIds = type === 'POS' ? [shiftId] : [];
+        const frontdeskSessionIds = type === 'FRONT_DESK' ? [shiftId] : [];
+        
+        await CashHandoverService.createHandover({
+          propertyId,
+          creatorId: reviewerId,
+          posSessionIds,
+          frontdeskSessionIds,
+          notes: 'Automatically created upon shift approval.',
+        });
+
+        // Re-fetch updated shift since its controlStatus is now HANDOVER_PENDING
+        if (type === 'POS') {
+          updated = await prisma.posSession.findUnique({ where: { id: shiftId } });
+        } else {
+          updated = await prisma.frontdeskSession.findUnique({ where: { id: shiftId } });
+        }
+      } catch (handoverError) {
+        console.error('[Shift approval] Failed to auto-create handover:', handoverError);
+      }
+    }
+
     return successResponse({ type, shift: updated });
   } catch (error: any) {
     console.error('[Shift approval POST]', error);
