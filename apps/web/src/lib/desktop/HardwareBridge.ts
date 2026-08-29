@@ -128,7 +128,7 @@ export const HardwareBridge = {
     return invokeDesktop('hardware.printRegistrationCard', { data });
   },
 
-  printGuestFolio: async (data: { folioId: string, guestName: string, version: number, details: any }) => {
+  printGuestFolio: async (data: { guestName: string, roomNumber: string, folioNumber: string, arrivalDate: string, departureDate: string, transactions: any[], totalCharges: number, totalPayments: number, balanceDue: number, currency: string, propertyName?: string, propertyAddress?: string, printedAt: string }) => {
     return invokeDesktop('hardware.printGuestFolio', { data });
   },
 

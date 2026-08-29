@@ -1029,7 +1029,7 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     else
                     {
                         room.Status = "DIRTY";
-                        room.HousekeepingStatus = "PENDING";
+                        room.HousekeepingStatus = "CLEANING";
                     }
                     room.IsOccupied = room.Status == "OCCUPIED";
                     room.MaintenanceStatus = el.TryGetProperty("maintenanceStatus", out var ms) && ms.ValueKind != System.Text.Json.JsonValueKind.Null ? ms.GetString() ?? "" : "";
@@ -2180,6 +2180,7 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     task.RoomId = el.TryGetProperty("roomId", out var rid) && rid.ValueKind != System.Text.Json.JsonValueKind.Null ? rid.GetString() ?? "" : "";
                     task.TaskType = el.TryGetProperty("type", out var typ) && typ.ValueKind != System.Text.Json.JsonValueKind.Null ? typ.GetString() ?? "" : (el.TryGetProperty("taskType", out var taskType) ? taskType.GetString() ?? "" : "");
                     task.Status = el.TryGetProperty("status", out var st) && st.ValueKind != System.Text.Json.JsonValueKind.Null ? st.GetString() ?? "" : "";
+                    if (task.Status is "PENDING" or "ASSIGNED" or "CLEAN") task.Status = "CLEANING";
                     var room = await dbContext.Rooms.FirstOrDefaultAsync(r => r.Id == task.RoomId, stoppingToken);
                     if (room != null)
                     {

@@ -96,20 +96,20 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
               where: { id: room.id },
               data: {
                 status: 'DIRTY',
-                housekeepingStatus: 'PENDING' // Requires inspection/cleaning before available
+                housekeepingStatus: 'CLEANING' // Housekeeping must clean, then inspect before available
               }
             });
 
             await tx.housekeepingTask.upsert({
               where: { idempotencyKey: `MAINTENANCE_${ticket.id}` },
-              update: { status: 'PENDING' },
+              update: { status: 'CLEANING' },
               create: {
                 idempotencyKey: `MAINTENANCE_${ticket.id}`,
                 propertyId: ticket.propertyId,
                 roomId: room.id,
                 type: 'INSPECTION',
                 priority: 'HIGH',
-                status: 'PENDING',
+                status: 'CLEANING',
                 businessDate: new Date(new Date().setUTCHours(0, 0, 0, 0)),
                 notes: 'Maintenance resolved; housekeeping must clean and inspect the room before release.'
               }

@@ -3,20 +3,28 @@ import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { Package, AlertTriangle, AlertCircle, RefreshCw, LogIn, LogOut, Scale, CreditCard, ShoppingCart } from 'lucide-react';
-import { formatCurrency } from '@/lib/utils'; // Assuming this exists or we can write a simple formatter
-
+import {
+  Package,
+  AlertTriangle,
+  AlertCircle,
+  RefreshCw,
+  LogIn,
+  LogOut,
+  Scale,
+  CreditCard,
+  ShoppingCart,
+  ArrowRight,
+  TrendingUp,
+} from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
 export default async function InventoryDashboardPage() {
   const session = await auth();
   if (!session?.user) redirect('/login');
-  
+
   const propertyId = (session.user as any).propertyId;
 
-  // 1. Fetch KPI Data
-  // Note: For total stock value we sum (quantityOnHand * costPrice) via Prisma aggregation
   const [
     stockItems,
     pendingPOs,
@@ -25,7 +33,6 @@ export default async function InventoryDashboardPage() {
     pendingReconciliations,
     recentActivity,
   ] = await Promise.all([
-    // Active stock items
     prisma.stockItem.findMany({
       where: { propertyId, isActive: true },
       select: {
@@ -34,54 +41,61 @@ export default async function InventoryDashboardPage() {
         quantityOnHand: true,
         reorderLevel: true,
         costPrice: true,
-        warehouse: { select: { name: true } }
-      }
+        warehouse: { select: { name: true } },
+      },
     }),
-    // POs
     prisma.purchaseOrder.findMany({
       where: { propertyId, status: { in: ['SUBMITTED', 'APPROVED'] } },
-      select: { id: true, poNumber: true, expectedDate: true, status: true, supplier: { select: { name: true } } }
+      select: {
+        id: true,
+        poNumber: true,
+        expectedDate: true,
+        status: true,
+        supplier: { select: { name: true } },
+      },
     }),
-    // GRNs
     prisma.goodsReceivedNote.findMany({
       where: { propertyId, status: 'DRAFT' },
-      select: { id: true, grnNumber: true, receivedDate: true, purchaseOrder: { select: { poNumber: true } } }
+      select: {
+        id: true,
+        grnNumber: true,
+        receivedDate: true,
+        purchaseOrder: { select: { poNumber: true } },
+      },
     }),
-    // Transfers
     prisma.stockTransfer.findMany({
       where: { propertyId, status: { in: ['DRAFT', 'PENDING_APPROVAL', 'APPROVED'] } },
-      select: { id: true, transferRef: true, status: true, fromWarehouse: { select: { name: true } }, toWarehouse: { select: { name: true } } }
+      select: {
+        id: true,
+        transferRef: true,
+        status: true,
+        fromWarehouse: { select: { name: true } },
+        toWarehouse: { select: { name: true } },
+      },
     }),
-    // Reconciliations
     prisma.approvalRequest.findMany({
       where: { propertyId, type: 'INVENTORY_ADJUSTMENT', status: 'PENDING' },
-      select: { id: true, status: true, requestedAt: true }
+      select: { id: true, status: true, requestedAt: true },
     }),
-    // Recent Transactions
     prisma.stockTransaction.findMany({
       where: { propertyId },
-      orderBy: { id: 'desc' }, // fallback order if timestamp is missing, assume timestamp exists below. Wait, StockTransaction doesn't have a timestamp/createdAt, it only has relation and id. Oh, wait, let's check StockTransaction model. Actually, the prompt says order by timestamp DESC, but StockTransaction doesn't have a timestamp according to my quick view earlier. Wait, let me just order by id desc since uuid v7/cuid is sortable or assume there's a timestamp. Let's not fetch it if we aren't sure. I'll omit timestamp from query for safety or just select what's available.
-      take: 5,
-      include: {
-        stockItem: { select: { name: true } }
-      }
-    })
+      orderBy: { id: 'desc' },
+      take: 6,
+      include: { stockItem: { select: { name: true } } },
+    }),
   ]);
 
-  // Compute stats
   let totalValue = 0;
   let itemsInStock = 0;
-  let lowStockItems: typeof stockItems = [];
-  let outOfStockItems: typeof stockItems = [];
+  const lowStockItems: typeof stockItems = [];
+  const outOfStockItems: typeof stockItems = [];
 
-  stockItems.forEach(item => {
+  stockItems.forEach((item) => {
     const qty = Number(item.quantityOnHand);
     const cost = Number(item.costPrice);
     const reorder = item.reorderLevel ? Number(item.reorderLevel) : null;
-    
     if (qty > 0) itemsInStock++;
-    totalValue += (qty * cost);
-
+    totalValue += qty * cost;
     if (qty <= 0) {
       outOfStockItems.push(item);
     } else if (reorder !== null && qty <= reorder) {
@@ -89,146 +103,231 @@ export default async function InventoryDashboardPage() {
     }
   });
 
+  const totalPending =
+    pendingPOs.length + pendingTransfers.length + pendingReconciliations.length;
+  const criticalStock = lowStockItems.length + outOfStockItems.length;
+  const allClear =
+    outOfStockItems.length === 0 &&
+    pendingPOs.length === 0 &&
+    pendingTransfers.length === 0;
+
+  const kpiCards = [
+    {
+      label: 'Total Stock Value',
+      value: `₦${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      sub: 'Across all warehouses',
+      icon: CreditCard,
+      accent: 'border-l-emerald-500',
+      iconBg: 'bg-emerald-500/10',
+      iconColor: 'text-emerald-600',
+    },
+    {
+      label: 'Items Tracked',
+      value: stockItems.length.toString(),
+      sub: `${itemsInStock} currently in stock`,
+      icon: Package,
+      accent: 'border-l-blue-500',
+      iconBg: 'bg-blue-500/10',
+      iconColor: 'text-blue-600',
+    },
+    {
+      label: 'Critical Stock',
+      value: criticalStock.toString(),
+      sub: `${outOfStockItems.length} out of stock`,
+      icon: AlertTriangle,
+      accent: 'border-l-red-500',
+      iconBg: 'bg-red-500/10',
+      iconColor: 'text-red-600',
+      valueColor: criticalStock > 0 ? 'text-red-600' : 'text-slate-900',
+    },
+    {
+      label: 'Pending Approvals',
+      value: totalPending.toString(),
+      sub: 'POs, transfers & adjustments',
+      icon: Scale,
+      accent: 'border-l-amber-500',
+      iconBg: 'bg-amber-500/10',
+      iconColor: 'text-amber-600',
+      valueColor: totalPending > 0 ? 'text-amber-600' : 'text-slate-900',
+    },
+  ];
+
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900 mb-1">Operations Dashboard</h1>
-        <p className="text-slate-500">Real-time overview of inventory and procurement activities.</p>
+    <div className="min-h-full">
+      {/* Hero header */}
+      <div className="bg-gradient-to-r from-[#0b1120] to-[#0f2619] px-8 py-7">
+        <div>
+          <h1 className="text-2xl font-bold text-white tracking-tight">
+            Inventory Dashboard
+          </h1>
+          <p className="text-slate-400 text-sm mt-1">
+            Real-time overview of stock, procurement, and warehouse activities.
+          </p>
+        </div>
       </div>
 
-      {/* Primary KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KPICard 
-          title="Total Stock Value" 
-          value={`₦${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-          subtitle="Across all warehouses"
-          icon={CreditCard}
-          color="bg-emerald-50 text-emerald-600 border-emerald-200"
-        />
-        <KPICard 
-          title="Items Tracked" 
-          value={stockItems.length.toString()}
-          subtitle={`${itemsInStock} items currently in stock`}
-          icon={Package}
-          color="bg-blue-50 text-blue-600 border-blue-200"
-        />
-        <KPICard 
-          title="Critical Stock" 
-          value={(lowStockItems.length + outOfStockItems.length).toString()}
-          subtitle={`${outOfStockItems.length} out of stock`}
-          icon={AlertTriangle}
-          color="bg-red-50 text-red-600 border-red-200"
-        />
-        <KPICard 
-          title="Pending Approvals" 
-          value={(pendingPOs.length + pendingTransfers.length + pendingReconciliations.length).toString()}
-          subtitle="POs, Transfers, Adjustments"
-          icon={Scale}
-          color="bg-amber-50 text-amber-600 border-amber-200"
-        />
-      </div>
+      <div className="px-6 py-7 max-w-screen-xl mx-auto space-y-7">
+        {/* KPI Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          {kpiCards.map((card) => {
+            const Icon = card.icon;
+            return (
+              <div
+                key={card.label}
+                className={`bg-white rounded-2xl border border-slate-200 shadow-sm border-l-4 ${card.accent} p-5 flex items-start gap-4 hover:shadow-md transition-shadow`}
+              >
+                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${card.iconBg}`}>
+                  <Icon className={`h-5 w-5 ${card.iconColor}`} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-slate-500 leading-tight">{card.label}</p>
+                  <p className={`text-2xl font-black mt-1 leading-tight tracking-tight ${card.valueColor ?? 'text-slate-900'}`}>
+                    {card.value}
+                  </p>
+                  <p className="text-xs text-slate-400 mt-0.5">{card.sub}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
 
-      {/* Attention Required & Quick Stats */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Left Column: Attention Required */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-            <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50/50">
-              <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-                <AlertCircle className="w-5 h-5 text-amber-500" />
-                Attention Required
-              </h2>
+        {/* Bottom grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Attention Required */}
+          <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-amber-500" />
+                <h2 className="text-base font-semibold text-slate-900">Attention Required</h2>
+              </div>
+              {!allClear && (
+                <span className="inline-flex items-center justify-center min-w-[24px] h-6 px-2 rounded-full bg-amber-500 text-white text-xs font-bold">
+                  {outOfStockItems.length + pendingPOs.length + pendingTransfers.length}
+                </span>
+              )}
             </div>
-            
+
             <div className="divide-y divide-slate-100">
-              {outOfStockItems.slice(0, 3).map(item => (
-                <div key={item.id} className="p-4 px-6 flex items-center justify-between hover:bg-slate-50 transition-colors">
+              {outOfStockItems.slice(0, 3).map((item) => (
+                <div key={item.id} className="flex items-center justify-between px-6 py-3.5 hover:bg-slate-50/70 transition-colors">
                   <div>
-                    <p className="text-sm font-medium text-slate-900">{item.name}</p>
-                    <p className="text-xs text-slate-500">Out of Stock • {item.warehouse.name}</p>
+                    <p className="text-sm font-semibold text-slate-800">{item.name}</p>
+                    <p className="text-xs text-red-500 mt-0.5 flex items-center gap-1">
+                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-red-500" />
+                      Out of Stock · {item.warehouse.name}
+                    </p>
                   </div>
-                  <Link href={`/inventory/stock-items/${item.id}`} className="text-xs font-semibold text-blue-600 hover:text-blue-700">View</Link>
-                </div>
-              ))}
-              
-              {pendingPOs.slice(0, 3).map(po => (
-                <div key={po.id} className="p-4 px-6 flex items-center justify-between hover:bg-slate-50 transition-colors">
-                  <div>
-                    <p className="text-sm font-medium text-slate-900">PO {po.poNumber} — {po.supplier.name}</p>
-                    <p className="text-xs text-slate-500">Pending • Expected {po.expectedDate ? new Date(po.expectedDate).toLocaleDateString() : 'N/A'}</p>
-                  </div>
-                  <Link href={`/inventory/purchase-orders/${po.id}`} className="text-xs font-semibold text-blue-600 hover:text-blue-700">Review</Link>
-                </div>
-              ))}
-
-              {pendingTransfers.slice(0, 3).map(tr => (
-                <div key={tr.id} className="p-4 px-6 flex items-center justify-between hover:bg-slate-50 transition-colors">
-                  <div>
-                    <p className="text-sm font-medium text-slate-900">Transfer {tr.transferRef}</p>
-                    <p className="text-xs text-slate-500">{tr.fromWarehouse.name} → {tr.toWarehouse.name}</p>
-                  </div>
-                  <Link href={`/inventory/transfers/${tr.id}`} className="text-xs font-semibold text-blue-600 hover:text-blue-700">Review</Link>
+                  <Link
+                    href={`/inventory/stock-items/${item.id}`}
+                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-colors"
+                  >
+                    View <ArrowRight className="h-3 w-3" />
+                  </Link>
                 </div>
               ))}
 
-              {outOfStockItems.length === 0 && pendingPOs.length === 0 && pendingTransfers.length === 0 && (
-                <div className="p-8 text-center text-slate-500 text-sm">
-                  All clear. No urgent items require attention.
+              {lowStockItems.slice(0, 2).map((item) => (
+                <div key={item.id} className="flex items-center justify-between px-6 py-3.5 hover:bg-slate-50/70 transition-colors">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">{item.name}</p>
+                    <p className="text-xs text-amber-600 mt-0.5 flex items-center gap-1">
+                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500" />
+                      Low Stock · {item.warehouse.name} · {Number(item.quantityOnHand)} left
+                    </p>
+                  </div>
+                  <Link
+                    href={`/inventory/stock-items/${item.id}`}
+                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-colors"
+                  >
+                    View <ArrowRight className="h-3 w-3" />
+                  </Link>
+                </div>
+              ))}
+
+              {pendingPOs.slice(0, 3).map((po) => (
+                <div key={po.id} className="flex items-center justify-between px-6 py-3.5 hover:bg-slate-50/70 transition-colors">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">
+                      PO {po.poNumber} — {po.supplier.name}
+                    </p>
+                    <p className="text-xs text-blue-600 mt-0.5 flex items-center gap-1">
+                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-blue-500" />
+                      {po.status} · Expected {po.expectedDate ? new Date(po.expectedDate).toLocaleDateString() : 'N/A'}
+                    </p>
+                  </div>
+                  <Link
+                    href={`/inventory/purchase-orders/${po.id}`}
+                    className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition-colors"
+                  >
+                    Review <ArrowRight className="h-3 w-3" />
+                  </Link>
+                </div>
+              ))}
+
+              {pendingTransfers.slice(0, 2).map((tr) => (
+                <div key={tr.id} className="flex items-center justify-between px-6 py-3.5 hover:bg-slate-50/70 transition-colors">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">Transfer {tr.transferRef}</p>
+                    <p className="text-xs text-violet-600 mt-0.5 flex items-center gap-1">
+                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-violet-500" />
+                      {tr.fromWarehouse.name} → {tr.toWarehouse.name}
+                    </p>
+                  </div>
+                  <Link
+                    href={`/inventory/transfers/${tr.id}`}
+                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-colors"
+                  >
+                    Review <ArrowRight className="h-3 w-3" />
+                  </Link>
+                </div>
+              ))}
+
+              {allClear && (
+                <div className="flex flex-col items-center justify-center py-12 text-center px-6">
+                  <div className="h-12 w-12 rounded-full bg-emerald-50 flex items-center justify-center mb-3">
+                    <TrendingUp className="h-6 w-6 text-emerald-500" />
+                  </div>
+                  <p className="text-sm font-semibold text-slate-700">All clear!</p>
+                  <p className="text-xs text-slate-400 mt-1">No urgent items require your attention.</p>
                 </div>
               )}
             </div>
           </div>
-        </div>
 
-        {/* Right Column: Recent Activity */}
-        <div className="space-y-6">
-          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-            <div className="px-5 py-4 border-b border-slate-200 bg-slate-50/50">
-              <h2 className="text-md font-semibold text-slate-900 flex items-center gap-2">
-                <RefreshCw className="w-4 h-4 text-slate-400" />
-                Recent Activity
-              </h2>
+          {/* Recent Activity */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-100">
+              <RefreshCw className="h-4 w-4 text-slate-400" />
+              <h2 className="text-base font-semibold text-slate-900">Recent Activity</h2>
             </div>
-            <div className="p-4 space-y-4">
-              {recentActivity.map(txn => (
-                <div key={txn.id} className="flex items-start gap-3">
-                  <div className={`mt-0.5 p-1.5 rounded-md ${Number(txn.quantity) > 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
-                    {Number(txn.quantity) > 0 ? <LogIn className="w-3 h-3" /> : <LogOut className="w-3 h-3" />}
+            <div className="p-4 space-y-3">
+              {recentActivity.map((txn) => {
+                const isIn = Number(txn.quantity) > 0;
+                return (
+                  <div key={txn.id} className="flex items-start gap-3">
+                    <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${isIn ? 'bg-emerald-50' : 'bg-red-50'}`}>
+                      {isIn
+                        ? <LogIn className="h-3.5 w-3.5 text-emerald-600" />
+                        : <LogOut className="h-3.5 w-3.5 text-red-500" />}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-slate-800 truncate">{txn.stockItem.name}</p>
+                      <p className="text-xs text-slate-500 capitalize">
+                        {txn.source.toLowerCase().replace(/_/g, ' ')} ·{' '}
+                        <span className={isIn ? 'text-emerald-600 font-semibold' : 'text-red-500 font-semibold'}>
+                          {isIn ? '+' : ''}{Number(txn.quantity).toString()}
+                        </span>
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-slate-900">{txn.stockItem.name}</p>
-                    <p className="text-xs text-slate-500 capitalize">{txn.source.toLowerCase()} • {Number(txn.quantity) > 0 ? '+' : ''}{Number(txn.quantity).toString()}</p>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
               {recentActivity.length === 0 && (
-                <p className="text-xs text-slate-500 text-center py-4">No recent transactions</p>
+                <p className="text-xs text-slate-400 text-center py-6">No recent transactions</p>
               )}
             </div>
           </div>
         </div>
-
-      </div>
-    </div>
-  );
-}
-
-function KPICard({ title, value, subtitle, icon: Icon, color }: any) {
-  return (
-    <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm relative overflow-hidden group hover:border-slate-300 transition-colors">
-      <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-        <Icon className="w-24 h-24 transform translate-x-4 -translate-y-4 text-slate-900" />
-      </div>
-      <div className="relative z-10">
-        <div className={`inline-flex p-2 rounded-xl border ${color} mb-4`}>
-          <Icon className="w-5 h-5" />
-        </div>
-        <h3 className="text-slate-500 text-sm font-medium">{title}</h3>
-        <p className="text-3xl font-bold text-slate-900 mt-1 mb-1 tracking-tight">{value}</p>
-        <p className="text-xs text-slate-500">{subtitle}</p>
       </div>
     </div>
   );

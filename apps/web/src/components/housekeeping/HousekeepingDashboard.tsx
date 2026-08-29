@@ -34,6 +34,13 @@ type HKStatus =
   | 'CANCELLED'
   | 'MAINTENANCE_REQUIRED';
 
+// Legacy records remain readable, but the active workflow is CLEANING -> INSPECTED.
+const normalizeHKStatus = (status: string): HKStatus => {
+  const normalized = status.toUpperCase();
+  if (normalized === 'PENDING' || normalized === 'ASSIGNED' || normalized === 'CLEAN') return 'CLEANING';
+  return normalized as HKStatus;
+};
+
 interface HKTask {
   id: string;
   room: { number?: string; roomType?: { name?: string } };
@@ -93,13 +100,10 @@ const STATUS_CONFIG: Record<
 };
 
 const STATUS_NEXT: Record<string, string[]> = {
-  PENDING: ['ASSIGNED', 'CANCELLED'],
-  ASSIGNED: ['CLEANING', 'CANCELLED'],
-  CLEANING: ['CLEAN', 'MAINTENANCE_REQUIRED'],
-  CLEAN: ['INSPECTED', 'MAINTENANCE_REQUIRED'],
+  CLEANING: ['INSPECTED', 'MAINTENANCE_REQUIRED'],
   INSPECTED: [],
   CANCELLED: [],
-  MAINTENANCE_REQUIRED: ['PENDING', 'ASSIGNED'],
+  MAINTENANCE_REQUIRED: ['CLEANING'],
 };
 
 // ─── KPI card ─────────────────────────────────────────────────────────────────
@@ -192,6 +196,7 @@ export default function HousekeepingDashboard() {
       setTasks(
         data.map((task: any) => ({
           ...task,
+          status: normalizeHKStatus(String(task.status || 'CLEANING')),
           room: task.room || { number: task.roomNumber || '??' },
           type: task.type || task.taskType || 'CLEANING',
           assignedTo: task.assignedTo || task.assignedToUserId || null,
@@ -258,10 +263,10 @@ export default function HousekeepingDashboard() {
 
   // ── KPI data ──
   const kpis = {
-    queue: tasks.filter((t) => ['PENDING', 'ASSIGNED'].includes(t.status)).length,
-    inProgress: tasks.filter((t) => t.status === 'CLEANING').length,
-    readyForCheck: tasks.filter((t) => t.status === 'CLEAN').length,
+    queue: tasks.filter((t) => t.status === 'CLEANING').length,
     inspected: tasks.filter((t) => t.status === 'INSPECTED').length,
+    maintenance: tasks.filter((t) => t.status === 'MAINTENANCE_REQUIRED').length,
+    total: tasks.length,
   };
 
   return (
@@ -326,28 +331,12 @@ export default function HousekeepingDashboard() {
         {/* ── KPI Row ── */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <KpiCard
-            label="Queue"
+            label="Cleaning"
             value={kpis.queue}
             gradient="bg-gradient-to-br from-amber-50 to-amber-100/50 border-amber-100 text-amber-950"
             icon={Clock}
             iconBg="bg-amber-200/50"
             iconColor="text-amber-700"
-          />
-          <KpiCard
-            label="In Progress"
-            value={kpis.inProgress}
-            gradient="bg-gradient-to-br from-indigo-50 to-indigo-100/50 border-indigo-100 text-indigo-950"
-            icon={Sparkles}
-            iconBg="bg-indigo-200/50"
-            iconColor="text-indigo-700"
-          />
-          <KpiCard
-            label="Ready for Inspection"
-            value={kpis.readyForCheck}
-            gradient="bg-gradient-to-br from-emerald-50 to-emerald-100/50 border-emerald-100 text-emerald-950"
-            icon={BedDouble}
-            iconBg="bg-emerald-200/50"
-            iconColor="text-emerald-700"
           />
           <KpiCard
             label="Inspected & Ready"
@@ -356,6 +345,22 @@ export default function HousekeepingDashboard() {
             icon={ShieldCheck}
             iconBg="bg-green-200/50"
             iconColor="text-green-700"
+          />
+          <KpiCard
+            label="Maintenance"
+            value={kpis.maintenance}
+            gradient="bg-gradient-to-br from-red-50 to-red-100/50 border-red-100 text-red-950"
+            icon={TriangleAlert}
+            iconBg="bg-red-200/50"
+            iconColor="text-red-700"
+          />
+          <KpiCard
+            label="Total Tasks"
+            value={kpis.total}
+            gradient="bg-gradient-to-br from-slate-50 to-slate-100/50 border-slate-200 text-slate-950"
+            icon={BedDouble}
+            iconBg="bg-slate-200/50"
+            iconColor="text-slate-700"
           />
         </div>
 
@@ -398,9 +403,10 @@ export default function HousekeepingDashboard() {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {tasks.map((task) => {
-                    const nextOptions = isReceptionist
-                      ? (task.status === 'CLEAN' ? ['INSPECTED'] : [])
-                      : (STATUS_NEXT[task.status] || []);
+                    const nextOptions = STATUS_NEXT[task.status] || [];
+                    const actionLabel = task.status === 'CLEANING'
+                      ? (isReceptionist ? 'Inspect' : 'Update')
+                      : 'Done';
                     const isManaging = managingTaskId === task.id;
                     const isSaving = savingTaskId === task.id;
 
@@ -514,7 +520,7 @@ export default function HousekeepingDashboard() {
                               }}
                               disabled={nextOptions.length === 0}
                             >
-                              {nextOptions.length === 0 ? 'Done' : 'Update'}
+                              {actionLabel}
                             </Button>
                           )}
                         </td>

@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
         roomId,
         type,
         priority,
-        status: assignedTo ? 'ASSIGNED' : 'PENDING',
+        status: 'CLEANING',
         assignedTo,
         businessDate,
         notes,
@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
     // Sync room housekeeping status
     await prisma.room.update({
       where: { id: roomId },
-      data: { housekeepingStatus: assignedTo ? 'ASSIGNED' : 'PENDING' }
+      data: { housekeepingStatus: 'CLEANING', status: 'CLEANING' }
     });
 
     return successResponse(task, 201);

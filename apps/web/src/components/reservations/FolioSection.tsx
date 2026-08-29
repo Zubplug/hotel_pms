@@ -83,23 +83,18 @@ export function FolioSection({ reservation }: { reservation: any }) {
 
     if (isFrontDesk && HardwareBridge.isAvailable()) {
       const result = await HardwareBridge.printGuestFolio({
-        folioId: folio.id,
         guestName,
-        version: Number(folio.version || 1),
-        details: {
-          guestName,
-          roomNumber,
-          folioNumber: folio.id.substring(0, 8).toUpperCase(),
-          arrivalDate: reservation.checkIn,
-          departureDate: reservation.checkOut,
-          transactions,
-          totalCharges,
-          totalPayments,
-          balanceDue: Number(folio.balance || 0),
-          currency: folio.currency || 'NGN',
-          propertyName: reservation.property?.name || '',
-          printedAt: new Date().toISOString(),
-        },
+        roomNumber,
+        folioNumber: folio.id.substring(0, 8).toUpperCase(),
+        arrivalDate: reservation.checkIn,
+        departureDate: reservation.checkOut,
+        transactions,
+        totalCharges,
+        totalPayments,
+        balanceDue: Number(folio.balance || 0),
+        currency: folio.currency || 'NGN',
+        propertyName: reservation.property?.name || '',
+        printedAt: new Date().toISOString(),
       });
       if (!result?.error) return;
     }

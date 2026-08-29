@@ -2,16 +2,16 @@ import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import prisma from '@hotel-pms/db';
 import Link from 'next/link';
-import { ArrowLeftRight, Plus } from 'lucide-react';
+import { ArrowLeftRight, Plus, ArrowRight } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
-const STATUS_STYLES: Record<string, string> = {
-  DRAFT:            'bg-slate-700 text-slate-700',
-  PENDING_APPROVAL: 'bg-blue-500/20 text-blue-600 border border-blue-500/30',
-  APPROVED:         'bg-green-500/20 text-green-400 border border-green-500/30',
-  POSTED:           'bg-teal-500/20 text-teal-400 border border-teal-500/30',
-  CANCELLED:        'bg-red-500/20 text-red-600 border border-red-500/30',
+const STATUS_META: Record<string, { label: string; classes: string }> = {
+  DRAFT:            { label: 'Draft',            classes: 'bg-slate-100 text-slate-600 border-slate-200' },
+  PENDING_APPROVAL: { label: 'Pending Approval', classes: 'bg-blue-50 text-blue-700 border-blue-200' },
+  APPROVED:         { label: 'Approved',         classes: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  POSTED:           { label: 'Posted',           classes: 'bg-teal-50 text-teal-700 border-teal-200' },
+  CANCELLED:        { label: 'Cancelled',        classes: 'bg-red-50 text-red-700 border-red-200' },
 };
 
 export default async function TransfersPage() {
@@ -24,67 +24,104 @@ export default async function TransfersPage() {
     where: { propertyId },
     include: {
       fromWarehouse: { select: { name: true } },
-      toWarehouse:   { select: { name: true } },
-      _count:        { select: { items: true } },
+      toWarehouse: { select: { name: true } },
+      _count: { select: { items: true } },
     },
     orderBy: { createdAt: 'desc' },
     take: 100,
   });
 
   return (
-    <div className="px-6 py-8">
-      <div className="flex items-center justify-between mb-8">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-blue-50 rounded-lg">
-            <ArrowLeftRight className="w-5 h-5 text-blue-600" />
-          </div>
+    <div className="min-h-full">
+      {/* Hero header */}
+      <div className="bg-gradient-to-r from-[#0b1120] to-[#0f2619] px-8 py-7">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Stock Transfers</h1>
-            <p className="text-slate-500 text-sm mt-0.5">{transfers.length} transfer(s) on record</p>
+            <h1 className="text-2xl font-bold text-white tracking-tight">Stock Transfers</h1>
+            <p className="text-slate-400 text-sm mt-1">Move stock between warehouses and track transfer approvals.</p>
           </div>
+          <Link
+            href="/inventory/transfers/new"
+            className="inline-flex items-center gap-2 bg-white text-slate-800 border border-white/20 hover:bg-white/90 px-4 py-2 rounded-lg text-sm font-semibold shadow-sm self-start sm:self-auto"
+          >
+            <Plus className="h-4 w-4" />
+            New Transfer
+          </Link>
         </div>
-        <Link href="/inventory/transfers/new" className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-slate-900 text-sm font-semibold transition-colors">
-          <Plus className="w-4 h-4" /> New Transfer
-        </Link>
       </div>
 
-      <div className="bg-slate-50 border border-slate-300 rounded-xl overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-slate-300 bg-slate-50">
-              <th className="text-left px-4 py-3 text-slate-500 font-medium">Ref</th>
-              <th className="text-left px-4 py-3 text-slate-500 font-medium">From</th>
-              <th className="text-left px-4 py-3 text-slate-500 font-medium">To</th>
-              <th className="text-left px-4 py-3 text-slate-500 font-medium">Items</th>
-              <th className="text-left px-4 py-3 text-slate-500 font-medium">Status</th>
-              <th className="text-left px-4 py-3 text-slate-500 font-medium">Date</th>
-              <th className="px-4 py-3"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-700/50">
-            {transfers.length === 0 ? (
-              <tr><td colSpan={7} className="px-4 py-12 text-center text-slate-500">No transfers found. Create your first transfer.</td></tr>
-            ) : transfers.map(t => (
-              <tr key={t.id} className="hover:bg-slate-700/30 transition-colors">
-                <td className="px-4 py-3 font-mono font-semibold text-slate-900">{t.transferRef}</td>
-                <td className="px-4 py-3 text-slate-700">{t.fromWarehouse.name}</td>
-                <td className="px-4 py-3 text-slate-700">{t.toWarehouse.name}</td>
-                <td className="px-4 py-3 text-slate-500">{t._count.items} item(s)</td>
-                <td className="px-4 py-3">
-                  <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${STATUS_STYLES[t.status] || 'bg-slate-700 text-slate-700'}`}>
-                    {t.status.replace('_', ' ')}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-slate-500">{new Date(t.createdAt).toLocaleDateString()}</td>
-                <td className="px-4 py-3">
-                  <Link href={`/inventory/transfers/${t.id}`} className="text-blue-600 hover:text-blue-700 text-xs font-medium">
-                    View →
-                  </Link>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="px-6 py-7 max-w-screen-xl mx-auto">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="flex items-center gap-2 px-6 py-4 border-b border-slate-100 bg-slate-50/60">
+            <ArrowLeftRight className="h-4 w-4 text-slate-500" />
+            <span className="text-sm font-semibold text-slate-700">All Transfers</span>
+            <span className="ml-1 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-slate-200 text-slate-600 text-xs font-bold">
+              {transfers.length}
+            </span>
+          </div>
+
+          {transfers.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-center px-6">
+              <div className="h-16 w-16 rounded-full bg-slate-100 flex items-center justify-center mb-4">
+                <ArrowLeftRight className="h-8 w-8 text-slate-400" />
+              </div>
+              <p className="text-sm font-semibold text-slate-600">No transfers yet</p>
+              <p className="text-sm text-slate-400 mt-1">Create your first stock transfer to move items between warehouses.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-50/80 border-b border-slate-100">
+                    {['Reference', 'From', 'To', 'Items', 'Status', 'Date', ''].map((h, i) => (
+                      <th
+                        key={i}
+                        className={`px-6 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap ${
+                          i >= 3 ? 'text-right' : 'text-left'
+                        }`}
+                      >
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {transfers.map((t) => {
+                    const meta = STATUS_META[t.status] ?? STATUS_META.DRAFT;
+                    return (
+                      <tr key={t.id} className="hover:bg-slate-50/70 transition-colors group">
+                        <td className="px-6 py-4 font-mono text-xs font-bold text-slate-800">{t.transferRef}</td>
+                        <td className="px-6 py-4 text-slate-700">{t.fromWarehouse.name}</td>
+                        <td className="px-6 py-4 text-slate-700">{t.toWarehouse.name}</td>
+                        <td className="px-6 py-4 text-right">
+                          <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-slate-100 text-slate-600 text-xs font-bold">
+                            {t._count.items}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold border ${meta.classes}`}>
+                            {meta.label}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-right text-slate-500 whitespace-nowrap">
+                          {new Date(t.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <Link
+                            href={`/inventory/transfers/${t.id}`}
+                            className="inline-flex items-center gap-1 opacity-0 group-hover:opacity-100 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-all"
+                          >
+                            View <ArrowRight className="h-3 w-3" />
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

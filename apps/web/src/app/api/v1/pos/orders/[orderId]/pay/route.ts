@@ -28,10 +28,13 @@ export async function POST(
 
     const { method, amount, currency, checkId, inventoryOverrideApprovalId } = parsed.data;
 
-    // Optional: verify token
+    // Payment posting must always be tied to an active operator session.
     let sessionId = null;
     let staffId = null;
     const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return NextResponse.json({ error: 'Operator token required' }, { status: 401 });
+    }
     if (authHeader) {
       const token = authHeader.replace('Bearer ', '');
       const payload = await verifyOperatorToken(token);
@@ -48,6 +51,19 @@ export async function POST(
 
     if (!order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+    }
+    if (!sessionId) {
+      return NextResponse.json({ error: 'An open POS till is required before posting a payment.' }, { status: 409 });
+    }
+    if (order.sessionId && order.sessionId !== sessionId) {
+      return NextResponse.json({ error: 'This order belongs to a different POS till.' }, { status: 403 });
+    }
+    const activePosSession = await prisma.posSession.findFirst({
+      where: { id: sessionId, propertyId: order.propertyId, outletId: order.outletId, status: 'OPEN', controlStatus: 'OPEN' },
+      select: { id: true },
+    });
+    if (!activePosSession) {
+      return NextResponse.json({ error: 'This POS till is closed or pending approval. Open an active till to continue.' }, { status: 409 });
     }
 
     const result = await prisma.$transaction(async (tx: any) => {

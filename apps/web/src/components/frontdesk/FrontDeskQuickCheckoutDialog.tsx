@@ -171,11 +171,31 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
     if (!HardwareBridge.isAvailable() || !reservation) return;
     setPrintStatus('PRINTING');
     try {
+      const folio = reservation.folios?.[0] || reservation.folio || {};
+      const room = reservation.reservationRooms?.[0]?.room || reservation.rooms?.[0]?.room || {};
+      const guest = reservation.primaryGuest || reservation.guest || {};
+      const transactions = (folio.transactions || []).map((transaction: any) => ({
+        date: transaction.date || transaction.createdAt || new Date().toISOString(),
+        description: transaction.description || transaction.type || 'Folio transaction',
+        reference: transaction.reference || transaction.id || null,
+        debitAmount: Number(transaction.debitAmount ?? transaction.debit ?? transaction.charge ?? 0),
+        creditAmount: Number(transaction.creditAmount ?? transaction.credit ?? transaction.payment ?? 0),
+        runningBalance: Number(transaction.runningBalance ?? 0),
+      }));
       const res = await HardwareBridge.printGuestFolio({
-        folioId: reservation.folios?.[0]?.id || reservation.id,
-        guestName: `${reservation.primaryGuest?.firstName || reservation.guest?.firstName || 'Guest'} ${reservation.primaryGuest?.lastName || reservation.guest?.lastName || ''}`.trim(),
-        version: Date.now(),
-        details: {}
+        guestName: `${guest.firstName || 'Guest'} ${guest.lastName || ''}`.trim(),
+        roomNumber: room.number || room.code || reservation.roomNumber || 'Unassigned',
+        folioNumber: folio.id || reservation.id,
+        arrivalDate: reservation.checkIn || reservation.reservationRooms?.[0]?.checkInDate || new Date().toISOString(),
+        departureDate: reservation.checkOut || reservation.reservationRooms?.[0]?.checkOutDate || new Date().toISOString(),
+        transactions,
+        totalCharges: Number(folio.totalCharges || 0),
+        totalPayments: Number(folio.totalPayments || 0),
+        balanceDue: Number(folio.netBalance ?? folio.balance ?? 0),
+        currency: folio.currency || reservation.currency || 'NGN',
+        propertyName: reservation.property?.name || 'LodgeCore',
+        propertyAddress: reservation.property?.address,
+        printedAt: new Date().toISOString(),
       });
       const parsed = typeof res === 'string' ? JSON.parse(res) : res;
       if (parsed?.success) {

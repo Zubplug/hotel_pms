@@ -196,7 +196,7 @@ export async function executeNightAudit(propertyId: string, userId: string | nul
                 roomId: room.id,
                 type: 'STAYOVER',
                 priority: taskPriority,
-                status: 'PENDING',
+                status: 'CLEANING',
                 businessDate: nextBusinessDate,
                 notes: 'Auto-generated via Night Audit'
               }
@@ -205,7 +205,7 @@ export async function executeNightAudit(propertyId: string, userId: string | nul
             // Update Room Status independently (status remains OCCUPIED)
             await tx.room.update({
               where: { id: room.id },
-              data: { housekeepingStatus: 'PENDING' }
+              data: { housekeepingStatus: 'CLEANING' }
             });
 
             // Write detailed audit log

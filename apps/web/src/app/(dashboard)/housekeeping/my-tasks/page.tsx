@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { useProperty } from '@/components/PropertyProvider';
-import { Loader2, CheckCircle2, PlayCircle, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { Loader2, CheckCircle2, AlertTriangle, ShieldCheck, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
@@ -30,7 +30,12 @@ export default function MyTasksMobileView() {
       const res = await fetch(`/api/v1/housekeeping/tasks?propertyId=${propertyId}`);
       if (!res.ok) throw new Error('Failed to fetch tasks');
       const data = await res.json();
-      setTasks(data.data || []);
+      setTasks((data.data || []).map((task: any) => ({
+        ...task,
+        status: ['PENDING', 'ASSIGNED', 'CLEAN'].includes(String(task.status).toUpperCase())
+          ? 'CLEANING'
+          : String(task.status).toUpperCase(),
+      })));
     } catch (err: any) {
       console.error(err);
     } finally {
@@ -109,7 +114,6 @@ export default function MyTasksMobileView() {
                 </div>
                 <div className="text-right">
                   <div className={`px-3 py-1 rounded-full text-xs font-bold inline-block ${
-                    task.status === 'CLEAN' ? 'bg-emerald-100 text-emerald-700' :
                     task.status === 'CLEANING' ? 'bg-indigo-100 text-indigo-700' :
                     task.status === 'INSPECTED' ? 'bg-green-100 text-green-700' :
                     'bg-amber-100 text-amber-700'
@@ -123,23 +127,11 @@ export default function MyTasksMobileView() {
               </div>
 
               <div className="p-4 bg-white grid grid-cols-2 gap-3">
-                {['PENDING', 'ASSIGNED'].includes(task.status) && (
-                  <Button 
-                    className="col-span-2 h-14 text-lg bg-indigo-600 hover:bg-indigo-700" 
-                    onClick={() => handleStatusUpdate(task.id, 'CLEANING')}
-                  >
-                    <PlayCircle className="w-6 h-6 mr-2" /> Start Cleaning
-                  </Button>
-                )}
-
                 {task.status === 'CLEANING' && (
                   <>
-                    <Button 
-                      className="h-14 text-lg bg-emerald-600 hover:bg-emerald-700" 
-                      onClick={() => handleStatusUpdate(task.id, 'CLEAN')}
-                    >
-                      <CheckCircle2 className="w-6 h-6 mr-2" /> Mark Clean
-                    </Button>
+                    <div className="col-span-2 text-center text-indigo-600 p-2 font-medium flex items-center justify-center">
+                      <Sparkles className="w-5 h-5 mr-2" /> Cleaning in progress — supervisor inspection follows
+                    </div>
                     <Button 
                       variant="outline" 
                       className="h-14 border-red-200 text-red-600 hover:bg-red-50"
@@ -150,12 +142,6 @@ export default function MyTasksMobileView() {
                   </>
                 )}
 
-                {task.status === 'CLEAN' && (
-                  <div className="col-span-2 text-center text-emerald-600 p-2 font-medium flex items-center justify-center">
-                    <CheckCircle2 className="w-5 h-5 mr-2" /> Waiting for Supervisor Inspection
-                  </div>
-                )}
-                
                 {task.status === 'INSPECTED' && (
                   <div className="col-span-2 text-center text-green-600 p-2 font-medium flex items-center justify-center">
                     <ShieldCheck className="w-5 h-5 mr-2" /> Inspected & Ready

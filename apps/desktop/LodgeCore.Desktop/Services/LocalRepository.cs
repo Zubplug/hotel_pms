@@ -1579,16 +1579,14 @@ public class LocalRepository
 
         var allowedTransitions = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {
-            ["PENDING"] = ["ASSIGNED", "CANCELLED"],
-            ["ASSIGNED"] = ["CLEANING", "CANCELLED"],
-            ["CLEANING"] = ["CLEAN", "MAINTENANCE_REQUIRED"],
-            ["CLEAN"] = ["INSPECTED", "MAINTENANCE_REQUIRED"],
+            ["CLEANING"] = ["INSPECTED", "MAINTENANCE_REQUIRED"],
             ["INSPECTED"] = [],
             ["CANCELLED"] = [],
-            ["MAINTENANCE_REQUIRED"] = ["PENDING", "ASSIGNED"]
+            ["MAINTENANCE_REQUIRED"] = ["CLEANING"]
         };
-        if (!allowedTransitions.TryGetValue(task.Status, out var allowed) || !allowed.Contains(status, StringComparer.OrdinalIgnoreCase))
-            throw new InvalidOperationException($"Cannot transition housekeeping task from {task.Status} to {status}.");
+        var currentStatus = task.Status is "PENDING" or "ASSIGNED" or "CLEAN" ? "CLEANING" : task.Status;
+        if (!allowedTransitions.TryGetValue(currentStatus, out var allowed) || !allowed.Contains(status, StringComparer.OrdinalIgnoreCase))
+            throw new InvalidOperationException($"Cannot transition housekeeping task from {currentStatus} to {status}.");
 
         task.Status = status.ToUpperInvariant();
         task.UpdatedAt = DateTime.UtcNow;
@@ -1600,7 +1598,6 @@ public class LocalRepository
             room.Status = task.Status switch
             {
                 "CLEANING" => "CLEANING",
-                "CLEAN" => "CLEAN",
                 "INSPECTED" => "AVAILABLE",
                 "MAINTENANCE_REQUIRED" => "MAINTENANCE",
                 _ => room.Status

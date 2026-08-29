@@ -54,6 +54,16 @@ export async function POST(
     if (order.propertyId !== payload.propertyId || (payload.outletId && order.outletId !== payload.outletId)) {
       return NextResponse.json({ error: 'Context mismatch: token does not match order context' }, { status: 403 });
     }
+    if (!payload.sessionId) {
+      return NextResponse.json({ error: 'An open POS till is required before firing items.' }, { status: 409 });
+    }
+    const activePosSession = await prisma.posSession.findFirst({
+      where: { id: payload.sessionId, propertyId: order.propertyId, outletId: order.outletId, status: 'OPEN', controlStatus: 'OPEN' },
+      select: { id: true },
+    });
+    if (!activePosSession) {
+      return NextResponse.json({ error: 'This POS till is closed or pending approval. Open an active till to continue.' }, { status: 409 });
+    }
     if (order.status === 'CLOSED' || order.status === 'VOIDED') {
       return NextResponse.json({ error: `Cannot fire items on a ${order.status} order` }, { status: 400 });
     }

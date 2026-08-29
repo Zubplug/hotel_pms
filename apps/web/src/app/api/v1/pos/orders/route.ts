@@ -39,6 +39,29 @@ export async function POST(req: NextRequest) {
       firedByStaffId = payload.staffId;
     }
 
+    // A submitted, approved, handed-over, or deposited till must not accept
+    // new POS transactions. Enforce this on the server because the desktop
+    // UI/token may remain open after the cashier submits the shift.
+    if (!sessionId) {
+      return NextResponse.json({ error: 'An open POS till is required before posting an order.' }, { status: 409 });
+    }
+    const activePosSession = await prisma.posSession.findFirst({
+      where: {
+        id: sessionId,
+        propertyId,
+        ...(outletId ? { outletId } : {}),
+        status: 'OPEN',
+        controlStatus: 'OPEN',
+      },
+      select: { id: true },
+    });
+    if (!activePosSession) {
+      return NextResponse.json(
+        { error: 'This POS till is closed or pending approval. Open an active till to continue.' },
+        { status: 409 },
+      );
+    }
+
     // Fetch products with their categories to resolve productionStation
     const productIds = items
       .filter((i: any) => i.productId)

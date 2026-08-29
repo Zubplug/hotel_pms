@@ -1,12 +1,22 @@
-import React from "react";
-import prisma from "@hotel-pms/db";
-import { auth } from "@/lib/auth";
-import Link from "next/link";
-import { redirect } from "next/navigation";
-import { formatCurrency } from "@/lib/utils";
-import { Wallet, Receipt, AlertCircle, ArrowDownToLine, ArrowUpFromLine, CheckCircle2 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import React from 'react';
+import prisma from '@hotel-pms/db';
+import { auth } from '@/lib/auth';
+import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { formatCurrency } from '@/lib/utils';
+import {
+  Wallet,
+  Receipt,
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  CheckCircle2,
+  Clock,
+  AlertTriangle,
+  RotateCcw,
+  ArrowRight,
+  CalendarDays,
+  TrendingUp,
+} from 'lucide-react';
 
 export default async function GeneralCashierDashboardPage() {
   const session = await auth();
@@ -23,69 +33,120 @@ export default async function GeneralCashierDashboardPage() {
 
   const activeOutletShifts = await prisma.posSession.findMany({
     where: { propertyId, status: 'OPEN' },
-    include: {
-      outlet: true,
-      primaryOperator: true
-    }
+    include: { outlet: true, primaryOperator: true },
   });
 
-  const [safeAccount, revenue, frontDeskRevenue, pettyCash, pendingApprovals, pendingReviewPosShifts, activeFrontDeskShifts, pendingReviewFrontDeskShifts] = await Promise.all([
-    prisma.cashAccount.findFirst({ where: { propertyId, type: 'SAFE', isActive: true }, select: { balance: true } }),
+  const [
+    safeAccount,
+    revenue,
+    frontDeskRevenue,
+    pettyCash,
+    pendingApprovals,
+    pendingReviewPosShifts,
+    activeFrontDeskShifts,
+    pendingReviewFrontDeskShifts,
+  ] = await Promise.all([
+    prisma.cashAccount.findFirst({
+      where: { propertyId, type: 'SAFE', isActive: true },
+      select: { balance: true },
+    }),
     prisma.posPayment.aggregate({
-      where: { order: { propertyId }, businessDate, status: 'CONFIRMED', amount: { gt: 0 } },
+      where: {
+        order: { propertyId },
+        businessDate,
+        status: 'CONFIRMED',
+        amount: { gt: 0 },
+      },
       _sum: { amount: true },
     }),
     prisma.payment.aggregate({
-      where: { propertyId, createdAt: { gte: businessDate, lt: new Date(businessDate.getTime() + 86_400_000) }, status: { in: ['COMPLETED', 'PARTIALLY_REFUNDED'] } },
+      where: {
+        propertyId,
+        createdAt: {
+          gte: businessDate,
+          lt: new Date(businessDate.getTime() + 86_400_000),
+        },
+        status: { in: ['COMPLETED', 'PARTIALLY_REFUNDED'] },
+      },
       _sum: { amount: true },
     }),
     prisma.posCashMovement.aggregate({
       where: { propertyId, businessDate, type: 'PAID_OUT' },
       _sum: { amount: true },
     }),
-    prisma.approvalRequest.count({ where: { propertyId, status: 'PENDING' } }),
+    prisma.approvalRequest.count({
+      where: { propertyId, status: 'PENDING' },
+    }),
     prisma.posSession.findMany({
-      where: { propertyId, controlStatus: { in: ['SUBMITTED', 'UNDER_REVIEW', 'RETURNED'] } },
+      where: {
+        propertyId,
+        controlStatus: { in: ['SUBMITTED', 'UNDER_REVIEW', 'RETURNED'] },
+      },
       orderBy: { updatedAt: 'desc' },
-      include: { outlet: true, primaryOperator: true, settlements: { orderBy: { settledAt: 'desc' }, take: 1 }, payments: true, cashMovements: true, orders: { select: { status: true } } },
+      include: {
+        outlet: true,
+        primaryOperator: true,
+        settlements: { orderBy: { settledAt: 'desc' }, take: 1 },
+        payments: true,
+        cashMovements: true,
+        orders: { select: { status: true } },
+      },
     }),
     prisma.frontdeskSession.findMany({
-      where: { propertyId, status: { in: ['OPEN', 'CLOSING'] } },
-      orderBy: { updatedAt: 'desc' }, take: 20,
-      include: { staff: true, cashAccount: true, payments: true, cashMovements: true, exceptions: true },
+      where: {
+        propertyId,
+        status: { in: ['OPEN', 'CLOSING'] },
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: 20,
+      include: {
+        staff: true,
+        cashAccount: true,
+        payments: true,
+        cashMovements: true,
+        exceptions: true,
+      },
     }),
     prisma.frontdeskSession.findMany({
-      where: { propertyId, controlStatus: { in: ['SUBMITTED', 'UNDER_REVIEW', 'RETURNED'] } },
+      where: {
+        propertyId,
+        controlStatus: { in: ['SUBMITTED', 'UNDER_REVIEW', 'RETURNED'] },
+      },
       orderBy: { updatedAt: 'desc' },
-      include: { staff: true, cashAccount: true, payments: true, cashMovements: true, exceptions: true },
+      include: {
+        staff: true,
+        cashAccount: true,
+        payments: true,
+        cashMovements: true,
+        exceptions: true,
+      },
     }),
   ]);
 
   const currency = property.baseCurrency;
-  const todayRevenue = Number(revenue._sum?.amount || 0) + Number(frontDeskRevenue._sum?.amount || 0);
+  const todayRevenue =
+    Number(revenue._sum?.amount || 0) + Number(frontDeskRevenue._sum?.amount || 0);
   const cashInDrawer = Number(safeAccount?.balance || 0);
   const pettyCashPayouts = Number(pettyCash._sum?.amount || 0);
   const pendingDrops = activeOutletShifts.length + activeFrontDeskShifts.length;
-  const methodTotals = [...pendingReviewPosShifts.flatMap(shift => shift.payments), ...pendingReviewFrontDeskShifts.flatMap(shift => shift.payments)].filter((payment: any) => ['CONFIRMED', 'PAID', 'COMPLETED', 'PARTIALLY_REFUNDED'].includes(payment.status)).reduce((result: Record<string, number>, payment: any) => {
-    result[payment.method] = (result[payment.method] || 0) + Number(payment.amount || 0);
-    return result;
-  }, {});
 
   const queueItems = [
-    ...pendingReviewPosShifts.map(shift => ({
+    ...pendingReviewPosShifts.map((shift) => ({
       id: shift.id,
-      type: 'POS',
+      type: 'POS' as const,
       label: shift.outlet.name,
-      operator: shift.primaryOperator ? `${shift.primaryOperator.firstName} ${shift.primaryOperator.lastName}` : 'System',
+      operator: shift.primaryOperator
+        ? `${shift.primaryOperator.firstName} ${shift.primaryOperator.lastName}`
+        : 'System',
       status: shift.controlStatus || 'SUBMITTED',
       expected: Number(shift.expectedCash),
       declared: shift.actualCash == null ? null : Number(shift.actualCash),
       variance: shift.variance == null ? null : Number(shift.variance),
       updatedAt: shift.updatedAt,
     })),
-    ...pendingReviewFrontDeskShifts.map(shift => ({
+    ...pendingReviewFrontDeskShifts.map((shift) => ({
       id: shift.id,
-      type: 'FRONT DESK',
+      type: 'FRONT DESK' as const,
       label: shift.cashAccount.name,
       operator: `${shift.staff.firstName} ${shift.staff.lastName}`,
       status: shift.controlStatus || 'SUBMITTED',
@@ -93,96 +154,229 @@ export default async function GeneralCashierDashboardPage() {
       declared: shift.declaredCash == null ? null : Number(shift.declaredCash),
       variance: shift.variance == null ? null : Number(shift.variance),
       updatedAt: shift.updatedAt,
-    }))
+    })),
   ].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
 
+  const businessDateLabel = businessDate.toLocaleDateString('en-GB', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+
+  const kpiCards = [
+    {
+      label: 'Current Safe Float',
+      value: formatCurrency(cashInDrawer, currency),
+      icon: Wallet,
+      iconBg: 'bg-indigo-500/10',
+      iconColor: 'text-indigo-600',
+      accent: 'border-l-indigo-500',
+      valueColor: 'text-slate-900',
+    },
+    {
+      label: "Today's Consolidated Revenue",
+      value: formatCurrency(todayRevenue, currency),
+      icon: TrendingUp,
+      iconBg: 'bg-emerald-500/10',
+      iconColor: 'text-emerald-600',
+      accent: 'border-l-emerald-500',
+      valueColor: 'text-slate-900',
+    },
+    {
+      label: 'Pending Till Drops',
+      value: `${pendingDrops} Active`,
+      icon: ArrowDownToLine,
+      iconBg: 'bg-amber-500/10',
+      iconColor: 'text-amber-600',
+      accent: 'border-l-amber-500',
+      valueColor: pendingDrops > 0 ? 'text-amber-600' : 'text-slate-900',
+    },
+    {
+      label: 'Petty Cash Payouts',
+      value: formatCurrency(pettyCashPayouts, currency),
+      icon: ArrowUpFromLine,
+      iconBg: 'bg-rose-500/10',
+      iconColor: 'text-rose-600',
+      accent: 'border-l-rose-500',
+      valueColor: 'text-slate-900',
+    },
+  ];
+
+  const statusMeta: Record<string, { label: string; icon: React.ElementType; pill: string }> = {
+    SUBMITTED: {
+      label: 'Submitted',
+      icon: Clock,
+      pill: 'bg-sky-50 text-sky-700 border border-sky-200',
+    },
+    UNDER_REVIEW: {
+      label: 'Under Review',
+      icon: RotateCcw,
+      pill: 'bg-violet-50 text-violet-700 border border-violet-200',
+    },
+    RETURNED: {
+      label: 'Returned',
+      icon: AlertTriangle,
+      pill: 'bg-red-50 text-red-700 border border-red-200',
+    },
+  };
+
   return (
-    <div className="p-8 space-y-8">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">General Cashier Workspace</h1>
-          <p className="text-slate-500">Manage central hotel finances, folios, till drops, and pending reviews.</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white p-6 rounded-xl border shadow-sm">
-          <h3 className="text-sm font-medium text-slate-500 flex items-center gap-2"><Wallet className="w-4 h-4" /> Current Float</h3>
-          <div className="text-3xl font-black text-slate-900 mt-2">{formatCurrency(cashInDrawer, currency)}</div>
-        </div>
-        <div className="bg-white p-6 rounded-xl border shadow-sm">
-          <h3 className="text-sm font-medium text-slate-500 flex items-center gap-2"><Receipt className="w-4 h-4" /> Today's Consolidated Revenue</h3>
-          <div className="text-3xl font-black text-slate-900 mt-2">{formatCurrency(todayRevenue, currency)}</div>
-        </div>
-        <div className="bg-white p-6 rounded-xl border shadow-sm">
-          <h3 className="text-sm font-medium text-slate-500 flex items-center gap-2"><ArrowDownToLine className="w-4 h-4" /> Pending Till Drops</h3>
-          <div className="text-3xl font-black text-amber-600 mt-2">{pendingDrops} Outlets</div>
-        </div>
-        <div className="bg-white p-6 rounded-xl border shadow-sm">
-          <h3 className="text-sm font-medium text-slate-500 flex items-center gap-2"><ArrowUpFromLine className="w-4 h-4" /> Petty Cash Payouts</h3>
-          <div className="text-3xl font-black text-slate-900 mt-2">{formatCurrency(pettyCashPayouts, currency)}</div>
-        </div>
-      </div>
-
-      <div className="bg-white p-6 rounded-xl border shadow-sm">
-        <div className="flex items-center justify-between gap-4 mb-4">
+    <div className="min-h-full">
+      {/* Hero header */}
+      <div className="bg-gradient-to-r from-[#0b1120] to-[#1e2d50] px-8 py-7">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <h2 className="text-xl font-semibold text-slate-900">Pending Review Queue</h2>
-            <p className="text-sm text-slate-500">Shifts submitted by operators requiring General Cashier approval.</p>
+            <h1 className="text-2xl font-bold text-white tracking-tight">
+              General Cashier Workspace
+            </h1>
+            <p className="text-slate-400 text-sm mt-1">
+              Manage central hotel finances, folios, till drops, and pending reviews.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 bg-white/10 border border-white/10 rounded-xl px-4 py-2 self-start sm:self-auto backdrop-blur-sm">
+            <CalendarDays className="h-4 w-4 text-indigo-300 shrink-0" />
+            <span className="text-sm font-medium text-slate-200">{businessDateLabel}</span>
           </div>
         </div>
-        
-        {queueItems.length === 0 ? (
-           <div className="p-12 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center text-slate-400">
-             <CheckCircle2 className="w-12 h-12 mb-4 text-emerald-400" />
-             <p>All shifts are reviewed and approved.</p>
-           </div>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Type</TableHead>
-                <TableHead>Location</TableHead>
-                <TableHead>Operator</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Expected</TableHead>
-                <TableHead className="text-right">Declared</TableHead>
-                <TableHead className="text-right">Variance</TableHead>
-                <TableHead className="text-right">Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {queueItems.map(item => (
-                <TableRow key={`${item.type}-${item.id}`}>
-                  <TableCell>
-                    <Badge variant="outline" className={item.type === 'POS' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-purple-50 text-purple-700 border-purple-200'}>
-                      {item.type}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="font-semibold">{item.label}</TableCell>
-                  <TableCell>{item.operator}</TableCell>
-                  <TableCell>
-                     <Badge variant={item.status === 'RETURNED' ? 'destructive' : item.status === 'UNDER_REVIEW' ? 'secondary' : 'default'} className="text-[10px] uppercase">
-                       {item.status.replace(/_/g, ' ')}
-                     </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">{formatCurrency(item.expected, currency)}</TableCell>
-                  <TableCell className="text-right">{item.declared == null ? '-' : formatCurrency(item.declared, currency)}</TableCell>
-                  <TableCell className={`text-right font-medium ${item.variance && item.variance < 0 ? 'text-red-600' : item.variance && item.variance > 0 ? 'text-amber-600' : 'text-green-600'}`}>
-                    {item.variance == null ? '-' : formatCurrency(item.variance, currency)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Link href={`/reports/shift?shiftId=${encodeURIComponent(item.id)}`} className="rounded-md border px-3 py-1 text-sm font-medium hover:bg-slate-50 text-indigo-600">
-                      Review &rarr;
-                    </Link>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
       </div>
 
+      <div className="px-6 py-7 space-y-7 max-w-screen-xl mx-auto">
+        {/* KPI Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          {kpiCards.map((card) => {
+            const Icon = card.icon;
+            return (
+              <div
+                key={card.label}
+                className={`bg-white rounded-2xl border border-slate-200 shadow-sm border-l-4 ${card.accent} p-5 flex items-start gap-4 hover:shadow-md transition-shadow`}
+              >
+                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${card.iconBg}`}>
+                  <Icon className={`h-5 w-5 ${card.iconColor}`} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-slate-500 leading-tight">{card.label}</p>
+                  <p className={`text-2xl font-black mt-1 leading-tight tracking-tight ${card.valueColor}`}>
+                    {card.value}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Pending Review Queue */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100">
+            <div>
+              <h2 className="text-base font-semibold text-slate-900">Pending Review Queue</h2>
+              <p className="text-sm text-slate-500 mt-0.5">
+                Shifts submitted by operators requiring General Cashier approval.
+              </p>
+            </div>
+            {queueItems.length > 0 && (
+              <span className="inline-flex items-center justify-center min-w-[24px] h-6 px-2 rounded-full bg-indigo-600 text-white text-xs font-bold">
+                {queueItems.length}
+              </span>
+            )}
+          </div>
+
+          {queueItems.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center px-6">
+              <div className="h-16 w-16 rounded-full bg-emerald-50 flex items-center justify-center mb-4">
+                <CheckCircle2 className="h-8 w-8 text-emerald-500" />
+              </div>
+              <p className="text-sm font-semibold text-slate-700">All caught up!</p>
+              <p className="text-sm text-slate-400 mt-1">All shifts have been reviewed and approved.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-50/80">
+                    <th className="text-left px-6 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider">Type</th>
+                    <th className="text-left px-6 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider">Location</th>
+                    <th className="text-left px-6 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider">Operator</th>
+                    <th className="text-left px-6 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider">Status</th>
+                    <th className="text-right px-6 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider">Expected</th>
+                    <th className="text-right px-6 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider">Declared</th>
+                    <th className="text-right px-6 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider">Variance</th>
+                    <th className="text-right px-6 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {queueItems.map((item) => {
+                    const meta = statusMeta[item.status] || statusMeta['SUBMITTED'];
+                    const StatusIcon = meta.icon;
+                    const varianceNegative = item.variance !== null && item.variance < 0;
+                    const variancePositive = item.variance !== null && item.variance > 0;
+                    return (
+                      <tr
+                        key={`${item.type}-${item.id}`}
+                        className="hover:bg-slate-50/70 transition-colors"
+                      >
+                        <td className="px-6 py-4">
+                          <span
+                            className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold border ${
+                              item.type === 'POS'
+                                ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                : 'bg-purple-50 text-purple-700 border-purple-200'
+                            }`}
+                          >
+                            {item.type}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 font-semibold text-slate-800">{item.label}</td>
+                        <td className="px-6 py-4 text-slate-600">{item.operator}</td>
+                        <td className="px-6 py-4">
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${meta.pill}`}>
+                            <StatusIcon className="h-3 w-3" />
+                            {meta.label}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-right font-medium text-slate-700">
+                          {formatCurrency(item.expected, currency)}
+                        </td>
+                        <td className="px-6 py-4 text-right font-medium text-slate-700">
+                          {item.declared == null ? (
+                            <span className="text-slate-400">—</span>
+                          ) : (
+                            formatCurrency(item.declared, currency)
+                          )}
+                        </td>
+                        <td
+                          className={`px-6 py-4 text-right font-semibold ${
+                            varianceNegative
+                              ? 'text-red-600'
+                              : variancePositive
+                              ? 'text-amber-600'
+                              : 'text-emerald-600'
+                          }`}
+                        >
+                          {item.variance == null ? (
+                            <span className="text-slate-400 font-normal">—</span>
+                          ) : (
+                            formatCurrency(item.variance, currency)
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <Link
+                            href={`/reports/shift?shiftId=${encodeURIComponent(item.id)}`}
+                            className="inline-flex items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 hover:border-indigo-300 transition-colors"
+                          >
+                            Review
+                            <ArrowRight className="h-3 w-3" />
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

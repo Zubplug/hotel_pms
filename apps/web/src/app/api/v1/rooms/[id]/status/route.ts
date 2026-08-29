@@ -48,7 +48,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         where: { id },
         data: {
           status: newStatus,
-          ...(newStatus === 'DIRTY' ? { housekeepingStatus: 'PENDING' } : {}),
+          ...(newStatus === 'DIRTY' ? { housekeepingStatus: 'CLEANING' } : {}),
         },
         include: { roomType: true, building: true, floor: true },
       });
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest, { params }: Params) {
             roomId: room.id,
             type: 'INSPECTION',
             priority: 'NORMAL',
-            status: 'PENDING',
+            status: 'CLEANING',
             businessDate: new Date(new Date().setUTCHours(0, 0, 0, 0)),
             idempotencyKey: `ROOM_DIRTY_${room.id}_${Date.now()}`,
             notes: reason || 'Room marked Dirty and requires housekeeping attention.',

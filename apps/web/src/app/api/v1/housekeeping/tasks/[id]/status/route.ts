@@ -6,14 +6,13 @@ import { hasPermission } from '@/lib/rbac';
 import { assertPropertyAccess } from '@/lib/property-access';
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
-  'PENDING': ['ASSIGNED', 'CANCELLED'],
-  'ASSIGNED': ['CLEANING', 'CANCELLED'],
-  'CLEANING': ['CLEAN', 'MAINTENANCE_REQUIRED'],
-  'CLEAN': ['INSPECTED', 'MAINTENANCE_REQUIRED'],
+  'CLEANING': ['INSPECTED', 'MAINTENANCE_REQUIRED'],
   'INSPECTED': [],
   'CANCELLED': [],
-  'MAINTENANCE_REQUIRED': ['PENDING', 'ASSIGNED'] // Reset flow if maintenance fixes it
+  'MAINTENANCE_REQUIRED': ['CLEANING'] // Resume flow after maintenance fixes it
 };
+
+const LEGACY_CLEANING_STATES = new Set(['PENDING', 'ASSIGNED', 'CLEAN']);
 
 export async function PATCH(
   req: NextRequest,
@@ -48,24 +47,22 @@ export async function PATCH(
     // Determine target status
     const requestedStatus = status ? String(status).toUpperCase() : undefined;
     let targetStatus = requestedStatus || task.status;
-    if (!status && assignedTo && task.status === 'PENDING') {
-      targetStatus = 'ASSIGNED'; // Auto-transition on assignment
-    }
+    const currentStatus = LEGACY_CLEANING_STATES.has(task.status) ? 'CLEANING' : task.status;
 
     if (isReceptionist) {
       if (assignedTo !== undefined) {
         return errorResponse('FORBIDDEN', 'Reception can only inspect completed housekeeping tasks', 403);
       }
-      if (targetStatus !== 'INSPECTED' || task.status !== 'CLEAN') {
-        return errorResponse('FORBIDDEN', 'Reception can only move a CLEAN task to INSPECTED once', 403);
+      if (targetStatus !== 'INSPECTED' || currentStatus !== 'CLEANING') {
+        return errorResponse('FORBIDDEN', 'Reception can only move a CLEANING task to INSPECTED once', 403);
       }
     }
 
     // Validate State Machine
-    if (targetStatus !== task.status) {
-      const allowedNext = VALID_TRANSITIONS[task.status] || [];
+    if (targetStatus !== currentStatus) {
+      const allowedNext = VALID_TRANSITIONS[currentStatus] || [];
       if (!allowedNext.includes(targetStatus)) {
-        return errorResponse('INVALID_STATE', `Cannot transition task from ${task.status} to ${targetStatus}`, 409);
+        return errorResponse('INVALID_STATE', `Cannot transition task from ${currentStatus} to ${targetStatus}`, 409);
       }
     }
 
@@ -76,7 +73,6 @@ export async function PATCH(
 
       // Sync Room status based on Task status
       if (targetStatus === 'CLEANING') roomStatusUpdate = 'CLEANING';
-      if (targetStatus === 'CLEAN') roomStatusUpdate = 'CLEAN';
       if (targetStatus === 'INSPECTED') roomStatusUpdate = 'AVAILABLE';
       if (targetStatus === 'MAINTENANCE_REQUIRED') roomStatusUpdate = 'MAINTENANCE';
 
@@ -85,8 +81,7 @@ export async function PATCH(
         ...(assignedTo !== undefined ? { assignedTo } : {})
       };
 
-      if (targetStatus === 'CLEANING' && task.status !== 'CLEANING') updateData.startedAt = new Date();
-      if (targetStatus === 'CLEAN' && task.status !== 'CLEAN') updateData.completedAt = new Date();
+      if (targetStatus === 'CLEANING' && currentStatus !== 'CLEANING') updateData.startedAt = new Date();
       if (targetStatus === 'INSPECTED') {
         updateData.inspectedAt = new Date();
         updateData.inspectedBy = session.user.id;

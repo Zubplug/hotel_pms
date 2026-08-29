@@ -1266,7 +1266,8 @@ export async function POST(req: NextRequest) {
                          roomId,
                          type: payload.TaskType || payload.taskType || 'CLEANING',
                          priority: payload.Priority || payload.priority || 'NORMAL',
-                         status: (payload.Status || payload.status || 'PENDING') as any,
+                         status: String(payload.Status || payload.status || 'CLEANING')
+                           .replace(/^(PENDING|ASSIGNED|CLEAN)$/i, 'CLEANING') as any,
                          businessDate: new Date(),
                          assignedTo: isUuid(payload.AssignedToUserId || payload.assignedToUserId)
                            ? payload.AssignedToUserId || payload.assignedToUserId
@@ -1275,7 +1276,8 @@ export async function POST(req: NextRequest) {
                  });
              }
              else if (eventType === 'UPDATE_STATUS') {
-                 const currentStatus = payload.Status || payload.status;
+                 const currentStatus = String(payload.Status || payload.status || 'CLEANING')
+                   .replace(/^(PENDING|ASSIGNED|CLEAN)$/i, 'CLEANING');
                  const updateData: any = { status: currentStatus as any };
                  if (currentStatus === 'IN_PROGRESS') {
                      updateData.startedAt = new Date();
