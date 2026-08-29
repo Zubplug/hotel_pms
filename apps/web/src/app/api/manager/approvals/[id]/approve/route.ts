@@ -50,6 +50,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         return { status: 'EXECUTED', approval: updated, productId: product.id, price: newPrice };
       }
 
+      if (approval.type === 'POS_MENU_CREATE') {
+        if (approval.status !== 'PENDING') throw new Error('CONFLICT');
+        if (!['MANAGER', 'HOTEL_MANAGER', 'ADMIN', 'CEO', 'SUPER_ADMIN'].includes(user.role) && !user.isSuperAdmin) throw new Error('MANAGER_APPROVAL_REQUIRED');
+        const details = (approval.details || {}) as Record<string, any>;
+        if (!details.accountantApprovedBy) throw new Error('ACCOUNTANT_APPROVAL_REQUIRED');
+        const category = await tx.productCategory.findFirst({ where: { id: details.categoryId, isActive: true, outlet: { propertyId: approval.propertyId, isActive: true } } });
+        if (!category || !details.name || !Number.isFinite(Number(details.price))) throw new Error('INVALID_MENU_REQUEST');
+        const product = await tx.posProduct.create({ data: { propertyId: approval.propertyId, categoryId: category.id, name: details.name, price: Number(details.price), taxRate: Number(details.taxRate || 0), inventoryMode: details.inventoryMode === 'STOCK' ? 'STOCK' : 'NON_STOCK', productionStation: details.productionStation || null, createdBy: user.id } });
+        const updated = await tx.approvalRequest.update({ where: { id: approval.id }, data: { status: 'APPROVED', reviewedBy: user.id, reviewedAt: new Date(), details: { ...details, stage: 'LIVE', managerApprovedBy: user.id, managerApprovedAt: new Date().toISOString(), productId: product.id } } });
+        return { status: 'EXECUTED', approval: updated, productId: product.id };
+      }
+
       if (approval.type === 'REFUND') {
         if (approval.status !== 'PENDING') throw new Error('CONFLICT');
           const details = (approval.details || {}) as { refundRequestId?: string; approverId?: string; approverRoleId?: string; posRefund?: boolean; orderId?: string; amount?: number; method?: string };

@@ -201,11 +201,13 @@ function CategoryEditModal({
 function ProductEditModal({
   product,
   categoryStation,
+  canEditStation = true,
   onClose,
   onSave,
 }: {
   product: Product;
   categoryStation: ProductionStation;
+  canEditStation?: boolean;
   onClose: () => void;
   onSave: (station: ProductionStation | null, price: number) => Promise<void>;
 }) {
@@ -256,7 +258,7 @@ function ProductEditModal({
         </div>
 
         {/* Options */}
-        <div className="p-6 space-y-3">
+        {canEditStation ? <div className="p-6 space-y-3">
           {/* Inherit option */}
           <label
             className={`flex items-center gap-4 p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
@@ -331,7 +333,7 @@ function ProductEditModal({
               </label>
             );
           })}
-        </div>
+        </div> : <div className="px-6 pb-6 text-xs text-slate-500">Production routing is controlled by management. Cashiers can submit the selling price for approval.</div>}
 
         {/* Footer */}
         <div className="flex items-center justify-end gap-3 px-6 py-4 border-t bg-slate-50">
@@ -370,6 +372,9 @@ export default function MenuManagerPage() {
   // Modals
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [showCreateMenu, setShowCreateMenu] = useState(false);
+  const [creatingMenu, setCreatingMenu] = useState(false);
+  const [newMenu, setNewMenu] = useState({ name: '', categoryId: '', price: '', taxRate: '0', inventoryMode: 'NON_STOCK', productionStation: 'NONE' });
 
   // Error / success toast
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -377,6 +382,31 @@ export default function MenuManagerPage() {
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
+  };
+
+  const isCashier = ['GENERAL_CASHIER', 'CASHIER', 'FRONT_DESK_CASHIER'].includes(
+    String((session?.user as any)?.role || '').toUpperCase()
+  );
+
+  const handleCreateMenuRequest = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setCreatingMenu(true);
+    try {
+      const response = await fetch('/api/v1/pos/products/menu-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...newMenu, price: Number(newMenu.price), taxRate: Number(newMenu.taxRate) }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || 'Unable to submit menu request');
+      setShowCreateMenu(false);
+      setNewMenu({ name: '', categoryId: '', price: '', taxRate: '0', inventoryMode: 'NON_STOCK', productionStation: 'NONE' });
+      showToast('Menu request sent for Accountant review');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Unable to submit menu request', 'error');
+    } finally {
+      setCreatingMenu(false);
+    }
   };
 
   // Fetch data
@@ -505,7 +535,10 @@ export default function MenuManagerPage() {
                 Manage categories, products, and production station routing
               </p>
             </div>
-            <Link href="/cashier/price-approvals" className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-100">Price approvals</Link>
+            <div className="flex items-center gap-2">
+              {isCashier && <button onClick={() => setShowCreateMenu(true)} className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-700">New menu request</button>}
+              <Link href="/cashier/price-approvals" className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-100">{isCashier ? 'My requests' : 'Price approvals'}</Link>
+            </div>
           </div>
           {/* Station overview pills */}
           <div className="hidden lg:flex items-center gap-2">
@@ -588,7 +621,7 @@ export default function MenuManagerPage() {
                       <span className="text-xs text-slate-400 shrink-0 mt-0.5">{catProductCount}</span>
                     </button>
                     {/* Edit station button */}
-                    <div className="px-4 pb-3 -mt-1">
+                    {!isCashier && <div className="px-4 pb-3 -mt-1">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -599,7 +632,7 @@ export default function MenuManagerPage() {
                         <Pencil className="w-2.5 h-2.5" />
                         Edit Station
                       </button>
-                    </div>
+                    </div>}
                   </div>
                 );
               })}
@@ -709,7 +742,7 @@ export default function MenuManagerPage() {
                             {cat?.name ?? '—'}
                           </td>
                           <td className="px-6 py-4 font-semibold text-slate-800">
-                            {formatCurrency(Math.round(price * 100))}
+                            {formatCurrency(price)}
                           </td>
                           <td className="px-6 py-4 text-slate-500">
                             {taxRate > 0 ? `${taxRate}%` : '—'}
@@ -769,9 +802,22 @@ export default function MenuManagerPage() {
         <ProductEditModal
           product={editingProduct}
           categoryStation={categoryMap[editingProduct.categoryId]?.productionStation ?? 'KITCHEN'}
+          canEditStation={!isCashier}
           onClose={() => setEditingProduct(null)}
           onSave={handleSaveProductStation}
         />
+      )}
+      {showCreateMenu && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <form onSubmit={handleCreateMenuRequest} className="w-full max-w-lg space-y-4 rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="flex items-start justify-between"><div><h2 className="text-lg font-semibold text-slate-900">Request new menu item</h2><p className="text-sm text-slate-500">Accountant reviews the details; Manager publishes it to POS.</p></div><button type="button" onClick={() => setShowCreateMenu(false)}><X className="h-5 w-5 text-slate-500" /></button></div>
+            <input required placeholder="Menu item name" value={newMenu.name} onChange={(e) => setNewMenu({ ...newMenu, name: e.target.value })} className="w-full rounded-lg border p-2.5 text-sm" />
+            <select required value={newMenu.categoryId} onChange={(e) => setNewMenu({ ...newMenu, categoryId: e.target.value })} className="w-full rounded-lg border p-2.5 text-sm"><option value="">Select category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select>
+            <div className="grid grid-cols-2 gap-3"><label className="text-sm text-slate-600">Selling price<input required min="0" step="0.01" type="number" value={newMenu.price} onChange={(e) => setNewMenu({ ...newMenu, price: e.target.value })} className="mt-1 w-full rounded-lg border p-2.5 text-sm" /></label><label className="text-sm text-slate-600">Tax rate %<input min="0" max="100" step="0.01" type="number" value={newMenu.taxRate} onChange={(e) => setNewMenu({ ...newMenu, taxRate: e.target.value })} className="mt-1 w-full rounded-lg border p-2.5 text-sm" /></label></div>
+            <div className="grid grid-cols-2 gap-3"><label className="text-sm text-slate-600">Stock handling<select value={newMenu.inventoryMode} onChange={(e) => setNewMenu({ ...newMenu, inventoryMode: e.target.value })} className="mt-1 w-full rounded-lg border p-2.5 text-sm"><option value="NON_STOCK">Non-stock / service</option><option value="STOCK">Stock-controlled</option></select></label><label className="text-sm text-slate-600">Production station<select value={newMenu.productionStation} onChange={(e) => setNewMenu({ ...newMenu, productionStation: e.target.value })} className="mt-1 w-full rounded-lg border p-2.5 text-sm">{(Object.keys(STATION_CONFIG) as ProductionStation[]).map((station) => <option key={station} value={station}>{station}</option>)}</select></label></div>
+            <div className="flex justify-end gap-2 border-t pt-4"><button type="button" onClick={() => setShowCreateMenu(false)} className="rounded-lg border px-4 py-2 text-sm">Cancel</button><button disabled={creatingMenu} className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{creatingMenu && <Loader2 className="h-4 w-4 animate-spin" />}Submit request</button></div>
+          </form>
+        </div>
       )}
     </div>
   );

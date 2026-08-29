@@ -11,7 +11,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!ACCOUNTANT_ROLES.includes(user.role) && !user.isSuperAdmin) return errorResponse('FORBIDDEN', 'Accountant approval required', 403);
   const { id } = await params;
   const approval = await prisma.approvalRequest.findUnique({ where: { id } });
-  if (!approval || approval.type !== 'POS_PRICE_CHANGE') return errorResponse('NOT_FOUND', 'Price request not found', 404);
+  if (!approval || !['POS_PRICE_CHANGE', 'POS_MENU_CREATE'].includes(approval.type)) return errorResponse('NOT_FOUND', 'POS approval request not found', 404);
   if (approval.status !== 'PENDING') return errorResponse('CONFLICT', 'Price request is no longer pending', 409);
   const details = (approval.details || {}) as Record<string, any>;
   if (details.accountantApprovedBy) return errorResponse('CONFLICT', 'Accountant approval already recorded', 409);

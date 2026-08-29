@@ -36,7 +36,7 @@ const CASH_MANAGEMENT_NAV = [
       { name: 'Bank Deposits', href: '/deposits' },
       { name: 'Receivables', href: '/reports/receivables' },
       { name: 'POS Menu & Prices', href: '/cashier/menu' },
-      { name: 'Price Approvals', href: '/cashier/price-approvals', roles: ['ACCOUNTANT', 'FINANCE_MANAGER', 'MANAGER', 'CEO', 'SUPER_ADMIN'] },
+      { name: 'Price Requests', href: '/cashier/price-approvals', roles: ['GENERAL_CASHIER', 'CASHIER', 'FRONT_DESK_CASHIER', 'ACCOUNTANT', 'FINANCE_MANAGER', 'MANAGER', 'CEO', 'SUPER_ADMIN'] },
       { name: 'Gateway', href: '/reports/gateway' },
     ],
   },
