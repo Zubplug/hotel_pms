@@ -12,7 +12,9 @@ export async function POST(req: NextRequest) {
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
 
     const body = await req.json();
-    const { folioId, amount, currency, method, idempotencyKey, notes, providerTransactionId, terminalId, reference, authorizationCode, frontdeskSessionId } = body;
+    const { folioId, amount, currency, method, idempotencyKey, notes, providerTransactionId, terminalId, reference, authorizationCode, frontdeskSessionId, collectionSource = 'FRONT_DESK' } = body;
+    const isReceivablesCollection = collectionSource === 'RECEIVABLES';
+    if (!['FRONT_DESK', 'RECEIVABLES', 'OTHER'].includes(collectionSource)) return errorResponse('BAD_REQUEST', 'Invalid collection source', 400);
 
     if (!folioId || !amount || !currency || !method || !idempotencyKey) {
       return errorResponse('BAD_REQUEST', 'Missing required fields (folioId, amount, currency, method, idempotencyKey)', 400);
@@ -61,7 +63,9 @@ export async function POST(req: NextRequest) {
       return errorResponse('FORBIDDEN', 'No access to this property', 403);
     }
 
-    const { staff, session: activeFrontdeskSession } = await findActiveFrontdeskSession(session.user.id, folio.propertyId, frontdeskSessionId);
+    const { staff, session: activeFrontdeskSession } = isReceivablesCollection
+      ? { staff: null, session: null }
+      : await findActiveFrontdeskSession(session.user.id, folio.propertyId, frontdeskSessionId);
     const role = String((session.user as any).role || '');
     if ((staff || isFrontdeskCashierRole(role)) && !activeFrontdeskSession) {
       return errorResponse('CONFLICT', 'Open a front desk cashier session before posting a payment.', 409);
@@ -120,6 +124,7 @@ export async function POST(req: NextRequest) {
           reservationId: folio.reservationId,
           propertyId: folio.propertyId,
           method: method as any,
+          collectionSource,
           amount: numericAmount,
           currency: currency,
           baseAmount: numericAmount,
@@ -137,6 +142,10 @@ export async function POST(req: NextRequest) {
       });
 
       if (activeFrontdeskSession && method === 'CASH' && staff) {
+        await tx.cashAccount.update({
+          where: { id: activeFrontdeskSession.cashAccountId },
+          data: { balance: { increment: numericAmount } },
+        });
         await tx.posCashMovement.create({
           data: {
             propertyId: folio.propertyId,

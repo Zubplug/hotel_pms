@@ -199,7 +199,7 @@ export default function ReceivablesReportPage() {
                           <Button 
                             variant="ghost" 
                             size="sm" 
-                            onClick={() => router.push(`/reservations/${r.reservation.id}`)}
+                            onClick={() => router.push(`/cashier/folios/${r.folioId}`)}
                             className="h-8 hover:bg-primary/10 hover:text-primary"
                           >
                             View Folio <ArrowRight className="w-4 h-4 ml-2" />
@@ -215,7 +215,7 @@ export default function ReceivablesReportPage() {
           </CardContent>
         </Card>
       )}
-      <AddPaymentDialog open={!!paymentFolio} onOpenChange={(open) => { if (!open) { setPaymentFolio(null); void refetch(); } }} folio={paymentFolio} />
+      <AddPaymentDialog open={!!paymentFolio} onOpenChange={(open) => { if (!open) { setPaymentFolio(null); void refetch(); } }} folio={paymentFolio} collectionSource="RECEIVABLES" />
     </div>
   );
 }

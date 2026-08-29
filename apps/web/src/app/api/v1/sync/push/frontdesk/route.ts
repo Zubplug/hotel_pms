@@ -760,6 +760,7 @@ export async function POST(req: NextRequest) {
                if (payload.frontdeskSessionId && methodStr === 'CASH') {
                  const session = await tx.frontdeskSession.findUnique({ where: { id: payload.frontdeskSessionId } });
                  if (!session || session.status !== 'OPEN') throw new Error('Front desk session is not open');
+                 await tx.cashAccount.update({ where: { id: session.cashAccountId }, data: { balance: { increment: amount } } });
                  await tx.posCashMovement.create({ data: { propertyId, deviceId: device.id, frontdeskSessionId: session.id, userId: actorId, amount, currency: payload.currency || 'NGN', type: 'PAYMENT', sourceAccountId: session.cashAccountId, destinationAccountId: session.cashAccountId, reasonCode: 'FOLIO_PAYMENT', receiptReference: payload.reference || null, operationId: `FD-PAYMENT-${idempotencyKey}`, businessDate: session.businessDate } });
                }
 

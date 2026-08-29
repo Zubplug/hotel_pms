@@ -917,6 +917,7 @@ model Payment {
   property           Property          @relation(fields: [propertyId], references: [id])
 
   method                PaymentMethod
+  collectionSource      String             @default("FRONT_DESK") // FRONT_DESK | RECEIVABLES | OTHER
   provider              String?
   providerTransactionId String?
   providerRef           String?

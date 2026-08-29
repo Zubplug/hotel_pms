@@ -357,6 +357,19 @@ function ProductEditModal({
   );
 }
 
+function ModifierManagerModal({ product, stockItems, onClose, onSubmitted }: { product: Product; stockItems: any[]; onClose: () => void; onSubmitted: () => Promise<void> }) {
+  const [modifiers, setModifiers] = useState<any[]>([]);
+  const [editing, setEditing] = useState<any | null>(null);
+  const [form, setForm] = useState({ name: '', price: '', stockItemId: '', quantity: '1', unitOfMeasure: '' });
+  const [saving, setSaving] = useState(false);
+  const load = async () => { const response = await fetch(`/api/v1/pos/products/${product.id}/modifiers`); const body = await response.json(); setModifiers(body.data || []); };
+  useEffect(() => { void load(); }, [product.id]);
+  const openForm = (modifier?: any) => { setEditing(modifier || null); setForm({ name: modifier?.name || '', price: modifier ? String(modifier.price) : '', stockItemId: modifier?.stockItemId || '', quantity: modifier ? String(modifier.quantity || 1) : '1', unitOfMeasure: modifier?.unitOfMeasure || '' }); };
+  const submit = async (event: React.FormEvent) => { event.preventDefault(); setSaving(true); try { const response = await fetch('/api/v1/pos/modifier-requests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ productId: product.id, modifierId: editing?.id, ...form, price: Number(form.price), quantity: Number(form.quantity) }) }); const body = await response.json(); if (!response.ok) throw new Error(body.error || 'Unable to submit modifier request'); await onSubmitted(); await load(); setEditing(null); setForm({ name: '', price: '', stockItemId: '', quantity: '1', unitOfMeasure: '' }); } catch (error) { window.alert(error instanceof Error ? error.message : 'Unable to submit modifier request'); } finally { setSaving(false); } };
+  const selectedStock = stockItems.find((item) => item.id === form.stockItemId); const units = selectedStock ? [selectedStock.baseUnit, ...(selectedStock.stockUnits || []).map((unit: any) => unit.unit)] : [];
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"><div className="w-full max-w-2xl space-y-5 rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-start justify-between"><div><h2 className="text-lg font-semibold">Modifiers · {product.name}</h2><p className="text-sm text-slate-500">New and updated modifiers require Accountant review and Manager publication.</p></div><button onClick={onClose}><X className="h-5 w-5 text-slate-500" /></button></div><div className="space-y-2">{modifiers.map((modifier) => <div key={modifier.id} className="flex items-center justify-between rounded-lg border p-3"><div><p className="font-medium">{modifier.name}</p><p className="text-xs text-slate-500">₦{Number(modifier.price).toLocaleString()}{modifier.stockItemId ? ` · uses ${modifier.quantity} ${modifier.unitOfMeasure || 'base unit'}` : ' · no stock deduction'}</p></div><button onClick={() => openForm(modifier)} className="rounded border px-3 py-1.5 text-xs font-semibold text-indigo-700">Request update</button></div>)}{modifiers.length === 0 && <p className="rounded-lg bg-slate-50 p-4 text-sm text-slate-500">No active modifiers.</p>}</div>{<form onSubmit={submit} className="space-y-3 border-t pt-4"><h3 className="font-semibold">{editing ? `Update ${editing.name}` : 'Request new modifier'}</h3><div className="grid grid-cols-2 gap-3"><input required placeholder="Modifier name" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} className="rounded-lg border p-2.5 text-sm" /><input required min="0" step="0.01" type="number" placeholder="Additional price" value={form.price} onChange={(event) => setForm({ ...form, price: event.target.value })} className="rounded-lg border p-2.5 text-sm" /></div><div className="grid grid-cols-2 gap-3"><select value={form.stockItemId} onChange={(event) => setForm({ ...form, stockItemId: event.target.value, unitOfMeasure: '' })} className="rounded-lg border p-2.5 text-sm"><option value="">No stock deduction</option>{stockItems.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><input min="0.0001" step="0.0001" type="number" value={form.quantity} onChange={(event) => setForm({ ...form, quantity: event.target.value })} className="rounded-lg border p-2.5 text-sm" /></div>{selectedStock && <select required value={form.unitOfMeasure} onChange={(event) => setForm({ ...form, unitOfMeasure: event.target.value })} className="w-full rounded-lg border p-2.5 text-sm"><option value="">Deduction unit</option>{units.map((unit: string) => <option key={unit} value={unit}>{unit}</option>)}</select>}<div className="flex justify-end gap-2"><button type="button" onClick={() => { setEditing(null); setForm({ name: '', price: '', stockItemId: '', quantity: '1', unitOfMeasure: '' }); }} className="rounded-lg border px-4 py-2 text-sm">Clear</button><button disabled={saving} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving ? 'Submitting…' : 'Submit for approval'}</button></div></form>}</div></div>;
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function MenuManagerPage() {
@@ -373,6 +386,7 @@ export default function MenuManagerPage() {
   // Modals
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [modifierProduct, setModifierProduct] = useState<Product | null>(null);
   const [showCreateMenu, setShowCreateMenu] = useState(false);
   const [creatingMenu, setCreatingMenu] = useState(false);
   const [newMenu, setNewMenu] = useState({ name: '', categoryId: '', price: '', taxRate: '0', inventoryMode: 'NON_STOCK', stockItemId: '', productionStation: 'NONE' });
@@ -541,7 +555,7 @@ export default function MenuManagerPage() {
             </div>
             <div className="flex items-center gap-2">
               {isCashier && <button onClick={() => setShowCreateMenu(true)} className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-700">New menu request</button>}
-              <Link href="/cashier/price-approvals" className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-100">{isCashier ? 'My requests' : 'Price approvals'}</Link>
+              {!isCashier && <Link href="/cashier/price-approvals" className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-100">Price approvals</Link>}
             </div>
           </div>
           {/* Station overview pills */}
@@ -782,6 +796,7 @@ export default function MenuManagerPage() {
                               <Pencil className="w-3 h-3" />
                               Station
                             </button>
+                            <button onClick={() => setModifierProduct(product)} className="ml-2 rounded-lg border border-indigo-100 bg-white px-3 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-50">Modifiers</button>
                           </td>
                         </tr>
                       );
@@ -811,6 +826,7 @@ export default function MenuManagerPage() {
           onSave={handleSaveProductStation}
         />
       )}
+      {modifierProduct && <ModifierManagerModal product={modifierProduct} stockItems={stockItems} onClose={() => setModifierProduct(null)} onSubmitted={async () => showToast('Modifier request submitted for approval')} />}
       {showCreateMenu && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <form onSubmit={handleCreateMenuRequest} className="w-full max-w-lg space-y-4 rounded-2xl bg-white p-6 shadow-2xl">

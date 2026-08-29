@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Loader2 } from 'lucide-react';
 import { generateUUID } from '@/lib/utils';
 
-export function AddPaymentDialog({ open, onOpenChange, folio }: { open: boolean, onOpenChange: (open: boolean) => void, folio: any }) {
+export function AddPaymentDialog({ open, onOpenChange, folio, collectionSource = 'FRONT_DESK' }: { open: boolean, onOpenChange: (open: boolean) => void, folio: any, collectionSource?: string }) {
   const [method, setMethod] = useState<string>('CASH');
   const [amount, setAmount] = useState<string>(folio?.balance > 0 ? folio.balance.toString() : '');
   const [notes, setNotes] = useState('');
@@ -50,6 +50,7 @@ export function AddPaymentDialog({ open, onOpenChange, folio }: { open: boolean,
         method,
         notes,
         idempotencyKey: generateUUID()
+        ,collectionSource
       };
 
       const res = await fetch(endpoint, {

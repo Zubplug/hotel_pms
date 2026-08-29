@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   if (!ROLES.includes(user.role) && !user.isSuperAdmin) return errorResponse('FORBIDDEN', 'Approval access required', 403);
   const isCashier = ['GENERAL_CASHIER', 'CASHIER', 'FRONT_DESK_CASHIER'].includes(user.role);
   const approvals = await prisma.approvalRequest.findMany({
-    where: { propertyId: { in: user.allowedProperties }, type: { in: ['POS_PRICE_CHANGE', 'POS_MENU_CREATE', 'POS_MODIFIER_CREATE'] }, ...(isCashier ? { requestedBy: user.id } : {}), ...(isCashier ? {} : { status: 'PENDING' }) },
+    where: { propertyId: { in: user.allowedProperties }, type: { in: ['POS_PRICE_CHANGE', 'POS_MENU_CREATE', 'POS_MODIFIER_CREATE', 'POS_MODIFIER_UPDATE'] }, ...(isCashier ? { requestedBy: user.id } : {}), ...(isCashier ? {} : { status: 'PENDING' }) },
     orderBy: { createdAt: 'desc' }, take: 200,
   });
   return successResponse(approvals);

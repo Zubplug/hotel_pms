@@ -66,14 +66,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         return { status: 'EXECUTED', approval: updated, productId: product.id };
       }
 
-      if (approval.type === 'POS_MODIFIER_CREATE') {
+      if (approval.type === 'POS_MODIFIER_CREATE' || approval.type === 'POS_MODIFIER_UPDATE') {
         if (approval.status !== 'PENDING') throw new Error('CONFLICT');
         if (!['MANAGER', 'HOTEL_MANAGER', 'ADMIN', 'CEO', 'SUPER_ADMIN'].includes(user.role) && !user.isSuperAdmin) throw new Error('MANAGER_APPROVAL_REQUIRED');
         const details = (approval.details || {}) as Record<string, any>;
         if (!details.accountantApprovedBy) throw new Error('ACCOUNTANT_APPROVAL_REQUIRED');
         const product = await tx.posProduct.findFirst({ where: { id: details.productId, propertyId: approval.propertyId, isActive: true } });
         if (!product || !details.name || !Number.isFinite(Number(details.price))) throw new Error('INVALID_MODIFIER_REQUEST');
-        const modifier = await tx.posProductModifier.create({ data: { productId: product.id, name: details.name, price: Number(details.price), isActive: true, stockItemId: details.stockItemId || null, quantity: Number(details.quantity || 1), unitOfMeasure: details.unitOfMeasure || null } });
+        const modifier = details.modifierId
+          ? await tx.posProductModifier.update({ where: { id: details.modifierId }, data: { name: details.name, price: Number(details.price), stockItemId: details.stockItemId || null, quantity: Number(details.quantity || 1), unitOfMeasure: details.unitOfMeasure || null } })
+          : await tx.posProductModifier.create({ data: { productId: product.id, name: details.name, price: Number(details.price), isActive: true, stockItemId: details.stockItemId || null, quantity: Number(details.quantity || 1), unitOfMeasure: details.unitOfMeasure || null } });
         const updated = await tx.approvalRequest.update({ where: { id: approval.id }, data: { status: 'APPROVED', reviewedBy: user.id, reviewedAt: new Date(), details: { ...details, stage: 'LIVE', managerApprovedBy: user.id, managerApprovedAt: new Date().toISOString(), modifierId: modifier.id } } });
         return { status: 'EXECUTED', approval: updated, modifierId: modifier.id };
       }
