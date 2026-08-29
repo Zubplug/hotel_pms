@@ -56,9 +56,9 @@ export default async function HandoversPage() {
       <div className="bg-gradient-to-r from-[#0b1120] to-[#1e2d50] px-8 py-7">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-white tracking-tight">Cash Handovers</h1>
+            <h1 className="text-2xl font-bold text-white tracking-tight">Payment Handovers</h1>
             <p className="text-slate-400 text-sm mt-1">
-              Transfer approved operator shifts into General Cashier custody.
+              Transfer approved operator shifts, cash, and payment receipts into General Cashier custody.
             </p>
           </div>
           {canCreate && (
@@ -95,7 +95,7 @@ export default async function HandoversPage() {
               </div>
               <p className="text-sm font-semibold text-slate-600">No handovers yet</p>
               <p className="text-sm text-slate-400 mt-1">
-                Cash handovers will appear here once approved shifts are transferred to the general cashier.
+                Payment handovers will appear here once approved shifts are transferred to the general cashier.
               </p>
             </div>
           ) : (
@@ -106,7 +106,7 @@ export default async function HandoversPage() {
                     {[
                       'Reference',
                       'Property',
-                      'Amount',
+                      'Cash / Receipts',
                       'Status',
                       'Handed Over By',
                       'Received By',
@@ -136,6 +136,7 @@ export default async function HandoversPage() {
                       };
                     const sessionCount =
                       h.posSessions.length + h.frontdeskSessions.length;
+                    const paymentBreakdown = (h.paymentBreakdown || {}) as Record<string, { amount?: number; count?: number }>;
                     return (
                       <tr
                         key={h.id}
@@ -147,6 +148,13 @@ export default async function HandoversPage() {
                         <td className="px-6 py-4 text-slate-600">{h.property.name}</td>
                         <td className="px-6 py-4 text-right font-semibold text-slate-800">
                           ₦{Number(h.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          <div className="mt-1 flex flex-wrap justify-end gap-1">
+                            {Object.entries(paymentBreakdown).map(([method, value]) => (
+                              <span key={method} className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                                {method.replace(/_/g, ' ')} ₦{Number(value.amount || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                              </span>
+                            ))}
+                          </div>
                         </td>
                         <td className="px-6 py-4 text-right">
                           <span

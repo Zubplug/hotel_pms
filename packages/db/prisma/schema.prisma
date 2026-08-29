@@ -3567,6 +3567,7 @@ model CashHandover {
   handoverReference String
   idempotencyKey    String?        @unique
   amount            Decimal        @db.Decimal(18, 4)
+  paymentBreakdown  Json?
   handedOverById    String         @db.Uuid
   receivedById      String?        @db.Uuid
   witnessedById     String?        @db.Uuid

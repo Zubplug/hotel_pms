@@ -77,9 +77,9 @@ export function ReceiveHandoverButton({
           {dialog === 'confirm' && (
             <>
               <DialogHeader>
-                <DialogTitle>Receive Cash Handover?</DialogTitle>
+                <DialogTitle>Receive Payment Handover?</DialogTitle>
                 <DialogDescription>
-                  This confirms that you have physically received custody of this cash. This action cannot be undone.
+                  This confirms that you received the physical cash and the listed payment receipts. This action cannot be undone.
                 </DialogDescription>
               </DialogHeader>
               <DialogFooter>
@@ -105,7 +105,7 @@ export function ReceiveHandoverButton({
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                  Cash Received Successfully
+                  Payment Handover Received Successfully
                 </DialogTitle>
                 <DialogDescription>
                   The linked shift is now operationally complete and marked as Handed Over.

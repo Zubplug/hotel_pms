@@ -79,7 +79,7 @@ export function CreateHandoverButton({
           {(state === 'idle' || state === 'loading') && (
             <>
               <DialogHeader>
-                <DialogTitle>Create Cash Handover</DialogTitle>
+                <DialogTitle>Create Payment Handover</DialogTitle>
                 <DialogDescription>
                   This places {totalSessions} approved shift{totalSessions !== 1 ? 's' : ''} into custody transfer. The receiving cashier must confirm physical receipt.
                 </DialogDescription>
@@ -124,7 +124,7 @@ export function CreateHandoverButton({
                   Handover Created
                 </DialogTitle>
                 <DialogDescription>
-                  The selected shifts are now pending cash receipt confirmation from the receiving cashier.
+                  The selected shifts are now pending receipt confirmation from the receiving cashier.
                 </DialogDescription>
               </DialogHeader>
               <DialogFooter>

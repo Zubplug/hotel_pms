@@ -23,17 +23,24 @@ export class CashHandoverService {
       }
       // 1. Fetch POS Sessions
       const posSessions = params.posSessionIds.length > 0 
-        ? await tx.posSession.findMany({ where: { id: { in: params.posSessionIds } } })
+        ? await tx.posSession.findMany({ where: { id: { in: params.posSessionIds } }, include: { payments: true } })
         : [];
         
       // 2. Fetch FD Sessions
       const fdSessions = params.frontdeskSessionIds.length > 0
-        ? await tx.frontdeskSession.findMany({ where: { id: { in: params.frontdeskSessionIds } } })
+        ? await tx.frontdeskSession.findMany({ where: { id: { in: params.frontdeskSessionIds } }, include: { payments: true } })
         : [];
 
       // 3. Validation: Ownership, Property Isolation, and Status
       let totalAmount = 0;
       let primaryOperatorId = '';
+      const paymentBreakdown: Record<string, { amount: number; count: number }> = {};
+      const addPayment = (method: string, amount: number) => {
+        const key = method || 'OTHER';
+        paymentBreakdown[key] = paymentBreakdown[key] || { amount: 0, count: 0 };
+        paymentBreakdown[key].amount += amount;
+        paymentBreakdown[key].count += 1;
+      };
       
       for (const shift of posSessions) {
         if (shift.propertyId !== params.propertyId) throw new ShiftControlError(`Shift ${shift.id} belongs to a different property.`, 'FORBIDDEN', 403);
@@ -46,6 +53,9 @@ export class CashHandoverService {
         
         // Use operator declared cash (actualCash) for custody tracking, since variance was already accepted.
         totalAmount += Number(shift.actualCash || 0);
+        for (const payment of shift.payments || []) {
+          if (['CONFIRMED', 'PAID'].includes(String(payment.status))) addPayment(String(payment.method), Number(payment.amount));
+        }
       }
 
       for (const shift of fdSessions) {
@@ -58,6 +68,9 @@ export class CashHandoverService {
         if (shift.cashHandoverId) throw new ShiftControlError(`Shift ${shift.id} is already in a handover.`, 'BAD_REQUEST');
         
         totalAmount += Number(shift.declaredCash || 0);
+        for (const payment of shift.payments || []) {
+          if (['COMPLETED', 'PARTIALLY_REFUNDED'].includes(String(payment.status))) addPayment(String(payment.method), Number(payment.amount));
+        }
       }
       
       // Ensure primaryOperatorId is a Staff ID (POS might store User ID in openedBy)
@@ -79,6 +92,7 @@ export class CashHandoverService {
           handoverReference: `HO-${Date.now()}-${crypto.randomBytes(2).toString('hex').toUpperCase()}`,
           idempotencyKey: params.idempotencyKey,
           amount: totalAmount,
+          paymentBreakdown,
           handedOverById: handedOverByStaffId,
           safeReference: params.safeReference,
           notes: params.notes,

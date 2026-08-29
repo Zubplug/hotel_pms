@@ -11,6 +11,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useProperty } from '@/components/PropertyProvider';
 import { Loader2, Download, Printer, ArrowRight } from 'lucide-react';
 import { format } from 'date-fns';
+import { AddPaymentDialog } from '@/components/reservations/AddPaymentDialog';
 
 export default function ReceivablesReportPage() {
   const { propertyId } = useProperty();
@@ -18,6 +19,7 @@ export default function ReceivablesReportPage() {
   
   const [filter, setFilter] = useState('ALL'); // ALL, IN_HOUSE, CHECKED_OUT, OVERDUE
   const [minBalance, setMinBalance] = useState('1'); // Exclude exact 0
+  const [paymentFolio, setPaymentFolio] = useState<any>(null);
 
   const fetchReceivables = async () => {
     if (!propertyId) return null;
@@ -27,7 +29,7 @@ export default function ReceivablesReportPage() {
     return data.data.receivables;
   };
 
-  const { data: receivables, isLoading, error } = useQuery({
+  const { data: receivables, isLoading, error, refetch } = useQuery({
     queryKey: ['receivables', propertyId, minBalance],
     queryFn: fetchReceivables,
     enabled: !!propertyId,
@@ -47,6 +49,26 @@ export default function ReceivablesReportPage() {
   }
 
   const totalOutstanding = filteredReceivables.reduce((sum: number, r: any) => sum + r.financials.balance, 0);
+  const agingTotals = filteredReceivables.reduce((result: Record<string, number>, row: any) => {
+    const days = Number(row.aging.daysOutstanding || 0);
+    const bucket = days <= 30 ? '0–30 days' : days <= 60 ? '31–60 days' : '61+ days';
+    result[bucket] = (result[bucket] || 0) + Number(row.financials.balance || 0);
+    return result;
+  }, {});
+
+  const exportCsv = () => {
+    const headers = ['Guest', 'Reservation', 'Room', 'Status', 'Days Outstanding', 'Balance', 'Currency'];
+    const rows = filteredReceivables.map((row: any) => [
+      row.guest?.name || 'Unknown Guest', row.reservation?.confirmationNumber || '', row.reservation?.room || '',
+      row.aging.status, row.aging.daysOutstanding, row.financials.balance, row.financials.currency,
+    ]);
+    const csv = [headers, ...rows].map((row) => row.map((value: any) => `"${String(value ?? '').replaceAll('"', '""')}"`).join(',')).join('\n');
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    link.download = `receivables-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  };
 
   return (
     <div className="space-y-6">
@@ -58,8 +80,8 @@ export default function ReceivablesReportPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline"><Printer className="w-4 h-4 mr-2" /> Print</Button>
-          <Button variant="outline"><Download className="w-4 h-4 mr-2" /> Export</Button>
+          <Button variant="outline" onClick={() => window.print()}><Printer className="w-4 h-4 mr-2" /> Print</Button>
+          <Button variant="outline" onClick={exportCsv}><Download className="w-4 h-4 mr-2" /> Export</Button>
         </div>
       </div>
 
@@ -98,6 +120,12 @@ export default function ReceivablesReportPage() {
           </div>
         </CardContent>
       </Card>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        {['0–30 days', '31–60 days', '61+ days'].map((bucket) => (
+          <Card key={bucket}><CardContent className="p-4"><p className="text-sm text-muted-foreground">{bucket}</p><p className="mt-1 text-xl font-bold">{formatCurrency(agingTotals[bucket] || 0)}</p></CardContent></Card>
+        ))}
+      </div>
 
       {isLoading ? (
         <div className="flex justify-center p-12">
@@ -163,6 +191,10 @@ export default function ReceivablesReportPage() {
                         {formatCurrency(r.financials.balance, r.financials.currency)}
                       </TableCell>
                       <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button variant="outline" size="sm" onClick={() => setPaymentFolio({ id: r.folioId, balance: r.financials.balance, currency: r.financials.currency, reservationId: r.reservation?.id })}>
+                            Record Payment
+                          </Button>
                         {r.reservation?.id && (
                           <Button 
                             variant="ghost" 
@@ -173,6 +205,7 @@ export default function ReceivablesReportPage() {
                             View Folio <ArrowRight className="w-4 h-4 ml-2" />
                           </Button>
                         )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -182,6 +215,7 @@ export default function ReceivablesReportPage() {
           </CardContent>
         </Card>
       )}
+      <AddPaymentDialog open={!!paymentFolio} onOpenChange={(open) => { if (!open) { setPaymentFolio(null); void refetch(); } }} folio={paymentFolio} />
     </div>
   );
 }
