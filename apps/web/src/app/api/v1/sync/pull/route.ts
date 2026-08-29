@@ -172,15 +172,9 @@ export async function GET(req: NextRequest) {
       orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     });
 
-    // Inventory is pulled as first-class POS configuration. Stock quantities
-    // use the normal cursor; active recipe versions are included on every pull
-    // so ingredient edits cannot be missed when only the recipe ingredient row
-    // changed and its parent version timestamp did not.
-    const stockItems = await prisma.stockItem.findMany({
-      where: buildWhere({ propertyId }),
-      take: limit,
-      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
-    });
+    // Only inventory mapped to active POS recipes belongs on a POS terminal.
+    // Warehouse-only stock (assets, cleaning supplies, housekeeping items, etc.)
+    // must remain available to inventory users without being synced to tills.
     const recipes = await prisma.recipe.findMany({
       where: { propertyId, isActive: true },
       include: {
@@ -189,6 +183,23 @@ export async function GET(req: NextRequest) {
           include: { ingredients: true },
         },
       },
+      take: limit,
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+    });
+    const posRecipeStockItemIds = Array.from(new Set(
+      recipes.flatMap((recipe: any) => recipe.versions.flatMap((version: any) =>
+        version.ingredients.map((ingredient: any) => ingredient.stockItemId)
+      )).filter(Boolean)
+    ));
+
+    // Inventory quantities are restricted to recipe-mapped items. On an
+    // incremental pull, returning the mapped set also covers a newly-created
+    // recipe link whose stock item itself has an older updatedAt timestamp.
+    const stockWhere = since
+      ? { propertyId, id: { in: posRecipeStockItemIds } }
+      : { ...buildWhere({ propertyId }), id: { in: posRecipeStockItemIds } };
+    const stockItems = await prisma.stockItem.findMany({
+      where: stockWhere,
       take: limit,
       orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     });

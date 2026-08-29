@@ -23,8 +23,8 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
   const transfer = await prisma.stockTransfer.findUnique({
     where: { id },
     include: {
-      fromWarehouse: true,
-      toWarehouse:   true,
+      fromWarehouse: { select: { name: true } },
+      toWarehouse:   { select: { name: true, posOutlet: { select: { name: true } } } },
       items: {
         include: {
           stockItem: { select: { name: true, stockType: true, baseUnit: true, quantityOnHand: true } }
@@ -35,7 +35,7 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
 
   if (!transfer || transfer.propertyId !== propertyId) notFound();
 
-  const isOutletIssue = Boolean(transfer.toWarehouse.posOutletId);
+  const isOutletIssue = Boolean(transfer.toWarehouse.posOutlet);
   const canApprove = isSuperAdmin || ['CEO', 'SUPER_ADMIN', 'MANAGER'].includes(role) ||
     (isOutletIssue && ['STOCK_KEEPER', 'STOCK_MANAGER'].includes(String(role).toUpperCase()));
 
