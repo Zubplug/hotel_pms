@@ -53,6 +53,8 @@ export class InventoryService {
                     },
                   },
                 },
+                modifiers: true,
+                stockItems: { where: { isActive: true }, select: { id: true, quantityOnHand: true, baseUnit: true, stockUnits: true } },
               },
             },
           },
@@ -63,15 +65,29 @@ export class InventoryService {
 
     const requirements = new Map<string, number>();
     for (const item of order.items) {
-      if (item.product?.inventoryMode !== 'STOCK') continue;
-      const ingredients = item.product.recipe?.versions?.[0]?.ingredients || [];
-      if (!ingredients.length) throw new Error(`Inventory mapping is missing for ${item.productName}`);
-      for (const recipe of ingredients) {
-        const conversion = recipe.unitOfMeasure === recipe.stockItem?.baseUnit
+      if (item.product?.inventoryMode === 'STOCK') {
+        const ingredients = item.product.recipe?.versions?.[0]?.ingredients || [];
+        if (!ingredients.length) {
+          const directStock = item.product.stockItems?.[0];
+          if (!directStock) throw new Error(`Inventory mapping is missing for ${item.productName}`);
+          requirements.set(directStock.id, (requirements.get(directStock.id) || 0) + Number(item.quantity));
+        }
+        for (const recipe of ingredients) {
+          const conversion = recipe.unitOfMeasure === recipe.stockItem?.baseUnit
+            ? 1
+            : Number(recipe.stockItem?.stockUnits?.find((unit: any) => unit.unit === recipe.unitOfMeasure)?.unitsInBase || 0);
+          if (conversion <= 0) throw new Error(`No conversion configured from ${recipe.unitOfMeasure} to ${recipe.stockItem?.baseUnit || 'base unit'} for ${item.productName}`);
+          requirements.set(recipe.stockItemId, (requirements.get(recipe.stockItemId) || 0) + Number(recipe.quantity) * conversion * Number(item.quantity));
+        }
+      }
+      for (const modifier of item.modifiers || []) {
+        if (!modifier.stockItemId || Number(modifier.quantity) <= 0) continue;
+        const stock = await tx.stockItem.findUnique({ where: { id: modifier.stockItemId }, select: { baseUnit: true, stockUnits: true } });
+        const conversion = !modifier.unitOfMeasure || modifier.unitOfMeasure === stock?.baseUnit
           ? 1
-          : Number(recipe.stockItem?.stockUnits?.find((unit: any) => unit.unit === recipe.unitOfMeasure)?.unitsInBase || 0);
-        if (conversion <= 0) throw new Error(`No conversion configured from ${recipe.unitOfMeasure} to ${recipe.stockItem?.baseUnit || 'base unit'} for ${item.productName}`);
-        requirements.set(recipe.stockItemId, (requirements.get(recipe.stockItemId) || 0) + Number(recipe.quantity) * conversion * Number(item.quantity));
+          : Number(stock?.stockUnits?.find((unit: any) => unit.unit === modifier.unitOfMeasure)?.unitsInBase || 0);
+        if (conversion <= 0) throw new Error(`No conversion configured for modifier ${modifier.name}`);
+        requirements.set(modifier.stockItemId, (requirements.get(modifier.stockItemId) || 0) + Number(modifier.quantity) * conversion * Number(item.quantity));
       }
     }
 

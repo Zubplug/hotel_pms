@@ -167,7 +167,7 @@ export async function GET(req: NextRequest) {
     
     const posProducts = await prisma.posProduct.findMany({
       where: buildWhere({ propertyId, isActive: true }),
-      include: { modifiers: true },
+      include: { modifiers: true, stockItems: { where: { isActive: true } } },
       take: limit,
       orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     });
@@ -191,13 +191,18 @@ export async function GET(req: NextRequest) {
         version.ingredients.map((ingredient: any) => ingredient.stockItemId)
       )).filter(Boolean)
     ));
+    const posDirectStockItemIds = posProducts.flatMap((product: any) => [
+      ...(product.stockItems || []).map((item: any) => item.id),
+      ...(product.modifiers || []).map((modifier: any) => modifier.stockItemId),
+    ]).filter(Boolean);
+    const posMappedStockItemIds = Array.from(new Set([...posRecipeStockItemIds, ...posDirectStockItemIds]));
 
     // Inventory quantities are restricted to recipe-mapped items. On an
     // incremental pull, returning the mapped set also covers a newly-created
     // recipe link whose stock item itself has an older updatedAt timestamp.
     const stockWhere = since
-      ? { propertyId, id: { in: posRecipeStockItemIds } }
-      : { ...buildWhere({ propertyId }), id: { in: posRecipeStockItemIds } };
+      ? { propertyId, id: { in: posMappedStockItemIds } }
+      : { ...buildWhere({ propertyId }), id: { in: posMappedStockItemIds } };
     const stockItems = await prisma.stockItem.findMany({
       where: stockWhere,
       take: limit,

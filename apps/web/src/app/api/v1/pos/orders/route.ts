@@ -130,6 +130,9 @@ export async function POST(req: NextRequest) {
                     create: item.modifiers.map((m: any) => ({
                       name:  m.name,
                       price: m.price ?? 0,
+                      stockItemId: m.stockItemId ?? null,
+                      quantity: m.quantity ?? 0,
+                      unitOfMeasure: m.unitOfMeasure ?? null,
                     })),
                   }
                 : undefined,

@@ -58,8 +58,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         const category = await tx.productCategory.findFirst({ where: { id: details.categoryId, isActive: true, outlet: { propertyId: approval.propertyId, isActive: true } } });
         if (!category || !details.name || !Number.isFinite(Number(details.price))) throw new Error('INVALID_MENU_REQUEST');
         const product = await tx.posProduct.create({ data: { propertyId: approval.propertyId, categoryId: category.id, name: details.name, price: Number(details.price), taxRate: Number(details.taxRate || 0), inventoryMode: details.inventoryMode === 'STOCK' ? 'STOCK' : 'NON_STOCK', productionStation: details.productionStation || null, createdBy: user.id } });
+        if (details.stockItemId) {
+          const linked = await tx.stockItem.updateMany({ where: { id: details.stockItemId, propertyId: approval.propertyId, isActive: true, posProductId: null }, data: { posProductId: product.id } });
+          if (linked.count !== 1) throw new Error('STOCK_ITEM_ALREADY_LINKED');
+        }
         const updated = await tx.approvalRequest.update({ where: { id: approval.id }, data: { status: 'APPROVED', reviewedBy: user.id, reviewedAt: new Date(), details: { ...details, stage: 'LIVE', managerApprovedBy: user.id, managerApprovedAt: new Date().toISOString(), productId: product.id } } });
         return { status: 'EXECUTED', approval: updated, productId: product.id };
+      }
+
+      if (approval.type === 'POS_MODIFIER_CREATE') {
+        if (approval.status !== 'PENDING') throw new Error('CONFLICT');
+        if (!['MANAGER', 'HOTEL_MANAGER', 'ADMIN', 'CEO', 'SUPER_ADMIN'].includes(user.role) && !user.isSuperAdmin) throw new Error('MANAGER_APPROVAL_REQUIRED');
+        const details = (approval.details || {}) as Record<string, any>;
+        if (!details.accountantApprovedBy) throw new Error('ACCOUNTANT_APPROVAL_REQUIRED');
+        const product = await tx.posProduct.findFirst({ where: { id: details.productId, propertyId: approval.propertyId, isActive: true } });
+        if (!product || !details.name || !Number.isFinite(Number(details.price))) throw new Error('INVALID_MODIFIER_REQUEST');
+        const modifier = await tx.posProductModifier.create({ data: { productId: product.id, name: details.name, price: Number(details.price), isActive: true, stockItemId: details.stockItemId || null, quantity: Number(details.quantity || 1), unitOfMeasure: details.unitOfMeasure || null } });
+        const updated = await tx.approvalRequest.update({ where: { id: approval.id }, data: { status: 'APPROVED', reviewedBy: user.id, reviewedAt: new Date(), details: { ...details, stage: 'LIVE', managerApprovedBy: user.id, managerApprovedAt: new Date().toISOString(), modifierId: modifier.id } } });
+        return { status: 'EXECUTED', approval: updated, modifierId: modifier.id };
       }
 
       if (approval.type === 'REFUND') {

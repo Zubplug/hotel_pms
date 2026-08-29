@@ -59,6 +59,7 @@ public class LocalStockItem
 {
     [Key] public string Id { get; set; } = string.Empty;
     public string PropertyId { get; set; } = string.Empty;
+    public string? PosProductId { get; set; }
     public string Name { get; set; } = string.Empty;
     public string BaseUnit { get; set; } = string.Empty;
     public decimal CostPrice { get; set; }
@@ -477,6 +478,9 @@ public class LocalPosProductModifier
     public string Name { get; set; } = string.Empty;
     public decimal Price { get; set; }
     public bool IsActive { get; set; }
+    public string? StockItemId { get; set; }
+    public decimal Quantity { get; set; } = 1m;
+    public string? UnitOfMeasure { get; set; }
     public DateTime CreatedAt { get; set; }
 }
 
@@ -486,6 +490,9 @@ public class LocalPosOrderItemModifier
     public string OrderItemId { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public decimal Price { get; set; }
+    public string? StockItemId { get; set; }
+    public decimal Quantity { get; set; }
+    public string? UnitOfMeasure { get; set; }
     public DateTime CreatedAt { get; set; }
 }
 

@@ -2574,8 +2574,19 @@ public class LocalRepository
             product.HasInventoryMapping = ingredients.Count > 0;
             if (!product.HasInventoryMapping)
             {
-                product.StockStatus = "UNMAPPED";
-                product.AvailableStock = 0;
+                var directStock = await _dbContext.StockItems
+                    .Where(s => s.PosProductId == product.Id && s.IsActive)
+                    .OrderBy(s => s.Id)
+                    .FirstOrDefaultAsync();
+                product.HasInventoryMapping = directStock != null;
+                if (directStock == null)
+                {
+                    product.StockStatus = "UNMAPPED";
+                    product.AvailableStock = 0;
+                    continue;
+                }
+                product.AvailableStock = Math.Max(0m, directStock.QuantityOnHand);
+                product.StockStatus = directStock.QuantityOnHand <= 0m ? "OUT_OF_STOCK" : directStock.QuantityOnHand <= 5m ? "LOW_STOCK" : "IN_STOCK";
                 continue;
             }
 

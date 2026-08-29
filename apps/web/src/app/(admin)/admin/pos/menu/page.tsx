@@ -364,6 +364,7 @@ export default function MenuManagerPage() {
   const propertyId = (session?.user as any)?.propertyId as string | undefined;
 
   const [categories, setCategories] = useState<Category[]>([]);
+  const [stockItems, setStockItems] = useState<any[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
@@ -374,7 +375,7 @@ export default function MenuManagerPage() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [showCreateMenu, setShowCreateMenu] = useState(false);
   const [creatingMenu, setCreatingMenu] = useState(false);
-  const [newMenu, setNewMenu] = useState({ name: '', categoryId: '', price: '', taxRate: '0', inventoryMode: 'NON_STOCK', productionStation: 'NONE' });
+  const [newMenu, setNewMenu] = useState({ name: '', categoryId: '', price: '', taxRate: '0', inventoryMode: 'NON_STOCK', stockItemId: '', productionStation: 'NONE' });
 
   // Error / success toast
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -395,12 +396,12 @@ export default function MenuManagerPage() {
       const response = await fetch('/api/v1/pos/products/menu-request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...newMenu, price: Number(newMenu.price), taxRate: Number(newMenu.taxRate) }),
+        body: JSON.stringify({ ...newMenu, price: Number(newMenu.price), taxRate: Number(newMenu.taxRate), stockItemId: newMenu.inventoryMode === 'STOCK' ? newMenu.stockItemId || undefined : undefined }),
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || 'Unable to submit menu request');
       setShowCreateMenu(false);
-      setNewMenu({ name: '', categoryId: '', price: '', taxRate: '0', inventoryMode: 'NON_STOCK', productionStation: 'NONE' });
+      setNewMenu({ name: '', categoryId: '', price: '', taxRate: '0', inventoryMode: 'NON_STOCK', stockItemId: '', productionStation: 'NONE' });
       showToast('Menu request sent for Accountant review');
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Unable to submit menu request', 'error');
@@ -418,9 +419,12 @@ export default function MenuManagerPage() {
         fetch(`/api/v1/pos/categories?propertyId=${propertyId}`),
         fetch(`/api/v1/pos/products?propertyId=${propertyId}`),
       ]);
+      const stockRes = await fetch('/api/v1/pos/modifier-requests');
       const [catJson, prodJson] = await Promise.all([catRes.json(), prodRes.json()]);
+      const stockJson = await stockRes.json();
       if (catJson.data) setCategories(catJson.data);
       if (prodJson.data) setProducts(prodJson.data);
+      if (stockJson.data) setStockItems(stockJson.data.filter((item: any) => !item.posProductId));
     } catch (err) {
       console.error('Failed to load menu data', err);
       showToast('Failed to load menu data', 'error');
@@ -814,7 +818,8 @@ export default function MenuManagerPage() {
             <input required placeholder="Menu item name" value={newMenu.name} onChange={(e) => setNewMenu({ ...newMenu, name: e.target.value })} className="w-full rounded-lg border p-2.5 text-sm" />
             <select required value={newMenu.categoryId} onChange={(e) => setNewMenu({ ...newMenu, categoryId: e.target.value })} className="w-full rounded-lg border p-2.5 text-sm"><option value="">Select category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select>
             <div className="grid grid-cols-2 gap-3"><label className="text-sm text-slate-600">Selling price<input required min="0" step="0.01" type="number" value={newMenu.price} onChange={(e) => setNewMenu({ ...newMenu, price: e.target.value })} className="mt-1 w-full rounded-lg border p-2.5 text-sm" /></label><label className="text-sm text-slate-600">Tax rate %<input min="0" max="100" step="0.01" type="number" value={newMenu.taxRate} onChange={(e) => setNewMenu({ ...newMenu, taxRate: e.target.value })} className="mt-1 w-full rounded-lg border p-2.5 text-sm" /></label></div>
-            <div className="grid grid-cols-2 gap-3"><label className="text-sm text-slate-600">Stock handling<select value={newMenu.inventoryMode} onChange={(e) => setNewMenu({ ...newMenu, inventoryMode: e.target.value })} className="mt-1 w-full rounded-lg border p-2.5 text-sm"><option value="NON_STOCK">Non-stock / service</option><option value="STOCK">Stock-controlled</option></select></label><label className="text-sm text-slate-600">Production station<select value={newMenu.productionStation} onChange={(e) => setNewMenu({ ...newMenu, productionStation: e.target.value })} className="mt-1 w-full rounded-lg border p-2.5 text-sm">{(Object.keys(STATION_CONFIG) as ProductionStation[]).map((station) => <option key={station} value={station}>{station}</option>)}</select></label></div>
+            <div className="grid grid-cols-2 gap-3"><label className="text-sm text-slate-600">Stock handling<select value={newMenu.inventoryMode} onChange={(e) => setNewMenu({ ...newMenu, inventoryMode: e.target.value, stockItemId: '' })} className="mt-1 w-full rounded-lg border p-2.5 text-sm"><option value="NON_STOCK">Non-stock / service</option><option value="STOCK">Stock-controlled</option></select></label><label className="text-sm text-slate-600">Production station<select value={newMenu.productionStation} onChange={(e) => setNewMenu({ ...newMenu, productionStation: e.target.value })} className="mt-1 w-full rounded-lg border p-2.5 text-sm">{(Object.keys(STATION_CONFIG) as ProductionStation[]).map((station) => <option key={station} value={station}>{station}</option>)}</select></label></div>
+            {newMenu.inventoryMode === 'STOCK' && <label className="block text-sm text-slate-600">Direct stock item <select required value={newMenu.stockItemId} onChange={(e) => setNewMenu({ ...newMenu, stockItemId: e.target.value })} className="mt-1 w-full rounded-lg border p-2.5 text-sm"><option value="">Select available stock item</option>{stockItems.map((item) => <option key={item.id} value={item.id}>{item.name} ({item.baseUnit})</option>)}</select><span className="mt-1 block text-xs text-slate-400">Use this for simple one-unit sales. Prepared items with ingredients should use a Recipe instead.</span></label>}
             <div className="flex justify-end gap-2 border-t pt-4"><button type="button" onClick={() => setShowCreateMenu(false)} className="rounded-lg border px-4 py-2 text-sm">Cancel</button><button disabled={creatingMenu} className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{creatingMenu && <Loader2 className="h-4 w-4 animate-spin" />}Submit request</button></div>
           </form>
         </div>

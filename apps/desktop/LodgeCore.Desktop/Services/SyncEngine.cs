@@ -1545,6 +1545,9 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                                 ? (mpr.ValueKind == System.Text.Json.JsonValueKind.Number ? mpr.GetDecimal() : (mpr.ValueKind == System.Text.Json.JsonValueKind.String && decimal.TryParse(mpr.GetString(), out var mdp) ? mdp : 0m)) 
                                 : 0m;
                             localMod.IsActive = m.TryGetProperty("isActive", out var mia) ? mia.GetBoolean() : true;
+                            localMod.StockItemId = m.TryGetProperty("stockItemId", out var msi) && msi.ValueKind != System.Text.Json.JsonValueKind.Null ? msi.GetString() : null;
+                            localMod.Quantity = m.TryGetProperty("quantity", out var mq) ? ReadDecimal(m, "quantity") : 1m;
+                            localMod.UnitOfMeasure = m.TryGetProperty("unitOfMeasure", out var mu) && mu.ValueKind != System.Text.Json.JsonValueKind.Null ? mu.GetString() : null;
                         }
 
                         // Remove stale modifiers for THIS product
@@ -1588,6 +1591,7 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     item.QuantityOnHand = ReadDecimal(el, "quantityOnHand");
                     item.ReorderLevel = el.TryGetProperty("reorderLevel", out var reorderEl) && reorderEl.ValueKind != JsonValueKind.Null ? ReadDecimal(reorderEl) : null;
                     item.IsActive = !el.TryGetProperty("isActive", out var activeEl) || activeEl.ValueKind == JsonValueKind.True;
+                    item.PosProductId = el.TryGetProperty("posProductId", out var ppi) && ppi.ValueKind != JsonValueKind.Null ? ppi.GetString() : null;
                     item.UpdatedAt = el.TryGetProperty("updatedAt", out var updatedEl) && DateTime.TryParse(updatedEl.GetString(), out var updatedAt) ? updatedAt : DateTime.UtcNow;
                 }
             }
@@ -2021,6 +2025,9 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                                     }
                                     mod.Name = mEl.TryGetProperty("name", out var mmn) && mmn.ValueKind != System.Text.Json.JsonValueKind.Null ? mmn.GetString() ?? "" : "";
                                     mod.Price = mEl.TryGetProperty("price", out var mmpr) && mmpr.ValueKind == System.Text.Json.JsonValueKind.Number ? mmpr.GetDecimal() : 0m;
+                                    mod.StockItemId = mEl.TryGetProperty("stockItemId", out var msi) && msi.ValueKind != System.Text.Json.JsonValueKind.Null ? msi.GetString() : null;
+                                    mod.Quantity = mEl.TryGetProperty("quantity", out var mq) ? ReadDecimal(mEl, "quantity") : 0m;
+                                    mod.UnitOfMeasure = mEl.TryGetProperty("unitOfMeasure", out var mu) && mu.ValueKind != System.Text.Json.JsonValueKind.Null ? mu.GetString() : null;
                                 }
                                 var modsToRemove = item.Modifiers.Where(m => !incomingModIds.Contains(m.Id)).ToList();
                                 foreach (var m in modsToRemove) item.Modifiers.Remove(m);

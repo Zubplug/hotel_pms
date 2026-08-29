@@ -19,6 +19,7 @@ export async function GET(req: NextRequest) {
           select: { id: true, name: true, productionStation: true },
         },
         modifiers: { select: { id: true } },
+        stockItems: { where: { isActive: true }, select: { id: true, quantityOnHand: true, baseUnit: true, isActive: true } },
         recipe: { include: { versions: { where: { isActive: true }, include: { ingredients: { include: { stockItem: { select: { id: true, quantityOnHand: true, isActive: true } } } } } } } },
       },
     });
@@ -27,10 +28,11 @@ export async function GET(req: NextRequest) {
     const enriched = products.map((p: any) => {
       const isStockControlled = p.inventoryMode === 'STOCK';
       const ingredients = p.recipe?.versions?.[0]?.ingredients || [];
-      const hasInventoryMapping = ingredients.length > 0;
-      const availableStock = isStockControlled && hasInventoryMapping
+      const directStock = p.stockItems?.[0];
+      const hasInventoryMapping = ingredients.length > 0 || Boolean(directStock);
+      const availableStock = isStockControlled && ingredients.length > 0
         ? Math.min(...ingredients.map((ingredient: any) => Number(ingredient.stockItem?.quantityOnHand || 0) / Number(ingredient.quantity || 1)))
-        : null;
+        : isStockControlled && directStock ? Number(directStock.quantityOnHand) : null;
       const outOfStock = isStockControlled && (!hasInventoryMapping || availableStock! <= 0 || ingredients.some((ingredient: any) => !ingredient.stockItem?.isActive));
       return {
       ...p,
@@ -43,6 +45,7 @@ export async function GET(req: NextRequest) {
       resolvedStation: p.productionStation ?? p.category?.productionStation ?? 'KITCHEN',
       modifiers: undefined, // strip raw modifier list — only expose flag
       recipe: undefined,
+      stockItems: undefined,
       };
     });
 

@@ -2027,6 +2027,7 @@ model StockItem {
   kitchenWaste      KitchenWasteEntry[]
   stocktakeItems    StocktakeItem[]
   stockUnits        StockItemUnit[]
+  modifierLinks     PosProductModifier[] @relation("ModifierStockItem")
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -2417,6 +2418,10 @@ model PosProductModifier {
   name     String
   price    Decimal @default(0) @db.Decimal(18, 4)
   isActive Boolean @default(true)
+  stockItemId String? @db.Uuid
+  stockItem   StockItem? @relation("ModifierStockItem", fields: [stockItemId], references: [id])
+  quantity   Decimal @default(1) @db.Decimal(18, 4)
+  unitOfMeasure UnitOfMeasure?
 
   createdAt DateTime @default(now()) @db.Timestamptz
 }
@@ -2950,6 +2955,9 @@ model PosOrderItemModifier {
 
   name  String
   price Decimal @default(0) @db.Decimal(18, 4)
+  stockItemId String? @db.Uuid
+  quantity Decimal @default(0) @db.Decimal(18, 4)
+  unitOfMeasure UnitOfMeasure?
 
   createdAt DateTime @default(now()) @db.Timestamptz
 }
