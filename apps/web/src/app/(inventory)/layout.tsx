@@ -3,7 +3,9 @@ import { redirect } from 'next/navigation';
 import React from 'react';
 import { InventoryLayout } from '@/components/layout/InventoryLayout';
 
-const ALLOWED = ['CEO', 'SUPER_ADMIN', 'MANAGER', 'STOCK_MANAGER', 'PROCUREMENT_MANAGER'];
+// General Cashiers may access the cost-control views linked from Cash Management.
+// Actions on those pages remain protected by their individual role checks.
+const ALLOWED = ['CEO', 'SUPER_ADMIN', 'MANAGER', 'GENERAL_CASHIER', 'STOCK_MANAGER', 'PROCUREMENT_MANAGER'];
 
 export default async function InventoryRootLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();

@@ -38,13 +38,13 @@ const NAV_LINKS = [
   { name: 'Stock Items',      href: '/inventory/stock-items',          icon: Boxes },
   { name: 'Warehouses',       href: '/inventory/warehouses',           icon: Warehouse },
   { name: 'Purchase Orders',  href: '/inventory/purchase-orders',      icon: ShoppingCart,   roles: ['CEO','SUPER_ADMIN','MANAGER','PROCUREMENT_MANAGER','STOCK_MANAGER'] },
-  { name: 'Goods Received',   href: '/inventory/grns',                 icon: Truck,          roles: ['CEO','SUPER_ADMIN','MANAGER','STOCK_MANAGER','PROCUREMENT_MANAGER'] },
+  { name: 'Goods Received',   href: '/inventory/grns',                 icon: Truck,          roles: ['CEO','SUPER_ADMIN','MANAGER','GENERAL_CASHIER','STOCK_MANAGER','PROCUREMENT_MANAGER'] },
   { name: 'Transfers',        href: '/inventory/transfers',            icon: ArrowRightLeft, roles: ['CEO','SUPER_ADMIN','MANAGER','STOCK_MANAGER'] },
   { name: 'Suppliers',        href: '/inventory/suppliers',            icon: Users,          roles: ['CEO','SUPER_ADMIN','MANAGER','PROCUREMENT_MANAGER','STOCK_MANAGER'] },
   { name: 'Alerts',           href: '/inventory/alerts',               icon: Bell },
-  { name: 'Stocktakes',       href: '/inventory/stocktakes',           icon: ClipboardList,  roles: ['CEO','SUPER_ADMIN','MANAGER','STOCK_MANAGER'] },
-  { name: 'Cost Control',     href: '/inventory/cost-control',         icon: Activity,       roles: ['CEO','SUPER_ADMIN','MANAGER'] },
-  { name: 'Ad-Hoc Adjust',    href: '/inventory/reconciliation',       icon: Scale,          roles: ['CEO','SUPER_ADMIN','MANAGER','STOCK_MANAGER'] },
+  { name: 'Stocktakes',       href: '/inventory/stocktakes',           icon: ClipboardList,  roles: ['CEO','SUPER_ADMIN','MANAGER','GENERAL_CASHIER','STOCK_MANAGER'] },
+  { name: 'Cost Control',     href: '/inventory/cost-control',         icon: Activity,       roles: ['CEO','SUPER_ADMIN','MANAGER','GENERAL_CASHIER'] },
+  { name: 'Variance Analysis',href: '/inventory/reconciliation',       icon: Scale,          roles: ['CEO','SUPER_ADMIN','MANAGER','GENERAL_CASHIER','STOCK_MANAGER'] },
 ];
 
 function getInitials(name?: string | null, email?: string | null) {

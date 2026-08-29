@@ -1,6 +1,6 @@
 import Link from 'next/link';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { FileText, Users, CreditCard, WalletCards } from 'lucide-react';
+import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { FileText, Users, WalletCards } from 'lucide-react';
 
 export default function ReportsOverviewPage() {
   const reports = [
@@ -22,12 +22,6 @@ export default function ReportsOverviewPage() {
       href: '/reports/receivables',
       icon: FileText,
     },
-    {
-      title: 'Gateway Reconciliation',
-      description: 'Audit LodgeCore payments against online payment gateway settlements to identify discrepancies.',
-      href: '/reports/gateway',
-      icon: CreditCard,
-    },
   ];
 
   return (
@@ -35,7 +29,7 @@ export default function ReportsOverviewPage() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Financial Reports</h1>
         <p className="text-muted-foreground mt-2">
-          Monitor your property's cash flow, receivables, and payment gateways.
+          Monitor your property's cash flow and receivables.
         </p>
       </div>
 

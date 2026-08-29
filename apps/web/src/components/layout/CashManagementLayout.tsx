@@ -24,7 +24,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { PropertySelector } from '@/components/properties/PropertySelector';
-import { AppSwitcher } from '@/components/layout/AppSwitcher';
 
 const CASH_MANAGEMENT_NAV = [
   {
@@ -208,9 +207,6 @@ export function CashManagementLayout({ children }: { children: React.ReactNode }
             >
               <Menu className="h-4 w-4" />
             </Button>
-            <div className="hidden sm:flex items-center gap-2">
-              <AppSwitcher />
-            </div>
           </div>
           <div className="flex items-center gap-3">
             <PropertySelector />

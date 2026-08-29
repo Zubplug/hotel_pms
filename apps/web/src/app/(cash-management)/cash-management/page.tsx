@@ -130,14 +130,35 @@ export default async function GeneralCashierDashboardPage() {
   const pettyCashPayouts = Number(pettyCash._sum?.amount || 0);
   const pendingDrops = activeOutletShifts.length + activeFrontDeskShifts.length;
 
+  // `primaryOperator` is not populated for every legacy/offline POS shift.
+  // Those sessions still retain the staff identity in `openedBy`, so resolve
+  // it before displaying the queue instead of incorrectly showing "System".
+  const posOpenedByIds = Array.from(
+    new Set(
+      pendingReviewPosShifts
+        .map((shift) => shift.openedBy)
+        .filter((id): id is string => Boolean(id))
+    )
+  );
+  const openedByStaff = posOpenedByIds.length
+    ? await prisma.staff.findMany({
+        where: { id: { in: posOpenedByIds } },
+        select: { id: true, firstName: true, lastName: true },
+      })
+    : [];
+  const openedByStaffMap = new Map(openedByStaff.map((staff) => [staff.id, staff]));
+
   const queueItems = [
     ...pendingReviewPosShifts.map((shift) => ({
       id: shift.id,
       type: 'POS' as const,
       label: shift.outlet.name,
-      operator: shift.primaryOperator
-        ? `${shift.primaryOperator.firstName} ${shift.primaryOperator.lastName}`
-        : 'System',
+      operator: (() => {
+        const operator = shift.primaryOperator || openedByStaffMap.get(shift.openedBy);
+        return operator
+          ? `${operator.firstName} ${operator.lastName}`.trim()
+          : 'Unassigned operator';
+      })(),
       status: shift.controlStatus || 'SUBMITTED',
       expected: Number(shift.expectedCash),
       declared: shift.actualCash == null ? null : Number(shift.actualCash),

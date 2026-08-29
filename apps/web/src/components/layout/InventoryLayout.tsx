@@ -9,7 +9,6 @@ import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { PropertySelector } from '@/components/properties/PropertySelector';
-import { AppSwitcher } from '@/components/layout/AppSwitcher';
 
 export function InventoryLayout({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useLodgeCoreSession();
@@ -81,9 +80,6 @@ export function InventoryLayout({ children }: { children: React.ReactNode }) {
             >
               <Menu className="h-4 w-4" />
             </Button>
-            <div className="hidden sm:flex items-center gap-2">
-              <AppSwitcher />
-            </div>
           </div>
           <div className="flex items-center gap-3">
             <PropertySelector />

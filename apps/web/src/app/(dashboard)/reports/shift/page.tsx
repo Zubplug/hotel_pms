@@ -39,6 +39,7 @@ import {
   FileText,
   CreditCard,
   XCircle,
+  RotateCcw,
   History,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
@@ -369,55 +370,112 @@ export default function ShiftReportPage() {
                 </div>
 
                 <div className="p-6 space-y-5">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {/* Decision */}
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wider">
-                        Decision
+                  <div>
+                    <div className="flex items-start justify-between gap-4 mb-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                          Review decision
+                        </label>
+                        <p className="text-xs text-slate-400 mt-1">
+                          Select the outcome to record in the shift audit trail.
+                        </p>
+                      </div>
+                      <span className="hidden sm:inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500">
+                        {shiftVariance === 0 ? 'Balanced shift' : 'Variance detected'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-3" role="group" aria-label="Review decision">
+                      {[
+                        {
+                          value: 'APPROVED',
+                          title: 'Approve',
+                          description: 'Balanced shift with no variance.',
+                          icon: CheckCircle2,
+                          disabled: shiftVariance !== 0,
+                          selected: 'border-emerald-300 bg-emerald-50/80 ring-2 ring-emerald-100',
+                          iconColor: 'text-emerald-600',
+                        },
+                        {
+                          value: 'APPROVED_WITH_VARIANCE',
+                          title: 'Approve with variance',
+                          description: 'Accept and document a shortage or overage.',
+                          icon: AlertTriangle,
+                          disabled: shiftVariance === 0,
+                          selected: 'border-amber-300 bg-amber-50/80 ring-2 ring-amber-100',
+                          iconColor: 'text-amber-600',
+                        },
+                        {
+                          value: 'REJECTED',
+                          title: 'Return for correction',
+                          description: 'Send the shift back to the operator.',
+                          icon: RotateCcw,
+                          disabled: false,
+                          selected: 'border-rose-300 bg-rose-50/80 ring-2 ring-rose-100',
+                          iconColor: 'text-rose-600',
+                        },
+                      ].map((option) => {
+                        const Icon = option.icon;
+                        const isSelected = decision === option.value;
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            disabled={option.disabled}
+                            aria-pressed={isSelected}
+                            onClick={() => setDecision(option.value)}
+                            className={cn(
+                              'group relative flex min-h-[88px] items-start gap-3 rounded-xl border p-3.5 text-left transition-all',
+                              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2',
+                              isSelected ? option.selected : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50',
+                              option.disabled && 'cursor-not-allowed opacity-45 hover:border-slate-200 hover:bg-white'
+                            )}
+                          >
+                            <span className={cn('mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white shadow-sm', option.iconColor)}>
+                              <Icon className="h-4 w-4" />
+                            </span>
+                            <span className="min-w-0">
+                              <span className="block text-sm font-semibold text-slate-800">{option.title}</span>
+                              <span className="mt-1 block text-xs leading-4 text-slate-500">{option.description}</span>
+                              {option.disabled && (
+                                <span className="mt-1.5 block text-[10px] font-medium text-slate-400">
+                                  {shiftVariance === 0 ? 'Only available with a variance' : 'Unavailable while variance exists'}
+                                </span>
+                              )}
+                            </span>
+                            {isSelected && <span className="absolute right-3 top-3 h-2 w-2 rounded-full bg-indigo-500" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Variance reason */}
+                  {decision === 'APPROVED_WITH_VARIANCE' && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-4">
+                      <label className="block text-xs font-semibold text-amber-900 mb-1.5 uppercase tracking-wider">
+                        Variance reason <span className="text-amber-600">*</span>
                       </label>
-                      <Select value={decision} onValueChange={(v) => setDecision(v || '')}>
-                        <SelectTrigger className="bg-white border-slate-200 rounded-xl">
-                          <SelectValue />
+                      <Select value={reasonCode} onValueChange={(v) => setReasonCode(v || '')}>
+                        <SelectTrigger className="bg-white border-amber-200 rounded-xl">
+                          <SelectValue placeholder="Select the reason for this variance…" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="APPROVED" disabled={shiftVariance !== 0}>
-                            ✓ Approve (Balanced)
-                          </SelectItem>
-                          <SelectItem value="APPROVED_WITH_VARIANCE" disabled={shiftVariance === 0}>
-                            ⚠ Approve with Variance
-                          </SelectItem>
-                          <SelectItem value="REJECTED">✕ Return for Correction</SelectItem>
+                          {[
+                            ['CASH_COUNTING_ERROR', 'Cash Counting Error'],
+                            ['MISSING_RECEIPT', 'Missing Receipt'],
+                            ['UNAUTHORIZED_PAYOUT', 'Unauthorized Payout'],
+                            ['REFUND_ERROR', 'Refund Error'],
+                            ['WRONG_CHANGE', 'Wrong Change Given'],
+                            ['CASH_DROP_ERROR', 'Cash Drop Error'],
+                            ['SYSTEM_ERROR', 'System Error'],
+                            ['UNKNOWN', 'Unknown'],
+                            ['OTHER', 'Other'],
+                          ].map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
-
-                    {/* Variance reason */}
-                    {decision === 'APPROVED_WITH_VARIANCE' && (
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wider">
-                          Variance Reason
-                        </label>
-                        <Select value={reasonCode} onValueChange={(v) => setReasonCode(v || '')}>
-                          <SelectTrigger className="bg-white border-slate-200 rounded-xl">
-                            <SelectValue placeholder="Select reason…" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {[
-                              ['CASH_COUNTING_ERROR', 'Cash Counting Error'],
-                              ['MISSING_RECEIPT', 'Missing Receipt'],
-                              ['UNAUTHORIZED_PAYOUT', 'Unauthorized Payout'],
-                              ['REFUND_ERROR', 'Refund Error'],
-                              ['WRONG_CHANGE', 'Wrong Change Given'],
-                              ['CASH_DROP_ERROR', 'Cash Drop Error'],
-                              ['SYSTEM_ERROR', 'System Error'],
-                              ['UNKNOWN', 'Unknown'],
-                              ['OTHER', 'Other'],
-                            ].map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
-                  </div>
+                  )}
 
                   {/* Notes */}
                   <div>
