@@ -38,6 +38,8 @@ const CASH_MANAGEMENT_NAV = [
     children: [
       { name: 'Overview', href: '/cash-management' },
       { name: 'Shifts', href: '/reports/shift' },
+      { name: 'Cash Handovers', href: '/handovers' },
+      { name: 'Bank Deposits', href: '/deposits' },
       { name: 'Receivables', href: '/reports/receivables' },
       { name: 'Gateway', href: '/reports/gateway' },
     ]

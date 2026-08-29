@@ -2566,6 +2566,8 @@ model FrontdeskSession {
   reviewStartedBy        String?                 @db.Uuid
   approvalDecision       String?
   approvalNotes          String?
+  approvedBy             String?                 @db.Uuid
+  approvedAt             DateTime?               @db.Timestamptz
   reasonCode             VarianceReasonCode?
   cashHandoverId         String?                 @db.Uuid
   cashHandover           CashHandover?           @relation(fields: [cashHandoverId], references: [id])

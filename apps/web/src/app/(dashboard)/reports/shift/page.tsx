@@ -11,6 +11,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { Loader2, Download, Printer } from 'lucide-react';
+import { CheckCircle2 } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useQuery } from '@tanstack/react-query';
 import { useProperty } from '@/components/PropertyProvider';
 
@@ -28,6 +30,7 @@ export default function ShiftReportPage() {
   const [approvalNotes, setApprovalNotes] = useState('');
   const [reasonCode, setReasonCode] = useState('');
   const [approvalState, setApprovalState] = useState('');
+  const [reviewDialog, setReviewDialog] = useState<'success' | 'error' | null>(null);
   const [approving, setApproving] = useState(false);
 
   useEffect(() => {
@@ -75,9 +78,10 @@ export default function ShiftReportPage() {
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || 'Unable to approve shift');
       setApprovalState(decision === 'REJECTED' ? 'Shift returned for correction.' : 'Shift successfully approved.');
-      window.location.reload();
+      setReviewDialog('success');
     } catch (approvalError) {
       setApprovalState(approvalError instanceof Error ? approvalError.message : 'Unable to process review');
+      setReviewDialog('error');
     } finally {
       setApproving(false);
     }
@@ -99,7 +103,7 @@ export default function ShiftReportPage() {
       Number(shift.variance || 0),
     ]);
     const csv = [['Type', 'Shift', 'Status', 'Operator', 'Expected Cash', 'Declared Cash', 'Variance'], ...rows]
-      .map(row => row.map(value => `"${String(value ?? '').replaceAll('"', '""')}"`).join(','))
+      .map(row => row.map((value: any) => `"${String(value ?? '').replaceAll('"', '""')}"`).join(','))
       .join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     const link = document.createElement('a');
@@ -337,6 +341,11 @@ export default function ShiftReportPage() {
           </Card>
         </div>
       )}
+      <Dialog open={reviewDialog !== null} onOpenChange={open => !open && !approving && setReviewDialog(null)}>
+        <DialogContent>
+          {reviewDialog === 'success' ? <><DialogHeader><DialogTitle className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-emerald-600" />Review completed</DialogTitle><DialogDescription>{approvalState} The shift is now available for the next handover step.</DialogDescription></DialogHeader><DialogFooter><Button onClick={() => { setReviewDialog(null); router.refresh(); }}>Continue</Button></DialogFooter></> : <><DialogHeader><DialogTitle>Review could not be completed</DialogTitle><DialogDescription>{approvalState}</DialogDescription></DialogHeader><DialogFooter><Button onClick={() => setReviewDialog(null)}>Close</Button></DialogFooter></>}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -3,13 +3,14 @@ import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { getUserPropertyIds } from '@/lib/property-access';
 import { ReceiveHandoverButton } from './receive-handover-button';
+import { CreateHandoverButton } from './create-handover-button';
 
 export default async function HandoversPage() {
   const actor = await auth();
   if (!actor?.user) redirect('/login');
 
   const allowedProperties = await getUserPropertyIds(actor.user.id);
-  const handovers = await prisma.cashHandover.findMany({
+  const [handovers, approvedPos, approvedFrontdesk] = await Promise.all([prisma.cashHandover.findMany({
     where: { propertyId: { in: allowedProperties } },
     orderBy: { handedOverAt: 'desc' },
     include: {
@@ -19,11 +20,11 @@ export default async function HandoversPage() {
       posSessions: { select: { id: true, controlStatus: true, actualCash: true } },
       frontdeskSessions: { select: { id: true, status: true, declaredCash: true } }
     }
-  });
+  }), prisma.posSession.findMany({ where: { propertyId: { in: allowedProperties }, controlStatus: { in: ['APPROVED', 'APPROVED_WITH_VARIANCE'] }, cashHandoverId: null }, select: { id: true, propertyId: true } }), prisma.frontdeskSession.findMany({ where: { propertyId: { in: allowedProperties }, controlStatus: { in: ['APPROVED', 'APPROVED_WITH_VARIANCE'] }, cashHandoverId: null }, select: { id: true, propertyId: true } })]);
 
   return (
     <div className="p-8 max-w-7xl mx-auto">
-      <h1 className="text-3xl font-bold mb-8">Cash Handovers Workspace</h1>
+      <div className="mb-8 flex items-center justify-between"><div><h1 className="text-3xl font-bold">Cash Handovers Workspace</h1><p className="mt-1 text-sm text-slate-500">Transfer approved operator shifts into General Cashier custody.</p></div>{allowedProperties.length === 1 && (approvedPos.length > 0 || approvedFrontdesk.length > 0) && <CreateHandoverButton propertyId={allowedProperties[0]} posSessionIds={approvedPos.filter(s => s.propertyId === allowedProperties[0]).map(s => s.id)} frontdeskSessionIds={approvedFrontdesk.filter(s => s.propertyId === allowedProperties[0]).map(s => s.id)} />}</div>
       
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <table className="w-full text-left text-sm">
@@ -42,7 +43,7 @@ export default async function HandoversPage() {
           <tbody className="divide-y divide-slate-100">
             {handovers.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-6 py-8 text-center text-slate-500">No handovers found</td>
+                <td colSpan={8} className="px-6 py-8 text-center text-slate-500">No handovers found</td>
               </tr>
             ) : (
               handovers.map(h => (

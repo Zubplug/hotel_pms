@@ -95,7 +95,8 @@ export class CashHandoverService {
           where: { id: { in: params.frontdeskSessionIds } },
           data: { 
             cashHandoverId: handover.id,
-            status: 'HANDOVER_PENDING' 
+            status: 'HANDOVER_PENDING',
+            controlStatus: 'HANDOVER_PENDING'
           }
         });
       }

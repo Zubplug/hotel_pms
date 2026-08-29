@@ -3,13 +3,14 @@ import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { getUserPropertyIds } from '@/lib/property-access';
 import { DepositActionButton } from './deposit-action-button';
+import { CreateDepositButton } from './create-deposit-button';
 
 export default async function DepositsPage() {
   const actor = await auth();
   if (!actor?.user) redirect('/login');
 
   const allowedProperties = await getUserPropertyIds(actor.user.id);
-  const deposits = await prisma.bankDeposit.findMany({
+  const [deposits, handedOverPos, handedOverFrontdesk] = await Promise.all([prisma.bankDeposit.findMany({
     where: { propertyId: { in: allowedProperties } },
     orderBy: { createdAt: 'desc' },
     include: {
@@ -21,11 +22,11 @@ export default async function DepositsPage() {
         }
       }
     }
-  });
+  }), prisma.posSession.findMany({ where: { propertyId: { in: allowedProperties }, controlStatus: 'HANDED_OVER', bankDepositAllocations: { none: {} } }, select: { id: true, propertyId: true } }), prisma.frontdeskSession.findMany({ where: { propertyId: { in: allowedProperties }, controlStatus: 'HANDED_OVER', bankDepositAllocations: { none: {} } }, select: { id: true, propertyId: true } })]);
 
   return (
     <div className="p-8 max-w-7xl mx-auto">
-      <h1 className="text-3xl font-bold mb-8">Bank Deposits Workspace</h1>
+      <div className="mb-8 flex items-center justify-between"><div><h1 className="text-3xl font-bold">Bank Deposits Workspace</h1><p className="mt-1 text-sm text-slate-500">Create, submit, and verify deposits after cash receipt.</p></div>{allowedProperties.length === 1 && (handedOverPos.length > 0 || handedOverFrontdesk.length > 0) && <CreateDepositButton propertyId={allowedProperties[0]} posSessionIds={handedOverPos.filter(s => s.propertyId === allowedProperties[0]).map(s => s.id)} frontdeskSessionIds={handedOverFrontdesk.filter(s => s.propertyId === allowedProperties[0]).map(s => s.id)} />}</div>
       
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <table className="w-full text-left text-sm">
@@ -45,7 +46,7 @@ export default async function DepositsPage() {
           <tbody className="divide-y divide-slate-100">
             {deposits.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-6 py-8 text-center text-slate-500">No deposits found</td>
+                <td colSpan={9} className="px-6 py-8 text-center text-slate-500">No deposits found</td>
               </tr>
             ) : (
               deposits.map(d => (
