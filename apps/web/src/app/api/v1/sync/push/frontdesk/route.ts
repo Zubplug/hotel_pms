@@ -242,8 +242,31 @@ export async function POST(req: NextRequest) {
                throw new Error('CONCURRENCY_CONFLICT: controlled Front Desk shift cannot be reviewed again');
              }
              const decision = String(payload.decision || '').toUpperCase();
-             const nextControlStatus = decision === 'APPROVED_WITH_VARIANCE' ? 'APPROVED_WITH_VARIANCE' : decision === 'APPROVED' ? 'APPROVED' : 'RETURNED';
-             await tx.frontdeskSession.update({ where: { id: sessionId }, data: { status: 'CLOSED', controlStatus: nextControlStatus, varianceStatus: decision === 'APPROVED_WITH_VARIANCE' ? 'ACCEPTED' : current.varianceStatus, approvalDecision: decision, approvalNotes: payload.notes || null, approvedBy: decision === 'REJECTED' ? null : actorId, approvedAt: decision === 'REJECTED' ? null : (payload.reviewedAt ? new Date(payload.reviewedAt) : new Date()) } });
+             let nextControlStatus = decision === 'APPROVED_WITH_VARIANCE' ? 'APPROVED_WITH_VARIANCE' : decision === 'APPROVED' ? 'APPROVED' : 'RETURNED';
+             let nextStatus = 'CLOSED';
+             let handoverId = null;
+
+             if (nextControlStatus === 'APPROVED' || nextControlStatus === 'APPROVED_WITH_VARIANCE') {
+               handoverId = randomUUID();
+               await tx.cashHandover.create({
+                 data: {
+                   id: handoverId,
+                   propertyId: current.propertyId,
+                   handoverReference: `HO-${Date.now()}-${randomUUID().split('-')[0].toUpperCase().substring(0, 4)}`,
+                   amount: Number(current.declaredCash || 0),
+                   handedOverById: current.staffId,
+                   notes: 'Automatically created upon offline shift approval sync.',
+                   status: 'PENDING'
+                 }
+               });
+               await tx.shiftControlAudit.create({
+                 data: { id: randomUUID(), propertyId: current.propertyId, frontdeskSessionId: sessionId, action: 'HANDOVER_CREATED', fromStatus: nextControlStatus, toStatus: 'HANDOVER_PENDING', performedBy: actorId, idempotencyKey: `audit_ho_${randomUUID()}` }
+               });
+               nextControlStatus = 'HANDOVER_PENDING';
+               nextStatus = 'HANDOVER_PENDING';
+             }
+
+             await tx.frontdeskSession.update({ where: { id: sessionId }, data: { status: nextStatus as any, controlStatus: nextControlStatus as any, cashHandoverId: handoverId, varianceStatus: decision === 'APPROVED_WITH_VARIANCE' ? 'ACCEPTED' : current.varianceStatus, approvalDecision: decision, approvalNotes: payload.notes || null, approvedBy: decision === 'REJECTED' ? null : actorId, approvedAt: decision === 'REJECTED' ? null : (payload.reviewedAt ? new Date(payload.reviewedAt) : new Date()) } });
              await tx.frontdeskSessionAudit.create({ data: { frontdeskSessionId: sessionId, action: 'REVIEWED', performedBy: actorId, notes: payload.notes || `Decision: ${decision}` } });
           } else if (eventType === 'CREATE' && aggregateType === 'RESERVATION') {
              const property = await tx.property.findUnique({ where: { id: propertyId } });
