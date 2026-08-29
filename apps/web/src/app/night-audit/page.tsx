@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState, useEffect } from 'react';
 import { useProperty } from '@/components/PropertyProvider';
 import { Card, CardContent } from '@/components/ui/card';

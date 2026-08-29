@@ -6,6 +6,38 @@ import { getSystemIntegrity } from './night-audit-service';
 
 const BATCH_SIZE = 50;
 
+import { getOperationalReview, getSystemIntegrity, getFinancialAudit, getCashReconciliation } from './night-audit-service';
+
+export async function getNightAuditPreview(propertyId: string) {
+  const [operational, system, financial, cash] = await Promise.all([
+    getOperationalReview(propertyId),
+    getSystemIntegrity(propertyId),
+    getFinancialAudit(propertyId),
+    getCashReconciliation(propertyId)
+  ]);
+
+  let blockers = 0;
+  let warnings = 0;
+
+  if (operational.arrivals.length > 0) warnings++;
+  if (operational.departures.length > 0) warnings++;
+  if (operational.roomReconciliation.some((r: any) => r.issue)) warnings++;
+
+  if (system.openPosSessions.length > 0) blockers++;
+  if (system.financialSyncConflicts.length > 0) blockers++;
+  if (system.hardwareAgents.some((a: any) => a.status === 'OFFLINE')) warnings++;
+
+  if (financial.highBalances.length > 0) warnings++;
+
+  return {
+    operational,
+    system,
+    financial,
+    cash,
+    summary: { blockers, warnings }
+  };
+}
+
 export async function executeNightAudit(
   propertyId: string, 
   userId: string | null, 

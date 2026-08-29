@@ -23,9 +23,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useLodgeCoreSession } from '@/hooks/useLodgeCoreSession';
+import { useSession } from 'next-auth/react';
 import { useLogout } from '@/hooks/useLogout';
-import { PropertySelector } from './PropertySelector';
+import { PropertySelector } from '@/components/properties/PropertySelector';
 import { AppSwitcher } from './AppSwitcher';
 
 const NIGHT_AUDIT_NAV = [
@@ -39,7 +39,7 @@ const NIGHT_AUDIT_NAV = [
 export function NightAuditLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const pathname = usePathname();
-  const { data: session, status } = useLodgeCoreSession();
+  const { data: session, status } = useSession();
   const router = useRouter();
   const logout = useLogout();
 
