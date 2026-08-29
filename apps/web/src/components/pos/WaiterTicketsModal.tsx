@@ -35,7 +35,11 @@ export function WaiterTicketsModal({
     try {
       const res = await dataProvider.getWaiterTickets(outletId, operatorToken, sessionId);
       if (res.error) throw new Error(res.error);
-      setTickets(res.data || []);
+      // Keep a defensive client-side guard for older/offline providers that
+      // may return mixed station data while their local schema is upgrading.
+      setTickets((res.data || []).filter((ticket: any) =>
+        String(ticket.station || '').toUpperCase() === 'KITCHEN'
+      ));
     } catch (err: any) {
       setError(err.message || 'Failed to load tickets');
     } finally {

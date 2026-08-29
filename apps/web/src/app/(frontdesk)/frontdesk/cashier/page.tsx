@@ -8,9 +8,9 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { AlertTriangle, Banknote, CheckCircle2, FileText, Loader2, LockKeyhole, PlayCircle, Printer, ShieldCheck, WalletCards } from 'lucide-react';
+import { AlertTriangle, ArrowRightLeft, Banknote, CheckCircle2, FileText, Loader2, LockKeyhole, PlayCircle, Printer, ShieldCheck, WalletCards } from 'lucide-react';
 
-type FrontdeskSession = { id: string; shiftReference: string; status: string; openingFloat: number; systemExpectedCash: number; cashAccount?: { id: string; name: string } };
+type FrontdeskSession = { id: string; shiftReference: string; status: string; controlStatus?: string; openingFloat: number; systemExpectedCash: number; cashAccount?: { id: string; name: string } };
 type CashAccount = { id: string; name: string; type: string; balance: number };
 type ShiftSummary = {
   session: { shiftReference: string; status: string; staffName: string; till: string; openingFloat: number; expectedCash: number; declaredCash?: number | null; variance?: number | null; openedAt: string; closedAt?: string | null };
@@ -33,13 +33,14 @@ export default function FrontdeskCashierPage() {
   const [accountId, setAccountId] = useState('');
   const [openingFloat, setOpeningFloat] = useState('0');
   const [declaredCash, setDeclaredCash] = useState('');
-  const [decision, setDecision] = useState('APPROVED');
-  const [reconciliationNotes, setReconciliationNotes] = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+  const [showOpenSuccess, setShowOpenSuccess] = useState(false);
   const [showCloseSuccess, setShowCloseSuccess] = useState(false);
+  const [showHandoverSuccess, setShowHandoverSuccess] = useState(false);
+  const effectiveControlStatus = current?.controlStatus || (current?.status === 'CLOSED' ? 'SUBMITTED' : current?.status || '');
 
   const load = async () => {
     if (!propertyId) return;
@@ -95,13 +96,32 @@ export default function FrontdeskCashierPage() {
     return result;
   });
 
-  const openSession = () => run(() => isDesktopMode
-    ? provider.frontdesk.openSession({ propertyId, cashAccountId: accountId, openingFloat: Number(openingFloat) })
-    : fetch('/api/v1/frontdesk/sessions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ propertyId, cashAccountId: accountId, openingFloat: Number(openingFloat) }) }).then(response => response.json()));
+  const openSession = () => run(async () => {
+    const result = await (isDesktopMode
+      ? provider.frontdesk.openSession({ propertyId, cashAccountId: accountId, openingFloat: Number(openingFloat) })
+      : fetch('/api/v1/frontdesk/sessions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ propertyId, cashAccountId: accountId, openingFloat: Number(openingFloat) }) }).then(response => response.json()));
+    if (result && typeof result === 'object' && 'error' in result && result.error) {
+      throw new Error(typeof result.error === 'string' ? result.error : JSON.stringify(result.error));
+    }
+    setShowOpenSuccess(true);
+    return result;
+  });
 
-  const reconcileSession = () => run(() => provider.frontdesk.reconcileSession
-    ? provider.frontdesk.reconcileSession(current!.id, decision, reconciliationNotes)
-    : Promise.reject(new Error('Reconciliation is unavailable on this terminal.')));
+  const initiateHandover = () => run(async () => {
+    if (!propertyId || !current?.id) return;
+    const res = await fetch('/api/v1/financial-control/handovers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': `frontdesk-handover:${current.id}` },
+      body: JSON.stringify({ propertyId, frontdeskSessionIds: [current.id] })
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      throw new Error(data.error || 'Failed to initiate handover');
+    }
+    setMessage('Handover initiated successfully. Please deliver your cash to the General Cashier.');
+    setShowHandoverSuccess(true);
+    return true;
+  });
 
   const printReport = () => {
     if (!summary || !provider.hardware.printShiftReport) return;
@@ -155,8 +175,15 @@ export default function FrontdeskCashierPage() {
     <Dialog open={showCloseSuccess} onOpenChange={setShowCloseSuccess}>
       <DialogContent>
         <DialogHeader><DialogTitle className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-emerald-600" />Shift submitted successfully</DialogTitle><DialogDescription>Your Front Desk shift has been closed and sent for review.</DialogDescription></DialogHeader>
-        <div className="rounded-lg border bg-emerald-50 p-4 text-sm text-emerald-900"><div className="flex justify-between"><span>Shift reference</span><span className="font-semibold">{current?.shiftReference}</span></div><div className="mt-1 flex justify-between"><span>Report status</span><span className="font-semibold">CLOSED</span></div></div>
+        <div className="rounded-lg border bg-emerald-50 p-4 text-sm text-emerald-900"><div className="flex justify-between"><span>Shift reference</span><span className="font-semibold">{current?.shiftReference}</span></div><div className="mt-1 flex justify-between"><span>Control status</span><span className="font-semibold">SUBMITTED — Awaiting review</span></div></div>
         <DialogFooter><Button onClick={() => setShowCloseSuccess(false)}>Continue</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+    <Dialog open={showOpenSuccess} onOpenChange={setShowOpenSuccess}>
+      <DialogContent>
+        <DialogHeader><DialogTitle className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-emerald-600" />Front Desk shift opened</DialogTitle><DialogDescription>The till is ready for Front Desk transactions.</DialogDescription></DialogHeader>
+        <div className="rounded-lg border bg-emerald-50 p-4 text-sm text-emerald-900"><div className="flex justify-between"><span>Till</span><span className="font-semibold">{accounts.find(account => account.id === accountId)?.name || 'Selected till'}</span></div><div className="mt-1 flex justify-between"><span>Opening float</span><span className="font-semibold">{money(Number(openingFloat) || 0)}</span></div><div className="mt-1 flex justify-between"><span>Control status</span><span className="font-semibold">OPEN</span></div></div>
+        <DialogFooter><Button onClick={() => setShowOpenSuccess(false)}>Continue</Button></DialogFooter>
       </DialogContent>
     </Dialog>
     <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
@@ -166,7 +193,7 @@ export default function FrontdeskCashierPage() {
     {message && <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">{message}</div>}
 
     {!current ? <Card><CardHeader><CardTitle className="flex items-center gap-2"><PlayCircle className="h-5 w-5 text-blue-600" />Open Front Desk Shift</CardTitle></CardHeader><CardContent className="grid gap-4 sm:grid-cols-3"><div><label className="text-sm font-medium">Till</label><select value={accountId} onChange={event => setAccountId(event.target.value)} className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm"><option value="">Select a till</option>{accounts.map(account => <option key={account.id} value={account.id}>{account.name} · {account.type}</option>)}</select></div><div><label className="text-sm font-medium">Opening float</label><Input value={openingFloat} onChange={event => setOpeningFloat(event.target.value)} type="number" /></div><div className="flex items-end"><Button disabled={busy || !accountId} onClick={openSession}><PlayCircle className="mr-2 h-4 w-4" />Open Shift</Button></div></CardContent></Card> : <>
-      <Card className="border-slate-200 bg-slate-950 text-white"><CardContent className="flex flex-col justify-between gap-5 p-6 md:flex-row md:items-center"><div><div className="mb-2 flex items-center gap-2 text-emerald-300"><ShieldCheck className="h-5 w-5" /><span className="text-xs font-semibold uppercase tracking-widest">Shift report status</span><Badge className="bg-emerald-500/20 text-emerald-200">{current.status.replaceAll('_', ' ')}</Badge></div><h2 className="text-2xl font-bold">{summary?.session.shiftReference || current.shiftReference}</h2><p className="mt-1 text-sm text-slate-300">{summary?.session.staffName || 'Assigned receptionist'} · {summary?.session.till || current.cashAccount?.name || 'Assigned till'}</p></div><div className="text-left md:text-right"><p className="text-xs uppercase tracking-wider text-slate-400">Opened</p><p className="font-medium">{dateTime(summary?.session.openedAt)}</p></div></CardContent></Card>
+      <Card className="border-slate-200 bg-slate-950 text-white"><CardContent className="flex flex-col justify-between gap-5 p-6 md:flex-row md:items-center"><div><div className="mb-2 flex items-center gap-2 text-emerald-300"><ShieldCheck className="h-5 w-5" /><span className="text-xs font-semibold uppercase tracking-widest">Shift control status</span><Badge className="bg-emerald-500/20 text-emerald-200">{effectiveControlStatus.replaceAll('_', ' ')}</Badge></div><h2 className="text-2xl font-bold">{summary?.session.shiftReference || current.shiftReference}</h2><p className="mt-1 text-sm text-slate-300">{summary?.session.staffName || 'Assigned receptionist'} · {summary?.session.till || current.cashAccount?.name || 'Assigned till'}</p></div><div className="text-left md:text-right"><p className="text-xs uppercase tracking-wider text-slate-400">Opened</p><p className="font-medium">{dateTime(summary?.session.openedAt)}</p></div></CardContent></Card>
 
       {summary && <>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -183,13 +210,16 @@ export default function FrontdeskCashierPage() {
 
         <Card><CardHeader><CardTitle>Cash reconciliation</CardTitle></CardHeader><CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><SummaryRow label="Opening float" value={money(summary.cash.openingFloat)} /><SummaryRow label="Cash received" value={money(summary.payments.cash)} /><SummaryRow label="Cash in" value={money(summary.cash.cashIn)} /><SummaryRow label="Refunds / drops / paid out" value={money(summary.cash.refunds + summary.cash.cashDrops + summary.cash.paidOuts + summary.cash.transfersOut)} /><SummaryRow label="Expected cash" value={money(summary.cash.expected)} strong /><SummaryRow label="Declared cash" value={summary.cash.declared == null ? 'Not declared' : money(summary.cash.declared)} /><SummaryRow label="Variance" value={summary.cash.variance == null ? '—' : money(summary.cash.variance)} strong valueClass={varianceTone} /></CardContent></Card>
 
-        <Card><CardHeader className="flex flex-row items-center justify-between"><CardTitle>Close and submit shift</CardTitle><Badge variant={summary.exceptions.failedSync ? 'destructive' : 'secondary'}>{summary.exceptions.failedSync ? `${summary.exceptions.failedSync} failed sync` : 'No sync failures'}</Badge></CardHeader><CardContent className="space-y-4"><p className="text-sm text-muted-foreground">Count the physical till, enter the exact amount, then close the session. The system will lock Front Desk transactions and send the report for reconciliation.</p><div className="flex flex-col gap-3 sm:flex-row sm:items-end"><div><label className="text-sm font-medium">Physical cash counted</label><Input value={declaredCash} onChange={event => setDeclaredCash(event.target.value)} placeholder="0.00" type="number" /></div><Button disabled={busy || !declaredCash || current.status !== 'OPEN'} onClick={() => setShowCloseConfirm(true)}><LockKeyhole className="mr-2 h-4 w-4" />Close and submit shift</Button></div></CardContent></Card>
+        <Card><CardHeader className="flex flex-row items-center justify-between"><CardTitle>Close and submit shift</CardTitle><Badge variant={summary.exceptions.failedSync ? 'destructive' : 'secondary'}>{summary.exceptions.failedSync ? `${summary.exceptions.failedSync} failed sync` : 'No sync failures'}</Badge></CardHeader><CardContent className="space-y-4"><p className="text-sm text-muted-foreground">Count the physical till, enter the exact amount, then close the session. The system will lock Front Desk transactions and send the report for management review.</p>{summary.exceptions.failedSync > 0 && <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">Resolve failed synchronization events before submitting this shift.</p>}<div className="flex flex-col gap-3 sm:flex-row sm:items-end"><div><label className="text-sm font-medium">Physical cash counted</label><Input value={declaredCash} onChange={event => setDeclaredCash(event.target.value)} placeholder="0.00" type="number" /></div><Button disabled={busy || !declaredCash || current.status !== 'OPEN' || summary.exceptions.failedSync > 0} onClick={() => setShowCloseConfirm(true)}><LockKeyhole className="mr-2 h-4 w-4" />Close and submit shift</Button></div></CardContent></Card>
 
         <Card><CardHeader><CardTitle>Recent session activity</CardTitle></CardHeader><CardContent><div className="divide-y rounded-md border">{summary.rows.slice(0, 8).map((row, index) => <div key={`${row.date}-${index}`} className="flex items-center justify-between gap-4 px-4 py-3 text-sm"><div><p className="font-medium">{row.description || row.kind}</p><p className="text-xs text-muted-foreground">{dateTime(row.date)} · {row.method || '—'}</p></div><span className="font-semibold">{money(row.amount)}</span></div>)}{summary.rows.length === 0 && <p className="p-6 text-center text-sm text-muted-foreground">No session activity recorded yet.</p>}</div></CardContent></Card>
       </>}
     </>}
 
-    {(current?.status === 'CLOSED' || current?.status === 'UNDER_REVIEW') && <Card><CardHeader><CardTitle>Manager reconciliation</CardTitle></CardHeader><CardContent><p className="text-sm text-muted-foreground">Record the managerial decision. Approval with variance is required when the declared cash differs from expected cash.</p><div className="mt-4 grid gap-3 md:grid-cols-[auto_1fr_auto]"><select value={decision} onChange={event => setDecision(event.target.value)} className="h-10 rounded-md border bg-background px-3 text-sm"><option value="APPROVED">Approve</option><option value="APPROVED_WITH_VARIANCE">Approve with variance</option><option value="REJECTED">Reject for review</option></select><Input value={reconciliationNotes} onChange={event => setReconciliationNotes(event.target.value)} placeholder="Decision notes (optional)" /><Button disabled={busy || !provider.frontdesk.reconcileSession} onClick={reconcileSession}><ShieldCheck className="mr-2 h-4 w-4" />Submit decision</Button></div></CardContent></Card>}
+    {current?.status === 'CLOSED' && ['SUBMITTED', 'UNDER_REVIEW'].includes(effectiveControlStatus) && <Card className="border-amber-200 bg-amber-50"><CardHeader><CardTitle className="text-amber-900">Awaiting management review</CardTitle></CardHeader><CardContent><p className="text-sm text-amber-800">This shift has been submitted. General Cashier or Finance will review it; Front Desk staff cannot approve their own shift.</p></CardContent></Card>}
+
+    {current?.status === 'CLOSED' && (effectiveControlStatus === 'APPROVED' || effectiveControlStatus === 'APPROVED_WITH_VARIANCE') && <Card className="border-indigo-200 bg-indigo-50"><CardHeader><CardTitle className="text-indigo-900">Initiate Cash Handover</CardTitle></CardHeader><CardContent><p className="text-sm text-indigo-700">Your shift has been approved by management. Please initiate the handover process to formally transfer the physical cash to the General Cashier.</p><div className="mt-4 flex justify-end"><Button className="bg-indigo-600 hover:bg-indigo-700 text-white" disabled={busy} onClick={initiateHandover}><ArrowRightLeft className="mr-2 h-4 w-4" />Initiate Handover</Button></div></CardContent></Card>}
+    <Dialog open={showHandoverSuccess} onOpenChange={setShowHandoverSuccess}><DialogContent><DialogHeader><DialogTitle className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-emerald-600" />Handover initiated</DialogTitle><DialogDescription>Your approved shift is now waiting for the General Cashier to receive the physical cash.</DialogDescription></DialogHeader><div className="rounded-lg border bg-emerald-50 p-4 text-sm text-emerald-900"><div className="flex justify-between"><span>Shift reference</span><span className="font-semibold">{current?.shiftReference}</span></div><div className="mt-1 flex justify-between"><span>Next status</span><span className="font-semibold">HANDOVER PENDING</span></div></div><DialogFooter><Button onClick={() => setShowHandoverSuccess(false)}>Continue</Button></DialogFooter></DialogContent></Dialog>
   </div>;
 }
 

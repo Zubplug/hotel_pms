@@ -134,6 +134,7 @@ export async function GET(req: NextRequest) {
         payments: { orderBy: { createdAt: 'desc' } },
         cashMovements: { orderBy: { createdAt: 'desc' } },
         settlements: { orderBy: { settledAt: 'desc' }, take: 1 },
+        controlAudits: { orderBy: { createdAt: 'desc' } },
       },
     });
     const frontdeskSessions = await prisma.frontdeskSession.findMany({
@@ -147,6 +148,7 @@ export async function GET(req: NextRequest) {
         cashAccount: { select: { id: true, name: true, type: true } },
         payments: true,
         cashMovements: true,
+        controlAudits: { orderBy: { createdAt: 'desc' } },
       },
     });
     const syncConflicts = await prisma.syncConflict.count({
@@ -213,6 +215,10 @@ export async function GET(req: NextRequest) {
         type: 'POS',
         businessDate: item.businessDate,
         status: item.status,
+        controlStatus: item.controlStatus,
+        varianceStatus: item.varianceStatus,
+        approvalDecision: item.approvalDecision,
+        approvalNotes: item.approvalNotes,
         settlementStatus: settlement?.status || null,
         outlet: item.outlet,
         operator: item.primaryOperator,
@@ -241,6 +247,7 @@ export async function GET(req: NextRequest) {
           refunds: movementTotal('REFUND') + movementTotal('REFUND_CASH'),
         },
         settlement,
+        shiftControlAudits: item.shiftControlAudits,
       };
     });
     const frontdeskShiftRows = frontdeskSessions.map((item: any) => {
@@ -252,6 +259,10 @@ export async function GET(req: NextRequest) {
         type: 'FRONT_DESK',
         businessDate: item.businessDate,
         status: item.status,
+        controlStatus: item.controlStatus,
+        varianceStatus: item.varianceStatus,
+        approvalDecision: item.approvalDecision,
+        approvalNotes: item.approvalNotes,
         till: item.cashAccount,
         operator: item.staff,
         openedAt: item.openedAt,
@@ -272,6 +283,7 @@ export async function GET(req: NextRequest) {
           transfersOut: movementTotal(['CASH_TRANSFER_OUT']),
           refunds: movementTotal(['REFUND', 'REFUND_CASH']),
         },
+        shiftControlAudits: item.shiftControlAudits,
       };
     });
     const shifts = [...posShiftRows, ...frontdeskShiftRows];

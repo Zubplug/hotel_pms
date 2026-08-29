@@ -71,8 +71,25 @@ export async function POST(req: NextRequest) {
     
     // 5. Fetch Property settings for banking model
     const property = await prisma.property.findUnique({ where: { id: propertyId } });
+    if (!property || !property.isActive) {
+      return NextResponse.json({ error: 'Property not found or inactive' }, { status: 400 });
+    }
     const bankingModel = (property?.settings as any)?.pos?.bankingModel || 'CENTRAL_CASHIER';
     const bankType = bankingModel === 'SERVER_BANKING' ? 'SERVER' : 'CENTRAL';
+
+    // General Cashier is a separate receiving/review role. A central POS
+    // bank is opened by a POS cashier (or authorized manager), while every
+    // server subsequently attaches to that same bank.
+    const staffProfile = staffId
+      ? await prisma.staff.findUnique({ where: { id: staffId }, select: { position: true, department: true } })
+      : null;
+    const staffRoleText = `${staffProfile?.position ?? ''} ${staffProfile?.department ?? ''}`
+      .toLowerCase()
+      .replace(/[^a-z]/g, '');
+    const isGeneralCashier = staffRoleText.includes('generalcashier') || staffRoleText.includes('centralcashier');
+    if (bankingModel === 'CENTRAL_CASHIER' && isGeneralCashier && !isManager) {
+      return NextResponse.json({ error: 'General Cashier cannot open the POS bank. A POS cashier must open it.' }, { status: 403 });
+    }
 
     // 6. Transaction to check for existing OPEN session and create new
     const result = await prisma.$transaction(async (tx: any) => {
@@ -83,13 +100,21 @@ export async function POST(req: NextRequest) {
         if (existingBank) return existingBank; // Idempotent logic per Waiter
       } else {
         const existingSession = await tx.posSession.findFirst({
-          where: { deviceId: device.id, status: 'OPEN' }
+          where: {
+            propertyId,
+            outletId: outlet.id,
+            status: 'OPEN',
+            bankType: 'CENTRAL',
+            bankingModel: 'CENTRAL_CASHIER'
+          },
+          orderBy: { openedAt: 'desc' }
         });
         if (existingSession) {
-          if (existingSession.openedBy === loggedInUserId && existingSession.outletId === outlet.id) {
-            return existingSession;
-          }
-          throw new Error('This terminal already has an OPEN financial session by another cashier.');
+          return existingSession;
+        }
+
+        if (bankingModel === 'CENTRAL_CASHIER' && !isManager) {
+          throw new Error('No central POS bank is open. A POS cashier must open it before servers can log in.');
         }
       }
 

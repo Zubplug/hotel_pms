@@ -87,6 +87,19 @@ public class LocalPosSession
     public string UserId { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
 
+    // Additive control projection. Status remains for compatibility with the
+    // legacy sync contract; these fields drive the controlled workflow.
+    public string ControlStatus { get; set; } = "OPEN";
+    public string? VarianceStatus { get; set; }
+    public DateTime? SubmittedAt { get; set; }
+    public string? SubmittedBy { get; set; }
+    public DateTime? ReviewStartedAt { get; set; }
+    public string? ReviewStartedBy { get; set; }
+    public string? ApprovalDecision { get; set; }
+    public string? ApprovalNotes { get; set; }
+    public DateTime? HandoverAt { get; set; }
+    public DateTime? DepositedAt { get; set; }
+
     public string BankingModel { get; set; } = "CENTRAL_CASHIER";
     public string BankType { get; set; } = "CENTRAL";
     public string? PrimaryOperatorId { get; set; }
@@ -128,6 +141,16 @@ public class LocalFrontdeskSession
     public string ShiftReference { get; set; } = string.Empty;
     public DateTime BusinessDate { get; set; }
     public string Status { get; set; } = "OPEN";
+    public string ControlStatus { get; set; } = "OPEN";
+    public string? VarianceStatus { get; set; }
+    public DateTime? SubmittedAt { get; set; }
+    public string? SubmittedBy { get; set; }
+    public DateTime? ReviewStartedAt { get; set; }
+    public string? ReviewStartedBy { get; set; }
+    public string? ApprovalDecision { get; set; }
+    public string? ApprovalNotes { get; set; }
+    public DateTime? HandoverAt { get; set; }
+    public DateTime? DepositedAt { get; set; }
     public decimal OpeningFloat { get; set; }
     public decimal SystemExpectedCash { get; set; }
     public decimal? DeclaredCash { get; set; }

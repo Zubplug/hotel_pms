@@ -8,8 +8,8 @@ import type { StaffProfile } from './useGlobalTerminalAuth';
 export type PosOperatorStep =
   | 'select'       // staff grid
   | 'pin'          // PIN entry
-  | 'shift'        // opening float (SERVER_BANKING only)
-  | 'error_central'; // central cashier model — till not open
+  | 'shift'        // opening float for SERVER_BANKING or first CENTRAL cashier
+  | 'error_central'; // central cashier model — till not open for this operator
 
 export interface UsePosOperatorAuthResult {
   // Data
@@ -48,7 +48,7 @@ export function usePosOperatorAuth({
   isOpen,
   outletId,
   onAuthenticated,
-  allowedRoles = ['WAITER', 'WAITRESS', 'CASHIER'],
+  allowedRoles = ['WAITER', 'WAITRESS', 'CASHIER', 'POS_CASHIER'],
 }: {
   isOpen: boolean;
   outletId?: string;
@@ -80,8 +80,11 @@ export function usePosOperatorAuth({
         res = await provider.pos.getActiveStaff(propertyId);
       }
       if (res?.data) {
-        const roles = new Set(allowedRoles.map(role => role.toUpperCase()));
-        setStaff(res.data.filter((member: StaffProfile) => roles.has(String(member.role || member.position || '').toUpperCase())));
+        const roles = new Set(allowedRoles.map(role => role.toUpperCase().replace(/[^A-Z]/g, '')));
+        setStaff(res.data.filter((member: StaffProfile) => {
+          const memberRole = String(member.role || member.position || '').toUpperCase().replace(/[^A-Z]/g, '');
+          return roles.has(memberRole);
+        }));
       }
     } catch (e) {
       console.error('[PosOperatorAuth] Failed to load staff', e);
@@ -168,7 +171,19 @@ export function usePosOperatorAuth({
       if (auth.requiresBank) {
         localStorage.removeItem('lodgecore_pos_session_id');
         if (token) localStorage.setItem('lodgecore_pos_operator_token', token);
-        onAuthenticated(operator, token, auth);
+        const operatorRole = String(operator.role || operator.position || '').toUpperCase().replace(/[^A-Z]/g, '');
+        const canOpenCentralBank = operatorRole === 'CASHIER' || operatorRole === 'POSCASHIER';
+
+        // Waiters/servers may use an existing central shift, but must not
+        // create the bank. A POS cashier gets the opening-float screen.
+        if (auth.bankingModel === 'CENTRAL_CASHIER' && !canOpenCentralBank) {
+          setStep('error_central');
+          return;
+        }
+
+        setVerifiedOperator(operator);
+        setPendingToken(token);
+        setStep('shift');
         return;
       }
 
@@ -240,7 +255,7 @@ export function usePosOperatorAuth({
         if (res?.data?.sessionId) {
           localStorage.setItem('lodgecore_pos_session_id', res.data.sessionId);
           localStorage.setItem('lodgecore_pos_operator_token', pendingToken);
-          onAuthenticated(verifiedOperator, pendingToken, { bankingModel: 'SERVER_BANKING', sessionId: res.data.sessionId });
+          onAuthenticated(verifiedOperator, pendingToken, { bankingModel: 'CENTRAL_CASHIER', sessionId: res.data.sessionId });
         } else {
           setError(res?.error || 'Failed to open shift. Try again.');
         }

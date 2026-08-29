@@ -304,7 +304,7 @@ public class OfflinePMSInterop
                 }
                 else
                 {
-                    var openSession = await _repo.GetActiveSessionForDeviceAsync(terminal.Id);
+                    var openSession = await _repo.GetActiveCentralBankAsync(propertyId, terminal.OutletId);
                     if (openSession != null)
                     {
                         posSessionId = openSession.Id;
@@ -312,7 +312,7 @@ public class OfflinePMSInterop
                     else
                     {
                         requiresBank = true;
-                        bankOwner = "MANAGER";
+                        bankOwner = "POS_CASHIER";
                     }
                 }
             }
@@ -1739,7 +1739,35 @@ public class OfflinePMSInterop
         try
         {
             var ctx = await GetSecureContextAsync();
-            var res = await _repo.OpenPosSessionAsync(propertyId, outletId, bankType, bankingModel, openingBalance, ctx.UserId, ctx.DeviceId);
+            var property = await _repo.GetPropertyAsync(propertyId);
+            var actualBankingModel = property?.BankingModel ?? "CENTRAL_CASHIER";
+            var actualBankType = string.Equals(actualBankingModel, "SERVER_BANKING", StringComparison.OrdinalIgnoreCase)
+                ? "SERVER"
+                : "CENTRAL";
+
+            var openingStaff = await _repo.GetStaffByIdAsync(ctx.UserId);
+            var openingRole = openingStaff?.Role ?? string.Empty;
+            var normalizedOpeningRole = new string(openingRole
+                .Where(char.IsLetter)
+                .ToArray())
+                .ToUpperInvariant();
+            if (actualBankType == "CENTRAL"
+                && (normalizedOpeningRole.Contains("GENERALCASHIER")
+                    || normalizedOpeningRole.Contains("CENTRALCASHIER")))
+            {
+                throw new Exception("General Cashier cannot open the POS bank. A POS cashier must open it.");
+            }
+
+            // The client-provided banking model/bank type is only a legacy
+            // hint. The property configuration is authoritative.
+            var res = await _repo.OpenPosSessionAsync(
+                propertyId,
+                outletId,
+                actualBankType,
+                actualBankingModel,
+                openingBalance,
+                ctx.UserId,
+                ctx.DeviceId);
             return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
         catch (Exception ex)
@@ -1903,6 +1931,15 @@ public class OfflinePMSInterop
                 }
             }
 
+            var currentStaff = await _repo.GetStaffByIdAsync(staffId);
+            var isGeneralCashier = currentStaff != null
+                && ($"{currentStaff.Role}".Contains("GENERAL CASHIER", StringComparison.OrdinalIgnoreCase)
+                    || $"{currentStaff.Role}".Contains("CENTRAL CASHIER", StringComparison.OrdinalIgnoreCase));
+            if (actualBankingModel == "CENTRAL_CASHIER" && isGeneralCashier)
+            {
+                throw new Exception("General Cashier cannot open the POS bank. A POS cashier must open it.");
+            }
+
             if (!string.IsNullOrEmpty(deviceId) && !string.IsNullOrEmpty(outletId))
             {
                 if (actualBankingModel == "SERVER_BANKING")
@@ -1915,7 +1952,7 @@ public class OfflinePMSInterop
                 }
                 else
                 {
-                    var openSession = await _repo.GetActiveSessionForDeviceAsync(deviceId);
+                    var openSession = await _repo.GetActiveCentralBankAsync(propertyId, outletId);
                     if (openSession != null)
                     {
                         posSessionId = openSession.Id;
@@ -1923,7 +1960,7 @@ public class OfflinePMSInterop
                     else
                     {
                         requiresBank = true;
-                        bankOwner = "MANAGER";
+                        bankOwner = "POS_CASHIER";
                     }
                 }
             }

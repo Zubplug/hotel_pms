@@ -118,6 +118,21 @@ export async function POST(req: NextRequest) {
 
       try {
         const payload = typeof event.payloadJson === 'string' ? JSON.parse(event.payloadJson || '{}') : event.payloadJson;
+
+        // Older desktop clients used generic CREATE/UPDATE operation names
+        // while the server handlers use business event names. Canonicalize
+        // by aggregate so those events are not merely recorded as synced
+        // without materializing their financial records.
+        if (isLegacy) {
+          const legacyOperation = String(event.eventType || '').toUpperCase();
+          if (event.aggregateType === 'POS_SETTLEMENT' && ['CREATE', 'UPDATE'].includes(legacyOperation)) {
+            event.eventType = 'POS_SETTLEMENT';
+          } else if ((event.aggregateType === 'POS_CASH_MOVEMENT' || event.aggregateType === 'CASH_MOVEMENT') && ['CREATE', 'UPDATE'].includes(legacyOperation)) {
+            event.eventType = 'POS_CASH_MOVEMENT';
+          } else if (event.aggregateType === 'POS_SESSION' && legacyOperation === 'UPDATE') {
+            event.eventType = 'POS_SESSION_UPDATED';
+          }
+        }
         
         await prisma.$transaction(async (tx: any) => {
           // 1. Idempotency Check
@@ -585,13 +600,53 @@ export async function POST(req: NextRequest) {
                   where: { operationId }
               });
               if (existing) {
-                  // Handled by outer duplicate check mostly, but for double safety
-                  // we could just ignore
+                  // A handover/approval update has its own idempotency key.
+                  // Apply the state change to the existing settlement instead
+                  // of treating the event as a harmless duplicate.
+                  if (payload.Status || payload.status || payload.AuthorizerId || payload.authorizerId) {
+                    await tx.posSettlement.update({
+                      where: { id: existing.id },
+                      data: {
+                        ...(payload.Status || payload.status ? { status: payload.Status || payload.status } : {}),
+                        ...(payload.AuthorizerId || payload.authorizerId ? {
+                          authorizerId: isUuid(payload.AuthorizerId || payload.authorizerId) ? (payload.AuthorizerId || payload.authorizerId) : null
+                        } : {})
+                      }
+                    });
+                  }
               } else {
                   const session = await tx.posOperatorSession.findUnique({
                       where: { id: payload.SessionId || payload.sessionId }
                   });
                   if (!session) throw new Error(`RETRYABLE_SESSION_NOT_FOUND: POS session ${payload.SessionId || payload.sessionId} has not reached the cloud yet`);
+
+                  // The desktop declaration is evidence, not the source of
+                  // truth. Recalculate the cash position from the cloud
+                  // ledger after all preceding events have been materialized.
+                  const settlementSession = await tx.posSession.findUnique({
+                    where: { id: session.id },
+                    include: { payments: true, cashMovements: true }
+                  });
+                  if (!settlementSession) throw new Error(`RETRYABLE_SESSION_NOT_FOUND: POS session ${session.id} is unavailable`);
+                  const protectedControlStates = ['APPROVED', 'APPROVED_WITH_VARIANCE', 'HANDOVER_PENDING', 'DEPOSITED', 'RECONCILED', 'HANDED_OVER'];
+                  if (protectedControlStates.includes(String(settlementSession.controlStatus))) {
+                    const conflict = new Error('CONCURRENCY_CONFLICT: settlement cannot be appended to a financially controlled shift');
+                    (conflict as any).currentVersion = settlementSession.controlStatus;
+                    throw conflict;
+                  }
+                  const cashSales = settlementSession.payments
+                    .filter((p: any) => ['CONFIRMED', 'PAID'].includes(p.status) && p.method === 'CASH')
+                    .reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
+                  const movementTotal = (types: string[]) => settlementSession.cashMovements
+                    .filter((m: any) => types.includes(m.type))
+                    .reduce((sum: number, m: any) => sum + Number(m.amount || 0), 0);
+                  const expectedCash = Number(settlementSession.openingCash || 0)
+                    + cashSales
+                    + movementTotal(['CASH_IN', 'CASH_TRANSFER_IN'])
+                    - movementTotal(['CASH_DROP', 'PAID_OUT', 'CASH_TRANSFER_OUT'])
+                    - movementTotal(['REFUND', 'REFUND_CASH']);
+                  const declaredCash = Number(payload.ActualCash ?? payload.actualCash ?? 0);
+                  const calculatedVariance = declaredCash - expectedCash;
 
                   await tx.posSettlement.create({
                       data: {
@@ -603,9 +658,9 @@ export async function POST(req: NextRequest) {
                           sessionOwnerId: isUuid(payload.SessionOwnerId || payload.sessionOwnerId) ? (payload.SessionOwnerId || payload.sessionOwnerId) : session.operatorId,
                           operatorId: isUuid(payload.OperatorId || payload.operatorId) ? (payload.OperatorId || payload.operatorId) : operatorId,
                           businessDate: payload.BusinessDate ? new Date(payload.BusinessDate) : session.startedAt,
-                          expectedCash: Number(payload.ExpectedCash ?? payload.expectedCash ?? 0),
-                          actualCash: Number(payload.ActualCash ?? payload.actualCash ?? 0),
-                          variance: Number(payload.Variance ?? payload.variance ?? 0),
+                          expectedCash,
+                          actualCash: declaredCash,
+                          variance: calculatedVariance,
                           authorizerId: isUuid(payload.AuthorizerId || payload.authorizerId) ? (payload.AuthorizerId || payload.authorizerId) : null,
                           settledAt: payload.SettledAt ? new Date(payload.SettledAt) : new Date(event.occurredAt),
                           status: payload.Status || 'SETTLED',
@@ -617,13 +672,67 @@ export async function POST(req: NextRequest) {
                       where: { id: session.id },
                       data: {
                           status: 'CLOSED',
-                          actualCash: Number(payload.ActualCash ?? payload.actualCash ?? 0),
-                          variance: Number(payload.Variance ?? payload.variance ?? 0),
+                          // Closing is a submission for finance review; it is
+                          // not an approval or reconciliation decision.
+                          controlStatus: 'SUBMITTED',
+                          expectedCash,
+                          actualCash: declaredCash,
+                          variance: calculatedVariance,
                           closedAt: payload.SettledAt ? new Date(payload.SettledAt) : new Date(event.occurredAt),
                           closedBy: isUuid(payload.OperatorId || payload.operatorId) ? (payload.OperatorId || payload.operatorId) : operatorId,
                       }
                   });
+
+                  // Keep the legacy POS session projection in step with the
+                  // operator session used by the financial ledger.
+                  await tx.posSession.updateMany({
+                    where: { id: session.id },
+                    data: {
+                      status: 'RECONCILIATION_REQUIRED',
+                      expectedCash,
+                      actualCash: declaredCash,
+                      variance: calculatedVariance,
+                      closedAt: payload.SettledAt ? new Date(payload.SettledAt) : new Date(event.occurredAt),
+                      closedBy: isUuid(payload.OperatorId || payload.operatorId) ? (payload.OperatorId || payload.operatorId) : operatorId,
+                      updatedAt: new Date(event.occurredAt || Date.now())
+                    }
+                  });
               }
+          }
+          else if (event.eventType === 'POS_SESSION_UPDATED') {
+              const sessionId = event.aggregateId;
+              const status = payload.Status || payload.status;
+              const closedAt = payload.ClosedAt || payload.closedAt;
+              const currentSession = await tx.posSession.findUnique({
+                where: { id: event.aggregateId },
+                select: { status: true, controlStatus: true }
+              });
+              if (!currentSession) {
+                throw new Error(`RETRYABLE_SESSION_NOT_FOUND: POS operator session ${event.aggregateId} has not reached the cloud yet`);
+              }
+              const finalControlStates = ['APPROVED', 'APPROVED_WITH_VARIANCE', 'HANDOVER_PENDING', 'DEPOSITED', 'RECONCILED', 'HANDED_OVER'];
+              if (finalControlStates.includes(String(currentSession.controlStatus)) && status && status !== currentSession.status) {
+                const conflict = new Error('CONCURRENCY_CONFLICT: controlled shift cannot be overwritten by a late offline status event');
+                (conflict as any).currentVersion =  currentSession.controlStatus;
+                throw conflict;
+              }
+              await tx.posOperatorSession.updateMany({
+                where: { id: sessionId },
+                data: {
+                  ...(status ? { status } : {}),
+                  ...(closedAt ? { closedAt: new Date(closedAt) } : {}),
+                  closedBy: operatorId
+                }
+              });
+              await tx.posSession.updateMany({
+                where: { id: sessionId },
+                data: {
+                  ...(status ? { status } : {}),
+                  ...(closedAt ? { closedAt: new Date(closedAt) } : {}),
+                  closedBy: operatorId,
+                  updatedAt: new Date(event.occurredAt || Date.now())
+                }
+              });
           }
           else if (event.eventType === 'POS_CASH_MOVEMENT' || event.eventType === 'CASH_MOVEMENT') {
               const operationId = payload.OperationId || payload.operationId || event.idempotencyKey;

@@ -5,6 +5,7 @@ import { X, Wallet, DollarSign, ArrowRightLeft, CheckCircle2 } from 'lucide-reac
 import { Button } from '@/components/ui/button';
 import { ActionSuccessModal } from '@/components/pos/ActionSuccessModal';
 import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 
 type MyShiftBankModalProps = {
@@ -13,6 +14,7 @@ type MyShiftBankModalProps = {
   posSessionId: string;
   provider: any;
   operatorToken: string;
+  currentOperatorId?: string;
   onReconciled?: () => void;
 };
 
@@ -22,6 +24,7 @@ export function MyShiftBankModal({
   posSessionId,
   provider,
   operatorToken,
+  currentOperatorId,
   onReconciled
 }: MyShiftBankModalProps) {
   const [sessionDetails, setSessionDetails] = useState<any>(null);
@@ -30,6 +33,7 @@ export function MyShiftBankModal({
   const [successDialog, setSuccessDialog] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
   useEffect(() => {
     if (isOpen && posSessionId) {
@@ -60,15 +64,24 @@ export function MyShiftBankModal({
   const expectedCash = Number(sessionDetails?.expectedCash || 0);
   const variance = actualCash - expectedCash;
 
-  const handleCloseShift = async () => {
+  const requestCloseShift = () => {
     if (actualCashStr === '') {
       toast.error('Please enter the actual physical cash you are handing over.');
       return;
     }
+    if (variance !== 0) {
+      toast.error('A variance requires supervisor authorization. Use the End of Shift Settlement screen to submit it.');
+      return;
+    }
+    setShowCloseConfirm(true);
+  };
+
+  const handleCloseShift = async () => {
+    setShowCloseConfirm(false);
 
     setIsSubmitting(true);
     try {
-      const res = await provider.pos.settleSession(sessionDetails.id || posSessionId, actualCash, sessionDetails.primaryOperatorId || '');
+      const res = await provider.pos.settleSession(sessionDetails.id || posSessionId, actualCash, sessionDetails.primaryOperatorId || '', undefined, operatorToken);
       if (!res.error) {
         setSuccessDialog(true);
       } else {
@@ -93,8 +106,8 @@ export function MyShiftBankModal({
               <Wallet className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-xl font-bold">My Shift Bank</h2>
-              <p className="text-indigo-100 text-sm">Review your shift financials before handover</p>
+              <h2 className="text-xl font-bold">Shift Bank</h2>
+              <p className="text-indigo-100 text-sm">Review and submit the shift for management review</p>
             </div>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors">
@@ -177,8 +190,8 @@ export function MyShiftBankModal({
 
               {/* Handover Input */}
               <div className="bg-blue-50/50 rounded-2xl border border-blue-100 p-5 space-y-4">
-                <h3 className="font-semibold text-slate-800">Actual Cash Handed Over</h3>
-                <p className="text-sm text-slate-500">Count the physical cash in your apron and enter the total below to close your shift.</p>
+                <h3 className="font-semibold text-slate-800">Declared Cash</h3>
+                <p className="text-sm text-slate-500">Count the physical cash and enter the total below. The shift will be submitted for General Cashier/Finance review.</p>
                 
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -213,14 +226,32 @@ export function MyShiftBankModal({
         {/* Footer */}
         <div className="p-6 pt-0 mt-4 shrink-0">
           <Button 
-            onClick={handleCloseShift} 
-            disabled={isLoading || isSubmitting || !sessionDetails}
+            onClick={requestCloseShift}
+            disabled={isLoading || isSubmitting || !sessionDetails || (!!currentOperatorId && currentOperatorId !== sessionDetails.primaryOperatorId)}
             className="w-full h-14 text-lg font-semibold rounded-xl bg-indigo-600 hover:bg-indigo-700"
           >
-            {isSubmitting ? 'Processing...' : 'Close Shift & Reconcile'}
+            {isSubmitting ? 'Submitting...' : 'Close and Submit Shift'}
           </Button>
+          {!!currentOperatorId && currentOperatorId !== sessionDetails?.primaryOperatorId && (
+            <p className="mt-2 text-center text-xs font-medium text-amber-700">Only the POS cashier who opened this shift can submit it.</p>
+          )}
         </div>
       </div>
+
+      <Dialog open={showCloseConfirm} onOpenChange={setShowCloseConfirm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm shift submission</DialogTitle>
+            <DialogDescription>Submitting will lock this POS shift and send it to General Cashier/Finance for review.</DialogDescription>
+          </DialogHeader>
+          <div className="rounded-lg bg-slate-50 p-4 text-sm space-y-2">
+            <div className="flex justify-between"><span className="text-slate-500">Expected cash</span><span className="font-semibold">₦{expectedCash.toFixed(2)}</span></div>
+            <div className="flex justify-between"><span className="text-slate-500">Declared cash</span><span className="font-semibold">₦{actualCash.toFixed(2)}</span></div>
+            <div className="flex justify-between"><span className="text-slate-500">Variance</span><span className="font-semibold text-emerald-700">₦0.00</span></div>
+          </div>
+          <DialogFooter><Button variant="outline" onClick={() => setShowCloseConfirm(false)} disabled={isSubmitting}>Go back</Button><Button onClick={handleCloseShift} disabled={isSubmitting}>{isSubmitting ? 'Submitting…' : 'Confirm and submit'}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
       
       {successDialog && (
         <ActionSuccessModal

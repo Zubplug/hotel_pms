@@ -131,7 +131,27 @@ public class LocalDbContext : DbContext
             "ALTER TABLE Properties ADD COLUMN NoShowChargeValue TEXT NOT NULL DEFAULT '0'",
             "ALTER TABLE Properties ADD COLUMN NoShowRefundableUnusedNights INTEGER NOT NULL DEFAULT 1",
             "ALTER TABLE Properties ADD COLUMN NoShowAllowReinstatement INTEGER NOT NULL DEFAULT 1",
-            "ALTER TABLE Properties ADD COLUMN NoShowReinstatementRequiresApproval INTEGER NOT NULL DEFAULT 1"
+            "ALTER TABLE Properties ADD COLUMN NoShowReinstatementRequiresApproval INTEGER NOT NULL DEFAULT 1",
+            "ALTER TABLE PosSessions ADD COLUMN ControlStatus TEXT NOT NULL DEFAULT 'OPEN'",
+            "ALTER TABLE PosSessions ADD COLUMN VarianceStatus TEXT NULL",
+            "ALTER TABLE PosSessions ADD COLUMN SubmittedAt TEXT NULL",
+            "ALTER TABLE PosSessions ADD COLUMN SubmittedBy TEXT NULL",
+            "ALTER TABLE PosSessions ADD COLUMN ReviewStartedAt TEXT NULL",
+            "ALTER TABLE PosSessions ADD COLUMN ReviewStartedBy TEXT NULL",
+            "ALTER TABLE PosSessions ADD COLUMN ApprovalDecision TEXT NULL",
+            "ALTER TABLE PosSessions ADD COLUMN ApprovalNotes TEXT NULL",
+            "ALTER TABLE PosSessions ADD COLUMN HandoverAt TEXT NULL",
+            "ALTER TABLE PosSessions ADD COLUMN DepositedAt TEXT NULL",
+            "ALTER TABLE FrontdeskSessions ADD COLUMN ControlStatus TEXT NOT NULL DEFAULT 'OPEN'",
+            "ALTER TABLE FrontdeskSessions ADD COLUMN VarianceStatus TEXT NULL",
+            "ALTER TABLE FrontdeskSessions ADD COLUMN SubmittedAt TEXT NULL",
+            "ALTER TABLE FrontdeskSessions ADD COLUMN SubmittedBy TEXT NULL",
+            "ALTER TABLE FrontdeskSessions ADD COLUMN ReviewStartedAt TEXT NULL",
+            "ALTER TABLE FrontdeskSessions ADD COLUMN ReviewStartedBy TEXT NULL",
+            "ALTER TABLE FrontdeskSessions ADD COLUMN ApprovalDecision TEXT NULL",
+            "ALTER TABLE FrontdeskSessions ADD COLUMN ApprovalNotes TEXT NULL",
+            "ALTER TABLE FrontdeskSessions ADD COLUMN HandoverAt TEXT NULL",
+            "ALTER TABLE FrontdeskSessions ADD COLUMN DepositedAt TEXT NULL"
         };
         foreach (var sql in columns)
         {

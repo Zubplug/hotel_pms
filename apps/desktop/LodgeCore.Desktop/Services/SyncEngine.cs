@@ -112,7 +112,9 @@ public class SyncEngine : BackgroundService
 
     public void TriggerManualSync()
     {
-        if (_isSyncing) return;
+        // Do not drop a wake-up while a cycle is running. An event may have
+        // been written after PushPendingEventsAsync queried the queue; keeping
+        // the semaphore signalled guarantees an immediate follow-up cycle.
         if (_forceSyncSemaphore.CurrentCount == 0)
         {
             _forceSyncSemaphore.Release();
@@ -694,6 +696,18 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
         if (identity == null) throw new Exception("Terminal identity not provisioned or property ID missing.");
         
         var propertyId = identity.PropertyId;
+
+        // Financial POS records are event-sourced locally. A pull must never
+        // replace a record while any local event for that aggregate/session is
+        // still pending, failed, processing, or conflicted.
+        async Task<bool> HasPendingPosEventAsync(string aggregateId)
+        {
+            return await dbContext.SyncEvents.AnyAsync(e =>
+                (e.EntityId == aggregateId || e.SessionId == aggregateId) &&
+                (e.Status == "PENDING" || e.Status == "FAILED" ||
+                 e.Status == "PROCESSING" || e.Status == "CONFLICT" ||
+                 e.Status == "DEAD_LETTER"), stoppingToken);
+        }
         
         var token = await GetActiveTokenAsync();
         if (string.IsNullOrEmpty(token)) throw new Exception("No auth token available; skipping pull.");
@@ -1085,6 +1099,17 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     localSession.CashAccountId = sessionEl.TryGetProperty("cashAccountId", out var cashAccountId) ? cashAccountId.GetString() ?? "" : localSession.CashAccountId;
                     localSession.ShiftReference = sessionEl.TryGetProperty("shiftReference", out var shiftReference) ? shiftReference.GetString() ?? "" : localSession.ShiftReference;
                     localSession.Status = sessionEl.TryGetProperty("status", out var sessionStatus) ? sessionStatus.GetString() ?? "OPEN" : "OPEN";
+                    localSession.ControlStatus = sessionEl.TryGetProperty("controlStatus", out var controlStatus) && controlStatus.ValueKind != JsonValueKind.Null
+                        ? controlStatus.GetString() ?? localSession.ControlStatus
+                        : localSession.Status switch
+                        {
+                            "RECONCILED" => "RECONCILED",
+                            "UNDER_REVIEW" => "UNDER_REVIEW",
+                            "CLOSED" or "CLOSING" => "SUBMITTED",
+                            _ => localSession.ControlStatus
+                        };
+                    localSession.VarianceStatus = sessionEl.TryGetProperty("varianceStatus", out var varianceStatus) && varianceStatus.ValueKind != JsonValueKind.Null
+                        ? varianceStatus.GetString() : localSession.VarianceStatus;
 
                     if (sessionEl.TryGetProperty("businessDate", out var businessDate) && DateTime.TryParse(businessDate.GetString(), out var parsedBusinessDate)) localSession.BusinessDate = parsedBusinessDate;
                     if (sessionEl.TryGetProperty("openingFloat", out var openingFloat) && decimal.TryParse(openingFloat.ToString(), out var parsedOpeningFloat)) localSession.OpeningFloat = parsedOpeningFloat;
@@ -1098,6 +1123,14 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     localSession.ReconciledBy = sessionEl.TryGetProperty("reconciledBy", out var reconciledBy) && reconciledBy.ValueKind != System.Text.Json.JsonValueKind.Null ? reconciledBy.GetString() : localSession.ReconciledBy;
                     localSession.ReconciliationDecision = sessionEl.TryGetProperty("reconciliationDecision", out var reconciliationDecision) && reconciliationDecision.ValueKind != System.Text.Json.JsonValueKind.Null ? reconciliationDecision.GetString() : localSession.ReconciliationDecision;
                     localSession.ReconciliationNotes = sessionEl.TryGetProperty("reconciliationNotes", out var reconciliationNotes) && reconciliationNotes.ValueKind != System.Text.Json.JsonValueKind.Null ? reconciliationNotes.GetString() : localSession.ReconciliationNotes;
+                    localSession.SubmittedBy = sessionEl.TryGetProperty("submittedBy", out var submittedBy) && submittedBy.ValueKind != System.Text.Json.JsonValueKind.Null ? submittedBy.GetString() : localSession.SubmittedBy;
+                    localSession.ReviewStartedBy = sessionEl.TryGetProperty("reviewStartedBy", out var reviewStartedBy) && reviewStartedBy.ValueKind != System.Text.Json.JsonValueKind.Null ? reviewStartedBy.GetString() : localSession.ReviewStartedBy;
+                    localSession.ApprovalDecision = sessionEl.TryGetProperty("approvalDecision", out var approvalDecision) && approvalDecision.ValueKind != System.Text.Json.JsonValueKind.Null ? approvalDecision.GetString() : localSession.ApprovalDecision;
+                    localSession.ApprovalNotes = sessionEl.TryGetProperty("approvalNotes", out var approvalNotes) && approvalNotes.ValueKind != System.Text.Json.JsonValueKind.Null ? approvalNotes.GetString() : localSession.ApprovalNotes;
+                    if (sessionEl.TryGetProperty("submittedAt", out var submittedAt) && submittedAt.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(submittedAt.GetString(), out var parsedSubmittedAt)) localSession.SubmittedAt = parsedSubmittedAt;
+                    if (sessionEl.TryGetProperty("reviewStartedAt", out var reviewStartedAt) && reviewStartedAt.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(reviewStartedAt.GetString(), out var parsedReviewStartedAt)) localSession.ReviewStartedAt = parsedReviewStartedAt;
+                    if (sessionEl.TryGetProperty("handoverAt", out var handoverAt) && handoverAt.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(handoverAt.GetString(), out var parsedHandoverAt)) localSession.HandoverAt = parsedHandoverAt;
+                    if (sessionEl.TryGetProperty("depositedAt", out var depositedAt) && depositedAt.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(depositedAt.GetString(), out var parsedDepositedAt)) localSession.DepositedAt = parsedDepositedAt;
                     localSession.CreatedAt = sessionEl.TryGetProperty("createdAt", out var createdAt) && DateTime.TryParse(createdAt.GetString(), out var parsedCreatedAt) ? parsedCreatedAt : localSession.CreatedAt;
                     localSession.UpdatedAt = sessionEl.TryGetProperty("updatedAt", out var updatedAt) && DateTime.TryParse(updatedAt.GetString(), out var parsedUpdatedAt) ? parsedUpdatedAt : DateTime.UtcNow;
 
@@ -1825,7 +1858,7 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     var posSession = await dbContext.PosSessions.FirstOrDefaultAsync(x => x.Id == id, stoppingToken);
                     
                     var incomingUpdatedAt = el.TryGetProperty("updatedAt", out var u) ? u.GetDateTime() : DateTime.MinValue;
-                    if (posSession != null && posSession.UpdatedAt >= incomingUpdatedAt) continue;
+                    if (posSession != null && (posSession.UpdatedAt >= incomingUpdatedAt || await HasPendingPosEventAsync(id))) continue;
 
                     if (posSession == null)
                     {
@@ -1837,6 +1870,15 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     posSession.DeviceId = el.TryGetProperty("deviceId", out var did) && did.ValueKind != System.Text.Json.JsonValueKind.Null ? did.GetString() : null;
                     posSession.UserId = el.TryGetProperty("userId", out var uid) && uid.ValueKind != System.Text.Json.JsonValueKind.Null ? uid.GetString() ?? "" : "";
                     posSession.Status = el.TryGetProperty("status", out var st) && st.ValueKind != System.Text.Json.JsonValueKind.Null ? st.GetString() ?? "" : "";
+                    posSession.ControlStatus = el.TryGetProperty("controlStatus", out var csStatus) && csStatus.ValueKind != System.Text.Json.JsonValueKind.Null
+                        ? csStatus.GetString() ?? posSession.ControlStatus
+                        : posSession.Status switch
+                        {
+                            "RECONCILED" => "RECONCILED",
+                            "RECONCILIATION_REQUIRED" or "CLOSED" => "SUBMITTED",
+                            _ => posSession.ControlStatus
+                        };
+                    posSession.VarianceStatus = el.TryGetProperty("varianceStatus", out var vsStatus) && vsStatus.ValueKind != System.Text.Json.JsonValueKind.Null ? vsStatus.GetString() : posSession.VarianceStatus;
                     posSession.BankingModel = el.TryGetProperty("bankingModel", out var bm) && bm.ValueKind != System.Text.Json.JsonValueKind.Null ? bm.GetString() ?? "CENTRAL_CASHIER" : "CENTRAL_CASHIER";
                     posSession.BankType = el.TryGetProperty("bankType", out var bt) && bt.ValueKind != System.Text.Json.JsonValueKind.Null ? bt.GetString() ?? "CENTRAL" : "CENTRAL";
                     posSession.PrimaryOperatorId = el.TryGetProperty("primaryOperatorId", out var poi) && poi.ValueKind != System.Text.Json.JsonValueKind.Null ? poi.GetString() : null;
@@ -1857,6 +1899,14 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     
                     posSession.ApprovedBy = el.TryGetProperty("approvedBy", out var ap) && ap.ValueKind != System.Text.Json.JsonValueKind.Null ? ap.GetString() : null;
                     if (el.TryGetProperty("approvedAt", out var apa) && apa.ValueKind != System.Text.Json.JsonValueKind.Null) posSession.ApprovedAt = apa.GetDateTime();
+                    posSession.SubmittedBy = el.TryGetProperty("submittedBy", out var submittedByPos) && submittedByPos.ValueKind != System.Text.Json.JsonValueKind.Null ? submittedByPos.GetString() : posSession.SubmittedBy;
+                    posSession.ReviewStartedBy = el.TryGetProperty("reviewStartedBy", out var reviewStartedByPos) && reviewStartedByPos.ValueKind != System.Text.Json.JsonValueKind.Null ? reviewStartedByPos.GetString() : posSession.ReviewStartedBy;
+                    posSession.ApprovalDecision = el.TryGetProperty("approvalDecision", out var approvalDecisionPos) && approvalDecisionPos.ValueKind != System.Text.Json.JsonValueKind.Null ? approvalDecisionPos.GetString() : posSession.ApprovalDecision;
+                    posSession.ApprovalNotes = el.TryGetProperty("approvalNotes", out var approvalNotesPos) && approvalNotesPos.ValueKind != System.Text.Json.JsonValueKind.Null ? approvalNotesPos.GetString() : posSession.ApprovalNotes;
+                    if (el.TryGetProperty("submittedAt", out var submittedAtPos) && submittedAtPos.ValueKind != System.Text.Json.JsonValueKind.Null) posSession.SubmittedAt = submittedAtPos.GetDateTime();
+                    if (el.TryGetProperty("reviewStartedAt", out var reviewStartedAtPos) && reviewStartedAtPos.ValueKind != System.Text.Json.JsonValueKind.Null) posSession.ReviewStartedAt = reviewStartedAtPos.GetDateTime();
+                    if (el.TryGetProperty("handoverAt", out var handoverAtPos) && handoverAtPos.ValueKind != System.Text.Json.JsonValueKind.Null) posSession.HandoverAt = handoverAtPos.GetDateTime();
+                    if (el.TryGetProperty("depositedAt", out var depositedAtPos) && depositedAtPos.ValueKind != System.Text.Json.JsonValueKind.Null) posSession.DepositedAt = depositedAtPos.GetDateTime();
                     
                     if (el.TryGetProperty("businessDate", out var bd) && bd.ValueKind != System.Text.Json.JsonValueKind.Null) posSession.BusinessDate = bd.GetDateTime();
                     posSession.OpenedBy = el.TryGetProperty("openedBy", out var ob) && ob.ValueKind != System.Text.Json.JsonValueKind.Null ? ob.GetString() : null;
@@ -1888,7 +1938,7 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     // Dirty protection! Check if local has been updated more recently or has changes pending sync
                     // Wait, we don't have IsDirty on PosOrders yet? LocalPosOrder does not have IsDirty.
                     // But if it was updated locally, its UpdatedAt might be > incomingUpdatedAt
-                    if (order != null && order.UpdatedAt >= incomingUpdatedAt) continue;
+                    if (order != null && (order.UpdatedAt >= incomingUpdatedAt || await HasPendingPosEventAsync(id))) continue;
 
                     if (order == null)
                     {
@@ -2007,8 +2057,11 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                         foreach(var c in checksToRemove) order.Checks.Remove(c);
                     }
 
-                    // Payments
-                    if (el.TryGetProperty("checks", out var checksPayments) && checksPayments.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    // Payments nested under checks are supported for older
+                    // payloads. Do not clear the local payment collection when
+                    // the current server shape returns root-level payments.
+                    if (el.TryGetProperty("checks", out var checksPayments) && checksPayments.ValueKind == System.Text.Json.JsonValueKind.Array &&
+                        checksPayments.EnumerateArray().Any(c => c.TryGetProperty("payments", out var p) && p.ValueKind == System.Text.Json.JsonValueKind.Array))
                     {
                         var incomingPaymentIds = new HashSet<string>();
                         foreach (var checkEl in checksPayments.EnumerateArray())
@@ -2041,6 +2094,31 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                         }
                         var paysToRemove = order.Payments.Where(p => !incomingPaymentIds.Contains(p.Id)).ToList();
                         foreach (var p in paysToRemove) order.Payments.Remove(p);
+                    }
+
+                    // Current API shape returns payments directly on PosOrder.
+                    if (el.TryGetProperty("payments", out var rootPayments) && rootPayments.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    {
+                        foreach (var payEl in rootPayments.EnumerateArray())
+                        {
+                            var payId = payEl.TryGetProperty("id", out var pid) ? pid.GetString() : null;
+                            if (string.IsNullOrWhiteSpace(payId)) continue;
+                            var payment = order.Payments.FirstOrDefault(p => p.Id == payId);
+                            if (payment == null)
+                            {
+                                payment = new LodgeCore.Desktop.Data.Entities.LocalPosPayment { Id = payId, OrderId = id };
+                                order.Payments.Add(payment);
+                            }
+                            payment.Method = payEl.TryGetProperty("method", out var pm) && pm.ValueKind != JsonValueKind.Null ? pm.GetString() ?? "" : payment.Method;
+                            payment.Status = payEl.TryGetProperty("status", out var pst) && pst.ValueKind != JsonValueKind.Null ? pst.GetString() ?? "" : payment.Status;
+                            if (payEl.TryGetProperty("amount", out var pa) && pa.ValueKind == JsonValueKind.Number) payment.Amount = pa.GetDecimal();
+                            payment.Currency = payEl.TryGetProperty("currency", out var pcu) && pcu.ValueKind != JsonValueKind.Null ? pcu.GetString() ?? "NGN" : payment.Currency;
+                            payment.CheckId = payEl.TryGetProperty("checkId", out var pci) && pci.ValueKind != JsonValueKind.Null ? pci.GetString() : payment.CheckId;
+                            payment.SessionId = payEl.TryGetProperty("sessionId", out var psi) && psi.ValueKind != JsonValueKind.Null ? psi.GetString() : payment.SessionId;
+                            if (payEl.TryGetProperty("businessDate", out var pbd) && pbd.ValueKind != JsonValueKind.Null) payment.BusinessDate = pbd.GetDateTime();
+                            if (payEl.TryGetProperty("createdAt", out var pcrt) && pcrt.ValueKind != JsonValueKind.Null) payment.CreatedAt = pcrt.GetDateTime();
+                            if (payEl.TryGetProperty("updatedAt", out var pupd) && pupd.ValueKind != JsonValueKind.Null) payment.UpdatedAt = pupd.GetDateTime();
+                        }
                     }
 
                     // Kots

@@ -35,6 +35,10 @@ export async function GET(req: Request) {
     const batches = await prisma.posProductionBatch.findMany({
       where: {
         firedByStaffId: payload.staffId,
+        // This modal is the POS operator's kitchen-ticket view. Bar and
+        // other production stations have their own displays and must not
+        // appear here.
+        station: 'KITCHEN',
         order: {
           outletId: outletId,
           sessionId: sessionId,
@@ -58,6 +62,7 @@ export async function GET(req: Request) {
     // Map PosProductionBatch to the KOT format expected by the frontend
     const kots = batches.map(batch => ({
       id: batch.id,
+      station: batch.station,
       kotNumber: `${batch.order.orderNumber}-${batch.batchNumber}`,
       status: batch.status,
       createdAt: batch.createdAt,

@@ -170,8 +170,8 @@ function PosOperatorAuthShell(props: TerminalAuthScreenPosProps) {
   const title =
     auth.step === 'select'        ? 'Who is working today?' :
     auth.step === 'pin'           ? `Enter PIN — ${auth.selectedStaff?.firstName}` :
-    auth.step === 'shift'         ? 'Open Your Shift' :
-    auth.step === 'error_central' ? 'Central Till Closed' :
+    auth.step === 'shift'         ? 'Open POS Cash Bank' :
+    auth.step === 'error_central' ? 'Central POS Bank Not Open' :
     '';
 
   const showBack =
@@ -570,7 +570,7 @@ function ShiftPanel({
       <div className="flex-1">
         <label className="block text-sm font-bold text-slate-700 mb-1">Opening Float</label>
         <p className="text-xs text-slate-400 mb-2.5">
-          Count cash in your drawer. Set to 0 if starting empty.
+            Count the opening cash assigned to this POS bank. Set to 0 if starting empty.
         </p>
         <div className="relative">
           <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">
@@ -618,9 +618,9 @@ function CentralCashierError({ onBack }: { onBack: () => void }) {
         <ShieldAlert className="w-7 h-7 text-rose-500" />
       </div>
       <div>
-        <h3 className="text-base font-black text-slate-800">Central Till is Closed</h3>
+        <h3 className="text-base font-black text-slate-800">Central POS Bank Not Open</h3>
         <p className="text-sm text-slate-500 mt-1 max-w-xs leading-relaxed">
-          A manager must open the main till before you can proceed. Contact your supervisor.
+          A POS cashier must log in and open the central bank before servers can process orders. You can return to the staff list and ask the POS cashier to open it.
         </p>
       </div>
       <button

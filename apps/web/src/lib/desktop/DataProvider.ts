@@ -125,10 +125,11 @@ export interface LodgeCoreDataProvider {
     getCashMovements(sessionId: string): Promise<{ data: any[], error: string | null }>;
     createCashMovement(propertyId: string, sessionId: string, amount: number, type: string, reasonCode: string, notes?: string, receiptReference?: string, authorizerId?: string): Promise<{ data: any, error: string | null }>;
     getSessionSettlementDetails(sessionId: string): Promise<{ data: any, error: string | null }>;
-    settleSession(sessionId: string, actualCash: number, operatorId: string, authorizerId?: string): Promise<{ data: any, error: string | null }>;
+    settleSession(sessionId: string, actualCash: number, operatorId: string, authorizerId?: string, operatorToken?: string): Promise<{ data: any, error: string | null }>;
     confirmHandover: (sessionId: string, managerPin: string) => Promise<any>;
     getCashOfficeOverview: (propertyId: string) => Promise<{ data: any, error: string | null }>;
     getPendingHandovers: (propertyId: string) => Promise<{ data: any[], error: string | null }>;
+    getMyApprovedShifts: (propertyId: string) => Promise<{ data: any[], error: string | null }>;
     getSafeLedger: (propertyId: string) => Promise<{ data: any, error: string | null }>;
     openSafe: (propertyId: string, amount: number, managerPin: string) => Promise<{ data: any, error: string | null }>;
     recordBankDeposit: (propertyId: string, amount: number, reference: string, managerPin: string) => Promise<{ data: any, error: string | null }>;

@@ -1,20 +1,21 @@
 import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { formatCurrency } from '@/lib/utils';
-import { CreditCard, Banknote, Building2, User, Loader2, CheckCircle2 } from 'lucide-react';
+import { CreditCard, Banknote, Building2, User, Loader2, CheckCircle2, Printer } from 'lucide-react';
 
 interface ChargeModalProps {
   isOpen: boolean;
   onClose: () => void;
   total: number;
   onCharge: (method: string) => Promise<void>;
+  onPrintReceipt: () => Promise<void>;
   isProcessing: boolean;
   posSessionId?: string | null;
   bankingModel?: string;
   currentOperatorId?: string;
 }
 
-export function ChargeModal({ isOpen, onClose, total, onCharge, isProcessing, posSessionId, bankingModel = 'CENTRAL_CASHIER', currentOperatorId }: ChargeModalProps) {
+export function ChargeModal({ isOpen, onClose, total, onCharge, onPrintReceipt, isProcessing, posSessionId, bankingModel = 'CENTRAL_CASHIER', currentOperatorId }: ChargeModalProps) {
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
 
   const handleCharge = (method: string) => {
@@ -49,6 +50,15 @@ export function ChargeModal({ isOpen, onClose, total, onCharge, isProcessing, po
 
         {/* Payment Methods */}
         <div className="p-8 pb-10">
+          <button
+            type="button"
+            onClick={onPrintReceipt}
+            disabled={isProcessing}
+            className="w-full mb-6 h-12 rounded-xl border-2 border-indigo-200 bg-indigo-50 text-indigo-700 font-bold text-sm flex items-center justify-center gap-2 hover:bg-indigo-100 hover:border-indigo-300 transition-colors disabled:opacity-50"
+          >
+            <Printer className="w-4 h-4" />
+            PRINT CUSTOMER RECEIPT
+          </button>
           <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 text-center">Select Payment Method</p>
           <div className="grid grid-cols-2 gap-4">
             <button

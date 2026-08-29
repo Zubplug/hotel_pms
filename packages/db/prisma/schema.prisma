@@ -70,57 +70,62 @@ model Property {
   settings          Json?
   lockConfiguration Json? // { provider: "DELUNS", dlsCoID: 12345, encoderPort: 1 }
 
-  buildings                Building[]
-  roomTypes                RoomType[]
-  rooms                    Room[]
-  amenities                Amenity[]
-  ratePlans                RatePlan[]
-  exchangeRates            ExchangeRate[]
-  reservations             Reservation[]
-  folios                   Folio[]
-  folioCredits             FolioCredit[]
-  payments                 Payment[]
-  refunds                  Refund[]
-  refundRequests           RefundRequest[]
-  taxes                    Tax[]
-  discounts                Discount[]
-  housekeepingTasks        HousekeepingTask[]
-  housekeepingShifts       HousekeepingShift[]
-  maintenanceTickets       MaintenanceTicket[]
-  maintenanceCats          MaintenanceCategory[]
-  doorLocks                DoorLock[]
-  hardwareAgents           HardwareAgent[]
-  lockOperations           LockOperation[]
-  lockEvents               LockEvent[]
-  integrationConfigs       IntegrationConfig[]
-  govSubmissions           GovernmentSubmission[]
-  nightAudits              NightAudit[]
-  occupancySnapshots       OccupancySnapshot[]
-  guestServiceRequests     GuestServiceRequest[]
-  cancellationPolicies     CancellationPolicy[]
-  depositPolicies          DepositPolicy[]
-  noShowPolicies           NoShowPolicy[]
-  userRoles                UserRole[]
-  suppliers                Supplier[]
-  warehouses               Warehouse[]
-  stockItems               StockItem[]
-  stockTransactions        StockTransaction[]
-  purchaseOrders           PurchaseOrder[]
-  goodsReceivedNotes       GoodsReceivedNote[]
-  posOutlets               PosOutlet[]
-  posDevices               PosDevice[]
-  posProducts              PosProduct[]
-  posOrders                PosOrder[]
-  uomConversions           UnitOfMeasureConversion[]
-  enrollmentTokens         AgentEnrollmentToken[]
-  syncConflicts            SyncConflict[]
-  inventoryAlerts          InventoryAlert[]
-  approvalRequests         ApprovalRequest[]
-  refundApprovalRules      RefundApprovalRule[]
-  frontdeskSessions        FrontdeskSession[]
-  cashAccounts             CashAccount[]
-  reconciliationExceptions ReconciliationException[]
-  costAdjustments          CostAdjustment[]
+  cashVarianceGeneralCashierLimit Decimal?                  @db.Decimal(18, 4)
+  cashVarianceFinanceManagerLimit Decimal?                  @db.Decimal(18, 4)
+  cashHandovers                   CashHandover[]
+  bankDeposits                    BankDeposit[]
+  buildings                       Building[]
+  roomTypes                       RoomType[]
+  rooms                           Room[]
+  amenities                       Amenity[]
+  ratePlans                       RatePlan[]
+  exchangeRates                   ExchangeRate[]
+  reservations                    Reservation[]
+  folios                          Folio[]
+  folioCredits                    FolioCredit[]
+  payments                        Payment[]
+  refunds                         Refund[]
+  refundRequests                  RefundRequest[]
+  taxes                           Tax[]
+  discounts                       Discount[]
+  housekeepingTasks               HousekeepingTask[]
+  housekeepingShifts              HousekeepingShift[]
+  maintenanceTickets              MaintenanceTicket[]
+  maintenanceCats                 MaintenanceCategory[]
+  doorLocks                       DoorLock[]
+  hardwareAgents                  HardwareAgent[]
+  lockOperations                  LockOperation[]
+  lockEvents                      LockEvent[]
+  integrationConfigs              IntegrationConfig[]
+  govSubmissions                  GovernmentSubmission[]
+  nightAudits                     NightAudit[]
+  occupancySnapshots              OccupancySnapshot[]
+  guestServiceRequests            GuestServiceRequest[]
+  cancellationPolicies            CancellationPolicy[]
+  depositPolicies                 DepositPolicy[]
+  noShowPolicies                  NoShowPolicy[]
+  userRoles                       UserRole[]
+  suppliers                       Supplier[]
+  warehouses                      Warehouse[]
+  stockItems                      StockItem[]
+  stockTransactions               StockTransaction[]
+  purchaseOrders                  PurchaseOrder[]
+  goodsReceivedNotes              GoodsReceivedNote[]
+  posOutlets                      PosOutlet[]
+  posDevices                      PosDevice[]
+  posProducts                     PosProduct[]
+  posOrders                       PosOrder[]
+  uomConversions                  UnitOfMeasureConversion[]
+  enrollmentTokens                AgentEnrollmentToken[]
+  syncConflicts                   SyncConflict[]
+  inventoryAlerts                 InventoryAlert[]
+  approvalRequests                ApprovalRequest[]
+  refundApprovalRules             RefundApprovalRule[]
+  frontdeskSessions               FrontdeskSession[]
+  cashAccounts                    CashAccount[]
+  reconciliationExceptions        ReconciliationException[]
+  shiftControlAudits              ShiftControlAudit[]
+  costAdjustments                 CostAdjustment[]
 
   createdAt           DateTime            @default(now()) @db.Timestamptz
   updatedAt           DateTime            @updatedAt @db.Timestamptz
@@ -1428,6 +1433,8 @@ model Staff {
   CashAccount          CashAccount[]
   frontdeskSessions    FrontdeskSession[]
   frontdeskAudits      FrontdeskSessionAudit[]
+  handoversGiven       CashHandover[]          @relation("HandoverGiver")
+  handoversReceived    CashHandover[]          @relation("HandoverReceiver")
 }
 
 model StaffPosOutletAccess {
@@ -2360,8 +2367,19 @@ model RecipeIngredient {
 
 enum PosSessionStatus {
   OPEN
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  APPROVED_WITH_VARIANCE
+  RETURNED
+  HANDOVER_PENDING
+  HANDED_OVER
+  DEPOSIT_PENDING
+  DEPOSITED
+  UNDER_RECONCILIATION
   CLOSED
   RECONCILED
+  EXCEPTION
   RECONCILIATION_REQUIRED
 }
 
@@ -2380,6 +2398,23 @@ model PosSession {
 
   status       PosSessionStatus @default(OPEN)
   businessDate DateTime         @db.Date
+
+  // Controlled shift lifecycle. Legacy status values remain supported during migration.
+  controlStatus          String                  @default("OPEN")
+  varianceStatus         String?
+  submittedAt            DateTime?               @db.Timestamptz
+  submittedBy            String?                 @db.Uuid
+  reviewStartedAt        DateTime?               @db.Timestamptz
+  reviewStartedBy        String?                 @db.Uuid
+  approvalDecision       String?
+  approvalNotes          String?
+  reasonCode             VarianceReasonCode?
+  cashHandoverId         String?                 @db.Uuid
+  cashHandover           CashHandover?           @relation(fields: [cashHandoverId], references: [id])
+  bankDepositAllocations BankDepositAllocation[]
+  reasonNotes            String?
+  handoverAt             DateTime?               @db.Timestamptz
+  depositedAt            DateTime?               @db.Timestamptz
 
   openingCash  Decimal  @default(0) @db.Decimal(18, 4)
   cashSales    Decimal  @default(0) @db.Decimal(18, 4)
@@ -2410,6 +2445,7 @@ model PosSession {
   receiptAudits       PosReceiptAudit[]
   authorizationAudits PosAuthorizationAudit[]
   settlements         PosSettlement[]
+  controlAudits       ShiftControlAudit[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -2484,39 +2520,65 @@ model PosCashMovement {
 enum FrontdeskSessionStatus {
   OPEN
   CLOSING
+  SUBMITTED
   CLOSED
   UNDER_REVIEW
+  APPROVED
+  APPROVED_WITH_VARIANCE
+  RETURNED
+  HANDOVER_PENDING
+  HANDED_OVER
+  DEPOSIT_PENDING
+  DEPOSITED
+  UNDER_RECONCILIATION
   RECONCILED
+  EXCEPTION
   REOPEN_REQUESTED
 }
 
 model FrontdeskSession {
-  id                     String                 @id @default(uuid()) @db.Uuid
-  propertyId             String                 @db.Uuid
-  property               Property               @relation(fields: [propertyId], references: [id])
-  staffId                String                 @db.Uuid
-  staff                  Staff                  @relation(fields: [staffId], references: [id])
-  cashAccountId          String                 @db.Uuid
-  cashAccount            CashAccount            @relation(fields: [cashAccountId], references: [id])
-  shiftReference         String                 @unique
-  businessDate           DateTime               @db.Date
-  status                 FrontdeskSessionStatus @default(OPEN)
-  openingFloat           Decimal                @default(0) @db.Decimal(18, 4)
-  systemExpectedCash     Decimal                @default(0) @db.Decimal(18, 4)
-  declaredCash           Decimal?               @db.Decimal(18, 4)
-  variance               Decimal?               @db.Decimal(18, 4)
-  openedAt               DateTime               @default(now()) @db.Timestamptz
-  closingAt              DateTime?              @db.Timestamptz
-  closedAt               DateTime?              @db.Timestamptz
-  reconciledAt           DateTime?              @db.Timestamptz
-  reconciledBy           String?                @db.Uuid
+  id                     String                  @id @default(uuid()) @db.Uuid
+  propertyId             String                  @db.Uuid
+  property               Property                @relation(fields: [propertyId], references: [id])
+  staffId                String                  @db.Uuid
+  staff                  Staff                   @relation(fields: [staffId], references: [id])
+  cashAccountId          String                  @db.Uuid
+  cashAccount            CashAccount             @relation(fields: [cashAccountId], references: [id])
+  shiftReference         String                  @unique
+  businessDate           DateTime                @db.Date
+  status                 FrontdeskSessionStatus  @default(OPEN)
+  controlStatus          String                  @default("OPEN")
+  varianceStatus         String?
+  openingFloat           Decimal                 @default(0) @db.Decimal(18, 4)
+  systemExpectedCash     Decimal                 @default(0) @db.Decimal(18, 4)
+  declaredCash           Decimal?                @db.Decimal(18, 4)
+  variance               Decimal?                @db.Decimal(18, 4)
+  openedAt               DateTime                @default(now()) @db.Timestamptz
+  closingAt              DateTime?               @db.Timestamptz
+  closedAt               DateTime?               @db.Timestamptz
+  reconciledAt           DateTime?               @db.Timestamptz
+  reconciledBy           String?                 @db.Uuid
   reconciliationDecision String?
   reconciliationNotes    String?
+  submittedAt            DateTime?               @db.Timestamptz
+  submittedBy            String?                 @db.Uuid
+  reviewStartedAt        DateTime?               @db.Timestamptz
+  reviewStartedBy        String?                 @db.Uuid
+  approvalDecision       String?
+  approvalNotes          String?
+  reasonCode             VarianceReasonCode?
+  cashHandoverId         String?                 @db.Uuid
+  cashHandover           CashHandover?           @relation(fields: [cashHandoverId], references: [id])
+  bankDepositAllocations BankDepositAllocation[]
+  reasonNotes            String?
+  handoverAt             DateTime?               @db.Timestamptz
+  depositedAt            DateTime?               @db.Timestamptz
 
   payments      Payment[]
   cashMovements PosCashMovement[]
   audits        FrontdeskSessionAudit[]
   exceptions    ReconciliationException[]
+  controlAudits ShiftControlAudit[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -2552,12 +2614,39 @@ model ReconciliationException {
   source             String
   reason             String
   status             String           @default("OPEN")
+  acceptedBy         String?          @db.Uuid
+  acceptedAt         DateTime?        @db.Timestamptz
+  resolutionNotes    String?
   resolvedBy         String?          @db.Uuid
   resolvedAt         DateTime?        @db.Timestamptz
   createdAt          DateTime         @default(now()) @db.Timestamptz
 
   @@index([propertyId, status])
   @@index([frontdeskSessionId, status])
+}
+
+// Append-only financial control events shared by POS and Front Desk shifts.
+// Exactly one session relation should be populated for each event.
+model ShiftControlAudit {
+  id                 String            @id @default(uuid()) @db.Uuid
+  propertyId         String            @db.Uuid
+  property           Property          @relation(fields: [propertyId], references: [id])
+  posSessionId       String?           @db.Uuid
+  posSession         PosSession?       @relation(fields: [posSessionId], references: [id])
+  frontdeskSessionId String?           @db.Uuid
+  frontdeskSession   FrontdeskSession? @relation(fields: [frontdeskSessionId], references: [id])
+  action             String
+  fromStatus         String?
+  toStatus           String?
+  performedBy        String            @db.Uuid
+  reason             String?
+  metadata           Json?
+  idempotencyKey     String            @unique
+  createdAt          DateTime          @default(now()) @db.Timestamptz
+
+  @@index([propertyId, createdAt])
+  @@index([posSessionId, createdAt])
+  @@index([frontdeskSessionId, createdAt])
 }
 
 model PosSettlement {
@@ -3319,4 +3408,107 @@ model StocktakeItem {
   varianceValue Decimal? @db.Decimal(18, 4)
 
   transactionId String? @db.Uuid
+}
+
+enum VarianceReasonCode {
+  CASH_COUNTING_ERROR
+  MISSING_RECEIPT
+  UNAUTHORIZED_PAYOUT
+  REFUND_ERROR
+  WRONG_CHANGE
+  CASH_DROP_ERROR
+  TRANSFER_ERROR
+  SYSTEM_ERROR
+  CUSTOMER_DISPUTE
+  UNKNOWN
+  OTHER
+}
+
+enum HandoverStatus {
+  PENDING
+  COMPLETED
+  REJECTED
+  CANCELLED
+}
+
+enum BankDepositStatus {
+  DRAFT
+  PENDING_HANDOVER
+  HANDED_OVER
+  DEPOSITED
+  UNDER_RECONCILIATION
+  RECONCILED
+  EXCEPTION
+  CANCELLED
+  REJECTED
+}
+
+model CashHandover {
+  id                String         @id @default(uuid()) @db.Uuid
+  propertyId        String         @db.Uuid
+  handoverReference String
+  idempotencyKey    String?        @unique
+  amount            Decimal        @db.Decimal(18, 4)
+  handedOverById    String         @db.Uuid
+  receivedById      String?        @db.Uuid
+  witnessedById     String?        @db.Uuid
+  safeReference     String?
+  status            HandoverStatus @default(PENDING)
+  handedOverAt      DateTime       @default(now())
+  receivedAt        DateTime?
+  notes             String?
+
+  posSessions       PosSession[]
+  frontdeskSessions FrontdeskSession[]
+
+  property     Property @relation(fields: [propertyId], references: [id])
+  handedOverBy Staff    @relation("HandoverGiver", fields: [handedOverById], references: [id])
+  receivedBy   Staff?   @relation("HandoverReceiver", fields: [receivedById], references: [id])
+}
+
+model BankDeposit {
+  id                  String            @id @default(uuid()) @db.Uuid
+  propertyId          String            @db.Uuid
+  depositReference    String
+  status              BankDepositStatus @default(DRAFT)
+  expectedAmount      Decimal           @db.Decimal(18, 4)
+  declaredAmount      Decimal?          @db.Decimal(18, 4)
+  bankConfirmedAmount Decimal?          @db.Decimal(18, 4)
+  difference          Decimal?          @db.Decimal(18, 4)
+  bankName            String?
+  bankAccount         String?
+  depositDate         DateTime?
+
+  createdById    String  @db.Uuid
+  submittedById  String? @db.Uuid
+  verifiedById   String? @db.Uuid
+  reconciledById String? @db.Uuid
+
+  createdAt    DateTime  @default(now())
+  submittedAt  DateTime?
+  depositedAt  DateTime?
+  verifiedAt   DateTime?
+  reconciledAt DateTime?
+
+  bankReceiptUrl String?
+  bankReference  String?
+  notes          String?
+
+  allocations BankDepositAllocation[]
+  property    Property                @relation(fields: [propertyId], references: [id])
+}
+
+model BankDepositAllocation {
+  id                 String   @id @default(uuid()) @db.Uuid
+  bankDepositId      String   @db.Uuid
+  posSessionId       String?  @db.Uuid
+  frontdeskSessionId String?  @db.Uuid
+  allocatedAmount    Decimal  @db.Decimal(18, 4)
+  createdAt          DateTime @default(now())
+
+  bankDeposit      BankDeposit       @relation(fields: [bankDepositId], references: [id])
+  posSession       PosSession?       @relation(fields: [posSessionId], references: [id])
+  frontdeskSession FrontdeskSession? @relation(fields: [frontdeskSessionId], references: [id])
+
+  @@unique([posSessionId, frontdeskSessionId])
 }

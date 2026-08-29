@@ -215,8 +215,36 @@ export async function POST(req: NextRequest) {
              }
           } else if (aggregateType === 'FRONTDESK_SESSION' && eventType === 'FRONTDESK_SESSION_CLOSED') {
              const sessionId = payload.sessionId || aggregateId;
-             await tx.frontdeskSession.update({ where: { id: sessionId }, data: { status: 'CLOSED', closingAt: new Date(), closedAt: new Date(), declaredCash: Number(payload.declaredCash || 0), systemExpectedCash: Number(payload.systemExpectedCash || 0), variance: Number(payload.variance || 0) } });
+             const current = await tx.frontdeskSession.findUnique({
+               where: { id: sessionId },
+               include: { cashMovements: true }
+             });
+             if (!current) throw new Error(`DEPENDENCY_NOT_READY: Front Desk session ${sessionId} has not been created yet`);
+             if (['APPROVED', 'APPROVED_WITH_VARIANCE', 'HANDOVER_PENDING', 'HANDED_OVER', 'DEPOSITED', 'RECONCILED'].includes(String(current.controlStatus))) {
+               throw new Error('CONCURRENCY_CONFLICT: controlled Front Desk shift cannot be closed again');
+             }
+             const movementTotal = (types: string[]) => current.cashMovements
+               .filter((movement: any) => types.includes(movement.type))
+               .reduce((sum: number, movement: any) => sum + Number(movement.amount || 0), 0);
+             const expectedCash = Number(current.openingFloat || 0)
+               + movementTotal(['PAYMENT', 'CASH_IN', 'CASH_TRANSFER_IN'])
+               - movementTotal(['REFUND', 'PAID_OUT', 'CASH_DROP', 'CASH_TRANSFER_OUT']);
+             const declaredCash = Number(payload.declaredCash || 0);
+             const variance = declaredCash - expectedCash;
+             await tx.frontdeskSession.update({ where: { id: sessionId }, data: { status: 'CLOSED', controlStatus: 'SUBMITTED', varianceStatus: variance === 0 ? null : 'OPEN', submittedAt: occurredAt ? new Date(occurredAt) : new Date(), submittedBy: actorId, closingAt: occurredAt ? new Date(occurredAt) : new Date(), closedAt: occurredAt ? new Date(occurredAt) : new Date(), declaredCash, systemExpectedCash: expectedCash, variance } });
              await tx.frontdeskSessionAudit.create({ data: { frontdeskSessionId: sessionId, action: 'CLOSED', performedBy: actorId, notes: 'Offline close synchronized' } });
+          } else if (aggregateType === 'FRONTDESK_SESSION' && eventType === 'FRONTDESK_SESSION_REVIEWED') {
+             const sessionId = payload.sessionId || aggregateId;
+             const current = await tx.frontdeskSession.findUnique({ where: { id: sessionId } });
+             if (!current) throw new Error(`DEPENDENCY_NOT_READY: Front Desk session ${sessionId} has not been created yet`);
+             if (current.staffId === actorId) throw new Error('SEGREGATION_OF_DUTIES: Operator cannot approve their own shift');
+             if (['APPROVED', 'APPROVED_WITH_VARIANCE', 'HANDOVER_PENDING', 'HANDED_OVER', 'DEPOSITED', 'RECONCILED'].includes(String(current.controlStatus))) {
+               throw new Error('CONCURRENCY_CONFLICT: controlled Front Desk shift cannot be reviewed again');
+             }
+             const decision = String(payload.decision || '').toUpperCase();
+             const nextControlStatus = decision === 'APPROVED_WITH_VARIANCE' ? 'APPROVED_WITH_VARIANCE' : decision === 'APPROVED' ? 'APPROVED' : 'RETURNED';
+             await tx.frontdeskSession.update({ where: { id: sessionId }, data: { status: 'CLOSED', controlStatus: nextControlStatus, varianceStatus: decision === 'APPROVED_WITH_VARIANCE' ? 'ACCEPTED' : current.varianceStatus, approvalDecision: decision, approvalNotes: payload.notes || null, approvedBy: decision === 'REJECTED' ? null : actorId, approvedAt: decision === 'REJECTED' ? null : (payload.reviewedAt ? new Date(payload.reviewedAt) : new Date()) } });
+             await tx.frontdeskSessionAudit.create({ data: { frontdeskSessionId: sessionId, action: 'REVIEWED', performedBy: actorId, notes: payload.notes || `Decision: ${decision}` } });
           } else if (eventType === 'CREATE' && aggregateType === 'RESERVATION') {
              const property = await tx.property.findUnique({ where: { id: propertyId } });
              let finalGuestId = payload.GuestId || payload.guestId;

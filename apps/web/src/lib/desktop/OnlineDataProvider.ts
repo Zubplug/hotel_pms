@@ -409,9 +409,10 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
       if (!sessionId) return { success: false, data: null, error: 'No active session' };
       return apiFetchResult(`/api/v1/pos/sessions/${sessionId}/settlement-details`);
     },
-    settleSession: async (sessionId: string, actualCash: number, operatorId: string, authorizerId?: string) => {
+    settleSession: async (sessionId: string, actualCash: number, operatorId: string, authorizerId?: string, operatorToken?: string) => {
       return apiFetchResult(`/api/v1/pos/sessions/${sessionId}/settle`, {
         method: 'POST',
+        headers: operatorToken ? { Authorization: `Bearer ${operatorToken}` } : undefined,
         body: JSON.stringify({ actualCash, operatorId, authorizerId })
       });
     },
@@ -421,11 +422,18 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
         body: JSON.stringify({ managerPin })
       });
     },
+    getPendingHandovers: async (propertyId: string) => {
+      const token = localStorage.getItem('lodgecore_pos_operator_token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+      return apiFetchResult(`/api/v1/pos/cash-office/handovers/pending?propertyId=${propertyId}`, { headers });
+    },
+    getMyApprovedShifts: async (propertyId: string) => {
+      const token = localStorage.getItem('lodgecore_pos_operator_token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+      return apiFetchResult(`/api/v1/pos/operator/approved-shifts?propertyId=${propertyId}`, { headers });
+    },
     getCashOfficeOverview: async (propertyId: string) => {
       return apiFetchResult(`/api/v1/pos/cash-office/overview?propertyId=${propertyId}`);
-    },
-    getPendingHandovers: async (propertyId: string) => {
-      return apiFetchResult(`/api/v1/pos/cash-office/handovers/pending?propertyId=${propertyId}`);
     },
     getSafeLedger: async (propertyId: string) => {
       return apiFetchResult(`/api/v1/pos/cash-office/safe?propertyId=${propertyId}`);

@@ -18,6 +18,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!allowed.includes(current.propertyId)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     const settlement = current.settlements[0];
     if (!settlement || settlement.status !== 'PENDING_HANDOVER') return NextResponse.json({ error: 'No pending handover exists for this session' }, { status: 409 });
+    if (!['APPROVED', 'APPROVED_WITH_VARIANCE'].includes(current.controlStatus)) {
+      return NextResponse.json({ error: 'Shift must be approved by Finance before handover' }, { status: 409 });
+    }
 
     const managers = await prisma.staff.findMany({ where: { propertyAccess: { has: current.propertyId }, isActive: true, posPinHash: { not: null }, position: { in: ['MANAGER', 'HOTEL_MANAGER', 'GENERAL_CASHIER', 'CEO', 'SUPER_ADMIN'] } }, select: { id: true, posPinHash: true } });
     const manager = (await Promise.all(managers.map(async candidate => candidate.posPinHash && await compare(managerPin, candidate.posPinHash) ? candidate : null))).find(Boolean);
@@ -26,7 +29,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const result = await prisma.$transaction(async tx => {
       const updated = await tx.posSettlement.update({ where: { id: settlement.id }, data: { status: 'CLOSED', authorizerId: manager.id } });
-      await tx.posSession.update({ where: { id: sessionId }, data: { status: 'CLOSED', approvedBy: manager.id, approvedAt: new Date() } });
+      await tx.posSession.update({ where: { id: sessionId }, data: { status: 'HANDED_OVER', controlStatus: 'HANDED_OVER', handoverAt: new Date() } });
       return updated;
     });
     return NextResponse.json({ data: result });

@@ -60,6 +60,9 @@ export async function POST(req: NextRequest) {
     const property = await prisma.property.findUnique({
       where: { id: propertyId }
     });
+    if (!property || !property.isActive) {
+      return NextResponse.json({ error: 'Property not found or inactive' }, { status: 400 });
+    }
     const bankingModel = (property?.settings as any)?.pos?.bankingModel || 'CENTRAL_CASHIER';
     const bankType = bankingModel === 'SERVER_BANKING' ? 'SERVER' : 'CENTRAL';
 
@@ -101,7 +104,16 @@ export async function POST(req: NextRequest) {
       }
       
       const openSession = await prisma.posSession.findFirst({
-        where: { propertyId, outletId, deviceId: dbDeviceId, status: 'OPEN' },
+        // CENTRAL_CASHIER is one shared bank for the property/outlet. It is
+        // intentionally not scoped to the terminal: servers may move between
+        // terminals while the cashier identity remains on each order.
+        where: {
+          propertyId,
+          outletId,
+          status: 'OPEN',
+          bankType: 'CENTRAL',
+          bankingModel: 'CENTRAL_CASHIER'
+        },
         orderBy: { openedAt: 'desc' }
       });
       if (openSession) {
@@ -109,7 +121,10 @@ export async function POST(req: NextRequest) {
       } else {
         requiresBank = true;
         activeSessionId = null;
-        bankOwner = "MANAGER";
+        // The missing bank must be opened by the designated POS cashier (or
+        // an authorized manager), never by General Cashier through this POS
+        // operator login flow.
+        bankOwner = "POS_CASHIER";
       }
     }
 

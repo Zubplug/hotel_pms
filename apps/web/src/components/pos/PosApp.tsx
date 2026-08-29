@@ -16,6 +16,7 @@ import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { formatCurrency } from '@/lib/utils';
 import { TerminalAuthScreen } from '@/components/pos/TerminalAuthScreen';
 import { MyShiftBankModal } from '@/components/pos/MyShiftBankModal';
+import { PendingHandoversModal } from '@/components/pos/PendingHandoversModal';
 import { EmergencyCashBankModal } from '@/components/pos/EmergencyCashBankModal';
 import { AutoLockScreen } from '@/components/pos/AutoLockScreen';
 import { CategoryTileGrid } from '@/components/pos/CategoryTileGrid';
@@ -97,10 +98,12 @@ export default function PosApp() {
   const [showSwitchPad, setShowSwitchPad] = useState(false);
   const [showMySales, setShowMySales] = useState(false);
   const [showShiftBank, setShowShiftBank] = useState(false);
+  const [showHandovers, setShowHandovers] = useState(false);
   const [showEmergencyModal, setShowEmergencyModal] = useState(false);
   const [showMyOrders, setShowMyOrders] = useState(false);
   const [showActiveOrders, setShowActiveOrders] = useState(false);
   const [showChargeModal, setShowChargeModal] = useState(false);
+  const [isPrintingCustomerReceipt, setIsPrintingCustomerReceipt] = useState(false);
   const [activeOrderType, setActiveOrderType] = useState<string>('TABLE');
   const [activeDisplayName, setActiveDisplayName] = useState<string>('');
 
@@ -616,6 +619,30 @@ export default function PosApp() {
     }
   };
 
+  // Print a customer-facing order receipt before payment. This is a preview
+  // of the amount due and must not create a payment or change order status.
+  const handlePrintCustomerReceipt = async () => {
+    if (!currentOrderId) { toast.error('No active order to print'); return; }
+    if (!HardwareBridge.isAvailable()) { toast.error('Receipt printer is not connected'); return; }
+
+    setIsPrintingCustomerReceipt(true);
+    try {
+      const receiptRes = await provider.pos.getReceipt(currentOrderId);
+      if (receiptRes?.error) throw new Error(receiptRes.error);
+      const receipt = receiptRes?.data ?? receiptRes;
+      await HardwareBridge.printReceipt(toReceiptPrintData({
+        ...receipt,
+        payments: [],
+        paymentMethod: 'UNPAID'
+      }));
+      toast.success('Customer receipt sent to printer');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to print customer receipt');
+    } finally {
+      setIsPrintingCustomerReceipt(false);
+    }
+  };
+
   // ─────────────────────────────────────────────────────────────────
   // Totals
   // ─────────────────────────────────────────────────────────────────
@@ -746,6 +773,7 @@ export default function PosApp() {
           onOpenMyOrders={() => setShowActiveOrders(true)}
           onOpenMySales={() => setShowMySales(true)}
           onOpenShiftBank={() => setShowShiftBank(true)}
+          onOpenHandovers={() => setShowHandovers(true)}
           onOpenKitchen={() => setShowKitchenModal(true)}
           onOpenPrinterSettings={() => setShowPrinterSettings(true)}
           onOpenSyncCenter={() => setShowSyncCenter(true)}
@@ -1226,6 +1254,7 @@ export default function PosApp() {
           posSessionId={posSessionId || ''}
           provider={provider}
           operatorToken={operatorToken || ''}
+          currentOperatorId={activeOperator?.id}
           onReconciled={() => {
             // Log out the user once reconciled
             setActiveOperator(null);
@@ -1235,6 +1264,16 @@ export default function PosApp() {
             setPosSessionId('');
             setShowSwitchPad(true);
           }}
+        />
+      )}
+
+      {/* Pending Handovers Modal */}
+      {showHandovers && (
+        <PendingHandoversModal
+          isOpen={showHandovers}
+          onClose={() => setShowHandovers(false)}
+          provider={provider}
+          propertyId={propertyId}
         />
       )}
 
@@ -1288,7 +1327,8 @@ export default function PosApp() {
         onClose={() => setShowChargeModal(false)}
         total={total}
         onCharge={handleCharge}
-        isProcessing={isProcessing}
+        onPrintReceipt={handlePrintCustomerReceipt}
+        isProcessing={isProcessing || isPrintingCustomerReceipt}
         posSessionId={posSessionId}
         bankingModel={bankingModel}
         currentOperatorId={activeOperator?.id}

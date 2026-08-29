@@ -5,7 +5,7 @@ import Image from 'next/image';
 import {
   LayoutGrid, MapPin, Receipt, TrendingUp, ChefHat, Wallet,
   Monitor, Lock, UserCircle, RefreshCw, Wifi, WifiOff, Printer,
-  AlertTriangle, ChevronLeft, ChevronRight,
+  AlertTriangle, ChevronLeft, ChevronRight, ArrowRightLeft,
 } from 'lucide-react';
 
 interface PosSidebarProps {
@@ -14,6 +14,7 @@ interface PosSidebarProps {
   onOpenMyOrders: () => void;
   onOpenMySales: () => void;
   onOpenShiftBank: () => void;
+  onOpenHandovers?: () => void;
   onOpenKitchen: () => void;
   onOpenPrinterSettings: () => void;
   onOpenSyncCenter: () => void;
@@ -31,6 +32,7 @@ export function PosSidebar({
   onOpenMyOrders,
   onOpenMySales,
   onOpenShiftBank,
+  onOpenHandovers,
   onOpenKitchen,
   onOpenPrinterSettings,
   onOpenSyncCenter,
@@ -152,6 +154,9 @@ export function PosSidebar({
         <NavItem icon={Receipt}    label="All Orders"   onClick={onOpenMyOrders} />
         <NavItem icon={TrendingUp} label="My Sales"     onClick={onOpenMySales} />
         <NavItem icon={Wallet}     label="Shift Bank"   onClick={onOpenShiftBank} />
+        {onOpenHandovers && (
+          <NavItem icon={ArrowRightLeft} label="Handovers" onClick={onOpenHandovers} />
+        )}
         <NavItem icon={ChefHat}    label="Kitchen"      onClick={onOpenKitchen} />
         {isDesktop && (
           <NavItem icon={Printer}    label="Printers"     onClick={onOpenPrinterSettings} />

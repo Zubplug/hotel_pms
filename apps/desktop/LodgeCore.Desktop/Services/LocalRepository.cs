@@ -1150,7 +1150,9 @@ public class LocalRepository
         if (session.Status != "OPEN") throw new InvalidOperationException($"Session is already {session.Status}.");
             var movements = await _dbContext.PosCashMovements.Where(item => item.FrontdeskSessionId == session.Id || (item.FrontdeskSessionId == null && item.PropertyId == session.PropertyId && item.CreatedAt >= session.OpenedAt && item.CreatedAt <= DateTime.UtcNow)).ToListAsync();
         var expected = session.OpeningFloat + movements.Where(item => item.Type is "PAYMENT" or "CASH_TRANSFER_IN").Sum(item => item.Amount) - movements.Where(item => item.Type is "REFUND" or "PAID_OUT" or "CASH_DROP" or "CASH_TRANSFER_OUT").Sum(item => item.Amount);
-        session.Status = "CLOSED"; session.DeclaredCash = declaredCash; session.SystemExpectedCash = expected; session.Variance = declaredCash - expected; session.ClosingAt = DateTime.UtcNow; session.ClosedAt = DateTime.UtcNow; session.UpdatedAt = DateTime.UtcNow;
+        session.Status = "CLOSED"; session.ControlStatus = "SUBMITTED"; session.VarianceStatus = Math.Abs(declaredCash - expected) > 0.01m ? "OPEN" : null;
+        session.DeclaredCash = declaredCash; session.SystemExpectedCash = expected; session.Variance = declaredCash - expected; session.ClosingAt = DateTime.UtcNow; session.ClosedAt = DateTime.UtcNow;
+        session.SubmittedAt = session.ClosingAt; session.SubmittedBy = staffId; session.UpdatedAt = DateTime.UtcNow;
         _dbContext.OutboxEvents.Add(new LocalOutboxEvent
         {
             IdempotencyKey = $"frontdesk-close:{session.Id}", PropertyId = session.PropertyId, DeviceId = deviceId, OperatorId = staffId,
@@ -1170,21 +1172,36 @@ public class LocalRepository
         if (session == null) throw new InvalidOperationException("Front desk session not found.");
         if (session.Status is not ("CLOSED" or "UNDER_REVIEW"))
             throw new InvalidOperationException($"Cannot reconcile session in status {session.Status}.");
+        if (session.StaffId == staffId)
+            throw new UnauthorizedAccessException("The operator cannot approve their own Front Desk shift.");
         if (decision == "APPROVED" && session.Variance.HasValue && Math.Abs(session.Variance.Value) > 0.01m)
             throw new InvalidOperationException("A session with a cash variance must be approved with variance or rejected.");
+        if (decision == "APPROVED_WITH_VARIANCE" && session.Variance.HasValue && Math.Abs(session.Variance.Value) > 0.01m && string.IsNullOrWhiteSpace(notes))
+            throw new InvalidOperationException("Reviewer notes are required when approving a cash variance.");
 
-        session.Status = decision == "REJECTED" ? "UNDER_REVIEW" : "RECONCILED";
-        session.ReconciledAt = DateTime.UtcNow;
-        session.ReconciledBy = staffId;
+        // Approval is not reconciliation. Keep the local projection aligned
+        // with the server control workflow until handover/deposit completes.
+        var reviewedAt = DateTime.UtcNow;
+        session.Status = decision == "REJECTED"
+            ? "RETURNED"
+            : decision == "APPROVED_WITH_VARIANCE" ? "APPROVED_WITH_VARIANCE" : "APPROVED";
+        session.ReconciledAt = null;
+        session.ReconciledBy = null;
         session.ReconciliationDecision = decision;
         session.ReconciliationNotes = notes;
+        session.ControlStatus = decision == "REJECTED" ? "RETURNED" : decision;
+        session.VarianceStatus = decision == "APPROVED_WITH_VARIANCE" ? "ACCEPTED" : null;
+        session.ReviewStartedAt ??= reviewedAt;
+        session.ReviewStartedBy ??= staffId;
+        session.ApprovalDecision = decision;
+        session.ApprovalNotes = notes;
         session.UpdatedAt = DateTime.UtcNow;
         _dbContext.OutboxEvents.Add(new LocalOutboxEvent
         {
-            IdempotencyKey = $"frontdesk-reconcile:{session.Id}:{session.ReconciledAt:O}",
+            IdempotencyKey = $"frontdesk-review:{session.Id}:{reviewedAt:O}",
             PropertyId = session.PropertyId, DeviceId = deviceId, OperatorId = staffId,
-            AggregateType = "FRONTDESK_SESSION", AggregateId = session.Id, EventType = "FRONTDESK_SESSION_RECONCILED", Sequence = 3,
-            PayloadJson = JsonSerializer.Serialize(new { sessionId, decision, notes, status = session.Status, reconciledAt = session.ReconciledAt })
+            AggregateType = "FRONTDESK_SESSION", AggregateId = session.Id, EventType = "FRONTDESK_SESSION_REVIEWED", Sequence = 3,
+            PayloadJson = JsonSerializer.Serialize(new { sessionId, decision, notes, status = session.Status, controlStatus = session.ControlStatus, varianceStatus = session.VarianceStatus, reviewedAt, reviewerId = staffId })
         });
         await _dbContext.SaveChangesAsync();
         return session;
@@ -2592,10 +2609,10 @@ public class LocalRepository
             var existingServerBank = await GetActiveServerBankAsync(userId, propertyId, outletId);
             if (existingServerBank != null) return existingServerBank;
         }
-        else 
+        else
         {
-            var existingDeviceBank = await GetActiveSessionForDeviceAsync(deviceId);
-            if (existingDeviceBank != null) return existingDeviceBank;
+            var existingCentralBank = await GetActiveCentralBankAsync(propertyId, outletId);
+            if (existingCentralBank != null) return existingCentralBank;
         }
 
         var session = new LocalPosSession
@@ -2691,7 +2708,9 @@ public class LocalRepository
     public async Task<List<object>> GetWaiterTicketsAsync(string outletId, string staffId, string sessionId)
     {
         var query = _dbContext.PosKots
-            .Where(k => k.OutletId == outletId && k.CreatedBy == staffId);
+            .Where(k => k.OutletId == outletId
+                && k.CreatedBy == staffId
+                && k.ProductionStation == "KITCHEN");
 
         // Session ownership is authoritative. Date-only matching is unreliable
         // around timezone boundaries and when local/cloud records are merged.
@@ -2715,6 +2734,7 @@ public class LocalRepository
 
             result.Add(new {
                 id = kot.Id,
+                station = kot.ProductionStation,
                 kotNumber = kot.KotNumber,
                 status = kot.Status,
                 createdAt = kot.CreatedAt,
@@ -3086,6 +3106,16 @@ public class LocalRepository
         if (session == null) throw new Exception("Session not found");
         if (session.Status == "CLOSED" || session.Status == "SETTLED") throw new Exception("Session is already closed or settled");
 
+        var operatorStaff = await _dbContext.Staff.FirstOrDefaultAsync(staff => staff.Id == operatorId);
+        var operatorRole = operatorStaff?.Role ?? string.Empty;
+        var privileged = operatorRole.Contains("MANAGER", StringComparison.OrdinalIgnoreCase)
+            || operatorRole.Contains("FINANCE", StringComparison.OrdinalIgnoreCase)
+            || operatorRole.Contains("ADMIN", StringComparison.OrdinalIgnoreCase);
+        if (!privileged && !string.Equals(session.UserId, operatorId, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new UnauthorizedAccessException("Only the POS cashier who opened this shift can close and submit it.");
+        }
+
         var details = await GetSessionSettlementDetailsAsync(sessionId);
 
         // Validation for override variance
@@ -3138,10 +3168,14 @@ public class LocalRepository
             OperationId = movement.OperationId,
             EntityType = "POS_CASH_MOVEMENT",
             EntityId = movement.Id,
-            OperationType = "CREATE",
+            OperationType = "POS_CASH_MOVEMENT",
             PayloadJson = JsonSerializer.Serialize(movement),
             UserId = operatorId,
-            DeviceId = deviceId
+            DeviceId = deviceId,
+            SessionId = sessionId,
+            OperatorId = operatorId,
+            OutletId = session.OutletId,
+            TerminalId = deviceId
         });
 
         if (settlement.Variance != 0)
@@ -3167,25 +3201,39 @@ public class LocalRepository
                 OperationId = varMovement.OperationId,
                 EntityType = "POS_CASH_MOVEMENT",
                 EntityId = varMovement.Id,
-                OperationType = "CREATE",
+                OperationType = "POS_CASH_MOVEMENT",
                 PayloadJson = JsonSerializer.Serialize(varMovement),
                 UserId = operatorId,
-                DeviceId = deviceId
+                DeviceId = deviceId,
+                SessionId = sessionId,
+                OperatorId = operatorId,
+                OutletId = session.OutletId,
+                TerminalId = deviceId
             });
         }
 
         session.Status = session.BankType == "SERVER" ? "RECONCILIATION_REQUIRED" : "CLOSED";
+        session.ControlStatus = "SUBMITTED";
+        session.VarianceStatus = settlement.Variance != 0 ? "OPEN" : null;
+        session.SubmittedAt = session.ClosedAt;
+        session.SubmittedBy = operatorId;
         session.ClosedAt = DateTime.UtcNow;
+        session.UpdatedAt = session.ClosedAt.Value;
+        session.Version++;
 
         _dbContext.SyncEvents.Add(new LocalSyncEvent
         {
             OperationId = operationId,
             EntityType = "POS_SETTLEMENT",
             EntityId = settlement.Id,
-            OperationType = "CREATE",
+            OperationType = "POS_SETTLEMENT",
             PayloadJson = JsonSerializer.Serialize(settlement),
             UserId = operatorId,
-            DeviceId = deviceId
+            DeviceId = deviceId,
+            SessionId = sessionId,
+            OperatorId = operatorId,
+            OutletId = session.OutletId,
+            TerminalId = deviceId
         });
 
         // Also sync the session close
@@ -3194,13 +3242,18 @@ public class LocalRepository
             OperationId = $"op_session_close_{sessionId}_{DateTime.UtcNow.Ticks}",
             EntityType = "POS_SESSION",
             EntityId = session.Id,
-            OperationType = "UPDATE",
-            PayloadJson = JsonSerializer.Serialize(new { Status = session.Status, ClosedAt = session.ClosedAt }),
+            OperationType = "POS_SESSION_UPDATED",
+            PayloadJson = JsonSerializer.Serialize(new { Status = session.Status, ControlStatus = session.ControlStatus, VarianceStatus = session.VarianceStatus, SubmittedAt = session.SubmittedAt, SubmittedBy = session.SubmittedBy, ClosedAt = session.ClosedAt }),
             UserId = operatorId,
-            DeviceId = deviceId
+            DeviceId = deviceId,
+            SessionId = sessionId,
+            OperatorId = operatorId,
+            OutletId = session.OutletId,
+            TerminalId = deviceId
         });
 
         await _dbContext.SaveChangesAsync();
+        SyncEngine.Instance?.TriggerManualSync();
         return settlement;
     }
 
@@ -3303,20 +3356,41 @@ public class LocalRepository
 
             _dbContext.PosCashMovements.Add(handoverMovement);
 
+            _dbContext.SyncEvents.Add(new LocalSyncEvent
+            {
+                OperationId = handoverMovement.OperationId,
+                EntityType = "POS_CASH_MOVEMENT",
+                EntityId = handoverMovement.Id,
+                OperationType = "POS_CASH_MOVEMENT",
+                PayloadJson = JsonSerializer.Serialize(handoverMovement),
+                UserId = authorizer.Id,
+                DeviceId = deviceId,
+                SessionId = sessionId,
+                OperatorId = authorizer.Id,
+                OutletId = session.OutletId,
+                TerminalId = deviceId
+            });
+
             settlement.Status = "CLOSED";
             settlement.AuthorizerId = authorizer.Id;
 
             session.Status = "CLOSED";
+            session.ControlStatus = "HANDED_OVER";
+            session.HandoverAt = DateTime.UtcNow;
             
             _dbContext.SyncEvents.Add(new LocalSyncEvent
             {
                 OperationId = $"op_handover_conf_{deviceId}_{DateTime.UtcNow.Ticks}",
                 EntityType = "POS_SESSION",
                 EntityId = session.Id,
-                OperationType = "UPDATE",
-                PayloadJson = JsonSerializer.Serialize(new { Status = "CLOSED" }),
+                OperationType = "POS_SESSION_UPDATED",
+                PayloadJson = JsonSerializer.Serialize(new { Status = "CLOSED", ControlStatus = session.ControlStatus, HandoverAt = session.HandoverAt }),
                 UserId = authorizer.Id,
-                DeviceId = deviceId
+                DeviceId = deviceId,
+                SessionId = sessionId,
+                OperatorId = authorizer.Id,
+                OutletId = session.OutletId,
+                TerminalId = deviceId
             });
 
             _dbContext.SyncEvents.Add(new LocalSyncEvent
@@ -3324,14 +3398,19 @@ public class LocalRepository
                 OperationId = $"op_settlement_conf_{deviceId}_{DateTime.UtcNow.Ticks}",
                 EntityType = "POS_SETTLEMENT",
                 EntityId = settlement.Id,
-                OperationType = "UPDATE",
+                OperationType = "POS_SETTLEMENT",
                 PayloadJson = JsonSerializer.Serialize(new { Status = "CLOSED", AuthorizerId = authorizer.Id }),
                 UserId = authorizer.Id,
-                DeviceId = deviceId
+                DeviceId = deviceId,
+                SessionId = sessionId,
+                OperatorId = authorizer.Id,
+                OutletId = session.OutletId,
+                TerminalId = deviceId
             });
 
             await _dbContext.SaveChangesAsync();
             await transaction.CommitAsync();
+            SyncEngine.Instance?.TriggerManualSync();
             return settlement;
         }
         catch (Exception)
@@ -3428,6 +3507,7 @@ public class LocalRepository
         });
 
         await _dbContext.SaveChangesAsync();
+        SyncEngine.Instance?.TriggerManualSync();
         return posVoid;
     }
 
@@ -3461,6 +3541,7 @@ public class LocalRepository
         });
 
         await _dbContext.SaveChangesAsync();
+        SyncEngine.Instance?.TriggerManualSync();
         return payment;
     }
 
@@ -3499,13 +3580,17 @@ public class LocalRepository
             OperationId = operationId,
             EntityType = "POS_CASH_MOVEMENT",
             EntityId = movement.Id,
-            OperationType = "CREATE",
+            OperationType = "POS_CASH_MOVEMENT",
             PayloadJson = JsonSerializer.Serialize(movement),
             UserId = userId,
-            DeviceId = deviceId
+            DeviceId = deviceId,
+            SessionId = sessionId,
+            OperatorId = userId,
+            TerminalId = deviceId
         });
 
         await _dbContext.SaveChangesAsync();
+        SyncEngine.Instance?.TriggerManualSync();
         return movement;
     }
 
@@ -3697,6 +3782,7 @@ public class LocalRepository
         });
 
         await _dbContext.SaveChangesAsync();
+        SyncEngine.Instance?.TriggerManualSync();
         return audit;
     }
 
@@ -3835,6 +3921,7 @@ public class LocalRepository
         });
 
         await _dbContext.SaveChangesAsync();
+        SyncEngine.Instance?.TriggerManualSync();
         return newSession;
     }
 
@@ -3882,6 +3969,7 @@ public class LocalRepository
         });
 
         await _dbContext.SaveChangesAsync();
+        SyncEngine.Instance?.TriggerManualSync();
         return audit;
     }
 
@@ -4276,12 +4364,35 @@ public class LocalRepository
         };
 
         _dbContext.SyncEvents.Add(syncEvent);
+
+        // Wake the background worker as soon as a POS event is queued. The
+        // event is still persisted by the caller's SaveChangesAsync; if the
+        // worker races that write, the retained semaphore signal causes an
+        // immediate second queue check.
+        SyncEngine.Instance?.TriggerManualSync();
     }
 
     public async Task<LodgeCore.Desktop.Data.Entities.LocalPosSession?> GetActiveServerBankAsync(string staffId, string propertyId, string outletId)
     {
         return await _dbContext.PosSessions
             .FirstOrDefaultAsync(s => s.PrimaryOperatorId == staffId && s.OutletId == outletId && s.Status == "OPEN" && s.BankType == "SERVER");
+    }
+
+    /// <summary>
+    /// Returns the single shared central POS bank for a property/outlet.
+    /// Central banking is not terminal-scoped; roaming servers must attach to
+    /// this session while retaining their own operator identity on orders.
+    /// </summary>
+    public async Task<LodgeCore.Desktop.Data.Entities.LocalPosSession?> GetActiveCentralBankAsync(string propertyId, string outletId)
+    {
+        return await _dbContext.PosSessions
+            .Where(s => s.PropertyId == propertyId
+                && s.OutletId == outletId
+                && s.Status == "OPEN"
+                && s.BankType == "CENTRAL"
+                && s.BankingModel == "CENTRAL_CASHIER")
+            .OrderByDescending(s => s.OpenedAt)
+            .FirstOrDefaultAsync();
     }
 
     public async Task<LodgeCore.Desktop.Data.Entities.LocalPosSession?> GetActiveSessionForDeviceAsync(string deviceId)

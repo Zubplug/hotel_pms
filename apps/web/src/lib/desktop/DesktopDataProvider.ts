@@ -445,7 +445,7 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     getSessionSettlementDetails: async (sessionId: string) => {
       return invokeDesktop('pos.getSessionSettlementDetails', { sessionId });
     },
-    settleSession: async (sessionId: string, actualCash: number, operatorId: string, authorizerId?: string) => {
+    settleSession: async (sessionId: string, actualCash: number, operatorId: string, authorizerId?: string, _operatorToken?: string) => {
       // In offline mode, we just pass actualCash. cashPaidOut is legacy.
       return invokeDesktop('pos.closeSession', { sessionId, actualCash, cashPaidOut: 0 });
     },
@@ -454,6 +454,9 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     },
     getPendingHandovers: async (propertyId: string) => {
       return invokeDesktop('pos.getPendingHandovers', { propertyId });
+    },
+    getMyApprovedShifts: async (propertyId: string) => {
+      return invokeDesktop('pos.getMyApprovedShifts', { propertyId });
     },
     getCashOfficeOverview: async (propertyId: string) => {
       return invokeDesktop('pos.getCashOfficeOverview', { propertyId });
