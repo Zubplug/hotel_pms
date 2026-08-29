@@ -58,6 +58,7 @@ export async function GET(request: Request) {
                 take: limit,
                 include: { 
                     warehouse: true,
+                    stockUnits: { orderBy: { unit: 'asc' } },
                     posProduct: { include: { category: true } },
                     inventoryCategory: true
                 },

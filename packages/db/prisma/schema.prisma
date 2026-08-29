@@ -109,6 +109,7 @@ model Property {
   warehouses                      Warehouse[]
   stockItems                      StockItem[]
   stockTransactions               StockTransaction[]
+  kitchenWasteEntries             KitchenWasteEntry[]
   purchaseOrders                  PurchaseOrder[]
   goodsReceivedNotes              GoodsReceivedNote[]
   posOutlets                      PosOutlet[]
@@ -1884,14 +1885,31 @@ model ReservationPriority {
 // -----------------------------------------------------------------------------
 
 enum UnitOfMeasure {
+  UNIT
+  EACH
   KG
   GRAM
+  TONNE
   LITRE
   ML
+  GALLON
   PIECE
+  PAIR
+  SET
+  DOZEN
   BOX
   BOTTLE
+  CAN
+  JAR
+  TIN
+  SACHET
   PACK
+  CARTON
+  CASE
+  PALLET
+  BAG
+  BUNDLE
+  ROLL
 }
 
 enum StockItemType {
@@ -1989,10 +2007,10 @@ model StockItem {
   categoryId        String?            @db.Uuid
   inventoryCategory InventoryCategory? @relation(fields: [categoryId], references: [id])
 
-  name     String
-  sku      String?
-  barcode  String?
-  baseUnit UnitOfMeasure
+  name      String
+  sku       String?
+  barcode   String?
+  baseUnit  UnitOfMeasure
   stockType StockItemType @default(CONSUMABLE)
 
   costPrice      Decimal  @default(0) @db.Decimal(18, 4)
@@ -2006,7 +2024,9 @@ model StockItem {
   alerts            InventoryAlert[]
   transferItems     StockTransferItem[]
   costAdjustments   CostAdjustment[]
+  kitchenWaste      KitchenWasteEntry[]
   stocktakeItems    StocktakeItem[]
+  stockUnits        StockItemUnit[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -2015,6 +2035,23 @@ model StockItem {
 
   @@unique([propertyId, barcode])
   @@unique([posProductId, warehouseId])
+}
+
+/// Item-specific packaging conversions, e.g. 1 CARTON = 12 BOTTLE.
+model StockItemUnit {
+  id             String        @id @default(uuid()) @db.Uuid
+  stockItemId    String        @db.Uuid
+  stockItem      StockItem     @relation(fields: [stockItemId], references: [id], onDelete: Cascade)
+  unit           UnitOfMeasure
+  unitsInBase    Decimal       @db.Decimal(18, 6)
+  barcode        String?
+  isPurchaseUnit Boolean       @default(false)
+  isIssueUnit    Boolean       @default(false)
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@unique([stockItemId, unit])
 }
 
 enum AdjustmentReason {
@@ -2037,6 +2074,23 @@ enum StockTransactionSource {
   RETURN
   POS_VOID
   POS_REFUND
+}
+
+enum KitchenWasteStatus {
+  SUBMITTED
+  APPROVED
+  REJECTED
+  POSTED
+}
+
+enum KitchenWasteReason {
+  SPOILAGE
+  OVER_PRODUCTION
+  BURNED
+  DAMAGED
+  RETURNED
+  WRONG_ORDER
+  OTHER
 }
 
 model StockTransaction {
@@ -2076,6 +2130,39 @@ model StockTransaction {
 
   transferId String?        @db.Uuid
   transfer   StockTransfer? @relation(fields: [transferId], references: [id])
+}
+
+model KitchenWasteEntry {
+  id                 String             @id @default(uuid()) @db.Uuid
+  propertyId         String             @db.Uuid
+  property           Property           @relation(fields: [propertyId], references: [id])
+  outletId           String?            @db.Uuid
+  stockItemId        String             @db.Uuid
+  stockItem          StockItem          @relation(fields: [stockItemId], references: [id])
+  quantity           Decimal            @db.Decimal(18, 4)
+  unitOfMeasure      UnitOfMeasure
+  baseQuantity       Decimal            @db.Decimal(18, 4)
+  unitCost           Decimal            @db.Decimal(18, 4)
+  totalValue         Decimal            @db.Decimal(18, 4)
+  reason             KitchenWasteReason
+  notes              String?
+  orderId            String?            @db.Uuid
+  productionBatchId  String?            @db.Uuid
+  status             KitchenWasteStatus @default(SUBMITTED)
+  createdBy          String             @db.Uuid
+  approvedBy         String?            @db.Uuid
+  approvedAt         DateTime?          @db.Timestamptz
+  rejectedBy         String?            @db.Uuid
+  rejectedAt         DateTime?          @db.Timestamptz
+  rejectionReason    String?
+  postedBy           String?            @db.Uuid
+  postedAt           DateTime?          @db.Timestamptz
+  stockTransactionId String?            @unique @db.Uuid
+  createdAt          DateTime           @default(now()) @db.Timestamptz
+  updatedAt          DateTime           @updatedAt @db.Timestamptz
+
+  @@index([propertyId, status, createdAt])
+  @@index([stockItemId, createdAt])
 }
 
 enum PurchaseOrderStatus {
@@ -2125,10 +2212,11 @@ model PurchaseOrderItem {
   stockItemId     String?       @db.Uuid
   description     String
 
-  quantity      Decimal       @db.Decimal(18, 4)
-  unitOfMeasure UnitOfMeasure
-  unitPrice     Decimal       @db.Decimal(18, 4)
-  totalPrice    Decimal       @db.Decimal(18, 4)
+  quantity         Decimal       @db.Decimal(18, 4)
+  unitOfMeasure    UnitOfMeasure
+  unitPrice        Decimal       @db.Decimal(18, 4)
+  totalPrice       Decimal       @db.Decimal(18, 4)
+  conversionToBase Decimal       @default(1) @db.Decimal(18, 6)
 
   receivedQty Decimal @default(0) @db.Decimal(18, 4)
 }
@@ -2208,10 +2296,12 @@ model GoodsReceivedNoteItem {
   stockItemId String            @db.Uuid
   description String?
 
-  receivedQty   Decimal       @db.Decimal(18, 4)
-  unitOfMeasure UnitOfMeasure
-  unitCost      Decimal       @db.Decimal(18, 4)
-  totalCost     Decimal       @db.Decimal(18, 4)
+  receivedQty     Decimal       @db.Decimal(18, 4)
+  unitOfMeasure   UnitOfMeasure
+  unitCost        Decimal       @db.Decimal(18, 4)
+  totalCost       Decimal       @db.Decimal(18, 4)
+  baseReceivedQty Decimal       @default(0) @db.Decimal(18, 4)
+  baseUnitCost    Decimal       @default(0) @db.Decimal(18, 4)
 }
 
 // -----------------------------------------------------------------------------
@@ -2986,17 +3076,31 @@ model PosDiscount {
 // -----------------------------------------------------------------------------
 
 model PosProductionBatch {
-  id             String                   @id @default(uuid()) @db.Uuid
-  orderId        String                   @db.Uuid
-  order          PosOrder                 @relation(fields: [orderId], references: [id])
+  id             String                    @id @default(uuid()) @db.Uuid
+  orderId        String                    @db.Uuid
+  order          PosOrder                  @relation(fields: [orderId], references: [id])
   batchNumber    Int
   station        ProductionStation
-  status         PosProductionBatchStatus @default(PENDING)
-  firedAt        DateTime                 @default(now()) @db.Timestamptz
-  firedByStaffId String?                  @db.Uuid
-  firedByStaff   Staff?                   @relation(fields: [firedByStaffId], references: [id])
+  status         PosProductionBatchStatus  @default(PENDING)
+  firedAt        DateTime                  @default(now()) @db.Timestamptz
+  firedByStaffId String?                   @db.Uuid
+  firedByStaff   Staff?                    @relation(fields: [firedByStaffId], references: [id])
   items          PosProductionBatchItem[]
-  createdAt      DateTime                 @default(now()) @db.Timestamptz
+  events         PosProductionBatchEvent[]
+  createdAt      DateTime                  @default(now()) @db.Timestamptz
+}
+
+model PosProductionBatchEvent {
+  id         String                   @id @default(uuid()) @db.Uuid
+  batchId    String                   @db.Uuid
+  batch      PosProductionBatch       @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  fromStatus PosProductionBatchStatus
+  toStatus   PosProductionBatchStatus
+  actorId    String?                  @db.Uuid
+  notes      String?
+  createdAt  DateTime                 @default(now()) @db.Timestamptz
+
+  @@index([batchId, createdAt])
 }
 
 model PosProductionBatchItem {
@@ -3326,6 +3430,7 @@ model StockTransferItem {
 
   quantity      Decimal       @db.Decimal(18, 4)
   unitOfMeasure UnitOfMeasure
+  baseQuantity  Decimal       @default(0) @db.Decimal(18, 4)
   notes         String?
 }
 

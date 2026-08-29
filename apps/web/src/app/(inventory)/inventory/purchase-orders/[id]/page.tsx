@@ -38,7 +38,7 @@ export default async function PurchaseOrderDetailPage({ params }: { params: Prom
 
   const stockItems = await prisma.stockItem.findMany({
     where: { id: { in: po.items.map((item: any) => item.stockItemId).filter(Boolean) } },
-    select: { id: true, name: true, stockType: true },
+    select: { id: true, name: true, stockType: true, baseUnit: true },
   });
   const stockItemById = new Map(stockItems.map((item) => [item.id, item]));
 
@@ -57,6 +57,8 @@ export default async function PurchaseOrderDetailPage({ params }: { params: Prom
     receivedQty: Number(item.receivedQty || 0),
     stockItemName: stockItemById.get(item.stockItemId)?.name || item.description || 'Unknown item',
     stockType: stockItemById.get(item.stockItemId)?.stockType || 'CONSUMABLE',
+    conversionToBase: Number(item.conversionToBase || 1),
+    stockBaseUnit: stockItemById.get(item.stockItemId)?.baseUnit || item.unitOfMeasure,
   }));
 
   return (

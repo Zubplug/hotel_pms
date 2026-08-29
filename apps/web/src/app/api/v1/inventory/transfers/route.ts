@@ -4,6 +4,7 @@ import prisma from '@hotel-pms/db';
 import { UnitOfMeasure } from '@hotel-pms/db';
 import { hasInventoryPermission } from '@/lib/inventory/permissions';
 import { InventoryService } from '@/lib/inventory/InventoryService';
+import { resolveStockUnitConversion } from '@/lib/inventory/UnitConversionService';
 
 export const dynamic = 'force-dynamic';
 
@@ -78,8 +79,12 @@ export async function POST(request: Request) {
     }
 
     const destinationWarehouse = warehouses.find(warehouse => warehouse.id === toWarehouseId);
+    const sourceWarehouse = warehouses.find(warehouse => warehouse.id === fromWarehouseId);
     if (issueToOutlet && !destinationWarehouse?.posOutlet) {
       return NextResponse.json({ data: null, error: 'Issue-to-outlet transfers must target an outlet warehouse' }, { status: 400 });
+    }
+    if (issueToOutlet && sourceWarehouse?.posOutlet) {
+      return NextResponse.json({ data: null, error: 'Issue-to-outlet transfers must start from a warehouse, not another outlet' }, { status: 400 });
     }
     if (String(role).toUpperCase() === 'OUTLET_HEAD') {
       if (!issueToOutlet || !destinationWarehouse?.posOutlet || !staffId) {
@@ -98,7 +103,7 @@ export async function POST(request: Request) {
     const stockItemIds = items.map((item: any) => item.stockItemId);
     const sourceItems = await prisma.stockItem.findMany({
       where: { id: { in: stockItemIds }, propertyId, warehouseId: fromWarehouseId, isActive: true },
-      select: { id: true, name: true, baseUnit: true, quantityOnHand: true },
+      select: { id: true, name: true, baseUnit: true, quantityOnHand: true, stockUnits: true },
     });
     const sourceById = new Map(sourceItems.map(item => [item.id, item]));
     const seenItemIds = new Set<string>();
@@ -111,9 +116,11 @@ export async function POST(request: Request) {
       if (!Number.isFinite(quantity) || quantity <= 0 || quantity > Number(sourceItem.quantityOnHand)) {
         return NextResponse.json({ data: null, error: `Invalid quantity for ${sourceItem.name}; available stock is ${sourceItem.quantityOnHand}` }, { status: 400 });
       }
-      if (!Object.values(UnitOfMeasure).includes(item.unitOfMeasure) || item.unitOfMeasure !== sourceItem.baseUnit) {
-        return NextResponse.json({ data: null, error: `Unit for ${sourceItem.name} must be ${sourceItem.baseUnit}` }, { status: 400 });
-      }
+      if (!Object.values(UnitOfMeasure).includes(item.unitOfMeasure)) return NextResponse.json({ data: null, error: `Invalid unit for ${sourceItem.name}` }, { status: 400 });
+      const conversion = item.unitOfMeasure === sourceItem.baseUnit ? 1 : Number(sourceItem.stockUnits.find((unit: any) => unit.unit === item.unitOfMeasure)?.unitsInBase || 0);
+      if (conversion <= 0) return NextResponse.json({ data: null, error: `No conversion configured from ${item.unitOfMeasure} to ${sourceItem.baseUnit} for ${sourceItem.name}` }, { status: 400 });
+      item.baseQuantity = quantity * conversion;
+      if (item.baseQuantity > Number(sourceItem.quantityOnHand)) return NextResponse.json({ data: null, error: `Invalid quantity for ${sourceItem.name}; available stock is ${sourceItem.quantityOnHand} ${sourceItem.baseUnit}` }, { status: 400 });
       seenItemIds.add(item.stockItemId);
     }
 
@@ -136,6 +143,7 @@ export async function POST(request: Request) {
             stockItemId: item.stockItemId,
             quantity: item.quantity,
             unitOfMeasure: item.unitOfMeasure,
+            baseQuantity: item.baseQuantity,
             notes: item.notes,
           }))
         }

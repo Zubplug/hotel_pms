@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { INVENTORY_UNITS, formatUnit } from '@/lib/inventory/units';
 
 export default function NewStockItemPage() {
   const router = useRouter();
@@ -97,8 +98,8 @@ export default function NewStockItemPage() {
             <div className="space-y-2">
               <label htmlFor="baseUnit" className="text-sm font-medium text-slate-800">Base Unit *</label>
               <select required id="baseUnit" name="baseUnit" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                {['UNIT', 'KG', 'GRAM', 'LITRE', 'ML', 'PIECE', 'DOZEN', 'BOX', 'CARTON'].map(unit => (
-                  <option key={unit} value={unit}>{unit}</option>
+                {INVENTORY_UNITS.map(unit => (
+                  <option key={unit} value={unit}>{formatUnit(unit)}</option>
                 ))}
               </select>
             </div>

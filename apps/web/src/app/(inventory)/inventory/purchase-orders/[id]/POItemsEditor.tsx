@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Trash2, Save, X } from 'lucide-react';
+import { INVENTORY_UNITS, formatUnit } from '@/lib/inventory/units';
 
 type Item = {
   id: string;
@@ -13,6 +14,8 @@ type Item = {
   receivedQty: number | string;
   stockItemName: string;
   stockType: string;
+  conversionToBase: number;
+  stockBaseUnit: string;
 };
 
 export function POItemsEditor({ poId, items, editable, currency }: { poId: string; items: Item[]; editable: boolean; currency: string }) {
@@ -20,7 +23,6 @@ export function POItemsEditor({ poId, items, editable, currency }: { poId: strin
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const units = ['KG', 'GRAM', 'LITRE', 'ML', 'PIECE', 'BOX', 'BOTTLE', 'PACK'];
   const total = rows.reduce((sum, item) => sum + Number(item.quantity) * Number(item.unitPrice), 0);
 
   const update = (id: string, field: keyof Item, value: string) => setRows(current => current.map(item => item.id === id ? { ...item, [field]: value } : item));
@@ -48,7 +50,7 @@ export function POItemsEditor({ poId, items, editable, currency }: { poId: strin
     </div>
     {error && <p className="mx-6 mt-4 p-3 rounded-lg bg-red-50 text-red-600 text-sm">{error}</p>}
     <div className="overflow-x-auto"><table className="w-full text-left text-sm whitespace-nowrap"><thead className="bg-slate-50 text-slate-500 border-b border-slate-200"><tr><th className="px-6 py-4 font-medium">Item</th><th className="px-6 py-4 font-medium text-right">Qty</th><th className="px-6 py-4 font-medium">UOM</th><th className="px-6 py-4 font-medium text-right">Unit Price</th><th className="px-6 py-4 font-medium text-right">Total</th><th className="px-6 py-4" /></tr></thead><tbody className="divide-y divide-slate-200">
-      {rows.map(item => <tr key={item.id}><td className="px-6 py-4">{editing ? <input value={item.description} onChange={e => update(item.id, 'description', e.target.value)} className="w-full min-w-48 px-2 py-1 border rounded text-slate-900" /> : <><span className="font-medium text-slate-900">{item.stockItemName}</span><span className="block text-xs text-slate-500 capitalize">{item.stockType.replace('_', ' ').toLowerCase()}{item.description ? ` · ${item.description}` : ''}</span></>}</td><td className="px-6 py-4 text-right">{editing ? <input type="number" min="0.0001" step="0.0001" value={item.quantity} onChange={e => update(item.id, 'quantity', e.target.value)} className="w-24 px-2 py-1 border rounded text-right text-slate-900" /> : Number(item.quantity).toFixed(2)}</td><td className="px-6 py-4">{editing ? <select value={item.unitOfMeasure} onChange={e => update(item.id, 'unitOfMeasure', e.target.value)} className="px-2 py-1 border rounded text-slate-900">{units.map(unit => <option key={unit}>{unit}</option>)}</select> : item.unitOfMeasure}</td><td className="px-6 py-4 text-right">{editing ? <input type="number" min="0" step="0.01" value={item.unitPrice} onChange={e => update(item.id, 'unitPrice', e.target.value)} className="w-28 px-2 py-1 border rounded text-right text-slate-900" /> : Number(item.unitPrice).toFixed(2)}</td><td className="px-6 py-4 text-right font-semibold">{currency} {(Number(item.quantity) * Number(item.unitPrice)).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td><td className="px-6 py-4 text-right">{editing && <button onClick={() => remove(item.id)} title="Remove item" className="p-1.5 text-red-500 hover:bg-red-50 rounded"><Trash2 className="w-4 h-4" /></button>}</td></tr>)}
+      {rows.map(item => <tr key={item.id}><td className="px-6 py-4">{editing ? <input value={item.description} onChange={e => update(item.id, 'description', e.target.value)} className="w-full min-w-48 px-2 py-1 border rounded text-slate-900" /> : <><span className="font-medium text-slate-900">{item.stockItemName}</span><span className="block text-xs text-slate-500 capitalize">{item.stockType.replace('_', ' ').toLowerCase()}{item.description ? ` · ${item.description}` : ''}</span></>}</td><td className="px-6 py-4 text-right">{editing ? <input type="number" min="0.0001" step="0.0001" value={item.quantity} onChange={e => update(item.id, 'quantity', e.target.value)} className="w-24 px-2 py-1 border rounded text-right text-slate-900" /> : Number(item.quantity).toFixed(2)}</td><td className="px-6 py-4">{editing ? <select value={item.unitOfMeasure} onChange={e => update(item.id, 'unitOfMeasure', e.target.value)} className="px-2 py-1 border rounded text-slate-900">{INVENTORY_UNITS.map(unit => <option key={unit} value={unit}>{formatUnit(unit)}</option>)}</select> : <>{item.unitOfMeasure}{item.conversionToBase !== 1 && <span className="block text-xs text-slate-500">× {item.conversionToBase} {item.stockBaseUnit}</span>}</>}</td><td className="px-6 py-4 text-right">{editing ? <input type="number" min="0" step="0.01" value={item.unitPrice} onChange={e => update(item.id, 'unitPrice', e.target.value)} className="w-28 px-2 py-1 border rounded text-right text-slate-900" /> : Number(item.unitPrice).toFixed(2)}</td><td className="px-6 py-4 text-right font-semibold">{currency} {(Number(item.quantity) * Number(item.unitPrice)).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td><td className="px-6 py-4 text-right">{editing && <button onClick={() => remove(item.id)} title="Remove item" className="p-1.5 text-red-500 hover:bg-red-50 rounded"><Trash2 className="w-4 h-4" /></button>}</td></tr>)}
     </tbody><tfoot className="bg-slate-50 border-t"><tr><td colSpan={4} className="px-6 py-4 text-right font-semibold text-slate-500">Total</td><td className="px-6 py-4 text-right font-bold text-slate-900">{currency} {total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td><td /></tr></tfoot></table></div>
   </div>;
 }

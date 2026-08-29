@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { UnitOfMeasure } from '@hotel-pms/db';
 import { hasInventoryPermission } from '@/lib/inventory/permissions';
+import { resolveStockUnitConversion } from '@/lib/inventory/UnitConversionService';
 
 export const dynamic = 'force-dynamic';
 
@@ -84,6 +85,12 @@ export async function PATCH(req: Request, props: { params: Promise<{ id: string 
         if (!item.description?.trim() || !Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(unitPrice) || unitPrice < 0 || !Object.values(UnitOfMeasure).includes(unitOfMeasure)) {
           return NextResponse.json({ error: 'Each PO line needs a description, valid quantity, unit, and non-negative price' }, { status: 400 });
         }
+        if (!existing.stockItemId) return NextResponse.json({ error: 'PO line is missing its stock item' }, { status: 400 });
+        try {
+          await resolveStockUnitConversion(prisma, existing.stockItemId, unitOfMeasure);
+        } catch (error: any) {
+          return NextResponse.json({ error: error.message }, { status: 400 });
+        }
         submittedIds.add(item.id);
         totalAmount += quantity * unitPrice;
       }
@@ -93,9 +100,10 @@ export async function PATCH(req: Request, props: { params: Promise<{ id: string 
         for (const item of items) {
           const quantity = Number(item.quantity);
           const unitPrice = Number(item.unitPrice);
+          const conversionToBase = await resolveStockUnitConversion(tx, existingById.get(item.id)!.stockItemId!, String(item.unitOfMeasure).toUpperCase() as UnitOfMeasure);
           await tx.purchaseOrderItem.update({
             where: { id: item.id },
-            data: { description: item.description.trim(), quantity, unitOfMeasure: String(item.unitOfMeasure).toUpperCase() as UnitOfMeasure, unitPrice, totalPrice: quantity * unitPrice },
+            data: { description: item.description.trim(), quantity, unitOfMeasure: String(item.unitOfMeasure).toUpperCase() as UnitOfMeasure, unitPrice, totalPrice: quantity * unitPrice, conversionToBase },
           });
         }
         await tx.purchaseOrder.update({ where: { id: po.id }, data: { totalAmount, updatedBy: (session.user as any).id, updatedAt: new Date() } });

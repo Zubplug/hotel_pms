@@ -36,7 +36,28 @@ export class InventoryService {
 
     const order = await tx.posOrder.findUnique({
       where: { id: posOrderId },
-      include: { items: { include: { product: { include: { recipe: { include: { versions: { where: { isActive: true }, include: { ingredients: true } } } } } } } } },
+      include: {
+        items: {
+          include: {
+            product: {
+              include: {
+                recipe: {
+                  include: {
+                    versions: {
+                      where: { isActive: true },
+                      include: {
+                        ingredients: {
+                          include: { stockItem: { select: { baseUnit: true, stockUnits: true } } },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
     });
     if (!order) throw new Error('POS Order not found');
 
@@ -46,7 +67,11 @@ export class InventoryService {
       const ingredients = item.product.recipe?.versions?.[0]?.ingredients || [];
       if (!ingredients.length) throw new Error(`Inventory mapping is missing for ${item.productName}`);
       for (const recipe of ingredients) {
-        requirements.set(recipe.stockItemId, (requirements.get(recipe.stockItemId) || 0) + Number(recipe.quantity) * Number(item.quantity));
+        const conversion = recipe.unitOfMeasure === recipe.stockItem?.baseUnit
+          ? 1
+          : Number(recipe.stockItem?.stockUnits?.find((unit: any) => unit.unit === recipe.unitOfMeasure)?.unitsInBase || 0);
+        if (conversion <= 0) throw new Error(`No conversion configured from ${recipe.unitOfMeasure} to ${recipe.stockItem?.baseUnit || 'base unit'} for ${item.productName}`);
+        requirements.set(recipe.stockItemId, (requirements.get(recipe.stockItemId) || 0) + Number(recipe.quantity) * conversion * Number(item.quantity));
       }
     }
 
@@ -222,16 +247,20 @@ export class InventoryService {
         const currentCost = Number(existingStockItem.costPrice);
         const receivedQty = Number(item.receivedQty);
         const receivedCost = Number(item.unitCost);
+        const poItem = grn.purchaseOrder?.items.find((p: any) => p.stockItemId === stockItem.id);
+        const conversionToBase = Number(poItem?.conversionToBase || 1);
+        const receivedQtyInBase = Number(item.baseReceivedQty || receivedQty * conversionToBase);
+        const receivedCostPerBase = Number(item.baseUnitCost || (conversionToBase > 0 ? receivedCost / conversionToBase : receivedCost));
 
         const currentTotalValue = currentQty * currentCost;
-        const receivedTotalValue = receivedQty * receivedCost;
-        const newTotalQty = currentQty + receivedQty;
+        const receivedTotalValue = receivedQtyInBase * receivedCostPerBase;
+        const newTotalQty = currentQty + receivedQtyInBase;
         const newMac = newTotalQty > 0 ? (currentTotalValue + receivedTotalValue) / newTotalQty : currentCost;
 
         const stockItem = await tx.stockItem.update({
           where: { id: item.stockItemId },
           data: {
-            quantityOnHand: { increment: item.receivedQty },
+            quantityOnHand: { increment: receivedQtyInBase },
             costPrice: newMac
           }
         });
@@ -242,11 +271,11 @@ export class InventoryService {
             propertyId: grn.propertyId,
             stockItemId: stockItem.id,
             source: 'RECEIPT' as StockTransactionSource,
-            quantity: qtyToReceive,
-            unitCost: item.unitCost,
-            quantityBefore: stockItem.quantityOnHand.minus(qtyToReceive),
+            quantity: receivedQtyInBase,
+            unitCost: receivedCostPerBase,
+            quantityBefore: stockItem.quantityOnHand.minus(receivedQtyInBase),
             quantityAfter: stockItem.quantityOnHand,
-            totalValue: qtyToReceive.mul(item.unitCost),
+            totalValue: receivedQtyInBase * receivedCostPerBase,
             currency,
             warehouseId: stockItem.warehouseId,
             grnId: grn.id,
@@ -331,12 +360,13 @@ export class InventoryService {
       const currency = property?.baseCurrency || 'NGN';
 
       for (const item of transfer.items) {
+        const transferQuantity = Number(item.baseQuantity || item.quantity);
         // Need the destination stock item (usually mapped by barcode/SKU in destination warehouse)
         // For simplicity, assuming stockItem in transfer is the source. We must find/create the dest stock item.
-        const sourceItem = await tx.stockItem.findUnique({ where: { id: item.stockItemId } });
+        const sourceItem = await tx.stockItem.findUnique({ where: { id: item.stockItemId }, include: { stockUnits: true } });
         if (!sourceItem) continue;
 
-        if (sourceItem.quantityOnHand.lt(item.quantity)) {
+        if (sourceItem.quantityOnHand.lt(transferQuantity)) {
           throw new Error(`Insufficient stock for transfer on item: ${sourceItem.name}`);
         }
 
@@ -358,9 +388,19 @@ export class InventoryService {
               sku: sourceItem.sku,
               barcode: sourceItem.barcode,
               baseUnit: sourceItem.baseUnit,
+              stockType: sourceItem.stockType,
               costPrice: sourceItem.costPrice,
               quantityOnHand: 0,
-              isActive: true
+              isActive: true,
+              stockUnits: {
+                create: sourceItem.stockUnits.map((unit: any) => ({
+                  unit: unit.unit,
+                  unitsInBase: unit.unitsInBase,
+                  barcode: null,
+                  isPurchaseUnit: unit.isPurchaseUnit,
+                  isIssueUnit: unit.isIssueUnit,
+                })),
+              },
             }
           });
         }
@@ -368,7 +408,7 @@ export class InventoryService {
         // 1. Deduct from Source
         const updatedSource = await tx.stockItem.update({
           where: { id: sourceItem.id },
-          data: { quantityOnHand: { decrement: item.quantity } }
+          data: { quantityOnHand: { decrement: transferQuantity } }
         });
 
         await tx.stockTransaction.create({
@@ -376,11 +416,11 @@ export class InventoryService {
             propertyId: transfer.propertyId,
             stockItemId: sourceItem.id,
             source: 'TRANSFER' as StockTransactionSource,
-            quantity: item.quantity.mul(-1), // Negative for Out
+            quantity: transferQuantity * -1, // Negative for Out, always in base units
             unitCost: sourceItem.costPrice,
             quantityBefore: sourceItem.quantityOnHand,
             quantityAfter: updatedSource.quantityOnHand,
-            totalValue: item.quantity.mul(sourceItem.costPrice).mul(-1),
+            totalValue: transferQuantity * Number(sourceItem.costPrice) * -1,
             currency,
             warehouseId: transfer.fromWarehouseId,
             transferId: transfer.id,
@@ -393,7 +433,7 @@ export class InventoryService {
         // 2. Add to Destination
         const updatedDest = await tx.stockItem.update({
           where: { id: destItem.id },
-          data: { quantityOnHand: { increment: item.quantity } }
+          data: { quantityOnHand: { increment: transferQuantity } }
         });
 
         await tx.stockTransaction.create({
@@ -401,11 +441,11 @@ export class InventoryService {
             propertyId: transfer.propertyId,
             stockItemId: destItem.id,
             source: 'TRANSFER' as StockTransactionSource,
-            quantity: item.quantity,
+            quantity: transferQuantity,
             unitCost: destItem.costPrice, // Maintain cost price across warehouse
             quantityBefore: destItem.quantityOnHand,
             quantityAfter: updatedDest.quantityOnHand,
-            totalValue: item.quantity.mul(destItem.costPrice),
+            totalValue: transferQuantity * Number(destItem.costPrice),
             currency,
             warehouseId: transfer.toWarehouseId,
             transferId: transfer.id,

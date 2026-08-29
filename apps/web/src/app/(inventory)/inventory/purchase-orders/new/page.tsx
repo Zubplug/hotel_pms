@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, Trash2, ArrowRight } from 'lucide-react';
+import { INVENTORY_UNITS, formatUnit } from '@/lib/inventory/units';
 
 export default function NewPurchaseOrderPage() {
   const router = useRouter();
@@ -25,6 +26,11 @@ export default function NewPurchaseOrderPage() {
   }, []);
 
   const total = items.reduce((sum, item) => sum + (Number(item.quantity) * Number(item.unitPrice)), 0);
+  const selectedUnits = (stockItemId: string) => {
+    const stockItem = stockItems.find((item) => item.id === stockItemId);
+    if (!stockItem) return INVENTORY_UNITS;
+    return [stockItem.baseUnit, ...(stockItem.stockUnits || []).map((unit: any) => unit.unit).filter((unit: string) => unit !== stockItem.baseUnit)];
+  };
 
   async function handleSubmit() {
     setLoading(true);
@@ -118,6 +124,8 @@ export default function NewPurchaseOrderPage() {
                           onChange={e => {
                             const newItems = [...items];
                             newItems[idx].stockItemId = e.target.value;
+                            const selected = stockItems.find((stockItem) => stockItem.id === e.target.value);
+                            newItems[idx].uom = selected?.baseUnit || '';
                             setItems(newItems);
                           }}
                           className="w-full bg-white border border-slate-300 rounded-md px-3 py-1.5 text-slate-900 text-sm"
@@ -167,8 +175,8 @@ export default function NewPurchaseOrderPage() {
                           className="w-full bg-white border border-slate-300 rounded-md px-3 py-1.5 text-slate-900 text-sm"
                         >
                           <option value="">Select unit...</option>
-                          {['KG', 'GRAM', 'LITRE', 'ML', 'PIECE', 'BOX', 'BOTTLE', 'PACK'].map(unit => (
-                            <option key={unit} value={unit}>{unit}</option>
+                          {selectedUnits(item.stockItemId).map(unit => (
+                            <option key={unit} value={unit}>{formatUnit(unit)}</option>
                           ))}
                         </select>
                       </div>

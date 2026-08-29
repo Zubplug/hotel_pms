@@ -119,6 +119,9 @@ export default async function CostControlDashboardPage() {
               {recipesCount}
             </span>
           </Link>
+          <Link href="/inventory/cost-control/waste" className="inline-flex items-center gap-2 rounded-lg border border-white/20 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10">
+            <AlertTriangle className="h-4 w-4" /> Kitchen Waste
+          </Link>
         </div>
       </div>
 

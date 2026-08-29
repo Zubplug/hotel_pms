@@ -4,6 +4,7 @@ import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
+import { INVENTORY_UNITS, formatUnit } from '@/lib/inventory/units';
 
 export default function EditStockItemPage(props: { params: Promise<{ id: string }> }) {
   const params = use(props.params);
@@ -11,6 +12,8 @@ export default function EditStockItemPage(props: { params: Promise<{ id: string 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [item, setItem] = useState<any>(null);
+  const [unitForm, setUnitForm] = useState({ unit: 'CARTON', unitsInBase: '', barcode: '', isPurchaseUnit: true, isIssueUnit: false });
+  const [unitSaving, setUnitSaving] = useState(false);
 
   useEffect(() => {
     fetch(`/api/v1/inventory/stock-items/${params.id}`)
@@ -18,6 +21,22 @@ export default function EditStockItemPage(props: { params: Promise<{ id: string 
       .then((data) => setItem(data.data))
       .catch((err) => console.error('Failed to fetch item', err));
   }, [params.id]);
+
+  const saveUnit = async () => {
+    setUnitSaving(true);
+    try {
+      const res = await fetch(`/api/v1/inventory/stock-items/${params.id}/units`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(unitForm) });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to save unit conversion');
+      setItem((current: any) => ({ ...current, stockUnits: [...(current.stockUnits || []).filter((unit: any) => unit.unit !== json.data.unit), json.data] }));
+      setUnitForm({ unit: 'CARTON', unitsInBase: '', barcode: '', isPurchaseUnit: true, isIssueUnit: false });
+    } catch (err: any) { setError(err.message); } finally { setUnitSaving(false); }
+  };
+
+  const deleteUnit = async (unit: string) => {
+    const res = await fetch(`/api/v1/inventory/stock-items/${params.id}/units?unit=${unit}`, { method: 'DELETE' });
+    if (res.ok) setItem((current: any) => ({ ...current, stockUnits: (current.stockUnits || []).filter((entry: any) => entry.unit !== unit) }));
+  };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -140,6 +159,18 @@ export default function EditStockItemPage(props: { params: Promise<{ id: string 
                 <label htmlFor="isActive" className="text-sm font-medium text-slate-800">Item is active</label>
               </div>
             </div>
+          </div>
+
+          <div className="mt-6 border-t border-slate-200 pt-6">
+            <h2 className="text-sm font-semibold text-slate-900">Packaging & Unit Conversions</h2>
+            <p className="mt-1 text-xs text-slate-500">Base unit: <strong>{formatUnit(item.baseUnit)}</strong>. Add purchase or issue units, such as 1 carton = 12 bottles.</p>
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+              <div><label className="text-xs font-medium text-slate-700">Unit</label><select value={unitForm.unit} onChange={(e) => setUnitForm({ ...unitForm, unit: e.target.value })} className="mt-1 w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-slate-900">{INVENTORY_UNITS.map((unit) => <option key={unit} value={unit} disabled={unit === item.baseUnit}>{formatUnit(unit)}</option>)}</select></div>
+              <div><label className="text-xs font-medium text-slate-700">Units in base</label><input type="number" min="0.000001" step="0.000001" value={unitForm.unitsInBase} onChange={(e) => setUnitForm({ ...unitForm, unitsInBase: e.target.value })} placeholder={`e.g. 12 ${item.baseUnit}`} className="mt-1 w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-slate-900" /></div>
+              <div><label className="text-xs font-medium text-slate-700">Barcode (optional)</label><input value={unitForm.barcode} onChange={(e) => setUnitForm({ ...unitForm, barcode: e.target.value })} className="mt-1 w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-slate-900" /></div>
+              <button type="button" onClick={saveUnit} disabled={unitSaving || !unitForm.unitsInBase} className="px-4 py-2 bg-slate-900 text-white rounded-md text-sm disabled:opacity-50">{unitSaving ? 'Saving...' : 'Save Conversion'}</button>
+            </div>
+            {(item.stockUnits || []).length > 0 && <div className="mt-4 divide-y divide-slate-100 border border-slate-200 rounded-lg">{item.stockUnits.map((unit: any) => <div key={unit.id} className="flex items-center justify-between px-3 py-2 text-sm"><span className="font-medium text-slate-800">1 {formatUnit(unit.unit)} = {Number(unit.unitsInBase)} {formatUnit(item.baseUnit)}</span><span className="flex items-center gap-3 text-xs text-slate-500">{unit.isPurchaseUnit && 'Purchase'}{unit.isIssueUnit && ' · Issue'}<button type="button" onClick={() => deleteUnit(unit.unit)} className="text-red-600 hover:text-red-800">Remove</button></span></div>)}</div>}
           </div>
 
           <div className="pt-4 flex justify-end gap-3 border-t border-slate-200">

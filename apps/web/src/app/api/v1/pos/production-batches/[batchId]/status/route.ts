@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { PosProductionBatchStatus } from '@hotel-pms/db';
+import { auth } from '@/lib/auth';
 
 // Valid status transitions (forward only)
 const STATUS_ORDER: PosProductionBatchStatus[] = [
@@ -18,6 +19,8 @@ export async function PATCH(
   { params }: { params: Promise<{ batchId: string }> }
 ) {
   try {
+    const session = await auth();
+    if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const { batchId } = await params;
     const body = await req.json();
     const { status: newStatus } = body as { status: PosProductionBatchStatus };
@@ -47,13 +50,16 @@ export async function PATCH(
       );
     }
 
-    const updated = await prisma.posProductionBatch.update({
-      where: { id: batchId },
-      data: { status: newStatus },
-      include: {
-        items: true,
-        order: { select: { id: true, orderNumber: true, tableNumber: true } },
-      },
+    const updated = await prisma.$transaction(async (tx) => {
+      const result = await tx.posProductionBatch.update({
+        where: { id: batchId },
+        data: { status: newStatus },
+        include: { items: true, order: { select: { id: true, orderNumber: true, tableNumber: true } } },
+      });
+      await tx.posProductionBatchEvent.create({
+        data: { batchId, fromStatus: batch.status, toStatus: newStatus, actorId: (session.user as any).id || null },
+      });
+      return result;
     });
 
     return NextResponse.json({ data: updated, error: null });

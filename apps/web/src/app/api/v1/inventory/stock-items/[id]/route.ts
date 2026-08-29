@@ -19,6 +19,7 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
             where: { id: params.id, propertyId },
             include: {
                 warehouse: true,
+                stockUnits: { orderBy: { unit: 'asc' } },
                 alerts: {
                     where: { status: 'OPEN' },
                 },

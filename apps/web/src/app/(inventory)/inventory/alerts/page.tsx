@@ -9,14 +9,34 @@ export default async function InventoryAlertsPage() {
   const session = await auth();
   if (!session?.user?.propertyId) return null;
 
-  await InventoryAlertService.sync(session.user.propertyId);
+  try {
+    await InventoryAlertService.sync(session.user.propertyId);
+  } catch (error) {
+    // Alert display should remain available even if a concurrent sync or
+    // temporary database issue prevents refreshing the alert snapshot.
+    console.error('[Inventory Alerts] Failed to sync alert snapshot', error);
+  }
 
   const alerts = await prisma.inventoryAlert.findMany({
     where: {
       propertyId: session.user.propertyId,
       status: { in: ['OPEN', 'ACKNOWLEDGED'] },
     },
-    include: { stockItem: { include: { warehouse: true } } },
+    select: {
+      id: true,
+      stockItemId: true,
+      type: true,
+      message: true,
+      status: true,
+      createdAt: true,
+      stockItem: {
+        select: {
+          name: true,
+          stockType: true,
+          warehouse: { select: { name: true } },
+        },
+      },
+    },
     orderBy: { createdAt: 'desc' },
   });
 

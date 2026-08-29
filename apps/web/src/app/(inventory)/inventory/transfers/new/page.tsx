@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeftRight, Plus, Trash2, ChevronRight, Loader2, Send } from 'lucide-react';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
+import { INVENTORY_UNITS, formatUnit } from '@/lib/inventory/units';
 
 interface Warehouse { id: string; name: string; posOutlet?: { id: string; name: string } | null; }
 interface StockItem { id: string; name: string; stockType?: string; baseUnit: string; quantityOnHand: number; warehouseId: string; }
@@ -28,6 +29,11 @@ export default function NewTransferPage() {
   }, []);
 
   const fromItems = stockItems.filter(i => !fromWarehouseId || i.warehouseId === fromWarehouseId);
+  const unitsForItem = (stockItemId: string) => {
+    const item = stockItems.find((entry) => entry.id === stockItemId);
+    if (!item) return INVENTORY_UNITS;
+    return [item.baseUnit, ...(item as any).stockUnits?.map((unit: any) => unit.unit).filter((unit: string) => unit !== item.baseUnit) || []];
+  };
 
   const addLine = () => setLines(l => [...l, { stockItemId: '', quantity: '', unitOfMeasure: 'PIECE', notes: '' }]);
   const removeLine = (i: number) => setLines(l => l.filter((_, idx) => idx !== i));
@@ -36,8 +42,8 @@ export default function NewTransferPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!fromWarehouseId || !toWarehouseId) { setError('Please select both warehouses.'); return; }
-    if (fromWarehouseId === toWarehouseId) { setError('Source and destination must be different warehouses.'); return; }
+    if (!fromWarehouseId || !toWarehouseId) { setError(issueToOutlet ? 'Please select a source warehouse and outlet.' : 'Please select both warehouses.'); return; }
+    if (fromWarehouseId === toWarehouseId) { setError('Source and destination must be different.'); return; }
     if (lines.some(l => !l.stockItemId || !l.quantity)) { setError('All transfer lines must have an item and quantity.'); return; }
 
     setIsSubmitting(true);
@@ -69,8 +75,10 @@ export default function NewTransferPage() {
     }
   }
 
-  const UNITS = ['KG', 'GRAM', 'LITRE', 'ML', 'PIECE', 'BOX', 'BOTTLE', 'PACK'];
-  const destinationWarehouses = warehouses.filter(w => w.id !== fromWarehouseId && (!issueToOutlet || w.posOutlet));
+  const sourceWarehouses = issueToOutlet ? warehouses.filter(w => !w.posOutlet) : warehouses;
+  const destinationWarehouses = issueToOutlet
+    ? warehouses.filter(w => w.id !== fromWarehouseId && w.posOutlet)
+    : warehouses.filter(w => w.id !== fromWarehouseId);
   const autoPostOutletIssue = issueToOutlet && ['STOCK_KEEPER', 'STOCK_MANAGER'].includes(String(session?.user?.role || '').toUpperCase());
 
   return (
@@ -88,7 +96,7 @@ export default function NewTransferPage() {
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Warehouse Selection */}
         <div className="bg-slate-50 border border-slate-300 rounded-xl p-6">
-          <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wider mb-4">Transfer Route</h2>
+          <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wider mb-4">{issueToOutlet ? 'Warehouse to Outlet' : 'Transfer Route'}</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="text-sm font-medium text-slate-700 mb-1.5 block">From Warehouse *</label>
@@ -99,20 +107,21 @@ export default function NewTransferPage() {
                 className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2.5 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
               >
                 <option value="">Select source warehouse</option>
-                {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                {sourceWarehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-sm font-medium text-slate-700 mb-1.5 block">To Warehouse *</label>
+              <label className="text-sm font-medium text-slate-700 mb-1.5 block">{issueToOutlet ? 'To Outlet *' : 'To Warehouse *'}</label>
               <select
                 value={toWarehouseId}
                 onChange={e => setToWarehouseId(e.target.value)}
                 required
                 className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2.5 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
               >
-                <option value="">Select destination warehouse</option>
-                {destinationWarehouses.map(w => <option key={w.id} value={w.id}>{w.posOutlet ? `${w.posOutlet.name} (Outlet)` : w.name}</option>)}
+                <option value="">{issueToOutlet ? 'Select available outlet' : 'Select destination warehouse'}</option>
+                {destinationWarehouses.map(w => <option key={w.id} value={w.id}>{issueToOutlet ? w.posOutlet?.name : w.name}</option>)}
               </select>
+              {issueToOutlet && destinationWarehouses.length === 0 && <p className="mt-1.5 text-xs text-amber-700">No outlet warehouse is configured yet.</p>}
             </div>
           </div>
           <div className="mt-4">
@@ -175,7 +184,7 @@ export default function NewTransferPage() {
                     onChange={e => updateLine(i, 'unitOfMeasure', e.target.value)}
                     className="w-full bg-white border border-slate-300 rounded px-2 py-2 text-slate-900 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500/50"
                   >
-                    {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                    {unitsForItem(line.stockItemId).map(u => <option key={u} value={u}>{formatUnit(u)}</option>)}
                   </select>
                 </div>
                 <div className="col-span-3">

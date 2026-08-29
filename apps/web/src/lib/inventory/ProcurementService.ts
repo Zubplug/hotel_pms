@@ -120,12 +120,15 @@ export class ProcurementService {
           throw new Error(`Cannot receive ${receivedQty} for ${poItem.description}. Only ${remainingQty} remaining.`);
         }
 
+        const conversionToBase = Number(poItem.conversionToBase || 1);
         validItems.push({
           stockItemId: poItem.stockItemId,
           description: poItem.description,
           receivedQty,
           unitOfMeasure: poItem.unitOfMeasure,
           unitCost,
+          baseReceivedQty: receivedQty * conversionToBase,
+          baseUnitCost: conversionToBase > 0 ? unitCost / conversionToBase : unitCost,
         });
         seenPoItems.add(input.poItemId);
       }

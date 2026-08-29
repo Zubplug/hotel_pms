@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma, { UnitOfMeasure } from '@hotel-pms/db';
 import { hasInventoryPermission } from '@/lib/inventory/permissions';
+import { resolveStockUnitConversion } from '@/lib/inventory/UnitConversionService';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,6 +60,9 @@ export async function POST(req: Request) {
     const poNumber = `PO-${String(count + 1).padStart(5, '0')}`;
 
     let totalAmount = 0;
+    const stockItemIds = items.map((item: any) => item.stockItemId).filter(Boolean);
+    const stockItems = await prisma.stockItem.findMany({ where: { id: { in: stockItemIds }, propertyId, isActive: true }, select: { id: true } });
+    const validStockItemIds = new Set(stockItems.map((item) => item.id));
     const poItems = items.map((item: any) => {
       const quantity = Number(item.quantity) || 0;
       const unitPrice = Number(item.unitPrice) || 0;
@@ -67,6 +71,7 @@ export async function POST(req: Request) {
       if (!Object.values(UnitOfMeasure).includes(unitOfMeasure)) {
         throw new Error(`Invalid unit of measure for ${item.description || 'line item'}`);
       }
+      if (!item.stockItemId || !validStockItemIds.has(item.stockItemId)) throw new Error('Each PO line must reference an active stock item in this property');
       totalAmount += amount;
       return {
         stockItemId: item.stockItemId,
@@ -75,8 +80,13 @@ export async function POST(req: Request) {
         unitOfMeasure,
         unitPrice,
         totalPrice: amount,
+        conversionToBase: 1,
       };
     });
+
+    for (const item of poItems) {
+      item.conversionToBase = await resolveStockUnitConversion(prisma, item.stockItemId, item.unitOfMeasure);
+    }
 
     const purchaseOrder = await prisma.purchaseOrder.create({
       data: {

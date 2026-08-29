@@ -16,7 +16,7 @@ export class CostControlService {
               where: { isActive: true },
               include: {
                 ingredients: {
-                  include: { stockItem: true }
+                  include: { stockItem: { include: { stockUnits: true } } }
                 }
               }
             }
@@ -54,7 +54,12 @@ export class CostControlService {
       const recipeUOM = ingredient.unitOfMeasure;
       const stockUOM = stockItem.baseUnit;
 
-      const ratio = getConversionRatio(recipeUOM, stockUOM);
+      const itemConversion = (stockItem as any).stockUnits?.find((unit: any) => unit.unit === recipeUOM);
+      const ratio = recipeUOM === stockUOM
+        ? 1
+        : itemConversion
+          ? Number(itemConversion.unitsInBase)
+          : getConversionRatio(recipeUOM, stockUOM);
       
       // StockItem cost is per stockUOM.
       // So the cost of the recipe ingredient is: (ingredientQty * ratio) * stockItem.costPrice
