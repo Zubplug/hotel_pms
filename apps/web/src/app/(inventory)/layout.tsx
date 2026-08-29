@@ -9,7 +9,7 @@ const ALLOWED = ['CEO', 'SUPER_ADMIN', 'MANAGER', 'GENERAL_CASHIER', 'STOCK_MANA
 
 export default async function InventoryRootLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
-  const role = (session?.user as any)?.role;
+  const role = String((session?.user as any)?.role || '').toUpperCase();
   const isSuperAdmin = (session?.user as any)?.isSuperAdmin;
   
   // Enforce server-side authorization
