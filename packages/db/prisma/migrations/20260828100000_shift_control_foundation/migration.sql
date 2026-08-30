@@ -75,7 +75,7 @@ SET "controlStatus" = CASE
 END
 WHERE "controlStatus" = 'OPEN';
 
-CREATE TABLE "ShiftControlAudit" (
+CREATE TABLE IF NOT EXISTS "ShiftControlAudit" (
   "id" UUID NOT NULL,
   "propertyId" UUID NOT NULL,
   "posSessionId" UUID,
@@ -91,10 +91,25 @@ CREATE TABLE "ShiftControlAudit" (
   CONSTRAINT "ShiftControlAudit_pkey" PRIMARY KEY ("id")
 );
 
-CREATE UNIQUE INDEX "ShiftControlAudit_idempotencyKey_key" ON "ShiftControlAudit"("idempotencyKey");
-CREATE INDEX "ShiftControlAudit_propertyId_createdAt_idx" ON "ShiftControlAudit"("propertyId", "createdAt");
-CREATE INDEX "ShiftControlAudit_posSessionId_createdAt_idx" ON "ShiftControlAudit"("posSessionId", "createdAt");
-CREATE INDEX "ShiftControlAudit_frontdeskSessionId_createdAt_idx" ON "ShiftControlAudit"("frontdeskSessionId", "createdAt");
+-- Some environments created the table before all control fields were added.
+-- Reconcile those partial installations without replacing existing records.
+ALTER TABLE "ShiftControlAudit"
+  ADD COLUMN IF NOT EXISTS "propertyId" UUID,
+  ADD COLUMN IF NOT EXISTS "posSessionId" UUID,
+  ADD COLUMN IF NOT EXISTS "frontdeskSessionId" UUID,
+  ADD COLUMN IF NOT EXISTS "action" TEXT,
+  ADD COLUMN IF NOT EXISTS "fromStatus" TEXT,
+  ADD COLUMN IF NOT EXISTS "toStatus" TEXT,
+  ADD COLUMN IF NOT EXISTS "performedBy" UUID,
+  ADD COLUMN IF NOT EXISTS "reason" TEXT,
+  ADD COLUMN IF NOT EXISTS "metadata" JSONB,
+  ADD COLUMN IF NOT EXISTS "idempotencyKey" TEXT,
+  ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+CREATE UNIQUE INDEX IF NOT EXISTS "ShiftControlAudit_idempotencyKey_key" ON "ShiftControlAudit"("idempotencyKey");
+CREATE INDEX IF NOT EXISTS "ShiftControlAudit_propertyId_createdAt_idx" ON "ShiftControlAudit"("propertyId", "createdAt");
+CREATE INDEX IF NOT EXISTS "ShiftControlAudit_posSessionId_createdAt_idx" ON "ShiftControlAudit"("posSessionId", "createdAt");
+CREATE INDEX IF NOT EXISTS "ShiftControlAudit_frontdeskSessionId_createdAt_idx" ON "ShiftControlAudit"("frontdeskSessionId", "createdAt");
 
 -- CENTRAL_CASHIER has exactly one open bank per property/outlet. This also
 -- prevents two terminals from opening competing central banks concurrently.
@@ -104,11 +119,22 @@ CREATE UNIQUE INDEX IF NOT EXISTS "PosSession_one_open_central_bank_per_outlet_k
     AND "bankType" = 'CENTRAL'
     AND "bankingModel" = 'CENTRAL_CASHIER';
 
-ALTER TABLE "ShiftControlAudit"
-  ADD CONSTRAINT "ShiftControlAudit_propertyId_fkey" FOREIGN KEY ("propertyId") REFERENCES "Property"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
-  ADD CONSTRAINT "ShiftControlAudit_posSessionId_fkey" FOREIGN KEY ("posSessionId") REFERENCES "PosSession"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
-  ADD CONSTRAINT "ShiftControlAudit_frontdeskSessionId_fkey" FOREIGN KEY ("frontdeskSessionId") REFERENCES "FrontdeskSession"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
-  ADD CONSTRAINT "ShiftControlAudit_performedBy_fkey" FOREIGN KEY ("performedBy") REFERENCES "Staff"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "ShiftControlAudit"
+    ADD CONSTRAINT "ShiftControlAudit_propertyId_fkey" FOREIGN KEY ("propertyId") REFERENCES "Property"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE "ShiftControlAudit"
+    ADD CONSTRAINT "ShiftControlAudit_posSessionId_fkey" FOREIGN KEY ("posSessionId") REFERENCES "PosSession"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE "ShiftControlAudit"
+    ADD CONSTRAINT "ShiftControlAudit_frontdeskSessionId_fkey" FOREIGN KEY ("frontdeskSessionId") REFERENCES "FrontdeskSession"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE "ShiftControlAudit"
+    ADD CONSTRAINT "ShiftControlAudit_performedBy_fkey" FOREIGN KEY ("performedBy") REFERENCES "Staff"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- Existing legacy status fields remain unchanged. The control-status columns
 -- are backfilled above so deployed readers can interpret existing records.

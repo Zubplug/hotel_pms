@@ -273,7 +273,7 @@ export async function GET(req: NextRequest) {
           refunds: movementTotal('REFUND') + movementTotal('REFUND_CASH'),
         },
         settlement,
-        shiftControlAudits: item.shiftControlAudits,
+        shiftControlAudits: item.controlAudits,
       };
     });
     const frontdeskShiftRows = frontdeskSessions.map((item: any) => {
@@ -309,7 +309,7 @@ export async function GET(req: NextRequest) {
           transfersOut: movementTotal(['CASH_TRANSFER_OUT']),
           refunds: movementTotal(['REFUND', 'REFUND_CASH']),
         },
-        shiftControlAudits: item.shiftControlAudits,
+        shiftControlAudits: item.controlAudits,
       };
     });
     const frontdeskCashMovements = frontdeskSessions.flatMap((session: any) => session.cashMovements.map((movement: any) => ({
