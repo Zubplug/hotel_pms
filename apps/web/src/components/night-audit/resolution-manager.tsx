@@ -692,6 +692,33 @@ function FinancialSyncResolution({ item, onSuccess, onClose }: { item: any; onSu
             <span className="text-muted-foreground">Device:</span>
             <span className="font-medium">{item.hotelEvent?.deviceId || 'Unknown'}</span>
           </div>
+
+          {item.hotelEvent?.payload && (
+            <div className="pt-3 mt-3 border-t space-y-2">
+              <p className="text-xs font-semibold text-slate-800 uppercase tracking-wider mb-2">Sync Payload Data</p>
+              {item.hotelEvent.payload.amount !== undefined && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Amount:</span>
+                  <span className="font-medium font-mono text-indigo-700">
+                    {Number(item.hotelEvent.payload.amount).toLocaleString('en-NG', { style: 'currency', currency: item.hotelEvent.payload.currency || 'NGN' })}
+                  </span>
+                </div>
+              )}
+              {item.hotelEvent.payload.description && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Description:</span>
+                  <span className="font-medium">{item.hotelEvent.payload.description}</span>
+                </div>
+              )}
+              {item.hotelEvent.payload.method && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Method:</span>
+                  <span className="font-medium">{item.hotelEvent.payload.method}</span>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="pt-2 mt-2 border-t text-xs text-muted-foreground">
             {item.errorDetails?.message || 'Version mismatch detected.'}
           </div>
