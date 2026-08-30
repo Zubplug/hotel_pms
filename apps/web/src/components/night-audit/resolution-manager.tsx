@@ -756,7 +756,7 @@ function FolioPreview({ item, onClose }: { item: any; onClose: () => void }) {
     <>
       <DialogHeader>
         <DialogTitle>Folio Preview</DialogTitle>
-        <DialogDescription>Folio #{item.folioNumber || item.id}</DialogDescription>
+        <DialogDescription>Folio #{item.reservation?.number || item.id.split('-')[0].toUpperCase()}</DialogDescription>
       </DialogHeader>
       <div className="py-4 space-y-4">
         <div className="p-4 bg-slate-50 border rounded-xl flex items-center justify-between">

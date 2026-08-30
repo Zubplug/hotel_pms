@@ -319,8 +319,11 @@ export default function NightAuditDashboard() {
         {data.financial.highBalances.map((hb: any) => (
           <div key={hb.id} className="text-sm p-3 bg-white rounded-lg border border-amber-200 flex items-center justify-between shadow-sm">
             <div>
-              <p className="font-medium text-amber-900">Folio #{hb.folioNumber}</p>
-              <p className="text-xs text-amber-700">Balance: <span className="font-semibold">{currency(Number(hb.balance), data?.property?.baseCurrency)}</span></p>
+              <p className="font-medium text-amber-900">Folio #{hb.reservation?.number || hb.id.split('-')[0].toUpperCase()}</p>
+              <p className="text-xs text-amber-700">
+                {hb.reservation?.primaryGuest ? `${hb.reservation.primaryGuest.firstName} ${hb.reservation.primaryGuest.lastName} • ` : ''}
+                Balance: <span className="font-semibold">{currency(Number(hb.balance), data?.property?.baseCurrency)}</span>
+              </p>
             </div>
             <button onClick={() => setResolutionAction({ type: 'FOLIO_PREVIEW', item: hb })} className="text-xs font-medium text-amber-700 hover:text-amber-900 bg-amber-50 px-3 py-1.5 rounded-md transition-colors">Review Folio</button>
           </div>
