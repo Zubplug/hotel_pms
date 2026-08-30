@@ -11,7 +11,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { useToast } from '@/components/ui/use-toast';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2, CheckCircle, HelpCircle, Receipt } from 'lucide-react';
@@ -30,7 +29,6 @@ export function TransactionVerificationResolution({
   propertyId,
 }: TransactionVerificationResolutionProps) {
   const router = useRouter();
-  const { toast } = useToast();
   
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -92,11 +90,7 @@ export function TransactionVerificationResolution({
 
   const handleVerify = async (status: 'VERIFIED' | 'QUESTIONED') => {
     if (status === 'QUESTIONED' && !notes.trim()) {
-      toast({
-        title: 'Notes Required',
-        description: 'Please provide a reason for questioning this transaction.',
-        variant: 'destructive',
-      });
+      alert('Please provide a reason for questioning this transaction.');
       return;
     }
 
@@ -120,10 +114,8 @@ export function TransactionVerificationResolution({
         throw new Error(error.message || 'Failed to verify transaction');
       }
 
-      toast({
-        title: 'Success',
-        description: status === 'VERIFIED' ? 'Transaction verified successfully.' : 'Transaction marked as questioned.',
-      });
+      // Optionally alert on success
+      // alert(status === 'VERIFIED' ? 'Transaction verified successfully.' : 'Transaction marked as questioned.');
 
       // Proceed to next or close
       setNotes('');
@@ -142,11 +134,7 @@ export function TransactionVerificationResolution({
       }
 
     } catch (error: any) {
-      toast({
-        title: 'Error',
-        description: error.message,
-        variant: 'destructive',
-      });
+      alert(error.message);
     } finally {
       setIsSubmitting(false);
     }
