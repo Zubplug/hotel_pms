@@ -5,6 +5,8 @@ import { successResponse, errorResponse } from '@/lib/api-response';
 import { assertPropertyAccess } from '@/lib/property-access';
 import { calculateFolioTotals } from '@/lib/finance/folio-totals';
 import { applyAvailableFolioCredit } from '@/lib/finance/apply-folio-credit';
+import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
+import { getPropertyBusinessDate } from '@/lib/date-utils';
 
 export async function GET(
   _req: NextRequest,
@@ -130,12 +132,15 @@ export async function PATCH(
       where: { id },
       include: {
         reservationRooms: true,
-        property: { select: { organizationId: true } }
+        property: { select: { organizationId: true, businessDate: true, timezone: true } }
       }
     });
 
     if (!existingReservation) return errorResponse('NOT_FOUND', 'Reservation not found', 404);
     await assertPropertyAccess(session.user.id, existingReservation.propertyId);
+    if (await isNightAuditTransactionLocked(existingReservation.propertyId)) {
+      return errorResponse('NIGHT_AUDIT_IN_PROGRESS', 'Night audit cutover is in progress. Reservation changes resume after the new business date is active.', 409);
+    }
 
     const {
       guestId,
@@ -272,99 +277,6 @@ export async function PATCH(
       });
 
       // 3. Update Folio Ledger
-      const oldTotalAmount = (existingReservation.ratePlanSnapshot as any)?.total || 0;
-      if (!isRoomReassignment && (Number(newTotalAmount) !== Number(oldTotalAmount) ||
-          newCheckInDate.getTime() !== existingReservation.reservationRooms[0]?.checkIn.getTime() || 
-          newCheckOutDate.getTime() !== existingReservation.reservationRooms[0]?.checkOut.getTime())) {
-        
-        const folio = await tx.folio.findFirst({ where: { reservationId: id, type: 'ROOM' } });
-        if (folio) {
-          // Delete old expected room charges
-          await tx.folioItem.deleteMany({
-            where: { folioId: folio.id, source: 'ROOM_CHARGE' }
-          });
-
-          // Recreate new room charges
-          const nights = Math.max(1, Math.ceil((newCheckOutDate.getTime() - newCheckInDate.getTime()) / (1000 * 60 * 60 * 24)));
-          const folioItems: any[] = [];
-          let currentDate = new Date(newCheckInDate);
-          for (let i = 0; i < nights; i++) {
-            folioItems.push({
-              folioId: folio.id,
-              businessDate: new Date(currentDate),
-              type: 'CHARGE',
-              source: 'ROOM_CHARGE',
-              description: `Room Charge - Night ${i + 1}`,
-              quantity: 1,
-              unitAmount: newRateAmount,
-              amount: newRateAmount,
-              currency: existingReservation.currency || 'NGN',
-              baseAmount: newRateAmount,
-              postedBy: session.user.id as string,
-            });
-            currentDate.setDate(currentDate.getDate() + 1);
-          }
-          await tx.folioItem.createMany({ data: folioItems });
-
-          const allFolioItems = await tx.folioItem.findMany({ where: { folioId: folio.id } });
-          const creditApplications = await tx.folioCreditApplication.findMany({ where: { folioId: folio.id }, select: { amount: true } });
-          const totals = calculateFolioTotals(allFolioItems, creditApplications);
-          
-          await tx.folio.update({
-            where: { id: folio.id },
-            data: {
-              ...totals,
-            }
-          });
-        }
-      }
-
-      if (isRoomReassignment && roomMoveAdjustment !== 0) {
-        const folio = await tx.folio.findFirst({ where: { reservationId: id, type: 'ROOM' } });
-        if (folio) {
-          const nights = Math.max(1, Math.ceil((newCheckOutDate.getTime() - newCheckInDate.getTime()) / (1000 * 60 * 60 * 24)));
-          const adjustmentKey = `ROOM_REASSIGNMENT:${id}:${newRoomId}:${newCheckOutDate.toISOString().slice(0, 10)}`;
-          const existingAdjustment = await tx.folioItem.findFirst({ where: { folioId: folio.id, posTransactionId: adjustmentKey } });
-          const amount = Math.abs(roomMoveAdjustment);
-          if (!existingAdjustment) {
-            const isUpgrade = roomMoveAdjustment > 0;
-            await tx.folioItem.create({
-              data: {
-                folioId: folio.id,
-                businessDate: new Date(),
-                type: isUpgrade ? 'CHARGE' : 'PAYMENT',
-                source: isUpgrade ? 'ROOM_UPGRADE' : 'ROOM_DOWNGRADE_CREDIT',
-                description: `${isUpgrade ? 'Room upgrade charge' : 'Room downgrade credit'} - ${nights} night${nights === 1 ? '' : 's'}`,
-                quantity: 1,
-                unitAmount: isUpgrade ? amount : -amount,
-                amount: isUpgrade ? amount : -amount,
-                currency: existingReservation.currency || 'NGN',
-                baseAmount: amount,
-                postedBy: session.user.id as string,
-                posTransactionId: adjustmentKey,
-              }
-            });
-          }
-          const allFolioItems = await tx.folioItem.findMany({ where: { folioId: folio.id } });
-          const creditApplications = await tx.folioCreditApplication.findMany({ where: { folioId: folio.id }, select: { amount: true } });
-          const totals = calculateFolioTotals(allFolioItems, creditApplications);
-          await tx.folio.update({ where: { id: folio.id }, data: totals });
-          if (roomMoveAdjustment > 0) {
-            await applyAvailableFolioCredit(tx, {
-              folioId: folio.id,
-              propertyId: existingReservation.propertyId,
-              guestId: existingReservation.primaryGuestId,
-              reservationId: existingReservation.id,
-              amount,
-              currency: existingReservation.currency || 'NGN',
-              source: 'ROOM_UPGRADE',
-              description: `Applied guest credit to room upgrade - ${nights} night${nights === 1 ? '' : 's'}`,
-              appliedBy: session.user.id,
-              operationKey: adjustmentKey
-            });
-          }
-        }
-      }
 
       // Determine audit events inside transaction
       const organizationId = existingReservation.property.organizationId;
@@ -421,6 +333,7 @@ export async function PATCH(
         });
       }
 
+      const oldTotalAmount = (existingReservation.ratePlanSnapshot as any)?.total || 0;
       if (Number(newTotalAmount) !== Number(oldTotalAmount)) {
         auditEvents.push({
           ...commonAuditData,

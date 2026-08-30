@@ -6,6 +6,7 @@ import { getUserPropertyIds } from '@/lib/property-access';
 import { encrypt } from '@/lib/encryption';
 import { getReducedStayEstimate } from '@/lib/refunds/reduced-stay';
 import { findActiveFrontdeskSession } from '@/lib/frontdesk/active-session';
+import { canOverrideNightAudit, getNightAuditOverrideReason, isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 
 const ACTIVE_REQUEST_STATUSES = ['PENDING_APPROVAL', 'APPROVED', 'PROCESSING'] as const;
 
@@ -43,6 +44,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       include: { folio: { include: { property: true, items: true } }, reservation: true }
     });
     if (!payment) return errorResponse('NOT_FOUND', 'Payment not found', 404);
+
+    const overrideReason = getNightAuditOverrideReason(body.nightAuditOverrideReason);
+    if (await isNightAuditTransactionLocked(payment.propertyId) && (!canOverrideNightAudit((session.user as any).role) || !overrideReason)) {
+      return errorResponse('NIGHT_AUDIT_IN_PROGRESS', 'Night audit is in progress. New refunds are temporarily paused.', 409);
+    }
 
     const allowedProperties = await getUserPropertyIds(session.user.id);
     if (!allowedProperties.includes(payment.propertyId)) {
@@ -136,6 +142,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           supportingNotes: [
             body.supportingNotes ? String(body.supportingNotes) : null,
             category === 'REDUCED_STAY' ? `Reduced stay nights: ${reducedStayNights}` : null,
+            overrideReason ? `Night audit override: ${overrideReason}` : null,
           ].filter(Boolean).join('\n') || null,
           requestedById: session.user.id,
           currentApproverId: candidate?.userId,

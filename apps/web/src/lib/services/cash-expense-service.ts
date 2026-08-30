@@ -5,7 +5,6 @@ import {
   ensureCashierControlAccountsForClient,
   ensureExpenseCounterpartyForClient,
 } from './cash-account-service';
-
 type ExpenseInput = {
   propertyId: string;
   requestedBy: string;

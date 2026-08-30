@@ -500,6 +500,9 @@ public class OfflinePMSInterop
                     primaryGuestId = guestId,
                     checkIn = r.CheckInDate,
                     checkOut = r.CheckOutDate,
+                    ratePlanSnapshot = !string.IsNullOrEmpty(r.RatePlanSnapshotJson)
+                        ? JsonSerializer.Deserialize<System.Text.Json.JsonElement>(r.RatePlanSnapshotJson, _jsonOptions)
+                        : default(object),
                     primaryGuest = r.Guest != null 
                         ? new { id = r.Guest.Id, firstName = r.Guest.FirstName, lastName = r.Guest.LastName, phone = r.Guest.Phone } 
                         : new { id = "unknown", firstName = "Unknown", lastName = "Guest", phone = (string?)"" },
@@ -723,7 +726,7 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
-    public async Task<string> ProcessCheckInAsync(string reservationId, bool bypassKeycard = false, string encodedRoomId = "", string? encodeData = null)
+    public async Task<string> ProcessCheckInAsync(string reservationId, bool bypassKeycard = false, string encodedRoomId = "", string? encodeData = null, bool overrideDeposit = false)
     {
         try
         {
@@ -895,6 +898,9 @@ public class OfflinePMSInterop
                 checkOut = r.CheckOutDate,
                 createdAt = r.CreatedAt,
                 updatedAt = r.UpdatedAt,
+                ratePlanSnapshot = !string.IsNullOrEmpty(r.RatePlanSnapshotJson)
+                    ? JsonSerializer.Deserialize<System.Text.Json.JsonElement>(r.RatePlanSnapshotJson, _jsonOptions)
+                    : default(object),
                 primaryGuest = r.Guest != null ? new {
                     id = r.Guest.Id,
                     firstName = r.Guest.FirstName,

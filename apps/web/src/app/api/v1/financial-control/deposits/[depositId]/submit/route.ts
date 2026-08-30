@@ -4,6 +4,7 @@ import { BankDepositService } from '@/lib/services/bank-deposit-service';
 import { DEPOSIT_SUBMIT_ROLES, hasFinancialRole } from '@/lib/financial-control-access';
 import prisma from '@hotel-pms/db';
 import { getUserPropertyIds } from '@/lib/property-access';
+import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 
 export async function POST(request: NextRequest, context: { params: Promise<{ depositId: string }> }) {
   try {
@@ -19,6 +20,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ de
     if (!staff) return NextResponse.json({ error: 'Staff record not found' }, { status: 401 });
     const body = await request.json();
     const { bankAccountId, bankReceiptUrl, bankReference } = body;
+
+    if (await isNightAuditTransactionLocked(deposit.propertyId)) {
+      return NextResponse.json({ error: 'Bank deposit cannot be submitted while Night Audit is posting. Retry after the new business date is active.', code: 'NIGHT_AUDIT_IN_PROGRESS' }, { status: 409 });
+    }
 
     const result = await BankDepositService.submitDeposit({
       depositId,

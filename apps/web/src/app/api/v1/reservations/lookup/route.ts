@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
+import { assertPropertyAccess } from '@/lib/property-access';
+
 
 export async function GET(req: NextRequest) {
   try {
@@ -13,6 +15,9 @@ export async function GET(req: NextRequest) {
     const propertyId = searchParams.get('propertyId');
 
     if (!roomNo || !propertyId) return errorResponse('BAD_REQUEST', 'Missing roomNo or propertyId', 400);
+
+    await assertPropertyAccess(session.user.id, propertyId);
+
 
     const resRoom = await prisma.reservationRoom.findFirst({
       where: {

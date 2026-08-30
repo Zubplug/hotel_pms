@@ -59,6 +59,12 @@
     <Content Include="..\..\sdk\hslock\HsLockSDK.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <Content Include="Locks\Rfv2016SdkFiles\RFV2007NETHOTEL.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Locks\Rfv2016SdkFiles\W-R-Card\**\*.*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>

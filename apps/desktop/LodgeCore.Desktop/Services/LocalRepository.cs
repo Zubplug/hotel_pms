@@ -17,8 +17,20 @@ public class LocalRepository
         _dbContext = dbContext;
     }
 
+    private async Task AssertNightAuditAllowsAsync(string propertyId, DateTime? businessDate = null)
+    {
+        var property = await _dbContext.Properties.FindAsync(propertyId);
+        if (property == null) throw new InvalidOperationException("Property is not available offline.");
+        var status = (property.AuditStatus ?? "OPEN").Trim().ToUpperInvariant();
+        var targetDate = (businessDate ?? property.BusinessDate).Date;
+        var currentDate = property.BusinessDate.Date;
+        if ((status == "IN_PROGRESS" && targetDate == currentDate) || (status == "POSTING" && targetDate < currentDate))
+            throw new InvalidOperationException("NIGHT_AUDIT_IN_PROGRESS: This business date is temporarily locked while Night Audit is posting.");
+    }
+
     public async Task<LocalReservation> CreateReservationAsync(LocalReservation reservation, string userId, string deviceId)
     {
+        await AssertNightAuditAllowsAsync(reservation.PropertyId);
         reservation.IsDirty = true;
 
         // Ensure a confirmation number exists
@@ -75,35 +87,14 @@ public class LocalRepository
             ReservationId = reservation.Id,
             Reservation = reservation,
             Status = "OPEN",
-            TotalCharges = totalAmount,
+            TotalCharges = 0,
             TotalPayments = 0,
             Currency = currency,
             IsDirty = true, // Force sync down to grab real ID later, or cloud matches by reservation? Actually, cloud API creates the folio, so this local one will get overwritten/merged on next pull. We just need it for UI.
         };
 
-        // Create Transactions JSON
-        var transactions = new List<object>();
-        DateTime currentDate = reservation.CheckInDate;
-        for (int i = 0; i < nights; i++)
-        {
-            transactions.Add(new
-            {
-                id = Guid.NewGuid().ToString(),
-                folioId = folio.Id,
-                businessDate = currentDate,
-                type = "CHARGE",
-                source = "ROOM_CHARGE",
-                description = $"Room Charge - Night {i + 1}",
-                quantity = 1,
-                unitAmount = baseRate,
-                amount = baseRate,
-                currency = currency,
-                baseAmount = baseRate,
-                postedBy = userId
-            });
-            currentDate = currentDate.AddDays(1);
-        }
-        folio.TransactionsJson = JsonSerializer.Serialize(new { items = transactions, payments = new List<object>() });
+        // Initialize empty Transactions JSON since we no longer post upfront room charges
+        folio.TransactionsJson = JsonSerializer.Serialize(new { items = new List<object>(), payments = new List<object>() });
         
         _dbContext.Folios.Add(folio);
         reservation.Folio = folio;
@@ -222,6 +213,7 @@ public class LocalRepository
     {
         var res = await _dbContext.Reservations.FindAsync(reservationId);
         if (res == null) return false;
+        await AssertNightAuditAllowsAsync(res.PropertyId);
 
         var oldRoomId = res.RoomId;
         res.RoomId = roomId;
@@ -253,6 +245,7 @@ public class LocalRepository
     {
         var res = await _dbContext.Reservations.FindAsync(reservationId);
         if (res == null) return false;
+        await AssertNightAuditAllowsAsync(res.PropertyId);
 
         // Guard: already cancelled is a no-op (idempotent)
         if (res.Status == "CANCELLED") return true;
@@ -306,30 +299,36 @@ public class LocalRepository
 
     public async Task<object?> MarkLateArrivalAsync(string reservationId, string notes, string userId, string deviceId)
     {
-        var res = await _dbContext.Reservations.Include(r => r.Folio).FirstOrDefaultAsync(r => r.Id == reservationId);
+        var res = await _dbContext.Reservations.FindAsync(reservationId);
         if (res == null) throw new InvalidOperationException("Reservation not found");
-        if (res.Status != "CONFIRMED") throw new InvalidOperationException("Late arrival can only be recorded for confirmed reservations.");
-        res.LateArrivalExpected = true; res.LateArrivalNotes = notes; res.LateArrivalAt = DateTime.UtcNow; res.LateArrivalBy = userId; res.IsDirty = true; res.LocalSequence++;
-        _dbContext.OutboxEvents.Add(new LocalOutboxEvent { PropertyId = res.PropertyId, DeviceId = deviceId, OperatorId = userId, AggregateType = "RESERVATION", AggregateId = res.Id, EventType = "LATE_ARRIVAL", Sequence = res.LocalSequence, PayloadJson = JsonSerializer.Serialize(new { reservationId = res.Id, notes, lateArrivalExpected = true }) });
+        await AssertNightAuditAllowsAsync(res.PropertyId);
+        var reservation = await _dbContext.Reservations.Include(r => r.Folio).FirstOrDefaultAsync(r => r.Id == reservationId);
+        
+        if (reservation.Status != "CONFIRMED") throw new InvalidOperationException("Late arrival can only be recorded for confirmed reservations.");
+        reservation.LateArrivalExpected = true; reservation.LateArrivalNotes = notes; reservation.LateArrivalAt = DateTime.UtcNow; reservation.LateArrivalBy = userId; reservation.IsDirty = true; reservation.LocalSequence++;
+        _dbContext.OutboxEvents.Add(new LocalOutboxEvent { PropertyId = reservation.PropertyId, DeviceId = deviceId, OperatorId = userId, AggregateType = "RESERVATION", AggregateId = reservation.Id, EventType = "LATE_ARRIVAL", Sequence = reservation.LocalSequence, PayloadJson = JsonSerializer.Serialize(new { reservationId = reservation.Id, notes, lateArrivalExpected = true }) });
         await _dbContext.SaveChangesAsync();
-        return res;
+        return reservation;
     }
 
     public async Task<object?> AssessNoShowAsync(string reservationId, string userId, string deviceId)
     {
-        var res = await _dbContext.Reservations.Include(r => r.Folio).FirstOrDefaultAsync(r => r.Id == reservationId);
+        var res = await _dbContext.Reservations.FindAsync(reservationId);
         if (res == null) throw new InvalidOperationException("Reservation not found");
-        if (res.Status != "CONFIRMED") throw new InvalidOperationException($"Cannot assess a {res.Status} reservation as no-show.");
-        if (res.LateArrivalExpected) throw new InvalidOperationException("Late arrival is authorized for this reservation.");
-        var property = await _dbContext.Properties.FindAsync(res.PropertyId);
-        var cutoff = res.CheckInDate.Date.AddDays(1);
+        await AssertNightAuditAllowsAsync(res.PropertyId);
+        var reservation = await _dbContext.Reservations.Include(r => r.Folio).FirstOrDefaultAsync(r => r.Id == reservationId);
+        
+        if (reservation.Status != "CONFIRMED") throw new InvalidOperationException($"Cannot assess a {reservation.Status} reservation as no-show.");
+        if (reservation.LateArrivalExpected) throw new InvalidOperationException("Late arrival is authorized for this reservation.");
+        var property = await _dbContext.Properties.FindAsync(reservation.PropertyId);
+        var cutoff = reservation.CheckInDate.Date.AddDays(1);
         if (TimeSpan.TryParse(property?.NoShowCutoffTime ?? "02:00", out var cutoffTime)) cutoff = cutoff.Add(cutoffTime);
         cutoff = cutoff.AddMinutes(property?.NoShowGracePeriodMinutes ?? 0);
         if (DateTime.UtcNow < cutoff) throw new InvalidOperationException($"No-show assessment is available after {cutoff:u}.");
 
-        var totalNights = Math.Max(1, (res.CheckOutDate - res.CheckInDate).Days);
-        var bookedValue = Math.Max(0, res.Folio?.TotalCharges ?? 0);
-        var totalPaid = Math.Max(0, res.Folio?.TotalPayments ?? 0);
+        var totalNights = Math.Max(1, (reservation.CheckOutDate - reservation.CheckInDate).Days);
+        var bookedValue = Math.Max(0, reservation.Folio?.TotalCharges ?? 0);
+        var totalPaid = Math.Max(0, reservation.Folio?.TotalPayments ?? 0);
         var firstNight = bookedValue / totalNights;
         var chargeType = (property?.NoShowChargeType ?? "FIRST_NIGHT").ToUpperInvariant();
         var chargeValue = Math.Max(0, property?.NoShowChargeValue ?? 0);
@@ -345,16 +344,18 @@ public class LocalRepository
             ? Math.Max(0, Math.Min(totalPaid, bookedValue > 0 ? bookedValue : totalPaid) - noShowCharge)
             : 0m;
 
-        res.Status = "NO_SHOW"; res.NoShowAt = DateTime.UtcNow; res.NoShowBy = userId; res.NoShowAssessedAt = DateTime.UtcNow; res.NoShowChargeAmount = noShowCharge; res.NoShowRefundableAmount = refundableAmount; res.IsDirty = true; res.LocalSequence++;
-        _dbContext.OutboxEvents.Add(new LocalOutboxEvent { PropertyId = res.PropertyId, DeviceId = deviceId, OperatorId = userId, AggregateType = "RESERVATION", AggregateId = res.Id, EventType = "NO_SHOW", Sequence = res.LocalSequence, PayloadJson = JsonSerializer.Serialize(new { reservationId = res.Id }) });
+        reservation.Status = "NO_SHOW"; reservation.NoShowAt = DateTime.UtcNow; reservation.NoShowBy = userId; reservation.NoShowAssessedAt = DateTime.UtcNow; reservation.NoShowChargeAmount = noShowCharge; reservation.NoShowRefundableAmount = refundableAmount; reservation.IsDirty = true; reservation.LocalSequence++;
+        _dbContext.OutboxEvents.Add(new LocalOutboxEvent { PropertyId = reservation.PropertyId, DeviceId = deviceId, OperatorId = userId, AggregateType = "RESERVATION", AggregateId = reservation.Id, EventType = "NO_SHOW", Sequence = reservation.LocalSequence, PayloadJson = JsonSerializer.Serialize(new { reservationId = reservation.Id }) });
         await _dbContext.SaveChangesAsync();
-        return new { reservation = res, assessment = new { totalNights, bookedValue, noShowCharge, refundableAmount }, refundRequired = refundableAmount > 0 };
+        return new { reservation = reservation, assessment = new { totalNights, bookedValue, noShowCharge, refundableAmount }, refundRequired = refundableAmount > 0 };
     }
 
     public async Task<object?> ReinstateReservationAsync(string reservationId, string reason, string userId, string deviceId)
     {
         var res = await _dbContext.Reservations.FindAsync(reservationId);
         if (res == null) throw new InvalidOperationException("Reservation not found");
+        await AssertNightAuditAllowsAsync(res.PropertyId);
+        
         if (res.Status != "NO_SHOW") throw new InvalidOperationException("Only no-show reservations can be reinstated.");
         var property = await _dbContext.Properties.FindAsync(res.PropertyId);
         if (property?.NoShowAllowReinstatement == false) throw new InvalidOperationException("Reinstatement is disabled by property policy.");
@@ -375,7 +376,11 @@ public class LocalRepository
 
     public async Task<bool> ReassignRoomAsync(string reservationId, string roomId, string? roomTypeId, string userId, string deviceId)
     {
-        var res = await _dbContext.Reservations
+        var res = await _dbContext.Reservations.FindAsync(reservationId);
+        if (res == null) return false;
+        await AssertNightAuditAllowsAsync(res.PropertyId);
+        
+        res = await _dbContext.Reservations
             .Include(r => r.Folio)
             .Include(r => r.Rooms)
             .FirstOrDefaultAsync(r => r.Id == reservationId);
@@ -465,7 +470,11 @@ public class LocalRepository
 
     public async Task<bool> ExtendStayAsync(string reservationId, DateTime newCheckOut, string userId, string deviceId)
     {
-        var res = await _dbContext.Reservations
+        var res = await _dbContext.Reservations.FindAsync(reservationId);
+        if (res == null) return false;
+        await AssertNightAuditAllowsAsync(res.PropertyId);
+        
+        res = await _dbContext.Reservations
             .Include(r => r.Rooms).ThenInclude(rr => rr.Room)
             .Include(r => r.Folio)
             .FirstOrDefaultAsync(r => r.Id == reservationId);
@@ -695,6 +704,7 @@ public class LocalRepository
     {
         var res = await _dbContext.Reservations.FindAsync(reservationId);
         if (res == null) return false;
+        await AssertNightAuditAllowsAsync(res.PropertyId);
 
         if (res.Status == "CHECKED_OUT" || res.Status == "CANCELLED")
             throw new InvalidOperationException($"Cannot edit a {res.Status} reservation.");
@@ -749,6 +759,7 @@ public class LocalRepository
     {
         var folio = await _dbContext.Folios.FindAsync(folioId);
         if (folio == null) return false;
+        await AssertNightAuditAllowsAsync(folio.PropertyId);
 
         if (!string.IsNullOrEmpty(idempotencyKey) && CheckFolioIdempotency(folio, idempotencyKey))
             return true;
@@ -812,8 +823,8 @@ public class LocalRepository
                 amount,
                 description,
                 currency = folio.Currency ?? "NGN",
-                businessDate = DateTime.UtcNow,
-                originalBusinessDate = DateTime.UtcNow,
+                businessDate = frontdeskSession?.BusinessDate,
+                originalBusinessDate = frontdeskSession?.BusinessDate,
                 idempotencyKey,
                 creditApplicationAmount,
                 creditApplicationKey = creditApplicationAmount > 0 ? $"CREDIT_APPLICATION:{idempotencyKey ?? newItem.id}" : null,
@@ -830,6 +841,7 @@ public class LocalRepository
     {
         var folio = await _dbContext.Folios.FindAsync(folioId);
         if (folio == null) return false;
+        await AssertNightAuditAllowsAsync(folio.PropertyId);
         var creditSession = await GetActiveFrontdeskSessionAsync(folio.PropertyId, userId);
         if (creditSession == null)
             throw new InvalidOperationException("Open your front desk cashier session before posting a credit adjustment.");
@@ -871,7 +883,7 @@ public class LocalRepository
             EventType = requiresApproval ? "CREDIT_ADJUSTMENT_REQUEST" : "ROOM_CREDIT",
             Sequence = folio.LocalSequence,
             IdempotencyKey = idempotencyKey ?? Guid.NewGuid().ToString(),
-            PayloadJson = JsonSerializer.Serialize(new { amount, description, currency = folio.Currency ?? "NGN", businessDate = DateTime.UtcNow, originalBusinessDate = DateTime.UtcNow, idempotencyKey, requiresApproval, frontdeskSessionId = creditSession?.Id })
+            PayloadJson = JsonSerializer.Serialize(new { amount, description, currency = folio.Currency ?? "NGN", businessDate = creditSession?.BusinessDate, originalBusinessDate = creditSession?.BusinessDate, idempotencyKey, requiresApproval, frontdeskSessionId = creditSession?.Id })
         });
 
         await _dbContext.SaveChangesAsync();
@@ -1110,6 +1122,7 @@ public class LocalRepository
 
     public async Task<LocalFrontdeskSession> OpenFrontdeskSessionAsync(string propertyId, string staffId, string cashAccountId, decimal openingFloat, string deviceId)
     {
+        await AssertNightAuditAllowsAsync(propertyId);
         var existing = await GetActiveFrontdeskSessionAsync(propertyId, staffId);
         if (existing != null) throw new InvalidOperationException("Staff already has an open front desk session.");
         var tillInUse = await _dbContext.FrontdeskSessions.AnyAsync(session => session.PropertyId == propertyId && session.CashAccountId == cashAccountId && session.Status == "OPEN");
@@ -1147,6 +1160,7 @@ public class LocalRepository
     {
         var session = await _dbContext.FrontdeskSessions.FirstOrDefaultAsync(item => item.Id == sessionId && item.StaffId == staffId);
         if (session == null) throw new InvalidOperationException("Front desk session not found.");
+        await AssertNightAuditAllowsAsync(session.PropertyId, session.BusinessDate);
         if (session.Status != "OPEN") throw new InvalidOperationException($"Session is already {session.Status}.");
             var movements = await _dbContext.PosCashMovements.Where(item => item.FrontdeskSessionId == session.Id || (item.FrontdeskSessionId == null && item.PropertyId == session.PropertyId && item.CreatedAt >= session.OpenedAt && item.CreatedAt <= DateTime.UtcNow)).ToListAsync();
         var expected = session.OpeningFloat + movements.Where(item => item.Type is "PAYMENT" or "CASH_TRANSFER_IN").Sum(item => item.Amount) - movements.Where(item => item.Type is "REFUND" or "PAID_OUT" or "CASH_DROP" or "CASH_TRANSFER_OUT").Sum(item => item.Amount);
@@ -1211,6 +1225,7 @@ public class LocalRepository
     {
         var folio = await _dbContext.Folios.FindAsync(folioId);
         if (folio == null) return false;
+        await AssertNightAuditAllowsAsync(folio.PropertyId);
 
         var frontdeskSession = await GetActiveFrontdeskSessionAsync(folio.PropertyId, userId);
         if (frontdeskSession == null)
@@ -1280,7 +1295,7 @@ public class LocalRepository
             EventType = "POST_PAYMENT",
             Sequence = folio.LocalSequence,
             IdempotencyKey = idempotencyKey ?? Guid.NewGuid().ToString(),
-            PayloadJson = JsonSerializer.Serialize(new { amount, method, reservationId = folio.ReservationId, currency = "NGN", businessDate = DateTime.UtcNow, originalBusinessDate = DateTime.UtcNow, idempotencyKey, frontdeskSessionId = frontdeskSession?.Id })
+            PayloadJson = JsonSerializer.Serialize(new { amount, method, reservationId = folio.ReservationId, currency = folio.Currency ?? "NGN", businessDate = frontdeskSession.BusinessDate, originalBusinessDate = frontdeskSession.BusinessDate, idempotencyKey, frontdeskSessionId = frontdeskSession?.Id })
         });
 
         await _dbContext.SaveChangesAsync();
@@ -1291,6 +1306,7 @@ public class LocalRepository
     {
         var folio = await _dbContext.Folios.FindAsync(folioId);
         if (folio == null) return false;
+        await AssertNightAuditAllowsAsync(folio.PropertyId);
         var frontdeskSession = await GetActiveFrontdeskSessionAsync(folio.PropertyId, userId);
         if (frontdeskSession == null)
             throw new InvalidOperationException("Open your front desk cashier session before posting an advance deposit.");
@@ -1344,8 +1360,8 @@ public class LocalRepository
                 notes,
                 reservationId = folio.ReservationId,
                 currency = folio.Currency ?? "NGN",
-                businessDate = DateTime.UtcNow,
-                originalBusinessDate = DateTime.UtcNow,
+                businessDate = frontdeskSession.BusinessDate,
+                originalBusinessDate = frontdeskSession.BusinessDate,
                 idempotencyKey,
                 requiresApproval,
                 frontdeskSessionId = frontdeskSession.Id
@@ -1459,9 +1475,13 @@ public class LocalRepository
     public async Task<bool> ProcessCheckInAsync(string reservationId, string userId, string deviceId, string? encodeData = null)
     {
         var res = await _dbContext.Reservations
+            .Include(r => r.Folio)
             .Include(r => r.Rooms)
             .FirstOrDefaultAsync(r => r.Id == reservationId);
         if (res == null || (res.Status != "PENDING" && res.Status != "CONFIRMED")) return false;
+        await AssertNightAuditAllowsAsync(res.PropertyId);
+        if (res.Folio != null && res.Folio.NetBalance > 0.01m)
+            throw new InvalidOperationException("Cannot check in with an outstanding balance. Settle the folio first.");
 
         res.Status = "CHECKED_IN";
         res.UpdatedAt = DateTime.UtcNow;
@@ -1498,6 +1518,7 @@ public class LocalRepository
                 .ThenInclude(rr => rr.Room)
             .FirstOrDefaultAsync(r => r.Id == reservationId);
         if (res == null || res.Status != "CHECKED_IN") return false;
+        await AssertNightAuditAllowsAsync(res.PropertyId);
 
         if (res.Folio != null && res.Folio.NetBalance > 0.01m)
         {
@@ -1576,6 +1597,7 @@ public class LocalRepository
     {
         var task = await _dbContext.HousekeepingTasks.FindAsync(taskId);
         if (task == null) return false;
+        await AssertNightAuditAllowsAsync(task.PropertyId);
 
         var allowedTransitions = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {
@@ -2036,6 +2058,7 @@ public class LocalRepository
     {
         var room = await _dbContext.Rooms.FirstOrDefaultAsync(r => r.Id == roomId);
         if (room == null) throw new Exception("Room not found");
+        await AssertNightAuditAllowsAsync(room.PropertyId);
 
         newStatus = newStatus.ToUpperInvariant();
         if (newStatus == "AVAILABLE" && new[] { "DIRTY", "MAINTENANCE", "OUT_OF_ORDER" }.Contains(room.Status.ToUpperInvariant()))
@@ -2262,7 +2285,10 @@ public class LocalRepository
         // 1. Generate Deterministic Operation ID
         string operationId = $"op_{deviceId}_{DateTime.UtcNow.Ticks}_{Guid.NewGuid().ToString("N").Substring(0, 8)}";
         order.Id = Guid.NewGuid().ToString();
-        if (order.BusinessDate == default) order.BusinessDate = DateTime.UtcNow.Date;
+        var property = await _dbContext.Properties.FindAsync(order.PropertyId);
+        if (property == null) throw new InvalidOperationException("Property is not available offline.");
+        if (order.BusinessDate == default) order.BusinessDate = property.BusinessDate.Date;
+        await AssertNightAuditAllowsAsync(order.PropertyId, order.BusinessDate);
         
         // Mark everything with the operation ID and device attribution
         foreach (var item in order.Items)
@@ -2409,6 +2435,7 @@ public class LocalRepository
             .Include(o => o.Items)
             .FirstOrDefaultAsync(o => o.Id == orderId);
         if (order == null) throw new Exception("Order not found");
+        await AssertNightAuditAllowsAsync(order.PropertyId, order.BusinessDate);
 
         if ((status == "CANCELLED" || status == "VOIDED") && order.Status != "CANCELLED" && order.Status != "VOIDED")
         {
@@ -2447,6 +2474,8 @@ public class LocalRepository
             .FirstOrDefaultAsync(o => o.Id == orderId);
 
         if (order == null) throw new Exception("Order not found");
+
+        await AssertNightAuditAllowsAsync(order.PropertyId, order.BusinessDate);
 
         var itemsToFire = order.Items.Where(i => itemIds.Contains(i.Id)).ToList();
         if (!itemsToFire.Any()) throw new Exception("No valid items selected for KOT");
@@ -2513,6 +2542,8 @@ public class LocalRepository
         var order = await _dbContext.PosOrders
             .Include(o => o.Items)
             .FirstOrDefaultAsync(o => o.Id == orderId);
+        
+        if (order != null) await AssertNightAuditAllowsAsync(order.PropertyId);
 
         if (order == null) throw new Exception("Order not found");
 
@@ -2611,6 +2642,7 @@ public class LocalRepository
 
     public async Task<LocalPosSession> OpenPosSessionAsync(string propertyId, string outletId, string bankType, string bankingModel, decimal openingBalance, string userId, string deviceId)
     {
+        await AssertNightAuditAllowsAsync(propertyId);
         // 1. Idempotency check: if there is already an active session for this specific context, return it.
         if (bankType == "SERVER")
         {
@@ -2770,6 +2802,7 @@ public class LocalRepository
             .FirstOrDefaultAsync(o => o.Id == orderId);
 
         if (order == null) throw new Exception("Order not found");
+        await AssertNightAuditAllowsAsync(order.PropertyId, order.BusinessDate);
 
         var newItems = new List<LocalPosOrderItem>();
 
@@ -2995,6 +3028,13 @@ public class LocalRepository
         var order = await _dbContext.PosOrders
             .Include(o => o.Items)
             .FirstOrDefaultAsync(o => o.Id == orderId);
+
+        if (order != null) await AssertNightAuditAllowsAsync(order.PropertyId);
+        
+        // Restore context state for the query so it matches the original shape
+        order = await _dbContext.PosOrders
+            .Include(o => o.Items)
+            .FirstOrDefaultAsync(o => o.Id == orderId);
         if (order == null) throw new Exception("Order not found");
 
         var payment = new LocalPosPayment
@@ -3112,6 +3152,7 @@ public class LocalRepository
     {
         var session = await _dbContext.PosSessions.FindAsync(sessionId);
         if (session == null) throw new Exception("Session not found");
+        await AssertNightAuditAllowsAsync(session.PropertyId, session.BusinessDate);
         if (session.Status == "CLOSED" || session.Status == "SETTLED") throw new Exception("Session is already closed or settled");
 
         var operatorStaff = await _dbContext.Staff.FirstOrDefaultAsync(staff => staff.Id == operatorId);
@@ -3305,6 +3346,7 @@ public class LocalRepository
         {
             var session = await _dbContext.PosSessions.FindAsync(sessionId);
             if (session == null) throw new Exception("Session not found");
+            await AssertNightAuditAllowsAsync(session.PropertyId, session.BusinessDate);
             if (session.Status != "PENDING_HANDOVER" && session.Status != "RECONCILIATION_REQUIRED") 
                 throw new Exception("Session is not in a handover state.");
 
@@ -3487,6 +3529,9 @@ public class LocalRepository
 
     public async Task<LocalPosVoid> AuthorizeVoidAsync(string orderId, string orderItemId, string reason, string authorizerId, string userId, string deviceId)
     {
+        var order = await _dbContext.PosOrders.FindAsync(orderId);
+        if (order != null) await AssertNightAuditAllowsAsync(order.PropertyId);
+
         string operationId = $"op_void_{deviceId}_{DateTime.UtcNow.Ticks}";
         
         var posVoid = new LocalPosVoid
@@ -3521,6 +3566,9 @@ public class LocalRepository
 
     public async Task<LocalPosPayment> RecordRefundAsync(string orderId, decimal amount, string method, string authorizerId, string userId, string deviceId)
     {
+        var order = await _dbContext.PosOrders.FindAsync(orderId);
+        if (order == null) throw new Exception("Order not found");
+        await AssertNightAuditAllowsAsync(order.PropertyId, order.BusinessDate);
         string operationId = $"op_refund_{deviceId}_{DateTime.UtcNow.Ticks}";
         
         var payment = new LocalPosPayment
@@ -3558,6 +3606,7 @@ public class LocalRepository
         string operationId = $"op_cashmvt_{deviceId}_{DateTime.UtcNow.Ticks}";
         
         var prop = await _dbContext.Properties.FindAsync(propertyId);
+        await AssertNightAuditAllowsAsync(propertyId);
         string currency = prop?.Currency ?? "NGN";
 
         var movement = new LocalPosCashMovement
@@ -3577,7 +3626,7 @@ public class LocalRepository
             ReceiptReference = receiptReference,
             OperationId = operationId,
             AuthorizedBy = authorizedBy,
-            BusinessDate = DateTime.UtcNow.Date,
+            BusinessDate = prop?.BusinessDate.Date ?? DateTime.UtcNow.Date,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -3667,6 +3716,7 @@ public class LocalRepository
 
     public async Task<LocalPosCashMovement> OpenSafeAsync(string propertyId, decimal amount, string managerPin, string deviceId)
     {
+        await AssertNightAuditAllowsAsync(propertyId);
         var authorizer = await ValidateSupervisorPinAsync(managerPin, propertyId);
         if (authorizer == null) throw new UnauthorizedAccessException("Invalid Manager PIN");
 
@@ -3695,7 +3745,7 @@ public class LocalRepository
             Notes = "Initial safe float",
             OperationId = $"op_safe_open_{deviceId}_{DateTime.UtcNow.Ticks}",
             AuthorizedBy = authorizer.Id,
-            BusinessDate = DateTime.UtcNow.Date,
+            BusinessDate = prop?.BusinessDate.Date ?? DateTime.UtcNow.Date,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -3715,6 +3765,7 @@ public class LocalRepository
 
     public async Task<LocalPosCashMovement> RecordBankDepositAsync(string propertyId, decimal amount, string reference, string managerPin, string deviceId)
     {
+        await AssertNightAuditAllowsAsync(propertyId);
         var authorizer = await ValidateSupervisorPinAsync(managerPin, propertyId);
         if (authorizer == null) throw new UnauthorizedAccessException("Invalid Manager PIN");
 
@@ -3748,7 +3799,7 @@ public class LocalRepository
             ReceiptReference = reference,
             OperationId = $"op_bank_dep_{deviceId}_{DateTime.UtcNow.Ticks}",
             AuthorizedBy = authorizer.Id,
-            BusinessDate = DateTime.UtcNow.Date,
+            BusinessDate = prop?.BusinessDate.Date ?? DateTime.UtcNow.Date,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -4632,6 +4683,7 @@ public class LocalRepository
         
         var orderId = Guid.NewGuid().ToString();
         var propertyId = root.GetProperty("propertyId").GetString() ?? "";
+        await AssertNightAuditAllowsAsync(propertyId);
         var customerType = root.TryGetProperty("customerType", out var ctElem) && ctElem.ValueKind != JsonValueKind.Null ? ctElem.GetString() ?? "IN_HOUSE" : "IN_HOUSE";
         var reservationId = root.TryGetProperty("reservationId", out var rElem) && rElem.ValueKind != JsonValueKind.Null ? rElem.GetString() : null;
         var guestId = root.GetProperty("guestId").GetString() ?? "";
@@ -4744,6 +4796,7 @@ public class LocalRepository
     {
         var order = await _dbContext.LaundryOrders.FindAsync(orderId);
         if (order == null) throw new Exception("Laundry order not found");
+        await AssertNightAuditAllowsAsync(order.PropertyId);
         
         var previousStatus = order.Status;
         if (previousStatus == status) return;
@@ -4800,6 +4853,7 @@ public class LocalRepository
     {
         var order = await _dbContext.LaundryOrders.FindAsync(orderId);
         if (order == null) throw new Exception("Laundry order not found");
+        await AssertNightAuditAllowsAsync(order.PropertyId);
         
         if (order.Status == "DELIVERED") return;
         if (order.Status != "READY")
@@ -4885,8 +4939,8 @@ public class LocalRepository
                         amount = order.TotalAmount, 
                         description = $"Laundry Service - {order.ServiceType}", 
                         currency = "NGN", 
-                        businessDate = DateTime.UtcNow, 
-                        originalBusinessDate = DateTime.UtcNow, 
+                        businessDate = frontdeskSession.BusinessDate,
+                        originalBusinessDate = frontdeskSession.BusinessDate,
                         idempotencyKey = idempotencyKey,
                         creditApplicationAmount,
                         creditApplicationKey = creditApplicationAmount > 0 ? $"CREDIT_APPLICATION:{idempotencyKey}" : null,

@@ -27,6 +27,7 @@ public static class MauiProgram
             return providerType.ToLowerInvariant() switch
             {
                 "hslock" => new HsLockProvider(loggerFactory.CreateLogger<HsLockProvider>()),
+                "rfv2016" => new Rfv2016LockProvider(loggerFactory.CreateLogger<Rfv2016LockProvider>()),
                 _        => new DelunsLockProvider(loggerFactory.CreateLogger<DelunsLockProvider>()) // Elock is the default
             };
         });

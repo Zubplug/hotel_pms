@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { ShiftControlService, ShiftControlError } from '@/lib/services/shift-control-service';
+import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -17,6 +18,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!staff) return errorResponse('UNAUTHORIZED', 'Staff not found', 401);
     const current = await prisma.frontdeskSession.findUnique({ where: { id }, include: { exceptions: true } });
     if (!current) return errorResponse('NOT_FOUND', 'Session not found', 404);
+    if (await isNightAuditTransactionLocked(current.propertyId, current.businessDate)) return errorResponse('NIGHT_AUDIT_IN_PROGRESS', 'Cashier reconciliation is temporarily paused while Night Audit is posting.', 409);
     if (!['CLOSED', 'UNDER_REVIEW'].includes(current.status)) return errorResponse('BAD_REQUEST', `Cannot reconcile session in status ${current.status}`, 400);
     const reviewNotes = typeof notes === 'string' ? notes.trim() : '';
     let updated;

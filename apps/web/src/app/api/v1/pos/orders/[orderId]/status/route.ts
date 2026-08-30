@@ -3,6 +3,7 @@ import prisma, { PosOrderStatus } from '@hotel-pms/db';
 import { z } from 'zod';
 import { verifyOperatorToken } from '@/lib/pos/operatorAuth';
 import { InventoryService } from '@/lib/inventory/InventoryService';
+import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 
 const StatusSchema = z.object({
   status: z.nativeEnum(PosOrderStatus),
@@ -39,6 +40,9 @@ export async function PATCH(
 
     if (!order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+    }
+    if (await isNightAuditTransactionLocked(order.propertyId, order.businessDate)) {
+      return NextResponse.json({ error: 'POS order changes are temporarily paused while Night Audit is posting', code: 'NIGHT_AUDIT_IN_PROGRESS' }, { status: 409 });
     }
 
     // Optional: Validate state transition. 

@@ -12,7 +12,8 @@ import {
   AlertTriangle,
   FileText,
   LogOut,
-  ChevronDown
+  ChevronDown,
+  Server
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -31,6 +32,7 @@ const NIGHT_AUDIT_NAV = [
   { name: 'Audit History', href: '/night-audit/history', icon: Clock },
   { name: 'Exceptions & Variances', href: '/night-audit/exceptions', icon: AlertTriangle },
   { name: 'Audit Reports', href: '/night-audit/reports', icon: FileText },
+  { name: 'System & Sync', href: '/night-audit/system', icon: Server },
 ];
 
 export function NightAuditLayout({ children }: { children: React.ReactNode }) {
@@ -123,7 +125,6 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
               <span className="w-full truncate text-left text-xs capitalize text-slate-500">{role === 'MANAGER' ? 'Night manager' : 'Auditor'}</span>
             </div>
             <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-500 transition-colors group-hover:text-slate-300" />
-            </div>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" side="top" className="w-56">
             <DropdownMenuSeparator />

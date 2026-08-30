@@ -39,7 +39,11 @@ export default function SystemSyncPage() {
             Monitor background jobs, interface syncs, and database backups.
           </p>
         </div>
-        <Button variant="outline" className="gap-2">
+        <Button variant="outline" className="gap-2" onClick={() => {
+          import('sonner').then(({ toast }) => {
+            toast('Information', { description: 'Sync is automatic — offline devices will sync when reconnected' });
+          });
+        }}>
           <RefreshCw className="h-4 w-4" />
           Force Sync All
         </Button>
@@ -127,17 +131,21 @@ export default function SystemSyncPage() {
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-3 mt-2">
-                <div className="h-10 w-10 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-                  <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                <div className="h-10 w-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                  <AlertCircle className="h-5 w-5 text-slate-500" />
                 </div>
                 <div>
-                  <p className="font-medium">Backup Completed</p>
-                  <p className="text-sm text-muted-foreground">Today at 02:00 AM</p>
+                  <p className="font-medium">Not configured</p>
+                  <p className="text-sm text-muted-foreground">Managed by your provider</p>
                 </div>
               </div>
             </CardContent>
             <CardFooter>
-              <Button variant="outline" className="w-full text-sm">View Backup Logs</Button>
+              <Button variant="outline" className="w-full text-sm" onClick={() => {
+                import('sonner').then(({ toast }) => {
+                  toast('Information', { description: 'Database backups are managed by your Supabase provider' });
+                });
+              }}>View Backup Logs</Button>
             </CardFooter>
           </Card>
 
@@ -150,24 +158,7 @@ export default function SystemSyncPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4 mt-2">
-                <div>
-                  <div className="flex justify-between text-xs mb-1">
-                    <span>CPU Usage</span>
-                    <span className="font-medium">32%</span>
-                  </div>
-                  <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                    <div className="h-full bg-slate-900 dark:bg-slate-400 w-[32%] rounded-full" />
-                  </div>
-                </div>
-                <div>
-                  <div className="flex justify-between text-xs mb-1">
-                    <span>Memory</span>
-                    <span className="font-medium">4.2 GB / 8 GB</span>
-                  </div>
-                  <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                    <div className="h-full bg-slate-900 dark:bg-slate-400 w-[52%] rounded-full" />
-                  </div>
-                </div>
+                <p className="text-sm text-muted-foreground">Server metrics available in your infrastructure dashboard.</p>
               </div>
             </CardContent>
           </Card>

@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { hasInventoryPermission } from '@/lib/inventory/permissions';
 import { ProcurementService } from '@/lib/inventory/ProcurementService';
+import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 
 export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -24,6 +25,10 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
 
     const po = await prisma.purchaseOrder.findFirst({ where: { id: params.id, propertyId }, select: { id: true } });
     if (!po) return NextResponse.json({ error: 'Purchase Order not found' }, { status: 404 });
+
+    if (await isNightAuditTransactionLocked(propertyId)) {
+      return NextResponse.json({ error: 'Goods receipt cannot be posted while Night Audit is posting. Retry after the new business date is active.', code: 'NIGHT_AUDIT_IN_PROGRESS' }, { status: 409 });
+    }
 
     const data = await ProcurementService.createGRN(params.id, userId, items, deliveryNoteRef);
 

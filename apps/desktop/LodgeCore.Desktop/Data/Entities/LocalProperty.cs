@@ -9,6 +9,7 @@ public class LocalProperty
     public string Currency { get; set; } = string.Empty;
     public string Timezone { get; set; } = "UTC";
     public DateTime BusinessDate { get; set; }
+    public string AuditStatus { get; set; } = "OPEN";
     public bool IsActive { get; set; }
 
     /// <summary>

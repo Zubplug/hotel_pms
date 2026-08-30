@@ -4,6 +4,7 @@ import { BankDepositService } from '@/lib/services/bank-deposit-service';
 import { DEPOSIT_VERIFY_ROLES, hasFinancialRole } from '@/lib/financial-control-access';
 import prisma from '@hotel-pms/db';
 import { getUserPropertyIds } from '@/lib/property-access';
+import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 
 export async function POST(request: NextRequest, context: { params: Promise<{ depositId: string }> }) {
   try {
@@ -17,6 +18,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ de
     if (!(await getUserPropertyIds(actor.user.id)).includes(deposit.propertyId)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     const staff = await prisma.staff.findFirst({ where: { userId: actor.user.id, isActive: true }, select: { id: true } });
     if (!staff) return NextResponse.json({ error: 'Staff record not found' }, { status: 401 });
+
+    if (await isNightAuditTransactionLocked(deposit.propertyId)) {
+      return NextResponse.json({ error: 'Bank deposit cannot be verified while Night Audit is posting. Retry after the new business date is active.', code: 'NIGHT_AUDIT_IN_PROGRESS' }, { status: 409 });
+    }
 
     // A POST to /verify just starts the verification process
     const result = await BankDepositService.startVerification({
@@ -48,6 +53,10 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ dep
 
     if (bankConfirmedAmount === undefined) {
       return NextResponse.json({ error: 'bankConfirmedAmount is required' }, { status: 400 });
+    }
+
+    if (await isNightAuditTransactionLocked(deposit.propertyId)) {
+      return NextResponse.json({ error: 'Bank deposit cannot be reconciled while Night Audit is posting. Retry after the new business date is active.', code: 'NIGHT_AUDIT_IN_PROGRESS' }, { status: 409 });
     }
 
     // A PUT to /verify finalizes the reconciliation

@@ -11,6 +11,12 @@ export async function GET(req: NextRequest) {
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
 
+    const userRole = (session.user as any).role;
+    const ALLOWED_ROLES = ['NIGHT_AUDITOR', 'MANAGER', 'HOTEL_MANAGER', 'ADMIN', 'SUPER_ADMIN', 'CEO', 'FINANCE_MANAGER', 'GENERAL_CASHIER', 'FRONT_DESK_SUPERVISOR'];
+    if (!ALLOWED_ROLES.includes(userRole)) {
+      return errorResponse('FORBIDDEN', 'Insufficient permissions to view night audit status', 403);
+    }
+
     const { searchParams } = req.nextUrl;
     const propertyId = searchParams.get('propertyId');
 
@@ -19,12 +25,19 @@ export async function GET(req: NextRequest) {
 
     const property = await prisma.property.findUnique({
       where: { id: propertyId },
-      select: { id: true, name: true, businessDate: true, auditStatus: true, lastAuditAt: true, baseCurrency: true }
+      select: { id: true, name: true, businessDate: true, timezone: true, auditStatus: true, lastAuditAt: true, baseCurrency: true, requireAuditAcknowledgements: true }
     });
     if (!property) return errorResponse('NOT_FOUND', 'Property not found', 404);
 
     const businessDate = property.businessDate ?? getPropertyBusinessDate();
-    const currentAudit = await prisma.nightAudit.findUnique({ where: { propertyId_businessDate: { propertyId, businessDate } } });
+    const localToday = getPropertyBusinessDate(property.timezone);
+    const [currentAudit, activeAudit] = await Promise.all([
+      prisma.nightAudit.findUnique({ where: { propertyId_businessDate: { propertyId, businessDate } } }),
+      prisma.nightAudit.findFirst({
+        where: { propertyId, status: { in: ['IN_PROGRESS', 'POSTING'] } },
+        orderBy: { startedAt: 'desc' }
+      })
+    ]);
 
     // Run all checks in parallel for maximum performance
     const [operational, system, financial, cash] = await Promise.all([
@@ -68,16 +81,33 @@ export async function GET(req: NextRequest) {
 
     // Financial blockers/warnings
     if (financial.highBalances.length > 0) warnings++;
-    // Unposted transactions missing here - mock check for now
     
     // Cash blockers/warnings
-    // Checking variances in UI
+    if (cash.cashHandovers.length > 0) blockers++;
+    if (cash.bankDeposits.length > 0) warnings++;
     
+    // Single canonical state field — the UI should branch exclusively on this.
+    type AuditState = 'IN_PROGRESS' | 'POSTING' | 'COMPLETED' | 'FAILED' | 'OVERDUE' | 'PENDING';
+    const auditState: AuditState =
+      activeAudit?.status === 'IN_PROGRESS' ? 'IN_PROGRESS' :
+      activeAudit?.status === 'POSTING'     ? 'POSTING' :
+      currentAudit?.status === 'COMPLETED'  ? 'COMPLETED' :
+      currentAudit?.status === 'FAILED'     ? 'FAILED' :
+      businessDate < localToday             ? 'OVERDUE' :
+                                              'PENDING';
+
     return successResponse({
       property,
       businessDate,
       currentAudit,
-      isBusinessDayAudited: currentAudit?.status === 'COMPLETED',
+      activeAudit,
+      // auditState is the single canonical status field. Use this in the UI.
+      auditState,
+      // Legacy fields kept for backwards compatibility:
+      auditPhase: activeAudit?.status || (currentAudit?.status ?? 'PENDING'),
+      auditInProgress: Boolean(activeAudit),
+      auditDue: !activeAudit && (property.auditStatus === 'FAILED' || businessDate < localToday),
+      isBusinessDayAudited: !activeAudit && property.auditStatus !== 'FAILED' && businessDate >= localToday,
       analytics: {
         revenue: Number(charges._sum.amount || 0),
         payments: Number(payments._sum.amount || 0),

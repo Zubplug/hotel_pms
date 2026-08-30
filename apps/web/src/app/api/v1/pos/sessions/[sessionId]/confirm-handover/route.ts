@@ -3,6 +3,9 @@ import prisma from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
 import { getUserPropertyIds } from '@/lib/property-access';
 import { compare } from 'bcryptjs';
+import { CashHandoverService } from '@/lib/services/cash-handover-service';
+import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
+
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ sessionId: string }> }) {
   try {
@@ -14,6 +17,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const current = await prisma.posSession.findUnique({ where: { id: sessionId }, include: { settlements: { orderBy: { settledAt: 'desc' }, take: 1 } } });
     if (!current || !current.propertyId) return NextResponse.json({ error: 'POS session not found' }, { status: 404 });
+    if (await isNightAuditTransactionLocked(current.propertyId)) {
+      return NextResponse.json({ error: 'Handover cannot be confirmed while Night Audit is posting.', code: 'NIGHT_AUDIT_IN_PROGRESS' }, { status: 409 });
+    }
     const allowed = await getUserPropertyIds(actor.user.id);
     if (!allowed.includes(current.propertyId)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     const settlement = current.settlements[0];
@@ -27,10 +33,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!manager) return NextResponse.json({ error: 'Invalid manager PIN or insufficient permissions' }, { status: 403 });
     if (manager.id === settlement.operatorId || manager.id === current.openedBy) return NextResponse.json({ error: 'The manager cannot approve the shift they operated' }, { status: 403 });
 
-    const result = await prisma.$transaction(async tx => {
-      const updated = await tx.posSettlement.update({ where: { id: settlement.id }, data: { status: 'CLOSED', authorizerId: manager.id } });
-      await tx.posSession.update({ where: { id: sessionId }, data: { status: 'HANDED_OVER', controlStatus: 'HANDED_OVER', handoverAt: new Date() } });
-      return updated;
+    const handoverId = current.cashHandoverId || (settlement as any).cashHandoverId;
+    if (!handoverId) return NextResponse.json({ error: 'No cash handover found for this session' }, { status: 400 });
+
+    const result = await CashHandoverService.receiveHandover({
+      handoverId,
+      receiverId: manager.id
+    });
+    
+    // Also update settlement status since CashHandoverService only updates session
+    await prisma.posSettlement.update({
+      where: { id: settlement.id },
+      data: { status: 'CLOSED', authorizerId: manager.id }
     });
     return NextResponse.json({ data: result });
   } catch (error) {

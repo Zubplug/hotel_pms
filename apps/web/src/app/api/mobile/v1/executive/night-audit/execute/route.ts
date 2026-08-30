@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { resolveUser } from '@/lib/resolve-user';
 import { executeNightAudit } from '@/lib/night-audit';
+import { hasPermission } from '@/lib/rbac';
 
 export async function POST(req: NextRequest) {
   try {
@@ -21,7 +22,8 @@ export async function POST(req: NextRequest) {
       return errorResponse('FORBIDDEN', 'No access to this property', 403);
     }
 
-    if (!['MANAGER', 'ADMIN', 'SUPER_ADMIN', 'DIRECTOR', 'EXECUTIVE'].includes(user.role) && !user.isSuperAdmin) {
+    const canExecute = await hasPermission(user.id, 'night_audit', 'execute', propertyId);
+    if (!canExecute) {
       return errorResponse('FORBIDDEN', 'Insufficient permissions', 403);
     }
 

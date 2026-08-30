@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { getUserPropertyIds } from '@/lib/property-access';
 import { CashExpenseService } from '@/lib/services/cash-expense-service';
+import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 
 const APPROVERS = ['MANAGER', 'FINANCE_MANAGER', 'ACCOUNTANT', 'CEO', 'SUPER_ADMIN'];
 
@@ -20,6 +21,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ex
     const action = String(body.action || '').toLowerCase();
     if (action === 'pay') {
       if (!['GENERAL_CASHIER', 'SUPER_ADMIN'].includes(role)) return NextResponse.json({ error: 'Only the General Cashier can pay expenses' }, { status: 403 });
+      if (await isNightAuditTransactionLocked(expense.propertyId)) {
+        return NextResponse.json({ error: 'Expense payment cannot be processed while Night Audit is posting.', code: 'NIGHT_AUDIT_IN_PROGRESS' }, { status: 409 });
+      }
       return NextResponse.json({ data: await CashExpenseService.pay(expenseId, staff.id) });
     }
     if (!APPROVERS.includes(role)) return NextResponse.json({ error: 'Expense approval access denied' }, { status: 403 });

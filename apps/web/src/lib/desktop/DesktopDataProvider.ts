@@ -153,7 +153,7 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     markLateArrival: async (id: string, notes: string) => invokeDesktop('reservations.lateArrival', { id, notes }),
     assessNoShow: async (id: string) => invokeDesktop('reservations.noShow', { id }),
     reinstate: async (id: string, reason: string) => invokeDesktop('reservations.reinstate', { id, reason }),
-    checkIn: async (id: string, userId: string, deviceId: string, options?: { bypassKeycard?: boolean }) => {
+    checkIn: async (id: string, userId: string, deviceId: string, options?: { bypassKeycard?: boolean, overrideDeposit?: boolean }) => {
       const bypass = options?.bypassKeycard === true;
       let encodedRoomId = '';
       let encodeRes: any = { success: true, data: { status: 'SUCCESS' } };
@@ -188,6 +188,7 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
         userId, 
         deviceId, 
         bypassKeycard: bypass, 
+        overrideDeposit: options?.overrideDeposit,
         encodedRoomId, 
         encodeData: encodeRes.data ? JSON.stringify(encodeRes.data) : undefined 
       });

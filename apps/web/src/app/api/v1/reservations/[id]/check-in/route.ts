@@ -3,6 +3,8 @@ import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { auth } from '@/lib/auth';
 import { assertPropertyAccess } from '@/lib/property-access';
+import { hasPermission } from '@/lib/rbac';
+import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 
 export async function POST(
   req: NextRequest,
@@ -15,6 +17,17 @@ export async function POST(
     }
 
     const { id: reservationId } = await params;
+    
+    // Parse body for options
+    let overrideDeposit = false;
+    try {
+      const body = await req.json();
+      if (body?.options?.overrideDeposit) {
+        overrideDeposit = true;
+      }
+    } catch (e) {
+      // Ignore body parsing errors
+    }
 
     // 1. Fetch Reservation
     const reservation = await prisma.reservation.findUnique({
@@ -34,6 +47,11 @@ export async function POST(
     // Verify access
     const propertyId = reservation.propertyId;
     await assertPropertyAccess(session.user.id, propertyId);
+    const canCheckIn = await hasPermission(session.user.id, 'reservation', 'update', propertyId);
+    if (!canCheckIn) return errorResponse('FORBIDDEN', 'Insufficient permissions', 403);
+    if (await isNightAuditTransactionLocked(propertyId)) {
+      return errorResponse('NIGHT_AUDIT_IN_PROGRESS', 'Check-in is temporarily paused while Night Audit is posting.', 409);
+    }
 
     if (reservation.status !== 'CONFIRMED') {
       return errorResponse('BAD_REQUEST', 'Reservation must be in CONFIRMED status to check in.', 400);
@@ -86,13 +104,32 @@ export async function POST(
         FOR UPDATE
       `;
 
-      let totalBalance = 0;
-      for (const folio of folios) {
-        totalBalance += Number(folio.balance);
-      }
+      // 7D.6 FINANCIAL GUARD: ENFORCE DEPOSIT REQUIREMENT (INCREMENTAL MODEL)
+      // Since room charges are posted incrementally via Night Audit, the outstanding balance is $0 at check-in.
+      // We must check if the wallet's available credit covers the expected cost, UNLESS the manager has explicitly overridden it.
+      if (!overrideDeposit && reservation.ratePlanSnapshot) {
+        const snapshot = reservation.ratePlanSnapshot as any;
+        const expectedCost = snapshot.total || 0;
+        
+        let totalCredit = 0;
+        let totalDebt = 0;
+        
+        const dbFolios = await tx.folio.findMany({
+          where: { reservationId },
+          include: { charges: true, payments: true }
+        });
+        
+        for (const f of dbFolios) {
+          const fCharges = f.charges.reduce((sum: number, c: any) => sum + Number(c.amount), 0);
+          const fPayments = f.payments.reduce((sum: number, p: any) => sum + Number(p.amount), 0);
+          const fBalance = fCharges - fPayments;
+          if (fBalance > 0) totalDebt += fBalance;
+          else if (fBalance < 0) totalCredit += Math.abs(fBalance);
+        }
 
-      if (totalBalance > 0) {
-        throw new Error('PAYMENT_REQUIRED');
+        if (totalDebt > 0 || totalCredit < expectedCost) {
+           throw new Error('PAYMENT_REQUIRED: Insufficient Deposit to cover Check-In.');
+        }
       }
       // ----------------------------
 

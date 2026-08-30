@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { verifyOperatorToken } from '@/lib/pos/operatorAuth';
 import { PosOrderStatus, ProductionStation } from '@hotel-pms/db';
+import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
+import { getPropertyBusinessDate } from '@/lib/date-utils';
 
 // POST /api/v1/pos/orders
 export async function POST(req: NextRequest) {
@@ -45,6 +47,9 @@ export async function POST(req: NextRequest) {
     if (!sessionId) {
       return NextResponse.json({ error: 'An open POS till is required before posting an order.' }, { status: 409 });
     }
+    if (await isNightAuditTransactionLocked(propertyId)) {
+      return NextResponse.json({ error: 'Night audit is in progress. New POS transactions are temporarily paused.' }, { status: 409 });
+    }
     const activePosSession = await prisma.posSession.findFirst({
       where: {
         id: sessionId,
@@ -53,7 +58,7 @@ export async function POST(req: NextRequest) {
         status: 'OPEN',
         controlStatus: 'OPEN',
       },
-      select: { id: true },
+      select: { id: true, businessDate: true },
     });
     if (!activePosSession) {
       return NextResponse.json(
@@ -109,7 +114,7 @@ export async function POST(req: NextRequest) {
           orderNumber,
           status:        'SUBMITTED' as PosOrderStatus,
           paymentStatus: 'UNPAID',
-          businessDate:  new Date(),
+          businessDate:  activePosSession.businessDate || getPropertyBusinessDate(),
           subtotal,
           taxAmount,
           total,
@@ -145,7 +150,7 @@ export async function POST(req: NextRequest) {
                   amount:   p.amount,
                   currency: p.currency ?? 'NGN',
                   status:   (p.status ?? 'CONFIRMED') as any,
-                  businessDate: new Date(),
+                  businessDate: activePosSession.businessDate || getPropertyBusinessDate(),
                 })),
               }
             : undefined,

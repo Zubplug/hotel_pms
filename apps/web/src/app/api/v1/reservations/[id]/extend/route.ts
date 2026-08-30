@@ -3,9 +3,12 @@ import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { auth } from '@/lib/auth';
 import { assertPropertyAccess } from '@/lib/property-access';
+import { hasPermission } from '@/lib/rbac';
 import { NotificationEngine } from '@/lib/notification-engine';
 import { calculateFolioTotals } from '@/lib/finance/folio-totals';
 import { applyAvailableFolioCredit } from '@/lib/finance/apply-folio-credit';
+import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
+import { getPropertyBusinessDate } from '@/lib/date-utils';
 
 export async function POST(
   req: NextRequest,
@@ -27,13 +30,19 @@ export async function POST(
         reservationRooms: {
           include: { room: true }
         },
-        property: { select: { organizationId: true } }
+        property: { select: { organizationId: true, businessDate: true, timezone: true } }
       }
     });
 
     if (!reservation) return errorResponse('NOT_FOUND', 'Reservation not found', 404);
+    if (await isNightAuditTransactionLocked(reservation.propertyId)) {
+      return errorResponse('NIGHT_AUDIT_IN_PROGRESS', 'Night audit cutover is in progress. Stay extensions resume after the new business date is active.', 409);
+    }
 
     await assertPropertyAccess(session.user.id, reservation.propertyId);
+
+    const canUpdate = await hasPermission(session.user.id, 'reservation', 'update', reservation.propertyId);
+    if (!canUpdate) return errorResponse('FORBIDDEN', 'Insufficient permissions to extend stay', 403);
 
     if (reservation.status !== 'CHECKED_IN') {
       return errorResponse('BAD_REQUEST', 'Only checked-in reservations can be extended', 400);
@@ -123,45 +132,12 @@ export async function POST(
         data: { checkOut: requestedCheckOut }
       });
 
-      // 3. Find folio and post additional charge
+      // 3. Find folio to apply credit if needed
       const folio = await tx.folio.findFirst({
         where: { reservationId: reservation.id }
       });
 
       if (folio) {
-        // Post additional night charges as daily line items
-        let dateIterator = new Date(currentCheckOut);
-        for (let i = 0; i < additionalNights; i++) {
-          const nightDate = new Date(dateIterator);
-          await tx.folioItem.create({
-            data: {
-              folioId: folio.id,
-              businessDate: nightDate,
-              type: 'CHARGE',
-              source: 'ROOM_CHARGE',
-              description: `Room Charge (Extension) - Night ${i + 1}`,
-              quantity: 1,
-              unitAmount: currentRate,
-              amount: currentRate,
-              baseAmount: currentRate,
-              currency: resRoom.currency,
-              postedBy: session.user.id,
-            }
-          });
-          dateIterator.setDate(dateIterator.getDate() + 1);
-        }
-
-        // Recalculate folio totals
-        const allItems = await tx.folioItem.findMany({ where: { folioId: folio.id } });
-        const creditApplications = await tx.folioCreditApplication.findMany({ where: { folioId: folio.id }, select: { amount: true } });
-        const totals = calculateFolioTotals(allItems, creditApplications);
-
-        await tx.folio.update({
-          where: { id: folio.id },
-          data: {
-            ...totals,
-          }
-        });
         await applyAvailableFolioCredit(tx, {
           folioId: folio.id,
           propertyId: reservation.propertyId,
@@ -173,6 +149,7 @@ export async function POST(
           description: `Applied guest credit to room extension - ${additionalNights} night${additionalNights === 1 ? '' : 's'}`,
           appliedBy: session.user.id,
           operationKey: idempotencyKey
+          ,businessDate: reservation.property.businessDate || getPropertyBusinessDate(reservation.property.timezone)
         });
       }
 
@@ -192,22 +169,6 @@ export async function POST(
         }
       });
 
-      if (folio) {
-        await tx.auditLog.create({
-          data: {
-            ...auditBase,
-            requestId: `${idempotencyKey}-folio`,
-            action: 'FOLIO_CHARGE_POSTED',
-            resource: 'Folio',
-            resourceId: folio.id,
-            newValue: {
-              amount: additionalCharge,
-              nights: additionalNights,
-              description: 'Room extension charge',
-            },
-          }
-        });
-      }
     });
 
     await NotificationEngine.emit({

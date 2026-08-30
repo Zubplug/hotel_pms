@@ -15,6 +15,7 @@ export function AddPaymentDialog({ open, onOpenChange, folio, collectionSource =
   const [method, setMethod] = useState<string>('CASH');
   const [amount, setAmount] = useState<string>(folio?.balance > 0 ? folio.balance.toString() : '');
   const [notes, setNotes] = useState('');
+  const [auditOverrideReason, setAuditOverrideReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successPaymentId, setSuccessPaymentId] = useState<string | null>(null);
@@ -42,7 +43,8 @@ export function AddPaymentDialog({ open, onOpenChange, folio, collectionSource =
       const payload = isGateway ? {
         folioId: folio.id,
         amount: numAmount,
-        currency: folio.currency
+        currency: folio.currency,
+        ...(auditOverrideReason.trim() ? { nightAuditOverrideReason: auditOverrideReason.trim() } : {})
       } : {
         folioId: folio.id,
         amount: numAmount,
@@ -50,7 +52,8 @@ export function AddPaymentDialog({ open, onOpenChange, folio, collectionSource =
         method,
         notes,
         idempotencyKey: generateUUID()
-        ,collectionSource
+        ,collectionSource,
+        ...(auditOverrideReason.trim() ? { nightAuditOverrideReason: auditOverrideReason.trim() } : {})
       };
 
       const res = await fetch(endpoint, {
@@ -60,7 +63,7 @@ export function AddPaymentDialog({ open, onOpenChange, folio, collectionSource =
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to process payment');
+      if (!res.ok) throw new Error(data.error?.message || data.error || 'Failed to process payment');
 
       if (isGateway && data.data?.authorizationUrl) {
         // Redirect to Paystack checkout
@@ -73,7 +76,10 @@ export function AddPaymentDialog({ open, onOpenChange, folio, collectionSource =
       setSuccessPaymentId(data.data.payment.id);
       // We do not close the dialog automatically.
     } catch (err: any) {
-      setError(err.message);
+      const message = err.message || 'Failed to process payment';
+      setError(message.includes('Night audit') || message.includes('NIGHT_AUDIT')
+        ? `${message} Supervisors may enter an override reason below.`
+        : message);
     } finally {
       setIsSubmitting(false);
     }
@@ -90,6 +96,7 @@ export function AddPaymentDialog({ open, onOpenChange, folio, collectionSource =
         </DialogHeader>
 
         {error && <div className="p-3 bg-red-100 text-red-800 text-sm rounded-md">{error}</div>}
+        {error?.includes('override reason') && <div className="space-y-2"><Label>Supervisor override reason</Label><Textarea value={auditOverrideReason} onChange={(e) => setAuditOverrideReason(e.target.value)} placeholder="Explain why this guest payment must be processed during audit (minimum 10 characters)" disabled={isSubmitting} /></div>}
 
         <form onSubmit={handleSubmit} className="space-y-4 mt-2">
           <div className="space-y-2">

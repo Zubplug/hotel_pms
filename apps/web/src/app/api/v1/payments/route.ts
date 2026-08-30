@@ -5,6 +5,8 @@ import { successResponse, errorResponse } from '@/lib/api-response';
 import { getUserPropertyIds } from '@/lib/property-access';
 import { NotificationEngine } from '@/lib/notification-engine';
 import { findActiveFrontdeskSession, isFrontdeskCashierRole } from '@/lib/frontdesk/active-session';
+import { canOverrideNightAudit, getNightAuditOverrideReason, isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
+import { getPropertyBusinessDate } from '@/lib/date-utils';
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,7 +14,7 @@ export async function POST(req: NextRequest) {
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
 
     const body = await req.json();
-    const { folioId, amount, currency, method, idempotencyKey, notes, providerTransactionId, terminalId, reference, authorizationCode, frontdeskSessionId, collectionSource = 'FRONT_DESK' } = body;
+    const { folioId, amount, currency, method, idempotencyKey, notes, providerTransactionId, terminalId, reference, authorizationCode, frontdeskSessionId, collectionSource = 'FRONT_DESK', nightAuditOverrideReason } = body;
     const isReceivablesCollection = collectionSource === 'RECEIVABLES';
     if (!['FRONT_DESK', 'RECEIVABLES', 'OTHER'].includes(collectionSource)) return errorResponse('BAD_REQUEST', 'Invalid collection source', 400);
 
@@ -49,6 +51,12 @@ export async function POST(req: NextRequest) {
 
     if (!folio) {
       return errorResponse('NOT_FOUND', 'Folio not found', 404);
+    }
+
+    const overrideReason = getNightAuditOverrideReason(nightAuditOverrideReason);
+    const auditLocked = await isNightAuditTransactionLocked(folio.propertyId);
+    if (auditLocked && (!canOverrideNightAudit((session.user as any).role) || !overrideReason)) {
+      return errorResponse('NIGHT_AUDIT_IN_PROGRESS', 'Night audit is in progress. New financial transactions are temporarily paused.', 409);
     }
 
     // --- 7D.6 FINANCIAL GUARD ---
@@ -99,7 +107,7 @@ export async function POST(req: NextRequest) {
       const folioItem = await tx.folioItem.create({
         data: {
           folioId: folio.id,
-          businessDate: new Date(),
+          businessDate: folio.property.businessDate || getPropertyBusinessDate(folio.property.timezone),
           type: 'PAYMENT',
           source: method === 'POS' ? 'POS' : 'MANUAL',
           description: `Payment - ${method}`,
@@ -185,7 +193,8 @@ export async function POST(req: NextRequest) {
             totalPayments: Number(updatedFolio.totalPayments),
             paymentId: payment.id,
             amount: numericAmount,
-            method
+            method,
+            nightAuditOverrideReason: overrideReason
           },
           ipAddress: req.headers.get('x-forwarded-for') || '127.0.0.1',
           userAgent: req.headers.get('user-agent') || 'Unknown',

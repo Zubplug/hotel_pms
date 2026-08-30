@@ -12,6 +12,7 @@ export async function applyAvailableFolioCredit(
     appliedBy: string;
     deviceId?: string | null;
     operationKey: string;
+    businessDate: Date;
   }
 ) {
   let appliedTotal = 0;
@@ -51,7 +52,7 @@ export async function applyAvailableFolioCredit(
         idempotencyKey: applicationKey,
         appliedBy: options.appliedBy,
         deviceId: options.deviceId,
-        businessDate: new Date()
+        businessDate: options.businessDate
       }
     });
 
@@ -74,7 +75,7 @@ export async function applyAvailableFolioCredit(
         currency: options.currency,
         operatorId: options.appliedBy,
         deviceId: options.deviceId,
-        businessDate: new Date(),
+        businessDate: options.businessDate,
         reason: options.description,
         approvalStatus: 'NOT_REQUIRED',
         idempotencyKey: `audit:${applicationKey}`,

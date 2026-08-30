@@ -25,78 +25,41 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     const hasApprove = hasInventoryPermission(role, 'inventory.stocktake.approve', isSuperAdmin);
 
     if (action === 'start') {
-      if (!hasManage || stocktake.status !== 'DRAFT' && stocktake.status !== 'REJECTED') {
+      if (!hasManage) {
         return NextResponse.json({ error: 'Cannot start', data: null }, { status: 400 });
       }
-      await prisma.stocktake.update({
-        where: { id: stocktake.id },
-        data: { status: 'COUNTING', startedBy: userId, startedAt: new Date() }
-      });
+      await StocktakeService.startStocktake(stocktake.id, userId);
     } 
     else if (action === 'submit') {
-      if (!hasManage || stocktake.status !== 'COUNTING') {
+      if (!hasManage) {
         return NextResponse.json({ error: 'Cannot submit', data: null }, { status: 400 });
       }
-
-      if (stocktake.items.some(item => item.countedQty === null)) {
-        return NextResponse.json({ error: 'Complete every physical count before submitting', data: null }, { status: 400 });
-      }
-      
-      // Calculate variances
-      const updates = stocktake.items.map(item => {
-        const expectedQty = item.expectedQty.toNumber();
-        const actualCounted = item.countedQty!.toNumber();
-        const variance = actualCounted - expectedQty;
-        const costAtCount = item.costAtCount.toNumber();
-        const varianceValue = variance * costAtCount;
-
-        return prisma.stocktakeItem.update({
-          where: { id: item.id },
-          data: { variance, varianceValue }
-        });
-      });
-
-      updates.push(prisma.stocktake.update({
-        where: { id: stocktake.id },
-        data: { status: 'SUBMITTED', submittedBy: userId, submittedAt: new Date() }
-      }) as any);
-
-      await prisma.$transaction(updates);
+      await StocktakeService.submitStocktake(stocktake.id, userId);
     }
     else if (action === 'reject') {
-      if (!hasApprove || stocktake.status !== 'SUBMITTED') {
+      if (!hasApprove) {
         return NextResponse.json({ error: 'Cannot reject', data: null }, { status: 400 });
       }
-      await prisma.stocktake.update({
-        where: { id: stocktake.id },
-        data: { status: 'REJECTED', rejectedBy: userId, rejectedAt: new Date() }
-      });
+      await StocktakeService.rejectStocktake(stocktake.id, userId, body.reason);
     }
     else if (action === 'approve') {
-      if (!hasApprove || stocktake.status !== 'SUBMITTED') {
+      if (!hasApprove) {
         return NextResponse.json({ error: 'Cannot approve', data: null }, { status: 400 });
       }
-      // Note: Threshold checking (e.g. Variance Value <= 50,000) could be implemented here via ApprovalConfig
-      await prisma.stocktake.update({
-        where: { id: stocktake.id },
-        data: { status: 'APPROVED', approvedBy: userId, approvedAt: new Date() }
-      });
+      await StocktakeService.approveStocktake(stocktake.id, userId);
     }
     else if (action === 'post') {
-      if (!hasApprove || stocktake.status !== 'APPROVED') {
+      if (!hasApprove) {
         return NextResponse.json({ error: 'Cannot post', data: null }, { status: 400 });
       }
       const operationId = crypto.randomUUID();
       await StocktakeService.postStocktake(stocktake.id, userId, operationId);
     }
     else if (action === 'cancel') {
-      if (!hasManage || ['POSTED', 'COMPLETED', 'CANCELLED'].includes(stocktake.status)) {
+      if (!hasManage) {
         return NextResponse.json({ error: 'Cannot cancel', data: null }, { status: 400 });
       }
-      await prisma.stocktake.update({
-        where: { id: stocktake.id },
-        data: { status: 'CANCELLED' }
-      });
+      await StocktakeService.cancelStocktake(stocktake.id, userId);
     }
     else {
       return NextResponse.json({ error: 'Invalid action', data: null }, { status: 400 });

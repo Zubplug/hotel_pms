@@ -3,6 +3,8 @@ import prisma from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
 import { getUserPropertyIds } from '@/lib/property-access';
 import { verifyOperatorToken } from '@/lib/pos/operatorAuth';
+import { ShiftControlService } from '@/lib/services/shift-control-service';
+import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 
 const amount = (value: unknown) => Number(value ?? 0);
 
@@ -59,6 +61,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     const operationId = request.headers.get('Idempotency-Key') || `online_settlement_${sessionId}_${Date.now()}`;
+    if (await isNightAuditTransactionLocked(current.propertyId, current.businessDate)) {
+      return NextResponse.json({ error: 'POS session cannot be settled while Night Audit is posting.', code: 'NIGHT_AUDIT_IN_PROGRESS' }, { status: 409 });
+    }
     const result = await prisma.$transaction(async tx => {
       const existing = await tx.posSettlement.findUnique({ where: { operationId } });
       if (existing) return existing;
@@ -80,22 +85,24 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           operationId,
         },
       });
-      await tx.posSession.update({ where: { id: sessionId }, data: {
-        status: current.bankType === 'SERVER' ? 'RECONCILIATION_REQUIRED' : 'CLOSED',
-        controlStatus: 'SUBMITTED',
-        varianceStatus: variance === 0 ? null : 'OPEN',
+      // ShiftControlService.submitShift() is the single authoritative path for
+      // OPEN → SUBMITTED and RETURNED → SUBMITTED transitions. It writes the
+      // shiftControlAudit record atomically inside this transaction.
+      await ShiftControlService.submitShift(tx, 'POS', sessionId, operatorId, {
+        declaredCash: actualCash,
         expectedCash,
-        actualCash,
         variance,
-        submittedBy: operatorId,
-        submittedAt: new Date(),
-        closedBy: operatorId,
-        closedAt: new Date(),
-        // An authorizer on settlement records the declaration authorization;
-        // it is not a Finance approval and cannot advance controlStatus.
-        approvedBy: null,
-        approvedAt: null
-      } });
+        varianceStatus: variance !== 0 ? 'OPEN' : null,
+        propertyId: current.propertyId as string,
+      });
+      // SERVER banking sessions remain open for concurrent waiters until the
+      // central cashier physically collects; flag them for reconciliation.
+      if (current.bankType === 'SERVER') {
+        await tx.posSession.update({
+          where: { id: sessionId },
+          data: { status: 'RECONCILIATION_REQUIRED' }
+        });
+      }
       return settlement;
     });
     return NextResponse.json({ data: result });

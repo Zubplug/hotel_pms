@@ -47,6 +47,25 @@ public partial class MainPage : ContentPage
         // Navigate to the isolated Desktop route
         webView2.CoreWebView2.Navigate("http://lodgecore.local/desktop");
 #endif
+
+        LodgeCore.Desktop.Services.SyncEngine.OnSyncHealthChanged += (health) =>
+        {
+            var evtJson = JsonSerializer.Serialize(new
+            {
+                @event = "sync.status_changed",
+                status = health.Sync.ToString(),
+                network = health.Network.ToString()
+            });
+
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                try
+                {
+                    webView2.CoreWebView2.PostWebMessageAsString(evtJson);
+                }
+                catch { }
+            });
+        };
     }
 
     private void CoreWebView2_WebResourceRequested(object sender, Microsoft.Web.WebView2.Core.CoreWebView2WebResourceRequestedEventArgs e)
@@ -259,9 +278,14 @@ public partial class MainPage : ContentPage
                     {
                         bool.TryParse(parameters["bypassKeycard"].ToString(), out bypassKeycard);
                     }
+                    bool overrideDeposit = false;
+                    if (parameters != null && parameters["overrideDeposit"] != null)
+                    {
+                        bool.TryParse(parameters["overrideDeposit"].ToString(), out overrideDeposit);
+                    }
                     var encodedRoomId = parameters?["encodedRoomId"]?.ToString() ?? "";
                     var encodeData = parameters?["encodeData"]?.ToString();
-                    responseData = await pmsInterop.ProcessCheckInAsync(resId, bypassKeycard, encodedRoomId, encodeData);
+                    responseData = await pmsInterop.ProcessCheckInAsync(resId, bypassKeycard, encodedRoomId, encodeData, overrideDeposit);
                     break;
                 case "reservations.checkOut":
                     string outResId = parameters?["id"]?.ToString() ?? "";

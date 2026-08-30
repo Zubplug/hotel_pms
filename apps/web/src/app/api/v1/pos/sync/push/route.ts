@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@hotel-pms/db";
 import { randomUUID } from "crypto";
 import { InventoryService } from "@/lib/inventory/InventoryService";
+import { isNightAuditCutoverActive } from "@/lib/night-audit-guard";
 
 // Legacy desktop SyncEvents use operation IDs such as `op_<device>_<ticks>`,
 // while HotelEvent.id is a PostgreSQL UUID. Keep the legacy ID as the
@@ -57,6 +58,10 @@ export async function POST(req: NextRequest) {
     if (!propertyId) {
       console.warn(`[sync/pos-push] request=${requestId} rejected terminalId=${terminalId} has no property`);
       return NextResponse.json({ error: "Terminal not associated with a property" }, { status: 400 });
+    }
+
+    if (await isNightAuditCutoverActive(propertyId)) {
+      return NextResponse.json({ error: "Night audit is in progress. POS synchronization is temporarily paused." }, { status: 409 });
     }
 
     console.info(`[sync/pos-push] request=${requestId} authorized terminalId=${terminal.id} propertyId=${propertyId} events=${body.events.length}`);

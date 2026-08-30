@@ -1,4 +1,4 @@
-import { POST as NightAuditPOST } from '../app/api/v1/night-audit/run/route';
+import { POST as NightAuditPOST } from '../app/api/v1/night-audit/execute/route';
 import { POST as SyncPOST } from '../app/api/v1/sync/push/route';
 import prisma from '@hotel-pms/db';
 

@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { getUserPropertyIds } from '@/lib/property-access';
 import { CashExpenseService } from '@/lib/services/cash-expense-service';
+import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 
 const GENERAL_CASHIER = ['GENERAL_CASHIER', 'SUPER_ADMIN'];
 
@@ -34,6 +35,23 @@ export async function POST(request: NextRequest) {
     if (!actor.staffId) return NextResponse.json({ error: 'Staff record not found' }, { status: 401 });
     const body = await request.json();
     if (!body.propertyId || !actor.propertyIds.includes(body.propertyId)) return NextResponse.json({ error: 'Invalid property' }, { status: 403 });
+
+    // OVERRIDE-pattern night audit guard.
+    // A General Cashier may record an urgent expense during Night Audit cutover
+    // only with an explicit reason. The reason is written to the expense record.
+    const OVERRIDE_ROLES = new Set(['SUPER_ADMIN', 'MANAGER', 'HOTEL_MANAGER', 'GENERAL_CASHIER']);
+    if (await isNightAuditTransactionLocked(body.propertyId)) {
+      const overrideReason = String(body.nightAuditOverrideReason || '').trim();
+      if (!overrideReason || !OVERRIDE_ROLES.has(actor.role)) {
+        return NextResponse.json({
+          error: 'Night Audit is in progress. To record a cash expense now, supply a nightAuditOverrideReason in the request body.',
+          code: 'NIGHT_AUDIT_IN_PROGRESS'
+        }, { status: 409 });
+      }
+      // Override reason is appended to the expense description for auditability
+      body.description = `${body.description || ''} [Night Audit Override: ${overrideReason}]`.trim();
+    }
+
     const expense = await CashExpenseService.create({ propertyId: body.propertyId, requestedBy: actor.staffId, amount: Number(body.amount), currency: body.currency, categoryId: String(body.categoryId || ''), description: String(body.description || ''), payee: String(body.payee || ''), receiptUrl: body.receiptUrl, costCenterId: body.costCenterId ? String(body.costCenterId) : undefined });
     return NextResponse.json({ data: expense }, { status: 201 });
   } catch (error: any) {

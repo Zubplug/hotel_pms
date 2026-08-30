@@ -5,6 +5,8 @@ import { successResponse, errorResponse } from '@/lib/api-response';
 import { hasPermission } from '@/lib/rbac';
 import { getUserPropertyIds } from '@/lib/property-access';
 import { findActiveFrontdeskSession } from '@/lib/frontdesk/active-session';
+import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
+import { getPropertyBusinessDate } from '@/lib/date-utils';
 
 const TRANSITIONS: Record<string, string[]> = {
   'PENDING': ['COLLECTED', 'CANCELLED'],
@@ -32,6 +34,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     });
 
     if (!order) return errorResponse('NOT_FOUND', 'Laundry order not found', 404);
+    const property = await prisma.property.findUnique({ where: { id: order.propertyId }, select: { businessDate: true, timezone: true } });
+    if (await isNightAuditTransactionLocked(order.propertyId)) {
+      return errorResponse('NIGHT_AUDIT_IN_PROGRESS', 'Night audit cutover is in progress. Laundry billing resumes after the new business date is active.', 409);
+    }
 
     const allowedProperties = await getUserPropertyIds(session.user.id);
     if (!allowedProperties.includes(order.propertyId)) {
@@ -142,7 +148,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         const folioItem = await tx.folioItem.create({
             data: {
                 folioId: activeFolio.id,
-                businessDate: new Date(),
+                businessDate: property?.businessDate || getPropertyBusinessDate(property?.timezone),
                 type: 'CHARGE',
                 source: 'LAUNDRY',
                 description: `Laundry Service - ${order.serviceType}`,
@@ -196,7 +202,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
               idempotencyKey: applicationKey,
               appliedBy: session.user.id,
               deviceId,
-              businessDate: new Date()
+              businessDate: property?.businessDate || getPropertyBusinessDate(property?.timezone)
             }
           });
 
@@ -214,7 +220,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
               currency: order.currency,
               operatorId: session.user.id,
               deviceId,
-              businessDate: new Date(),
+              businessDate: property?.businessDate || getPropertyBusinessDate(property?.timezone),
               reason: `Applied guest credit to Laundry Service - ${order.serviceType}`,
               balanceBefore: activeFolio.balance,
               balanceAfter: Number(activeFolio.balance) + Number(order.totalAmount) - creditApplied - applied,

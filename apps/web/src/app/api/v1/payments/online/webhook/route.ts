@@ -46,6 +46,8 @@ async function handleChargeSuccess(req: NextRequest, event: any, provider: Payst
       return NextResponse.json({ message: 'Payment not found' }, { status: 404 });
     }
 
+    const property = await prisma.property.findUnique({ where: { id: payment.propertyId }, select: { businessDate: true } });
+
     // 2. Application-Level Idempotency
     if (payment.status === 'COMPLETED') {
       return NextResponse.json({ message: 'Payment already processed' }, { status: 200 });
@@ -131,7 +133,7 @@ async function handleChargeSuccess(req: NextRequest, event: any, provider: Payst
       await tx.folioItem.create({
         data: {
           folioId: folio.id,
-          businessDate: new Date(),
+          businessDate: property?.businessDate || new Date(),
           type: 'PAYMENT',
           source: 'OTHER', // or a specific gateway source if added to enum later
           description: `Online Payment (Paystack) - ${reference}`,
@@ -200,6 +202,8 @@ async function handleRefundProcessed(req: NextRequest, event: any) {
 
     if (!refund) return NextResponse.json({ message: 'Refund not found or not processing' }, { status: 200 });
 
+    const property = await prisma.property.findUnique({ where: { id: refund.propertyId }, select: { businessDate: true } });
+
     const numericAmount = amount / 100; // Paystack sends in kobo
 
     await prisma.$transaction(async (tx: any) => {
@@ -229,7 +233,7 @@ async function handleRefundProcessed(req: NextRequest, event: any) {
       await tx.folioItem.create({
         data: {
           folioId: folio.id,
-          businessDate: new Date(),
+          businessDate: property?.businessDate || new Date(),
           type: 'REFUND',
           source: 'OTHER',
           description: `Gateway Refund - ${transaction_reference}`,

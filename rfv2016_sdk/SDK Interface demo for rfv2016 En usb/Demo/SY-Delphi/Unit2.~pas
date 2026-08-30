@@ -1,0 +1,13 @@
+unit Unit2;
+
+interface
+var
+  ReadDataStr:string;
+  //--------------------------------------------------
+  Procedure WriteCardTxt(WriteDataStr:string;WriteDBPath:String);
+  Procedure WriteCardReceiveTxt(WriteReceiveDBPath:String);
+  Procedure ReadCardTxt(ReadDBPath:String);
+implementation
+
+end.
+ 

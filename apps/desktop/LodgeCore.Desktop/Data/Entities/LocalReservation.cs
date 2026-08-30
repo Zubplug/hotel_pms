@@ -13,6 +13,7 @@ public class LocalReservation
     public string? Source { get; set; }
     public string? ChannelRef { get; set; }
     public string? RatePlanId { get; set; }
+    public string? RatePlanSnapshotJson { get; set; }
     public string? Currency { get; set; }
     
     public ICollection<LocalReservationRoom> Rooms { get; set; } = new List<LocalReservationRoom>();

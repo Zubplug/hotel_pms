@@ -442,6 +442,7 @@ export async function GET(req: NextRequest) {
       currency: property.baseCurrency,
       timezone: property.timezone,
       businessDate: property.businessDate,
+      auditStatus: property.auditStatus,
       isActive: property.isActive,
       earlyCheckinWindowHours: (settings.earlyCheckinWindowHours as number) ?? 2,
       bankingModel: ((settings.pos as any)?.bankingModel as string) ?? 'CENTRAL_CASHIER',

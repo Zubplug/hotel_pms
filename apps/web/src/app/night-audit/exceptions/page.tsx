@@ -6,21 +6,56 @@ import { Button } from '@/components/ui/button';
 import { AlertTriangle, TrendingDown, TrendingUp, Info, CheckCircle2, Loader2 } from 'lucide-react';
 import { useProperty } from '@/components/PropertyProvider';
 import { getExceptions } from '@/lib/night-audit-actions';
+import { useRouter } from 'next/navigation';
 
 export default function ExceptionsPage() {
   const { propertyId } = useProperty();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [acking, setAcking] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     if (propertyId) {
       setLoading(true);
-      getExceptions(propertyId).then(res => {
-        setData(res);
+      try {
+        getExceptions(propertyId).then(res => {
+          setData(res);
+          setLoading(false);
+        }).catch(err => {
+          alert("Failed to load exceptions: " + err.message);
+          setLoading(false);
+        });
+      } catch (err: any) {
+        alert(err.message);
         setLoading(false);
-      });
+      }
     }
   }, [propertyId]);
+
+  
+  const handleAckAll = async () => {
+    setAcking(true);
+    try {
+      const statusRes = await fetch(`/api/v1/night-audit/status?propertyId=${propertyId}`);
+      const statusData = await statusRes.json();
+      const nightAuditId = statusData.data?.pendingRun?.id;
+      
+      const promises = [];
+      if (data?.syncConflicts > 0) promises.push(fetch('/api/v1/night-audit/acknowledge', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ propertyId, nightAuditId, warningType: 'HARDWARE_OFFLINE', reason: 'Bulk ack', comment: '' }) }));
+      if (data?.openPosSessions > 0) promises.push(fetch('/api/v1/night-audit/acknowledge', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ propertyId, nightAuditId, warningType: 'OPEN_POS', reason: 'Bulk ack', comment: '' }) }));
+      if (data?.highBalances > 0) promises.push(fetch('/api/v1/night-audit/acknowledge', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ propertyId, nightAuditId, warningType: 'HIGH_BALANCE', reason: 'Bulk ack', comment: '' }) }));
+      
+      await Promise.all(promises);
+      
+      const res = await getExceptions(propertyId);
+      setData(res);
+    } catch (err: any) {
+      alert("Failed to acknowledge all: " + err.message);
+    } finally {
+      setAcking(false);
+    }
+  };
 
   if (loading) return <div className="flex justify-center p-12"><Loader2 className="h-8 w-8 animate-spin text-amber-500" /></div>;
 
@@ -35,7 +70,8 @@ export default function ExceptionsPage() {
             Resolve unposted charges, room discrepancies, and cashier variances.
           </p>
         </div>
-        <Button className="bg-amber-600 hover:bg-amber-700">
+        <Button className="bg-amber-600 hover:bg-amber-700" onClick={handleAckAll} disabled={acking}>
+          {acking ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
           Acknowledge All
         </Button>
       </div>
@@ -50,7 +86,7 @@ export default function ExceptionsPage() {
             <CardDescription>Shift drops greater than expected</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${data?.cashOverages?.toFixed(2) || '0.00'}</div>
+            <div className="text-2xl font-bold">₦{data?.cashOverages?.toFixed(2) || '0.00'}</div>
             <p className="text-xs text-muted-foreground mt-1">Calculated from un-deposited drops</p>
           </CardContent>
         </Card>
@@ -64,7 +100,7 @@ export default function ExceptionsPage() {
             <CardDescription>Shift drops less than expected</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-rose-600 dark:text-rose-400">-${data?.cashShortages?.toFixed(2) || '0.00'}</div>
+            <div className="text-2xl font-bold text-rose-600 dark:text-rose-400">-₦{data?.cashShortages?.toFixed(2) || '0.00'}</div>
             <p className="text-xs text-muted-foreground mt-1">Requires supervisor override</p>
           </CardContent>
         </Card>
@@ -103,7 +139,7 @@ export default function ExceptionsPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm">Investigate</Button>
+                  <Button variant="outline" size="sm" onClick={() => router.push('/frontdesk')}>Investigate</Button>
                 </div>
               </div>
             )}
@@ -120,7 +156,7 @@ export default function ExceptionsPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm">Investigate</Button>
+                  <Button variant="outline" size="sm" onClick={() => router.push('/pos')}>Investigate</Button>
                 </div>
               </div>
             )}
@@ -133,11 +169,11 @@ export default function ExceptionsPage() {
                   </div>
                   <div>
                     <p className="text-sm font-medium">High Balance Folios</p>
-                    <p className="text-sm text-muted-foreground">{data.highBalances} folios have exceeded the house credit limit.</p>
+                    <p className="text-sm text-muted-foreground">{data.highBalances} open folios have an outstanding debit balance requiring review.</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm">Investigate</Button>
+                  <Button variant="outline" size="sm" onClick={() => router.push('/reservations')}>Investigate</Button>
                 </div>
               </div>
             )}

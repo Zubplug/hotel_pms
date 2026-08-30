@@ -3,6 +3,7 @@ import prisma from '@hotel-pms/db';
 import { verifyOperatorToken } from '@/lib/pos/operatorAuth';
 import { z } from 'zod';
 import { InventoryService } from '@/lib/inventory/InventoryService';
+import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 
 const PaymentSchema = z.object({
   method: z.string(),
@@ -51,6 +52,9 @@ export async function POST(
 
     if (!order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+    }
+    if (await isNightAuditTransactionLocked(order.propertyId, order.businessDate)) {
+      return NextResponse.json({ error: 'Night audit is in progress. New POS transactions are temporarily paused.' }, { status: 409 });
     }
     if (!sessionId) {
       return NextResponse.json({ error: 'An open POS till is required before posting a payment.' }, { status: 409 });

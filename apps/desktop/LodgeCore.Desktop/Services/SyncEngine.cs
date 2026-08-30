@@ -215,16 +215,20 @@ public class SyncEngine : BackgroundService
                 {
                     _logger.LogInformation("[SYNC-CYCLE] Starting sync cycle. Online={Online}", _isOnline);
                     BroadcastHealth(SyncState.SYNCING, null, "PREP", 0, 1, "Preparing sync...");
-                    try { await PushPendingEventsAsync(stoppingToken); } catch (Exception ex) { _logger.LogError(ex, "Failed to push POS events"); }
-                    try { await PushFrontDeskOutboxAsync(stoppingToken); } catch (Exception ex) { _logger.LogError(ex, "Failed to push Front Desk events"); }
-                    try { await PushKeycardAuditsAsync(stoppingToken); } catch (Exception ex) { _logger.LogError(ex, "Failed to push Keycard events"); }
-
                     // ── Sync guests FIRST so GuestId FK is satisfied when
                     //    reservations are saved in PullUpdatesAsync below.
                     await SyncGuestsIncrementalAsync(stoppingToken);
 
-                    // Pull all other entities (RoomTypes, Rooms, Reservations, Folios …)
+                    // Pull control state before pushing queued offline events.
+                    // This refreshes AuditStatus/businessDate so reconnecting
+                    // terminals do not blindly submit old-date work during
+                    // an active cloud Night Audit.
                     await PullUpdatesAsync(stoppingToken);
+
+                    try { await PushPendingEventsAsync(stoppingToken); } catch (Exception ex) { _logger.LogError(ex, "Failed to push POS events"); }
+                    try { await PushFrontDeskOutboxAsync(stoppingToken); } catch (Exception ex) { _logger.LogError(ex, "Failed to push Front Desk events"); }
+                    try { await PushKeycardAuditsAsync(stoppingToken); } catch (Exception ex) { _logger.LogError(ex, "Failed to push Keycard events"); }
+
                     try { await SyncRefundStatusesAsync(stoppingToken); } catch (Exception ex) { _logger.LogWarning(ex, "Failed to sync refund statuses"); }
 
                     // Resolve any conflicts that emerged from the push/pull
@@ -810,6 +814,8 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     if (propEl.TryGetProperty("businessDate", out var bd) &&
                         bd.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(bd.GetString(), out var parsedDate))
                         localProp.BusinessDate = parsedDate;
+                    if (propEl.TryGetProperty("auditStatus", out var auditStatus) && auditStatus.ValueKind != System.Text.Json.JsonValueKind.Null)
+                        localProp.AuditStatus = auditStatus.GetString() ?? localProp.AuditStatus;
                 }
                 else
                 {
@@ -835,6 +841,7 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                         NoShowRefundableUnusedNights = !propEl.TryGetProperty("noShowRefundableUnusedNights", out var nsr2) || nsr2.ValueKind == System.Text.Json.JsonValueKind.True,
                         NoShowAllowReinstatement = !propEl.TryGetProperty("noShowAllowReinstatement", out var nsa2) || nsa2.ValueKind == System.Text.Json.JsonValueKind.True,
                         NoShowReinstatementRequiresApproval = !propEl.TryGetProperty("noShowReinstatementRequiresApproval", out var nsra2) || nsra2.ValueKind == System.Text.Json.JsonValueKind.True,
+                        AuditStatus = propEl.TryGetProperty("auditStatus", out var auditStatus2) && auditStatus2.ValueKind != System.Text.Json.JsonValueKind.Null ? auditStatus2.GetString() ?? "OPEN" : "OPEN",
                         BusinessDate = propEl.TryGetProperty("businessDate", out var bd2) && bd2.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(bd2.GetString(), out var parsedDate2) ? parsedDate2 : DateTime.UtcNow.Date
                     };
                     dbContext.Properties.Add(localProp);
@@ -1248,6 +1255,7 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     res.Source = el.TryGetProperty("source", out var src) && src.ValueKind != System.Text.Json.JsonValueKind.Null ? src.GetString() : null;
                     res.ChannelRef = el.TryGetProperty("channelRef", out var cref) && cref.ValueKind != System.Text.Json.JsonValueKind.Null ? cref.GetString() : null;
                     res.RatePlanId = el.TryGetProperty("ratePlanId", out var rpi) && rpi.ValueKind != System.Text.Json.JsonValueKind.Null ? rpi.GetString() : null;
+                    res.RatePlanSnapshotJson = el.TryGetProperty("ratePlanSnapshot", out var rps) && rps.ValueKind == System.Text.Json.JsonValueKind.Object ? rps.GetRawText() : null;
                     res.Currency = el.TryGetProperty("currency", out var cur) && cur.ValueKind != System.Text.Json.JsonValueKind.Null ? cur.GetString() : null;
                     res.InternalNotes = el.TryGetProperty("internalNotes", out var inn) && inn.ValueKind != System.Text.Json.JsonValueKind.Null ? inn.GetString() : null;
                     res.EarlyCheckIn = el.TryGetProperty("earlyCheckIn", out var eci) && eci.GetBoolean();

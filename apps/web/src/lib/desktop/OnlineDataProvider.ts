@@ -149,10 +149,10 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
     markLateArrival: async (id, notes) => apiFetch(`/api/v1/reservations/${id}/late-arrival`, { method: 'POST', body: JSON.stringify({ notes }) }),
     assessNoShow: async (id) => apiFetch(`/api/v1/reservations/${id}/no-show`, { method: 'POST', body: '{}' }),
     reinstate: async (id, reason) => apiFetch(`/api/v1/reservations/${id}/reinstate`, { method: 'POST', body: JSON.stringify({ reason }) }),
-    checkIn: async (id, userId, deviceId) => {
+    checkIn: async (id, userId, deviceId, options) => {
       return apiFetch(`/api/v1/reservations/${id}/check-in`, {
         method: 'POST',
-        body: JSON.stringify({ userId, deviceId })
+        body: JSON.stringify({ userId, deviceId, options })
       });
     },
     checkOut: async (id, userId, deviceId) => {

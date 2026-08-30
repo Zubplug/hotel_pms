@@ -6,6 +6,7 @@ import { getUserPropertyIds } from '@/lib/property-access';
 import { PaystackProvider } from '@/lib/payment-providers/paystack';
 import crypto from 'crypto';
 import { findActiveFrontdeskSession, isFrontdeskCashierRole } from '@/lib/frontdesk/active-session';
+import { canOverrideNightAudit, getNightAuditOverrideReason, isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,7 +14,7 @@ export async function POST(req: NextRequest) {
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
 
     const body = await req.json();
-    const { folioId, amount, currency, terminalId, frontdeskSessionId } = body;
+    const { folioId, amount, currency, terminalId, frontdeskSessionId, nightAuditOverrideReason } = body;
 
     if (!folioId || !amount || !currency) {
       return errorResponse('BAD_REQUEST', 'Missing required fields', 400);
@@ -30,6 +31,11 @@ export async function POST(req: NextRequest) {
     });
 
     if (!folio) return errorResponse('NOT_FOUND', 'Folio not found', 404);
+
+    const overrideReason = getNightAuditOverrideReason(nightAuditOverrideReason);
+    if (await isNightAuditTransactionLocked(folio.propertyId) && (!canOverrideNightAudit((session.user as any).role) || !overrideReason)) {
+      return errorResponse('NIGHT_AUDIT_IN_PROGRESS', 'Night audit is in progress. New financial transactions are temporarily paused.', 409);
+    }
 
     // --- 7D.6 FINANCIAL GUARD ---
     if (folio.status === 'CLOSED') {
@@ -96,7 +102,7 @@ export async function POST(req: NextRequest) {
           action: 'PAYMENT_CREATED',
           resource: 'Payment',
           resourceId: p.id,
-          newValue: { amount: numericAmount, currency, method: 'PAYMENT_GATEWAY', provider: 'PAYSTACK', providerRef },
+          newValue: { amount: numericAmount, currency, method: 'PAYMENT_GATEWAY', provider: 'PAYSTACK', providerRef, nightAuditOverrideReason: overrideReason },
           ipAddress: req.headers.get('x-forwarded-for') || '127.0.0.1',
           userAgent: req.headers.get('user-agent') || 'Unknown',
           requestId: req.headers.get('x-request-id') || crypto.randomUUID(),

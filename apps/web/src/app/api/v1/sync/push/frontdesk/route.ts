@@ -8,6 +8,8 @@ import { getReducedStayEstimate } from '@/lib/refunds/reduced-stay';
 import { calculateNoShowAssessment } from '@/lib/refunds/no-show';
 import { calculateFolioTotals } from '@/lib/finance/folio-totals';
 import { applyAvailableFolioCredit } from '@/lib/finance/apply-folio-credit';
+import { isNightAuditCutoverActive } from '@/lib/night-audit-guard';
+import { getPropertyBusinessDate } from '@/lib/date-utils';
 
 const isUuid = (value: unknown): value is string =>
   typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
@@ -56,6 +58,11 @@ export async function POST(req: NextRequest) {
     if (!property) {
        return NextResponse.json({ error: 'Property not found' }, { status: 404 });
     }
+    if (await isNightAuditCutoverActive(propertyId)) {
+       return NextResponse.json({ error: 'Night audit is in progress. Financial synchronization is temporarily paused.' }, { status: 409 });
+    }
+
+    const authoritativeBusinessDate = property.businessDate || getPropertyBusinessDate('Africa/Lagos', new Date());
 
     const terminals = await prisma.posTerminal.findMany({
       where: { propertyId, registrationState: 'REGISTERED' }
@@ -125,6 +132,7 @@ export async function POST(req: NextRequest) {
           'ROOM_CHARGE', 'POST_CHARGE', 'POST_PAYMENT', 'ADVANCE_DEPOSIT',
           'ADVANCE_DEPOSIT_REQUEST', 'CREDIT_ADJUSTMENT_REQUEST', 'ROOM_CREDIT', 'REFUND_REQUESTED'
         ]);
+        let sessionBusinessDate: Date | null = null;
         if (sessionBoundEvents.has(eventType) && payload.frontdeskTransaction !== false) {
           const frontdeskSessionId = payload.frontdeskSessionId;
           if (!frontdeskSessionId) throw new Error('FRONTDESK_SHIFT_REQUIRED: Transaction has no cashier session.');
@@ -132,6 +140,7 @@ export async function POST(req: NextRequest) {
           if (!frontdeskSession || frontdeskSession.propertyId !== propertyId || frontdeskSession.status !== 'OPEN' || frontdeskSession.staffId !== actorId) {
             throw new Error('FRONTDESK_SHIFT_CLOSED: Cashier session is missing, closed, or belongs to another receptionist.');
           }
+          sessionBusinessDate = frontdeskSession.businessDate;
         }
 
         // 1 & 2. Atomic Concurrency Control & Execution within a Single Transaction
@@ -404,34 +413,13 @@ export async function POST(req: NextRequest) {
                  type: 'ROOM',
                  status: 'OPEN',
                  currency: currency,
-                 totalCharges: amount,
+                 totalCharges: 0,
                  totalPayments: 0,
-                 balance: amount,
+                 balance: 0,
                  version: 1
                }
              });
 
-             // 7D.1: Create Per-Night Room Charges
-             const folioItems: any[] = [];
-             let currentDate = new Date(checkInDate);
-             for (let i = 0; i < nights; i++) {
-               folioItems.push({
-                 folioId: newFolio.id,
-                 businessDate: new Date(currentDate),
-                 type: 'CHARGE',
-                 source: 'ROOM_CHARGE',
-                 description: `Room Charge - Night ${i + 1}`,
-                 quantity: 1,
-                 unitAmount: baseRate,
-                 amount: baseRate,
-                 currency: currency,
-                 baseAmount: baseRate,
-                 postedBy: actorId,
-               });
-               currentDate.setDate(currentDate.getDate() + 1);
-             }
-             
-             await tx.folioItem.createMany({ data: folioItems });
           }
           else if (eventType === 'CHECK_IN') {
              const reservation = await tx.reservation.findUnique({ where: { id: aggregateId } });
@@ -492,7 +480,7 @@ export async function POST(req: NextRequest) {
                  deviceId: device.id,
                  operationId: payload.operationId || id,
                  idempotencyKey,
-                 businessDate: new Date(payload.originalBusinessDate || payload.businessDate || new Date()),
+                 businessDate: authoritativeBusinessDate,
                }
              });
              await tx.financialAuditLog.create({
@@ -507,7 +495,7 @@ export async function POST(req: NextRequest) {
                  currency: payload.currency || folio.currency || 'NGN',
                  operatorId: actorId,
                  deviceId: device.id,
-                 businessDate: new Date(payload.originalBusinessDate || payload.businessDate || new Date()),
+                 businessDate: authoritativeBusinessDate,
                  reason: payload.description || 'Room downgrade credit',
                  balanceBefore: folio.balance,
                  balanceAfter: folio.balance,
@@ -531,7 +519,7 @@ export async function POST(req: NextRequest) {
              await tx.folioItem.create({
                data: {
                  folioId: aggregateId,
-                 businessDate: new Date(payload.originalBusinessDate || payload.businessDate || new Date()),
+                 businessDate: authoritativeBusinessDate,
                  type: 'CHARGE',
                  source: payload.source || 'ROOM_CHARGE',
                  description: payload.description,
@@ -579,7 +567,7 @@ export async function POST(req: NextRequest) {
                      idempotencyKey: `${payload.creditApplicationKey || `CREDIT_APPLICATION:${idempotencyKey}`}:${credit.id}`,
                      appliedBy: actorId,
                      deviceId: device.id,
-                     businessDate: new Date(payload.originalBusinessDate || payload.businessDate || new Date())
+                     businessDate: authoritativeBusinessDate
                    }
                  });
                  await tx.folio.update({
@@ -600,7 +588,7 @@ export async function POST(req: NextRequest) {
                      currency: payload.currency || folio.currency || 'NGN',
                      operatorId: actorId,
                      deviceId: device.id,
-                     businessDate: new Date(payload.originalBusinessDate || payload.businessDate || new Date()),
+                     businessDate: authoritativeBusinessDate,
                      reason: payload.description || 'Applied guest credit',
                      balanceBefore: credit.remainingAmount,
                      balanceAfter: Number(credit.remainingAmount) - applied,
@@ -657,7 +645,7 @@ export async function POST(req: NextRequest) {
                  currency: payload.currency || folio.currency || 'NGN',
                  operatorId: actorId,
                  deviceId: device.id,
-                 businessDate: new Date(payload.originalBusinessDate || payload.businessDate || new Date()),
+                 businessDate: authoritativeBusinessDate,
                  reason: payload.description || payload.notes || 'Financial operation requires approval',
                  balanceBefore: folio.balance,
                  balanceAfter: folio.balance,
@@ -696,7 +684,7 @@ export async function POST(req: NextRequest) {
                  deviceId: device.id,
                  operationId: payload.operationId || id,
                  idempotencyKey,
-                 businessDate: new Date(payload.originalBusinessDate || payload.businessDate || new Date()),
+                 businessDate: authoritativeBusinessDate,
                }
              });
           }
@@ -717,7 +705,7 @@ export async function POST(req: NextRequest) {
                await tx.folioItem.create({
                  data: {
                    folioId: aggregateId,
-                   businessDate: new Date(payload.originalBusinessDate || payload.businessDate || new Date()),
+                   businessDate: authoritativeBusinessDate,
                    type: 'PAYMENT',
                    source: 'MANUAL',
                    description: payload.description || `${payload.method || 'PAYMENT'} payment`,
@@ -956,7 +944,7 @@ export async function POST(req: NextRequest) {
                  await tx.folioItem.create({
                    data: {
                      folioId: res.folios[0].id,
-                     businessDate: new Date(),
+                     businessDate: authoritativeBusinessDate,
                      type: 'CHARGE',
                      source: 'ROOM_UPGRADE',
                      description: `Room upgrade - ${nights} night${nights === 1 ? '' : 's'}`,
@@ -981,6 +969,7 @@ export async function POST(req: NextRequest) {
                    description: `Applied guest credit to room upgrade - ${nights} night${nights === 1 ? '' : 's'}`,
                    appliedBy: actorId,
                    operationKey: upgradeKey
+                   ,businessDate: authoritativeBusinessDate
                  });
                }
              }
@@ -993,7 +982,7 @@ export async function POST(req: NextRequest) {
                  await tx.folioItem.create({
                    data: {
                      folioId: res.folios[0].id,
-                     businessDate: new Date(),
+                     businessDate: authoritativeBusinessDate,
                      type: 'PAYMENT',
                      source: 'ROOM_DOWNGRADE_CREDIT',
                      description: `Room downgrade credit - ${nights} night${nights === 1 ? '' : 's'}`,
@@ -1213,31 +1202,7 @@ export async function POST(req: NextRequest) {
                where: { reservationId: aggregateId, propertyId },
              });
              if (folio && (p.checkIn || p.checkOut || p.roomTypeId)) {
-               const items = await tx.folioItem.findMany({ where: { folioId: folio.id } });
-               const nonRoomItems = items.filter((item: any) => item.source !== 'ROOM_CHARGE');
-               const nights = Math.ceil((newCheckOut.getTime() - newCheckIn.getTime()) / (1000 * 60 * 60 * 24));
-               const roomItems = Array.from({ length: nights }, (_, index) => {
-                 const businessDate = new Date(newCheckIn);
-                 businessDate.setDate(businessDate.getDate() + index);
-                 return {
-                   folioId: folio.id,
-                   businessDate,
-                   type: 'CHARGE',
-                   source: 'ROOM_CHARGE',
-                   description: `Room Charge - Night ${index + 1}`,
-                   quantity: 1,
-                   unitAmount: newRateAmount || 0,
-                   amount: newRateAmount || 0,
-                   currency: res.currency,
-                   baseAmount: newRateAmount || 0,
-                   postedBy: actorId,
-                 };
-               });
-               await tx.folioItem.deleteMany({ where: { folioId: folio.id, source: 'ROOM_CHARGE' } });
-               await tx.folioItem.createMany({ data: roomItems as any[] });
-               const creditApplications = await tx.folioCreditApplication.findMany({ where: { folioId: folio.id }, select: { amount: true } });
-               const totals = calculateFolioTotals([...nonRoomItems, ...roomItems], creditApplications);
-               await tx.folio.update({ where: { id: folio.id }, data: totals });
+               // We no longer recreate room charges here in the incremental model.
              }
           }
           else if (eventType === 'EDIT_GUEST' && aggregateType === 'GUEST') {
@@ -1292,7 +1257,7 @@ export async function POST(req: NextRequest) {
                          priority: payload.Priority || payload.priority || 'NORMAL',
                          status: String(payload.Status || payload.status || 'CLEANING')
                            .replace(/^(PENDING|ASSIGNED|CLEAN)$/i, 'CLEANING') as any,
-                         businessDate: new Date(),
+                         businessDate: authoritativeBusinessDate,
                          assignedTo: isUuid(payload.AssignedToUserId || payload.assignedToUserId)
                            ? payload.AssignedToUserId || payload.assignedToUserId
                            : null
@@ -1492,7 +1457,7 @@ export async function POST(req: NextRequest) {
                                      folioItem = await tx.folioItem.create({
                                          data: {
                                              folioId: activeFolio.id,
-                                             businessDate: new Date(),
+                                             businessDate: authoritativeBusinessDate,
                                              type: 'CHARGE',
                                              source: 'LAUNDRY',
                                              description: `Laundry Service - ${order.serviceType}`,
@@ -1521,6 +1486,7 @@ export async function POST(req: NextRequest) {
                                          description: `Applied guest credit to Laundry Service - ${order.serviceType}`,
                                          appliedBy: actorId,
                                          operationKey: idempotencyKey
+                                         ,businessDate: authoritativeBusinessDate
                                      });
                                  } else {
                                      folioItem = existingCharge;

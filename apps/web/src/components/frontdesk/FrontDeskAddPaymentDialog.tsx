@@ -18,6 +18,7 @@ export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio, initialAm
   const [method, setMethod] = useState<string>('CASH');
   const [amount, setAmount] = useState<string>(initialAmount?.toString() || (!isDeposit && folio?.balance > 0 ? folio.balance.toString() : ''));
   const [notes, setNotes] = useState('');
+  const [auditOverrideReason, setAuditOverrideReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successPaymentId, setSuccessPaymentId] = useState<string | null>(null);
@@ -85,7 +86,8 @@ export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio, initialAm
         const payload = {
           folioId: folio.id,
           amount: numAmount,
-          currency: folio.currency
+          currency: folio.currency,
+          ...(auditOverrideReason.trim() ? { nightAuditOverrideReason: auditOverrideReason.trim() } : {})
         };
 
         const res = await fetch(endpoint, {
@@ -103,12 +105,13 @@ export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio, initialAm
         }
         paymentId = data.data?.payment?.id;
       } else {
-        const payload = {
+          const payload = {
           amount: numAmount,
           currency: folio.currency,
           method,
           notes,
-          idempotencyKey: generateUUID()
+          idempotencyKey: generateUUID(),
+          ...(auditOverrideReason.trim() ? { nightAuditOverrideReason: auditOverrideReason.trim() } : {})
         };
 
         const res = isDeposit
@@ -125,7 +128,10 @@ export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio, initialAm
       onPaymentSuccess?.();
       triggerPrint(paymentId);
     } catch (err: any) {
-      setError(err.message);
+      const message = err.message || 'Failed to record payment';
+      setError(message.includes('Night audit') || message.includes('NIGHT_AUDIT')
+        ? `${message} Supervisors may enter an override reason below.`
+        : message);
     } finally {
       setIsSubmitting(false);
     }
@@ -172,6 +178,7 @@ export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio, initialAm
               <p className="text-sm font-medium leading-relaxed">{error}</p>
             </div>
           )}
+          {error?.includes('override reason') && <div className="mb-6 space-y-2 rounded-xl border border-amber-200 bg-amber-50 p-4"><Label className="text-amber-900">Supervisor override reason</Label><Textarea value={auditOverrideReason} onChange={(e) => setAuditOverrideReason(e.target.value)} placeholder="Explain why this guest payment must be processed during audit (minimum 10 characters)" disabled={isSubmitting} /></div>}
 
           {!successPaymentId ? (
             <form onSubmit={handleSubmit} className="space-y-6">

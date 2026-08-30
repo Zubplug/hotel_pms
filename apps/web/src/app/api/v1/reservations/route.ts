@@ -4,6 +4,7 @@ import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse, paginatedResponse } from '@/lib/api-response';
 import { getUserPropertyIds } from '@/lib/property-access';
 import { NotificationEngine } from '@/lib/notification-engine';
+import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 
 export async function GET(req: NextRequest) {
   try {
@@ -87,6 +88,9 @@ export async function POST(req: NextRequest) {
     const allowedPropertyIds = await getUserPropertyIds(session.user.id);
     if (!allowedPropertyIds.includes(propertyId)) {
       return errorResponse('FORBIDDEN', 'No access to this property', 403);
+    }
+    if (await isNightAuditTransactionLocked(propertyId)) {
+      return errorResponse('NIGHT_AUDIT_IN_PROGRESS', 'Night audit cutover is in progress. New reservation financial activity resumes after the new business date is active.', 409);
     }
 
     const checkInDate = new Date(checkIn);
@@ -194,33 +198,12 @@ export async function POST(req: NextRequest) {
           type: 'ROOM',
           status: 'OPEN',
           currency: currency,
-          totalCharges: totalAmount,
+          totalCharges: 0,
           totalPayments: 0,
-          balance: totalAmount,
+          balance: 0,
         }
       });
 
-      // 7D.1: Create Per-Night Room Charges
-      const folioItems: any[] = [];
-      let currentDate = new Date(checkInDate);
-      for (let i = 0; i < nights; i++) {
-        folioItems.push({
-          folioId: newFolio.id,
-          businessDate: new Date(currentDate),
-          type: 'CHARGE',
-          source: 'ROOM_CHARGE',
-          description: `Room Charge - Night ${i + 1}`,
-          quantity: 1,
-          unitAmount: baseRate,
-          amount: baseRate,
-          currency: currency,
-          baseAmount: baseRate,
-          postedBy: session.user.id as string, // Using session user ID
-        });
-        currentDate.setDate(currentDate.getDate() + 1);
-      }
-      
-      await tx.folioItem.createMany({ data: folioItems });
 
       // Audit Log
       const property = await tx.property.findUnique({ where: { id: propertyId } });

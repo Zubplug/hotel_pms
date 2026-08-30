@@ -1,4 +1,6 @@
 import prisma, { StockTransactionSource } from '@hotel-pms/db';
+import { assertNightAuditAllowsTransaction } from '@/lib/night-audit-guard';
+import { GRN_STATUS, TRANSFER_STATUS, PO_STATUS } from '@/lib/inventory/types';
 
 export class InventoryService {
   /** Restore every committed ingredient for a cancelled/voided order. */
@@ -19,7 +21,7 @@ export class InventoryService {
             unitCost: stock.costPrice, quantityBefore: stock.quantityOnHand, quantityAfter: updated.quantityOnHand,
             totalValue: quantity * Number(stock.costPrice), currency: sale.currency, warehouseId: stock.warehouseId,
             reference: posOrderId, notes: `Inventory restored for cancelled/voided order ${posOrderId}`,
-            operationId: reversalOperation, userId: actorId, businessDate: new Date(),
+            operationId: reversalOperation, userId: actorId, businessDate: sale.businessDate,
           },
         });
       }
@@ -158,7 +160,7 @@ export class InventoryService {
         unitCost: stock.costPrice, quantityBefore: stock.quantityOnHand, quantityAfter: updated.quantityOnHand,
         totalValue: quantity * Number(stock.costPrice), currency: sale.currency, warehouseId: stock.warehouseId,
         reference: posOrderId, notes: `Stock restored for POS refund ${operationId} (${(ratio * 100).toFixed(2)}%)`,
-        operationId: reversalOperation, userId: actorId, businessDate: new Date(),
+        operationId: reversalOperation, userId: actorId, businessDate: sale.businessDate,
       } });
     }
   }
@@ -174,7 +176,7 @@ export class InventoryService {
     return await prisma.goodsReceivedNote.update({
       where: { id: grnId },
       data: {
-        status: 'SUBMITTED',
+        status: GRN_STATUS.SUBMITTED,
         submittedBy: actorId,
         submittedAt: new Date(),
         updatedBy: actorId,
@@ -189,12 +191,12 @@ export class InventoryService {
   static async approveReceipt(grnId: string, actorId: string) {
     const grn = await prisma.goodsReceivedNote.findUnique({ where: { id: grnId } });
     if (!grn) throw new Error('GRN not found');
-    if (grn.status !== 'SUBMITTED') throw new Error('Only SUBMITTED GRNs can be approved');
+    if (grn.status !== GRN_STATUS.SUBMITTED) throw new Error('Only SUBMITTED GRNs can be approved');
 
     return await prisma.goodsReceivedNote.update({
       where: { id: grnId },
       data: {
-        status: 'APPROVED',
+        status: GRN_STATUS.APPROVED,
         approvedBy: actorId,
         approvedAt: new Date(),
         updatedBy: actorId,
@@ -209,7 +211,7 @@ export class InventoryService {
   static async rejectReceipt(grnId: string, actorId: string, reason: string) {
     const grn = await prisma.goodsReceivedNote.findUnique({ where: { id: grnId } });
     if (!grn) throw new Error('GRN not found');
-    if (grn.status !== 'SUBMITTED') throw new Error('Only SUBMITTED GRNs can be rejected');
+    if (grn.status !== GRN_STATUS.SUBMITTED) throw new Error('Only SUBMITTED GRNs can be rejected');
 
     return await prisma.goodsReceivedNote.update({
       where: { id: grnId },
@@ -230,6 +232,9 @@ export class InventoryService {
    * If tied to a PO, increments receivedQty on the PO.
    */
   static async postReceipt(grnId: string, actorId: string, operationId: string) {
+    const guardRecord = await prisma.goodsReceivedNote.findUnique({ where: { id: grnId }, select: { propertyId: true } });
+    if (!guardRecord) throw new Error('GRN not found');
+    await assertNightAuditAllowsTransaction(guardRecord.propertyId);
     // Idempotency check
     const existingTx = await prisma.stockTransaction.findFirst({
       where: { operationId, source: 'RECEIPT' }
@@ -245,7 +250,7 @@ export class InventoryService {
       });
 
       if (!grn) throw new Error('GRN not found');
-      if (grn.status !== 'APPROVED') throw new Error('GRN must be APPROVED to post to stock');
+      if (grn.status !== GRN_STATUS.APPROVED) throw new Error('GRN must be APPROVED to post to stock');
 
       const property = await tx.property.findUnique({ where: { id: grn.propertyId } });
       const currency = property?.baseCurrency || 'NGN';
@@ -327,7 +332,7 @@ export class InventoryService {
         await tx.purchaseOrder.update({
           where: { id: grn.purchaseOrderId },
           data: {
-            status: allReceived ? 'RECEIVED' : 'PARTIALLY_RECEIVED',
+            status: allReceived ? PO_STATUS.RECEIVED : PO_STATUS.PARTIALLY_RECEIVED,
             updatedBy: actorId,
             updatedAt: new Date()
           }
@@ -338,7 +343,7 @@ export class InventoryService {
       const updatedGrn = await tx.goodsReceivedNote.update({
         where: { id: grn.id },
         data: {
-          status: 'POSTED',
+          status: GRN_STATUS.POSTED,
           postedBy: actorId,
           postedAt: new Date(),
           updatedBy: actorId
@@ -355,9 +360,12 @@ export class InventoryService {
    * and creates TRANSFER StockTransactions for both sides.
    */
   static async postTransfer(transferId: string, actorId: string, operationId: string) {
+    const guardRecord = await prisma.stockTransfer.findUnique({ where: { id: transferId }, select: { propertyId: true } });
+    if (!guardRecord) throw new Error('Transfer not found');
+    await assertNightAuditAllowsTransaction(guardRecord.propertyId);
     // Idempotency check
     const existingTransfer = await prisma.stockTransfer.findFirst({
-      where: { id: transferId, status: 'POSTED' }
+      where: { id: transferId, status: TRANSFER_STATUS.POSTED }
     });
     if (existingTransfer) {
       return { success: true, message: 'Already posted', transferId };
@@ -370,7 +378,7 @@ export class InventoryService {
       });
 
       if (!transfer) throw new Error('Transfer not found');
-      if (transfer.status !== 'APPROVED') throw new Error('Transfer must be APPROVED before posting');
+      if (transfer.status !== TRANSFER_STATUS.APPROVED) throw new Error('Transfer must be APPROVED before posting');
 
       const property = await tx.property.findUnique({ where: { id: transfer.propertyId } });
       const currency = property?.baseCurrency || 'NGN';
@@ -475,7 +483,7 @@ export class InventoryService {
       const updatedTransfer = await tx.stockTransfer.update({
         where: { id: transfer.id },
         data: {
-          status: 'POSTED',
+          status: TRANSFER_STATUS.POSTED,
           postedBy: actorId,
           postedAt: new Date(),
           updatedAt: new Date()

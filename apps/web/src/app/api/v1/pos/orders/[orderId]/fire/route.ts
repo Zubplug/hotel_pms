@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { verifyOperatorToken } from '@/lib/pos/operatorAuth';
 import { ProductionStation } from '@hotel-pms/db';
+import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 
 // POST /api/v1/pos/orders/[orderId]/fire
 // Fires additional items to an existing IN_SERVICE order.
@@ -50,6 +51,9 @@ export async function POST(
 
     if (!order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+    }
+    if (await isNightAuditTransactionLocked(order.propertyId, order.businessDate)) {
+      return NextResponse.json({ error: 'Night audit is in progress. New POS transactions are temporarily paused.' }, { status: 409 });
     }
     if (order.propertyId !== payload.propertyId || (payload.outletId && order.outletId !== payload.outletId)) {
       return NextResponse.json({ error: 'Context mismatch: token does not match order context' }, { status: 403 });

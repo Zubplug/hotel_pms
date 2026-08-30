@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
 import { hasInventoryPermission } from '@/lib/inventory/permissions';
+import { getPropertyBusinessDate } from '@/lib/date-utils';
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -14,6 +15,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const { id } = await params;
   const entry = await prisma.kitchenWasteEntry.findFirst({ where: { id, propertyId: user.propertyId } });
   if (!entry) return NextResponse.json({ error: 'Kitchen waste entry not found', data: null }, { status: 404 });
+  const property = await prisma.property.findUnique({ where: { id: entry.propertyId }, select: { timezone: true, businessDate: true } });
 
   try {
     if (action === 'approve') {
@@ -39,7 +41,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         unitCost: current.unitCost, totalValue: -current.totalValue, quantityBefore: stock.quantityOnHand,
         quantityAfter: after?.quantityOnHand || 0, warehouseId: stock.warehouseId, reference: current.id,
         notes: `Kitchen waste: ${current.reason}${current.notes ? ` — ${current.notes}` : ''}`, reason: 'WASTE',
-        userId: user.id, businessDate: new Date(), operationId: `KITCHEN_WASTE_${current.id}`,
+        userId: user.id, businessDate: property?.businessDate || getPropertyBusinessDate(property?.timezone), operationId: `KITCHEN_WASTE_${current.id}`,
       } });
       return tx.kitchenWasteEntry.update({ where: { id }, data: { status: 'POSTED', postedBy: user.id, postedAt: new Date(), stockTransactionId: transaction.id } });
     });

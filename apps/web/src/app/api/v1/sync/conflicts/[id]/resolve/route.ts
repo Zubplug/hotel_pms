@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
 import crypto from 'crypto';
+import { isNightAuditCutoverActive } from '@/lib/night-audit-guard';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -25,6 +26,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     if (!conflict) return NextResponse.json({ error: 'Conflict not found' }, { status: 404 });
     if (conflict.status !== 'PENDING') return NextResponse.json({ error: 'Conflict already resolved' }, { status: 400 });
+    if (await isNightAuditCutoverActive(conflict.propertyId)) {
+       return NextResponse.json({ error: 'Night audit is processing. Financial sync conflicts can be resolved after audit posting completes.', code: 'NIGHT_AUDIT_IN_PROGRESS' }, { status: 409 });
+    }
 
     const edgeEvent = conflict.hotelEvent;
     

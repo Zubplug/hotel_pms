@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
 import { verifyOperatorToken } from '@/lib/pos/operatorAuth';
+import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
+import { getPropertyBusinessDate } from '@/lib/date-utils';
 
 export async function POST(req: NextRequest) {
   try {
@@ -74,6 +76,9 @@ export async function POST(req: NextRequest) {
     if (!property || !property.isActive) {
       return NextResponse.json({ error: 'Property not found or inactive' }, { status: 400 });
     }
+    if (await isNightAuditTransactionLocked(propertyId)) {
+      return NextResponse.json({ error: 'Night audit cutover is in progress. Open a POS session after the new business date is active.', code: 'NIGHT_AUDIT_IN_PROGRESS' }, { status: 409 });
+    }
     const bankingModel = (property?.settings as any)?.pos?.bankingModel || 'CENTRAL_CASHIER';
     const bankType = bankingModel === 'SERVER_BANKING' ? 'SERVER' : 'CENTRAL';
 
@@ -124,7 +129,7 @@ export async function POST(req: NextRequest) {
           propertyId,
           outletId: outlet.id,
           deviceId: device.id, // Satisfy DB NOT NULL constraint; servers can still roam
-          businessDate: new Date(),
+          businessDate: property.businessDate || getPropertyBusinessDate(property.timezone),
           openingCash: openingCash || 0,
           expectedCash: openingCash || 0,
           openedBy: loggedInUserId,

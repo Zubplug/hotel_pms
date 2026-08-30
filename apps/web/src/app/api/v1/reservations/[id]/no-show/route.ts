@@ -3,6 +3,8 @@ import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { assertPropertyAccess } from '@/lib/property-access';
+import { hasPermission } from '@/lib/rbac';
+import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 import { calculateNoShowAssessment } from '@/lib/refunds/no-show';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -22,6 +24,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     });
     if (!reservation) return errorResponse('NOT_FOUND', 'Reservation not found', 404);
     await assertPropertyAccess(session.user.id, reservation.propertyId);
+    const canUpdate = await hasPermission(session.user.id, 'reservation', 'update', reservation.propertyId);
+    if (!canUpdate) return errorResponse('FORBIDDEN', 'Insufficient permissions to mark no-show', 403);
+    if (await isNightAuditTransactionLocked(reservation.propertyId)) {
+      return errorResponse('NIGHT_AUDIT_IN_PROGRESS', 'Reservation changes are temporarily paused while Night Audit is posting.', 409);
+    }
     if (reservation.status !== 'CONFIRMED') return errorResponse('BAD_REQUEST', `Cannot assess a reservation that is ${reservation.status}`, 400);
     if (reservation.lateArrivalExpected && !body.overrideLateArrival) return errorResponse('CONFLICT', 'Late arrival is authorized for this reservation.', 409);
 

@@ -9,6 +9,12 @@ export async function GET(req: NextRequest) {
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
 
+    const userRole = (session.user as any).role;
+    const ALLOWED_ROLES = ['NIGHT_AUDITOR', 'MANAGER', 'HOTEL_MANAGER', 'ADMIN', 'SUPER_ADMIN', 'CEO', 'FINANCE_MANAGER'];
+    if (!ALLOWED_ROLES.includes(userRole)) {
+      return errorResponse('FORBIDDEN', 'Insufficient permissions to view managers flash report', 403);
+    }
+
     const { searchParams } = req.nextUrl;
     const propertyId = searchParams.get('propertyId');
     const businessDateStr = searchParams.get('businessDate');
@@ -53,10 +59,10 @@ export async function GET(req: NextRequest) {
     const report = {
       occupancy: {
         roomsAvailable: totalRooms,
-        roomsSold: 0, // Calculate dynamically or add to schema later
-        occupancyPercentage: 0,
-        adr: 0,
-        revpar: 0,
+        roomsSold: nightAudit.occupancy ? Math.round((Number(nightAudit.occupancy) / 100) * totalRooms) : 0,
+        occupancyPercentage: Number(nightAudit.occupancy) || 0,
+        adr: Number(nightAudit.adr) || 0,
+        revpar: Number(nightAudit.revpar) || 0,
       },
       revenue: {
         room: roomRevenue,

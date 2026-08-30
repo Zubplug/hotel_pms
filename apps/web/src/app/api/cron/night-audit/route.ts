@@ -49,20 +49,10 @@ async function runScheduledAudits(request: Request) {
       results.push({ propertyId: property.id, status: 'COMPLETED', ...result });
     } catch (error: any) {
       console.error(`[Night Audit Cron] Property ${property.id} failed:`, error);
-      if (!error.message?.includes('already in progress')) {
-        await prisma.nightAudit.updateMany({
-          where: {
-            propertyId: property.id,
-            businessDate: property.businessDate,
-            status: 'IN_PROGRESS'
-          },
-          data: {
-            status: 'FAILED',
-            completedAt: new Date(),
-            exceptions: { error: error.message }
-          }
-        });
-      }
+      // executeNightAudit owns failure recovery. It records FAILED against
+      // the captured old business date before this loop sees the error; do
+      // not update property.businessDate here because cutover may already
+      // have advanced it to the next day.
       results.push({ propertyId: property.id, status: 'BLOCKED', error: error.message });
     }
   }

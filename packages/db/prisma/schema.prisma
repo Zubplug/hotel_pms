@@ -61,7 +61,7 @@ model Property {
 
   businessDate DateTime? @db.Date
   lastAuditAt  DateTime? @db.Timestamptz
-  auditStatus  String? // 'OPEN' | 'IN_PROGRESS' | 'CLOSED'
+  auditStatus  String? // 'OPEN' | 'IN_PROGRESS' | 'POSTING' | 'COMPLETED' | 'COMPLETED_WITH_EXCEPTIONS' | 'FAILED'
 
   isActive Boolean @default(true)
 
@@ -73,6 +73,13 @@ model Property {
   cashVarianceGeneralCashierLimit Decimal?                  @db.Decimal(18, 4)
   cashVarianceFinanceManagerLimit Decimal?                  @db.Decimal(18, 4)
   cashVarianceNightAuditTolerance Decimal?                  @db.Decimal(18, 4)
+  // Folio balances above this threshold are flagged as warnings during Night Audit.
+  // Default: 50,000 (property currency units). Replaces the former hardcoded 5,000 dummy check.
+  nightAuditHighBalanceThreshold  Decimal                   @default(50000) @db.Decimal(18, 4)
+  // When true, all Night Audit warnings must be explicitly acknowledged (via
+  // NightAuditAcknowledgement tied to the specific run ID) before /execute proceeds.
+  requireAuditAcknowledgements    Boolean                   @default(false)
+
   cashHandovers                   CashHandover[]
   bankDeposits                    BankDeposit[]
   buildings                       Building[]
@@ -1139,7 +1146,7 @@ model NightAudit {
   property     Property @relation(fields: [propertyId], references: [id])
   businessDate DateTime @db.Date
 
-  status       String // 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED'
+  status       String // 'PENDING' | 'IN_PROGRESS' (cutover) | 'POSTING' | 'COMPLETED' | 'FAILED'
   startedAt    DateTime? @db.Timestamptz
   cutoffAt     DateTime? @db.Timestamptz
   completedAt  DateTime? @db.Timestamptz
@@ -1199,6 +1206,8 @@ model OccupancySnapshot {
   adr          Decimal @db.Decimal(18, 4)
   revpar       Decimal @db.Decimal(18, 4)
   currency     String
+
+  @@unique([propertyId, businessDate])
 }
 
 // -----------------------------------------------------------------------------
@@ -1861,6 +1870,15 @@ model AuditLog {
   requestId String
 
   createdAt DateTime @default(now()) @db.Timestamptz
+
+  // ⚠️  DEPLOYMENT NOTE: When Prisma generates the migration SQL for these indexes,
+  //     manually edit it to use `CREATE INDEX CONCURRENTLY` instead of `CREATE INDEX`
+  //     to avoid table-level write locks on production. Run during off-peak hours and
+  //     monitor pg_stat_activity / lock contention before and after.
+  @@index([organizationId, createdAt])
+  @@index([propertyId, createdAt])
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
 }
 
 model AgentEnrollmentToken {

@@ -1,0 +1,80 @@
+Interface version number: RFV2016
+Applicable card making machine: Card making machine containing VID and PID values
+
+The interface contains 2 parts: RFV2007NETHOTEL.dll, W-R-Card
+The external program only needs to call the function in RFV2007NETHOTEL.dll, W-R-Card only needs to perform the configuration operation
+RFV2007NETHOTEL.dll file and W-R-Card folder must be placed in the same directory (can be placed in the root directory of the hotel system at the same time)
+
+If it is the SQL SERVER network version (ms access stand-alone version does not need to operate):
+Please open the ConDB.ini file in the WR-Card directory, and change the value of the item ServerName in it to the computer name or IP address of the card software database server (requires SQL Server network database support); set the value of SQLID to 1
+
+Get started with the interface:
+After the above 2 steps are completed, you can use the interface function RFV2007NETHOTEL.dll to call it. For the calling method, please refer to the usage example in Demo.
+RFV2007NETHOTEL.dll provides external program interface functions
+Contains 4 functions
+
+function W_Card(nRoom,Wstartdate,Wenddate,Op,nCode,jLift):Integer;
+function R_Card(i_display:integer):pchar;
+function R_CardID(i_display:integer):pchar;
+function Woff_Card(I):integer;
+function Getcardid(IntnPort:pchar):pchar;
+
+Function comments
+W_Card is a card-making function, which contains 6 parameters
+nRoom: string type, room number
+Wstartdate: string type, opening card activation time, format yyyymmddhhmm, such as 200901010830
+Wenddate: string type, door opening deadline, format yyyymmddhhmm, such as 200912301200
+Op: string type, operator
+
+nCode: Integer, use the new business card or co-living business card, set to 1 to use the new business card, and set to 0 to use co-living business card; using the new door opener card will successfully restrict all previous guests. Opening card, using the guest card of the same residence card will not restrict the previous door opening card (using the same residence card can be understood as a copy of the previous guest card).
+If a guest room only issues one door opening card to a guest, a new card is used (that is, the parameter is set to 1). If two or more door opening cards are to be issued, a new card is used when the first door card is issued. (That is, the parameter is set to 1), the second card starts to use the same residence card (that is, the parameter is set to 0)
+
+jlift: string type, elevator parameters 1 + 2 + 3 + E + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 13 + 14 + 15 + 16 + 17 + 18 + 19 + 20 + 21 + 22 + 23 + 24 + 25 + 26 + 27 + 28 + 29 + 30 means that the door opening card is valid for the 1 to 30 floors of the elevator (64 elevators are supported in total). If there is no elevator, please fill in 0
+The parameters 1, 2, 3, E, 5 and so on indicate the elevator floor position, which can be represented by any character and connected by plus (+); the elevator floor position must correspond to the elevator floor position set in the card making software, otherwise, The elevator information may be invalid during card making. Therefore, the elevator floor location information database (similar to the room number) should also be established in the hotel management system.
+
+Business card return value is integer
+70: Incorrect start date format
+71: Deadline format error
+72: Failed to connect to the card issuing system database
+73: The system does not have the room number
+74: Please unplug the setter before operating
+75: No card
+76: additional data length does not match
+77: Error reading data block / operation failed
+78: M1 card sector key comparison error
+51: Data decryption error
+0: Communication error (card machine is not connected)
+1: card writing successful
+
+R_Card is a card reading function and contains 1 parameter
+i_display: integer, please set to a fixed value of 1
+The return value is a string type,
+80: Query information about the card without the card
+72: Failed to connect to the card issuing system database
+WOFF: indicates that the card has been cancelled
+74: Please unplug the setter before operating
+75: No card
+76: additional data length does not match
+77: Error reading data block / operation failed
+78: M1 card sector key comparison error
+51: Data decryption error
+0: Communication error (card machine encoder is not connected)
+Reading the card successfully returns a series of strings beginning with ok and connected by the symbol +
+For example ok + 1101 + guest card + 2009-03-31 08: 00 + 2009-12-31 12: 00 + 1 + 1 + 2009-12-11,14: 36: 40 + 8888 + 8925A799
+1101 is the room number, guest card is the card type, 2009-03-31 08:00 is the card's activation time, 2009-12-31 12:00 is the card's cut-off time, 1 is with door opening sound, 1 is with weak current alarm , 2009-12-11, 14:36:40 is the card making time, 8888 is the operator, and 8925A799 is the card ID number
+
+R_CardID is a function of reading the ID number of the card, including 1 parameter
+i_display: integer, please set to a fixed value of 1
+The return value is a string type ID number. When the return value is 00000000, the ID number of the card is incorrect.
+
+Woff_Card is a card cancellation function without parameters
+The return value is an integer
+74: Please unplug the setter before operating
+75: No card
+76: additional data length does not match
+77: Error reading data block / operation failed
+78: M1 card sector key comparison error
+51: Data decryption error
+0: Communication error (card machine is not connected)
+1: indicates that the card was successfully cancelled
+

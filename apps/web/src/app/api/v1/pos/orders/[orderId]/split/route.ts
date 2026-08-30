@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
+import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 
 // POST /api/v1/pos/orders/[orderId]/split
 export async function POST(
@@ -18,6 +19,9 @@ export async function POST(
     const order = await prisma.posOrder.findUnique({ where: { id: orderId } });
     if (!order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+    }
+    if (await isNightAuditTransactionLocked(order.propertyId, order.businessDate)) {
+      return NextResponse.json({ error: 'POS order changes are temporarily paused while Night Audit is posting', code: 'NIGHT_AUDIT_IN_PROGRESS' }, { status: 409 });
     }
 
     const matchingItems = await prisma.posOrderItem.findMany({

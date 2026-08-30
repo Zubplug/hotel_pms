@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { assertPropertyAccess } from '@/lib/property-access';
+import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 
 const MANAGER_ROLES = ['ADMIN', 'SUPER_ADMIN', 'MANAGER', 'CEO', 'FINANCE_MANAGER'];
 
@@ -15,6 +16,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const reservation = await prisma.reservation.findUnique({ where: { id }, include: { property: true, noShowPolicy: true, reservationRooms: { where: { status: 'NO_SHOW' }, include: { room: true } } } });
     if (!reservation) return errorResponse('NOT_FOUND', 'Reservation not found', 404);
     await assertPropertyAccess(session.user.id, reservation.propertyId);
+    if (await isNightAuditTransactionLocked(reservation.propertyId)) {
+      return errorResponse('NIGHT_AUDIT_IN_PROGRESS', 'Reservation changes are temporarily paused while Night Audit is posting.', 409);
+    }
     if (reservation.status !== 'NO_SHOW') return errorResponse('BAD_REQUEST', `Only NO_SHOW reservations can be reinstated; current status is ${reservation.status}`, 400);
     if (reservation.noShowPolicy?.allowReinstatement === false) return errorResponse('FORBIDDEN', 'This property policy does not allow reinstatement.', 403);
     const isManager = MANAGER_ROLES.includes((session.user as any).role || '') || (session.user as any).isSuperAdmin;

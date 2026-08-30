@@ -13,6 +13,7 @@ import {
   Users,
   Bell,
   ClipboardList,
+  SlidersHorizontal,
   Activity,
   Hotel,
   LogOut,
@@ -42,6 +43,7 @@ const NAV_LINKS = [
   { name: 'Suppliers',        href: '/inventory/suppliers',            icon: Users,          roles: ['CEO','SUPER_ADMIN','MANAGER','PROCUREMENT_MANAGER','STOCK_MANAGER'] },
   { name: 'Alerts',           href: '/inventory/alerts',               icon: Bell },
   { name: 'Stocktakes',       href: '/inventory/stocktakes',           icon: ClipboardList,  roles: ['CEO','SUPER_ADMIN','MANAGER','GENERAL_CASHIER','INVENTORY_MANAGER','STOCK_KEEPER','STOCK_MANAGER'] },
+  { name: 'Stock Adjustments', href: '/inventory/reconciliation',       icon: SlidersHorizontal, roles: ['CEO','SUPER_ADMIN','MANAGER','INVENTORY_MANAGER','STOCK_KEEPER','STOCK_MANAGER'] },
   { name: 'Cost Control',     href: '/inventory/cost-control',         icon: Activity,       roles: ['CEO','SUPER_ADMIN','MANAGER','GENERAL_CASHIER'] },
 ];
 

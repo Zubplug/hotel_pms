@@ -4,6 +4,7 @@ import { CashHandoverService } from '@/lib/services/cash-handover-service';
 import prisma from '@hotel-pms/db';
 import { getUserPropertyIds } from '@/lib/property-access';
 import { CASH_HANDOVER_ROLES, hasFinancialRole } from '@/lib/financial-control-access';
+import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 
 export async function POST(request: NextRequest, context: { params: Promise<{ handoverId: string }> }) {
   try {
@@ -17,6 +18,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ha
     const handover = await prisma.cashHandover.findUnique({ where: { id: handoverId }, select: { propertyId: true } });
     if (!handover) return NextResponse.json({ error: 'Handover not found' }, { status: 404 });
     if (!(await getUserPropertyIds(actor.user.id)).includes(handover.propertyId)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (await isNightAuditTransactionLocked(handover.propertyId)) {
+      return NextResponse.json({ error: 'Handover receipt cannot be recorded while Night Audit is posting. Retry after the new business date is active.', code: 'NIGHT_AUDIT_IN_PROGRESS' }, { status: 409 });
+    }
     const userRec = await prisma.user.findUnique({ where: { id: actor.user.id }, select: { staffId: true } });
     const staff = await prisma.staff.findFirst({ 
       where: { 

@@ -4,6 +4,7 @@ import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { hasPermission } from '@/lib/rbac';
 import { assertPropertyAccess } from '@/lib/property-access';
+import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 import { lockOrchestrator } from '@/lib/locks/orchestrator';
 import crypto from 'crypto';
 import { NotificationEngine } from '@/lib/notification-engine';
@@ -29,6 +30,9 @@ export async function POST(
     }
 
     await assertPropertyAccess(session.user.id, reservation.propertyId);
+    if (await isNightAuditTransactionLocked(reservation.propertyId)) {
+      return errorResponse('NIGHT_AUDIT_IN_PROGRESS', 'Check-out is temporarily paused while Night Audit is posting.', 409);
+    }
     const canCheckOut = await hasPermission(session.user.id, 'reservation', 'update', reservation.propertyId);
     if (!canCheckOut) return errorResponse('FORBIDDEN', 'Insufficient permissions', 403);
 

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { compare } from 'bcryptjs';
 import { auth } from '@/lib/auth';
+import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
+import { getPropertyBusinessDate } from '@/lib/date-utils';
 
 export async function POST(req: NextRequest) {
   try {
@@ -20,6 +22,9 @@ export async function POST(req: NextRequest) {
     const propertyId = (session.user as any).propertyId;
     if (!propertyId) {
       return NextResponse.json({ error: 'Property ID missing from session context' }, { status: 400 });
+    }
+    if (await isNightAuditTransactionLocked(propertyId)) {
+      return NextResponse.json({ error: 'Night audit cutover is in progress. Emergency POS banks cannot be opened until the new business date is active.', code: 'NIGHT_AUDIT_IN_PROGRESS' }, { status: 409 });
     }
 
     // Deep Authorization: Check Manager permissions for this property
@@ -90,7 +95,7 @@ export async function POST(req: NextRequest) {
           status: 'OPEN',
           openingCash: 0,
           expectedCash: 0,
-          businessDate: new Date(), // Mocking business date for now
+          businessDate: (await tx.property.findUnique({ where: { id: propertyId }, select: { businessDate: true } }))?.businessDate || getPropertyBusinessDate(),
           bankType: 'EMERGENCY'
         }
       });

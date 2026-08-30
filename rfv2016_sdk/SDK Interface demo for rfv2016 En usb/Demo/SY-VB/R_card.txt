@@ -1,0 +1,1 @@
+roomno:1101 cardtype:Guest-card starttime:2009-03-31 08:00 endtime:2009-12-31 12:00 writetime:2009-12-05,13:04 voice:¡Ì Abb elec.:¡Ì Op.:8888

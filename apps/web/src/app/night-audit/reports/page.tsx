@@ -1,15 +1,31 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { FileText, Download, Printer, Share2, FileSpreadsheet } from 'lucide-react';
+import { FileText, Clock as Clock3, Download, Printer, Share2, FileSpreadsheet } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useProperty } from '@/components/PropertyProvider';
 
 export default function ReportsGeneratorPage() {
   const { propertyId } = useProperty();
-  const businessDate = new Date().toISOString();
+  
+  const [businessDate, setBusinessDate] = useState<string | null>(null);
+  const [flashReport, setFlashReport] = useState<any>(null);
+  const [showFlashReport, setShowFlashReport] = useState(false);
+
+  useEffect(() => {
+    if (propertyId) {
+      fetch(`/api/v1/night-audit/status?propertyId=${propertyId}`)
+        .then(res => res.json())
+        .then(res => {
+          if (res.data?.currentBusinessDate) setBusinessDate(res.data.currentBusinessDate);
+        })
+        .catch(console.error);
+    }
+  }, [propertyId]);
+
   const reports = [
     { title: "Daily Manager's Report", desc: "Overview of revenue, occupancy, and ADR.", icon: FileText, color: "text-blue-500", bg: "bg-blue-100 dark:bg-blue-900/30" },
     { title: "Detailed Revenue Report", desc: "Breakdown of revenue by department and code.", icon: FileSpreadsheet, color: "text-emerald-500", bg: "bg-emerald-100 dark:bg-emerald-900/30" },
@@ -60,11 +76,16 @@ export default function ReportsGeneratorPage() {
                   <CardDescription>{report.desc}</CardDescription>
                 </CardContent>
                 <CardFooter className="pt-2 flex gap-2 border-t mt-4 bg-muted/10 rounded-b-xl">
-                  <Button variant="ghost" size="sm" className="flex-1 text-muted-foreground hover:text-foreground" onClick={() => {
+                  <Button variant="ghost" size="sm" className="flex-1 text-muted-foreground hover:text-foreground" disabled={!report.title.includes('Manager')} title={!report.title.includes('Manager') ? 'Coming soon' : ''} onClick={() => {
                     if (report.title.includes('Manager')) {
-                      window.open(`/api/v1/night-audit/reports/managers-flash?propertyId=${propertyId}&businessDate=${businessDate}`, '_blank');
+                      
+                      fetch(`/api/v1/night-audit/reports/managers-flash?propertyId=${propertyId}&businessDate=${businessDate}`)
+                        .then(res => res.json())
+                        .then(data => { setFlashReport(data); setShowFlashReport(true); })
+                        .catch(err => alert('Failed to fetch flash report: ' + err.message));
+
                     } else {
-                      alert('Standard report endpoint wiring pending.');
+                      
                     }
                   }}>
                     <Download className="h-4 w-4 mr-2" /> View
@@ -80,7 +101,65 @@ export default function ReportsGeneratorPage() {
             ))}
           </div>
         </TabsContent>
+        <TabsContent value="custom">
+          <div className="py-12 text-center text-muted-foreground bg-muted/20 rounded-xl border border-dashed">
+            <FileText className="mx-auto h-8 w-8 mb-2 opacity-20" />
+            <p>Custom reports coming soon</p>
+          </div>
+        </TabsContent>
+        <TabsContent value="scheduled">
+          <div className="py-12 text-center text-muted-foreground bg-muted/20 rounded-xl border border-dashed">
+            <Clock3 className="mx-auto h-8 w-8 mb-2 opacity-20" />
+            <p>Scheduled reports coming soon</p>
+          </div>
+        </TabsContent>
       </Tabs>
+
+      <Dialog open={showFlashReport} onOpenChange={setShowFlashReport}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Daily Manager's Report</DialogTitle>
+          </DialogHeader>
+          {flashReport ? (
+            <div className="space-y-6" id="flash-report-content">
+              <div className="flex justify-between border-b pb-4">
+                <div>
+                  <h3 className="font-semibold text-lg">{flashReport.propertyName || 'Property'}</h3>
+                  <p className="text-muted-foreground">{new Date(flashReport.businessDate || businessDate || '').toLocaleDateString()}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <h4 className="font-medium text-sm text-muted-foreground mb-3">Occupancy</h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between"><span>Rooms Available:</span> <span className="font-medium">{flashReport.occupancy?.available || 0}</span></div>
+                    <div className="flex justify-between"><span>Rooms Sold:</span> <span className="font-medium">{flashReport.occupancy?.sold || 0}</span></div>
+                    <div className="flex justify-between"><span>Occupancy %:</span> <span className="font-medium">{flashReport.occupancy?.percentage || 0}%</span></div>
+                    <div className="flex justify-between"><span>ADR:</span> <span className="font-medium">{flashReport.occupancy?.adr || 0}</span></div>
+                    <div className="flex justify-between"><span>RevPAR:</span> <span className="font-medium">{flashReport.occupancy?.revpar || 0}</span></div>
+                  </div>
+                </div>
+                <div>
+                  <h4 className="font-medium text-sm text-muted-foreground mb-3">Revenue</h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between"><span>Room Revenue:</span> <span className="font-medium">{flashReport.revenue?.room || 0}</span></div>
+                    <div className="flex justify-between"><span>F&B Revenue:</span> <span className="font-medium">{flashReport.revenue?.fb || 0}</span></div>
+                    <div className="flex justify-between"><span>Other Revenue:</span> <span className="font-medium">{flashReport.revenue?.other || 0}</span></div>
+                    <div className="flex justify-between pt-2 border-t font-semibold"><span>Total Revenue:</span> <span>{flashReport.revenue?.total || 0}</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="p-8 text-center text-muted-foreground">Loading report data...</div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowFlashReport(false)}>Close</Button>
+            <Button onClick={() => window.print()} className="gap-2"><Printer className="h-4 w-4" /> Print Report</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }

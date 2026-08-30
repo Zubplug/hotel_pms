@@ -3,6 +3,8 @@ import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { assertPropertyAccess } from '@/lib/property-access';
+import { hasPermission } from '@/lib/rbac';
+import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 import { NotificationEngine } from '@/lib/notification-engine';
 
 export async function POST(
@@ -30,6 +32,11 @@ export async function POST(
 
     if (!existingReservation) return errorResponse('NOT_FOUND', 'Reservation not found', 404);
     await assertPropertyAccess(session.user.id, existingReservation.propertyId);
+    const canCancel = await hasPermission(session.user.id, 'reservation', 'delete', existingReservation.propertyId);
+    if (!canCancel) return errorResponse('FORBIDDEN', 'Insufficient permissions to cancel reservations', 403);
+    if (await isNightAuditTransactionLocked(existingReservation.propertyId)) {
+      return errorResponse('NIGHT_AUDIT_IN_PROGRESS', 'Reservation changes are temporarily paused while Night Audit is posting.', 409);
+    }
 
     // Business Logic: Only CONFIRMED reservations can be cancelled.
     if (existingReservation.status !== 'CONFIRMED') {

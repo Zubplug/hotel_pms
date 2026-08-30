@@ -1,0 +1,54 @@
+Ð´¿Í¿¨
+string ls_YstatrDate,ls_Yenddate,ls_Yoperate,Yvoice,Ynodian
+string ls_text
+string ls_YRoom_No
+string is_YnewCode
+string is_lift
+int aint
+ls_YstatrDate=sle_2.text
+ls_YstatrDate='"'+ls_YstatrDate+'"'
+ls_Yenddate=sle_3.text
+ls_Yenddate='"'+ls_Yenddate+'"'
+ls_Yoperate=sle_4.text
+ls_Yoperate='"'+ls_Yoperate+'"'
+is_YnewCode=trim(ddplb_3.text)
+ls_YRoom_No=sle_1.text
+ls_YRoom_No='"'+ls_YRoom_No+'"'
+if cbx_1.checked then 
+  Yvoice="1"
+else
+  Yvoice="0"	
+end if  
+if cbx_2.checked then 
+  Ynodian="1"
+else
+  Ynodian="0"	
+end if 
+is_lift=trim(sle_5.text)
+aint=W_Card(ls_YRoom_No,ls_YstatrDate,ls_Yenddate,Yvoice,Ynodian,ls_Yoperate,is_YnewCode,is_lift)
+if aint=1 then
+  messagebox('Info', 'Write card ok')
+else
+  messagebox('Info', 'Write card fail')	
+end if	
+
+¶Á¿¨
+string astr
+astr = R_Card(1)
+messagebox('Info', astr)
+
+×¢Ïú¿¨
+int aint
+aint=Woff_Card()
+if aint=1 then
+  messagebox('Info', 'Woff card ok')
+else
+  messagebox('Info', 'Woff card fail')	
+end if	
+
+¶Á¿¨IDºÅ
+string astr
+string IntnPort
+IntnPort=trim(ddplb_1.text)
+astr=Getcardid(IntnPort)
+sle_9.text=astr

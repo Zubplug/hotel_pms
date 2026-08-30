@@ -13,6 +13,8 @@ import { format } from 'date-fns';
 import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { formatRoomNumber } from '@/lib/format-room';
+import { FrontDeskAddPaymentDialog } from './FrontDeskAddPaymentDialog';
+import { formatCurrency } from '@/lib/utils';
 
 interface FrontDeskCheckInDialogProps {
   open: boolean;
@@ -30,6 +32,8 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
   const [operationId, setOperationId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [existingCardData, setExistingCardData] = useState<any>(null);
+  const [isDepositOverride, setIsDepositOverride] = useState(false);
+  const [isCollectDepositOpen, setIsCollectDepositOpen] = useState(false);
 
   // Fetch full reservation data since the dashboard only passed an ID
   const { data: resData, isLoading: isFetching } = useQuery({
@@ -51,6 +55,8 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
       setOperationId(null);
       setErrorMsg(null);
       setExistingCardData(null);
+      setIsDepositOverride(false);
+      setIsCollectDepositOpen(false);
     }
   }, [open, reservationId]);
 
@@ -136,7 +142,7 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
       setErrorMsg(null);
       setOperationId(null); 
 
-      const data = await provider.reservations.checkIn(reservationId!, "System", "Device1");
+      const data = await provider.reservations.checkIn(reservationId!, "System", "Device1", { overrideDeposit: isDepositOverride });
 
       if (!data || data.error) {
         setPhase('FAILED');
@@ -183,7 +189,13 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
 
   const room = reservation?.reservationRooms?.[0]?.room;
   const guest = reservation?.primaryGuest;
-  const isReady = reservation?.status === 'CONFIRMED' && room;
+  
+  const expectedCost = Number(reservation?.ratePlanSnapshot?.total || 0);
+  const folio = reservation?.folios?.[0];
+  const availableCredit = Number(folio?.availableCredit || 0);
+  const isDepositSufficient = availableCredit >= expectedCost;
+  
+  const isReady = reservation?.status === 'CONFIRMED' && room && (isDepositSufficient || isDepositOverride);
 
   return (
     <Dialog open={open && !!reservationId} onOpenChange={onOpenChange}>
@@ -247,9 +259,40 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
                   </div>
 
                   {!isReady ? (
-                    <div className="bg-amber-50 text-amber-800 p-4 rounded-xl text-sm font-bold border border-amber-200 mb-6 flex items-start gap-2">
-                      <AlertCircle className="w-5 h-5 shrink-0" />
-                      <p>Guest is not ready for check-in. Please ensure they have a room assigned and outstanding balance is cleared.</p>
+                    <div className="bg-amber-50 text-amber-800 p-4 rounded-xl text-sm border border-amber-200 mb-6 flex flex-col gap-3">
+                      {!room ? (
+                        <div className="flex items-start gap-2 font-bold">
+                          <AlertCircle className="w-5 h-5 shrink-0" />
+                          <p>Guest is not ready for check-in. Please ensure they have a room assigned.</p>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex items-start gap-2 font-bold">
+                            <Wallet className="w-5 h-5 shrink-0" />
+                            <p>Advance Deposit Required for Check-In</p>
+                          </div>
+                          <div className="pl-7 space-y-1">
+                            <p>Expected Stay Cost: <strong>{formatCurrency(expectedCost)}</strong></p>
+                            <p>Available Credit: <strong className={availableCredit > 0 ? "text-blue-600" : ""}>{formatCurrency(availableCredit)}</strong></p>
+                            <p className="text-red-600 font-bold">Shortfall: {formatCurrency(Math.max(0, expectedCost - availableCredit))}</p>
+                          </div>
+                          <div className="flex gap-2 pl-7 mt-2">
+                            <Button 
+                              onClick={() => setIsCollectDepositOpen(true)}
+                              className="bg-amber-600 hover:bg-amber-700 font-bold text-white shadow-sm"
+                            >
+                              Collect Deposit
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              onClick={() => setIsDepositOverride(true)}
+                              className="font-bold border-amber-300 text-amber-800 hover:bg-amber-100"
+                            >
+                              Manager Override
+                            </Button>
+                          </div>
+                        </>
+                      )}
                     </div>
                   ) : (
                     <div className="text-center">
@@ -367,6 +410,20 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
           )}
         </div>
       </DialogContent>
+      
+      {folio && (
+        <FrontDeskAddPaymentDialog
+          open={isCollectDepositOpen}
+          onOpenChange={setIsCollectDepositOpen}
+          folio={folio}
+          initialAmount={Math.max(0, expectedCost - availableCredit)}
+          mode="deposit"
+          onPaymentSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ['reservation', reservationId] });
+            setIsCollectDepositOpen(false);
+          }}
+        />
+      )}
     </Dialog>
   );
 }

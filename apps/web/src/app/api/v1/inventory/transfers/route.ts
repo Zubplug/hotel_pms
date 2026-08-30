@@ -5,6 +5,7 @@ import { UnitOfMeasure } from '@hotel-pms/db';
 import { hasInventoryPermission } from '@/lib/inventory/permissions';
 import { InventoryService } from '@/lib/inventory/InventoryService';
 import { resolveStockUnitConversion } from '@/lib/inventory/UnitConversionService';
+import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,6 +61,10 @@ export async function POST(request: Request) {
 
     if (!fromWarehouseId || !toWarehouseId || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ data: null, error: 'Source, destination, and at least one item are required' }, { status: 400 });
+    }
+
+    if (await isNightAuditTransactionLocked(propertyId)) {
+      return NextResponse.json({ data: null, error: 'Stock transfers cannot be created while Night Audit is posting. Retry after the new business date is active.', code: 'NIGHT_AUDIT_IN_PROGRESS' }, { status: 409 });
     }
 
     // Validate both warehouses belong to propertyId
