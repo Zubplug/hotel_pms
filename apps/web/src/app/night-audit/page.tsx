@@ -297,7 +297,7 @@ export default function NightAuditDashboard() {
               <p className="font-medium text-rose-900">Type: {sc.aggregateType}</p>
               <p className="text-xs text-rose-600">Event: {sc.hotelEvent?.eventType || 'Unknown'}</p>
             </div>
-            <a href="/integrations/accounting/sync-errors" target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-rose-700 hover:text-rose-900 bg-rose-50 px-3 py-1.5 rounded-md transition-colors">Resolve</a>
+            <button onClick={() => setResolutionAction({ type: 'SYNC_CONFLICT', item: sc })} className="text-xs font-medium text-rose-700 hover:text-rose-900 bg-rose-50 px-3 py-1.5 rounded-md transition-colors">Resolve</button>
           </div>
         ))}
       </div>

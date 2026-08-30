@@ -14,6 +14,7 @@ export type ResolutionAction =
   | { type: 'POS_SESSION'; item: any }
   | { type: 'FRONTDESK_SHIFT'; item: any }
   | { type: 'FOLIO_PREVIEW'; item: any }
+  | { type: 'SYNC_CONFLICT'; item: any }
   | null;
 
 interface Props {
@@ -33,7 +34,7 @@ export function ResolutionManager({ action, onClose, onSuccess }: Props) {
         {action.type === 'ROOM_DISCREPANCY' && <RoomDiscrepancyResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
         {action.type === 'POS_SESSION' && <PosSessionResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
         {action.type === 'FRONTDESK_SHIFT' && <FrontdeskShiftResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
-        {action.type === 'FOLIO_PREVIEW' && <FolioPreview item={action.item} onClose={onClose} />}
+        {action.type === 'SYNC_CONFLICT' && <FinancialSyncResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
       </DialogContent>
     </Dialog>
   );
@@ -636,6 +637,87 @@ function FrontdeskShiftResolution({ item, onSuccess, onClose }: { item: any; onS
         <Button className="w-full" onClick={handleClose} disabled={loading || declared === ''}>
           {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Confirm & Close Shift'}
         </Button>
+      </div>
+    </>
+  );
+}
+
+function FinancialSyncResolution({ item, onSuccess, onClose }: { item: any; onSuccess: () => void; onClose: () => void }) {
+  const [loading, setLoading] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleResolve = async (action: 'FORCE_EDGE_EVENT' | 'REJECT_EDGE_EVENT') => {
+    setLoading(action);
+    setError(null);
+    try {
+      const res = await fetch(`/api/v1/sync/conflicts/${item.id}/resolve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Idempotency-Key': crypto.randomUUID() },
+        body: JSON.stringify({ action, resolutionComment: `Night Audit manual resolution: ${action}` })
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || body.error?.message || 'Failed to resolve conflict');
+      }
+      toast.success('Sync conflict resolved');
+      onSuccess();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>Financial Sync Conflict</DialogTitle>
+        <DialogDescription>A POS or remote device attempted to sync data that conflicts with the PMS.</DialogDescription>
+      </DialogHeader>
+      
+      {error && <div className="p-3 bg-rose-50 text-rose-600 rounded-lg text-sm border border-rose-100">{error}</div>}
+      
+      <div className="py-4 space-y-4">
+        <div className="p-4 border rounded-xl bg-slate-50 space-y-2 text-sm">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Type:</span>
+            <span className="font-medium">{item.aggregateType}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Event:</span>
+            <span className="font-medium">{item.hotelEvent?.eventType || 'Unknown'}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Device:</span>
+            <span className="font-medium">{item.hotelEvent?.deviceId || 'Unknown'}</span>
+          </div>
+          <div className="pt-2 mt-2 border-t text-xs text-muted-foreground">
+            {item.errorDetails?.message || 'Version mismatch detected.'}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Button 
+            variant="outline" 
+            className="w-full whitespace-normal h-auto py-3 px-4 flex flex-col items-start gap-1"
+            onClick={() => handleResolve('REJECT_EDGE_EVENT')} 
+            disabled={!!loading}
+          >
+            <span className="font-semibold text-sm">Reject Event</span>
+            <span className="text-xs text-muted-foreground text-left">Discard the POS change. The PMS state wins.</span>
+            {loading === 'REJECT_EDGE_EVENT' && <Loader2 className="absolute right-4 h-4 w-4 animate-spin" />}
+          </Button>
+
+          <Button 
+            className="w-full whitespace-normal h-auto py-3 px-4 flex flex-col items-start gap-1 bg-rose-600 hover:bg-rose-700 text-white"
+            onClick={() => handleResolve('FORCE_EDGE_EVENT')} 
+            disabled={!!loading}
+          >
+            <span className="font-semibold text-sm">Force Sync</span>
+            <span className="text-xs text-rose-200 text-left">Apply the POS charge/payment forcibly.</span>
+            {loading === 'FORCE_EDGE_EVENT' && <Loader2 className="absolute right-4 h-4 w-4 animate-spin text-white" />}
+          </Button>
+        </div>
       </div>
     </>
   );
