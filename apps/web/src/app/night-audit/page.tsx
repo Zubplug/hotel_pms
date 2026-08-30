@@ -165,7 +165,116 @@ export default function NightAuditDashboard() {
 
     <div className="grid gap-4 md:grid-cols-3"><Button variant="outline" className="h-auto justify-start p-4" onClick={() => window.location.href = '/night-audit/history'}><Clock3 className="mr-3 h-5 w-5 text-indigo-500" /><span className="text-left"><b className="block">Audit history</b><small className="text-muted-foreground">Review signed-off dates</small></span><ArrowRight className="ml-auto h-4 w-4" /></Button><Button variant="outline" className="h-auto justify-start p-4" onClick={() => window.location.href = '/night-audit/exceptions'}><AlertTriangle className="mr-3 h-5 w-5 text-amber-500" /><span className="text-left"><b className="block">Exceptions</b><small className="text-muted-foreground">Investigate variances</small></span><ArrowRight className="ml-auto h-4 w-4" /></Button><Button variant="outline" className="h-auto justify-start p-4" onClick={() => window.location.href = '/night-audit/reports'}><FileBarChart className="mr-3 h-5 w-5 text-emerald-500" /><span className="text-left"><b className="block">Audit reports</b><small className="text-muted-foreground">Open the reporting pack</small></span><ArrowRight className="ml-auto h-4 w-4" /></Button></div>
 
-    <Dialog open={wizardOpen} onOpenChange={setWizardOpen}><DialogContent className="!flex !h-[calc(100vh-2rem)] !max-h-[calc(100vh-2rem)] !w-[calc(100vw-2rem)] !max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl p-0"><div className="bg-slate-950 px-7 py-6 text-white"><DialogHeader><div className="flex items-start justify-between gap-5"><div className="flex items-center gap-4"><div className="rounded-2xl bg-indigo-500/20 p-3 text-indigo-300"><MoonStar className="h-6 w-6" /></div><div><div className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-indigo-300"><span>Night audit</span><span className="text-slate-600">/</span><span>Control flow</span></div><DialogTitle className="text-2xl font-semibold text-white">Close business day</DialogTitle><DialogDescription className="mt-1 text-sm text-slate-400">Complete each control before posting charges and rolling the date.</DialogDescription></div></div><div className="hidden rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-right sm:block"><p className="text-xs text-slate-400">Business date</p><p className="mt-1 font-semibold">{format(businessDate, 'dd MMM yyyy')}</p></div></div></DialogHeader><div className="mt-6 flex items-center gap-2"><div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-indigo-400 transition-all" style={{ width: `${((step + 1) / steps.length) * 100}%` }} /></div><span className="text-xs font-medium text-slate-400">{step + 1} of {steps.length}</span></div></div><div className="grid min-h-0 flex-1 overflow-hidden md:grid-cols-[320px_1fr]"><div className="overflow-y-auto border-r bg-slate-50 p-6 dark:bg-slate-900/50">{steps.map((item, index) => { const Icon = item.icon; return <button key={item.title} onClick={() => setStep(index)} className={`mb-3 flex w-full items-center gap-3 rounded-2xl p-4 text-left text-sm transition-colors ${step === index ? 'bg-indigo-100 font-medium text-indigo-800 shadow-sm dark:bg-indigo-500/20 dark:text-indigo-200' : 'text-muted-foreground hover:bg-white dark:hover:bg-slate-800'}`}><span className={`rounded-xl p-2.5 shadow-sm ${step === index ? 'bg-indigo-600 text-white' : 'bg-white text-slate-500 dark:bg-slate-800 dark:text-slate-300'}`}>{step > index ? <Check className="h-4 w-4 text-emerald-500" /> : <Icon className="h-4 w-4" />}</span><span><b className="block">{index + 1}. {item.title}</b><small className="mt-0.5 block leading-4 opacity-80">{item.description}</small></span></button>; })}<div className="mt-8 rounded-2xl border border-indigo-100 bg-indigo-50 p-4 dark:border-indigo-900/50 dark:bg-indigo-950/30"><p className="text-xs font-semibold uppercase tracking-wider text-indigo-600">Audit protocol</p><p className="mt-2 text-xs leading-5 text-muted-foreground">Every close is recorded against the active auditor and business date.</p></div></div><div className="flex min-w-0 flex-col overflow-y-auto p-7 md:p-10"><div><div className="flex items-center gap-3"><span className="rounded-lg bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300">STEP {String(step + 1).padStart(2, '0')}</span><span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Control review</span></div><h3 className="mt-4 text-2xl font-semibold tracking-tight">{steps[step].title}</h3><p className="mt-2 text-muted-foreground">{steps[step].description}</p></div><div className="mt-8 flex-1 rounded-2xl border bg-slate-50 p-7 dark:bg-slate-900/50">{step < 4 ? <><div className="flex items-start gap-4">{(step === 1 ? blockers : step === 2 ? (data?.financial?.highBalances?.length || 0) : step === 3 ? 0 : ((data?.operational?.arrivals?.length || 0) + (data?.operational?.departures?.length || 0))) > 0 ? <div className="rounded-xl bg-amber-100 p-3 text-amber-600 dark:bg-amber-500/10"><AlertTriangle className="h-6 w-6" /></div> : <div className="rounded-xl bg-emerald-100 p-3 text-emerald-600 dark:bg-emerald-500/10"><CheckCircle2 className="h-6 w-6" /></div>}<div><p className="text-lg font-semibold">{step === 1 && blockers > 0 ? `${blockers} blocking control${blockers === 1 ? '' : 's'} found` : 'Control check complete'}</p><p className="mt-2 max-w-lg text-sm leading-6 text-muted-foreground">{step === 0 ? 'Review arrivals and departures before continuing. Any outstanding movement should be resolved or documented.' : 'Review the surfaced items in the workspace if needed, then continue to the next control.'}</p></div></div></> : <div className="flex h-full min-h-[210px] flex-col items-center justify-center text-center"><div className="rounded-2xl bg-emerald-100 p-4 text-emerald-600 dark:bg-emerald-500/10"><ShieldCheck className="h-10 w-10" /></div>
+    <Dialog open={wizardOpen} onOpenChange={setWizardOpen}><DialogContent className="!flex !h-[calc(100vh-2rem)] !max-h-[calc(100vh-2rem)] !w-[calc(100vw-2rem)] !max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl p-0"><div className="bg-slate-950 px-7 py-6 text-white"><DialogHeader><div className="flex items-start justify-between gap-5"><div className="flex items-center gap-4"><div className="rounded-2xl bg-indigo-500/20 p-3 text-indigo-300"><MoonStar className="h-6 w-6" /></div><div><div className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-indigo-300"><span>Night audit</span><span className="text-slate-600">/</span><span>Control flow</span></div><DialogTitle className="text-2xl font-semibold text-white">Close business day</DialogTitle><DialogDescription className="mt-1 text-sm text-slate-400">Complete each control before posting charges and rolling the date.</DialogDescription></div></div><div className="hidden rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-right sm:block"><p className="text-xs text-slate-400">Business date</p><p className="mt-1 font-semibold">{format(businessDate, 'dd MMM yyyy')}</p></div></div></DialogHeader><div className="mt-6 flex items-center gap-2"><div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-indigo-400 transition-all" style={{ width: `${((step + 1) / steps.length) * 100}%` }} /></div><span className="text-xs font-medium text-slate-400">{step + 1} of {steps.length}</span></div></div><div className="grid min-h-0 flex-1 overflow-hidden md:grid-cols-[320px_1fr]"><div className="overflow-y-auto border-r bg-slate-50 p-6 dark:bg-slate-900/50">{steps.map((item, index) => { const Icon = item.icon; return <button key={item.title} onClick={() => setStep(index)} className={`mb-3 flex w-full items-center gap-3 rounded-2xl p-4 text-left text-sm transition-colors ${step === index ? 'bg-indigo-100 font-medium text-indigo-800 shadow-sm dark:bg-indigo-500/20 dark:text-indigo-200' : 'text-muted-foreground hover:bg-white dark:hover:bg-slate-800'}`}><span className={`rounded-xl p-2.5 shadow-sm ${step === index ? 'bg-indigo-600 text-white' : 'bg-white text-slate-500 dark:bg-slate-800 dark:text-slate-300'}`}>{step > index ? <Check className="h-4 w-4 text-emerald-500" /> : <Icon className="h-4 w-4" />}</span><span><b className="block">{index + 1}. {item.title}</b><small className="mt-0.5 block leading-4 opacity-80">{item.description}</small></span></button>; })}<div className="mt-8 rounded-2xl border border-indigo-100 bg-indigo-50 p-4 dark:border-indigo-900/50 dark:bg-indigo-950/30"><p className="text-xs font-semibold uppercase tracking-wider text-indigo-600">Audit protocol</p><p className="mt-2 text-xs leading-5 text-muted-foreground">Every close is recorded against the active auditor and business date.</p></div></div><div className="flex min-w-0 flex-col overflow-y-auto p-7 md:p-10"><div><div className="flex items-center gap-3"><span className="rounded-lg bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300">STEP {String(step + 1).padStart(2, '0')}</span><span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Control review</span></div><h3 className="mt-4 text-2xl font-semibold tracking-tight">{steps[step].title}</h3><p className="mt-2 text-muted-foreground">{steps[step].description}</p></div><div className="mt-8 flex-1 rounded-2xl border bg-slate-50 p-7 dark:bg-slate-900/50">{step < 4 ? <div className="space-y-6"><div className="flex items-start gap-4">{(step === 1 ? blockers : step === 2 ? (data?.financial?.highBalances?.length || 0) : step === 3 ? (data?.cash?.cashHandovers?.length || 0) : ((data?.operational?.arrivals?.length || 0) + (data?.operational?.departures?.length || 0))) > 0 ? <div className="rounded-xl bg-amber-100 p-3 text-amber-600 dark:bg-amber-500/10"><AlertTriangle className="h-6 w-6" /></div> : <div className="rounded-xl bg-emerald-100 p-3 text-emerald-600 dark:bg-emerald-500/10"><CheckCircle2 className="h-6 w-6" /></div>}<div><p className="text-lg font-semibold">{step === 1 && blockers > 0 ? `${blockers} blocking control${blockers === 1 ? '' : 's'} found` : (step === 0 && ((data?.operational?.arrivals?.length || 0) + (data?.operational?.departures?.length || 0)) > 0) ? 'Pending Operations' : 'Control check complete'}</p><p className="mt-2 max-w-lg text-sm leading-6 text-muted-foreground">{step === 0 ? 'Review arrivals and departures before continuing. Any outstanding movement should be resolved or documented.' : 'Review the surfaced items in the workspace if needed, then continue to the next control.'}</p></div></div>
+
+{/* Detail Lists */}
+{step === 0 && data?.operational && (
+  <div className="space-y-4 border-t pt-4">
+    {data.operational.arrivals?.length > 0 && <div>
+      <h4 className="font-medium text-sm mb-2 text-slate-700">Pending Arrivals</h4>
+      <div className="space-y-2">
+        {data.operational.arrivals.map((arr: any) => (
+          <div key={arr.id} className="text-sm p-3 bg-white rounded-lg border flex justify-between">
+            <span>{arr.primaryGuest?.firstName} {arr.primaryGuest?.lastName}</span>
+            <span className="text-muted-foreground">{arr.confirmationNumber}</span>
+          </div>
+        ))}
+      </div>
+    </div>}
+    {data.operational.departures?.length > 0 && <div>
+      <h4 className="font-medium text-sm mb-2 text-slate-700">Pending Departures</h4>
+      <div className="space-y-2">
+        {data.operational.departures.map((dep: any) => (
+          <div key={dep.id} className="text-sm p-3 bg-white rounded-lg border flex justify-between">
+            <span>{dep.primaryGuest?.firstName} {dep.primaryGuest?.lastName}</span>
+            <span className="text-muted-foreground">{dep.confirmationNumber}</span>
+          </div>
+        ))}
+      </div>
+    </div>}
+    {!data.operational.arrivals?.length && !data.operational.departures?.length && (
+      <div className="text-sm text-emerald-600 bg-emerald-50 p-3 rounded-lg border border-emerald-100">All arrivals and departures have been processed.</div>
+    )}
+  </div>
+)}
+
+{step === 1 && data?.system && (
+  <div className="space-y-4 border-t pt-4">
+    {data.system.openPosSessions?.length > 0 && <div>
+      <h4 className="font-medium text-sm mb-2 text-rose-700">Open POS Sessions (Blocker)</h4>
+      <div className="space-y-2">
+        {data.system.openPosSessions.map((pos: any) => (
+          <div key={pos.id} className="text-sm p-3 bg-white rounded-lg border border-rose-200">
+            {pos.outlet?.name || 'Register'} - Opened by {pos.openedBy}
+          </div>
+        ))}
+      </div>
+    </div>}
+    {data.system.openFrontdeskSessions?.length > 0 && <div>
+      <h4 className="font-medium text-sm mb-2 text-rose-700">Open Front Desk Shifts (Blocker)</h4>
+      <div className="space-y-2">
+        {data.system.openFrontdeskSessions.map((fd: any) => (
+          <div key={fd.id} className="text-sm p-3 bg-white rounded-lg border border-rose-200">
+            Shift {fd.shiftReference} - {fd.status}
+          </div>
+        ))}
+      </div>
+    </div>}
+    {!data.system.openPosSessions?.length && !data.system.openFrontdeskSessions?.length && (
+      <div className="text-sm text-emerald-600 bg-emerald-50 p-3 rounded-lg border border-emerald-100">All sessions and shifts are closed.</div>
+    )}
+  </div>
+)}
+
+{step === 2 && data?.financial && (
+  <div className="space-y-4 border-t pt-4">
+    {data.financial.highBalances?.length > 0 && <div>
+      <h4 className="font-medium text-sm mb-2 text-amber-700">High Balances</h4>
+      <div className="space-y-2">
+        {data.financial.highBalances.map((hb: any) => (
+          <div key={hb.id} className="text-sm p-3 bg-white rounded-lg border flex justify-between">
+            <span>Folio #{hb.folioNumber}</span>
+            <span className="font-medium">{currency(Number(hb.balance), data?.property?.baseCurrency)}</span>
+          </div>
+        ))}
+      </div>
+    </div>}
+    {!data.financial.highBalances?.length && (
+      <div className="text-sm text-emerald-600 bg-emerald-50 p-3 rounded-lg border border-emerald-100">No high balances detected.</div>
+    )}
+  </div>
+)}
+
+{step === 3 && data?.cash && (
+  <div className="space-y-4 border-t pt-4">
+    {data.cash.cashHandovers?.length > 0 && <div>
+      <h4 className="font-medium text-sm mb-2 text-rose-700">Pending Cash Handovers (Blocker)</h4>
+      <div className="space-y-2">
+        {data.cash.cashHandovers.map((ch: any) => (
+          <div key={ch.id} className="text-sm p-3 bg-white rounded-lg border border-rose-200">
+            {ch.drawerName} - {currency(Number(ch.amount), data?.property?.baseCurrency)}
+          </div>
+        ))}
+      </div>
+    </div>}
+    {data.cash.bankDeposits?.length > 0 && <div>
+      <h4 className="font-medium text-sm mb-2 text-amber-700">Pending Bank Deposits</h4>
+      <div className="space-y-2">
+        {data.cash.bankDeposits.map((bd: any) => (
+          <div key={bd.id} className="text-sm p-3 bg-white rounded-lg border flex justify-between">
+            <span>Reference: {bd.reference}</span>
+            <span className="font-medium">{currency(Number(bd.amount), data?.property?.baseCurrency)}</span>
+          </div>
+        ))}
+      </div>
+    </div>}
+    {!data.cash.cashHandovers?.length && !data.cash.bankDeposits?.length && (
+      <div className="text-sm text-emerald-600 bg-emerald-50 p-3 rounded-lg border border-emerald-100">All cash handling and deposits are reconciled.</div>
+    )}
+  </div>
+)}
+
+</div> : <div className="flex h-full min-h-[210px] flex-col items-center justify-center text-center"><div className="rounded-2xl bg-emerald-100 p-4 text-emerald-600 dark:bg-emerald-500/10"><ShieldCheck className="h-10 w-10" /></div>
 
 {step === 4 && requiredAcks.length > 0 && (
   <div className="w-full mt-6 space-y-4 text-left">
