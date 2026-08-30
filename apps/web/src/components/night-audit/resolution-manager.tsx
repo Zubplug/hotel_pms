@@ -34,6 +34,7 @@ export function ResolutionManager({ action, onClose, onSuccess }: Props) {
         {action.type === 'ROOM_DISCREPANCY' && <RoomDiscrepancyResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
         {action.type === 'POS_SESSION' && <PosSessionResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
         {action.type === 'FRONTDESK_SHIFT' && <FrontdeskShiftResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
+        {action.type === 'FOLIO_PREVIEW' && <FolioPreview item={action.item} onClose={onClose} />}
         {action.type === 'SYNC_CONFLICT' && <FinancialSyncResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
       </DialogContent>
     </Dialog>
