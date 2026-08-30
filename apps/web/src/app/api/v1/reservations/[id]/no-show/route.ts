@@ -66,6 +66,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return successResponse({ reservation: result, assessment, refundRequired: assessment.refundableAmount > 0 });
   } catch (error: any) {
     console.error('[Reservation No-Show POST]', error);
-    return errorResponse('INTERNAL_ERROR', 'Unable to assess no-show', 500);
+    return errorResponse('INTERNAL_ERROR', error.message || 'Unable to assess no-show', 500);
   }
 }

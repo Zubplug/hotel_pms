@@ -218,6 +218,6 @@ export async function POST(
     return successResponse({ ...cancelled.updatedRes, refundRequests: cancelled.refundRequests });
   } catch (err: any) {
     console.error('[Reservation Cancel POST]', err);
-    return errorResponse('INTERNAL_ERROR', 'An unexpected error occurred', 500);
+    return errorResponse('INTERNAL_ERROR', err.message || 'An unexpected error occurred', 500);
   }
 }
