@@ -87,12 +87,26 @@ function ArrivalResolution({ item, onSuccess, onClose }: { item: any; onSuccess:
     }
   };
 
+  const totalBalance = item.folios?.reduce((acc: number, f: any) => acc + Number(f.balance), 0) || 0;
+  const isPaid = totalBalance < 0;
+
   return (
     <>
       <DialogHeader>
         <DialogTitle>Resolve Pending Arrival</DialogTitle>
         <DialogDescription>
           {item.primaryGuest?.firstName} {item.primaryGuest?.lastName} (Conf: {item.confirmationNumber})
+          <div className="mt-2 text-sm">
+            {isPaid ? (
+              <span className="inline-flex items-center gap-1.5 font-medium text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md">
+                <CheckCircle2 className="h-4 w-4" /> Pre-paid/Deposit: {Math.abs(totalBalance).toLocaleString('en-NG', { style: 'currency', currency: 'NGN' })}
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 font-medium text-amber-600 bg-amber-50 px-2 py-1 rounded-md">
+                <AlertTriangle className="h-4 w-4" /> No prepayment on file
+              </span>
+            )}
+          </div>
         </DialogDescription>
       </DialogHeader>
       
