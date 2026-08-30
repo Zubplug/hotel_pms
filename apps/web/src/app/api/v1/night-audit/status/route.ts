@@ -32,7 +32,10 @@ export async function GET(req: NextRequest) {
     const businessDate = property.businessDate ?? getPropertyBusinessDate();
     const localToday = getPropertyBusinessDate(property.timezone);
     const [currentAudit, activeAudit] = await Promise.all([
-      prisma.nightAudit.findUnique({ where: { propertyId_businessDate: { propertyId, businessDate } } }),
+      prisma.nightAudit.findUnique({ 
+        where: { propertyId_businessDate: { propertyId, businessDate } },
+        include: { acknowledgements: true }
+      }),
       prisma.nightAudit.findFirst({
         where: { propertyId, status: { in: ['IN_PROGRESS', 'POSTING'] } },
         orderBy: { startedAt: 'desc' }

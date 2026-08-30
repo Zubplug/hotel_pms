@@ -63,12 +63,22 @@ export default function NightAuditDashboard() {
       const result = await response.json();
       if (!response.ok) throw new Error(result.error?.message || 'Unable to load audit status');
       setData(result.data);
-      if (result.data.auditState === 'OVERDUE' && result.data.auditState === 'PENDING') setWizardOpen(true);
+      if (result.data.auditState === 'OVERDUE' || result.data.auditState === 'PENDING') setWizardOpen(true);
     } catch (err: any) { setError(err.message); }
     finally { setLoading(false); setRefreshing(false); }
   };
 
   useEffect(() => { load(); }, [propertyId]);
+
+  useEffect(() => {
+    if (data?.currentAudit?.acknowledgements) {
+      const existingAcks = data.currentAudit.acknowledgements.reduce((acc: any, ack: any) => {
+        acc[ack.warningType] = true;
+        return acc;
+      }, {} as Record<string, boolean>);
+      setAcks(existingAcks);
+    }
+  }, [data?.currentAudit?.acknowledgements]);
 
   const requiredAcks = useMemo(() => {
     const arr = [];
