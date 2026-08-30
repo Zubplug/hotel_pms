@@ -30,8 +30,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         data: { 
           lateArrivalExpected: true, 
           lateArrivalNotes: notes, 
-          lateArrivalAt: new Date(), 
-          lateArrivalBy: session.user.id 
+          lateArrivalAt: new Date()
         } 
       });
 

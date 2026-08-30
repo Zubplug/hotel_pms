@@ -64,10 +64,13 @@ export async function POST(
 
     // 2. Perform transactional cancellation
     const cancelled = await prisma.$transaction(async (tx: any) => {
-      const updatedResRoom = await tx.reservationRoom.update({
-        where: { id: existingReservation.reservationRooms[0].id },
-        data: { status: 'CANCELLED' }
-      });
+      let updatedResRoom = null;
+      if (existingReservation.reservationRooms.length > 0) {
+        updatedResRoom = await tx.reservationRoom.updateMany({
+          where: { reservationId: id, status: 'ACTIVE' },
+          data: { status: 'CANCELLED' }
+        });
+      }
 
       const updatedRes = await tx.reservation.update({
         where: { id },
