@@ -42,10 +42,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // For this implementation, we require 'MANAGER' or 'ADMIN' role on the session.
     // If it's financial, we require 'ADMIN' or explicit FORCE_SYNC_RESOLUTION.
     const userRole = (session.user as any).role || 'STAFF';
-    if (userRole !== 'MANAGER' && userRole !== 'ADMIN' && userRole !== 'OWNER') {
+    const isNightAuditor = userRole === 'NIGHT_AUDITOR';
+    
+    if (userRole !== 'MANAGER' && userRole !== 'ADMIN' && userRole !== 'OWNER' && !isNightAuditor) {
         return NextResponse.json({ error: 'Insufficient permissions. Requires RESOLVE_SYNC_CONFLICT.' }, { status: 403 });
     }
-    if (isFinancial && userRole !== 'ADMIN' && userRole !== 'OWNER') {
+    if (isFinancial && userRole !== 'ADMIN' && userRole !== 'OWNER' && !isNightAuditor) {
         return NextResponse.json({ error: 'Financial conflicts require FORCE_SYNC_RESOLUTION capability.' }, { status: 403 });
     }
 
