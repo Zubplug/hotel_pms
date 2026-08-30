@@ -365,6 +365,6 @@ export async function GET(req: NextRequest) {
 
   } catch (err: any) {
     console.error('[Shift Report GET]', err);
-    return errorResponse('INTERNAL_ERROR', 'Unexpected error generating shift report', 500);
+    return errorResponse('INTERNAL_ERROR', err.stack || err.message || 'Unexpected error generating shift report', 500);
   }
 }
