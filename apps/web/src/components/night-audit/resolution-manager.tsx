@@ -261,7 +261,7 @@ function DepartureResolution({ item, onSuccess, onClose }: { item: any; onSucces
       const res = await fetch(`/api/v1/reservations/${item.id}/extend`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Idempotency-Key': crypto.randomUUID() },
-        body: JSON.stringify({ newCheckoutDate: d.toISOString().split('T')[0] })
+        body: JSON.stringify({ newCheckoutDate: d.toISOString().split('T')[0], idempotencyKey: crypto.randomUUID() })
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
