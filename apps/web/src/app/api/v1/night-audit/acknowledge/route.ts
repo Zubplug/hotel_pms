@@ -15,13 +15,40 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { propertyId, nightAuditId, warningType, reason, comment } = body;
+    let { propertyId, nightAuditId, warningType, reason, comment } = body;
 
-    if (!propertyId || !nightAuditId || !warningType || !reason) {
+    if (!propertyId || !warningType || !reason) {
       return errorResponse('BAD_REQUEST', 'Missing required fields', 400);
     }
     
     await assertPropertyAccess(session.user.id, propertyId);
+
+    // If nightAuditId is not provided (e.g. acknowledging before first run), find or create a PENDING run
+    if (!nightAuditId) {
+      const property = await prisma.property.findUnique({
+        where: { id: propertyId },
+        select: { businessDate: true }
+      });
+      if (!property) return errorResponse('NOT_FOUND', 'Property not found', 404);
+      
+      const businessDate = property.businessDate || new Date();
+      let pendingRun = await prisma.nightAudit.findFirst({
+        where: { propertyId, businessDate, status: { in: ['PENDING', 'FAILED'] } },
+        orderBy: { createdAt: 'desc' }
+      });
+
+      if (!pendingRun) {
+        pendingRun = await prisma.nightAudit.create({
+          data: {
+            propertyId,
+            businessDate,
+            status: 'PENDING',
+            runBy: session.user.id
+          }
+        });
+      }
+      nightAuditId = pendingRun.id;
+    }
 
     const auditRun = await prisma.nightAudit.findUnique({
       where: { id: nightAuditId },
