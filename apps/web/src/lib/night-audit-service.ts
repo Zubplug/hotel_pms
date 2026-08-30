@@ -8,12 +8,12 @@ export async function getOperationalReview(propertyId: string) {
   const businessDate = property.businessDate ?? getPropertyBusinessDate(property.timezone, new Date());
 
   const arrivals = await prisma.reservation.findMany({
-    where: { propertyId, checkIn: businessDate },
+    where: { propertyId, checkIn: businessDate, status: 'CONFIRMED' },
     select: { id: true, status: true, primaryGuestId: true, primaryGuest: { select: { firstName: true, lastName: true } }, folios: { select: { balance: true } } }
   });
 
   const departures = await prisma.reservation.findMany({
-    where: { propertyId, checkOut: businessDate },
+    where: { propertyId, checkOut: businessDate, status: 'CHECKED_IN' },
     select: { id: true, status: true, primaryGuestId: true, primaryGuest: { select: { firstName: true, lastName: true } }, folios: { select: { balance: true } } }
   });
 
