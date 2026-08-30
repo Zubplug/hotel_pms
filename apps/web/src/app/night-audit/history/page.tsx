@@ -25,6 +25,15 @@ export default function AuditHistoryPage() {
   const [dateRange, setDateRange] = useState({ from: '', to: '' });
   const [selectedAudit, setSelectedAudit] = useState<any>(null);
 
+  const formatDuration = (start: string | null, end: string | null) => {
+    if (!start || !end) return '—';
+    const ms = new Date(end).getTime() - new Date(start).getTime();
+    if (ms < 0) return '—';
+    const s = Math.floor(ms / 1000);
+    if (s < 60) return `${s}s`;
+    return `${Math.floor(s / 60)}m ${s % 60}s`;
+  };
+
   useEffect(() => {
     if (propertyId) {
       getNightAuditHistory(propertyId).then(setHistory);
@@ -52,7 +61,7 @@ export default function AuditHistoryPage() {
       new Date(audit.businessDate).toLocaleDateString(),
       audit.runReference || 'SYSTEM',
       audit.status,
-      audit.startedAt && audit.completedAt ? Math.round((new Date(audit.completedAt).getTime() - new Date(audit.startedAt).getTime()) / 60000) + ' min' : '-',
+      formatDuration(audit.startedAt, audit.completedAt),
       audit.roomChargesPosted || 0
     ]);
     const csvContent = [header, ...rows].map(e => e.join(",")).join("\n");
@@ -143,7 +152,7 @@ export default function AuditHistoryPage() {
                   </TableCell>
                   <TableCell>{audit.runReference || 'SYSTEM'}</TableCell>
                   <TableCell>
-                    {audit.startedAt && audit.completedAt ? Math.round((new Date(audit.completedAt).getTime() - new Date(audit.startedAt).getTime()) / 60000) + ' min' : '—'}
+                    {formatDuration(audit.startedAt, audit.completedAt)}
                   </TableCell>
                   <TableCell>
                     
@@ -199,7 +208,7 @@ export default function AuditHistoryPage() {
               <div className="flex justify-between border-b pb-2"><span>Status:</span> <span className="font-medium">{selectedAudit.status}</span></div>
               <div className="flex justify-between border-b pb-2"><span>Rooms Charged:</span> <span className="font-medium">{selectedAudit.roomChargesPosted || 0}</span></div>
               <div className="flex justify-between border-b pb-2"><span>Revenue Posted:</span> <span className="font-medium">{selectedAudit.revenuePosted || 0}</span></div>
-              <div className="flex justify-between border-b pb-2"><span>Duration:</span> <span className="font-medium">{selectedAudit.startedAt && selectedAudit.completedAt ? Math.round((new Date(selectedAudit.completedAt).getTime() - new Date(selectedAudit.startedAt).getTime()) / 60000) + ' min' : '—'}</span></div>
+              <div className="flex justify-between border-b pb-2"><span>Duration:</span> <span className="font-medium">{formatDuration(selectedAudit.startedAt, selectedAudit.completedAt)}</span></div>
             </div>
           )}
           <DialogFooter>
