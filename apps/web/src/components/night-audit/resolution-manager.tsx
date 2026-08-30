@@ -453,7 +453,7 @@ function RoomDiscrepancyResolution({ item, onSuccess, onClose }: { item: any; on
           roomId: item.roomId, 
           action: 'RECONCILE', 
           pmsStatus: item.expected,
-          targetStatus: item.expected === 'OCCUPIED' ? 'DIRTY' : 'CLEAN' 
+          targetStatus: item.expected === 'OCCUPIED' ? 'PENDING' : 'CLEAN' 
         })
       });
       if (!res.ok) {
