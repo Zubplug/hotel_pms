@@ -12,6 +12,7 @@ import {
   Clock3, FileBarChart, FileCheck2, Loader2, MoonStar, Play, RefreshCw, ShieldCheck,
   SlidersHorizontal, TrendingUp, Users, XCircle
 } from 'lucide-react';
+import { ResolutionManager, ResolutionAction } from '@/components/night-audit/resolution-manager';
 
 type AuditData = any;
 
@@ -30,7 +31,8 @@ function Metric({ label, value, tone = 'slate', icon: Icon }: { label: string; v
   return <div className="rounded-2xl border bg-white p-5 shadow-sm dark:bg-slate-900">
     <div className="flex items-center justify-between"><span className="text-sm text-muted-foreground">{label}</span><Icon className={`h-5 w-5 ${iconTone}`} /></div>
     <div className="mt-3 text-3xl font-semibold tracking-tight">{value}</div>
-  </div>;
+        <ResolutionManager action={resolutionAction} onClose={() => setResolutionAction(null)} onSuccess={() => { setResolutionAction(null); fetchStatus(); }} />
+    </div>;
 }
 
 export default function NightAuditDashboard() {
@@ -44,7 +46,9 @@ export default function NightAuditDashboard() {
   const [rechecking, setRechecking] = useState(false);
   const [rechecked, setRechecked] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  const [successState, setSuccessState] = useState<any>(null);
+  
+  const [resolutionAction, setResolutionAction] = useState<ResolutionAction>(null);
 
   const [acks, setAcks] = useState<Record<string, boolean>>({});
   const [ackInputs, setAckInputs] = useState<Record<string, {reason: string, comment: string}>>({});
@@ -123,8 +127,10 @@ export default function NightAuditDashboard() {
     setRechecking(false);
   };
 
-  if (!propertyId) return <div className="flex min-h-[60vh] items-center justify-center text-center"><div><MoonStar className="mx-auto h-10 w-10 text-indigo-500" /><h2 className="mt-4 text-xl font-semibold">Select a property</h2><p className="mt-1 text-muted-foreground">Choose a property to open the audit workspace.</p></div></div>;
-  if (loading) return <div className="flex min-h-[60vh] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-indigo-600" /></div>;
+  if (!propertyId) return <div className="flex min-h-[60vh] items-center justify-center text-center"><div><MoonStar className="mx-auto h-10 w-10 text-indigo-500" /><h2 className="mt-4 text-xl font-semibold">Select a property</h2><p className="mt-1 text-muted-foreground">Choose a property to open the audit workspace.</p></div>      <ResolutionManager action={resolutionAction} onClose={() => setResolutionAction(null)} onSuccess={() => { setResolutionAction(null); fetchStatus(); }} />
+    </div>;
+  if (loading) return <div className="flex min-h-[60vh] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-indigo-600" />      <ResolutionManager action={resolutionAction} onClose={() => setResolutionAction(null)} onSuccess={() => { setResolutionAction(null); fetchStatus(); }} />
+    </div>;
 
   const businessDate = data?.currentBusinessDate ? new Date(data.businessDate) : new Date();
   const isAuditInProgress = (data?.auditState === 'IN_PROGRESS' || data?.auditState === 'POSTING');
@@ -155,10 +161,12 @@ export default function NightAuditDashboard() {
 
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><Metric label="Business-day revenue" value={currency(data?.analytics?.revenue || 0, data?.property?.baseCurrency)} tone="emerald" icon={TrendingUp} /><Metric label="Payments collected" value={currency(data?.analytics?.payments || 0, data?.property?.baseCurrency)} tone="indigo" icon={Banknote} /><Metric label="Cash variance" value={currency(data?.analytics?.cashVariance || 0, data?.property?.baseCurrency)} tone={Math.abs(data?.analytics?.cashVariance || 0) > 0 ? 'amber' : 'emerald'} icon={Banknote} /><Metric label="Late postings" value={data?.analytics?.latePostings || 0} tone="amber" icon={Clock3} /></div>
 
-    <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]"><Card><CardHeader><CardTitle>Occupancy analysis</CardTitle><p className="mt-1 text-sm text-muted-foreground">Live room distribution for the current business date.</p></CardHeader><CardContent><div className="flex items-end gap-3"><div className="text-4xl font-semibold">{data?.analytics?.rooms?.total ? Math.round((data.analytics.rooms.occupied / data.analytics.rooms.total) * 100) : 0}%</div><p className="pb-1 text-sm text-muted-foreground">occupancy · {data?.analytics?.rooms?.occupied || 0} of {data?.analytics?.rooms?.total || 0} rooms</p></div><div className="mt-5 flex h-3 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"><div className="bg-indigo-600" style={{ width: `${data?.analytics?.rooms?.total ? (data.analytics.rooms.occupied / data.analytics.rooms.total) * 100 : 0}%` }} /><div className="bg-emerald-400" style={{ width: `${data?.analytics?.rooms?.total ? (data.analytics.rooms.available / data.analytics.rooms.total) * 100 : 0}%` }} /><div className="bg-rose-400" style={{ width: `${data?.analytics?.rooms?.total ? (data.analytics.rooms.outOfOrder / data.analytics.rooms.total) * 100 : 0}%` }} /></div><div className="mt-4 grid grid-cols-3 gap-3 text-sm"><div><span className="mr-2 inline-block h-2 w-2 rounded-full bg-indigo-600" />Occupied <b>{data?.analytics?.rooms?.occupied || 0}</b></div><div><span className="mr-2 inline-block h-2 w-2 rounded-full bg-emerald-400" />Available <b>{data?.analytics?.rooms?.available || 0}</b></div><div><span className="mr-2 inline-block h-2 w-2 rounded-full bg-rose-400" />Out of order <b>{data?.analytics?.rooms?.outOfOrder || 0}</b></div></div></CardContent></Card><Card><CardHeader><CardTitle>Seven-day performance</CardTitle><p className="mt-1 text-sm text-muted-foreground">Completed audit revenue trend.</p></CardHeader><CardContent>{data?.analytics?.trend?.length ? <div className="flex h-36 items-end gap-2">{data.analytics.trend.map((day: any) => { const max = Math.max(...data.analytics.trend.map((item: any) => Number(item.totalRevenue) || 0), 1); const height = Math.max(8, ((Number(day.totalRevenue) || 0) / max) * 100); return <div key={String(day.businessDate)} className="group flex flex-1 flex-col items-center gap-2"><div className="w-full rounded-t-md bg-indigo-500 transition-colors group-hover:bg-indigo-600" style={{ height: `${height}%` }} title={`${format(new Date(day.businessDate), 'dd MMM')}: ${currency(Number(day.totalRevenue) || 0, data?.property?.baseCurrency)}`} /><span className="text-[10px] text-muted-foreground">{format(new Date(day.businessDate), 'dd MMM')}</span></div>; })}</div> : <div className="flex h-36 items-center justify-center text-sm text-muted-foreground">Trend data will appear after completed audits.</div>}</CardContent></Card></div>
+    <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]"><Card><CardHeader><CardTitle>Occupancy analysis</CardTitle><p className="mt-1 text-sm text-muted-foreground">Live room distribution for the current business date.</p></CardHeader><CardContent><div className="flex items-end gap-3"><div className="text-4xl font-semibold">{data?.analytics?.rooms?.total ? Math.round((data.analytics.rooms.occupied / data.analytics.rooms.total) * 100) : 0}%</div><p className="pb-1 text-sm text-muted-foreground">occupancy · {data?.analytics?.rooms?.occupied || 0} of {data?.analytics?.rooms?.total || 0} rooms</p></div><div className="mt-5 flex h-3 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"><div className="bg-indigo-600" style={{ width: `${data?.analytics?.rooms?.total ? (data.analytics.rooms.occupied / data.analytics.rooms.total) * 100 : 0}%` }} /><div className="bg-emerald-400" style={{ width: `${data?.analytics?.rooms?.total ? (data.analytics.rooms.available / data.analytics.rooms.total) * 100 : 0}%` }} /><div className="bg-rose-400" style={{ width: `${data?.analytics?.rooms?.total ? (data.analytics.rooms.outOfOrder / data.analytics.rooms.total) * 100 : 0}%` }} /></div><div className="mt-4 grid grid-cols-3 gap-3 text-sm"><div><span className="mr-2 inline-block h-2 w-2 rounded-full bg-indigo-600" />Occupied <b>{data?.analytics?.rooms?.occupied || 0}</b></div><div><span className="mr-2 inline-block h-2 w-2 rounded-full bg-emerald-400" />Available <b>{data?.analytics?.rooms?.available || 0}</b></div><div><span className="mr-2 inline-block h-2 w-2 rounded-full bg-rose-400" />Out of order <b>{data?.analytics?.rooms?.outOfOrder || 0}</b></div></div></CardContent></Card><Card><CardHeader><CardTitle>Seven-day performance</CardTitle><p className="mt-1 text-sm text-muted-foreground">Completed audit revenue trend.</p></CardHeader><CardContent>{data?.analytics?.trend?.length ? <div className="flex h-36 items-end gap-2">{data.analytics.trend.map((day: any) => { const max = Math.max(...data.analytics.trend.map((item: any) => Number(item.totalRevenue) || 0), 1); const height = Math.max(8, ((Number(day.totalRevenue) || 0) / max) * 100); return <div key={String(day.businessDate)} className="group flex flex-1 flex-col items-center gap-2"><div className="w-full rounded-t-md bg-indigo-500 transition-colors group-hover:bg-indigo-600" style={{ height: `${height}%` }} title={`${format(new Date(day.businessDate), 'dd MMM')}: ${currency(Number(day.totalRevenue) || 0, data?.property?.baseCurrency)}`} /><span className="text-[10px] text-muted-foreground">{format(new Date(day.businessDate), 'dd MMM')}</span>      <ResolutionManager action={resolutionAction} onClose={() => setResolutionAction(null)} onSuccess={() => { setResolutionAction(null); fetchStatus(); }} />
+    </div>; })}</div> : <div className="flex h-36 items-center justify-center text-sm text-muted-foreground">Trend data will appear after completed audits.</div>}</CardContent></Card></div>
 
     <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
-      <Card><CardHeader className="flex-row items-center justify-between"><div><CardTitle>Readiness overview</CardTitle><p className="mt-1 text-sm text-muted-foreground">The controls that determine whether the date can be closed.</p></div><Badge variant={isReady ? 'default' : 'destructive'}>{isReady ? 'Ready to close' : 'Blocked'}</Badge></CardHeader><CardContent><div className="space-y-3">{steps.slice(0, 4).map((item, index) => { const Icon = item.icon; const count = index === 0 ? (data?.operational?.arrivals?.length || 0) + (data?.operational?.departures?.length || 0) : index === 1 ? (data?.system?.openPosSessions?.length || 0) + (data?.system?.openFrontdeskSessions?.length || 0) + (data?.system?.financialSyncConflicts?.length || 0) : index === 2 ? (data?.financial?.highBalances?.length || 0) : (data?.cash?.cashHandovers?.length || 0); return <div key={item.title} className="flex items-center gap-4 rounded-xl border p-4"><div className="rounded-lg bg-slate-100 p-2.5 text-slate-600 dark:bg-slate-800 dark:text-slate-300"><Icon className="h-5 w-5" /></div><div className="min-w-0 flex-1"><p className="font-medium">{item.title}</p><p className="text-sm text-muted-foreground">{item.description}</p></div>{count ? <Badge variant="outline" className="text-amber-600">{count} review</Badge> : <Check className="h-5 w-5 text-emerald-500" />}</div>; })}</div></CardContent></Card>
+      <Card><CardHeader className="flex-row items-center justify-between"><div><CardTitle>Readiness overview</CardTitle><p className="mt-1 text-sm text-muted-foreground">The controls that determine whether the date can be closed.</p></div><Badge variant={isReady ? 'default' : 'destructive'}>{isReady ? 'Ready to close' : 'Blocked'}</Badge></CardHeader><CardContent><div className="space-y-3">{steps.slice(0, 4).map((item, index) => { const Icon = item.icon; const count = index === 0 ? (data?.operational?.arrivals?.length || 0) + (data?.operational?.departures?.length || 0) : index === 1 ? (data?.system?.openPosSessions?.length || 0) + (data?.system?.openFrontdeskSessions?.length || 0) + (data?.system?.financialSyncConflicts?.length || 0) : index === 2 ? (data?.financial?.highBalances?.length || 0) : (data?.cash?.cashHandovers?.length || 0); return <div key={item.title} className="flex items-center gap-4 rounded-xl border p-4"><div className="rounded-lg bg-slate-100 p-2.5 text-slate-600 dark:bg-slate-800 dark:text-slate-300"><Icon className="h-5 w-5" /></div><div className="min-w-0 flex-1"><p className="font-medium">{item.title}</p><p className="text-sm text-muted-foreground">{item.description}</p></div>{count ? <Badge variant="outline" className="text-amber-600">{count} review</Badge> : <Check className="h-5 w-5 text-emerald-500" />}      <ResolutionManager action={resolutionAction} onClose={() => setResolutionAction(null)} onSuccess={() => { setResolutionAction(null); fetchStatus(); }} />
+    </div>; })}</div></CardContent></Card>
       <Card><CardHeader><CardTitle>Attention queue</CardTitle><p className="mt-1 text-sm text-muted-foreground">Items surfaced by the latest control check.</p></CardHeader><CardContent><div className="space-y-3">{checks.slice(0, 5).map((item: any, index: number) => <div key={index} className="flex items-start gap-3 border-b pb-3 last:border-0 last:pb-0"><AlertTriangle className={`mt-0.5 h-4 w-4 ${item.tone === 'blocker' ? 'text-rose-500' : 'text-amber-500'}`} /><p className="text-sm">{item.label}</p></div>)}{checks.length === 0 && <div className="py-6 text-center"><CheckCircle2 className="mx-auto h-8 w-8 text-emerald-500" /><p className="mt-2 text-sm font-medium">No exceptions surfaced</p><p className="text-xs text-muted-foreground">All monitored controls are clear.</p></div>}</div></CardContent></Card>
     </div>
 
@@ -181,7 +189,7 @@ export default function NightAuditDashboard() {
               <p className="font-medium">{arr.primaryGuest?.firstName} {arr.primaryGuest?.lastName}</p>
               <p className="text-xs text-muted-foreground">Confirmation: {arr.confirmationNumber}</p>
             </div>
-            <a href={`/reservations/${arr.id}`} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-3 py-1.5 rounded-md transition-colors">Resolve</a>
+            <button onClick={() => setResolutionAction({ type: 'ARRIVALS', item: arr })} className="text-xs font-medium text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-3 py-1.5 rounded-md transition-colors">Resolve</button>
           </div>
         ))}
       </div>
@@ -198,7 +206,7 @@ export default function NightAuditDashboard() {
               <p className="font-medium">{dep.primaryGuest?.firstName} {dep.primaryGuest?.lastName}</p>
               <p className="text-xs text-muted-foreground">Confirmation: {dep.confirmationNumber}</p>
             </div>
-            <a href={`/reservations/${dep.id}`} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-3 py-1.5 rounded-md transition-colors">Resolve</a>
+            <button onClick={() => setResolutionAction({ type: 'DEPARTURES', item: dep })} className="text-xs font-medium text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-3 py-1.5 rounded-md transition-colors">Resolve</button>
           </div>
         ))}
       </div>
@@ -215,7 +223,7 @@ export default function NightAuditDashboard() {
               <p className="font-medium text-amber-900">Room {rm.roomNumber}</p>
               <p className="text-xs text-amber-700">Expected: {rm.expected} (Current: {rm.hkStatus})</p>
             </div>
-            <a href="/housekeeping" target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-amber-700 hover:text-amber-900 bg-amber-50 px-3 py-1.5 rounded-md transition-colors">Fix</a>
+            <button onClick={() => setResolutionAction({ type: 'ROOM_DISCREPANCY', item: rd })} className="text-xs font-medium text-amber-700 hover:text-amber-900 bg-amber-50 px-3 py-1.5 rounded-md transition-colors">Fix</button>
           </div>
         ))}
       </div>
@@ -240,7 +248,7 @@ export default function NightAuditDashboard() {
               <p className="font-medium text-rose-900">{pos.outlet?.name || 'Register'}</p>
               <p className="text-xs text-rose-600">Opened by {pos.openedBy}</p>
             </div>
-            <a href="/point-of-sale" target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-rose-700 hover:text-rose-900 bg-rose-50 px-3 py-1.5 rounded-md transition-colors">Go to POS</a>
+            <button onClick={() => setResolutionAction({ type: 'POS_SESSION', item: session })} className="text-xs font-medium text-rose-700 hover:text-rose-900 bg-rose-50 px-3 py-1.5 rounded-md transition-colors">Resolve</button>
           </div>
         ))}
       </div>
@@ -257,7 +265,7 @@ export default function NightAuditDashboard() {
               <p className="font-medium text-rose-900">Shift Reference: {fd.shiftReference}</p>
               <p className="text-xs text-rose-600">Status: {fd.status}</p>
             </div>
-            <a href="/front-desk" target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-rose-700 hover:text-rose-900 bg-rose-50 px-3 py-1.5 rounded-md transition-colors">Go to Cashier</a>
+            <button onClick={() => setResolutionAction({ type: 'FRONTDESK_SHIFT', item: shift })} className="text-xs font-medium text-rose-700 hover:text-rose-900 bg-rose-50 px-3 py-1.5 rounded-md transition-colors">Resolve</button>
           </div>
         ))}
       </div>
@@ -299,7 +307,7 @@ export default function NightAuditDashboard() {
               <p className="font-medium text-amber-900">Folio #{hb.folioNumber}</p>
               <p className="text-xs text-amber-700">Balance: <span className="font-semibold">{currency(Number(hb.balance), data?.property?.baseCurrency)}</span></p>
             </div>
-            <a href={`/finance/folios/${hb.id}`} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-amber-700 hover:text-amber-900 bg-amber-50 px-3 py-1.5 rounded-md transition-colors">Review Folio</a>
+            <button onClick={() => setResolutionAction({ type: 'FOLIO_PREVIEW', item: hb })} className="text-xs font-medium text-amber-700 hover:text-amber-900 bg-amber-50 px-3 py-1.5 rounded-md transition-colors">Review Folio</button>
           </div>
         ))}
       </div>
@@ -316,7 +324,7 @@ export default function NightAuditDashboard() {
               <p className="font-medium text-amber-900">Reservation #{rv.folio?.reservationId?.slice(0, 8) || 'Unknown'}</p>
               <p className="text-xs text-amber-700">Base: {currency(Number(rv.baseAmount), data?.property?.baseCurrency)} / Posted: <span className="font-semibold">{currency(Number(rv.unitAmount), data?.property?.baseCurrency)}</span></p>
             </div>
-            <a href={`/finance/folios/${rv.folioId}`} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-amber-700 hover:text-amber-900 bg-amber-50 px-3 py-1.5 rounded-md transition-colors">Review Folio</a>
+            <button onClick={() => setResolutionAction({ type: 'FOLIO_PREVIEW', item: { id: rv.folioId, folioNumber: rv.folioNumber, balance: rv.varianceAmount } })} className="text-xs font-medium text-amber-700 hover:text-amber-900 bg-amber-50 px-3 py-1.5 rounded-md transition-colors">Review</button>
           </div>
         ))}
       </div>
@@ -400,5 +408,6 @@ export default function NightAuditDashboard() {
   </div>
 )}
 <p className="mt-4 text-xl font-semibold">{isReady ? 'Ready to close this business day' : 'Resolve blockers before closing'}</p><p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">Posting charges and rolling the date is recorded against your auditor profile and cannot be undone.</p></div>}</div><DialogFooter className="mt-8 border-t pt-6"><Button variant="ghost" onClick={recheck} disabled={rechecking}><RefreshCw className={`mr-2 h-4 w-4 ${rechecking ? 'animate-spin' : ''}`} />{rechecking ? 'Rechecking…' : 'Refresh and recheck'}</Button><Button variant="outline" onClick={() => setWizardOpen(false)}>Exit flow</Button>{step < steps.length - 1 ? <Button onClick={() => setStep(step + 1)} className="bg-indigo-600 px-6 hover:bg-indigo-700">Continue <ArrowRight className="ml-2 h-4 w-4" /></Button> : <Button disabled={!isReady || !rechecked || executing || auditState !== 'PENDING' || Object.keys(acks).length < requiredAcks.length} onClick={execute} className="bg-indigo-600 px-6 hover:bg-indigo-700">{executing ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Closing day...</> : <><Play className="mr-2 h-4 w-4" />{rechecked ? 'Close business day' : 'Recheck before closing'}</>}</Button>}</DialogFooter></div></div></DialogContent></Dialog>
-  </div>;
+        <ResolutionManager action={resolutionAction} onClose={() => setResolutionAction(null)} onSuccess={() => { setResolutionAction(null); fetchStatus(); }} />
+    </div>;
 }

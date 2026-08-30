@@ -35,7 +35,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         ? await prisma.staff.findFirst({ where: { userId: actor.user.id }, select: { id: true, position: true } })
         : null;
     if (!actorStaff) return NextResponse.json({ error: 'Staff record not found' }, { status: 401 });
-    const privilegedPositions = new Set(['MANAGER', 'HOTEL_MANAGER', 'FINANCE_MANAGER', 'ADMIN', 'SUPER_ADMIN', 'CEO']);
+    const privilegedPositions = new Set(['MANAGER', 'HOTEL_MANAGER', 'FINANCE_MANAGER', 'ADMIN', 'SUPER_ADMIN', 'CEO', 'NIGHT_AUDITOR']);
     const isPrivileged = privilegedPositions.has(String(actorStaff.position || '').toUpperCase());
     const sessionOwnerId = current.primaryOperatorId || current.openedBy;
     if (actorStaff.id !== sessionOwnerId && !isPrivileged) {
