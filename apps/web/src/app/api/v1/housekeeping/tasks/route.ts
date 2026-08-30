@@ -73,7 +73,28 @@ export async function POST(req: NextRequest) {
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
 
     const body = await req.json();
-    const { propertyId, roomId, type, priority, assignedTo, notes } = body;
+    const { propertyId, roomId, type, priority, assignedTo, notes, action, targetStatus } = body;
+
+    // Night Audit Room Discrepancy Reconciliation
+    if (action === 'RECONCILE' && roomId && targetStatus) {
+      const room = await prisma.room.findUnique({ where: { id: roomId } });
+      if (!room) return errorResponse('NOT_FOUND', 'Room not found', 404);
+      
+      const isNightAuditor = String((session.user as any).role || '').toUpperCase() === 'NIGHT_AUDITOR' 
+                          || String((session.user as any).role || '').toUpperCase() === 'MANAGER';
+      const canManage = await hasPermission(session.user.id, 'housekeeping', 'create', room.propertyId);
+      
+      if (!canManage && !isNightAuditor) {
+        return errorResponse('FORBIDDEN', 'Insufficient permissions to reconcile room', 403);
+      }
+
+      await prisma.room.update({
+        where: { id: roomId },
+        data: { housekeepingStatus: targetStatus }
+      });
+      
+      return successResponse({ success: true, message: 'Room reconciled' }, 200);
+    }
 
     if (!propertyId || !roomId || !type || !priority) {
       return errorResponse('BAD_REQUEST', 'Missing required fields', 400);
