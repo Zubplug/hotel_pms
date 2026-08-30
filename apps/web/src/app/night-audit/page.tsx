@@ -397,12 +397,17 @@ export default function NightAuditDashboard() {
         {data.cash.cashHandovers.map((ch: any) => (
           <div key={ch.id} className="text-sm p-3 bg-white rounded-lg border border-rose-200 flex items-center justify-between shadow-sm">
             <div>
-              <p className="font-medium text-rose-900">{ch.drawerName}</p>
+              <p className="font-medium text-rose-900">{ch.drawerName || 'Pending Handover'}</p>
               <p className="text-xs text-rose-600">Pending Handover</p>
             </div>
             <div className="flex items-center gap-4">
               <span className="font-semibold text-rose-700">{currency(Number(ch.amount), data?.property?.baseCurrency)}</span>
-              <a href="/finance/cash-drawers" target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-rose-700 hover:text-rose-900 bg-rose-50 px-3 py-1.5 rounded-md transition-colors">Action</a>
+              <button 
+                onClick={() => setResolutionAction({ type: 'CASH_HANDOVER', item: { ...ch, propertyId } })}
+                className="text-xs font-medium text-rose-700 hover:text-rose-900 bg-rose-50 px-3 py-1.5 rounded-md transition-colors"
+              >
+                Action
+              </button>
             </div>
           </div>
         ))}

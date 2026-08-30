@@ -3739,6 +3739,10 @@ model CashHandover {
   receivedAt        DateTime?
   notes             String?
 
+  actualAmount      Decimal?       @db.Decimal(18, 4)
+  variance          Decimal?       @db.Decimal(18, 4)
+  reasonCode        VarianceReasonCode?
+
   posSessions       PosSession[]
   frontdeskSessions FrontdeskSession[]
 

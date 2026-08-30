@@ -7,6 +7,7 @@ import { Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { FolioDetailView } from '@/components/finance/FolioDetailView';
+import { CashHandoverResolution } from './cash-handover-resolution';
 
 export type ResolutionAction = 
   | { type: 'ARRIVALS'; item: any }
@@ -16,6 +17,7 @@ export type ResolutionAction =
   | { type: 'FRONTDESK_SHIFT'; item: any }
   | { type: 'FOLIO_PREVIEW'; item: any }
   | { type: 'SYNC_CONFLICT'; item: any }
+  | { type: 'CASH_HANDOVER'; item: any }
   | null;
 
 interface Props {
@@ -37,6 +39,7 @@ export function ResolutionManager({ action, onClose, onSuccess }: Props) {
         {action.type === 'FRONTDESK_SHIFT' && <FrontdeskShiftResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
         {action.type === 'FOLIO_PREVIEW' && <FolioPreview item={action.item} onClose={onClose} />}
         {action.type === 'SYNC_CONFLICT' && <FinancialSyncResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
+        {action.type === 'CASH_HANDOVER' && <CashHandoverResolution propertyId={action.item.propertyId} baseCurrency="NGN" handover={action.item} onSuccess={onSuccess} onClose={onClose} />}
       </DialogContent>
     </Dialog>
   );

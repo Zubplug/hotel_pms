@@ -190,7 +190,8 @@ export async function getCashReconciliation(propertyId: string) {
   const cashHandovers = await prisma.cashHandover.findMany({
     where: { 
       propertyId, 
-      handedOverAt: { gte: businessDate, lt: nextBusinessDate }
+      handedOverAt: { gte: businessDate, lt: nextBusinessDate },
+      status: 'PENDING'
     },
     include: { handedOverBy: true }
   });
