@@ -9,12 +9,12 @@ export async function getOperationalReview(propertyId: string) {
 
   const arrivals = await prisma.reservation.findMany({
     where: { propertyId, checkIn: businessDate, status: 'CONFIRMED' },
-    select: { id: true, status: true, primaryGuestId: true, primaryGuest: { select: { firstName: true, lastName: true } }, folios: { select: { balance: true } } }
+    select: { id: true, status: true, checkIn: true, checkOut: true, confirmationNumber: true, primaryGuestId: true, primaryGuest: { select: { firstName: true, lastName: true } }, folios: { select: { balance: true } } }
   });
 
   const departures = await prisma.reservation.findMany({
     where: { propertyId, checkOut: businessDate, status: 'CHECKED_IN' },
-    select: { id: true, status: true, primaryGuestId: true, primaryGuest: { select: { firstName: true, lastName: true } }, folios: { select: { balance: true } } }
+    select: { id: true, status: true, checkIn: true, checkOut: true, confirmationNumber: true, primaryGuestId: true, primaryGuest: { select: { firstName: true, lastName: true } }, folios: { select: { balance: true } } }
   });
 
   const rooms = await prisma.room.findMany({
