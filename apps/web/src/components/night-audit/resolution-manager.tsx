@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { FolioDetailView } from '@/components/finance/FolioDetailView';
 
 export type ResolutionAction = 
   | { type: 'ARRIVALS'; item: any }
@@ -28,7 +29,7 @@ export function ResolutionManager({ action, onClose, onSuccess }: Props) {
 
   return (
     <Dialog open={!!action} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className={action?.type === 'FOLIO_PREVIEW' ? "sm:max-w-4xl max-h-[90vh] overflow-y-auto p-0 border-0 bg-transparent shadow-none" : "sm:max-w-[500px]"}>
         {action.type === 'ARRIVALS' && <ArrivalResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
         {action.type === 'DEPARTURES' && <DepartureResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
         {action.type === 'ROOM_DISCREPANCY' && <RoomDiscrepancyResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
@@ -753,26 +754,10 @@ function FinancialSyncResolution({ item, onSuccess, onClose }: { item: any; onSu
 
 function FolioPreview({ item, onClose }: { item: any; onClose: () => void }) {
   return (
-    <>
-      <DialogHeader>
-        <DialogTitle>Folio Preview</DialogTitle>
-        <DialogDescription>Folio #{item.reservation?.confirmationNumber || item.id.split('-')[0].toUpperCase()}</DialogDescription>
-      </DialogHeader>
-      <div className="py-4 space-y-4">
-        <div className="p-4 bg-slate-50 border rounded-xl flex items-center justify-between">
-          <span className="text-sm font-medium">Current Balance</span>
-          <span className="font-semibold text-amber-600">{Number(item.balance || 0).toFixed(2)}</span>
-        </div>
-        <div className="p-4 border rounded-xl text-sm">
-          <p className="text-muted-foreground mb-3">This is a read-only preview. To process financial adjustments or payments, you must open the full billing interface.</p>
-          <Button variant="outline" className="w-full bg-white" onClick={() => window.open(`/cashier/folios/${item.id}`, '_blank')}>
-            Open Billing Workspace
-          </Button>
-        </div>
+    <div className="bg-slate-50 rounded-2xl overflow-hidden shadow-2xl ring-1 ring-slate-900/5">
+      <div className="max-h-[90vh] overflow-y-auto p-6">
+        <FolioDetailView folioId={item.id} onBack={onClose} />
       </div>
-      <DialogFooter>
-        <Button variant="ghost" onClick={onClose}>Close Preview</Button>
-      </DialogFooter>
-    </>
+    </div>
   );
 }
