@@ -765,7 +765,7 @@ function FolioPreview({ item, onClose }: { item: any; onClose: () => void }) {
         </div>
         <div className="p-4 border rounded-xl text-sm">
           <p className="text-muted-foreground mb-3">This is a read-only preview. To process financial adjustments or payments, you must open the full billing interface.</p>
-          <Button variant="outline" className="w-full bg-white" onClick={() => window.open(`/finance/folios/${item.id}`, '_blank')}>
+          <Button variant="outline" className="w-full bg-white" onClick={() => window.open(`/cashier/folios/${item.id}`, '_blank')}>
             Open Billing Workspace
           </Button>
         </div>
