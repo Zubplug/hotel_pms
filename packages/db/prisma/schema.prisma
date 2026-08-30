@@ -712,6 +712,66 @@ enum TransactionVerificationStatus {
   UNVERIFIED
   VERIFIED
   QUESTIONED
+  RESOLUTION_REQUESTED
+  RESOLVED
+  REJECTED
+}
+
+enum TransactionExceptionReason {
+  BANK_DELAY
+  BANK_TRANSFER_PENDING
+  BANK_TRANSFER_CONFIRMED
+  STAFF_DEDUCTION
+  STAFF_REIMBURSEMENT
+  CASHIER_ACCOUNTABILITY
+  DUPLICATE_TRANSACTION
+  WRONG_AMOUNT
+  WRONG_ACCOUNT
+  WRONG_PAYMENT_METHOD
+  TRANSACTION_CORRECTION
+  OTHER
+}
+
+enum TransactionExceptionStatus {
+  OPEN
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+}
+
+model TransactionException {
+  id String @id @default(uuid()) @db.Uuid
+  
+  paymentId String? @db.Uuid
+  payment   Payment? @relation(fields: [paymentId], references: [id])
+  
+  posPaymentId String? @db.Uuid
+  posPayment   PosPayment? @relation(fields: [posPaymentId], references: [id])
+  
+  status TransactionExceptionStatus @default(OPEN)
+  
+  questionReason String
+  questionedById String @db.Uuid
+  questionedAt   DateTime @default(now()) @db.Timestamptz(3)
+  
+  proposedResolution TransactionExceptionReason?
+  resolutionNotes    String?
+  requestedById      String? @db.Uuid
+  requestedAt        DateTime? @db.Timestamptz(3)
+  
+  rejectionReason String?
+  rejectedById    String? @db.Uuid
+  rejectedAt      DateTime? @db.Timestamptz(3)
+  
+  approvedById String? @db.Uuid
+  approvedAt   DateTime? @db.Timestamptz(3)
+  
+  propertyId   String @db.Uuid
+  businessDate DateTime @db.Timestamptz(3)
+
+  @@index([propertyId])
+  @@index([status])
+  @@index([businessDate])
 }
 
 model Folio {
@@ -977,6 +1037,7 @@ model Payment {
 
   refunds        Refund[]
   refundRequests RefundRequest[]
+  transactionExceptions TransactionException[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -3213,6 +3274,7 @@ model PosPayment {
   verifiedAt           DateTime? @db.Timestamptz
   verifiedById         String?   @db.Uuid
   verificationNotes    String?
+  transactionExceptions TransactionException[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz

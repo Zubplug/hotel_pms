@@ -89,7 +89,26 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // 3. Create AuditLog
+      // 3. Create TransactionException if QUESTIONED
+      if (status === 'QUESTIONED') {
+        const property = await tx.property.findUnique({
+          where: { id: propertyId },
+          select: { businessDate: true }
+        });
+        
+        await tx.transactionException.create({
+          data: {
+            paymentId: type === 'PAYMENT' ? transactionId : null,
+            posPaymentId: type === 'POS_PAYMENT' ? transactionId : null,
+            questionReason: notes || 'No reason provided',
+            questionedById: session.user.id,
+            propertyId: propertyId,
+            businessDate: property?.businessDate || new Date()
+          }
+        });
+      }
+
+      // 4. Create AuditLog
       if (idempotencyKey) {
         await tx.financialAuditLog.create({
           data: {
