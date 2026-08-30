@@ -111,19 +111,45 @@ export async function getFinancialAudit(propertyId: string) {
           primaryGuest: { select: { firstName: true, lastName: true } },
           reservationRooms: { select: { room: { select: { number: true } } }, take: 1 }
         } 
-      } 
+      },
+      items: {
+        select: {
+          amount: true,
+          businessDate: true,
+          type: true
+        }
+      }
     }
   });
 
   // Flag folios whose balance exceeds the property-configured threshold.
   // Configurable via Property.nightAuditHighBalanceThreshold (default: 50,000).
   const highBalanceThreshold = Number(property.nightAuditHighBalanceThreshold ?? 50000);
+  
   const highBalances = openFolios
-    .filter(f => Number(f.balance) > highBalanceThreshold)
-    .map(f => ({
-      ...f,
-      creditLimit: highBalanceThreshold
-    }));
+    .map(f => {
+      // Calculate consumed balance to avoid flagging guests for future room charges
+      // Start with the full ledger balance
+      let currentBalance = Number(f.balance);
+      
+      // Subtract any charges that are posted for future dates (after today's audit date)
+      for (const item of f.items) {
+        if (item.businessDate > businessDate) {
+          if (item.type === 'CHARGE' || item.type === 'TAX') {
+            currentBalance -= Number(item.amount);
+          } else if (item.type === 'DISCOUNT') {
+            currentBalance += Number(item.amount);
+          }
+        }
+      }
+      
+      return {
+        ...f,
+        balance: currentBalance, // Override the display balance
+        creditLimit: highBalanceThreshold
+      };
+    })
+    .filter(f => f.balance > highBalanceThreshold);
 
 
   const roomCharges = await prisma.folioItem.findMany({
