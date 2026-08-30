@@ -756,7 +756,7 @@ function FolioPreview({ item, onClose }: { item: any; onClose: () => void }) {
   return (
     <div className="bg-slate-50 rounded-2xl overflow-hidden shadow-2xl ring-1 ring-slate-900/5">
       <div className="max-h-[90vh] overflow-y-auto p-6">
-        <FolioDetailView folioId={item.id} onBack={onClose} />
+        <FolioDetailView folioId={item.id} onBack={onClose} readOnly={true} />
       </div>
     </div>
   );

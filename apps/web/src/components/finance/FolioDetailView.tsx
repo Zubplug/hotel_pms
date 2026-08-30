@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { ArrowLeft, CreditCard, Loader2, Printer } from 'lucide-react';
 import { AddPaymentDialog } from '@/components/reservations/AddPaymentDialog';
 
-export function FolioDetailView({ folioId, onBack }: { folioId: string, onBack?: () => void }) {
+export function FolioDetailView({ folioId, onBack, readOnly = false }: { folioId: string, onBack?: () => void, readOnly?: boolean }) {
   const [folio, setFolio] = useState<any>(null);
   const [error, setError] = useState('');
   const [paymentOpen, setPaymentOpen] = useState(false);
@@ -34,9 +34,11 @@ export function FolioDetailView({ folioId, onBack }: { folioId: string, onBack?:
           <button onClick={() => window.print()} className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm hover:bg-slate-50 transition-colors">
             <Printer className="h-4 w-4" />Print
           </button>
-          <button onClick={() => setPaymentOpen(true)} className="flex items-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 px-3 py-2 text-sm font-semibold text-white transition-colors shadow-sm">
-            <CreditCard className="h-4 w-4" />Record payment
-          </button>
+          {!readOnly && (
+            <button onClick={() => setPaymentOpen(true)} className="flex items-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 px-3 py-2 text-sm font-semibold text-white transition-colors shadow-sm">
+              <CreditCard className="h-4 w-4" />Record payment
+            </button>
+          )}
         </div>
       </div>
       <section className="rounded-2xl bg-slate-950 p-6 text-white shadow-md">
