@@ -41,8 +41,10 @@ export async function POST(
 
     await assertPropertyAccess(session.user.id, reservation.propertyId);
 
+    const userRole = String((session.user as any).role || 'STAFF').toUpperCase();
+    const isNightAuditor = userRole === 'NIGHT_AUDITOR' || userRole === 'MANAGER' || userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
     const canUpdate = await hasPermission(session.user.id, 'reservation', 'update', reservation.propertyId);
-    if (!canUpdate) return errorResponse('FORBIDDEN', 'Insufficient permissions to extend stay', 403);
+    if (!canUpdate && !isNightAuditor) return errorResponse('FORBIDDEN', 'Insufficient permissions to extend stay', 403);
 
     if (reservation.status !== 'CHECKED_IN') {
       return errorResponse('BAD_REQUEST', 'Only checked-in reservations can be extended', 400);
