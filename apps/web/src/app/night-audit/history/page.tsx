@@ -12,7 +12,7 @@ import {
   TableHeader, 
   TableRow 
 } from '@/components/ui/table';
-import { Clock, Search, Filter, Download, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import { Clock, Search, Filter, Download, CheckCircle2, XCircle, Loader2, Calendar, User, BedDouble, Banknote, Activity, FileText } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { useProperty } from '@/components/PropertyProvider';
 import { getNightAuditHistory } from '@/lib/night-audit-actions';
@@ -197,23 +197,83 @@ export default function AuditHistoryPage() {
         </CardContent>
       </Card>
       <Dialog open={!!selectedAudit} onOpenChange={(open) => !open && setSelectedAudit(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Audit Summary</DialogTitle>
-          </DialogHeader>
-          {selectedAudit && (
-            <div className="space-y-4">
-              <div className="flex justify-between border-b pb-2"><span>Date:</span> <span className="font-medium">{new Date(selectedAudit.businessDate).toLocaleDateString()}</span></div>
-              <div className="flex justify-between border-b pb-2"><span>Auditor:</span> <span className="font-medium">{selectedAudit.runReference || 'SYSTEM'}</span></div>
-              <div className="flex justify-between border-b pb-2"><span>Status:</span> <span className="font-medium">{selectedAudit.status}</span></div>
-              <div className="flex justify-between border-b pb-2"><span>Rooms Charged:</span> <span className="font-medium">{selectedAudit.roomChargesPosted || 0}</span></div>
-              <div className="flex justify-between border-b pb-2"><span>Revenue Posted:</span> <span className="font-medium">{selectedAudit.revenuePosted || 0}</span></div>
-              <div className="flex justify-between border-b pb-2"><span>Duration:</span> <span className="font-medium">{formatDuration(selectedAudit.startedAt, selectedAudit.completedAt)}</span></div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button onClick={() => setSelectedAudit(null)}>Close</Button>
-          </DialogFooter>
+        <DialogContent className="sm:max-w-md overflow-hidden p-0">
+          <div className="bg-gradient-to-br from-indigo-50 to-white dark:from-slate-900 dark:to-slate-950 p-6">
+            <DialogHeader className="border-b border-indigo-100/50 dark:border-slate-800 pb-5 mb-5">
+              <div className="flex items-center gap-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-600 shadow-md shadow-indigo-200 dark:shadow-none text-white">
+                  <FileText className="h-6 w-6" />
+                </div>
+                <div>
+                  <DialogTitle className="text-2xl font-bold text-slate-900 dark:text-white">Audit Summary</DialogTitle>
+                  <CardDescription className="mt-1 flex items-center gap-1.5 text-[15px] font-medium text-indigo-600 dark:text-indigo-400">
+                    <Calendar className="h-4 w-4" />
+                    {selectedAudit ? new Date(selectedAudit.businessDate).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' }) : ''}
+                  </CardDescription>
+                </div>
+              </div>
+            </DialogHeader>
+            
+            {selectedAudit && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="rounded-2xl border border-slate-200/60 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/50 transition-all hover:shadow-md">
+                    <div className="flex items-center gap-2 text-sm font-medium text-slate-500 mb-2">
+                      <User className="h-4 w-4 text-slate-400" />
+                      <span>Auditor</span>
+                    </div>
+                    <div className="font-semibold text-slate-900 dark:text-slate-100 text-lg">{selectedAudit.runReference || 'SYSTEM'}</div>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200/60 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/50 transition-all hover:shadow-md">
+                    <div className="flex items-center gap-2 text-sm font-medium text-slate-500 mb-2">
+                      <Activity className="h-4 w-4 text-slate-400" />
+                      <span>Status</span>
+                    </div>
+                    <div className="font-semibold text-slate-900 dark:text-slate-100 text-lg flex items-center gap-2">
+                      {selectedAudit.status === 'COMPLETED' ? <CheckCircle2 className="h-5 w-5 text-emerald-500" /> : selectedAudit.status === 'FAILED' ? <XCircle className="h-5 w-5 text-rose-500" /> : <Clock className="h-5 w-5 text-amber-500" />}
+                      {selectedAudit.status}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200/60 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/50 transition-all hover:shadow-md">
+                    <div className="flex items-center gap-2 text-sm font-medium text-slate-500 mb-2">
+                      <Clock className="h-4 w-4 text-slate-400" />
+                      <span>Duration</span>
+                    </div>
+                    <div className="font-semibold text-slate-900 dark:text-slate-100 text-lg">{formatDuration(selectedAudit.startedAt, selectedAudit.completedAt)}</div>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200/60 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/50 transition-all hover:shadow-md">
+                    <div className="flex items-center gap-2 text-sm font-medium text-slate-500 mb-2">
+                      <BedDouble className="h-4 w-4 text-slate-400" />
+                      <span>Rooms Charged</span>
+                    </div>
+                    <div className="font-semibold text-slate-900 dark:text-slate-100 text-lg">{selectedAudit.roomChargesPosted || 0}</div>
+                  </div>
+                </div>
+                
+                <div className="relative overflow-hidden rounded-2xl border border-indigo-200 bg-gradient-to-r from-indigo-50 to-indigo-100/50 p-5 shadow-sm dark:border-indigo-500/20 dark:from-indigo-950/40 dark:to-indigo-900/20">
+                  <div className="absolute -right-6 -top-6 opacity-10">
+                    <Banknote className="h-32 w-32" />
+                  </div>
+                  <div className="relative z-10 flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-300 font-medium mb-1">
+                        <Banknote className="h-5 w-5" />
+                        <span>Total Revenue Posted</span>
+                      </div>
+                      <div className="text-sm text-indigo-600/70 dark:text-indigo-400/70">From night audit postings</div>
+                    </div>
+                    <div className="text-2xl font-bold text-indigo-900 dark:text-indigo-100">
+                      {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(selectedAudit.revenuePosted || 0)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            <DialogFooter className="mt-8 border-t border-slate-200/60 dark:border-slate-800 pt-5">
+              <Button size="lg" className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-md" onClick={() => setSelectedAudit(null)}>Close Summary</Button>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
