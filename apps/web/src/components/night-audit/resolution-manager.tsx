@@ -139,7 +139,12 @@ function DepartureResolution({ item, onSuccess, onClose }: { item: any; onSucces
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showSkipperConfirm, setShowSkipperConfirm] = useState(false);
+  const [showRetainConfirm, setShowRetainConfirm] = useState(false);
+  const [showRefundConfirm, setShowRefundConfirm] = useState(false);
   const [skipperReason, setSkipperReason] = useState('');
+  const [retainReasonCode, setRetainReasonCode] = useState('EARLY_DEPARTURE');
+  const [retainNotes, setRetainNotes] = useState('');
+  const [refundReason, setRefundReason] = useState('Refund unavailable during Night Audit');
 
   const balance = item.folios?.reduce((acc: number, f: any) => acc + Number(f.balance || 0), 0) || 0;
   const hasBalance = balance !== 0;
@@ -186,6 +191,58 @@ function DepartureResolution({ item, onSuccess, onClose }: { item: any; onSucces
         throw new Error(body.error?.message || 'Failed to process skipper checkout');
       }
       toast.success('Successfully transferred to City Ledger and checked out');
+      onSuccess();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const handleRetainCredit = async () => {
+    if (!retainNotes.trim()) {
+      setError('A reason is required to retain the credit balance.');
+      return;
+    }
+    setLoading('retain');
+    setError(null);
+    try {
+      const res = await fetch(`/api/v1/reservations/${item.id}/retain-credit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Idempotency-Key': crypto.randomUUID() },
+        body: JSON.stringify({ reasonCode: retainReasonCode, reason: retainNotes })
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error?.message || 'Failed to process retention checkout');
+      }
+      toast.success('Successfully retained credit and checked out');
+      onSuccess();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const handleTransferRefund = async () => {
+    if (!refundReason.trim()) {
+      setError('A reason is required to transfer the refund liability.');
+      return;
+    }
+    setLoading('transfer-refund');
+    setError(null);
+    try {
+      const res = await fetch(`/api/v1/reservations/${item.id}/transfer-credit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Idempotency-Key': crypto.randomUUID() },
+        body: JSON.stringify({ reason: refundReason })
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error?.message || 'Failed to transfer refund liability');
+      }
+      toast.success('Successfully transferred to Refund Payable and checked out');
       onSuccess();
     } catch (err: any) {
       setError(err.message);
@@ -258,6 +315,69 @@ function DepartureResolution({ item, onSuccess, onClose }: { item: any; onSucces
             </Button>
           </div>
         </div>
+      ) : showRetainConfirm ? (
+        <div className="py-4 space-y-4">
+          <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 space-y-3">
+            <h4 className="font-bold flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-emerald-600" /> Retain {Math.abs(balance).toLocaleString('en-NG', { style: 'currency', currency: 'NGN' })} and Check Out?
+            </h4>
+            <p>This will apply an approved early-departure/retention charge of <strong>{Math.abs(balance).toFixed(2)}</strong>.</p>
+            <p>The guest will no longer have a credit balance.</p>
+            <div className="space-y-1.5 pt-2 border-t">
+              <label className="text-xs font-semibold">Retention Code (Required)</label>
+              <select className="w-full px-3 py-2 border rounded-md bg-white text-sm outline-none" value={retainReasonCode} onChange={e => setRetainReasonCode(e.target.value)}>
+                <option value="EARLY_DEPARTURE">Early departure penalty</option>
+                <option value="DEPOSIT_FORFEITURE">Deposit forfeiture</option>
+                <option value="NO_SHOW">Cancellation/no-show penalty</option>
+                <option value="OTHER">Other approved retention reason</option>
+              </select>
+            </div>
+            <div className="space-y-1.5 pt-2">
+              <label className="text-xs font-semibold">Notes (Required)</label>
+              <input 
+                type="text" 
+                className="w-full px-3 py-2 border rounded-md bg-white text-sm outline-none" 
+                placeholder="Manager approved retention..."
+                value={retainNotes}
+                onChange={e => setRetainNotes(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" className="flex-1" onClick={() => setShowRetainConfirm(false)} disabled={!!loading}>Cancel</Button>
+            <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={handleRetainCredit} disabled={!!loading || !retainNotes.trim()}>
+              {loading === 'retain' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Retain & Check-Out
+            </Button>
+          </div>
+        </div>
+      ) : showRefundConfirm ? (
+        <div className="py-4 space-y-4">
+          <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-800 space-y-3">
+            <h4 className="font-bold flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4" /> Transfer {Math.abs(balance).toLocaleString('en-NG', { style: 'currency', currency: 'NGN' })} to Pending Guest Refunds?
+            </h4>
+            <p>This will record <strong>{Math.abs(balance).toFixed(2)}</strong> as a liability owed by the hotel to the guest.</p>
+            <p className="font-semibold text-rose-600">No money will be refunded now.</p>
+            <p>Finance will process the actual refund transfer at a later date.</p>
+            <div className="space-y-1.5 pt-2 border-t border-blue-200">
+              <label className="text-xs font-semibold">Reason (Required)</label>
+              <input 
+                type="text" 
+                className="w-full px-3 py-2 border border-blue-300 rounded-md bg-white text-sm outline-none focus:ring-2 focus:ring-blue-500" 
+                value={refundReason}
+                onChange={e => setRefundReason(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" className="flex-1" onClick={() => setShowRefundConfirm(false)} disabled={!!loading}>Cancel</Button>
+            <Button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white" onClick={handleTransferRefund} disabled={!!loading || !refundReason.trim()}>
+              {loading === 'transfer-refund' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Transfer & Check-Out
+            </Button>
+          </div>
+        </div>
       ) : (
         <div className="py-4 space-y-4">
           <div className="p-4 bg-slate-50 border rounded-xl flex items-center justify-between">
@@ -273,11 +393,19 @@ function DepartureResolution({ item, onSuccess, onClose }: { item: any; onSucces
               {loading === 'checkout' && <Loader2 className="h-4 w-4 animate-spin" />}
             </Button>
           ) : isCredit ? (
-            <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl text-sm text-blue-700">
-              <p className="font-semibold mb-1">Credit Balance - Cannot Check Out</p>
-              <p>This guest has overpaid. Please go to the billing screen to process a refund before checking out.</p>
-              <div className="mt-3 flex gap-2">
-                <Button size="sm" variant="outline" className="bg-white" onClick={() => window.open(`/reservations/${item.id}/folios`, '_blank')}>Go to Billing</Button>
+            <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl text-sm text-blue-700 space-y-3">
+              <p className="font-semibold">Credit Balance - Cannot Check Out</p>
+              <p>This guest has an overpayment of <strong>{Math.abs(balance).toFixed(2)}</strong>. You must zero this balance before checking out.</p>
+              <div className="grid gap-2 pt-2">
+                <Button size="sm" variant="outline" className="w-full justify-between bg-white text-slate-700" onClick={() => window.open(`/reservations/${item.id}/folios`, '_blank')}>
+                  <span>Go to Billing (Actual Refund)</span>
+                </Button>
+                <Button size="sm" variant="outline" className="w-full justify-between border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-800" onClick={() => setShowRetainConfirm(true)}>
+                  <span>Retain Credit (Early Departure Fee)</span>
+                </Button>
+                <Button size="sm" variant="outline" className="w-full justify-between border-blue-200 bg-blue-100 hover:bg-blue-200 text-blue-800" onClick={() => setShowRefundConfirm(true)}>
+                  <span>Transfer to Pending Guest Refunds (Liability)</span>
+                </Button>
               </div>
             </div>
           ) : (
