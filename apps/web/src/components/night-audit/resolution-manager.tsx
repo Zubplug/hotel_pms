@@ -449,7 +449,12 @@ function RoomDiscrepancyResolution({ item, onSuccess, onClose }: { item: any; on
       const res = await fetch(`/api/v1/housekeeping/tasks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Idempotency-Key': crypto.randomUUID() },
-        body: JSON.stringify({ roomId: item.roomId, action: 'RECONCILE', targetStatus: item.expected === 'OCCUPIED' ? 'DIRTY' : 'CLEAN' })
+        body: JSON.stringify({ 
+          roomId: item.roomId, 
+          action: 'RECONCILE', 
+          pmsStatus: item.expected,
+          targetStatus: item.expected === 'OCCUPIED' ? 'DIRTY' : 'CLEAN' 
+        })
       });
       if (!res.ok) {
         throw new Error('Failed to reconcile room status');
@@ -473,8 +478,9 @@ function RoomDiscrepancyResolution({ item, onSuccess, onClose }: { item: any; on
       <div className="py-4 space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <div className="p-4 border rounded-xl bg-slate-50">
-            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Front Desk</p>
-            <p className="font-semibold">{item.expected}</p>
+            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">PMS Status</p>
+            <p className="font-semibold">{item.pmsStatus}</p>
+            <p className="text-xs text-indigo-600 mt-1">Expected: {item.expected}</p>
           </div>
           <div className="p-4 border rounded-xl bg-amber-50">
             <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Housekeeping</p>

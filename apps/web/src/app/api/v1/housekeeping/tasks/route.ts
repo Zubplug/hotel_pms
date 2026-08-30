@@ -71,9 +71,8 @@ export async function POST(req: NextRequest) {
   try {
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
-
     const body = await req.json();
-    const { propertyId, roomId, type, priority, assignedTo, notes, action, targetStatus } = body;
+    const { propertyId, roomId, type, priority, assignedTo, notes, action, targetStatus, pmsStatus } = body;
 
     // Night Audit Room Discrepancy Reconciliation
     if (action === 'RECONCILE' && roomId && targetStatus) {
@@ -90,7 +89,10 @@ export async function POST(req: NextRequest) {
 
       await prisma.room.update({
         where: { id: roomId },
-        data: { housekeepingStatus: targetStatus }
+        data: { 
+          housekeepingStatus: targetStatus,
+          ...(pmsStatus ? { status: pmsStatus } : {})
+        }
       });
       
       return successResponse({ success: true, message: 'Room reconciled' }, 200);

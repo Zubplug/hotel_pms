@@ -236,7 +236,7 @@ export default function NightAuditDashboard() {
           <div key={rm.roomId} className="text-sm p-3 bg-white rounded-lg border border-amber-200 flex items-center justify-between shadow-sm">
             <div>
               <p className="font-medium text-amber-900">Room {rm.roomNumber}</p>
-              <p className="text-xs text-amber-700">Expected: {rm.expected} (Current: {rm.hkStatus})</p>
+              <p className="text-xs text-amber-700">PMS: {rm.pmsStatus} (Expected: {rm.expected}) | HK: {rm.hkStatus}</p>
             </div>
             <button onClick={() => setResolutionAction({ type: 'ROOM_DISCREPANCY', item: rm })} className="text-xs font-medium text-amber-700 hover:text-amber-900 bg-amber-50 px-3 py-1.5 rounded-md transition-colors">Fix</button>
           </div>
