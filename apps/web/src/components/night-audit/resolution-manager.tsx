@@ -138,9 +138,13 @@ function ArrivalResolution({ item, onSuccess, onClose }: { item: any; onSuccess:
 function DepartureResolution({ item, onSuccess, onClose }: { item: any; onSuccess: () => void; onClose: () => void }) {
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showSkipperConfirm, setShowSkipperConfirm] = useState(false);
+  const [skipperReason, setSkipperReason] = useState('');
 
   const balance = item.folios?.reduce((acc: number, f: any) => acc + Number(f.balance || 0), 0) || 0;
   const hasBalance = balance !== 0;
+  const isSkipper = balance > 0;
+  const isCredit = balance < 0;
 
   const handleCheckout = async () => {
     setLoading('checkout');
@@ -156,6 +160,32 @@ function DepartureResolution({ item, onSuccess, onClose }: { item: any; onSucces
         throw new Error(body.error?.message || 'Failed to check out');
       }
       toast.success('Successfully checked out');
+      onSuccess();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const handleSkipper = async () => {
+    if (!skipperReason.trim()) {
+      setError('A reason is required to transfer to City Ledger.');
+      return;
+    }
+    setLoading('skipper');
+    setError(null);
+    try {
+      const res = await fetch(`/api/v1/reservations/${item.id}/skipper`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Idempotency-Key': crypto.randomUUID() },
+        body: JSON.stringify({ reason: skipperReason })
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error?.message || 'Failed to process skipper checkout');
+      }
+      toast.success('Successfully transferred to City Ledger and checked out');
       onSuccess();
     } catch (err: any) {
       setError(err.message);
@@ -200,36 +230,77 @@ function DepartureResolution({ item, onSuccess, onClose }: { item: any; onSucces
 
       {error && <div className="p-3 bg-rose-50 text-rose-600 rounded-lg text-sm border border-rose-100">{error}</div>}
 
-      <div className="py-4 space-y-4">
-        <div className="p-4 bg-slate-50 border rounded-xl flex items-center justify-between">
-          <span className="text-sm font-medium">Outstanding Balance</span>
-          <span className={`font-semibold ${hasBalance ? 'text-rose-600' : 'text-emerald-600'}`}>
-            {balance.toFixed(2)}
-          </span>
-        </div>
-
-        {hasBalance ? (
-          <div className="p-4 bg-rose-50 border border-rose-100 rounded-xl text-sm text-rose-700">
-            <p className="font-semibold mb-1">Cannot Check Out</p>
-            <p>This reservation has a non-zero folio balance. Please go to the billing screen to process payment, discounts, or refunds before checking out.</p>
-            <div className="mt-3 flex gap-2">
-              <Button size="sm" variant="outline" className="bg-white" onClick={() => window.open(`/reservations/${item.id}/folios`, '_blank')}>Go to Billing</Button>
+      {showSkipperConfirm ? (
+        <div className="py-4 space-y-4">
+          <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800 space-y-3">
+            <h4 className="font-bold flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4" /> Transfer Balance & Force Check-Out
+            </h4>
+            <p>This guest has an outstanding balance of <strong>{balance.toFixed(2)}</strong>.</p>
+            <p>The balance will be transferred to the <strong>City Ledger / Accounts Receivable</strong> and the reservation will be checked out.</p>
+            <p className="font-medium">The guest will still owe this amount to the hotel.</p>
+            <div className="space-y-1.5 pt-2 border-t border-amber-200/50">
+              <label className="text-xs font-semibold">Reason (Required)</label>
+              <input 
+                type="text" 
+                className="w-full px-3 py-2 border border-amber-300 rounded-md bg-white focus:ring-2 focus:ring-amber-500 outline-none" 
+                placeholder="Guest left without settling balance..."
+                value={skipperReason}
+                onChange={e => setSkipperReason(e.target.value)}
+              />
             </div>
           </div>
-        ) : (
-          <Button className="w-full justify-between bg-indigo-600 hover:bg-indigo-700" onClick={handleCheckout} disabled={!!loading}>
-            <span>Process Check-Out</span>
-            {loading === 'checkout' && <Loader2 className="h-4 w-4 animate-spin" />}
-          </Button>
-        )}
-
-        <div className="relative border-t mt-4 pt-4">
-          <Button variant="outline" className="w-full justify-between" onClick={handleExtend} disabled={!!loading}>
-            <span>Extend Stay (1 Night)</span>
-            {loading === 'extend' && <Loader2 className="h-4 w-4 animate-spin" />}
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" className="flex-1" onClick={() => setShowSkipperConfirm(false)} disabled={!!loading}>Cancel</Button>
+            <Button className="flex-1 bg-amber-600 hover:bg-amber-700" onClick={handleSkipper} disabled={!!loading || !skipperReason.trim()}>
+              {loading === 'skipper' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Transfer & Check-Out
+            </Button>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="py-4 space-y-4">
+          <div className="p-4 bg-slate-50 border rounded-xl flex items-center justify-between">
+            <span className="text-sm font-medium">Outstanding Balance</span>
+            <span className={`font-semibold ${isSkipper ? 'text-rose-600' : isCredit ? 'text-blue-600' : 'text-emerald-600'}`}>
+              {balance.toFixed(2)}
+            </span>
+          </div>
+
+          {!hasBalance ? (
+            <Button className="w-full justify-between bg-indigo-600 hover:bg-indigo-700" onClick={handleCheckout} disabled={!!loading}>
+              <span>Process Check-Out</span>
+              {loading === 'checkout' && <Loader2 className="h-4 w-4 animate-spin" />}
+            </Button>
+          ) : isCredit ? (
+            <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl text-sm text-blue-700">
+              <p className="font-semibold mb-1">Credit Balance - Cannot Check Out</p>
+              <p>This guest has overpaid. Please go to the billing screen to process a refund before checking out.</p>
+              <div className="mt-3 flex gap-2">
+                <Button size="sm" variant="outline" className="bg-white" onClick={() => window.open(`/reservations/${item.id}/folios`, '_blank')}>Go to Billing</Button>
+              </div>
+            </div>
+          ) : (
+            <div className="p-4 bg-rose-50 border border-rose-100 rounded-xl text-sm text-rose-700 space-y-3">
+              <p className="font-semibold">Balance Due - Cannot Standard Check-Out</p>
+              <p>This reservation has a non-zero folio balance. You can process payment in billing, or if the guest has left, transfer the debt to Accounts Receivable (City Ledger).</p>
+              <div className="flex gap-2 pt-2">
+                <Button size="sm" variant="outline" className="bg-white" onClick={() => window.open(`/reservations/${item.id}/folios`, '_blank')}>Go to Billing</Button>
+                <Button size="sm" variant="secondary" className="bg-rose-100 hover:bg-rose-200 text-rose-800 border border-rose-200" onClick={() => setShowSkipperConfirm(true)}>
+                  Transfer to City Ledger (Skipper)
+                </Button>
+              </div>
+            </div>
+          )}
+
+          <div className="relative border-t mt-4 pt-4">
+            <Button variant="outline" className="w-full justify-between" onClick={handleExtend} disabled={!!loading}>
+              <span>Extend Stay (1 Night)</span>
+              {loading === 'extend' && <Loader2 className="h-4 w-4 animate-spin" />}
+            </Button>
+          </div>
+        </div>
+      )}
       <DialogFooter>
         <Button variant="ghost" onClick={onClose} disabled={!!loading}>Cancel</Button>
       </DialogFooter>

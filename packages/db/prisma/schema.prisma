@@ -70,71 +70,71 @@ model Property {
   settings          Json?
   lockConfiguration Json? // { provider: "DELUNS", dlsCoID: 12345, encoderPort: 1 }
 
-  cashVarianceGeneralCashierLimit Decimal?                  @db.Decimal(18, 4)
-  cashVarianceFinanceManagerLimit Decimal?                  @db.Decimal(18, 4)
-  cashVarianceNightAuditTolerance Decimal?                  @db.Decimal(18, 4)
+  cashVarianceGeneralCashierLimit Decimal? @db.Decimal(18, 4)
+  cashVarianceFinanceManagerLimit Decimal? @db.Decimal(18, 4)
+  cashVarianceNightAuditTolerance Decimal? @db.Decimal(18, 4)
   // Folio balances above this threshold are flagged as warnings during Night Audit.
   // Default: 50,000 (property currency units). Replaces the former hardcoded 5,000 dummy check.
-  nightAuditHighBalanceThreshold  Decimal                   @default(50000) @db.Decimal(18, 4)
+  nightAuditHighBalanceThreshold  Decimal  @default(50000) @db.Decimal(18, 4)
   // When true, all Night Audit warnings must be explicitly acknowledged (via
   // NightAuditAcknowledgement tied to the specific run ID) before /execute proceeds.
-  requireAuditAcknowledgements    Boolean                   @default(false)
+  requireAuditAcknowledgements    Boolean  @default(false)
 
-  cashHandovers                   CashHandover[]
-  bankDeposits                    BankDeposit[]
-  buildings                       Building[]
-  roomTypes                       RoomType[]
-  rooms                           Room[]
-  amenities                       Amenity[]
-  ratePlans                       RatePlan[]
-  exchangeRates                   ExchangeRate[]
-  reservations                    Reservation[]
-  folios                          Folio[]
-  folioCredits                    FolioCredit[]
-  payments                        Payment[]
-  refunds                         Refund[]
-  refundRequests                  RefundRequest[]
-  taxes                           Tax[]
-  discounts                       Discount[]
-  housekeepingTasks               HousekeepingTask[]
-  housekeepingShifts              HousekeepingShift[]
-  maintenanceTickets              MaintenanceTicket[]
-  maintenanceCats                 MaintenanceCategory[]
-  doorLocks                       DoorLock[]
-  hardwareAgents                  HardwareAgent[]
-  lockOperations                  LockOperation[]
-  lockEvents                      LockEvent[]
-  integrationConfigs              IntegrationConfig[]
-  govSubmissions                  GovernmentSubmission[]
-  nightAudits                     NightAudit[]
-  occupancySnapshots              OccupancySnapshot[]
-  guestServiceRequests            GuestServiceRequest[]
-  cancellationPolicies            CancellationPolicy[]
-  depositPolicies                 DepositPolicy[]
-  noShowPolicies                  NoShowPolicy[]
-  userRoles                       UserRole[]
-  suppliers                       Supplier[]
-  warehouses                      Warehouse[]
-  stockItems                      StockItem[]
-  stockTransactions               StockTransaction[]
-  kitchenWasteEntries             KitchenWasteEntry[]
-  purchaseOrders                  PurchaseOrder[]
-  goodsReceivedNotes              GoodsReceivedNote[]
-  posOutlets                      PosOutlet[]
-  posDevices                      PosDevice[]
-  posProducts                     PosProduct[]
-  posOrders                       PosOrder[]
-  uomConversions                  UnitOfMeasureConversion[]
-  enrollmentTokens                AgentEnrollmentToken[]
-  syncConflicts                   SyncConflict[]
-  inventoryAlerts                 InventoryAlert[]
-  approvalRequests                ApprovalRequest[]
-  refundApprovalRules             RefundApprovalRule[]
-  frontdeskSessions               FrontdeskSession[]
-  cashAccounts                    CashAccount[]
-  reconciliationExceptions        ReconciliationException[]
-  shiftControlAudits              ShiftControlAudit[]
-  costAdjustments                 CostAdjustment[]
+  cashHandovers            CashHandover[]
+  bankDeposits             BankDeposit[]
+  buildings                Building[]
+  roomTypes                RoomType[]
+  rooms                    Room[]
+  amenities                Amenity[]
+  ratePlans                RatePlan[]
+  exchangeRates            ExchangeRate[]
+  reservations             Reservation[]
+  folios                   Folio[]
+  folioCredits             FolioCredit[]
+  payments                 Payment[]
+  refunds                  Refund[]
+  refundRequests           RefundRequest[]
+  taxes                    Tax[]
+  discounts                Discount[]
+  housekeepingTasks        HousekeepingTask[]
+  housekeepingShifts       HousekeepingShift[]
+  maintenanceTickets       MaintenanceTicket[]
+  maintenanceCats          MaintenanceCategory[]
+  doorLocks                DoorLock[]
+  hardwareAgents           HardwareAgent[]
+  lockOperations           LockOperation[]
+  lockEvents               LockEvent[]
+  integrationConfigs       IntegrationConfig[]
+  govSubmissions           GovernmentSubmission[]
+  nightAudits              NightAudit[]
+  occupancySnapshots       OccupancySnapshot[]
+  guestServiceRequests     GuestServiceRequest[]
+  cancellationPolicies     CancellationPolicy[]
+  depositPolicies          DepositPolicy[]
+  noShowPolicies           NoShowPolicy[]
+  userRoles                UserRole[]
+  suppliers                Supplier[]
+  warehouses               Warehouse[]
+  stockItems               StockItem[]
+  stockTransactions        StockTransaction[]
+  kitchenWasteEntries      KitchenWasteEntry[]
+  purchaseOrders           PurchaseOrder[]
+  goodsReceivedNotes       GoodsReceivedNote[]
+  posOutlets               PosOutlet[]
+  posDevices               PosDevice[]
+  posProducts              PosProduct[]
+  posOrders                PosOrder[]
+  uomConversions           UnitOfMeasureConversion[]
+  enrollmentTokens         AgentEnrollmentToken[]
+  syncConflicts            SyncConflict[]
+  inventoryAlerts          InventoryAlert[]
+  approvalRequests         ApprovalRequest[]
+  refundApprovalRules      RefundApprovalRule[]
+  frontdeskSessions        FrontdeskSession[]
+  cashAccounts             CashAccount[]
+  reconciliationExceptions ReconciliationException[]
+  shiftControlAudits       ShiftControlAudit[]
+  costAdjustments          CostAdjustment[]
 
   createdAt           DateTime            @default(now()) @db.Timestamptz
   updatedAt           DateTime            @updatedAt @db.Timestamptz
@@ -150,6 +150,7 @@ model Property {
   cashExpenses        CashExpense[]
   expenseCategories   ExpenseCategory[]
   costCenters         CostCenter[]
+  CityLedgerAccount   CityLedgerAccount[]
 }
 
 model Building {
@@ -547,10 +548,11 @@ model Guest {
   reservationGuests ReservationGuest[]
   lockCredentials   LockCredential[]
 
-  createdAt     DateTime       @default(now()) @db.Timestamptz
-  updatedAt     DateTime       @updatedAt @db.Timestamptz
-  deletedAt     DateTime?      @db.Timestamptz
-  laundryOrders LaundryOrder[]
+  createdAt       DateTime          @default(now()) @db.Timestamptz
+  updatedAt       DateTime          @updatedAt @db.Timestamptz
+  deletedAt       DateTime?         @db.Timestamptz
+  laundryOrders   LaundryOrder[]
+  CityLedgerEntry CityLedgerEntry[]
 }
 
 model GuestDocument {
@@ -657,10 +659,11 @@ model Reservation {
   lockOperations    LockOperation[]
   priorities        ReservationPriority[]
 
-  createdAt     DateTime       @default(now()) @db.Timestamptz
-  updatedAt     DateTime       @updatedAt @db.Timestamptz
-  deletedAt     DateTime?      @db.Timestamptz
-  laundryOrders LaundryOrder[]
+  createdAt       DateTime          @default(now()) @db.Timestamptz
+  updatedAt       DateTime          @updatedAt @db.Timestamptz
+  deletedAt       DateTime?         @db.Timestamptz
+  laundryOrders   LaundryOrder[]
+  CityLedgerEntry CityLedgerEntry[]
 }
 
 model ReservationGuest {
@@ -736,8 +739,9 @@ model Folio {
   refundRequests     RefundRequest[]
   posOrders          PosOrder[]
 
-  createdAt DateTime @default(now()) @db.Timestamptz
-  updatedAt DateTime @updatedAt @db.Timestamptz
+  createdAt       DateTime          @default(now()) @db.Timestamptz
+  updatedAt       DateTime          @updatedAt @db.Timestamptz
+  CityLedgerEntry CityLedgerEntry[]
 }
 
 model FolioCredit {
@@ -858,6 +862,7 @@ enum FolioItemSource {
   SPA
   LAUNDRY
   TRANSPORT
+  CITY_LEDGER
   TELEPHONE
   INTERNET
   MINIBAR
@@ -3789,4 +3794,46 @@ model BankDepositAllocation {
   frontdeskSession FrontdeskSession? @relation(fields: [frontdeskSessionId], references: [id])
 
   @@unique([posSessionId, frontdeskSessionId])
+}
+
+model CityLedgerAccount {
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @db.Uuid
+  propertyId     String  @db.Uuid
+  name           String // e.g. "Skippers / Walk-Outs", "Corporate Billing"
+  type           String // 'SKIPPER', 'CORPORATE', 'HOUSE'
+  status         String  @default("ACTIVE")
+  balance        Decimal @default(0) @db.Decimal(18, 4)
+  currency       String
+
+  property  Property          @relation(fields: [propertyId], references: [id])
+  entries   CityLedgerEntry[]
+  createdAt DateTime          @default(now()) @db.Timestamptz
+  updatedAt DateTime          @updatedAt @db.Timestamptz
+}
+
+model CityLedgerEntry {
+  id            String  @id @default(uuid()) @db.Uuid
+  accountId     String  @db.Uuid
+  propertyId    String  @db.Uuid
+  guestId       String? @db.Uuid
+  reservationId String? @db.Uuid
+  folioId       String? @db.Uuid
+
+  amount    Decimal @db.Decimal(18, 4)
+  currency  String
+  type      String // 'TRANSFER_IN', 'PAYMENT', 'ADJUSTMENT'
+  status    String  @default("OPEN") // 'OPEN', 'SETTLED'
+  reference String?
+  reason    String?
+
+  createdBy String @db.Uuid // Staff ID
+
+  account     CityLedgerAccount @relation(fields: [accountId], references: [id])
+  guest       Guest?            @relation(fields: [guestId], references: [id])
+  reservation Reservation?      @relation(fields: [reservationId], references: [id])
+  folio       Folio?            @relation(fields: [folioId], references: [id])
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
 }
