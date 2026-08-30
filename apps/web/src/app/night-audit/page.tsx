@@ -1,380 +1,114 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useProperty } from '@/components/PropertyProvider';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { 
-  CheckCircle2, AlertTriangle, XCircle, Play, 
-  Building, MonitorSmartphone, DollarSign, Wallet, 
-  Receipt, FileCheck, Rocket, Loader2, ChevronDown, 
-  ShieldCheck, ArrowRight
-} from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { format } from 'date-fns';
+import { useProperty } from '@/components/PropertyProvider';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  AlertTriangle, ArrowRight, Banknote, Building2, Check, CheckCircle2, ClipboardCheck,
+  Clock3, FileBarChart, FileCheck2, Loader2, MoonStar, Play, RefreshCw, ShieldCheck,
+  SlidersHorizontal, TrendingUp, Users, XCircle
+} from 'lucide-react';
 
-export default function NightAuditWizard() {
+type AuditData = any;
+
+const currency = (value: number, code = 'NGN') => new Intl.NumberFormat('en-NG', { style: 'currency', currency: code, maximumFractionDigits: 0 }).format(value);
+
+const steps = [
+  { title: 'Operations', description: 'Arrivals, departures and room status', icon: Building2 },
+  { title: 'System control', description: 'POS sessions and financial sync', icon: SlidersHorizontal },
+  { title: 'Financial review', description: 'Folios, balances and rate checks', icon: FileCheck2 },
+  { title: 'Cash control', description: 'Handovers and bank deposits', icon: Banknote },
+  { title: 'Final sign-off', description: 'Confirm readiness and roll the date', icon: ShieldCheck },
+];
+
+function Metric({ label, value, tone = 'slate', icon: Icon }: { label: string; value: string | number; tone?: string; icon: React.ElementType }) {
+  const iconTone = tone === 'rose' ? 'text-rose-500' : tone === 'amber' ? 'text-amber-500' : tone === 'indigo' ? 'text-indigo-500' : tone === 'emerald' ? 'text-emerald-500' : 'text-slate-500';
+  return <div className="rounded-2xl border bg-white p-5 shadow-sm dark:bg-slate-900">
+    <div className="flex items-center justify-between"><span className="text-sm text-muted-foreground">{label}</span><Icon className={`h-5 w-5 ${iconTone}`} /></div>
+    <div className="mt-3 text-3xl font-semibold tracking-tight">{value}</div>
+  </div>;
+}
+
+export default function NightAuditDashboard() {
   const { propertyId } = useProperty();
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<AuditData>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [step, setStep] = useState(0);
   const [executing, setExecuting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  const [activeStep, setActiveStep] = useState(0);
+  const [message, setMessage] = useState<string | null>(null);
 
-  const fetchData = async () => {
+  const load = async (quiet = false) => {
     if (!propertyId) return;
-    setLoading(true);
-    setError(null);
+    quiet ? setRefreshing(true) : setLoading(true);
     try {
-      const res = await fetch(`/api/v1/night-audit/status?propertyId=${propertyId}`);
-      if (!res.ok) throw new Error('Failed to fetch Night Audit status');
-      const json = await res.json();
-      setData(json.data);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
+      const response = await fetch(`/api/v1/night-audit/status?propertyId=${propertyId}`);
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error?.message || 'Unable to load audit status');
+      setData(result.data);
+      if (!result.data.isBusinessDayAudited) setWizardOpen(true);
+    } catch (err: any) { setError(err.message); }
+    finally { setLoading(false); setRefreshing(false); }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, [propertyId]);
-
-  const handleExecute = async () => {
-    if (!confirm('Are you sure you want to execute the Night Audit? This action cannot be undone.')) return;
-    
-    setExecuting(true);
-    setError(null);
-    setSuccessMsg(null);
-    try {
-      const res = await fetch(`/api/v1/night-audit/execute`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ propertyId }),
-      });
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.error?.message || 'Failed to execute Night Audit');
-      
-      setSuccessMsg(`Night Audit completed successfully. ${result.data?.tasksCreated || 0} tasks created.`);
-      fetchData(); // Refresh UI
-      setActiveStep(0);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setExecuting(false);
-    }
-  };
-
-  if (!propertyId) {
-    return (
-      <div className="flex h-[80vh] items-center justify-center">
-        <div className="text-center space-y-4">
-          <Building className="w-12 h-12 text-slate-300 mx-auto" />
-          <h2 className="text-xl font-semibold text-slate-600">No Property Selected</h2>
-          <p className="text-slate-500">Please select a property to run the Night Audit.</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (loading && !data) {
-    return (
-      <div className="flex h-[80vh] items-center justify-center">
-        <Loader2 className="w-10 h-10 animate-spin text-indigo-600" />
-      </div>
-    );
-  }
+  useEffect(() => { load(); }, [propertyId]);
 
   const blockers = data?.summary?.blockers || 0;
   const warnings = data?.summary?.warnings || 0;
-  const readinessScore = Math.max(0, 100 - (blockers * 20) - (warnings * 5));
-  
-  let scoreColor = 'text-emerald-400';
-  let badgeColor = 'bg-emerald-500/20 text-emerald-300';
-  if (readinessScore < 100 && readinessScore >= 80) {
-    scoreColor = 'text-amber-400';
-    badgeColor = 'bg-amber-500/20 text-amber-300';
-  } else if (readinessScore < 80) {
-    scoreColor = 'text-rose-400';
-    badgeColor = 'bg-rose-500/20 text-rose-300';
-  }
+  const checks = useMemo(() => [
+    ...(data?.operational?.arrivals || []).map((item: any) => ({ label: `Arrival · ${item.primaryGuest?.firstName || 'Guest'} ${item.primaryGuest?.lastName || ''}`, tone: 'warning' })),
+    ...(data?.operational?.departures || []).map((item: any) => ({ label: `Departure · ${item.primaryGuest?.firstName || 'Guest'} ${item.primaryGuest?.lastName || ''}`, tone: 'warning' })),
+    ...(data?.system?.openPosSessions || []).map((item: any) => ({ label: `Open POS · ${item.outlet?.name || 'Register'}`, tone: 'blocker' })),
+    ...(data?.system?.financialSyncConflicts || []).map(() => ({ label: 'Financial sync conflict', tone: 'blocker' })),
+  ], [data]);
 
-  const steps = [
-    { id: 'operational', title: 'Operational Audit', icon: Building, desc: 'Arrivals, Departures & Rooms' },
-    { id: 'system', title: 'System Integrity', icon: MonitorSmartphone, desc: 'POS Sessions & Sync' },
-    { id: 'financial', title: 'Financial Audit', icon: DollarSign, desc: 'High Balances & Open Folios' },
-    { id: 'cash', title: 'Cash Reconciliation', icon: Wallet, desc: 'Cash Handovers & Deposits' },
-    { id: 'room_charges', title: 'Room Charge Preview', icon: Receipt, desc: 'Preview tonight\'s postings' },
-    { id: 'validation', title: 'Final Validation', icon: FileCheck, desc: 'System pre-flight check' },
-    { id: 'execute', title: 'Execution', icon: Rocket, desc: 'Run the Night Audit' },
-  ];
-
-  const renderList = (title: string, items: any[], type: 'blocker' | 'warning' = 'blocker') => {
-    const isBlocker = type === 'blocker';
-    if (!items || items.length === 0) {
-      return (
-        <div className="flex items-center gap-3 p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 transition-all">
-          <CheckCircle2 className="w-5 h-5 shrink-0" />
-          <span className="font-medium text-sm">{title} - Clear</span>
-        </div>
-      );
-    }
-    return (
-      <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          {isBlocker ? <XCircle className="w-5 h-5 text-rose-500" /> : <AlertTriangle className="w-5 h-5 text-amber-500" />}
-          <h4 className="font-semibold text-sm text-slate-800 dark:text-slate-200">{title} ({items.length})</h4>
-        </div>
-        <div className="grid gap-2">
-          {items.map((item, idx) => (
-            <div key={idx} className={`p-3 rounded-lg border text-sm flex items-center justify-between shadow-sm transition-all
-              ${isBlocker ? 'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300' 
-                          : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300'}`}>
-              <span className="font-medium">
-                {item?.name || item?.id || (typeof item === 'string' ? item : JSON.stringify(item))}
-              </span>
-              <Button size="sm" variant="ghost" className={isBlocker ? 'text-rose-600 hover:text-rose-700 hover:bg-rose-100' : 'text-amber-600 hover:text-amber-700 hover:bg-amber-100'}>
-                Resolve
-              </Button>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
+  const execute = async () => {
+    setExecuting(true); setError(null);
+    try {
+      const response = await fetch('/api/v1/night-audit/execute', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ propertyId }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error?.message || 'Audit execution failed');
+      setWizardOpen(false); setStep(0); setMessage(`Audit completed. ${result.data?.roomChargesPosted || 0} room charges posted.`); await load(true);
+    } catch (err: any) { setError(err.message); }
+    finally { setExecuting(false); }
   };
 
-  const renderStepContent = (index: number) => {
-    switch (index) {
-      case 0:
-        return (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {renderList('Pending Arrivals', data?.operational?.arrivals, 'blocker')}
-            {renderList('Pending Departures', data?.operational?.departures, 'blocker')}
-            <div className="md:col-span-2">
-              {renderList('Room Reconciliation', data?.operational?.roomReconciliation, 'warning')}
-            </div>
-          </div>
-        );
-      case 1:
-        return (
-          <div className="grid grid-cols-1 gap-4">
-            {renderList('Open POS Sessions', data?.system?.openPosSessions, 'blocker')}
-            {renderList('Financial Sync Conflicts', data?.system?.financialSyncConflicts, 'blocker')}
-            {renderList('Hardware Agents offline', data?.system?.hardwareAgents, 'warning')}
-          </div>
-        );
-      case 2:
-        return (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {renderList('High Balance Folios', data?.financial?.highBalances, 'warning')}
-            {renderList('Open Temporary Folios', data?.financial?.openFolios, 'blocker')}
-          </div>
-        );
-      case 3:
-        return (
-          <div className="grid grid-cols-1 gap-4">
-            {renderList('Pending Cash Handovers', data?.cash?.cashHandovers, 'blocker')}
-            {renderList('Pending Bank Deposits', data?.cash?.bankDeposits, 'warning')}
-            <div className="flex items-center justify-between p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
-              <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Cash Tolerance Threshold</span>
-              <Badge variant="secondary" className="font-mono text-sm">${data?.cash?.tolerance || 0}</Badge>
-            </div>
-          </div>
-        );
-      case 4:
-        return (
-          <div className="p-6 text-center space-y-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
-            <Receipt className="w-12 h-12 mx-auto text-indigo-400" />
-            <h3 className="text-lg font-semibold">Ready to Post Room Charges</h3>
-            <p className="text-sm text-slate-500 max-w-md mx-auto">
-              The system is prepared to automatically post nightly room charges and packages for all in-house guests upon execution.
-            </p>
-          </div>
-        );
-      case 5:
-        return (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 text-center space-y-1">
-              <span className="text-3xl font-bold text-rose-500">{blockers}</span>
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Blockers</p>
-            </div>
-            <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 text-center space-y-1">
-              <span className="text-3xl font-bold text-amber-500">{warnings}</span>
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Warnings</p>
-            </div>
-            <div className="col-span-2 p-4 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-center gap-3">
-               {blockers === 0 ? (
-                 <div className="flex items-center gap-2 text-emerald-600">
-                    <ShieldCheck className="w-8 h-8" />
-                    <span className="font-semibold">Ready for Execution</span>
-                 </div>
-               ) : (
-                 <div className="flex items-center gap-2 text-rose-600">
-                    <XCircle className="w-8 h-8" />
-                    <span className="font-semibold">Resolve Blockers First</span>
-                 </div>
-               )}
-            </div>
-          </div>
-        );
-      case 6:
-        return (
-          <div className="flex flex-col items-center justify-center py-8 space-y-6">
-            <div className="text-center space-y-2">
-              <h3 className="text-2xl font-bold tracking-tight">Execute Night Audit</h3>
-              <p className="text-slate-500">Initiate the end-of-day sequence and roll the business date.</p>
-            </div>
-            
-            <Button 
-              size="lg" 
-              onClick={handleExecute} 
-              disabled={blockers > 0 || executing}
-              className={`h-16 px-12 text-lg rounded-full shadow-lg transition-all ${
-                blockers > 0 
-                ? 'bg-slate-100 text-slate-400 cursor-not-allowed dark:bg-slate-800 dark:text-slate-500 hover:bg-slate-100' 
-                : 'bg-indigo-600 hover:bg-indigo-700 hover:shadow-indigo-500/25 hover:scale-105'
-              }`}
-            >
-              {executing ? (
-                <><Loader2 className="w-6 h-6 mr-3 animate-spin" /> Processing Sequence...</>
-              ) : (
-                <><Play className="w-6 h-6 mr-3 fill-current" /> Initialize Sequence</>
-              )}
-            </Button>
-            
-            {blockers > 0 && (
-              <p className="text-sm font-medium text-rose-500 flex items-center gap-1.5">
-                <AlertTriangle className="w-4 h-4" /> Cannot execute while blockers exist.
-              </p>
-            )}
-          </div>
-        );
-      default:
-        return null;
-    }
-  };
+  if (!propertyId) return <div className="flex min-h-[60vh] items-center justify-center text-center"><div><MoonStar className="mx-auto h-10 w-10 text-indigo-500" /><h2 className="mt-4 text-xl font-semibold">Select a property</h2><p className="mt-1 text-muted-foreground">Choose a property to open the audit workspace.</p></div></div>;
+  if (loading) return <div className="flex min-h-[60vh] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-indigo-600" /></div>;
 
-  return (
-    <div className="max-w-4xl mx-auto p-4 md:p-8 space-y-8 font-sans pb-24">
-      {/* Header Widget */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 border border-slate-800 p-8 shadow-2xl">
-        <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 rounded-full bg-indigo-500/20 blur-3xl mix-blend-screen pointer-events-none"></div>
-        <div className="absolute bottom-0 left-0 -ml-16 -mb-16 w-64 h-64 rounded-full bg-emerald-500/10 blur-3xl mix-blend-screen pointer-events-none"></div>
-        
-        <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-8">
-          <div className="space-y-2 text-center md:text-left flex-1">
-            <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight">Night Audit</h1>
-            <p className="text-slate-400 font-medium">Business Date: <span className="text-white">{data?.businessDate ? format(new Date(data.businessDate), 'PPP') : 'Loading...'}</span></p>
-          </div>
+  const businessDate = data?.businessDate ? new Date(data.businessDate) : new Date();
+  const isReady = blockers === 0;
 
-          <div className="flex flex-col items-center md:items-end space-y-3 bg-white/5 p-5 rounded-2xl backdrop-blur-md border border-white/10 w-full md:w-auto">
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-medium text-slate-300 uppercase tracking-widest">Readiness Score</span>
-              <Badge className={`${badgeColor} border-0 rounded-full px-3 py-1 font-bold text-sm shadow-inner`}>
-                {readinessScore}% Ready
-              </Badge>
-            </div>
-            <div className="flex gap-6 mt-1">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-rose-400">{blockers}</div>
-                <div className="text-[10px] text-slate-400 uppercase tracking-widest font-semibold">Blockers</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-amber-400">{warnings}</div>
-                <div className="text-[10px] text-slate-400 uppercase tracking-widest font-semibold">Warnings</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-emerald-400">{10 - (blockers + warnings)}</div>
-                <div className="text-[10px] text-slate-400 uppercase tracking-widest font-semibold">Passed</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {error && (
-        <div className="bg-rose-50 border border-rose-200 text-rose-700 p-4 rounded-xl flex items-center gap-3 shadow-sm">
-          <XCircle className="w-5 h-5 shrink-0" /> <span className="font-medium">{error}</span>
-        </div>
-      )}
-
-      {successMsg && (
-        <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 p-4 rounded-xl flex items-center gap-3 shadow-sm">
-          <CheckCircle2 className="w-5 h-5 shrink-0" /> <span className="font-medium">{successMsg}</span>
-        </div>
-      )}
-
-      {/* Vertical Stepper */}
-      <div className="space-y-4">
-        {steps.map((step, index) => {
-          const isActive = activeStep === index;
-          const isPast = activeStep > index;
-          const Icon = step.icon;
-
-          return (
-            <Card 
-              key={step.id} 
-              className={`overflow-hidden transition-all duration-300 border-2 shadow-sm ${
-                isActive 
-                  ? 'border-indigo-500 shadow-indigo-100 dark:shadow-indigo-900/20' 
-                  : isPast 
-                    ? 'border-emerald-500/30' 
-                    : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-              }`}
-            >
-              <div 
-                className={`flex items-center gap-4 p-4 md:p-6 cursor-pointer select-none ${isActive ? 'bg-indigo-50/50 dark:bg-indigo-500/5' : ''}`}
-                onClick={() => setActiveStep(index)}
-              >
-                <div className={`flex items-center justify-center w-12 h-12 rounded-full shrink-0 transition-colors ${
-                  isActive 
-                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 dark:shadow-none' 
-                    : isPast 
-                      ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400' 
-                      : 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500'
-                }`}>
-                  {isPast ? <CheckCircle2 className="w-6 h-6" /> : <Icon className="w-6 h-6" />}
-                </div>
-                
-                <div className="flex-1 min-w-0">
-                  <h3 className={`text-lg font-semibold truncate ${isActive ? 'text-indigo-900 dark:text-indigo-100' : isPast ? 'text-slate-700 dark:text-slate-300' : 'text-slate-500 dark:text-slate-400'}`}>
-                    Step {index + 1}: {step.title}
-                  </h3>
-                  <p className="text-sm text-slate-500 truncate">{step.desc}</p>
-                </div>
-
-                <div className="shrink-0 text-slate-400">
-                  <ChevronDown className={`w-5 h-5 transition-transform duration-300 ${isActive ? 'rotate-180' : ''}`} />
-                </div>
-              </div>
-
-              {isActive && (
-                <div className="px-4 pb-6 md:px-6 md:pb-6 pt-2 animate-in slide-in-from-top-4 fade-in duration-300">
-                  <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
-                    {renderStepContent(index)}
-                    
-                    {index < steps.length - 1 && (
-                      <div className="flex justify-end mt-8">
-                        <Button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setActiveStep(index + 1);
-                          }}
-                          className="bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200"
-                        >
-                          Continue to Next Step <ArrowRight className="w-4 h-4 ml-2" />
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </Card>
-          );
-        })}
-      </div>
+  return <div className="space-y-8">
+    <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
+      <div><div className="flex items-center gap-2 text-sm font-medium text-indigo-600"><MoonStar className="h-4 w-4" /> Auditor workspace</div><h1 className="mt-2 text-3xl font-semibold tracking-tight">Night audit control centre</h1><p className="mt-2 text-muted-foreground">A clear view of readiness, controls and the next business date.</p></div>
+      <div className="flex items-center gap-3"><Button variant="outline" onClick={() => load(true)} disabled={refreshing}><RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />Refresh</Button><Button onClick={() => { setStep(0); setWizardOpen(true); }} className="bg-indigo-600 hover:bg-indigo-700"><Play className="mr-2 h-4 w-4" />Open audit flow</Button></div>
     </div>
-  );
+
+    <div className="rounded-3xl bg-slate-950 p-6 text-white shadow-xl md:p-8"><div className="flex flex-col justify-between gap-6 md:flex-row md:items-center"><div><p className="text-sm font-medium text-indigo-300">Current business date</p><p className="mt-2 text-3xl font-semibold">{format(businessDate, 'EEEE, dd MMMM yyyy')}</p><p className="mt-2 text-sm text-slate-400">{data?.property?.name || 'Property'} · {data?.isBusinessDayAudited ? 'Audit completed' : 'Audit pending'}</p></div><div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-4"><div className={`rounded-full p-3 ${data?.isBusinessDayAudited ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'}`}>{data?.isBusinessDayAudited ? <CheckCircle2 /> : <Clock3 />}</div><div><p className="font-medium">{data?.isBusinessDayAudited ? 'Signed off' : 'Action required'}</p><p className="text-sm text-slate-400">{data?.currentAudit?.completedAt ? format(new Date(data.currentAudit.completedAt), 'dd MMM · HH:mm') : 'No completed run for this date'}</p></div></div></div></div>
+
+    {error && <div className="flex items-center gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700"><XCircle className="h-5 w-5" />{error}</div>}
+    {message && <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700"><CheckCircle2 className="h-5 w-5" />{message}</div>}
+
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><Metric label="Readiness blockers" value={blockers} tone="rose" icon={XCircle} /><Metric label="Warnings to review" value={warnings} tone="amber" icon={AlertTriangle} /><Metric label="Open POS sessions" value={data?.system?.openPosSessions?.length || 0} tone="indigo" icon={ClipboardCheck} /><Metric label="In-house guests" value={data?.financial?.openFolios?.length || 0} tone="emerald" icon={Users} /></div>
+
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><Metric label="Business-day revenue" value={currency(data?.analytics?.revenue || 0, data?.property?.baseCurrency)} tone="emerald" icon={TrendingUp} /><Metric label="Payments collected" value={currency(data?.analytics?.payments || 0, data?.property?.baseCurrency)} tone="indigo" icon={Banknote} /><Metric label="Cash variance" value={currency(data?.analytics?.cashVariance || 0, data?.property?.baseCurrency)} tone={Math.abs(data?.analytics?.cashVariance || 0) > 0 ? 'amber' : 'emerald'} icon={Banknote} /><Metric label="Late postings" value={data?.analytics?.latePostings || 0} tone="amber" icon={Clock3} /></div>
+
+    <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]"><Card><CardHeader><CardTitle>Occupancy analysis</CardTitle><p className="mt-1 text-sm text-muted-foreground">Live room distribution for the current business date.</p></CardHeader><CardContent><div className="flex items-end gap-3"><div className="text-4xl font-semibold">{data?.analytics?.rooms?.total ? Math.round((data.analytics.rooms.occupied / data.analytics.rooms.total) * 100) : 0}%</div><p className="pb-1 text-sm text-muted-foreground">occupancy · {data?.analytics?.rooms?.occupied || 0} of {data?.analytics?.rooms?.total || 0} rooms</p></div><div className="mt-5 flex h-3 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"><div className="bg-indigo-600" style={{ width: `${data?.analytics?.rooms?.total ? (data.analytics.rooms.occupied / data.analytics.rooms.total) * 100 : 0}%` }} /><div className="bg-emerald-400" style={{ width: `${data?.analytics?.rooms?.total ? (data.analytics.rooms.available / data.analytics.rooms.total) * 100 : 0}%` }} /><div className="bg-rose-400" style={{ width: `${data?.analytics?.rooms?.total ? (data.analytics.rooms.outOfOrder / data.analytics.rooms.total) * 100 : 0}%` }} /></div><div className="mt-4 grid grid-cols-3 gap-3 text-sm"><div><span className="mr-2 inline-block h-2 w-2 rounded-full bg-indigo-600" />Occupied <b>{data?.analytics?.rooms?.occupied || 0}</b></div><div><span className="mr-2 inline-block h-2 w-2 rounded-full bg-emerald-400" />Available <b>{data?.analytics?.rooms?.available || 0}</b></div><div><span className="mr-2 inline-block h-2 w-2 rounded-full bg-rose-400" />Out of order <b>{data?.analytics?.rooms?.outOfOrder || 0}</b></div></div></CardContent></Card><Card><CardHeader><CardTitle>Seven-day performance</CardTitle><p className="mt-1 text-sm text-muted-foreground">Completed audit revenue trend.</p></CardHeader><CardContent>{data?.analytics?.trend?.length ? <div className="flex h-36 items-end gap-2">{data.analytics.trend.map((day: any) => { const max = Math.max(...data.analytics.trend.map((item: any) => Number(item.totalRevenue) || 0), 1); const height = Math.max(8, ((Number(day.totalRevenue) || 0) / max) * 100); return <div key={String(day.businessDate)} className="group flex flex-1 flex-col items-center gap-2"><div className="w-full rounded-t-md bg-indigo-500 transition-colors group-hover:bg-indigo-600" style={{ height: `${height}%` }} title={`${format(new Date(day.businessDate), 'dd MMM')}: ${currency(Number(day.totalRevenue) || 0, data?.property?.baseCurrency)}`} /><span className="text-[10px] text-muted-foreground">{format(new Date(day.businessDate), 'dd MMM')}</span></div>; })}</div> : <div className="flex h-36 items-center justify-center text-sm text-muted-foreground">Trend data will appear after completed audits.</div>}</CardContent></Card></div>
+
+    <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+      <Card><CardHeader className="flex-row items-center justify-between"><div><CardTitle>Readiness overview</CardTitle><p className="mt-1 text-sm text-muted-foreground">The controls that determine whether the date can be closed.</p></div><Badge variant={isReady ? 'default' : 'destructive'}>{isReady ? 'Ready to close' : 'Blocked'}</Badge></CardHeader><CardContent><div className="space-y-3">{steps.slice(0, 4).map((item, index) => { const Icon = item.icon; const count = index === 0 ? (data?.operational?.arrivals?.length || 0) + (data?.operational?.departures?.length || 0) : index === 1 ? (data?.system?.openPosSessions?.length || 0) + (data?.system?.financialSyncConflicts?.length || 0) : index === 2 ? (data?.financial?.highBalances?.length || 0) : (data?.cash?.cashHandovers?.length || 0); return <div key={item.title} className="flex items-center gap-4 rounded-xl border p-4"><div className="rounded-lg bg-slate-100 p-2.5 text-slate-600 dark:bg-slate-800 dark:text-slate-300"><Icon className="h-5 w-5" /></div><div className="min-w-0 flex-1"><p className="font-medium">{item.title}</p><p className="text-sm text-muted-foreground">{item.description}</p></div>{count ? <Badge variant="outline" className="text-amber-600">{count} review</Badge> : <Check className="h-5 w-5 text-emerald-500" />}</div>; })}</div></CardContent></Card>
+      <Card><CardHeader><CardTitle>Attention queue</CardTitle><p className="mt-1 text-sm text-muted-foreground">Items surfaced by the latest control check.</p></CardHeader><CardContent><div className="space-y-3">{checks.slice(0, 5).map((item: any, index: number) => <div key={index} className="flex items-start gap-3 border-b pb-3 last:border-0 last:pb-0"><AlertTriangle className={`mt-0.5 h-4 w-4 ${item.tone === 'blocker' ? 'text-rose-500' : 'text-amber-500'}`} /><p className="text-sm">{item.label}</p></div>)}{checks.length === 0 && <div className="py-6 text-center"><CheckCircle2 className="mx-auto h-8 w-8 text-emerald-500" /><p className="mt-2 text-sm font-medium">No exceptions surfaced</p><p className="text-xs text-muted-foreground">All monitored controls are clear.</p></div>}</div></CardContent></Card>
+    </div>
+
+    <div className="grid gap-4 md:grid-cols-3"><Button variant="outline" className="h-auto justify-start p-4" onClick={() => window.location.href = '/night-audit/history'}><Clock3 className="mr-3 h-5 w-5 text-indigo-500" /><span className="text-left"><b className="block">Audit history</b><small className="text-muted-foreground">Review signed-off dates</small></span><ArrowRight className="ml-auto h-4 w-4" /></Button><Button variant="outline" className="h-auto justify-start p-4" onClick={() => window.location.href = '/night-audit/exceptions'}><AlertTriangle className="mr-3 h-5 w-5 text-amber-500" /><span className="text-left"><b className="block">Exceptions</b><small className="text-muted-foreground">Investigate variances</small></span><ArrowRight className="ml-auto h-4 w-4" /></Button><Button variant="outline" className="h-auto justify-start p-4" onClick={() => window.location.href = '/night-audit/reports'}><FileBarChart className="mr-3 h-5 w-5 text-emerald-500" /><span className="text-left"><b className="block">Audit reports</b><small className="text-muted-foreground">Open the reporting pack</small></span><ArrowRight className="ml-auto h-4 w-4" /></Button></div>
+
+    <Dialog open={wizardOpen} onOpenChange={setWizardOpen}><DialogContent className="max-w-3xl overflow-hidden p-0"><div className="bg-slate-950 px-6 py-5 text-white"><DialogHeader><div className="flex items-center gap-3"><div className="rounded-xl bg-indigo-500/20 p-2 text-indigo-300"><MoonStar className="h-5 w-5" /></div><div><DialogTitle className="text-white">Close business day</DialogTitle><DialogDescription className="mt-1 text-slate-400">Complete each control before posting charges and rolling the date.</DialogDescription></div></div></DialogHeader></div><div className="grid md:grid-cols-[220px_1fr]"><div className="border-r bg-slate-50 p-4 dark:bg-slate-900/50">{steps.map((item, index) => { const Icon = item.icon; return <button key={item.title} onClick={() => setStep(index)} className={`mb-2 flex w-full items-center gap-3 rounded-xl p-3 text-left text-sm ${step === index ? 'bg-indigo-100 font-medium text-indigo-800 dark:bg-indigo-500/20 dark:text-indigo-200' : 'text-muted-foreground'}`}><span className="rounded-lg bg-white p-2 shadow-sm dark:bg-slate-800">{step > index ? <Check className="h-4 w-4 text-emerald-500" /> : <Icon className="h-4 w-4" />}</span><span><b className="block">{index + 1}. {item.title}</b><small>{item.description}</small></span></button>; })}</div><div className="min-h-[310px] p-6"><h3 className="text-xl font-semibold">{steps[step].title}</h3><p className="mt-1 text-sm text-muted-foreground">{steps[step].description}</p><div className="mt-6 rounded-2xl border bg-slate-50 p-5 dark:bg-slate-900/50">{step < 4 ? <><div className="flex items-center gap-3">{(step === 1 ? blockers : step === 2 ? (data?.financial?.highBalances?.length || 0) : step === 3 ? 0 : ((data?.operational?.arrivals?.length || 0) + (data?.operational?.departures?.length || 0))) > 0 ? <AlertTriangle className="h-6 w-6 text-amber-500" /> : <CheckCircle2 className="h-6 w-6 text-emerald-500" />}<div><p className="font-medium">{step === 1 && blockers > 0 ? `${blockers} blocking control${blockers === 1 ? '' : 's'} found` : 'Control check complete'}</p><p className="text-sm text-muted-foreground">{step === 0 ? 'Review arrivals and departures before continuing.' : 'Review the surfaced items in the workspace if needed.'}</p></div></div></> : <div className="text-center"><ShieldCheck className="mx-auto h-10 w-10 text-emerald-500" /><p className="mt-3 font-medium">{isReady ? 'Ready to close this business day' : 'Resolve blockers before closing'}</p><p className="mt-1 text-sm text-muted-foreground">Posting charges and rolling the date is recorded against your auditor profile.</p></div>}</div><DialogFooter className="mt-8 p-0"><Button variant="outline" onClick={() => setWizardOpen(false)}>Exit flow</Button>{step < steps.length - 1 ? <Button onClick={() => setStep(step + 1)}>Continue <ArrowRight className="ml-2 h-4 w-4" /></Button> : <Button disabled={!isReady || executing} onClick={execute} className="bg-indigo-600 hover:bg-indigo-700">{executing ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Closing day...</> : <><Play className="mr-2 h-4 w-4" />Close business day</>}</Button>}</DialogFooter></div></div></DialogContent></Dialog>
+  </div>;
 }

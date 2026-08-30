@@ -5,13 +5,11 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { 
-  Hotel, 
   Menu,
   MoonStar,
   Clock,
   AlertTriangle,
   FileText,
-  Server,
   LogOut,
   ChevronDown
 } from 'lucide-react';
@@ -29,11 +27,10 @@ import { PropertySelector } from '@/components/properties/PropertySelector';
 import { AppSwitcher } from './AppSwitcher';
 
 const NIGHT_AUDIT_NAV = [
-  { name: 'Execution Wizard', href: '/night-audit', icon: MoonStar },
+  { name: 'Audit overview', href: '/night-audit', icon: MoonStar },
   { name: 'Audit History', href: '/night-audit/history', icon: Clock },
   { name: 'Exceptions & Variances', href: '/night-audit/exceptions', icon: AlertTriangle },
-  { name: 'Reports Generator', href: '/night-audit/reports', icon: FileText },
-  { name: 'System & Sync', href: '/night-audit/system', icon: Server },
+  { name: 'Audit Reports', href: '/night-audit/reports', icon: FileText },
 ];
 
 export function NightAuditLayout({ children }: { children: React.ReactNode }) {
