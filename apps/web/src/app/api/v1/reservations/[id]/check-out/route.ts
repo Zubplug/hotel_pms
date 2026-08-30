@@ -33,8 +33,10 @@ export async function POST(
     if (await isNightAuditTransactionLocked(reservation.propertyId)) {
       return errorResponse('NIGHT_AUDIT_IN_PROGRESS', 'Check-out is temporarily paused while Night Audit is posting.', 409);
     }
+    const userRole = String((session.user as any).role || 'STAFF').toUpperCase();
+    const isNightAuditor = userRole === 'NIGHT_AUDITOR' || userRole === 'MANAGER' || userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
     const canCheckOut = await hasPermission(session.user.id, 'reservation', 'update', reservation.propertyId);
-    if (!canCheckOut) return errorResponse('FORBIDDEN', 'Insufficient permissions', 403);
+    if (!canCheckOut && !isNightAuditor) return errorResponse('FORBIDDEN', 'Insufficient permissions', 403);
 
     // Run the operational checkout transaction
     const txResult = await prisma.$transaction(async (tx: any) => {
