@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
     } else {
       // POS payments live in PosPayment; prevent unrelated front-desk
       // payments from appearing in a POS shift report.
-      paymentWhere.id = '__NO_FRONTDESK_PAYMENT_FOR_POS_SHIFT__';
+      paymentWhere.id = { in: [] };
     }
     
     if (targetUserId) {
@@ -94,7 +94,7 @@ export async function GET(req: NextRequest) {
     } else if (!shiftId) {
       refundWhere.createdAt = dateFilter;
     } else {
-      refundWhere.id = '__NO_FRONTDESK_REFUND_FOR_POS_SHIFT__';
+      refundWhere.id = { in: [] };
     }
     if (targetUserId) {
       refundWhere.authorizedBy = targetUserId;
