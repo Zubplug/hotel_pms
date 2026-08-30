@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
                 outlet: { select: { name: true } }
               }
             },
-            session: { select: { openedBy: { select: { firstName: true, lastName: true } } } }
+            session: { select: { primaryOperator: { select: { firstName: true, lastName: true } } } }
           }
         }
       },
