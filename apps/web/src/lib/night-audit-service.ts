@@ -245,13 +245,12 @@ export async function getCashReconciliation(propertyId: string) {
       order: {
         select: {
           id: true,
-          receiptNumber: true,
           outlet: { select: { name: true } }
         }
       },
       session: {
         select: {
-          shiftReference: true,
+          id: true,
           operator: { select: { firstName: true, lastName: true } }
         }
       }
