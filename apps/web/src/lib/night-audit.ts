@@ -23,6 +23,7 @@ export async function getNightAuditPreview(propertyId: string) {
   if (operational.roomReconciliation.some((r: any) => r.issue)) warnings++;
 
   if (system.openPosSessions.length > 0) blockers++;
+  if (system.openFrontdeskSessions.length > 0) blockers++;
   if (system.financialSyncConflicts.length > 0) blockers++;
   if (system.hardwareAgents.some((a: any) => a.status === 'OFFLINE')) warnings++;
 
@@ -53,12 +54,17 @@ export async function executeNightAudit(
 
   const businessDate = property.businessDate ?? getPropertyBusinessDate(property.timezone, new Date());
   const nextBusinessDate = getNextBusinessDate(businessDate);
+  const cutoffAt = new Date();
 
   // 1. Enforce Blocking Conditions
-  const { openPosSessions, financialSyncConflicts } = await getSystemIntegrity(propertyId);
+  const { openPosSessions, openFrontdeskSessions, financialSyncConflicts } = await getSystemIntegrity(propertyId);
   
   if (openPosSessions.length > 0) {
     throw new Error('BLOCKER:Cannot execute audit. There are open POS sessions.');
+  }
+
+  if (openFrontdeskSessions.length > 0) {
+    throw new Error('BLOCKER:Cannot execute audit. There are open front-desk cashier shifts.');
   }
 
   if (financialSyncConflicts.length > 0) {
@@ -74,12 +80,15 @@ export async function executeNightAudit(
     update: {
       status: 'IN_PROGRESS',
       runBy: userId,
+      startedAt: cutoffAt,
+      cutoffAt,
     },
     create: {
       propertyId,
       businessDate,
       status: 'IN_PROGRESS',
-      startedAt: new Date(),
+      startedAt: cutoffAt,
+      cutoffAt,
       runBy: userId,
       runReference
     }

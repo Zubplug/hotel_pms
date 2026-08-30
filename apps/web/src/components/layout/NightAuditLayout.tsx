@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { 
+  Hotel,
   Menu,
   MoonStar,
   Clock,
@@ -24,7 +25,6 @@ import {
 import { useSession } from 'next-auth/react';
 import { useLogout } from '@/hooks/useLogout';
 import { PropertySelector } from '@/components/properties/PropertySelector';
-import { AppSwitcher } from './AppSwitcher';
 
 const NIGHT_AUDIT_NAV = [
   { name: 'Audit overview', href: '/night-audit', icon: MoonStar },
@@ -51,6 +51,7 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
     : '??';
   
   const role = (session?.user as any)?.role || 'STAFF';
+  const userDisplay = session?.user?.name || session?.user?.email || 'Staff member';
 
   // Block render while session is resolving
   if (status === 'loading') {
@@ -69,17 +70,22 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
   const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => (
     <>
       {/* Logo */}
-      <div className="flex h-16 shrink-0 items-center px-6 border-b gap-3 bg-indigo-950 text-white">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 shadow shadow-indigo-500/30">
-          <MoonStar className="h-4 w-4 text-white" />
-        </div>
-        <span className="text-lg font-bold tracking-tight">Night Auditor</span>
+      <div className="flex h-16 shrink-0 items-center gap-3 border-b border-white/5 px-5">
+        <Link href="/night-audit" className="group flex items-center gap-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-900/40 transition-transform group-hover:scale-105">
+            <Hotel className="h-4 w-4 text-white" />
+          </div>
+          <div className="flex flex-col leading-tight">
+            <span className="text-sm font-bold tracking-tight text-white">LodgeCore PMS</span>
+            <span className="text-[10px] font-medium uppercase tracking-widest text-indigo-400">Night Audit</span>
+          </div>
+        </Link>
       </div>
 
       {/* Nav */}
-      <div className="flex flex-1 flex-col overflow-y-auto px-4 py-6 gap-2 bg-slate-900">
+      <div className="flex flex-1 flex-col gap-1 overflow-y-auto bg-[#0b1120] px-3 py-5">
         {NIGHT_AUDIT_NAV.map((item) => {
-          const isActive = pathname === item.href;
+          const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
           
           return (
             <Link
@@ -87,16 +93,16 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
               href={item.href}
               onClick={onNavigate}
               className={cn(
-                'group flex items-center rounded-lg px-3 py-2.5 text-sm font-medium transition-all',
+                'group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150',
                 isActive
-                  ? 'bg-indigo-600/20 text-indigo-400 shadow-sm'
-                  : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                  ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-900/50'
+                  : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
               )}
             >
               <item.icon
                 className={cn(
-                  'mr-3 h-5 w-5 shrink-0 transition-colors',
-                  isActive ? 'text-indigo-400' : 'text-slate-500 group-hover:text-slate-300'
+                  'h-4 w-4 shrink-0 transition-colors',
+                  isActive ? 'text-white' : 'text-slate-500 group-hover:text-slate-300'
                 )}
               />
               {item.name}
@@ -106,22 +112,17 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* User footer */}
-      <div className="border-t border-slate-800 bg-slate-900 px-4 py-4">
+      <div className="shrink-0 border-t border-white/5 bg-[#0b1120] p-3">
         <DropdownMenu>
-          <DropdownMenuTrigger className="rounded-lg hover:bg-slate-800 transition-colors cursor-pointer outline-none w-full">
-            <div className="flex w-full items-center gap-3 px-2 py-2 text-sm text-slate-300">
-              <div className="h-8 w-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
+          <DropdownMenuTrigger className="group flex w-full cursor-pointer items-center gap-3 rounded-lg px-2 py-2 outline-none transition-colors hover:bg-white/5">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-xs font-semibold text-white ring-2 ring-indigo-500/30">
                 {userInitials}
-              </div>
-              <div className="flex-1 text-left min-w-0">
-                <p className="text-sm font-medium truncate text-slate-200">
-                  {session?.user?.email ?? 'User'}
-                </p>
-                <p className="text-xs text-slate-500 truncate">
-                  {role === 'MANAGER' ? 'Night Manager' : 'Auditor'}
-                </p>
-              </div>
-              <ChevronDown className="h-4 w-4 text-slate-500 shrink-0" />
+            </div>
+            <div className="flex min-w-0 flex-1 flex-col items-start overflow-hidden">
+              <span className="w-full truncate text-left text-sm font-medium text-slate-200">{userDisplay}</span>
+              <span className="w-full truncate text-left text-xs capitalize text-slate-500">{role === 'MANAGER' ? 'Night manager' : 'Auditor'}</span>
+            </div>
+            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-500 transition-colors group-hover:text-slate-300" />
             </div>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" side="top" className="w-56">
@@ -136,7 +137,7 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <div className="flex h-screen overflow-hidden bg-muted/30">
+    <div className="flex h-screen overflow-hidden bg-slate-50 font-sans">
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
@@ -144,39 +145,38 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
             className="fixed inset-0 bg-black/60 backdrop-blur-sm"
             onClick={() => setSidebarOpen(false)}
           />
-          <div className="fixed inset-y-0 left-0 w-64 bg-slate-900 border-r border-slate-800 shadow-xl flex flex-col">
+          <div className="fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-white/5 bg-[#0b1120] shadow-xl">
             <Sidebar onNavigate={() => setSidebarOpen(false)} />
           </div>
         </div>
       )}
 
       {/* Desktop sidebar */}
-      <div className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0 lg:border-r lg:border-slate-800 lg:bg-slate-900">
+      <div className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-white/5 bg-[#0b1120] lg:flex">
         <Sidebar />
       </div>
 
       {/* Main content area */}
       <div className="flex flex-1 flex-col lg:pl-64 min-w-0">
         {/* Top bar */}
-        <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-4 border-b bg-background/95 backdrop-blur-sm px-4 sm:px-6 lg:px-8 shadow-sm">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="lg:hidden"
+        <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 shadow-sm sm:px-6">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 lg:hidden"
             onClick={() => setSidebarOpen(true)}
           >
             <Menu className="h-5 w-5" />
           </Button>
 
-          <div className="flex flex-1 items-center gap-4">
-            <AppSwitcher />
+          <div className="flex items-center gap-3">
             <PropertySelector />
           </div>
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto pb-10 bg-slate-50/50 dark:bg-slate-950/50">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+        <main className="flex-1 overflow-y-auto bg-slate-50">
+          <div className="mx-auto max-w-screen-2xl">
             {children}
           </div>
         </main>

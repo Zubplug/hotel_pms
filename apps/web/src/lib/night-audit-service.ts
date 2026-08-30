@@ -54,6 +54,18 @@ export async function getSystemIntegrity(propertyId: string) {
     select: { id: true, outletId: true, outlet: { select: { name: true } }, status: true, openedAt: true }
   });
 
+  const openFrontdeskSessions = await prisma.frontdeskSession.findMany({
+    where: { propertyId, businessDate, status: { in: ['OPEN', 'CLOSING'] }, controlStatus: 'OPEN' },
+    select: {
+      id: true,
+      shiftReference: true,
+      status: true,
+      controlStatus: true,
+      openedAt: true,
+      staff: { select: { firstName: true, lastName: true } },
+    },
+  });
+
   const syncConflicts = await prisma.syncConflict.findMany({
     where: { propertyId, status: 'PENDING' },
     include: { hotelEvent: true }
@@ -69,7 +81,7 @@ export async function getSystemIntegrity(propertyId: string) {
     select: { id: true, name: true, status: true, lastHeartbeat: true }
   });
 
-  return { openPosSessions, syncConflicts, financialSyncConflicts, hardwareAgents };
+  return { openPosSessions, openFrontdeskSessions, syncConflicts, financialSyncConflicts, hardwareAgents };
 }
 
 export async function getFinancialAudit(propertyId: string) {

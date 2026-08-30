@@ -1141,6 +1141,7 @@ model NightAudit {
 
   status       String // 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED'
   startedAt    DateTime? @db.Timestamptz
+  cutoffAt     DateTime? @db.Timestamptz
   completedAt  DateTime? @db.Timestamptz
   runBy        String?   @db.Uuid // Staff ID, null if automated
   runReference String?   @unique
