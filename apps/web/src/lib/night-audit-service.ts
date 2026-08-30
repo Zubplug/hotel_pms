@@ -250,8 +250,7 @@ export async function getCashReconciliation(propertyId: string) {
       },
       session: {
         select: {
-          id: true,
-          operator: { select: { firstName: true, lastName: true } }
+          id: true
         }
       }
     }
