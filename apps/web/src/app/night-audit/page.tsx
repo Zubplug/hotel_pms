@@ -169,25 +169,37 @@ export default function NightAuditDashboard() {
 
 {/* Detail Lists */}
 {step === 0 && data?.operational && (
-  <div className="space-y-4 border-t pt-4">
+  <div className="space-y-6 border-t pt-4">
     {data.operational.arrivals?.length > 0 && <div>
-      <h4 className="font-medium text-sm mb-2 text-slate-700">Pending Arrivals</h4>
+      <div className="mb-3">
+        <h4 className="font-semibold text-sm text-slate-900">Pending Arrivals</h4>
+        <p className="text-xs text-muted-foreground mt-0.5">Guests scheduled to arrive today must be checked in, cancelled, or marked as no-show.</p>
+      </div>
       <div className="space-y-2">
         {data.operational.arrivals.map((arr: any) => (
-          <div key={arr.id} className="text-sm p-3 bg-white rounded-lg border flex justify-between">
-            <span>{arr.primaryGuest?.firstName} {arr.primaryGuest?.lastName}</span>
-            <span className="text-muted-foreground">{arr.confirmationNumber}</span>
+          <div key={arr.id} className="text-sm p-3 bg-white rounded-lg border flex items-center justify-between shadow-sm">
+            <div>
+              <p className="font-medium">{arr.primaryGuest?.firstName} {arr.primaryGuest?.lastName}</p>
+              <p className="text-xs text-muted-foreground">Confirmation: {arr.confirmationNumber}</p>
+            </div>
+            <a href={`/reservations/${arr.id}`} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-3 py-1.5 rounded-md transition-colors">Resolve</a>
           </div>
         ))}
       </div>
     </div>}
     {data.operational.departures?.length > 0 && <div>
-      <h4 className="font-medium text-sm mb-2 text-slate-700">Pending Departures</h4>
+      <div className="mb-3">
+        <h4 className="font-semibold text-sm text-slate-900">Pending Departures</h4>
+        <p className="text-xs text-muted-foreground mt-0.5">Guests scheduled to depart today must be checked out or have their stay extended.</p>
+      </div>
       <div className="space-y-2">
         {data.operational.departures.map((dep: any) => (
-          <div key={dep.id} className="text-sm p-3 bg-white rounded-lg border flex justify-between">
-            <span>{dep.primaryGuest?.firstName} {dep.primaryGuest?.lastName}</span>
-            <span className="text-muted-foreground">{dep.confirmationNumber}</span>
+          <div key={dep.id} className="text-sm p-3 bg-white rounded-lg border flex items-center justify-between shadow-sm">
+            <div>
+              <p className="font-medium">{dep.primaryGuest?.firstName} {dep.primaryGuest?.lastName}</p>
+              <p className="text-xs text-muted-foreground">Confirmation: {dep.confirmationNumber}</p>
+            </div>
+            <a href={`/reservations/${dep.id}`} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-3 py-1.5 rounded-md transition-colors">Resolve</a>
           </div>
         ))}
       </div>
@@ -199,77 +211,115 @@ export default function NightAuditDashboard() {
 )}
 
 {step === 1 && data?.system && (
-  <div className="space-y-4 border-t pt-4">
+  <div className="space-y-6 border-t pt-4">
     {data.system.openPosSessions?.length > 0 && <div>
-      <h4 className="font-medium text-sm mb-2 text-rose-700">Open POS Sessions (Blocker)</h4>
+      <div className="mb-3">
+        <h4 className="font-semibold text-sm text-rose-700">Open POS Sessions (Blocker)</h4>
+        <p className="text-xs text-rose-600/80 mt-0.5">All Point of Sale sessions must be closed and reconciled before the business day can end.</p>
+      </div>
       <div className="space-y-2">
         {data.system.openPosSessions.map((pos: any) => (
-          <div key={pos.id} className="text-sm p-3 bg-white rounded-lg border border-rose-200">
-            {pos.outlet?.name || 'Register'} - Opened by {pos.openedBy}
+          <div key={pos.id} className="text-sm p-3 bg-white rounded-lg border border-rose-200 flex items-center justify-between shadow-sm">
+            <div>
+              <p className="font-medium text-rose-900">{pos.outlet?.name || 'Register'}</p>
+              <p className="text-xs text-rose-600">Opened by {pos.openedBy}</p>
+            </div>
+            <a href="/point-of-sale" target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-rose-700 hover:text-rose-900 bg-rose-50 px-3 py-1.5 rounded-md transition-colors">Go to POS</a>
           </div>
         ))}
       </div>
     </div>}
     {data.system.openFrontdeskSessions?.length > 0 && <div>
-      <h4 className="font-medium text-sm mb-2 text-rose-700">Open Front Desk Shifts (Blocker)</h4>
+      <div className="mb-3">
+        <h4 className="font-semibold text-sm text-rose-700">Open Front Desk Shifts (Blocker)</h4>
+        <p className="text-xs text-rose-600/80 mt-0.5">All Front Desk cashier shifts must be closed to prevent cross-day posting conflicts.</p>
+      </div>
       <div className="space-y-2">
         {data.system.openFrontdeskSessions.map((fd: any) => (
-          <div key={fd.id} className="text-sm p-3 bg-white rounded-lg border border-rose-200">
-            Shift {fd.shiftReference} - {fd.status}
+          <div key={fd.id} className="text-sm p-3 bg-white rounded-lg border border-rose-200 flex items-center justify-between shadow-sm">
+            <div>
+              <p className="font-medium text-rose-900">Shift Reference: {fd.shiftReference}</p>
+              <p className="text-xs text-rose-600">Status: {fd.status}</p>
+            </div>
+            <a href="/front-desk" target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-rose-700 hover:text-rose-900 bg-rose-50 px-3 py-1.5 rounded-md transition-colors">Go to Cashier</a>
           </div>
         ))}
       </div>
     </div>}
     {!data.system.openPosSessions?.length && !data.system.openFrontdeskSessions?.length && (
-      <div className="text-sm text-emerald-600 bg-emerald-50 p-3 rounded-lg border border-emerald-100">All sessions and shifts are closed.</div>
+      <div className="text-sm text-emerald-600 bg-emerald-50 p-3 rounded-lg border border-emerald-100 flex items-center gap-2 shadow-sm"><CheckCircle2 className="h-4 w-4" /> All sessions and shifts are closed.</div>
     )}
   </div>
 )}
 
 {step === 2 && data?.financial && (
-  <div className="space-y-4 border-t pt-4">
+  <div className="space-y-6 border-t pt-4">
     {data.financial.highBalances?.length > 0 && <div>
-      <h4 className="font-medium text-sm mb-2 text-amber-700">High Balances</h4>
+      <div className="mb-3">
+        <h4 className="font-semibold text-sm text-amber-700">High Balances</h4>
+        <p className="text-xs text-amber-600/80 mt-0.5">Review folios exceeding their approved credit limit to secure additional payment or authorization.</p>
+      </div>
       <div className="space-y-2">
         {data.financial.highBalances.map((hb: any) => (
-          <div key={hb.id} className="text-sm p-3 bg-white rounded-lg border flex justify-between">
-            <span>Folio #{hb.folioNumber}</span>
-            <span className="font-medium">{currency(Number(hb.balance), data?.property?.baseCurrency)}</span>
+          <div key={hb.id} className="text-sm p-3 bg-white rounded-lg border border-amber-200 flex items-center justify-between shadow-sm">
+            <div>
+              <p className="font-medium text-amber-900">Folio #{hb.folioNumber}</p>
+              <p className="text-xs text-amber-700">Balance: <span className="font-semibold">{currency(Number(hb.balance), data?.property?.baseCurrency)}</span></p>
+            </div>
+            <a href={`/finance/folios/${hb.id}`} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-amber-700 hover:text-amber-900 bg-amber-50 px-3 py-1.5 rounded-md transition-colors">Review Folio</a>
           </div>
         ))}
       </div>
     </div>}
     {!data.financial.highBalances?.length && (
-      <div className="text-sm text-emerald-600 bg-emerald-50 p-3 rounded-lg border border-emerald-100">No high balances detected.</div>
+      <div className="text-sm text-emerald-600 bg-emerald-50 p-3 rounded-lg border border-emerald-100 flex items-center gap-2 shadow-sm"><CheckCircle2 className="h-4 w-4" /> No high balances detected.</div>
     )}
   </div>
 )}
 
 {step === 3 && data?.cash && (
-  <div className="space-y-4 border-t pt-4">
+  <div className="space-y-6 border-t pt-4">
     {data.cash.cashHandovers?.length > 0 && <div>
-      <h4 className="font-medium text-sm mb-2 text-rose-700">Pending Cash Handovers (Blocker)</h4>
+      <div className="mb-3">
+        <h4 className="font-semibold text-sm text-rose-700">Pending Cash Handovers (Blocker)</h4>
+        <p className="text-xs text-rose-600/80 mt-0.5">Cash drawers must be physically handed over and reconciled in the system before closing.</p>
+      </div>
       <div className="space-y-2">
         {data.cash.cashHandovers.map((ch: any) => (
-          <div key={ch.id} className="text-sm p-3 bg-white rounded-lg border border-rose-200">
-            {ch.drawerName} - {currency(Number(ch.amount), data?.property?.baseCurrency)}
+          <div key={ch.id} className="text-sm p-3 bg-white rounded-lg border border-rose-200 flex items-center justify-between shadow-sm">
+            <div>
+              <p className="font-medium text-rose-900">{ch.drawerName}</p>
+              <p className="text-xs text-rose-600">Pending Handover</p>
+            </div>
+            <div className="flex items-center gap-4">
+              <span className="font-semibold text-rose-700">{currency(Number(ch.amount), data?.property?.baseCurrency)}</span>
+              <a href="/finance/cash-drawers" target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-rose-700 hover:text-rose-900 bg-rose-50 px-3 py-1.5 rounded-md transition-colors">Action</a>
+            </div>
           </div>
         ))}
       </div>
     </div>}
     {data.cash.bankDeposits?.length > 0 && <div>
-      <h4 className="font-medium text-sm mb-2 text-amber-700">Pending Bank Deposits</h4>
+      <div className="mb-3">
+        <h4 className="font-semibold text-sm text-amber-700">Pending Bank Deposits</h4>
+        <p className="text-xs text-amber-600/80 mt-0.5">Review cash drops that have not yet been batched for bank deposit.</p>
+      </div>
       <div className="space-y-2">
         {data.cash.bankDeposits.map((bd: any) => (
-          <div key={bd.id} className="text-sm p-3 bg-white rounded-lg border flex justify-between">
-            <span>Reference: {bd.reference}</span>
-            <span className="font-medium">{currency(Number(bd.amount), data?.property?.baseCurrency)}</span>
+          <div key={bd.id} className="text-sm p-3 bg-white rounded-lg border border-amber-200 flex items-center justify-between shadow-sm">
+            <div>
+              <p className="font-medium text-amber-900">Reference: {bd.reference}</p>
+            </div>
+            <div className="flex items-center gap-4">
+              <span className="font-semibold text-amber-700">{currency(Number(bd.amount), data?.property?.baseCurrency)}</span>
+              <a href="/finance/deposits" target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-amber-700 hover:text-amber-900 bg-amber-50 px-3 py-1.5 rounded-md transition-colors">Review</a>
+            </div>
           </div>
         ))}
       </div>
     </div>}
     {!data.cash.cashHandovers?.length && !data.cash.bankDeposits?.length && (
-      <div className="text-sm text-emerald-600 bg-emerald-50 p-3 rounded-lg border border-emerald-100">All cash handling and deposits are reconciled.</div>
+      <div className="text-sm text-emerald-600 bg-emerald-50 p-3 rounded-lg border border-emerald-100 flex items-center gap-2 shadow-sm"><CheckCircle2 className="h-4 w-4" /> All cash handling and deposits are reconciled.</div>
     )}
   </div>
 )}
