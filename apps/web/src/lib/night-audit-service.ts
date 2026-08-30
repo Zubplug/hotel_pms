@@ -207,5 +207,61 @@ export async function getCashReconciliation(propertyId: string) {
     }
   });
 
-  return { cashHandovers, bankDeposits, tolerance: property.cashVarianceNightAuditTolerance };
+  const unverifiedPayments = await prisma.payment.findMany({
+    where: {
+      propertyId,
+      method: { in: ['BANK_TRANSFER', 'POS'] },
+      verificationStatus: 'UNVERIFIED',
+      createdAt: { gte: businessDate, lt: nextBusinessDate }
+    },
+    include: {
+      folio: {
+        select: {
+          folioNumber: true,
+          reservation: {
+            select: {
+              primaryGuest: { select: { firstName: true, lastName: true } }
+            }
+          }
+        }
+      },
+      frontdeskSession: {
+        select: {
+          shiftReference: true,
+          staff: { select: { firstName: true, lastName: true } }
+        }
+      }
+    }
+  });
+
+  const unverifiedPosPayments = await prisma.posPayment.findMany({
+    where: {
+      method: { in: ['BANK_TRANSFER', 'POS'] },
+      verificationStatus: 'UNVERIFIED',
+      businessDate: businessDate,
+      order: { outlet: { propertyId } }
+    },
+    include: {
+      order: {
+        select: {
+          id: true,
+          receiptNumber: true,
+          outlet: { select: { name: true } }
+        }
+      },
+      session: {
+        select: {
+          shiftReference: true,
+          operator: { select: { firstName: true, lastName: true } }
+        }
+      }
+    }
+  });
+
+  return { 
+    cashHandovers, 
+    bankDeposits, 
+    unverifiedTransactions: [...unverifiedPayments, ...unverifiedPosPayments],
+    tolerance: property.cashVarianceNightAuditTolerance 
+  };
 }

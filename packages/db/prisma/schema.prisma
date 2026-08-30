@@ -708,6 +708,12 @@ model ReservationRoom {
 // FINANCIAL
 // -----------------------------------------------------------------------------
 
+enum TransactionVerificationStatus {
+  UNVERIFIED
+  VERIFIED
+  QUESTIONED
+}
+
 model Folio {
   id            String       @id @default(uuid()) @db.Uuid
   reservationId String?      @db.Uuid // null for master/city ledgers
@@ -962,6 +968,12 @@ model Payment {
   latePostingReason    String?
   originalBusinessDate DateTime? @db.Date
   syncedAt             DateTime? @db.Timestamptz
+
+  // Transaction Verification
+  verificationStatus   TransactionVerificationStatus @default(UNVERIFIED)
+  verifiedAt           DateTime? @db.Timestamptz
+  verifiedById         String?   @db.Uuid
+  verificationNotes    String?
 
   refunds        Refund[]
   refundRequests RefundRequest[]
@@ -3195,6 +3207,12 @@ model PosPayment {
   deviceId     String?
 
   paidAt DateTime? @db.Timestamptz
+
+  // Transaction Verification
+  verificationStatus   TransactionVerificationStatus @default(UNVERIFIED)
+  verifiedAt           DateTime? @db.Timestamptz
+  verifiedById         String?   @db.Uuid
+  verificationNotes    String?
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz

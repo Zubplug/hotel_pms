@@ -86,6 +86,7 @@ export async function GET(req: NextRequest) {
     
     // Cash blockers/warnings
     if (cash.cashHandovers.length > 0) blockers++;
+    if (cash.unverifiedTransactions.length > 0) blockers++;
     if (cash.bankDeposits.length > 0) warnings++;
     
     // Single canonical state field — the UI should branch exclusively on this.
