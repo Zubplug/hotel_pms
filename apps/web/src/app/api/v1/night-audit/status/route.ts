@@ -77,7 +77,6 @@ export async function GET(req: NextRequest) {
     if (system.openPosSessions.length > 0) blockers++;
     if (system.openFrontdeskSessions.length > 0) blockers++;
     if (system.financialSyncConflicts.length > 0) blockers++;
-    if (system.hardwareAgents.some(a => a.status === 'OFFLINE')) warnings++;
 
     // Financial blockers/warnings
     if (financial.highBalances.length > 0) warnings++;

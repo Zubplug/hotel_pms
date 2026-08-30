@@ -26,7 +26,6 @@ export async function getNightAuditPreview(propertyId: string) {
   if (system.openPosSessions.length > 0) blockers++;
   if (system.openFrontdeskSessions.length > 0) blockers++;
   if (system.financialSyncConflicts.length > 0) blockers++;
-  if (system.hardwareAgents.some((a: any) => a.status === 'OFFLINE')) warnings++;
 
   if (financial.highBalances.length > 0) warnings++;
 

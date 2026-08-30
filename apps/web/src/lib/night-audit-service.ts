@@ -90,12 +90,7 @@ export async function getSystemIntegrity(propertyId: string) {
     return et.includes('PAYMENT') || et.includes('CHARGE') || et.includes('REFUND') || c.aggregateType === 'FOLIO';
   });
 
-  const hardwareAgents = await prisma.hardwareAgent.findMany({
-    where: { propertyId },
-    select: { id: true, name: true, status: true, lastHeartbeat: true }
-  });
-
-  return { openPosSessions, openFrontdeskSessions, syncConflicts, financialSyncConflicts, hardwareAgents };
+  return { openPosSessions, openFrontdeskSessions, syncConflicts, financialSyncConflicts };
 }
 
 export async function getFinancialAudit(propertyId: string) {

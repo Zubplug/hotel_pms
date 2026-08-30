@@ -71,8 +71,7 @@ export default function NightAuditDashboard() {
     if (data?.operational?.arrivals?.some((a: any) => a.status === 'CONFIRMED')) arr.push({ type: 'PENDING_ARRIVALS', title: 'Pending Arrivals', desc: 'There are still confirmed arrivals for today.' });
     if (data?.operational?.departures?.some((d: any) => d.status === 'CHECKED_IN')) arr.push({ type: 'PENDING_DEPARTURES', title: 'Pending Departures', desc: 'There are still checked-in departures for today.' });
     if (data?.financial?.highBalances?.length > 0) arr.push({ type: 'HIGH_BALANCE', title: 'High Balance Folios', desc: 'Some folios have exceeded the high balance limit.' });
-    if (data?.financial?.rateVariances?.length > 0) arr.push({ type: 'RATE_VARIANCE', title: 'Rate Variances', desc: 'There are room rate variances that need review.' });
-    if (data?.system?.hardwareAgents?.some((h: any) => h.status === 'OFFLINE' || h.status === 'ERROR')) arr.push({ type: 'HARDWARE_OFFLINE', title: 'Hardware Offline', desc: 'Some hardware agents are offline or in error state.' });
+    if (data?.financial?.rateVariances?.length > 0) arr.push({ type: 'RATE_VARIANCE', title: 'Rate Variances', desc: 'Some active room charges deviate from their booked rate.' });
     return arr;
   }, [data]);
 
@@ -280,24 +279,7 @@ export default function NightAuditDashboard() {
         ))}
       </div>
     </div>}
-    {data.system.hardwareAgents?.filter((a: any) => a.status === 'OFFLINE').length > 0 && <div>
-      <div className="mb-3">
-        <h4 className="font-semibold text-sm text-amber-700">Hardware Agents Offline</h4>
-        <p className="text-xs text-amber-600/80 mt-0.5">Key card encoders or POS terminals have lost connection.</p>
-      </div>
-      <div className="space-y-2">
-        {data.system.hardwareAgents.filter((a: any) => a.status === 'OFFLINE').map((agent: any) => (
-          <div key={agent.id} className="text-sm p-3 bg-white rounded-lg border border-amber-200 flex items-center justify-between shadow-sm">
-            <div>
-              <p className="font-medium text-amber-900">{agent.name}</p>
-              <p className="text-xs text-amber-700">Status: OFFLINE</p>
-            </div>
-            <a href="/integrations/hardware" target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-amber-700 hover:text-amber-900 bg-amber-50 px-3 py-1.5 rounded-md transition-colors">Check</a>
-          </div>
-        ))}
-      </div>
-    </div>}
-    {!data.system.openPosSessions?.length && !data.system.openFrontdeskSessions?.length && !data.system.financialSyncConflicts?.length && !data.system.hardwareAgents?.filter((a: any) => a.status === 'OFFLINE').length && (
+    {!data.system.openPosSessions?.length && !data.system.openFrontdeskSessions?.length && !data.system.financialSyncConflicts?.length && (
       <div className="text-sm text-emerald-600 bg-emerald-50 p-3 rounded-lg border border-emerald-100 flex items-center gap-2 shadow-sm"><CheckCircle2 className="h-4 w-4" /> All systems and integrations are healthy.</div>
     )}
   </div>
