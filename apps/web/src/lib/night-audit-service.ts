@@ -107,7 +107,7 @@ export async function getFinancialAudit(propertyId: string) {
       reservationId: true, 
       reservation: { 
         select: { 
-          number: true,
+          confirmationNumber: true,
           primaryGuest: { select: { firstName: true, lastName: true } },
           reservationRooms: { select: { room: { select: { number: true } } }, take: 1 }
         } 

@@ -319,7 +319,7 @@ export default function NightAuditDashboard() {
         {data.financial.highBalances.map((hb: any) => {
           const roomNumber = hb.reservation?.reservationRooms?.[0]?.room?.number || 'Unassigned';
           const guestName = hb.reservation?.primaryGuest ? `${hb.reservation.primaryGuest.firstName} ${hb.reservation.primaryGuest.lastName}` : 'Walk-in';
-          const folioStr = hb.folioNumber || hb.reservation?.number || hb.id.split('-')[0].toUpperCase();
+          const folioStr = hb.folioNumber || hb.reservation?.confirmationNumber || hb.id.split('-')[0].toUpperCase();
           const balance = Number(hb.balance);
           const limit = Number(hb.creditLimit);
           const over = balance - limit;
