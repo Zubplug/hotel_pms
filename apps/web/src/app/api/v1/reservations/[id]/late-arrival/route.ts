@@ -52,7 +52,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     });
     
     return successResponse(updated);
-  } catch (error) {
+  } catch (error: any) {
     console.error('[Reservation Late Arrival POST]', error);
     return errorResponse('INTERNAL_ERROR', error.message || 'Unable to record late arrival', 500);
   }
