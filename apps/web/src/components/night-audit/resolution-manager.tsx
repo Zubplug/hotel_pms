@@ -52,6 +52,7 @@ function ArrivalResolution({ item, onSuccess, onClose }: { item: any; onSuccess:
       const res = await fetch(`/api/v1/reservations/${item.id}/${action}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Idempotency-Key': crypto.randomUUID() },
+        body: '{}'
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -73,6 +74,7 @@ function ArrivalResolution({ item, onSuccess, onClose }: { item: any; onSuccess:
       const res = await fetch(`/api/v1/reservations/${item.id}/late-arrival`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Idempotency-Key': crypto.randomUUID() },
+        body: '{}'
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -147,6 +149,7 @@ function DepartureResolution({ item, onSuccess, onClose }: { item: any; onSucces
       const res = await fetch(`/api/v1/reservations/${item.id}/check-out`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Idempotency-Key': crypto.randomUUID() },
+        body: '{}'
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
