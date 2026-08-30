@@ -63,7 +63,7 @@ export default function NightAuditDashboard() {
       const result = await response.json();
       if (!response.ok) throw new Error(result.error?.message || 'Unable to load audit status');
       setData(result.data);
-      if (result.data.auditState === 'OVERDUE' || result.data.auditState === 'PENDING') setWizardOpen(true);
+      if (result.data.auditState === 'OVERDUE') setWizardOpen(true);
     } catch (err: any) { setError(err.message); }
     finally { setLoading(false); setRefreshing(false); }
   };
