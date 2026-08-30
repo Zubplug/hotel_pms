@@ -316,18 +316,41 @@ export default function NightAuditDashboard() {
         <p className="text-xs text-amber-600/80 mt-0.5">Review folios exceeding their approved credit limit to secure additional payment or authorization.</p>
       </div>
       <div className="space-y-2">
-        {data.financial.highBalances.map((hb: any) => (
-          <div key={hb.id} className="text-sm p-3 bg-white rounded-lg border border-amber-200 flex items-center justify-between shadow-sm">
-            <div>
-              <p className="font-medium text-amber-900">Folio #{hb.reservation?.number || hb.id.split('-')[0].toUpperCase()}</p>
-              <p className="text-xs text-amber-700">
-                {hb.reservation?.primaryGuest ? `${hb.reservation.primaryGuest.firstName} ${hb.reservation.primaryGuest.lastName} • ` : ''}
-                Balance: <span className="font-semibold">{currency(Number(hb.balance), data?.property?.baseCurrency)}</span>
-              </p>
+        {data.financial.highBalances.map((hb: any) => {
+          const roomNumber = hb.reservation?.reservationRooms?.[0]?.room?.number || 'Unassigned';
+          const guestName = hb.reservation?.primaryGuest ? `${hb.reservation.primaryGuest.firstName} ${hb.reservation.primaryGuest.lastName}` : 'Walk-in';
+          const folioStr = hb.folioNumber || hb.reservation?.number || hb.id.split('-')[0].toUpperCase();
+          const balance = Number(hb.balance);
+          const limit = Number(hb.creditLimit);
+          const over = balance - limit;
+
+          return (
+            <div key={hb.id} className="text-sm p-4 bg-white rounded-lg border border-amber-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <p className="font-medium text-amber-950">
+                  {guestName} &middot; Room {roomNumber} &middot; Folio #{folioStr}
+                </p>
+                <div className="flex gap-4 text-xs">
+                  <p className="text-amber-800">
+                    Balance: <span className="font-semibold text-amber-950">{currency(balance, data?.property?.baseCurrency)}</span>
+                  </p>
+                  <p className="text-muted-foreground">
+                    Limit: <span>{currency(limit, data?.property?.baseCurrency)}</span>
+                  </p>
+                  <p className="text-rose-600 font-medium">
+                    Over limit: {currency(over, data?.property?.baseCurrency)}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setResolutionAction({ type: 'FOLIO_PREVIEW', item: hb })} 
+                className="shrink-0 text-xs font-medium text-amber-800 hover:text-amber-950 bg-amber-100/50 hover:bg-amber-100 px-4 py-2 rounded-md transition-colors"
+              >
+                Review Folio
+              </button>
             </div>
-            <button onClick={() => setResolutionAction({ type: 'FOLIO_PREVIEW', item: hb })} className="text-xs font-medium text-amber-700 hover:text-amber-900 bg-amber-50 px-3 py-1.5 rounded-md transition-colors">Review Folio</button>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>}
     {data.financial.rateVariances?.length > 0 && <div>

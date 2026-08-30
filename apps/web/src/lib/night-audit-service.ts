@@ -100,13 +100,30 @@ export async function getFinancialAudit(propertyId: string) {
 
   const openFolios = await prisma.folio.findMany({
     where: { propertyId, status: 'OPEN', balance: { not: 0 } },
-    select: { id: true, balance: true, reservationId: true, reservation: { select: { primaryGuest: { select: { firstName: true, lastName: true } } } } }
+    select: { 
+      id: true, 
+      folioNumber: true,
+      balance: true, 
+      reservationId: true, 
+      reservation: { 
+        select: { 
+          number: true,
+          primaryGuest: { select: { firstName: true, lastName: true } },
+          reservationRooms: { select: { room: { select: { number: true } } }, take: 1 }
+        } 
+      } 
+    }
   });
 
   // Flag folios whose balance exceeds the property-configured threshold.
   // Configurable via Property.nightAuditHighBalanceThreshold (default: 50,000).
   const highBalanceThreshold = Number(property.nightAuditHighBalanceThreshold ?? 50000);
-  const highBalances = openFolios.filter(f => Number(f.balance) > highBalanceThreshold);
+  const highBalances = openFolios
+    .filter(f => Number(f.balance) > highBalanceThreshold)
+    .map(f => ({
+      ...f,
+      creditLimit: highBalanceThreshold
+    }));
 
 
   const roomCharges = await prisma.folioItem.findMany({
