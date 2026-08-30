@@ -204,8 +204,25 @@ export default function NightAuditDashboard() {
         ))}
       </div>
     </div>}
-    {!data.operational.arrivals?.length && !data.operational.departures?.length && (
-      <div className="text-sm text-emerald-600 bg-emerald-50 p-3 rounded-lg border border-emerald-100">All arrivals and departures have been processed.</div>
+    {data.operational.roomReconciliation?.filter((r: any) => r.issue).length > 0 && <div>
+      <div className="mb-3">
+        <h4 className="font-semibold text-sm text-amber-700">Room Discrepancies</h4>
+        <p className="text-xs text-amber-600/80 mt-0.5">Rooms where the Housekeeping status doesn't match the expected Front Desk status.</p>
+      </div>
+      <div className="space-y-2">
+        {data.operational.roomReconciliation.filter((r: any) => r.issue).map((rm: any) => (
+          <div key={rm.roomId} className="text-sm p-3 bg-white rounded-lg border border-amber-200 flex items-center justify-between shadow-sm">
+            <div>
+              <p className="font-medium text-amber-900">Room {rm.roomNumber}</p>
+              <p className="text-xs text-amber-700">Expected: {rm.expected} (Current: {rm.hkStatus})</p>
+            </div>
+            <a href="/housekeeping" target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-amber-700 hover:text-amber-900 bg-amber-50 px-3 py-1.5 rounded-md transition-colors">Fix</a>
+          </div>
+        ))}
+      </div>
+    </div>}
+    {!data.operational.arrivals?.length && !data.operational.departures?.length && !data.operational.roomReconciliation?.filter((r: any) => r.issue).length && (
+      <div className="text-sm text-emerald-600 bg-emerald-50 p-3 rounded-lg border border-emerald-100 flex items-center gap-2 shadow-sm"><CheckCircle2 className="h-4 w-4" /> All arrivals, departures, and rooms are processed.</div>
     )}
   </div>
 )}
@@ -246,8 +263,42 @@ export default function NightAuditDashboard() {
         ))}
       </div>
     </div>}
-    {!data.system.openPosSessions?.length && !data.system.openFrontdeskSessions?.length && (
-      <div className="text-sm text-emerald-600 bg-emerald-50 p-3 rounded-lg border border-emerald-100 flex items-center gap-2 shadow-sm"><CheckCircle2 className="h-4 w-4" /> All sessions and shifts are closed.</div>
+    {data.system.financialSyncConflicts?.length > 0 && <div>
+      <div className="mb-3">
+        <h4 className="font-semibold text-sm text-rose-700">Financial Sync Conflicts (Blocker)</h4>
+        <p className="text-xs text-rose-600/80 mt-0.5">Payments or charges failed to sync with the accounting system.</p>
+      </div>
+      <div className="space-y-2">
+        {data.system.financialSyncConflicts.map((sc: any) => (
+          <div key={sc.id} className="text-sm p-3 bg-white rounded-lg border border-rose-200 flex items-center justify-between shadow-sm">
+            <div>
+              <p className="font-medium text-rose-900">Type: {sc.aggregateType}</p>
+              <p className="text-xs text-rose-600">Event: {sc.hotelEvent?.eventType || 'Unknown'}</p>
+            </div>
+            <a href="/integrations/accounting/sync-errors" target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-rose-700 hover:text-rose-900 bg-rose-50 px-3 py-1.5 rounded-md transition-colors">Resolve</a>
+          </div>
+        ))}
+      </div>
+    </div>}
+    {data.system.hardwareAgents?.filter((a: any) => a.status === 'OFFLINE').length > 0 && <div>
+      <div className="mb-3">
+        <h4 className="font-semibold text-sm text-amber-700">Hardware Agents Offline</h4>
+        <p className="text-xs text-amber-600/80 mt-0.5">Key card encoders or POS terminals have lost connection.</p>
+      </div>
+      <div className="space-y-2">
+        {data.system.hardwareAgents.filter((a: any) => a.status === 'OFFLINE').map((agent: any) => (
+          <div key={agent.id} className="text-sm p-3 bg-white rounded-lg border border-amber-200 flex items-center justify-between shadow-sm">
+            <div>
+              <p className="font-medium text-amber-900">{agent.name}</p>
+              <p className="text-xs text-amber-700">Status: OFFLINE</p>
+            </div>
+            <a href="/integrations/hardware" target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-amber-700 hover:text-amber-900 bg-amber-50 px-3 py-1.5 rounded-md transition-colors">Check</a>
+          </div>
+        ))}
+      </div>
+    </div>}
+    {!data.system.openPosSessions?.length && !data.system.openFrontdeskSessions?.length && !data.system.financialSyncConflicts?.length && !data.system.hardwareAgents?.filter((a: any) => a.status === 'OFFLINE').length && (
+      <div className="text-sm text-emerald-600 bg-emerald-50 p-3 rounded-lg border border-emerald-100 flex items-center gap-2 shadow-sm"><CheckCircle2 className="h-4 w-4" /> All systems and integrations are healthy.</div>
     )}
   </div>
 )}
@@ -271,8 +322,25 @@ export default function NightAuditDashboard() {
         ))}
       </div>
     </div>}
-    {!data.financial.highBalances?.length && (
-      <div className="text-sm text-emerald-600 bg-emerald-50 p-3 rounded-lg border border-emerald-100 flex items-center gap-2 shadow-sm"><CheckCircle2 className="h-4 w-4" /> No high balances detected.</div>
+    {data.financial.rateVariances?.length > 0 && <div>
+      <div className="mb-3">
+        <h4 className="font-semibold text-sm text-amber-700">Rate Variances</h4>
+        <p className="text-xs text-amber-600/80 mt-0.5">Room rates that deviate from their base reservation amount.</p>
+      </div>
+      <div className="space-y-2">
+        {data.financial.rateVariances.map((rv: any) => (
+          <div key={rv.id} className="text-sm p-3 bg-white rounded-lg border border-amber-200 flex items-center justify-between shadow-sm">
+            <div>
+              <p className="font-medium text-amber-900">Reservation #{rv.folio?.reservationId?.slice(0, 8) || 'Unknown'}</p>
+              <p className="text-xs text-amber-700">Base: {currency(Number(rv.baseAmount), data?.property?.baseCurrency)} / Posted: <span className="font-semibold">{currency(Number(rv.unitAmount), data?.property?.baseCurrency)}</span></p>
+            </div>
+            <a href={`/finance/folios/${rv.folioId}`} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-amber-700 hover:text-amber-900 bg-amber-50 px-3 py-1.5 rounded-md transition-colors">Review Folio</a>
+          </div>
+        ))}
+      </div>
+    </div>}
+    {!data.financial.highBalances?.length && !data.financial.rateVariances?.length && (
+      <div className="text-sm text-emerald-600 bg-emerald-50 p-3 rounded-lg border border-emerald-100 flex items-center gap-2 shadow-sm"><CheckCircle2 className="h-4 w-4" /> No financial anomalies detected.</div>
     )}
   </div>
 )}
