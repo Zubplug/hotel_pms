@@ -52,10 +52,52 @@ public class Rfv2016LockProvider : ILockProvider
         }
     }
 
-    public Task<bool> WaitForCardAsync(TimeSpan timeout, CancellationToken cancellationToken)
+    public async Task<bool> WaitForCardAsync(TimeSpan timeout, CancellationToken cancellationToken)
     {
-        // Not heavily used in offline desktop but interface requires it.
-        return Task.FromResult(true);
+        _logger.LogInformation("Waiting for card on RFV2016 encoder...");
+        
+        var startTime = DateTime.UtcNow;
+        while (DateTime.UtcNow - startTime < timeout)
+        {
+            if (cancellationToken.IsCancellationRequested) return false;
+
+            bool cardFound = await Task.Run(() =>
+            {
+                lock (_syncLock)
+                {
+                    string prevDir = Environment.CurrentDirectory;
+                    try
+                    {
+                        Environment.CurrentDirectory = _workingDir;
+                        IntPtr ptr = Rfv2016LockSdkNative.R_CardID(1);
+                        string? resultStr = Marshal.PtrToStringAnsi(ptr);
+                        
+                        if (!string.IsNullOrEmpty(resultStr) && resultStr != "75" && resultStr != "0" && resultStr != "00000000")
+                        {
+                            return true;
+                        }
+                        return false;
+                    }
+                    catch
+                    {
+                        return false;
+                    }
+                    finally
+                    {
+                        Environment.CurrentDirectory = prevDir;
+                    }
+                }
+            });
+
+            if (cardFound)
+            {
+                _logger.LogInformation("Card detected by RFV2016 Encoder.");
+                return true;
+            }
+
+            await Task.Delay(500, cancellationToken);
+        }
+        return false;
     }
 
     public Task<LockResult> EncodeCardAsync(string lockCode, DateTime checkInDate, DateTime checkOutDate, CancellationToken cancellationToken)
@@ -99,7 +141,41 @@ public class Rfv2016LockProvider : ILockProvider
 
     public Task<DiagnosticResult> ReadDiagnosticAsync(CancellationToken cancellationToken)
     {
-        return Task.FromResult(new DiagnosticResult { Success = true, Vendor = VendorId });
+        return Task.Run(() =>
+        {
+            lock (_syncLock)
+            {
+                string prevDir = Environment.CurrentDirectory;
+                try
+                {
+                    Environment.CurrentDirectory = _workingDir;
+                    IntPtr ptr = Rfv2016LockSdkNative.R_CardID(1);
+                    string? resultStr = Marshal.PtrToStringAnsi(ptr);
+                    
+                    if (string.IsNullOrEmpty(resultStr) || resultStr == "75" || resultStr == "0" || resultStr == "00000000")
+                    {
+                        return new DiagnosticResult { Success = false, ErrorMessage = "No card detected or invalid card", Vendor = VendorId };
+                    }
+                    
+                    // The SDK might return an error code like 75, let's parse and check
+                    if (int.TryParse(resultStr, out int errCode) && errCode < 100)
+                    {
+                         return new DiagnosticResult { Success = false, ErrorMessage = GetErrorMessage(errCode), Vendor = VendorId };
+                    }
+
+                    return new DiagnosticResult { Success = true, RawDataHex = resultStr, Vendor = VendorId };
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "RFV2016 diagnostic failed");
+                    return new DiagnosticResult { Success = false, ErrorMessage = ex.Message, Vendor = VendorId };
+                }
+                finally
+                {
+                    Environment.CurrentDirectory = prevDir;
+                }
+            }
+        });
     }
 
     public Task<ReadCardResult> ReadCardAsync(CancellationToken cancellationToken)
