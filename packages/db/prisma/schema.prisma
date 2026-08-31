@@ -514,8 +514,8 @@ model Guest {
   id             String       @id @default(uuid()) @db.Uuid
   organizationId String       @db.Uuid
   organization   Organization @relation(fields: [organizationId], references: [id])
-  propertyId     String?      @db.Uuid
-  property       Property?    @relation(fields: [propertyId], references: [id])
+  propertyId     String       @db.Uuid
+  property       Property     @relation(fields: [propertyId], references: [id])
 
   firstName String
   lastName  String
