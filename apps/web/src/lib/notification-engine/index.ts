@@ -119,13 +119,27 @@ async function resolveRecipients(organizationId: string, propertyId?: string): P
     whereClause.propertyId = null;
   }
 
-  const userRoles = await prisma.userRole.findMany({
-    where: whereClause,
-    select: { userId: true }
-  });
+  const [userRoles, orgAdmins] = await Promise.all([
+    prisma.userRole.findMany({
+      where: whereClause,
+      select: { userId: true }
+    }),
+    prisma.organizationMembership.findMany({
+      where: {
+        organizationId,
+        role: { in: ['OWNER', 'ADMIN', 'SUPER_ADMIN'] },
+        status: 'ACTIVE'
+      },
+      select: { userId: true }
+    })
+  ]);
 
   // Unique list of user IDs
-  return Array.from(new Set(userRoles.map((ur: any) => ur.userId)));
+  const allUserIds = [
+    ...userRoles.map((ur: any) => ur.userId),
+    ...orgAdmins.map((oa: any) => oa.userId)
+  ];
+  return Array.from(new Set(allUserIds));
 }
 
 /**
