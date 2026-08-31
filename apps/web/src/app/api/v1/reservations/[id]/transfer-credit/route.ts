@@ -241,6 +241,18 @@ export async function POST(
         entityId: id,
         idempotencyKey: `checkout_transfer_${id}_${Date.now()}`
       });
+      await NotificationEngine.emit({
+        type: 'CREDIT_TRANSFERRED',
+        organizationId: txResult.organizationId,
+        propertyId: reservation.propertyId,
+        entityType: 'reservation',
+        entityId: id,
+        metadata: {
+          amount: creditAmount,
+          reason
+        },
+        idempotencyKey: `credit_transferred_${id}_${Date.now()}`
+      });
     }
 
     let revokedCount = 0;

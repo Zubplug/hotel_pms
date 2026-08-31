@@ -400,6 +400,42 @@ async function evaluateEvent(event: NotificationEvent, policy: NotificationPolic
       };
     }
 
+    case 'CREDIT_RETAINED': {
+      const res = await prisma.reservation.findUnique({
+         where: { id: event.entityId },
+         include: { primaryGuest: true }
+      });
+      if (!res) return null;
+      const guestName = res.primaryGuest?.firstName ? `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}` : 'A guest';
+      const amount = event.metadata?.amount || 0;
+      const reasonCode = event.metadata?.reasonCode || 'Early Departure';
+      
+      return {
+        subject: `Credit Retained — ${guestName}`,
+        body: `Guest checked out, and a credit balance of ${res.currency} ${amount.toLocaleString()} was retained by the property.\nReason: ${reasonCode}`,
+        category: 'Finance',
+        priority: 'High', // High priority so executives see revenue retentions clearly
+      };
+    }
+
+    case 'CREDIT_TRANSFERRED': {
+      const res = await prisma.reservation.findUnique({
+         where: { id: event.entityId },
+         include: { primaryGuest: true }
+      });
+      if (!res) return null;
+      const guestName = res.primaryGuest?.firstName ? `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}` : 'A guest';
+      const amount = event.metadata?.amount || 0;
+      const reason = event.metadata?.reason || 'Unknown';
+      
+      return {
+        subject: `Credit Transferred (Refund Payable) — ${guestName}`,
+        body: `A credit of ${res.currency} ${amount.toLocaleString()} was transferred to City Ledger / Refund Payables at check-out.\nReason: ${reason}`,
+        category: 'Finance',
+        priority: 'High', 
+      };
+    }
+
     case 'RESERVATION_CREATED': {
       if (!policy.notifyOnReservationCreated) return null;
       const res = await prisma.reservation.findUnique({

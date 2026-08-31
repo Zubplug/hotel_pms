@@ -202,6 +202,19 @@ export async function POST(
         entityId: id,
         idempotencyKey: `checkout_retain_${id}_${Date.now()}`
       });
+      await NotificationEngine.emit({
+        type: 'CREDIT_RETAINED',
+        organizationId: txResult.organizationId,
+        propertyId: reservation.propertyId,
+        entityType: 'reservation',
+        entityId: id,
+        metadata: {
+          amount: creditAmount,
+          reasonCode: reasonCode || 'Early Departure',
+          reason
+        },
+        idempotencyKey: `credit_retained_${id}_${Date.now()}`
+      });
     }
 
     let revokedCount = 0;
