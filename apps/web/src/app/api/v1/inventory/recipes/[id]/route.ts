@@ -2,15 +2,17 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { hasInventoryPermission } from '@/lib/inventory/permissions';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const user = session.user as any;
+  const ctx = await requireOrganizationContext(session.user.id);
   if (!hasInventoryPermission(user.role, 'inventory.manage', user.isSuperAdmin)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const { id } = await params;
   const body = await request.json();
-  const recipe = await prisma.recipe.findFirst({ where: { id, propertyId: user.propertyId, isActive: true } });
+  const recipe = await prisma.recipe.findFirst({ where: { id, propertyId: { in: ctx.propertyIds as string[] }, isActive: true } });
   if (!recipe) return NextResponse.json({ error: 'Recipe not found' }, { status: 404 });
   const ingredients = Array.isArray(body.ingredients) ? body.ingredients : [];
   if (!ingredients.length) return NextResponse.json({ error: 'At least one ingredient is required' }, { status: 400 });
@@ -21,3 +23,4 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   });
   return NextResponse.json({ data: saved });
 }
+

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
 import { verifyOperatorToken } from '@/lib/pos/operatorAuth';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 export async function GET(
   req: NextRequest,
@@ -57,8 +58,7 @@ export async function POST(
     }
 
     const floorPlan = await prisma.posFloorPlan.create({
-      data: {
-        outletId,
+      data: { outletId,
         name,
         isActive: true
       }

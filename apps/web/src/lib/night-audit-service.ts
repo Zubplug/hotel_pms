@@ -1,8 +1,10 @@
 import prisma from '@hotel-pms/db';
 import { getPropertyBusinessDate, getNextBusinessDate } from '@/lib/date-utils';
 import crypto from 'crypto';
+import { TenantContext } from './organization-access';
 
-export async function getOperationalReview(propertyId: string) {
+export async function getOperationalReview(ctx: TenantContext, propertyId: string) {
+  if (!ctx.propertyIds.includes(propertyId)) throw new Error('FORBIDDEN');
   const property = await prisma.property.findUnique({ where: { id: propertyId } });
   if (!property) throw new Error('NOT_FOUND:Property not found');
   const businessDate = property.businessDate ?? getPropertyBusinessDate(property.timezone, new Date());
@@ -58,7 +60,8 @@ export async function getOperationalReview(propertyId: string) {
   return { arrivals, departures, roomReconciliation };
 }
 
-export async function getSystemIntegrity(propertyId: string) {
+export async function getSystemIntegrity(ctx: TenantContext, propertyId: string) {
+  if (!ctx.propertyIds.includes(propertyId)) throw new Error('FORBIDDEN');
   const property = await prisma.property.findUnique({ where: { id: propertyId } });
   if (!property) throw new Error('NOT_FOUND:Property not found');
   const businessDate = property.businessDate ?? getPropertyBusinessDate(property.timezone, new Date());
@@ -93,7 +96,8 @@ export async function getSystemIntegrity(propertyId: string) {
   return { openPosSessions, openFrontdeskSessions, syncConflicts, financialSyncConflicts };
 }
 
-export async function getFinancialAudit(propertyId: string) {
+export async function getFinancialAudit(ctx: TenantContext, propertyId: string) {
+  if (!ctx.propertyIds.includes(propertyId)) throw new Error('FORBIDDEN');
   const property = await prisma.property.findUnique({ where: { id: propertyId } });
   if (!property) throw new Error('NOT_FOUND:Property not found');
   const businessDate = property.businessDate ?? getPropertyBusinessDate(property.timezone, new Date());
@@ -181,7 +185,8 @@ export async function getFinancialAudit(propertyId: string) {
   return { openFolios, highBalances, rateVariances };
 }
 
-export async function getCashReconciliation(propertyId: string) {
+export async function getCashReconciliation(ctx: TenantContext, propertyId: string) {
+  if (!ctx.propertyIds.includes(propertyId)) throw new Error('FORBIDDEN');
   const property = await prisma.property.findUnique({ where: { id: propertyId } });
   if (!property) throw new Error('NOT_FOUND:Property not found');
   

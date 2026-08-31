@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 export async function POST(req: NextRequest) {
   try {
@@ -26,8 +27,7 @@ export async function POST(req: NextRequest) {
     }
 
     const audit = await prisma.posAuthorizationAudit.create({
-      data: {
-        propertyId,
+      data: { propertyId,
         deviceId,
         sessionId,
         requestedBy,

@@ -1,3 +1,5 @@
+import { NextResponse } from 'next/server';
+import { requireOrganizationContext } from '@/lib/organization-access';
 import { NextRequest } from 'next/server';
 import { auth } from '@/lib/auth';
 import { successResponse, errorResponse } from '@/lib/api-response';
@@ -14,12 +16,17 @@ export async function POST(req: NextRequest) {
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
 
     const body = await req.json();
-    const { propertyId } = body;
+    const propertyId = body.propertyId;
 
-    if (!propertyId) return errorResponse('BAD_REQUEST', 'Missing propertyId', 400);
-    await assertPropertyAccess(session.user.id, propertyId);
+    if (!propertyId) {
+      return errorResponse('BAD_REQUEST', 'Missing propertyId', 400);
+    }
 
-    // Requires the dedicated 'night_audit:execute' permission.
+    const ctx = await requireOrganizationContext(session.user.id);
+
+    if (!ctx.propertyIds.includes(propertyId)) {
+      return errorResponse('FORBIDDEN', 'User not authorized for this property', 403);
+    } // Requires the dedicated 'night_audit:execute' permission.
     // This is seeded via the add_night_audit_permission migration.
     const canRun = await hasPermission(session.user.id, 'night_audit', 'execute', propertyId);
     if (!canRun) return errorResponse('FORBIDDEN', 'Insufficient permissions to run night audit', 403);
@@ -41,9 +48,9 @@ export async function POST(req: NextRequest) {
 
       if (pendingRun) {
         const [operationalReview, financialAudit, systemIntegrity] = await Promise.all([
-          getOperationalReview(propertyId),
-          getFinancialAudit(propertyId),
-          getSystemIntegrity(propertyId)
+          getOperationalReview(ctx, propertyId),
+          getFinancialAudit(ctx, propertyId),
+          getSystemIntegrity(ctx, propertyId)
         ]);
 
         const requiredAckTypes: string[] = [];
@@ -74,9 +81,10 @@ export async function POST(req: NextRequest) {
     const userAgent = req.headers.get('user-agent') || 'SYSTEM';
 
     const result = await executeNightAudit(
+      ctx,
       propertyId, 
       session.user.id, 
-      session.user.email, 
+      session.user.email ?? null, 
       (session.user as any).role || 'SYSTEM',
       ipAddress,
       userAgent

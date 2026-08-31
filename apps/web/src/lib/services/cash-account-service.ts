@@ -1,4 +1,5 @@
 import prisma from '@hotel-pms/db';
+import { TenantContext } from '../organization-access';
 
 export const GENERAL_CASHIER_SAFE = 'SAFE';
 export const CASH_IN_TRANSIT = 'CASH_IN_TRANSIT';
@@ -9,11 +10,13 @@ export const BANK_ACCOUNT = 'BANK_ACCOUNT';
  * General Cashier workflow. Existing accounts are always reused, so this is
  * safe to call from page loads, seed flows, and future background jobs.
  */
-export async function ensureCashierControlAccounts(propertyId: string) {
-  return prisma.$transaction((tx) => ensureCashierControlAccountsForClient(tx, propertyId));
+export async function ensureCashierControlAccounts(ctx: TenantContext, propertyId: string) {
+  if (!ctx.propertyIds.includes(propertyId)) throw new Error('FORBIDDEN');
+  return prisma.$transaction((tx) => ensureCashierControlAccountsForClient(ctx, tx, propertyId));
 }
 
-export async function ensureCashierControlAccountsForClient(tx: any, propertyId: string) {
+export async function ensureCashierControlAccountsForClient(ctx: TenantContext, tx: any, propertyId: string) {
+    if (!ctx.propertyIds.includes(propertyId)) throw new Error('FORBIDDEN');
     const definitions = [
       { type: GENERAL_CASHIER_SAFE, name: 'General Cashier Safe', aliases: ['Reception Safe'] },
       { type: CASH_IN_TRANSIT, name: 'Cash in Transit', aliases: ['Pending Bank Deposits'] },
@@ -55,11 +58,13 @@ export async function ensureCashierControlAccountsForClient(tx: any, propertyId:
 }
 
 export async function ensureBankAccountForClient(
+  ctx: TenantContext,
   tx: any,
   propertyId: string,
   bankName?: string,
   bankAccount?: string
 ) {
+  if (!ctx.propertyIds.includes(propertyId)) throw new Error('FORBIDDEN');
   const name = bankName?.trim() || bankAccount?.trim()
     ? `${bankName?.trim() || 'Bank'}${bankAccount?.trim() ? ` · ${bankAccount.trim()}` : ''}`
     : 'Main Corporate Bank Account';
@@ -74,7 +79,8 @@ export async function ensureBankAccountForClient(
   );
 }
 
-export async function ensureExpenseCounterpartyForClient(tx: any, propertyId: string) {
+export async function ensureExpenseCounterpartyForClient(ctx: TenantContext, tx: any, propertyId: string) {
+  if (!ctx.propertyIds.includes(propertyId)) throw new Error('FORBIDDEN');
   return (
     (await tx.cashAccount.findFirst({
       where: { propertyId, type: 'EXTERNAL', name: 'Cash Expense Clearing' },

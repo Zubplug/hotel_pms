@@ -1,14 +1,16 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { ShiftControlService, ShiftControlError } from '@/lib/services/shift-control-service';
 import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth();
     if (!session?.user?.id) return errorResponse('UNAUTHORIZED', 'Unauthorized', 401);
+    const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
     const role = String((session.user as any).role || '');
     if (!['MANAGER', 'FINANCE_MANAGER', 'ADMIN', 'SUPER_ADMIN'].includes(role) && !(session.user as any).isSuperAdmin) return errorResponse('FORBIDDEN', 'Manager reconciliation access required', 403);
     const { id } = await params;
@@ -23,13 +25,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const reviewNotes = typeof notes === 'string' ? notes.trim() : '';
     let updated;
     if (decision === 'APPROVED') {
-      updated = await ShiftControlService.approveShift('FRONT_DESK', id, staff.id);
+      updated = await ShiftControlService.approveShift(ctx, 'FRONT_DESK', id);
     } else if (decision === 'APPROVED_WITH_VARIANCE') {
       updated = await ShiftControlService.approveShiftWithVariance(
-        'FRONT_DESK', id, staff.id, role, 'CASH_RECONCILIATION', reviewNotes
+        ctx, 'FRONT_DESK', id, 'CASH_RECONCILIATION', reviewNotes
       );
     } else {
-      updated = await ShiftControlService.returnShift('FRONT_DESK', id, staff.id, reviewNotes);
+      updated = await ShiftControlService.returnShift(ctx, 'FRONT_DESK', id, reviewNotes);
     }
     return successResponse({ session: updated });
   } catch (error) {

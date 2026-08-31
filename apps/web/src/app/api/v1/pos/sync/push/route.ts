@@ -3,6 +3,7 @@ import prisma from "@hotel-pms/db";
 import { randomUUID } from "crypto";
 import { InventoryService } from "@/lib/inventory/InventoryService";
 import { isNightAuditCutoverActive } from "@/lib/night-audit-guard";
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 // Legacy desktop SyncEvents use operation IDs such as `op_<device>_<ticks>`,
 // while HotelEvent.id is a PostgreSQL UUID. Keep the legacy ID as the
@@ -291,8 +292,7 @@ export async function POST(req: NextRequest) {
                      if (updateResult.count === 0) {
                          // Table is already occupied by someone else! Conflict.
                          await tx.syncConflict.create({
-                             data: {
-                                 propertyId,
+                             data: { propertyId,
                                  aggregateType: 'POS_ORDER',
                                  aggregateId: event.aggregateId,
                                  conflictReason: `Table ${tableId} is already occupied by another order.`,

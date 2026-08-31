@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 export async function POST(
   req: NextRequest,
@@ -12,8 +13,13 @@ export async function POST(
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
 
     const body = await req.json();
+        let reqPropertyId = body?.propertyId;
+        if (reqPropertyId && !ctx.propertyIds.includes(reqPropertyId)) return NextResponse.json({ error: 'Forbidden property' }, { status: 403 });
+        let reqOutletId = body?.outletId;
+        if (reqOutletId && !ctx.outletIds.includes(reqOutletId)) return NextResponse.json({ error: 'Forbidden outlet' }, { status: 403 });
     const { name, capacity, positionX, positionY } = body;
 
     if (!name || capacity === undefined) {

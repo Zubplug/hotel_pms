@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { hasInventoryPermission } from '@/lib/inventory/permissions';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 export async function PATCH(request: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -11,14 +12,15 @@ export async function PATCH(request: Request, props: { params: Promise<{ id: str
       return NextResponse.json({ data: null, error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { role, propertyId, isSuperAdmin, id: userId } = session.user as any;
+    const { role, isSuperAdmin, id: userId } = session.user as any;
+    const ctx = await requireOrganizationContext(session.user.id);
 
     if (!hasInventoryPermission(role, 'inventory.read', isSuperAdmin)) {
       return NextResponse.json({ data: null, error: 'Forbidden' }, { status: 403 });
     }
 
     const alert = await prisma.inventoryAlert.updateMany({
-      where: { id: params.id, propertyId, status: 'OPEN' },
+      where: { id: params.id, propertyId: ctx.propertyIds[0], status: 'OPEN' },
       data: {
         status: 'ACKNOWLEDGED' as any,
         acknowledgedBy: userId,

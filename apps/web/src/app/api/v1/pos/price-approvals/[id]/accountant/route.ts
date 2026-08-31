@@ -1,7 +1,8 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { errorResponse, successResponse } from '@/lib/api-response';
 import { resolveUser } from '@/lib/resolve-user';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 const ACCOUNTANT_ROLES = ['ACCOUNTANT', 'FINANCE_MANAGER', 'MANAGER', 'CEO', 'SUPER_ADMIN'];
 

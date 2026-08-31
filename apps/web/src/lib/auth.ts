@@ -42,7 +42,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (user.staffId) {
           staff = await prisma.staff.findUnique({
             where: { id: user.staffId },
-            select: { firstName: true, lastName: true }
+            select: { firstName: true, lastName: true, organizationId: true }
           });
         }
 
@@ -72,7 +72,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         capabilities = Array.from(new Set(capabilities));
         
         let primaryRole = user.roles?.[0]?.role?.name || 'STAFF';
-        let organizationId = user.roles?.[0]?.role?.organizationId || null;
+        let organizationId = staff?.organizationId || user.roles?.[0]?.role?.organizationId || null;
         let propertyId = propertyIds.length > 0 ? propertyIds[0] : null;
 
         // Industry standard: Super Admin bypasses normal role checks and gets all capabilities
@@ -81,9 +81,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           capabilities = Array.from(new Set([...capabilities, ...allPermissions.map(p => p.name)]));
           primaryRole = 'SUPER_ADMIN';
 
-          // Ensure Super Admin has a working context if no roles are assigned
+          // Ensure Super Admin has a working context only within an organization
+          // explicitly associated with the account.
           if (!propertyId) {
-            const firstProperty = await prisma.property.findFirst();
+            const organizationIds = Array.from(new Set([
+              staff?.organizationId,
+              ...(user.roles ?? []).map((ur: any) => ur.role?.organizationId),
+            ].filter((id): id is string => Boolean(id))));
+            const firstProperty = organizationIds.length
+              ? await prisma.property.findFirst({ where: { organizationId: { in: organizationIds } } })
+              : null;
             if (firstProperty) {
               propertyId = firstProperty.id;
               organizationId = firstProperty.organizationId;

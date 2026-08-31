@@ -18,7 +18,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const result = await prisma.$transaction(async tx => {
       const request = await tx.refundRequest.findUnique({ where: { id }, include: { payment: true, folio: true } });
       if (!request) throw new Error('NOT_FOUND');
-      if (!user.isSuperAdmin && !user.allowedProperties.includes(request.propertyId)) throw new Error('FORBIDDEN');
+      if (!user.allowedProperties.includes(request.propertyId)) throw new Error('FORBIDDEN');
       if (await isNightAuditTransactionLocked(request.propertyId)) throw new Error('NIGHT_AUDIT_IN_PROGRESS');
       if (request.approvedMethod !== 'CASH' || request.status !== 'APPROVED') throw new Error('CONFLICT');
 

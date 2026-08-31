@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { hasInventoryPermission } from '@/lib/inventory/permissions';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 const STOCK_ITEM_TYPES = ['SELLABLE', 'RAW_MATERIAL', 'CONSUMABLE', 'CLEANING', 'HOUSEKEEPING', 'ASSET', 'PACKAGING'] as const;
 
@@ -11,7 +12,8 @@ export async function GET(request: Request) {
     try {
         const session = await auth();
         if (!session?.user) return NextResponse.json({ error: 'Unauthorized', data: null }, { status: 401 });
-        const { role, propertyId, isSuperAdmin } = session.user as any;
+        const { role, isSuperAdmin } = session.user as any;
+    const ctx = await requireOrganizationContext(session.user.id);
         if (!hasInventoryPermission(role, 'inventory.read', isSuperAdmin)) return NextResponse.json({ error: 'Forbidden', data: null }, { status: 403 });
 
         const { searchParams } = new URL(request.url);
@@ -25,7 +27,7 @@ export async function GET(request: Request) {
         const limit = parseInt(searchParams.get('limit') || '50', 10);
         const skip = (page - 1) * limit;
 
-        const where: any = { propertyId, isActive };
+        const where: any = { propertyId: { in: ctx.propertyIds as string[] }, isActive };
         if (warehouseId) where.warehouseId = warehouseId;
         if (stockType && STOCK_ITEM_TYPES.includes(stockType as typeof STOCK_ITEM_TYPES[number])) where.stockType = stockType;
         
@@ -76,7 +78,8 @@ export async function POST(request: Request) {
     try {
         const session = await auth();
         if (!session?.user) return NextResponse.json({ error: 'Unauthorized', data: null }, { status: 401 });
-        const { role, propertyId, isSuperAdmin } = session.user as any;
+        const { role, isSuperAdmin } = session.user as any;
+    const ctx = await requireOrganizationContext(session.user.id);
         if (!hasInventoryPermission(role, 'inventory.manage', isSuperAdmin)) return NextResponse.json({ error: 'Forbidden', data: null }, { status: 403 });
 
         const body = await request.json();
@@ -87,7 +90,7 @@ export async function POST(request: Request) {
         }
 
         const warehouse = await prisma.warehouse.findFirst({
-            where: { id: warehouseId, propertyId },
+            where: { id: warehouseId, propertyId: ctx.propertyIds[0] },
         });
 
         if (!warehouse) {
@@ -96,7 +99,7 @@ export async function POST(request: Request) {
 
         const item = await prisma.stockItem.create({
             data: {
-                propertyId,
+                propertyId: ctx.propertyIds[0],
                 warehouseId,
                 name,
                 sku,

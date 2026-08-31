@@ -1,16 +1,17 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { assertPropertyAccess } from '@/lib/property-access';
 import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 import crypto from 'crypto';
-
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth();
     if (!session?.user?.id) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
     const { id } = await params;
     const body = await req.json().catch(() => ({}));
     const reservation = await prisma.reservation.findUnique({ where: { id }, select: { propertyId: true, status: true, id: true, property: { select: { organizationId: true } } } });

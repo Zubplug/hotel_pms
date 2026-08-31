@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
@@ -6,6 +6,7 @@ import { assertPropertyAccess } from '@/lib/property-access';
 import { hasPermission } from '@/lib/rbac';
 import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 import { NotificationEngine } from '@/lib/notification-engine';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 export async function POST(
   req: NextRequest,
@@ -14,9 +15,12 @@ export async function POST(
   try {
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
     
     const { id } = await params;
     const body = await req.json();
+        let reqPropertyId = body?.propertyId;
+        if (reqPropertyId && !ctx.propertyIds.includes(reqPropertyId)) return NextResponse.json({ error: 'Forbidden property' }, { status: 403 });
     const reason = body?.reason || 'No reason provided';
     
     // 1. Verify property access and get the existing reservation
@@ -100,7 +104,7 @@ export async function POST(
       await tx.auditLog.create({
         data: {
           organizationId,
-          propertyId,
+          propertyId: (typeof reqPropertyId !== "undefined" ? reqPropertyId : ctx.propertyIds[0]),
           userId: session.user.id,
           userEmail: session.user.email,
           userRole: (session.user as any).role || 'STAFF',
@@ -137,7 +141,7 @@ export async function POST(
             continue;
           }
 
-          const workflowRules = await tx.refundApprovalRule.findMany({ where: { propertyId, isActive: true }, orderBy: { stepOrder: 'asc' } });
+          const workflowRules = await tx.refundApprovalRule.findMany({ where: { propertyId: { in: ctx.propertyIds as string[] }, isActive: true }, orderBy: { stepOrder: 'asc' } });
           const matchingRules = workflowRules.filter((rule: any) => (rule.minAmount == null || amount >= Number(rule.minAmount)) && (rule.maxAmount == null || amount <= Number(rule.maxAmount)));
           const firstRule = matchingRules[0];
           const fallbackRoleName = amount > 250000 ? 'FINANCE_MANAGER' : amount > 50000 ? 'MANAGER' : 'FRONT_DESK_MANAGER';
@@ -153,7 +157,7 @@ export async function POST(
           const request = await tx.refundRequest.create({
             data: {
               organizationId,
-              propertyId,
+              propertyId: (typeof reqPropertyId !== "undefined" ? reqPropertyId : ctx.propertyIds[0]),
               reservationId: id,
               folioId: folio.id,
               paymentId: payment.id,
@@ -172,8 +176,7 @@ export async function POST(
             },
           });
           await tx.approvalRequest.create({
-            data: {
-              propertyId,
+            data: { propertyId: (typeof reqPropertyId !== "undefined" ? reqPropertyId : ctx.propertyIds[0]),
               type: 'REFUND',
               status: 'PENDING',
               requestedBy: session.user.id,

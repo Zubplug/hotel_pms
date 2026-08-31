@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { hasInventoryPermission } from '@/lib/inventory/permissions';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -11,7 +12,8 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       return NextResponse.json({ data: null, error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { role, propertyId, isSuperAdmin } = session.user as any;
+    const { role, isSuperAdmin } = session.user as any;
+    const ctx = await requireOrganizationContext(session.user.id);
 
     if (!hasInventoryPermission(role, 'inventory.transfer', isSuperAdmin)) {
       return NextResponse.json({ data: null, error: 'Forbidden' }, { status: 403 });
@@ -20,7 +22,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     const transfer = await prisma.stockTransfer.updateMany({
       where: { 
         id: params.id, 
-        propertyId,
+        propertyId: ctx.propertyIds[0],
         status: 'DRAFT'
       },
       data: {

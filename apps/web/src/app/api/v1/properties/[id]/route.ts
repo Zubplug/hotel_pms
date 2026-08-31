@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
@@ -6,6 +6,7 @@ import { createAuditLog } from '@/lib/audit';
 import { hasPermission } from '@/lib/rbac';
 import { assertPropertyAccess, NotFoundError, ForbiddenError } from '@/lib/property-access';
 import { updatePropertySchema } from '@hotel-pms/types';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -13,6 +14,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   try {
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
 
     const { id } = await params;
     await assertPropertyAccess(session.user.id, id);
@@ -38,6 +40,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   try {
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
 
     const { id } = await params;
     await assertPropertyAccess(session.user.id, id);
@@ -48,6 +51,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (!property) return errorResponse('NOT_FOUND', 'Property not found', 404);
 
     const body = await req.json();
+        let reqPropertyId = body?.propertyId;
+        if (reqPropertyId && !ctx.propertyIds.includes(reqPropertyId)) return NextResponse.json({ error: 'Forbidden property' }, { status: 403 });
     const data = updatePropertySchema.parse(body);
     const updated = await prisma.property.update({ where: { id }, data: data as any });
 
@@ -74,6 +79,7 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   try {
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
 
     const { id } = await params;
     await assertPropertyAccess(session.user.id, id);

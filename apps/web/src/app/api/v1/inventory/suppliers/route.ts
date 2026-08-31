@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { hasInventoryPermission } from '@/lib/inventory/permissions';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 export const dynamic = 'force-dynamic';
 
@@ -10,7 +11,8 @@ export async function GET(req: Request) {
     const session = await auth();
     if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { role, propertyId, isSuperAdmin } = session.user as any;
+    const { role, isSuperAdmin } = session.user as any;
+    const ctx = await requireOrganizationContext(session.user.id);
     if (!hasInventoryPermission(role, 'inventory.read', isSuperAdmin)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -18,7 +20,7 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const search = searchParams.get('search');
 
-    const where: any = { propertyId };
+    const where: any = { propertyId: ctx.propertyIds[0] };
     if (search) {
       where.OR = [
         { name: { contains: search, mode: 'insensitive' } },
@@ -43,7 +45,8 @@ export async function POST(req: Request) {
     const session = await auth();
     if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { role, propertyId, isSuperAdmin } = session.user as any;
+    const { role, isSuperAdmin } = session.user as any;
+    const ctx = await requireOrganizationContext(session.user.id);
     if (!hasInventoryPermission(role, 'procurement.supplier.manage', isSuperAdmin)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -63,7 +66,7 @@ export async function POST(req: Request) {
         phone,
         address,
         taxIdentifier,
-        propertyId,
+        propertyId: ctx.propertyIds[0],
       },
     });
 

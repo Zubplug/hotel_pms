@@ -1,8 +1,8 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
 import { errorResponse, successResponse } from '@/lib/api-response';
-import { getUserPropertyIds } from '@/lib/property-access';
+import { requireOrganizationContext } from '@/lib/organization-access';
 
 const number = (value: unknown) => Number(value ?? 0);
 
@@ -10,6 +10,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   try {
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
     const { id } = await params;
     const current = await prisma.frontdeskSession.findUnique({
       where: { id },
@@ -39,7 +40,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       },
     });
     if (!current) return errorResponse('NOT_FOUND', 'Front Desk session not found', 404);
-    if (!(await getUserPropertyIds(session.user.id)).includes(current.propertyId)) return errorResponse('FORBIDDEN', 'No access to this property', 403);
+    if (!((await requireOrganizationContext(session.user.id)).propertyIds).includes(current.propertyId)) return errorResponse('FORBIDDEN', 'No access to this property', 403);
 
     const payments = current.payments.filter(payment => ['COMPLETED', 'PARTIALLY_REFUNDED'].includes(payment.status));
     const cash = payments.filter(payment => payment.method === 'CASH').reduce((sum, payment) => sum + number(payment.amount), 0);

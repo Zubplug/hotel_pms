@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
+import { requireOrganizationContext } from "@/lib/organization-access";
 import { auth } from '@/lib/auth';
-import { getUserPropertyIds } from '@/lib/property-access';
 import { compare } from 'bcryptjs';
 import { CashHandoverService } from '@/lib/services/cash-handover-service';
 import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
-
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ sessionId: string }> }) {
   try {
@@ -20,7 +19,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (await isNightAuditTransactionLocked(current.propertyId)) {
       return NextResponse.json({ error: 'Handover cannot be confirmed while Night Audit is posting.', code: 'NIGHT_AUDIT_IN_PROGRESS' }, { status: 409 });
     }
-    const allowed = await getUserPropertyIds(actor.user.id);
+    const allowed = (await requireOrganizationContext(actor.user.id)).propertyIds;
     if (!allowed.includes(current.propertyId)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     const settlement = current.settlements[0];
     if (!settlement || settlement.status !== 'PENDING_HANDOVER') return NextResponse.json({ error: 'No pending handover exists for this session' }, { status: 409 });
@@ -36,9 +35,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const handoverId = current.cashHandoverId || (settlement as any).cashHandoverId;
     if (!handoverId) return NextResponse.json({ error: 'No cash handover found for this session' }, { status: 400 });
 
-    const result = await CashHandoverService.receiveHandover({
-      handoverId,
-      receiverId: manager.id
+    const ctx = await requireOrganizationContext(actor.user.id);
+    const result = await CashHandoverService.receiveHandover(ctx, {
+      handoverId
     });
     
     // Also update settlement status since CashHandoverService only updates session

@@ -1,0 +1,80 @@
+src/app/api/v1/pos/authorize/route.ts(14,31): error TS2304: Cannot find name 'ctx'.
+src/app/api/v1/pos/authorize/route.ts(16,29): error TS2304: Cannot find name 'ctx'.
+src/app/api/v1/pos/authorize/route.ts(34,83): error TS2304: Cannot find name 'ctx'.
+src/app/api/v1/pos/cash-office/safe/deposit/route.ts(64,39): error TS2552: Cannot find name 'reqPropertyId'. Did you mean 'propertyId'?
+src/app/api/v1/pos/cash-office/safe/deposit/route.ts(64,71): error TS2552: Cannot find name 'reqPropertyId'. Did you mean 'propertyId'?
+src/app/api/v1/pos/cash-office/safe/deposit/route.ts(70,37): error TS2552: Cannot find name 'reqPropertyId'. Did you mean 'propertyId'?
+src/app/api/v1/pos/cash-office/safe/deposit/route.ts(70,69): error TS2552: Cannot find name 'reqPropertyId'. Did you mean 'propertyId'?
+src/app/api/v1/pos/cash-office/safe/open/route.ts(52,39): error TS2552: Cannot find name 'reqPropertyId'. Did you mean 'propertyId'?
+src/app/api/v1/pos/cash-office/safe/open/route.ts(52,71): error TS2552: Cannot find name 'reqPropertyId'. Did you mean 'propertyId'?
+src/app/api/v1/pos/cash-office/safe/open/route.ts(62,39): error TS2552: Cannot find name 'reqPropertyId'. Did you mean 'propertyId'?
+src/app/api/v1/pos/cash-office/safe/open/route.ts(62,71): error TS2552: Cannot find name 'reqPropertyId'. Did you mean 'propertyId'?
+src/app/api/v1/pos/cash-office/safe/open/route.ts(68,37): error TS2552: Cannot find name 'reqPropertyId'. Did you mean 'propertyId'?
+src/app/api/v1/pos/cash-office/safe/open/route.ts(68,69): error TS2552: Cannot find name 'reqPropertyId'. Did you mean 'propertyId'?
+src/app/api/v1/pos/devices/register/route.ts(105,35): error TS2552: Cannot find name 'reqPropertyId'. Did you mean 'propertyId'?
+src/app/api/v1/pos/devices/register/route.ts(105,67): error TS2552: Cannot find name 'reqPropertyId'. Did you mean 'propertyId'?
+src/app/api/v1/pos/kds/waiter-tickets/route.ts(30,51): error TS18047: 'session' is possibly 'null'.
+src/app/api/v1/pos/kds/waiter-tickets/route.ts(30,59): error TS2339: Property 'user' does not exist on type '{ id: string; version: number; outletId: string; bankingModel: string; bankType: string; primaryOperatorId: string | null; authorizedBy: string | null; reason: string | null; status: PosSessionStatus; ... 31 more ...; updatedAt: Date; }'.
+src/app/api/v1/pos/kitchen/waste/route.ts(44,29): error TS2304: Cannot find name 'ctx'.
+src/app/api/v1/pos/kitchen/waste/route.ts(69,100): error TS2304: Cannot find name 'ctx'.
+src/app/api/v1/pos/modifier-requests/route.ts(24,29): error TS2304: Cannot find name 'ctx'.
+src/app/api/v1/pos/operator-sessions/[id]/route.ts(18,31): error TS2448: Block-scoped variable 'ctx' used before its declaration.
+src/app/api/v1/pos/operator-sessions/[id]/route.ts(18,31): error TS2454: Variable 'ctx' is used before being assigned.
+src/app/api/v1/pos/operator-sessions/[id]/route.ts(20,29): error TS2448: Block-scoped variable 'ctx' used before its declaration.
+src/app/api/v1/pos/operator-sessions/[id]/route.ts(20,29): error TS2454: Variable 'ctx' is used before being assigned.
+src/app/api/v1/pos/operator-sessions/[id]/route.ts(32,59): error TS2339: Property 'user' does not exist on type '{ id: string; version: number; terminalId: string; outletId: string; operatorId: string; startedAt: Date; lastActivityAt: Date; lockedAt: Date | null; endedAt: Date | null; status: PosOperatorSessionStatus; authenticationMethod: string; deviceSessionId: string | null; }'.
+src/app/api/v1/pos/operator-sessions/route.ts(17,31): error TS2448: Block-scoped variable 'ctx' used before its declaration.
+src/app/api/v1/pos/operator-sessions/route.ts(17,31): error TS2454: Variable 'ctx' is used before being assigned.
+src/app/api/v1/pos/operator-sessions/route.ts(19,29): error TS2448: Block-scoped variable 'ctx' used before its declaration.
+src/app/api/v1/pos/operator-sessions/route.ts(19,29): error TS2454: Variable 'ctx' is used before being assigned.
+src/app/api/v1/pos/operator-sessions/route.ts(48,59): error TS2339: Property 'user' does not exist on type '{ id: string; version: number; terminalId: string; outletId: string; operatorId: string; startedAt: Date; lastActivityAt: Date; lockedAt: Date | null; endedAt: Date | null; status: PosOperatorSessionStatus; authenticationMethod: string; deviceSessionId: string | null; }'.
+src/app/api/v1/pos/operator/route.ts(21,59): error TS2339: Property 'user' does not exist on type '{ id: string; version: number; outletId: string; bankingModel: string; bankType: string; primaryOperatorId: string | null; authorizedBy: string | null; reason: string | null; status: PosSessionStatus; ... 31 more ...; updatedAt: Date; }'.
+src/app/api/v1/pos/orders/[orderId]/fire/route.ts(31,31): error TS2304: Cannot find name 'ctx'.
+src/app/api/v1/pos/orders/[orderId]/fire/route.ts(33,29): error TS2304: Cannot find name 'ctx'.
+src/app/api/v1/pos/orders/[orderId]/pay/route.ts(26,31): error TS2304: Cannot find name 'ctx'.
+src/app/api/v1/pos/orders/[orderId]/pay/route.ts(28,29): error TS2304: Cannot find name 'ctx'.
+src/app/api/v1/pos/orders/[orderId]/status/route.ts(22,31): error TS2304: Cannot find name 'ctx'.
+src/app/api/v1/pos/orders/[orderId]/status/route.ts(24,29): error TS2304: Cannot find name 'ctx'.
+src/app/api/v1/pos/orders/[orderId]/status/route.ts(76,41): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Readonly<{ organizationId: string; userId: string; role: string; permissions: readonly string[]; propertyIds: readonly string[]; outletIds: readonly string[]; }>'.
+src/app/api/v1/pos/orders/route.ts(17,31): error TS2304: Cannot find name 'ctx'.
+src/app/api/v1/pos/orders/route.ts(19,29): error TS2304: Cannot find name 'ctx'.
+src/app/api/v1/pos/orders/route.ts(103,74): error TS2304: Cannot find name 'ctx'.
+src/app/api/v1/pos/orders/route.ts(107,85): error TS2304: Cannot find name 'ctx'.
+src/app/api/v1/pos/orders/route.ts(108,73): error TS2304: Cannot find name 'ctx'.
+src/app/api/v1/pos/outlets/[outletId]/floor-plans/route.ts(19,51): error TS18047: 'session' is possibly 'null'.
+src/app/api/v1/pos/products/[productId]/modifiers/route.ts(36,31): error TS2304: Cannot find name 'ctx'.
+src/app/api/v1/pos/products/[productId]/modifiers/route.ts(38,29): error TS2304: Cannot find name 'ctx'.
+src/app/api/v1/pos/products/[productId]/price-request/route.ts(17,31): error TS2304: Cannot find name 'ctx'.
+src/app/api/v1/pos/products/[productId]/price-request/route.ts(19,29): error TS2304: Cannot find name 'ctx'.
+src/app/api/v1/pos/products/menu-request/route.ts(18,29): error TS2304: Cannot find name 'ctx'.
+src/app/api/v1/pos/provision/route.ts(10,31): error TS2304: Cannot find name 'ctx'.
+src/app/api/v1/pos/provision/route.ts(12,29): error TS2304: Cannot find name 'ctx'.
+src/app/api/v1/pos/provision/route.ts(57,77): error TS2304: Cannot find name 'ctx'.
+src/app/api/v1/pos/provision/route.ts(58,71): error TS2304: Cannot find name 'ctx'.
+src/app/api/v1/pos/provision/route.ts(72,89): error TS2304: Cannot find name 'ctx'.
+src/app/api/v1/pos/provision/route.ts(73,84): error TS2304: Cannot find name 'ctx'.
+src/app/api/v1/pos/sessions/[sessionId]/confirm-handover/route.ts(20,51): error TS2552: Cannot find name 'session'. Did you mean 'sessionId'?
+src/app/api/v1/pos/sessions/[sessionId]/confirm-handover/route.ts(20,79): error TS2552: Cannot find name 'session'. Did you mean 'sessionId'?
+src/app/api/v1/pos/sessions/[sessionId]/confirm-handover/route.ts(40,46): error TS2554: Expected 2 arguments, but got 1.
+src/app/api/v1/pos/sessions/[sessionId]/context/route.ts(23,59): error TS2339: Property 'user' does not exist on type '{ outlet: { id: string; propertyId: string; name: string; type: string; isActive: boolean; autoLockSeconds: number; createdAt: Date; updatedAt: Date; createdBy: string | null; updatedBy: string | null; }; primaryOperator: { ...; } | null; } & { ...; }'.
+src/app/api/v1/pos/sessions/[sessionId]/settle/route.ts(21,31): error TS2448: Block-scoped variable 'ctx' used before its declaration.
+src/app/api/v1/pos/sessions/[sessionId]/settle/route.ts(21,31): error TS2454: Variable 'ctx' is used before being assigned.
+src/app/api/v1/pos/sessions/[sessionId]/settle/route.ts(23,29): error TS2448: Block-scoped variable 'ctx' used before its declaration.
+src/app/api/v1/pos/sessions/[sessionId]/settle/route.ts(23,29): error TS2454: Variable 'ctx' is used before being assigned.
+src/app/api/v1/pos/sessions/[sessionId]/settle/route.ts(29,51): error TS2552: Cannot find name 'session'. Did you mean 'sessionId'?
+src/app/api/v1/pos/sessions/[sessionId]/settle/route.ts(29,79): error TS2552: Cannot find name 'session'. Did you mean 'sessionId'?
+src/app/api/v1/pos/sessions/[sessionId]/settle/route.ts(97,45): error TS2739: Type 'Omit<PrismaClient<PrismaClientOptions, never, DefaultArgs>, "$connect" | "$disconnect" | "$extends" | "$on" | "$transaction" | "$use">' is missing the following properties from type 'Readonly<{ organizationId: string; userId: string; role: string; permissions: readonly string[]; propertyIds: readonly string[]; outletIds: readonly string[]; }>': organizationId, userId, permissions, propertyIds, outletIds
+src/app/api/v1/pos/sessions/emergency-bank/route.ts(66,39): error TS2552: Cannot find name 'reqPropertyId'. Did you mean 'propertyId'?
+src/app/api/v1/pos/sessions/emergency-bank/route.ts(66,71): error TS2552: Cannot find name 'reqPropertyId'. Did you mean 'propertyId'?
+src/app/api/v1/pos/sessions/emergency-bank/route.ts(67,31): error TS2552: Cannot find name 'reqOutletId'. Did you mean 'outletId'?
+src/app/api/v1/pos/sessions/emergency-bank/route.ts(67,61): error TS2552: Cannot find name 'reqOutletId'. Did you mean 'outletId'?
+src/app/api/v1/pos/sessions/emergency-bank/route.ts(90,37): error TS2552: Cannot find name 'reqPropertyId'. Did you mean 'propertyId'?
+src/app/api/v1/pos/sessions/emergency-bank/route.ts(90,69): error TS2552: Cannot find name 'reqPropertyId'. Did you mean 'propertyId'?
+src/app/api/v1/pos/sessions/emergency-bank/route.ts(105,37): error TS2552: Cannot find name 'reqPropertyId'. Did you mean 'propertyId'?
+src/app/api/v1/pos/sessions/emergency-bank/route.ts(105,69): error TS2552: Cannot find name 'reqPropertyId'. Did you mean 'propertyId'?
+src/app/api/v1/pos/sessions/route.ts(38,31): error TS2304: Cannot find name 'ctx'.
+src/app/api/v1/pos/sessions/route.ts(40,29): error TS2304: Cannot find name 'ctx'.
+src/app/api/v1/pos/sessions/route.ts(134,85): error TS2304: Cannot find name 'ctx'.
+src/app/api/v1/pos/sync/push/route.ts(28,31): error TS2304: Cannot find name 'ctx'.
+src/app/api/v1/pos/sync/push/route.ts(30,29): error TS2304: Cannot find name 'ctx'.
+src/app/api/v1/pos/sync/push/route.ts(299,106): error TS2304: Cannot find name 'ctx'.

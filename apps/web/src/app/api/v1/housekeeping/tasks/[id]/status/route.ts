@@ -1,3 +1,5 @@
+import { NextResponse } from 'next/server';
+import { requireOrganizationContext } from '@/lib/organization-access';
 import { NextRequest } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
@@ -35,7 +37,7 @@ export async function PATCH(
     });
 
     if (!task) return errorResponse('NOT_FOUND', 'Task not found', 404);
-    await assertPropertyAccess(session.user.id, task.propertyId);
+    if (!(await requireOrganizationContext(session.user.id)).propertyIds.includes(task.propertyId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     // Housekeeping task management is controlled by reception or management.
     const capabilities = (session.user as any).capabilities || [];

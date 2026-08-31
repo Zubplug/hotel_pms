@@ -1,3 +1,5 @@
+import { NextResponse } from 'next/server';
+import { requireOrganizationContext } from '@/lib/organization-access';
 import { NextRequest } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
@@ -20,7 +22,7 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
     });
 
     if (!ticket) return errorResponse('NOT_FOUND', 'Maintenance ticket not found', 404);
-    await assertPropertyAccess(session.user.id, ticket.propertyId);
+    if (!(await requireOrganizationContext(session.user.id)).propertyIds.includes(ticket.propertyId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     // Validate Transitions
     const allowedTransitions: Record<string, string[]> = {

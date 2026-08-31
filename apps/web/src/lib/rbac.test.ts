@@ -38,9 +38,9 @@ vi.mock('@hotel-pms/db', () => {
   };
 });
 
-test('Super admin has all permissions implicitly', async () => {
+test('Super admin requires a property-scoped organization context', async () => {
   const result = await hasPermission('superadmin', 'anything', 'anyaction');
-  expect(result).toBe(true);
+  expect(result).toBe(false);
 });
 
 test('Normal user with specific permission', async () => {

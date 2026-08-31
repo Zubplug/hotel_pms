@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { compare } from 'bcryptjs';
-import { createHash } from 'crypto';
+import { authenticateSyncRequest } from '@/lib/sync-auth';
 import prisma from '@hotel-pms/db';
 
 export async function GET(req: NextRequest) {
@@ -10,30 +9,23 @@ export async function GET(req: NextRequest) {
       .split(',')
       .map(value => value.trim())
       .filter(Boolean);
-    const authHeader = req.headers.get('Authorization');
-    if (!propertyId || !eventIds.length || !authHeader?.startsWith('Bearer ')) {
+    
+    if (!propertyId || !eventIds.length) {
       return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
     }
 
-    const token = authHeader.substring(7);
-    const tokenHash = createHash('sha256').update(token).digest('hex');
-    const terminals = await prisma.posTerminal.findMany({
-      where: { propertyId, registrationState: 'REGISTERED' },
-      select: { id: true, deviceCredentialHash: true }
-    });
-    const device = (await Promise.all(terminals.map(async terminal => {
-      if (!terminal.deviceCredentialHash) return null;
-      if (terminal.deviceCredentialHash === tokenHash) return terminal;
-      if (terminal.deviceCredentialHash.length === 60 && await compare(token, terminal.deviceCredentialHash)) return terminal;
-      return null;
-    }))).find(Boolean);
-    if (!device) return NextResponse.json({ error: 'Terminal not authorized' }, { status: 403 });
+    const authResult = await authenticateSyncRequest(req, propertyId);
+    if (!authResult.success || !authResult.isDevice) {
+      return NextResponse.json({ error: authResult.success ? 'Must be a device' : authResult.error }, { status: authResult.success ? 403 : authResult.status });
+    }
+    
+    const deviceId = authResult.deviceId;
 
     const events = await prisma.hotelEvent.findMany({
       where: {
         id: { in: eventIds },
         propertyId,
-        deviceId: device.id,
+        deviceId,
         syncConflict: { is: { status: { not: 'PENDING' } } }
       },
       include: { syncConflict: { select: { status: true, resolution: true } } }

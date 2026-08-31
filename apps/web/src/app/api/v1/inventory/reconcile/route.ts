@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { hasInventoryPermission } from '@/lib/inventory/permissions';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 export async function POST(request: Request) {
   try {
@@ -10,7 +11,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ data: null, error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { role, propertyId, isSuperAdmin, id: userId } = session.user as any;
+    const { role, isSuperAdmin, id: userId } = session.user as any;
+    const ctx = await requireOrganizationContext(session.user.id);
 
     if (!hasInventoryPermission(role, 'inventory.adjust', isSuperAdmin)) {
       return NextResponse.json({ data: null, error: 'Forbidden' }, { status: 403 });
@@ -21,11 +23,11 @@ export async function POST(request: Request) {
     
     // Read the approval configuration for stock adjustments to save the required roles
     const { getFlowConfig } = await import('@/lib/approval-config');
-    const adjustConfig = await getFlowConfig(propertyId, 'INVENTORY_ADJUSTMENT');
+    const adjustConfig = await getFlowConfig(ctx.propertyIds[0], 'INVENTORY_ADJUSTMENT');
 
     const approvalRequest = await prisma.approvalRequest.create({
       data: {
-        propertyId,
+        propertyId: ctx.propertyIds[0],
         type: 'INVENTORY_ADJUSTMENT',
         status: 'PENDING',
         requestedBy: userId,

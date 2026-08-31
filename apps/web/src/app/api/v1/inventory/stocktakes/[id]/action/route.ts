@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { hasInventoryPermission } from '@/lib/inventory/permissions';
 import { StocktakeService } from '@/lib/inventory/StocktakeService';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -10,12 +11,13 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     const session = await auth();
     if (!session?.user) return NextResponse.json({ error: 'Unauthorized', data: null }, { status: 401 });
     
-    const { role, propertyId, isSuperAdmin, id: userId } = session.user as any;
+    const { role, isSuperAdmin, id: userId } = session.user as any;
+    const ctx = await requireOrganizationContext(session.user.id);
     const body = await request.json();
     const { action } = body; // start, submit, reject, approve, post, cancel
 
     const stocktake = await prisma.stocktake.findUnique({
-      where: { id: params.id, propertyId },
+      where: { id: params.id, propertyId: ctx.propertyIds[0] },
       include: { items: true }
     });
 

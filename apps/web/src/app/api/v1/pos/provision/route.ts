@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@hotel-pms/db';
 import { randomBytes, createHash } from 'crypto';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 export async function POST(req: NextRequest) {
   try {

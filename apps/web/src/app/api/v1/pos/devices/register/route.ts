@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
 import bcrypt from 'bcryptjs';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 export async function POST(req: NextRequest) {
   try {
@@ -100,8 +101,7 @@ export async function POST(req: NextRequest) {
 
     // Create the device as ACTIVE since it's being registered by an admin directly
     const device = await prisma.posDevice.create({
-      data: {
-        propertyId,
+      data: { propertyId,
         name,
         identifier,
         outletId: outletId || null,

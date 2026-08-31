@@ -1,54 +1,34 @@
 import { NextRequest } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
-import { verifyMobileToken } from '@/lib/mobile-auth';
+import { resolveUser } from '@/lib/resolve-user';
+import { requireOrganizationContext } from '@/lib/organization-access';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   try {
-    const session = await verifyMobileToken(req);
-    if (!session) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    const user = await resolveUser(req);
+    
+    if (!user) {
+      return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    }
+    
+    const isSystemAdmin = user.isSuperAdmin || user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
+    
+    if (!isSystemAdmin && !['MANAGER', 'DIRECTOR', 'EXECUTIVE'].includes(user.role)) {
+      return errorResponse('FORBIDDEN', 'Executive or Management access required', 403);
+    }
+
+    const ctx = await requireOrganizationContext(user.id);
+    const allowedPropertyIds = ctx.propertyIds;
+
+    if (allowedPropertyIds.length === 0) {
+      return errorResponse('FORBIDDEN', 'No property access', 403);
+    }
 
     const { searchParams } = new URL(req.url);
     const propertyId = searchParams.get('propertyId'); // 'ALL_AUTHORIZED' or a specific UUID
-
-    // 1. Resolve authorized properties
-    const user = await prisma.user.findUnique({
-      where: { id: session.id },
-      include: {
-        roles: {
-          include: { role: true }
-        }
-      }
-    });
-
-    if (!user) return errorResponse('UNAUTHORIZED', 'User not found', 401);
-
-    const staff = await prisma.staff.findFirst({
-      where: user.staffId ? { id: user.staffId } : { userId: user.id },
-      include: {
-        organization: {
-          include: {
-            properties: {
-              where: { isActive: true },
-              select: { id: true }
-            }
-          }
-        }
-      }
-    });
-
-    const isSystemAdmin = user.roles.some((r: any) => r.role.name === 'ADMIN' || r.role.name === 'SUPER_ADMIN' || r.role.name === 'DIRECTOR');
-    
-    let allowedPropertyIds: string[] = [];
-    if (staff && staff.organization) {
-      if (isSystemAdmin) {
-        allowedPropertyIds = staff.organization.properties.map((p: any) => p.id);
-      } else if (staff.propertyAccess) {
-        allowedPropertyIds = staff.propertyAccess;
-      }
-    }
 
     if (allowedPropertyIds.length === 0) {
       return successResponse({
@@ -63,7 +43,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Filter by requested property if specified and authorized
-    let targetProperties = allowedPropertyIds;
+    let targetProperties = [...allowedPropertyIds];
     let resolvedPropertyScope = propertyId || 'ALL_AUTHORIZED';
 
     if (propertyId === 'AUTO_SELECT_FIRST' && allowedPropertyIds.length > 0) {
@@ -122,7 +102,7 @@ export async function GET(req: NextRequest) {
 
     // 4. Determine Quick Actions based on Role/Capabilities
     const quickActions = [];
-    if (isSystemAdmin || user.roles.some((r: any) => r.role.name === 'MANAGER' || r.role.name === 'EXECUTIVE')) {
+    if (isSystemAdmin || ['MANAGER', 'EXECUTIVE'].includes(user.role)) {
       quickActions.push({ id: 'approvals', label: 'Approvals', icon: 'check_circle', capability: 'approvals.view' });
       quickActions.push({ id: 'alerts', label: 'Alerts', icon: 'warning', capability: 'alerts.view' });
       quickActions.push({ id: 'broadcast', label: 'Broadcast', icon: 'campaign', capability: 'notifications.broadcast' });
@@ -137,7 +117,7 @@ export async function GET(req: NextRequest) {
     };
 
     const authorizedPropertiesDetails = await prisma.property.findMany({
-      where: { id: { in: allowedPropertyIds } },
+      where: { id: { in: [...allowedPropertyIds] } },
       select: { id: true, name: true, code: true }
     });
 

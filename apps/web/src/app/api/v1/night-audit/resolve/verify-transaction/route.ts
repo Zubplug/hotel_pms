@@ -1,3 +1,5 @@
+import { NextResponse } from 'next/server';
+import { requireOrganizationContext } from '@/lib/organization-access';
 import { NextRequest } from 'next/server';
 import { auth } from '@/lib/auth';
 import { successResponse, errorResponse } from '@/lib/api-response';
@@ -34,7 +36,7 @@ export async function POST(req: NextRequest) {
       return errorResponse('BAD_REQUEST', 'Notes are required when questioning a transaction', 400);
     }
 
-    await assertPropertyAccess(session.user.id, propertyId);
+    if (!(await requireOrganizationContext(session.user.id)).propertyIds.includes(propertyId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     // Prevent double submission using idempotencyKey by creating an AuditLog.
     // If it already exists, the unique constraint will fail, or we can check first.

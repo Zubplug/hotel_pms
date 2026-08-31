@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { resolveUser } from '@/lib/resolve-user';
 import { z } from 'zod';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 const RequestSchema = z.object({
   orderId: z.string().uuid(),

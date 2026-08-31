@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { hasInventoryPermission } from '@/lib/inventory/permissions';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +13,8 @@ export async function GET(request: Request) {
       return NextResponse.json({ data: null, error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { role, propertyId, isSuperAdmin } = session.user as any;
+    const { role, isSuperAdmin } = session.user as any;
+    const ctx = await requireOrganizationContext(session.user.id);
 
     if (!hasInventoryPermission(role, 'inventory.read', isSuperAdmin)) {
       return NextResponse.json({ data: null, error: 'Forbidden' }, { status: 403 });
@@ -22,7 +24,7 @@ export async function GET(request: Request) {
     const status = searchParams.get('status');
     const purchaseOrderId = searchParams.get('purchaseOrderId');
 
-    const where: any = { propertyId };
+    const where: any = { propertyId: ctx.propertyIds[0] };
     if (status) where.status = status;
     if (purchaseOrderId) where.purchaseOrderId = purchaseOrderId;
 

@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
       || user.capabilities.includes('MANAGE_REFUND_WORKFLOW');
     if (!canManageWorkflow) return NextResponse.json({ error: 'Refund workflow administrator access required' }, { status: 403 });
     const propertyId = new URL(req.url).searchParams.get('propertyId');
-    if (!propertyId || (!user.isSuperAdmin && !user.allowedProperties.includes(propertyId))) return NextResponse.json({ error: 'Property access denied' }, { status: 403 });
+    if (!propertyId || !user.allowedProperties.includes(propertyId)) return NextResponse.json({ error: 'Property access denied' }, { status: 403 });
 
     const property = await prisma.property.findUnique({
       where: { id: propertyId },

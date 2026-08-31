@@ -1,9 +1,9 @@
+import { NextResponse } from 'next/server';
+import { requireOrganizationContext } from '@/lib/organization-access';
 import { NextRequest } from 'next/server';
 import { auth } from '@/lib/auth';
 import { successResponse, errorResponse } from '@/lib/api-response';
-import { getUserPropertyIds } from '@/lib/property-access';
 import { ShiftControlService, ShiftControlError } from '@/lib/services/shift-control-service';
-
 /**
  * POST /api/v1/financial-control/shifts/[id]/start-review
  *
@@ -14,12 +14,10 @@ import { ShiftControlService, ShiftControlError } from '@/lib/services/shift-con
  * RBAC: General Cashier, Finance Manager, Manager, or Super Admin.
  * Cannot be called by the shift's own operator (segregation of duty).
  */
-
 const REVIEWER_ROLES = new Set([
   'GENERAL_CASHIER', 'FINANCE_MANAGER', 'MANAGER',
   'HOTEL_MANAGER', 'CEO', 'SUPER_ADMIN'
 ]);
-
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -27,27 +25,22 @@ export async function POST(
   try {
     const session = await auth();
     if (!session?.user?.id) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
-
     const { id: shiftId } = await params;
     const body = await req.json().catch(() => ({}));
     const type: 'POS' | 'FRONT_DESK' = body.type === 'POS' ? 'POS' : 'FRONT_DESK';
-
     const userRole = String((session.user as any).role || '').toUpperCase();
     if (!REVIEWER_ROLES.has(userRole)) {
       return errorResponse('FORBIDDEN', 'Only Finance or Management staff can start a shift review', 403);
     }
-
     // Resolve staff ID for segregation-of-duty check inside the service
     const staff = await import('@hotel-pms/db').then(m => m.default.staff.findFirst({
       where: { userId: session.user!.id, isActive: true },
       select: { id: true }
     }));
     if (!staff) return errorResponse('UNAUTHORIZED', 'Staff record not found', 401);
-
     // Verify reviewer has access to the property this shift belongs to
     // (done inside validateAndGetShift — shift.propertyId is validated implicitly)
-    const updated = await ShiftControlService.startShiftReview(type, shiftId, staff.id);
-
+    const updated = await ShiftControlService.startShiftReview(await requireOrganizationContext(session.user.id), type, shiftId);
     return successResponse({ shift: updated });
   } catch (err) {
     if (err instanceof ShiftControlError) {

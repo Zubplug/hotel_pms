@@ -8,7 +8,7 @@ async function authorize(req: NextRequest, propertyId: string) {
   const user = await resolveUser(req);
   if (!user) throw new Error('UNAUTHORIZED');
   if (!ADMIN_ROLES.includes(user.role) && !user.isSuperAdmin) throw new Error('FORBIDDEN');
-  if (!user.isSuperAdmin && !user.allowedProperties.includes(propertyId)) throw new Error('FORBIDDEN');
+  if (!user.allowedProperties.includes(propertyId)) throw new Error('FORBIDDEN');
   return user;
 }
 

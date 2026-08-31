@@ -1,8 +1,8 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { resolveUser } from '@/lib/resolve-user';
-import { getUserPropertyIds } from '@/lib/property-access';
+import { requireOrganizationContext } from '@/lib/organization-access';
 
 const CASHIER_ROLES = ['GENERAL_CASHIER', 'CASHIER', 'FRONT_DESK_CASHIER'];
 
@@ -16,7 +16,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
   if (!Number.isFinite(newPrice) || newPrice < 0) return errorResponse('BAD_REQUEST', 'A valid non-negative selling price is required', 400);
   const product = await prisma.posProduct.findUnique({ where: { id: productId } });
   if (!product) return errorResponse('NOT_FOUND', 'Product not found', 404);
-  if (!(await getUserPropertyIds(user.id)).includes(product.propertyId)) return errorResponse('FORBIDDEN', 'No access to this property', 403);
+  if (!((await requireOrganizationContext(user.id)).propertyIds).includes(product.propertyId)) return errorResponse('FORBIDDEN', 'No access to this property', 403);
   const pending = await prisma.approvalRequest.findFirst({ where: { propertyId: product.propertyId, type: 'POS_PRICE_CHANGE', status: 'PENDING', details: { path: ['productId'], equals: productId } } });
   if (pending) return errorResponse('CONFLICT', 'This product already has a pending price request', 409);
   const approval = await prisma.approvalRequest.create({ data: {

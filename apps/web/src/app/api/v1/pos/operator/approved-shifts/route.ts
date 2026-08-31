@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { verifyOperatorToken } from '@/lib/pos/operatorAuth';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 export async function GET(req: NextRequest) {
   try {

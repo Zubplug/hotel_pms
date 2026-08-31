@@ -1,8 +1,8 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse, paginatedResponse } from '@/lib/api-response';
-import { getUserPropertyIds } from '@/lib/property-access';
+import { requireOrganizationContext } from '@/lib/organization-access';
 import { NotificationEngine } from '@/lib/notification-engine';
 import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 
@@ -10,6 +10,7 @@ export async function GET(req: NextRequest) {
   try {
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
 
     const { searchParams } = req.nextUrl;
     const page     = Math.max(1, parseInt(searchParams.get('page')     ?? '1'));
@@ -18,7 +19,7 @@ export async function GET(req: NextRequest) {
     const status   = searchParams.get('status') ?? '';
     const propertyId = searchParams.get('propertyId') ?? '';
 
-    const allowedPropertyIds = await getUserPropertyIds(session.user.id);
+    const allowedPropertyIds = (await requireOrganizationContext(session.user.id)).propertyIds;
     if (allowedPropertyIds.length === 0) {
       return paginatedResponse([], { page, pageSize, total: 0, totalPages: 0 });
     }
@@ -77,15 +78,18 @@ export async function POST(req: NextRequest) {
   try {
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
 
     const body = await req.json();
+        let reqPropertyId = body?.propertyId;
+        if (reqPropertyId && !ctx.propertyIds.includes(reqPropertyId)) return NextResponse.json({ error: 'Forbidden property' }, { status: 403 });
     const { propertyId, guestId, guestDetails, checkIn, checkOut, roomTypeId, roomId, adults, children } = body;
 
     if (!propertyId || (!guestId && !guestDetails) || !checkIn || !checkOut || !roomTypeId || !roomId) {
       return errorResponse('BAD_REQUEST', 'Missing required fields', 400);
     }
 
-    const allowedPropertyIds = await getUserPropertyIds(session.user.id);
+    const allowedPropertyIds = (await requireOrganizationContext(session.user.id)).propertyIds;
     if (!allowedPropertyIds.includes(propertyId)) {
       return errorResponse('FORBIDDEN', 'No access to this property', 403);
     }
@@ -139,8 +143,7 @@ export async function POST(req: NextRequest) {
 
       // Create Reservation
       const newReservation = await tx.reservation.create({
-        data: {
-          propertyId,
+        data: { propertyId: (typeof reqPropertyId !== "undefined" ? reqPropertyId : ctx.propertyIds[0]),
           primaryGuestId: finalGuestId as string,
           confirmationNumber,
           source: 'WALK_IN',
@@ -149,7 +152,7 @@ export async function POST(req: NextRequest) {
           checkOut: checkOutDate,
           adults: parseInt(adults) || 1,
           children: parseInt(children) || 0,
-          ratePlanId: (await tx.ratePlan.findFirst({ where: { propertyId } }))?.id || '',
+          ratePlanId: (await tx.ratePlan.findFirst({ where: { propertyId: { in: ctx.propertyIds as string[] } } }))?.id || '',
           ratePlanSnapshot: { baseRate, total: totalAmount, currency },
           currency: currency,
           createdBy: (session.user.staffId || session.user.id) as string,
@@ -192,7 +195,7 @@ export async function POST(req: NextRequest) {
       const newFolio = await tx.folio.create({
         data: {
           reservationId: newReservation.id,
-          propertyId,
+          propertyId: (typeof reqPropertyId !== "undefined" ? reqPropertyId : ctx.propertyIds[0]),
           guestId: finalGuestId,
           folioNumber,
           type: 'ROOM',

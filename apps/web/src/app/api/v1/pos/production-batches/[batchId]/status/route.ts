@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { PosProductionBatchStatus } from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 // Valid status transitions (forward only)
 const STATUS_ORDER: PosProductionBatchStatus[] = [
@@ -21,8 +22,13 @@ export async function PATCH(
   try {
     const session = await auth();
     if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
     const { batchId } = await params;
     const body = await req.json();
+        let reqPropertyId = body?.propertyId;
+        if (reqPropertyId && !ctx.propertyIds.includes(reqPropertyId)) return NextResponse.json({ error: 'Forbidden property' }, { status: 403 });
+        let reqOutletId = body?.outletId;
+        if (reqOutletId && !ctx.outletIds.includes(reqOutletId)) return NextResponse.json({ error: 'Forbidden outlet' }, { status: 403 });
     const { status: newStatus } = body as { status: PosProductionBatchStatus };
 
     if (!STATUS_ORDER.includes(newStatus)) {

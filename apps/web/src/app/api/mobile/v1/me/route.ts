@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { resolveUser } from '@/lib/resolve-user';
+import { requireOrganizationContext } from '@/lib/organization-access';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 
@@ -9,6 +10,7 @@ export async function GET(req: NextRequest) {
     if (!user) {
       return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
     }
+    const ctx = await requireOrganizationContext(user.id);
 
     const userId = user.id;
 
@@ -50,7 +52,7 @@ export async function GET(req: NextRequest) {
     // Map system role (first role or default)
     const systemRole = dbUser.roles && dbUser.roles.length > 0 ? dbUser.roles[0].role.name : 'STAFF';
 
-    // Build human-readable capabilities based on role (mock logic for now as requested by user to show human readable permissions)
+    // Build human-readable capabilities based on role
     const capabilities = [];
     if (systemRole === 'ADMIN' || systemRole === 'DIRECTOR' || systemRole === 'MANAGER') {
       capabilities.push('View Financial Performance');
@@ -62,19 +64,11 @@ export async function GET(req: NextRequest) {
       capabilities.push('Manage Tasks');
     }
 
-    // Gather property access. 
-    // For admins/directors, they typically have access to all active properties in the org.
-    // Otherwise, restrict to staff.propertyAccess
-    let authorizedProperties: { id: string; name: string; code: string }[] = [];
-    if (staff && staff.organization) {
-       if (systemRole === 'ADMIN' || systemRole === 'DIRECTOR') {
-          authorizedProperties = staff.organization.properties.map((p: any) => ({ id: p.id, name: p.name, code: p.code }));
-       } else if (staff.propertyAccess && staff.propertyAccess.length > 0) {
-          authorizedProperties = staff.organization.properties
-             .filter((p: any) => staff.propertyAccess.includes(p.id))
-             .map((p: any) => ({ id: p.id, name: p.name, code: p.code }));
-       }
-    }
+    // Use organization context to fetch the definitively authorized properties
+    const authorizedProperties = await prisma.property.findMany({
+      where: { id: { in: [...ctx.propertyIds] } },
+      select: { id: true, name: true, code: true }
+    });
 
     // Explicit DTO mapping
     const dto = {

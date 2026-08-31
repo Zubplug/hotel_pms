@@ -1,20 +1,17 @@
+import { requireOrganizationContext } from '@/lib/organization-access';
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
-import { getUserPropertyIds } from '@/lib/property-access';
-
 const CONFIG_ROLES = ['ACCOUNTANT', 'SUPER_ADMIN'];
 const READ_ROLES = ['GENERAL_CASHIER', 'ACCOUNTANT', 'FINANCE_MANAGER', 'MANAGER', 'CEO', 'SUPER_ADMIN'];
-
 async function context() {
   const session = await auth();
   if (!session?.user) return null;
   return {
     role: String((session.user as any).role || '').toUpperCase(),
-    propertyIds: await getUserPropertyIds(session.user.id),
+    propertyIds: (await requireOrganizationContext(session.user.id)).propertyIds,
   };
 }
-
 export async function GET(request: Request) {
   const actor = await context();
   if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -27,7 +24,6 @@ export async function GET(request: Request) {
   ]);
   return NextResponse.json({ data: { categories, costCenters } });
 }
-
 export async function POST(request: Request) {
   const actor = await context();
   if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

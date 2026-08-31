@@ -1,36 +1,30 @@
+import { NextResponse } from 'next/server';
+import { requireOrganizationContext } from '@/lib/organization-access';
 import { NextRequest } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
 import { errorResponse, successResponse } from '@/lib/api-response';
-import { getUserPropertyIds } from '@/lib/property-access';
-
 const toNumber = (value: unknown) => Number(value ?? 0);
-
 export async function GET(request: NextRequest) {
   try {
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
-
     const { searchParams } = new URL(request.url);
     const propertyId = searchParams.get('propertyId');
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
-
     if (!propertyId || !startDate || !endDate) {
       return errorResponse('BAD_REQUEST', 'propertyId, startDate, and endDate are required', 400);
     }
-
-    const allowedProperties = await getUserPropertyIds(session.user.id);
+    const allowedProperties = (await requireOrganizationContext(session.user.id)).propertyIds;
     if (!allowedProperties.includes(propertyId)) {
       return errorResponse('FORBIDDEN', 'No access to this property', 403);
     }
-
     const start = new Date(startDate);
     const end = new Date(endDate);
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
       return errorResponse('BAD_REQUEST', 'Invalid report date range', 400);
     }
-
     const sessions = await prisma.frontdeskSession.findMany({
       where: { propertyId, businessDate: { gte: start, lte: end } },
       orderBy: [{ businessDate: 'desc' }, { openedAt: 'desc' }],
@@ -61,7 +55,6 @@ export async function GET(request: NextRequest) {
         cashMovements: { orderBy: { createdAt: 'desc' } },
       },
     }) as any[];
-
     const reportSessions = sessions.map((frontdeskSession) => {
       const payments = frontdeskSession.payments.map((payment: any) => ({
         id: payment.id,
@@ -83,7 +76,6 @@ export async function GET(request: NextRequest) {
         guest: payment.folio.guest ? `${payment.folio.guest.firstName} ${payment.folio.guest.lastName}` : null,
         rooms: payment.folio.reservation?.reservationRooms.map((room: any) => room.room?.displayName || room.room?.number).filter(Boolean) || [],
       }));
-
       const movements = frontdeskSession.cashMovements.map((movement: any) => {
         const inflow = ['OPENING_FLOAT', 'PAYMENT', 'CASH_TRANSFER_IN'].includes(movement.type);
         return {
@@ -107,7 +99,6 @@ export async function GET(request: NextRequest) {
           rooms: [],
         };
       });
-
       const charges = frontdeskSession.payments.flatMap((payment: any) => payment.folio.items.map((item: any) => {
         const itemAmount = toNumber(item.amount);
         return {
@@ -134,11 +125,9 @@ export async function GET(request: NextRequest) {
         unitAmount: toNumber(item.unitAmount),
         };
       }));
-
       const rows = [...payments, ...movements, ...charges].sort(
         (left, right) => new Date(right.date).getTime() - new Date(left.date).getTime(),
       );
-
       return {
         id: frontdeskSession.id,
         shiftReference: frontdeskSession.shiftReference,
@@ -156,11 +145,9 @@ export async function GET(request: NextRequest) {
         rows,
       };
     });
-
     const rows = reportSessions.flatMap((item) => item.rows.map((row) => ({ ...row, sessionId: item.id, shiftReference: item.shiftReference })));
     const inflows = rows.filter((row) => row.direction === 'INFLOW').reduce((sum, row) => sum + row.amount, 0);
     const outflows = rows.filter((row) => row.direction === 'OUTFLOW').reduce((sum, row) => sum + row.amount, 0);
-
     return successResponse({
       propertyId,
       startDate,

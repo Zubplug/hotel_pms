@@ -14,7 +14,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const body = await req.json();
     const request = await prisma.refundRequest.findUnique({ where: { id } });
     if (!request) return NextResponse.json({ error: 'Refund request not found' }, { status: 404 });
-    if (!user.allowedProperties.includes(request.propertyId) && !user.isSuperAdmin) {
+    if (!user.allowedProperties.includes(request.propertyId)) {
       return NextResponse.json({ error: 'Property access denied' }, { status: 403 });
     }
     if (request.status !== 'PENDING_APPROVAL') {

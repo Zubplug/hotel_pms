@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth';
 import { verifyOperatorToken } from '@/lib/pos/operatorAuth';
 import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 import { getPropertyBusinessDate } from '@/lib/date-utils';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 export async function POST(req: NextRequest) {
   try {
@@ -125,8 +126,7 @@ export async function POST(req: NextRequest) {
       }
 
       return tx.posSession.create({
-        data: {
-          propertyId,
+        data: { propertyId,
           outletId: outlet.id,
           deviceId: device.id, // Satisfy DB NOT NULL constraint; servers can still roam
           businessDate: property.businessDate || getPropertyBusinessDate(property.timezone),

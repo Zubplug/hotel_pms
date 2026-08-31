@@ -5,6 +5,7 @@ import { auth } from '@/lib/auth';
 import { SignJWT } from 'jose';
 import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 import { getPropertyBusinessDate } from '@/lib/date-utils';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,8 +13,13 @@ export async function POST(req: NextRequest) {
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
 
     const body = await req.json();
+        let reqPropertyId = body?.propertyId;
+        if (reqPropertyId && !ctx.propertyIds.includes(reqPropertyId)) return NextResponse.json({ error: 'Forbidden property' }, { status: 403 });
+        let reqOutletId = body?.outletId;
+        if (reqOutletId && !ctx.outletIds.includes(reqOutletId)) return NextResponse.json({ error: 'Forbidden outlet' }, { status: 403 });
     const { staffId, pin, propertyId } = body;
     const sessionId = body.sessionId || undefined;
     let outletId = body.outletId || undefined;
@@ -84,8 +90,7 @@ export async function POST(req: NextRequest) {
         activeSessionId = openSession.id;
       } else if (dbDeviceId && outletId) {
         const newSession = await prisma.posSession.create({
-          data: {
-            propertyId,
+          data: { propertyId,
             outletId,
             deviceId: dbDeviceId, // Satisfy DB NOT NULL constraint; servers can still roam
             businessDate: property.businessDate || getPropertyBusinessDate(property.timezone),

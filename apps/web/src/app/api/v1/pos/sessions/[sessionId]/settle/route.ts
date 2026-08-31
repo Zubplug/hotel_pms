@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
+import { requireOrganizationContext } from "@/lib/organization-access";
 import { auth } from '@/lib/auth';
-import { getUserPropertyIds } from '@/lib/property-access';
 import { verifyOperatorToken } from '@/lib/pos/operatorAuth';
 import { ShiftControlService } from '@/lib/services/shift-control-service';
 import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
@@ -22,12 +22,27 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const current = await prisma.posSession.findUnique({ where: { id: sessionId }, include: { cashMovements: true, payments: true } });
     if (!current || !current.propertyId) return NextResponse.json({ error: 'POS session not found' }, { status: 404 });
     if (actor?.user) {
-      const allowed = await getUserPropertyIds(actor.user.id);
+      const allowed = (await requireOrganizationContext(actor.user.id)).propertyIds;
       if (!allowed.includes(current.propertyId)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     } else if (operatorPayload?.propertyId !== current.propertyId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     if (current.status !== 'OPEN' && current.status !== 'RECONCILIATION_REQUIRED' && current.controlStatus !== 'RETURNED') return NextResponse.json({ error: `Session cannot be settled from ${current.status}` }, { status: 409 });
+
+    let ctx: any;
+    if (actor?.user) {
+      ctx = await requireOrganizationContext(actor.user.id);
+    } else if (operatorPayload) {
+      const orgStaff = await prisma.staff.findUnique({ where: { id: operatorPayload.staffId } });
+      ctx = {
+        organizationId: orgStaff?.organizationId || '',
+        userId: orgStaff?.userId || operatorPayload.staffId,
+        role: orgStaff?.position || 'STAFF',
+        permissions: [],
+        propertyIds: [current.propertyId],
+        outletIds: [current.outletId || '']
+      };
+    }
 
     const actorStaff = operatorPayload?.staffId
       ? await prisma.staff.findUnique({ where: { id: operatorPayload.staffId }, select: { id: true, position: true } })
@@ -88,7 +103,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       // ShiftControlService.submitShift() is the single authoritative path for
       // OPEN → SUBMITTED and RETURNED → SUBMITTED transitions. It writes the
       // shiftControlAudit record atomically inside this transaction.
-      await ShiftControlService.submitShift(tx, 'POS', sessionId, operatorId, {
+      await ShiftControlService.submitShift(ctx, tx, 'POS', sessionId, {
         declaredCash: actualCash,
         expectedCash,
         variance,

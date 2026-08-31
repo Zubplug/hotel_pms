@@ -39,11 +39,9 @@ export async function POST(
       }
 
       // 2. Verify Property Access
-      // Empty allowedProperties implies global access ONLY if isSuperAdmin is true.
-      const hasGlobalAccess = user.isSuperAdmin;
       const hasSpecificAccess = user.allowedProperties.includes(approvalRequest.propertyId);
       
-      if (!hasGlobalAccess && !hasSpecificAccess) {
+      if (!hasSpecificAccess) {
         throw new Error('FORBIDDEN:No access to this property');
       }
 

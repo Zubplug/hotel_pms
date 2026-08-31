@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { compare } from 'bcryptjs';
 import { auth } from '@/lib/auth';
-
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 export async function POST(req: NextRequest) {
   try {
@@ -66,8 +66,7 @@ export async function POST(req: NextRequest) {
 
       // 3. Create Movement
       const movement = await tx.posCashMovement.create({
-        data: {
-          propertyId,
+        data: { propertyId,
           deviceId: 'web-browser-cash-office',
           userId: manager.id,
           amount: amount,

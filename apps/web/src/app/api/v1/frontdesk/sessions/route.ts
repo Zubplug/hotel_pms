@@ -1,19 +1,20 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
-import { getUserPropertyIds } from '@/lib/property-access';
+import { requireOrganizationContext } from '@/lib/organization-access';
 import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 
 export async function GET(req: NextRequest) {
   try {
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Unauthorized', 401);
+    const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
     const url = new URL(req.url);
     const propertyId = url.searchParams.get('propertyId');
     if (!propertyId) return errorResponse('BAD_REQUEST', 'Property ID is required', 400);
-    if (!(await getUserPropertyIds(session.user.id)).includes(propertyId)) return errorResponse('FORBIDDEN', 'No access to this property', 403);
+    if (!((await requireOrganizationContext(session.user.id)).propertyIds).includes(propertyId)) return errorResponse('FORBIDDEN', 'No access to this property', 403);
     const status = url.searchParams.get('status') || undefined;
     const staff = await prisma.staff.findFirst({ where: { userId: session.user.id }, select: { id: true } });
     if (!staff) return errorResponse('UNAUTHORIZED', 'Staff record not found', 401);
@@ -35,15 +36,16 @@ export async function POST(req: NextRequest) {
   try {
     const session = await auth();
     if (!session?.user?.id) return errorResponse('UNAUTHORIZED', 'Unauthorized', 401);
+    const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
     const { propertyId, cashAccountId, openingFloat = 0, deviceId = 'FRONT_DESK' } = await req.json();
     if (!propertyId || !cashAccountId) return errorResponse('BAD_REQUEST', 'Property ID and cash account ID are required', 400);
     const staff = await prisma.staff.findFirst({ where: { userId: session.user.id } });
     if (!staff) return errorResponse('UNAUTHORIZED', 'Staff record not found', 401);
     const property = await prisma.property.findUnique({ where: { id: propertyId } });
     if (!property) return errorResponse('NOT_FOUND', 'Property not found', 404);
-    if (!(await getUserPropertyIds(session.user.id)).includes(propertyId)) return errorResponse('FORBIDDEN', 'No access to this property', 403);
+    if (!((await requireOrganizationContext(session.user.id)).propertyIds).includes(propertyId)) return errorResponse('FORBIDDEN', 'No access to this property', 403);
     if (await isNightAuditTransactionLocked(propertyId)) return errorResponse('NIGHT_AUDIT_IN_PROGRESS', 'Night audit cutover is in progress. Open a cashier shift after the new business date is active.', 409);
-    const cashAccount = await prisma.cashAccount.findFirst({ where: { id: cashAccountId, propertyId, isActive: true } });
+    const cashAccount = await prisma.cashAccount.findFirst({ where: { id: cashAccountId, propertyId: { in: ctx.propertyIds as string[] }, isActive: true } });
     if (!cashAccount) return errorResponse('BAD_REQUEST', 'Cashier till is not active for this property', 400);
     const businessDate = property.businessDate || new Date(new Intl.DateTimeFormat('en-CA', { timeZone: property.timezone || 'Africa/Lagos' }).format(new Date()) + 'T00:00:00.000Z');
     const floatValue = Number(openingFloat) || 0;

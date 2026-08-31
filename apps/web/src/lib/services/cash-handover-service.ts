@@ -2,15 +2,15 @@ import prisma from '@hotel-pms/db';
 import crypto from 'crypto';
 import { ShiftControlError } from './shift-control-service';
 import { ensureCashierControlAccountsForClient } from './cash-account-service';
+import { TenantContext } from '../organization-access';
 
 export class CashHandoverService {
   /**
    * General Cashier initiates a handover to take custody of an operator's approved shift,
    * or an operator initiates it to transfer to a safe.
    */
-  static async createHandover(params: {
+  static async createHandover(ctx: TenantContext, params: {
     propertyId: string;
-    creatorId: string;
     posSessionIds: string[];
     frontdeskSessionIds: string[];
     safeReference?: string;
@@ -22,6 +22,12 @@ export class CashHandoverService {
         const existing = await tx.cashHandover.findUnique({ where: { idempotencyKey: params.idempotencyKey } });
         if (existing) return existing;
       }
+      
+      // ENFORCE OWNERSHIP PATH
+      if (!ctx.propertyIds.includes(params.propertyId)) {
+        throw new ShiftControlError('Access denied to property.', 'FORBIDDEN', 403);
+      }
+      
       // 1. Fetch POS Sessions
       const posSessions = params.posSessionIds.length > 0 
         ? await tx.posSession.findMany({ where: { id: { in: params.posSessionIds } }, include: { payments: true } })
@@ -75,7 +81,7 @@ export class CashHandoverService {
       }
       
       // Ensure primaryOperatorId is a Staff ID (POS might store User ID in openedBy)
-      let handedOverByStaffId = params.creatorId;
+      let handedOverByStaffId = ctx.userId;
       if (primaryOperatorId) {
         const staff = await tx.staff.findFirst({ where: { OR: [{ id: primaryOperatorId }, { userId: primaryOperatorId }] } });
         if (staff) handedOverByStaffId = staff.id;
@@ -125,10 +131,10 @@ export class CashHandoverService {
 
       // 6. Audit Trail
       for (const id of params.posSessionIds) {
-        await this.audit(tx, params.propertyId, params.creatorId, id, undefined, 'HANDOVER_CREATED', 'APPROVED', 'HANDOVER_PENDING', { handoverId: handover.id, amount: totalAmount });
+        await this.audit(tx, params.propertyId, ctx.userId, id, undefined, 'HANDOVER_CREATED', 'APPROVED', 'HANDOVER_PENDING', { handoverId: handover.id, amount: totalAmount });
       }
       for (const id of params.frontdeskSessionIds) {
-        await this.audit(tx, params.propertyId, params.creatorId, undefined, id, 'HANDOVER_CREATED', 'APPROVED', 'HANDOVER_PENDING', { handoverId: handover.id, amount: totalAmount });
+        await this.audit(tx, params.propertyId, ctx.userId, undefined, id, 'HANDOVER_CREATED', 'APPROVED', 'HANDOVER_PENDING', { handoverId: handover.id, amount: totalAmount });
       }
 
       return handover;
@@ -138,9 +144,8 @@ export class CashHandoverService {
   /**
    * General Cashier receives a pending handover and takes custody of the cash.
    */
-  static async receiveHandover(params: {
+  static async receiveHandover(ctx: TenantContext, params: {
     handoverId: string;
-    receiverId: string;
     notes?: string;
   }) {
     return prisma.$transaction(async tx => {
@@ -152,9 +157,10 @@ export class CashHandoverService {
         }
       });
 
-      if (!handover) throw new ShiftControlError('Handover not found', 'NOT_FOUND', 404);
+      // ENFORCE OWNERSHIP PATH
+      if (!handover || !ctx.propertyIds.includes(handover.propertyId)) throw new ShiftControlError('Handover not found or access denied', 'NOT_FOUND', 404);
       if (handover.status !== 'PENDING') throw new ShiftControlError(`Handover is already ${handover.status}`, 'BAD_REQUEST');
-      if (handover.handedOverById === params.receiverId) throw new ShiftControlError('Cannot receive your own handover', 'FORBIDDEN', 403);
+      if (handover.handedOverById === ctx.userId) throw new ShiftControlError('Cannot receive your own handover', 'FORBIDDEN', 403);
 
       // Verify the receiver has property access (assumed to be done at controller level, but safe to double check)
       
@@ -162,13 +168,13 @@ export class CashHandoverService {
         where: { id: params.handoverId },
         data: {
           status: 'COMPLETED',
-          receivedById: params.receiverId,
+          receivedById: ctx.userId,
           receivedAt: new Date(),
           notes: params.notes ? `${handover.notes || ''}\n[Received]: ${params.notes}` : handover.notes
         }
       });
 
-      const controlAccounts = await ensureCashierControlAccountsForClient(tx, handover.propertyId);
+      const controlAccounts = await ensureCashierControlAccountsForClient(ctx, tx, handover.propertyId);
       const safeAccount = controlAccounts.find((account: any) => account.type === 'SAFE');
       if (!safeAccount) throw new ShiftControlError('General Cashier Safe account is unavailable.', 'INTERNAL_ERROR', 500);
 
@@ -184,7 +190,7 @@ export class CashHandoverService {
             propertyId: handover.propertyId,
             deviceId: 'web-cash-management',
             frontdeskSessionId: session.id,
-            userId: params.receiverId,
+            userId: ctx.userId,
             amount,
             type: 'CASH_TRANSFER_IN',
             sourceAccountId: session.cashAccountId,
@@ -223,7 +229,7 @@ export class CashHandoverService {
             propertyId: handover.propertyId,
             deviceId: 'web-cash-management',
             posSessionId: session.id,
-            userId: params.receiverId,
+            userId: ctx.userId,
             amount,
             type: 'CASH_TRANSFER_IN',
             sourceAccountId: sourceAccount.id,
@@ -245,7 +251,7 @@ export class CashHandoverService {
         });
         
         for (const session of handover.posSessions) {
-          await this.audit(tx, handover.propertyId, params.receiverId, session.id, undefined, 'CASH_RECEIVED', session.controlStatus, 'HANDED_OVER', { handoverId: handover.id });
+          await this.audit(tx, handover.propertyId, ctx.userId, session.id, undefined, 'CASH_RECEIVED', session.controlStatus, 'HANDED_OVER', { handoverId: handover.id });
         }
       }
 
@@ -257,7 +263,7 @@ export class CashHandoverService {
         });
         
         for (const session of handover.frontdeskSessions) {
-          await this.audit(tx, handover.propertyId, params.receiverId, undefined, session.id, 'CASH_RECEIVED', session.status, 'HANDED_OVER', { handoverId: handover.id });
+          await this.audit(tx, handover.propertyId, ctx.userId, undefined, session.id, 'CASH_RECEIVED', session.status, 'HANDED_OVER', { handoverId: handover.id });
         }
       }
 
@@ -275,7 +281,7 @@ export class CashHandoverService {
           depositReference: `DEP-${Date.now()}-${crypto.randomBytes(2).toString('hex').toUpperCase()}`,
           expectedAmount: handover.amount,
           status: 'PENDING_HANDOVER',
-          createdById: params.receiverId,
+          createdById: ctx.userId,
           allocations: { create: allocations.map((allocation) => ({ ...allocation, id: crypto.randomUUID() })) },
         },
       });
@@ -286,8 +292,8 @@ export class CashHandoverService {
         await tx.frontdeskSession.updateMany({ where: { id: { in: handover.frontdeskSessions.map((session) => session.id) } }, data: { status: 'DEPOSIT_PENDING' } });
       }
       for (const allocation of allocations) {
-        if (allocation.posSessionId) await this.audit(tx, handover.propertyId, params.receiverId, allocation.posSessionId, undefined, 'DEPOSIT_PREPARED', 'HANDED_OVER', 'DEPOSIT_PENDING', { depositId: deposit.id });
-        if (allocation.frontdeskSessionId) await this.audit(tx, handover.propertyId, params.receiverId, undefined, allocation.frontdeskSessionId, 'DEPOSIT_PREPARED', 'HANDED_OVER', 'DEPOSIT_PENDING', { depositId: deposit.id });
+        if (allocation.posSessionId) await this.audit(tx, handover.propertyId, ctx.userId, allocation.posSessionId, undefined, 'DEPOSIT_PREPARED', 'HANDED_OVER', 'DEPOSIT_PENDING', { depositId: deposit.id });
+        if (allocation.frontdeskSessionId) await this.audit(tx, handover.propertyId, ctx.userId, undefined, allocation.frontdeskSessionId, 'DEPOSIT_PREPARED', 'HANDED_OVER', 'DEPOSIT_PENDING', { depositId: deposit.id });
       }
 
       return updated;

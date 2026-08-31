@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { hasInventoryPermission } from '@/lib/inventory/permissions';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 export const dynamic = 'force-dynamic';
 
@@ -13,14 +14,15 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
       return NextResponse.json({ data: null, error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { role, propertyId, isSuperAdmin } = session.user as any;
+    const { role, isSuperAdmin } = session.user as any;
+    const ctx = await requireOrganizationContext(session.user.id);
 
     if (!hasInventoryPermission(role, 'inventory.read', isSuperAdmin)) {
       return NextResponse.json({ data: null, error: 'Forbidden' }, { status: 403 });
     }
 
     const grn = await prisma.goodsReceivedNote.findFirst({
-      where: { id: params.id, propertyId },
+      where: { id: params.id, propertyId: ctx.propertyIds[0] },
       include: {
         purchaseOrder: true,
         items: true

@@ -1,76 +1,64 @@
+import { NextResponse } from 'next/server';
+import { requireOrganizationContext } from '@/lib/organization-access';
 import { NextRequest } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
-import { getUserPropertyIds } from '@/lib/property-access';
 import { NotificationEngine } from '@/lib/notification-engine';
 import { findActiveFrontdeskSession, isFrontdeskCashierRole } from '@/lib/frontdesk/active-session';
 import { canOverrideNightAudit, getNightAuditOverrideReason, isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 import { getPropertyBusinessDate } from '@/lib/date-utils';
-
 export async function POST(req: NextRequest) {
   try {
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
-
     const body = await req.json();
     const { folioId, amount, currency, method, idempotencyKey, notes, providerTransactionId, terminalId, reference, authorizationCode, frontdeskSessionId, collectionSource = 'FRONT_DESK', nightAuditOverrideReason } = body;
     const isReceivablesCollection = collectionSource === 'RECEIVABLES';
     if (!['FRONT_DESK', 'RECEIVABLES', 'OTHER'].includes(collectionSource)) return errorResponse('BAD_REQUEST', 'Invalid collection source', 400);
-
     if (!folioId || !amount || !currency || !method || !idempotencyKey) {
       return errorResponse('BAD_REQUEST', 'Missing required fields (folioId, amount, currency, method, idempotencyKey)', 400);
     }
-
     const numericAmount = Number(amount);
     if (isNaN(numericAmount) || numericAmount <= 0) {
       return errorResponse('BAD_REQUEST', 'Amount must be greater than zero', 400);
     }
-
     // Validate enum
     const validMethods = ['CASH', 'POS', 'BANK_TRANSFER', 'CARD'];
     if (!validMethods.includes(method)) {
       return errorResponse('BAD_REQUEST', `Invalid payment method. Allowed: ${validMethods.join(', ')}`, 400);
     }
-
     // 1. Database-Level Idempotency Check
     const existingPayment = await prisma.payment.findUnique({
       where: { idempotencyKey }
     });
-
     if (existingPayment) {
       // If we've already processed this exact request, return success immediately.
       return successResponse(existingPayment, 200);
     }
-
     // 2. Load Folio and Validate
     const folio = await prisma.folio.findUnique({
       where: { id: folioId },
       include: { property: true }
     });
-
     if (!folio) {
       return errorResponse('NOT_FOUND', 'Folio not found', 404);
     }
-
     const overrideReason = getNightAuditOverrideReason(nightAuditOverrideReason);
     const auditLocked = await isNightAuditTransactionLocked(folio.propertyId);
     if (auditLocked && (!canOverrideNightAudit((session.user as any).role) || !overrideReason)) {
       return errorResponse('NIGHT_AUDIT_IN_PROGRESS', 'Night audit is in progress. New financial transactions are temporarily paused.', 409);
     }
-
     // --- 7D.6 FINANCIAL GUARD ---
     if (folio.status === 'CLOSED') {
       return errorResponse('BAD_REQUEST', 'Cannot post payments to a CLOSED folio. Please use post-stay adjustment workflows.', 400);
     }
     // ----------------------------
-
     // Ensure staff has property access
-    const allowedPropertyIds = await getUserPropertyIds(session.user.id);
+    const allowedPropertyIds = (await requireOrganizationContext(session.user.id)).propertyIds;
     if (!allowedPropertyIds.includes(folio.propertyId)) {
       return errorResponse('FORBIDDEN', 'No access to this property', 403);
     }
-
     const { staff, session: activeFrontdeskSession } = isReceivablesCollection
       ? { staff: null, session: null }
       : await findActiveFrontdeskSession(session.user.id, folio.propertyId, frontdeskSessionId);
@@ -78,16 +66,13 @@ export async function POST(req: NextRequest) {
     if ((staff || isFrontdeskCashierRole(role)) && !activeFrontdeskSession) {
       return errorResponse('CONFLICT', 'Open a front desk cashier session before posting a payment.', 409);
     }
-
     if (currency !== folio.currency) {
       return errorResponse('BAD_REQUEST', `Currency mismatch. Expected ${folio.currency}`, 400);
     }
-
     const currentBalance = Number(folio.balance);
     if (numericAmount > currentBalance) {
       return errorResponse('BAD_REQUEST', 'Payment amount exceeds outstanding balance. Overpayments are not currently permitted.', 400);
     }
-
     // 3. Atomic Transaction for Financial Integrity
     const result = await prisma.$transaction(async (tx: any) => {
       // A. Optimistic Concurrency Control update on Folio
@@ -102,7 +87,6 @@ export async function POST(req: NextRequest) {
           balance: { decrement: numericAmount }
         }
       });
-
       // B. Create the FolioItem (Financial Event)
       const folioItem = await tx.folioItem.create({
         data: {
@@ -119,12 +103,10 @@ export async function POST(req: NextRequest) {
           postedBy: session.user.id
         }
       });
-
       // Generate Receipt Number: RCPT-YYYY-XXXXXX
       const year = new Date().getFullYear();
       const randomPart = globalThis.crypto.randomUUID().split('-')[0].toUpperCase().slice(0, 6);
       const receiptNumber = `RCPT-${year}-${randomPart}`;
-
       // C. Create the actual Payment record
       const payment = await tx.payment.create({
         data: {
@@ -148,7 +130,6 @@ export async function POST(req: NextRequest) {
           notes
         } as any
       });
-
       if (activeFrontdeskSession && method === 'CASH' && staff) {
         await tx.cashAccount.update({
           where: { id: activeFrontdeskSession.cashAccountId },
@@ -172,7 +153,6 @@ export async function POST(req: NextRequest) {
           }
         });
       }
-
       // D. Write Atomic Audit Log
       await tx.auditLog.create({
         data: {
@@ -201,10 +181,8 @@ export async function POST(req: NextRequest) {
           requestId: req.headers.get('x-request-id') || crypto.randomUUID(),
         }
       });
-
       return { payment, updatedFolio };
     });
-
     // Fire notification for the payment (fire and forget)
     NotificationEngine.emit({
       type: 'PAYMENT_RECEIVED',
@@ -219,7 +197,6 @@ export async function POST(req: NextRequest) {
       },
       idempotencyKey: `payment_received_${result.payment.id}`,
     }).catch(err => console.error('[NotificationEngine] Failed to emit payment notification:', err));
-
     return successResponse(result, 201);
   } catch (err: any) {
     console.error('[Payments POST]', err);

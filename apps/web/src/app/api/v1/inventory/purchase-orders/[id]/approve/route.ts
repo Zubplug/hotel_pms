@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { canApprove } from '@/lib/approval-config';
 import { ProcurementService } from '@/lib/inventory/ProcurementService';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -11,6 +12,7 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
     if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { role, isSuperAdmin, id: userId } = session.user as any;
+    const ctx = await requireOrganizationContext(session.user.id);
     
     const po = await prisma.purchaseOrder.findUnique({
       where: { id: params.id },

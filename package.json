@@ -21,6 +21,7 @@
     "test": "turbo test"
   },
   "devDependencies": {
+    "ts-morph": "^28.0.0",
     "turbo": "^2.0.0"
   }
 }

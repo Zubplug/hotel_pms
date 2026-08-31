@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { hasInventoryPermission } from '@/lib/inventory/permissions';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 export const dynamic = 'force-dynamic';
 
@@ -9,7 +10,8 @@ export async function GET(request: Request) {
   try {
     const session = await auth();
     if (!session?.user) return NextResponse.json({ error: 'Unauthorized', data: null }, { status: 401 });
-    const { role, propertyId, isSuperAdmin } = session.user as any;
+    const { role, isSuperAdmin } = session.user as any;
+    const ctx = await requireOrganizationContext(session.user.id);
     if (!hasInventoryPermission(role, 'inventory.read', isSuperAdmin)) {
       return NextResponse.json({ error: 'Forbidden', data: null }, { status: 403 });
     }
@@ -17,7 +19,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
 
-    const where: any = { propertyId };
+    const where: any = { propertyId: ctx.propertyIds[0] };
     if (status) where.status = status;
 
     const stocktakes = await prisma.stocktake.findMany({
@@ -40,7 +42,8 @@ export async function POST(request: Request) {
   try {
     const session = await auth();
     if (!session?.user) return NextResponse.json({ error: 'Unauthorized', data: null }, { status: 401 });
-    const { role, propertyId, isSuperAdmin, id: userId } = session.user as any;
+    const { role, isSuperAdmin, id: userId } = session.user as any;
+    const ctx = await requireOrganizationContext(session.user.id);
     if (!hasInventoryPermission(role, 'inventory.stocktake', isSuperAdmin)) {
       return NextResponse.json({ error: 'Forbidden', data: null }, { status: 403 });
     }
@@ -53,23 +56,23 @@ export async function POST(request: Request) {
     }
 
     // Generate reference
-    const count = await prisma.stocktake.count({ where: { propertyId } });
+    const count = await prisma.stocktake.count({ where: { propertyId: { in: ctx.propertyIds as string[] } } });
     const stocktakeRef = `STK-${String(count + 1).padStart(5, '0')}`;
 
-    const warehouse = await prisma.warehouse.findFirst({ where: { id: warehouseId, propertyId, isActive: true } });
+    const warehouse = await prisma.warehouse.findFirst({ where: { id: warehouseId, propertyId: { in: ctx.propertyIds as string[] }, isActive: true } });
     if (!warehouse) {
       return NextResponse.json({ error: 'Warehouse not found', data: null }, { status: 404 });
     }
 
     if (categoryId) {
-      const category = await prisma.inventoryCategory.findFirst({ where: { id: categoryId, propertyId, isActive: true } });
+      const category = await prisma.inventoryCategory.findFirst({ where: { id: categoryId, propertyId: { in: ctx.propertyIds as string[] }, isActive: true } });
       if (!category) {
         return NextResponse.json({ error: 'Category not found', data: null }, { status: 404 });
       }
     }
 
     // Get all items that should be part of this snapshot.
-    const itemWhere: any = { propertyId, warehouseId, isActive: true };
+    const itemWhere: any = { propertyId: ctx.propertyIds[0], warehouseId, isActive: true };
     if (categoryId) itemWhere.categoryId = categoryId;
 
     const itemsToCount = await prisma.stockItem.findMany({
@@ -82,7 +85,7 @@ export async function POST(request: Request) {
 
     const stocktake = await prisma.stocktake.create({
       data: {
-        propertyId,
+        propertyId: ctx.propertyIds[0],
         warehouseId,
         categoryId: categoryId || null,
         stocktakeRef,

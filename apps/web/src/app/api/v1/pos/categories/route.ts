@@ -1,12 +1,14 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 export async function GET(req: NextRequest) {
   try {
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Unauthorized', 401);
+    const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
 
     const url = new URL(req.url);
     const propertyId = url.searchParams.get('propertyId');
@@ -14,7 +16,7 @@ export async function GET(req: NextRequest) {
 
     // Categories are linked via outlet. Let's get outlets for this property first, then categories.
     const outlets = await prisma.posOutlet.findMany({
-      where: { propertyId, isActive: true },
+      where: { propertyId: { in: ctx.propertyIds as string[] }, isActive: true },
       select: { id: true }
     });
     

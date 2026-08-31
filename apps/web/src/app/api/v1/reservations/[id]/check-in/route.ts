@@ -1,10 +1,11 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { auth } from '@/lib/auth';
 import { assertPropertyAccess } from '@/lib/property-access';
 import { hasPermission } from '@/lib/rbac';
 import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 export async function POST(
   req: NextRequest,
@@ -15,6 +16,7 @@ export async function POST(
     if (!session?.user?.id) {
       return errorResponse('UNAUTHORIZED', 'Not authenticated', 401);
     }
+    const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
 
     const { id: reservationId } = await params;
     
@@ -22,6 +24,8 @@ export async function POST(
     let overrideDeposit = false;
     try {
       const body = await req.json();
+        let reqPropertyId = body?.propertyId;
+        if (reqPropertyId && !ctx.propertyIds.includes(reqPropertyId)) return NextResponse.json({ error: 'Forbidden property' }, { status: 403 });
       if (body?.options?.overrideDeposit) {
         overrideDeposit = true;
       }
@@ -137,8 +141,7 @@ export async function POST(
       let doorLock = await tx.doorLock.findFirst({ where: { roomId: resRoom.room!.id } });
       if (!doorLock) {
         doorLock = await tx.doorLock.create({
-          data: {
-            propertyId,
+          data: { propertyId,
             roomId: resRoom.room!.id,
             lockCode: `ENCODER-${resRoom.room!.id}`,
             provider: 'DELUNS_ENCODER',

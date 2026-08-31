@@ -15,10 +15,12 @@ export async function POST(req: NextRequest) {
     if (!propertyId || propertyId === 'ALL_AUTHORIZED') {
       return errorResponse('BAD_REQUEST', 'Please specify a single valid propertyId', 400);
     }
+    
+    const { requireOrganizationContext } = await import('@/lib/organization-access');
+    const ctx = await requireOrganizationContext(user.id);
 
-    const hasGlobalAccess = user.isSuperAdmin;
-    const hasSpecificAccess = user.allowedProperties.includes(propertyId);
-    if (!hasGlobalAccess && !hasSpecificAccess) {
+    const hasSpecificAccess = ctx.propertyIds.includes(propertyId);
+    if (!hasSpecificAccess) {
       return errorResponse('FORBIDDEN', 'No access to this property', 403);
     }
 

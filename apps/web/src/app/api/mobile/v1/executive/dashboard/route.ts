@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { resolveUser } from '@/lib/resolve-user';
+import { requireOrganizationContext } from '@/lib/organization-access';
 import { getExecutiveKPISnapshot, getPropertyBusinessDate } from '@/lib/kpi';
 import { evaluatePropertyAlerts } from '@/lib/attention-engine';
 import { fetchHotelPulse } from '@/lib/executive/hotel-pulse';
@@ -11,22 +12,14 @@ export const dynamic = 'force-dynamic';
 export async function GET(req: NextRequest) {
   try {
     const user = await resolveUser(req);
-    
     if (!user) {
       return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
     }
-    
-    if (!['MANAGER', 'ADMIN', 'SUPER_ADMIN', 'DIRECTOR', 'EXECUTIVE'].includes(user.role) && !user.isSuperAdmin) {
-      return errorResponse('FORBIDDEN', 'Executive access required', 403);
-    }
-
-    const allowedPropertyIds = user.allowedProperties;
-
-    if (allowedPropertyIds.length === 0) {
+    const ctx = await requireOrganizationContext(user.id);
+    const primaryPropertyId = ctx.propertyIds[0];
+    if (!primaryPropertyId) {
       return errorResponse('FORBIDDEN', 'No property access', 403);
     }
-
-    const primaryPropertyId = allowedPropertyIds[0];
 
     const prismaModule = await import('@hotel-pms/db');
     const prisma = prismaModule.default;

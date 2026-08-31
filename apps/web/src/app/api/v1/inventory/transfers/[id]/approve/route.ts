@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { canApprove } from '@/lib/approval-config';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -11,7 +12,8 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       return NextResponse.json({ data: null, error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { role, propertyId, isSuperAdmin, id: userId } = session.user as any;
+    const { role, isSuperAdmin, id: userId } = session.user as any;
+    const ctx = await requireOrganizationContext(session.user.id);
     
     const transferCheck = await prisma.stockTransfer.findUnique({
       where: { id: params.id },
@@ -30,7 +32,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     const isStockIssuer = ['STOCK_KEEPER', 'STOCK_MANAGER'].includes(String(role).toUpperCase());
     if (isOutletIssue && isStockIssuer) {
       const updated = await prisma.stockTransfer.updateMany({
-        where: { id: params.id, propertyId, status: 'PENDING_APPROVAL' },
+        where: { id: params.id, propertyId: ctx.propertyIds[0], status: 'PENDING_APPROVAL' },
         data: { status: 'APPROVED', approvedBy: userId, approvedAt: new Date() },
       });
       if (!updated.count) return NextResponse.json({ data: null, error: 'Transfer is not pending approval' }, { status: 400 });
@@ -53,7 +55,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     const transfer = await prisma.stockTransfer.updateMany({
       where: { 
         id: params.id, 
-        propertyId,
+        propertyId: ctx.propertyIds[0],
         status: 'PENDING_APPROVAL'
       },
       data: {

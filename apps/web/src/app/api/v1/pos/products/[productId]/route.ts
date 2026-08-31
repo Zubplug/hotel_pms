@@ -1,7 +1,8 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 export async function PATCH(
   req: NextRequest,
@@ -11,9 +12,14 @@ export async function PATCH(
     const { productId } = await params;
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Unauthorized', 401);
+    const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
     if (!productId) return errorResponse('BAD_REQUEST', 'Product ID is required', 400);
 
     const body = await req.json();
+        let reqPropertyId = body?.propertyId;
+        if (reqPropertyId && !ctx.propertyIds.includes(reqPropertyId)) return NextResponse.json({ error: 'Forbidden property' }, { status: 403 });
+        let reqOutletId = body?.outletId;
+        if (reqOutletId && !ctx.outletIds.includes(reqOutletId)) return NextResponse.json({ error: 'Forbidden outlet' }, { status: 403 });
     const { productionStation, name, price, isActive, inventoryMode } = body;
     const role = String((session.user as any).role || '').toUpperCase();
     if (price !== undefined && !['MANAGER', 'ADMIN', 'CEO', 'SUPER_ADMIN'].includes(role) && !(session.user as any).isSuperAdmin) {

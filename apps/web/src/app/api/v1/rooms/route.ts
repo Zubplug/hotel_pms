@@ -1,16 +1,18 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { paginatedResponse, errorResponse, successResponse } from '@/lib/api-response';
 import { createAuditLog } from '@/lib/audit';
 import { hasPermission } from '@/lib/rbac';
-import { assertPropertyAccess, ForbiddenError, getUserPropertyIds } from '@/lib/property-access';
+import { assertPropertyAccess, ForbiddenError, } from '@/lib/property-access';
+import { requireOrganizationContext } from '@/lib/organization-access';
 import { createRoomSchema, roomQuerySchema } from '@hotel-pms/types';
 
 export async function GET(req: NextRequest) {
   try {
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
 
     const { searchParams } = req.nextUrl;
     const query = roomQuerySchema.parse({
@@ -28,11 +30,11 @@ export async function GET(req: NextRequest) {
       sortOrder: searchParams.get('sortOrder') ?? undefined,
     });
 
-    const allowed = await getUserPropertyIds(session.user.id);
+    const allowed = (await requireOrganizationContext(session.user.id)).propertyIds;
     if (query.propertyId) await assertPropertyAccess(session.user.id, query.propertyId);
 
     const where = {
-      propertyId: query.propertyId ? query.propertyId : { in: allowed },
+      propertyId: query.propertyId ? query.propertyId : { in: [...allowed] },
       ...(query.buildingId ? { buildingId: query.buildingId } : {}),
       ...(query.floorId ? { floorId: query.floorId } : {}),
       ...(query.roomTypeId ? { roomTypeId: query.roomTypeId } : {}),
@@ -89,7 +91,10 @@ export async function POST(req: NextRequest) {
   try {
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
     const body = await req.json();
+        let reqPropertyId = body?.propertyId;
+        if (reqPropertyId && !ctx.propertyIds.includes(reqPropertyId)) return NextResponse.json({ error: 'Forbidden property' }, { status: 403 });
     const data = createRoomSchema.parse(body);
     await assertPropertyAccess(session.user.id, data.propertyId);
     const canCreate = await hasPermission(session.user.id, 'room', 'create', data.propertyId);

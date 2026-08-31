@@ -1,3 +1,5 @@
+import { NextResponse } from 'next/server';
+import { requireOrganizationContext } from '@/lib/organization-access';
 import { NextRequest } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
@@ -16,7 +18,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     const { id } = await params;
     const amenity = await prisma.amenity.findUnique({ where: { id } });
     if (!amenity) return errorResponse('NOT_FOUND', 'Amenity not found', 404);
-    await assertPropertyAccess(session.user.id, amenity.propertyId);
+    if (!(await requireOrganizationContext(session.user.id)).propertyIds.includes(amenity.propertyId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     const canUpdate = await hasPermission(session.user.id, 'amenity', 'update', amenity.propertyId);
     if (!canUpdate) return errorResponse('FORBIDDEN', 'Insufficient permissions', 403);
     const body = await req.json();
@@ -42,7 +44,7 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
     const { id } = await params;
     const amenity = await prisma.amenity.findUnique({ where: { id } });
     if (!amenity) return errorResponse('NOT_FOUND', 'Amenity not found', 404);
-    await assertPropertyAccess(session.user.id, amenity.propertyId);
+    if (!(await requireOrganizationContext(session.user.id)).propertyIds.includes(amenity.propertyId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     const canDelete = await hasPermission(session.user.id, 'amenity', 'delete', amenity.propertyId);
     if (!canDelete) return errorResponse('FORBIDDEN', 'Insufficient permissions', 403);
     await prisma.amenity.delete({ where: { id } });

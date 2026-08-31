@@ -27,26 +27,11 @@ export async function assertPropertyAccess(
   userId: string,
   propertyId: string
 ): Promise<void> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { isSuperAdmin: true },
-  });
-
-  if (!user) throw new ForbiddenError('User not found');
-  if (user.isSuperAdmin) return; // super admins access everything
-
-  const [staff, userRoles] = await Promise.all([
-    prisma.staff.findFirst({ where: { userId }, select: { propertyAccess: true } }),
-    prisma.userRole.findMany({ where: { userId }, select: { propertyId: true, role: { select: { organizationId: true } } } }),
-  ]);
-
-  const rolePropertyIds = userRoles.filter(role => role.propertyId).map(role => role.propertyId as string);
-  const organizationIds = Array.from(new Set(userRoles.filter(role => !role.propertyId).map(role => role.role.organizationId)));
-  const organizationPropertyIds = organizationIds.length
-    ? (await prisma.property.findMany({ where: { organizationId: { in: organizationIds } }, select: { id: true } })).map(property => property.id)
-    : [];
-  const hasAccess = [...(staff?.propertyAccess ?? []), ...rolePropertyIds, ...organizationPropertyIds].includes(propertyId);
-  if (!hasAccess) throw new ForbiddenError();
+  const { requireOrganizationContext } = await import('./organization-access');
+  const ctx = await requireOrganizationContext(userId);
+  if (!ctx.propertyIds.includes(propertyId)) {
+    throw new ForbiddenError();
+  }
 }
 
 /**

@@ -1,15 +1,17 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { varianceStatusFor } from '@/lib/shift-control';
 import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 import { ShiftControlService } from '@/lib/services/shift-control-service';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth();
     if (!session?.user?.id) return errorResponse('UNAUTHORIZED', 'Unauthorized', 401);
+    const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
     const { id } = await params;
     const { declaredCash } = await req.json();
     const staff = await prisma.staff.findFirst({ where: { userId: session.user.id } });
@@ -34,7 +36,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       // ShiftControlService.submitShift() is the single authoritative path for
       // OPEN → SUBMITTED and RETURNED → SUBMITTED transitions. It writes the
       // shiftControlAudit record atomically inside this transaction.
-      const updated = await ShiftControlService.submitShift(tx, 'FRONT_DESK', id, staff.id, {
+      const updated = await ShiftControlService.submitShift(ctx, tx, 'FRONT_DESK', id, {
         declaredCash: declared,
         expectedCash: expected,
         variance,

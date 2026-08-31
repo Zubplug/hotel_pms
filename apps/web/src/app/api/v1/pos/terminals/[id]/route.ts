@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 export async function GET(
   req: NextRequest,

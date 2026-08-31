@@ -19,7 +19,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const result = await prisma.$transaction(async tx => {
       const approval = await tx.approvalRequest.findUnique({ where: { id } });
       if (!approval || approval.status !== 'PENDING') throw new Error('CONFLICT');
-      if (!user.allowedProperties.includes(approval.propertyId) && !user.isSuperAdmin) throw new Error('FORBIDDEN');
+      if (!user.allowedProperties.includes(approval.propertyId)) throw new Error('FORBIDDEN');
       const details = (approval.details || {}) as { refundRequestId?: string; approverId?: string; approverRoleId?: string };
       if (details.approverId && details.approverId !== user.id) throw new Error('ASSIGNED_APPROVER_REQUIRED');
       if (details.approverRoleId && !await tx.userRole.findFirst({ where: { userId: user.id, roleId: details.approverRoleId, OR: [{ propertyId: approval.propertyId }, { propertyId: null }] } })) throw new Error('ASSIGNED_ROLE_REQUIRED');

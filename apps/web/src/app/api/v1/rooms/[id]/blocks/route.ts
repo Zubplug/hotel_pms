@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
@@ -6,6 +6,7 @@ import { createAuditLog } from '@/lib/audit';
 import { hasPermission } from '@/lib/rbac';
 import { assertPropertyAccess, ForbiddenError } from '@/lib/property-access';
 import { createRoomBlockSchema } from '@hotel-pms/types';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -13,6 +14,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   try {
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
     const { id } = await params;
     const room = await prisma.room.findUnique({ where: { id }, select: { propertyId: true, deletedAt: true } });
     if (!room || room.deletedAt) return errorResponse('NOT_FOUND', 'Room not found', 404);
@@ -32,6 +34,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   try {
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
     const { id } = await params;
     const room = await prisma.room.findUnique({ where: { id }, select: { propertyId: true, deletedAt: true, number: true } });
     if (!room || room.deletedAt) return errorResponse('NOT_FOUND', 'Room not found', 404);
@@ -40,6 +43,8 @@ export async function POST(req: NextRequest, { params }: Params) {
     if (!canManage) return errorResponse('FORBIDDEN', 'Insufficient permissions', 403);
 
     const body = await req.json();
+        let reqPropertyId = body?.propertyId;
+        if (reqPropertyId && !ctx.propertyIds.includes(reqPropertyId)) return NextResponse.json({ error: 'Forbidden property' }, { status: 403 });
     const data = createRoomBlockSchema.parse({ ...body, roomId: id, propertyId: room.propertyId });
 
     // Application-level overlap check (DB constraint is the authoritative guard)

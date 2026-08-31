@@ -5,6 +5,7 @@ import { hasInventoryPermission } from '@/lib/inventory/permissions';
 import { resolveStockUnitConversion } from '@/lib/inventory/UnitConversionService';
 import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 import { ProcurementService } from '@/lib/inventory/ProcurementService';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 export const dynamic = 'force-dynamic';
 
@@ -13,7 +14,8 @@ export async function GET(req: Request) {
     const session = await auth();
     if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { role, propertyId, isSuperAdmin } = session.user as any;
+    const { role, isSuperAdmin } = session.user as any;
+    const ctx = await requireOrganizationContext(session.user.id);
     if (!hasInventoryPermission(role, 'inventory.read', isSuperAdmin)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -22,7 +24,7 @@ export async function GET(req: Request) {
     const status = searchParams.get('status');
     const supplierId = searchParams.get('supplierId');
 
-    const where: any = { propertyId };
+    const where: any = { propertyId: ctx.propertyIds[0] };
     if (status) where.status = status;
     if (supplierId) where.supplierId = supplierId;
 
@@ -46,18 +48,19 @@ export async function POST(req: Request) {
     const session = await auth();
     if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { role, propertyId, isSuperAdmin, id: userId } = session.user as any;
+    const { role, isSuperAdmin, id: userId } = session.user as any;
+    const ctx = await requireOrganizationContext(session.user.id);
     if (!hasInventoryPermission(role, 'procurement.po.create', isSuperAdmin)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const body = await req.json();
     
-    if (await isNightAuditTransactionLocked(propertyId)) {
+    if (await isNightAuditTransactionLocked(ctx.propertyIds[0])) {
       return NextResponse.json({ error: 'Purchase orders cannot be created while Night Audit is posting. Retry after the new business date is active.', code: 'NIGHT_AUDIT_IN_PROGRESS' }, { status: 409 });
     }
 
-    body.propertyId = propertyId;
+    body.propertyId = ctx.propertyIds[0];
     const purchaseOrder = await ProcurementService.createPO(body, userId);
 
     return NextResponse.json({ data: purchaseOrder });

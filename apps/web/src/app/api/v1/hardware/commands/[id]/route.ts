@@ -4,28 +4,16 @@ import { successResponse, errorResponse } from '@/lib/api-response';
 import bcrypt from 'bcryptjs';
 import { NotificationEngine } from '@/lib/notification-engine';
 
-async function authenticateAgent(req: NextRequest) {
-  const authHeader = req.headers.get('authorization');
-  if (!authHeader?.startsWith('Basic ')) return null;
-  const decoded = Buffer.from(authHeader.slice(6), 'base64').toString('utf-8');
-  const colonIdx = decoded.indexOf(':');
-  if (colonIdx === -1) return null;
-  const agentId = decoded.slice(0, colonIdx);
-  const agentSecret = decoded.slice(colonIdx + 1);
-  const agent = await prisma.hardwareAgent.findUnique({ where: { id: agentId } });
-  if (!agent || !agent.enabled) return null;
-  const valid = await bcrypt.compare(agentSecret, agent.agentSecretHash);
-  if (!valid) return null;
-  return agent;
-}
+import { authenticateAgent } from '@/lib/hardware-auth';
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const agent = await authenticateAgent(req);
-    if (!agent) return errorResponse('UNAUTHORIZED', 'Invalid agent credentials', 401);
+    const authResult = await authenticateAgent(req);
+    if (!authResult) return errorResponse('UNAUTHORIZED', 'Invalid agent credentials', 401);
+    const { agent, ctx } = authResult;
 
     const { id } = await params;
     const body = await req.json();

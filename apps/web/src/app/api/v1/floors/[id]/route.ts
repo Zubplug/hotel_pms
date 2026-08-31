@@ -1,3 +1,5 @@
+import { NextResponse } from 'next/server';
+import { requireOrganizationContext } from '@/lib/organization-access';
 import { NextRequest } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
@@ -16,7 +18,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
     const { id } = await params;
     const floor = await prisma.floor.findUnique({ where: { id }, include: { _count: { select: { rooms: true } } } });
     if (!floor) return errorResponse('NOT_FOUND', 'Floor not found', 404);
-    await assertPropertyAccess(session.user.id, floor.propertyId);
+    if (!(await requireOrganizationContext(session.user.id)).propertyIds.includes(floor.propertyId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     return successResponse(floor);
   } catch (err) {
     if (err instanceof ForbiddenError) return errorResponse('FORBIDDEN', err.message, 403);
@@ -31,7 +33,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     const { id } = await params;
     const floor = await prisma.floor.findUnique({ where: { id } });
     if (!floor) return errorResponse('NOT_FOUND', 'Floor not found', 404);
-    await assertPropertyAccess(session.user.id, floor.propertyId);
+    if (!(await requireOrganizationContext(session.user.id)).propertyIds.includes(floor.propertyId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     const canUpdate = await hasPermission(session.user.id, 'floor', 'update', floor.propertyId);
     if (!canUpdate) return errorResponse('FORBIDDEN', 'Insufficient permissions', 403);
     const body = await req.json();
@@ -63,7 +65,7 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
     const { id } = await params;
     const floor = await prisma.floor.findUnique({ where: { id } });
     if (!floor) return errorResponse('NOT_FOUND', 'Floor not found', 404);
-    await assertPropertyAccess(session.user.id, floor.propertyId);
+    if (!(await requireOrganizationContext(session.user.id)).propertyIds.includes(floor.propertyId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     const canDelete = await hasPermission(session.user.id, 'floor', 'delete', floor.propertyId);
     if (!canDelete) return errorResponse('FORBIDDEN', 'Insufficient permissions', 403);
     await prisma.floor.update({ where: { id }, data: { isActive: false } });

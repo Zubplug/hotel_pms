@@ -8,6 +8,7 @@ import {
   DEFAULT_APPROVAL_FLOWS,
   type PropertyApprovalFlows,
 } from '@/lib/approval-config';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 export const dynamic = 'force-dynamic';
 
@@ -22,11 +23,12 @@ export async function GET(
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
 
-    const { role, propertyId: sessionPropertyId, isSuperAdmin } = session.user as any;
+    const { role, isSuperAdmin } = session.user as any;
 
     // Must belong to this property or be a super admin
-    if (!isSuperAdmin && sessionPropertyId !== params.id && role !== 'CEO') {
+    if (!isSuperAdmin && !ctx.propertyIds.includes(params.id) && role !== 'CEO') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -72,8 +74,9 @@ export async function PATCH(
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
 
-    const { role, propertyId: sessionPropertyId, isSuperAdmin } = session.user as any;
+    const { role, isSuperAdmin } = session.user as any;
 
     // Only SUPER_ADMIN and CEO may change approval flow config
     const isAuthorized =
@@ -90,7 +93,7 @@ export async function PATCH(
     }
 
     // Property scope check
-    if (!isSuperAdmin && sessionPropertyId !== params.id) {
+    if (!isSuperAdmin && !ctx.propertyIds.includes(params.id)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -103,6 +106,8 @@ export async function PATCH(
     }
 
     const body = await req.json();
+        let reqPropertyId = body?.propertyId;
+        if (reqPropertyId && !ctx.propertyIds.includes(reqPropertyId)) return NextResponse.json({ error: 'Forbidden property' }, { status: 403 });
     const { approvalFlows } = body as { approvalFlows: Partial<PropertyApprovalFlows> };
 
     if (!approvalFlows || typeof approvalFlows !== 'object') {

@@ -64,42 +64,23 @@ export async function authenticateSyncRequest(req: NextRequest, targetPropertyId
 
   // 2. Try NextAuth Session
   const session = await auth();
-  if (session?.user) {
-    // We need to resolve property access. In our auth model, user roles define property access.
-    // If the user has access to this property, allow it.
-    const userRoles = await prisma.userRole.findMany({
-      where: {
-        userId: session.user.id,
-        OR: [
-          { propertyId: targetPropertyId },
-          { propertyId: null } // Org-wide role
-        ]
-      },
-      include: {
-        role: {
-          include: { organization: true }
-        }
-      }
-    });
-
-    if (userRoles.length > 0) {
-      // Find the organization ID. If they have a property-specific role, we still need the org ID for the property.
-      // If it's an org-wide role, we use that org ID.
-      let orgId = userRoles[0].role?.organizationId || null;
+  if (session?.user?.id) {
+    try {
+      const { requireOrganizationContext } = await import('@/lib/organization-access');
+      const ctx = await requireOrganizationContext(session.user.id);
       
-      if (!orgId) {
-        const prop = await prisma.property.findUnique({ where: { id: targetPropertyId } });
-        if (prop) orgId = prop.organizationId;
+      if (ctx.propertyIds.includes(targetPropertyId)) {
+        return { 
+          success: true, 
+          propertyId: targetPropertyId, 
+          organizationId: ctx.organizationId,
+          isDevice: false 
+        };
+      } else {
+        return { success: false, error: 'User does not have access to this property', status: 403 };
       }
-
-      return { 
-        success: true, 
-        propertyId: targetPropertyId, 
-        organizationId: orgId,
-        isDevice: false 
-      };
-    } else {
-      return { success: false, error: 'User does not have access to this property', status: 403 };
+    } catch (e: any) {
+      return { success: false, error: e.message || 'Authorization failed', status: 403 };
     }
   }
 

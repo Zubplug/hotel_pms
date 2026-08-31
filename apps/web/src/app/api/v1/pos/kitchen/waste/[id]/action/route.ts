@@ -3,12 +3,18 @@ import prisma from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
 import { hasInventoryPermission } from '@/lib/inventory/permissions';
 import { getPropertyBusinessDate } from '@/lib/date-utils';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized', data: null }, { status: 401 });
+    const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
   const user = session.user as any;
   const body = await request.json();
+        let reqPropertyId = body?.propertyId;
+        if (reqPropertyId && !ctx.propertyIds.includes(reqPropertyId)) return NextResponse.json({ error: 'Forbidden property' }, { status: 403 });
+        let reqOutletId = body?.outletId;
+        if (reqOutletId && !ctx.outletIds.includes(reqOutletId)) return NextResponse.json({ error: 'Forbidden outlet' }, { status: 403 });
   const action = String(body.action || '').toLowerCase();
   const canApprove = hasInventoryPermission(user.role, 'inventory.adjust.approve', user.isSuperAdmin);
   if (!user.propertyId || !canApprove) return NextResponse.json({ error: 'Forbidden', data: null }, { status: 403 });

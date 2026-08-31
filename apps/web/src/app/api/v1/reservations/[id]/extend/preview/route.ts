@@ -1,8 +1,9 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { auth } from '@/lib/auth';
 import { assertPropertyAccess } from '@/lib/property-access';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 export async function POST(
   req: NextRequest,
@@ -11,6 +12,7 @@ export async function POST(
   try {
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
 
     const { id } = await params;
     const { newCheckoutDate } = await req.json();

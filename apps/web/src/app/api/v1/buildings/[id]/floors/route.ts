@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
@@ -6,6 +6,7 @@ import { createAuditLog } from '@/lib/audit';
 import { hasPermission } from '@/lib/rbac';
 import { assertPropertyAccess, ForbiddenError } from '@/lib/property-access';
 import { createFloorSchema } from '@hotel-pms/types';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -13,10 +14,11 @@ export async function GET(_req: NextRequest, { params }: Params) {
   try {
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
     const { id: buildingId } = await params;
     const building = await prisma.building.findUnique({ where: { id: buildingId } });
     if (!building) return errorResponse('NOT_FOUND', 'Building not found', 404);
-    await assertPropertyAccess(session.user.id, building.propertyId);
+    if (!(await requireOrganizationContext(session.user.id)).propertyIds.includes(building.propertyId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     const floors = await prisma.floor.findMany({
       where: { buildingId },
       include: { _count: { select: { rooms: true } } },
@@ -33,14 +35,17 @@ export async function POST(req: NextRequest, { params }: Params) {
   try {
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
     const { id: buildingId } = await params;
     const building = await prisma.building.findUnique({ where: { id: buildingId } });
     if (!building) return errorResponse('NOT_FOUND', 'Building not found', 404);
-    await assertPropertyAccess(session.user.id, building.propertyId);
+    if (!(await requireOrganizationContext(session.user.id)).propertyIds.includes(building.propertyId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     const canCreate = await hasPermission(session.user.id, 'floor', 'create', building.propertyId);
     if (!canCreate) return errorResponse('FORBIDDEN', 'Insufficient permissions', 403);
 
     const body = await req.json();
+        let reqPropertyId = body?.propertyId;
+        if (reqPropertyId && !ctx.propertyIds.includes(reqPropertyId)) return NextResponse.json({ error: 'Forbidden property' }, { status: 403 });
     const data = createFloorSchema.parse({ ...body, buildingId, propertyId: building.propertyId });
 
     // Check duplicate floor number

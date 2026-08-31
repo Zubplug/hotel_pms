@@ -1,31 +1,25 @@
+import { requireOrganizationContext } from '@/lib/organization-access';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
-import { getUserPropertyIds } from '@/lib/property-access';
-
 export const dynamic = 'force-dynamic';
-
 export async function GET(req: NextRequest) {
   try {
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
-
     const { searchParams } = new URL(req.url);
     const requestedPropertyId = searchParams.get('propertyId');
-
-    const allowedPropertyIds = await getUserPropertyIds(session.user.id);
-    
+    const allowedPropertyIds = (await requireOrganizationContext(session.user.id)).propertyIds;
     let propertyIdsToQuery: string[] = [];
     if (requestedPropertyId) {
-      if (!allowedPropertyIds.includes(requestedPropertyId) && !(session.user as any).isSuperAdmin) {
+      if (!(allowedPropertyIds as string[]).includes(requestedPropertyId) && !(session.user as any).isSuperAdmin) {
         return errorResponse('FORBIDDEN', 'No access to this property', 403);
       }
       propertyIdsToQuery = [requestedPropertyId];
     } else {
-      propertyIdsToQuery = allowedPropertyIds;
+      propertyIdsToQuery = allowedPropertyIds as string[];
     }
-
     if (propertyIdsToQuery.length === 0) {
       return successResponse({
         kpis: { netCollected30d: 0, occupancy: 0, activeGuests: 0, receivables: 0, operationalHealth: { available: 0, occupied: 0, cleaning: 0, outOfOrder: 0 } },
@@ -34,16 +28,12 @@ export async function GET(req: NextRequest) {
         activity: []
       }, 200);
     }
-
     const now = new Date();
     const thirtyDaysAgo = new Date(now);
     thirtyDaysAgo.setDate(now.getDate() - 30);
-
     const fourteenDaysAgo = new Date(now);
     fourteenDaysAgo.setDate(now.getDate() - 14);
-
     // --- KPIs ---
-    
     // 1. Net Collected 30d
     const paymentsAgg = await prisma.payment.aggregate({
       where: {
@@ -53,7 +43,6 @@ export async function GET(req: NextRequest) {
       },
       _sum: { amount: true }
     });
-    
     const refundsAgg = await prisma.refund.aggregate({
       where: {
         propertyId: { in: propertyIdsToQuery },
@@ -62,18 +51,15 @@ export async function GET(req: NextRequest) {
       },
       _sum: { amount: true }
     });
-
     const grossPayments = Number(paymentsAgg._sum.amount || 0);
     const totalRefunds = Number(refundsAgg._sum.amount || 0);
     const netCollected30d = grossPayments - totalRefunds;
-
     // 2 & 5. Occupancy Today & Operational Health
     const rooms = await prisma.room.groupBy({
       by: ['status'],
       where: { propertyId: { in: propertyIdsToQuery } },
       _count: true
     });
-
     let available = 0, occupied = 0, cleaning = 0, outOfOrder = 0;
     rooms.forEach((r: any) => {
       if (r.status === 'AVAILABLE') available += r._count;
@@ -81,18 +67,15 @@ export async function GET(req: NextRequest) {
       else if (['DIRTY', 'CLEANING', 'CLEAN', 'INSPECTED'].includes(r.status)) cleaning += r._count;
       else if (['OUT_OF_ORDER', 'OUT_OF_SERVICE', 'MAINTENANCE'].includes(r.status)) outOfOrder += r._count;
     });
-
     const sellableRooms = available + occupied + cleaning; 
     const totalRooms = sellableRooms + outOfOrder;
     const occupancy = sellableRooms > 0 ? (occupied / sellableRooms) * 100 : 0;
-    
     const operationalHealth = {
       available: totalRooms > 0 ? (available / totalRooms) * 100 : 0,
       occupied: totalRooms > 0 ? (occupied / totalRooms) * 100 : 0,
       cleaning: totalRooms > 0 ? (cleaning / totalRooms) * 100 : 0,
       outOfOrder: totalRooms > 0 ? (outOfOrder / totalRooms) * 100 : 0,
     };
-
     // 3. Active Guests
     const activeGuests = await prisma.reservation.count({
       where: {
@@ -100,7 +83,6 @@ export async function GET(req: NextRequest) {
         status: 'CHECKED_IN'
       }
     });
-
     // 4. Outstanding Receivables
     const foliosAgg = await prisma.folio.aggregate({
       where: {
@@ -110,7 +92,6 @@ export async function GET(req: NextRequest) {
       _sum: { balance: true }
     });
     const receivables = Number(foliosAgg._sum.balance || 0);
-
     // --- Properties Comparison ---
     const propertiesData = await prisma.property.findMany({
       where: { id: { in: propertyIdsToQuery } },
@@ -128,7 +109,6 @@ export async function GET(req: NextRequest) {
         }
       }
     });
-
     const propertyComparisons = propertiesData.map((p: any) => {
       let pAvailable = 0, pOccupied = 0, pCleaning = 0, pOutOfOrder = 0;
       p.rooms.forEach((r: any) => {
@@ -139,13 +119,10 @@ export async function GET(req: NextRequest) {
       });
       const pSellable = pAvailable + pOccupied + pCleaning;
       const pOccupancy = pSellable > 0 ? (pOccupied / pSellable) * 100 : 0;
-      
       const pGross = p.payments.reduce((sum: any, pay: any) => sum + Number(pay.amount), 0);
       const pRefunds = p.refunds.reduce((sum: any, ref: any) => sum + Number(ref.amount), 0);
       const pNet = pGross - pRefunds;
-
       const adr = pOccupied > 0 ? pNet / pOccupied : 0; // Simplified ADR approximation using net collected
-
       return {
         id: p.id,
         name: p.name,
@@ -155,11 +132,9 @@ export async function GET(req: NextRequest) {
         outOfOrder: pOutOfOrder
       };
     });
-
     // --- Trend (14 days) ---
     // A more complex raw query would be ideal for exact historical room occupancy, 
     // but we will build a simpler approximation grouping payments by day.
-    
     // Create an array of 14 days
     const trendData = [];
     for (let i = 13; i >= 0; i--) {
@@ -175,7 +150,6 @@ export async function GET(req: NextRequest) {
         roomNights: 0
       });
     }
-
     // Revenue per day
     const payments14d = await prisma.payment.findMany({
       where: {
@@ -193,14 +167,12 @@ export async function GET(req: NextRequest) {
       },
       select: { amount: true, createdAt: true }
     });
-
     for (const item of trendData) {
       const pDay = payments14d.filter((p: any) => new Date(p.createdAt).getTime() >= item.timestamp && new Date(p.createdAt).getTime() < item.timestamp + 86400000);
       const rDay = refunds14d.filter((r: any) => new Date(r.createdAt).getTime() >= item.timestamp && new Date(r.createdAt).getTime() < item.timestamp + 86400000);
       const net = pDay.reduce((sum: any, p: any) => sum + Number(p.amount), 0) - rDay.reduce((sum: any, r: any) => sum + Number(r.amount), 0);
       item.revenue = net;
     }
-
     // We can approximate historical occupancy by finding all reservations that overlapped each day
     const reservations14d = await prisma.reservation.findMany({
       where: {
@@ -211,9 +183,7 @@ export async function GET(req: NextRequest) {
       },
       select: { checkIn: true, checkOut: true }
     });
-
     const totalRoomsCount = sellableRooms > 0 ? sellableRooms : 1; // Approx total sellable for past 14d
-
     for (const item of trendData) {
       let roomNights = 0;
       for (const res of reservations14d) {
@@ -227,7 +197,6 @@ export async function GET(req: NextRequest) {
       item.roomNights = roomNights;
       item.occupancyPct = Math.min(100, (roomNights / totalRoomsCount) * 100);
     }
-
     // --- Live Activity ---
     const activity = await prisma.auditLog.findMany({
       where: {
@@ -247,7 +216,6 @@ export async function GET(req: NextRequest) {
         propertyId: true
       }
     });
-
     return successResponse({
       kpis: {
         netCollected30d,
@@ -271,7 +239,6 @@ export async function GET(req: NextRequest) {
         details: a.newValue
       }))
     }, 200);
-
   } catch (err: any) {
     console.error('[Dashboard Analytics GET]', err);
     return errorResponse('INTERNAL_ERROR', 'Unexpected error generating analytics', 500);

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 export async function POST(
   req: NextRequest,
@@ -12,6 +13,7 @@ export async function POST(
     if (!session?.user?.propertyId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
 
     const terminal = await prisma.posTerminal.findUnique({
       where: { id }

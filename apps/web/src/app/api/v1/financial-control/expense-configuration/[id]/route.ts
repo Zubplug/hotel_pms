@@ -1,14 +1,13 @@
+import { requireOrganizationContext } from '@/lib/organization-access';
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
-import { getUserPropertyIds } from '@/lib/property-access';
-
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const role = String((session.user as any).role || '').toUpperCase();
   if (!['ACCOUNTANT', 'SUPER_ADMIN'].includes(role)) return NextResponse.json({ error: 'Only an accountant or super admin can configure expenses' }, { status: 403 });
-  const propertyIds = await getUserPropertyIds(session.user.id);
+  const propertyIds = (await requireOrganizationContext(session.user.id)).propertyIds as string[];
   const { id } = await params;
   const body = await request.json();
   const isActive = Boolean(body.isActive);

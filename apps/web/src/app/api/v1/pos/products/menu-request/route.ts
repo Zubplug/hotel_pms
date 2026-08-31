@@ -1,8 +1,8 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { errorResponse, successResponse } from '@/lib/api-response';
 import { resolveUser } from '@/lib/resolve-user';
-import { getUserPropertyIds } from '@/lib/property-access';
+import { requireOrganizationContext } from '@/lib/organization-access';
 
 const CASHIER_ROLES = ['GENERAL_CASHIER', 'CASHIER', 'FRONT_DESK_CASHIER'];
 const STATIONS = ['KITCHEN', 'BAR', 'DIRECT', 'NONE'];
@@ -11,13 +11,23 @@ export async function POST(req: NextRequest) {
   const user = await resolveUser(req);
   if (!user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
   if (!CASHIER_ROLES.includes(user.role) && !user.isSuperAdmin) return errorResponse('FORBIDDEN', 'Only cashiers can submit menu requests', 403);
+  const ctx = await requireOrganizationContext(user.id);
+  const propertyIds = ctx.propertyIds;
   const body = await req.json();
+        let reqPropertyId = body?.propertyId;
   const name = String(body.name || '').trim();
   const price = Number(body.price);
   const taxRate = Number(body.taxRate || 0);
   if (!name || !Number.isFinite(price) || price < 0 || !Number.isFinite(taxRate) || taxRate < 0 || taxRate > 100) return errorResponse('BAD_REQUEST', 'Name, valid price, and tax rate are required', 400);
   if (body.productionStation && !STATIONS.includes(body.productionStation)) return errorResponse('BAD_REQUEST', 'Invalid production station', 400);
-  const category = await prisma.productCategory.findFirst({ where: { id: body.categoryId, outlet: { propertyId: { in: await getUserPropertyIds(user.id) }, isActive: true }, isActive: true }, include: { outlet: true } });
+  const category = await prisma.productCategory.findFirst({
+    where: {
+      id: body.categoryId,
+      outlet: { propertyId: { in: [...propertyIds] } },
+      isActive: true
+    },
+    include: { outlet: true }
+  });
   if (!category) return errorResponse('BAD_REQUEST', 'Select a valid active category', 400);
   let stockItemId: string | null = null;
   if (body.stockItemId) {

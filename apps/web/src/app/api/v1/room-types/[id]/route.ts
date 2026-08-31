@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
@@ -6,6 +6,7 @@ import { createAuditLog } from '@/lib/audit';
 import { hasPermission } from '@/lib/rbac';
 import { assertPropertyAccess, ForbiddenError } from '@/lib/property-access';
 import { updateRoomTypeSchema } from '@hotel-pms/types';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -13,10 +14,11 @@ export async function GET(_req: NextRequest, { params }: Params) {
   try {
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
     const { id } = await params;
     const rt = await prisma.roomType.findUnique({ where: { id }, include: { _count: { select: { rooms: true } } } });
     if (!rt) return errorResponse('NOT_FOUND', 'Room type not found', 404);
-    await assertPropertyAccess(session.user.id, rt.propertyId);
+    if (!(await requireOrganizationContext(session.user.id)).propertyIds.includes(rt.propertyId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     return successResponse(rt);
   } catch (err) {
     if (err instanceof ForbiddenError) return errorResponse('FORBIDDEN', err.message, 403);
@@ -28,13 +30,16 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   try {
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
     const { id } = await params;
     const rt = await prisma.roomType.findUnique({ where: { id } });
     if (!rt) return errorResponse('NOT_FOUND', 'Room type not found', 404);
-    await assertPropertyAccess(session.user.id, rt.propertyId);
+    if (!(await requireOrganizationContext(session.user.id)).propertyIds.includes(rt.propertyId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     const canUpdate = await hasPermission(session.user.id, 'room_type', 'update', rt.propertyId);
     if (!canUpdate) return errorResponse('FORBIDDEN', 'Insufficient permissions', 403);
     const body = await req.json();
+        let reqPropertyId = body?.propertyId;
+        if (reqPropertyId && !ctx.propertyIds.includes(reqPropertyId)) return NextResponse.json({ error: 'Forbidden property' }, { status: 403 });
     const data = updateRoomTypeSchema.parse(body);
     const updated = await prisma.roomType.update({ where: { id }, data: { ...data, baseRate: data.baseRate } });
     const property = await prisma.property.findUnique({ where: { id: rt.propertyId }, select: { organizationId: true } });
@@ -54,10 +59,11 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   try {
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
     const { id } = await params;
     const rt = await prisma.roomType.findUnique({ where: { id } });
     if (!rt) return errorResponse('NOT_FOUND', 'Room type not found', 404);
-    await assertPropertyAccess(session.user.id, rt.propertyId);
+    if (!(await requireOrganizationContext(session.user.id)).propertyIds.includes(rt.propertyId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     const canDelete = await hasPermission(session.user.id, 'room_type', 'delete', rt.propertyId);
     if (!canDelete) return errorResponse('FORBIDDEN', 'Insufficient permissions', 403);
     await prisma.roomType.update({ where: { id }, data: { isActive: false } });

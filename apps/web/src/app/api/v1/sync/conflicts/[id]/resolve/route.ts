@@ -7,7 +7,7 @@ import { isNightAuditCutoverActive } from '@/lib/night-audit-guard';
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth();
-    if (!session || !session.user) {
+    if (!session || !session.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -38,16 +38,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
        isFinancial = true;
     }
 
-    // Role verification (simplified mapping: we check if user is manager, in reality we'd query RolePermission)
-    // For this implementation, we require 'MANAGER' or 'ADMIN' role on the session.
-    // If it's financial, we require 'ADMIN' or explicit FORCE_SYNC_RESOLUTION.
-    const userRole = (session.user as any).role || 'STAFF';
+    const { requireOrganizationContext } = await import('@/lib/organization-access');
+    const ctx = await requireOrganizationContext(session.user.id);
+    if (!ctx.propertyIds.includes(conflict.propertyId)) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const userRole = ctx.role;
     const isNightAuditor = userRole === 'NIGHT_AUDITOR';
     
-    if (userRole !== 'MANAGER' && userRole !== 'ADMIN' && userRole !== 'OWNER' && !isNightAuditor) {
+    if (userRole !== 'MANAGER' && userRole !== 'ADMIN' && userRole !== 'OWNER' && userRole !== 'SUPER_ADMIN' && userRole !== 'CEO' && userRole !== 'FINANCE_MANAGER' && !isNightAuditor) {
         return NextResponse.json({ error: 'Insufficient permissions. Requires RESOLVE_SYNC_CONFLICT.' }, { status: 403 });
     }
-    if (isFinancial && userRole !== 'ADMIN' && userRole !== 'OWNER' && !isNightAuditor) {
+    if (isFinancial && userRole !== 'ADMIN' && userRole !== 'OWNER' && userRole !== 'SUPER_ADMIN' && userRole !== 'CEO' && userRole !== 'FINANCE_MANAGER' && !isNightAuditor) {
         return NextResponse.json({ error: 'Financial conflicts require FORCE_SYNC_RESOLUTION capability.' }, { status: 403 });
     }
 

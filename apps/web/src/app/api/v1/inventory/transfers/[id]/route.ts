@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { hasInventoryPermission } from '@/lib/inventory/permissions';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 export const dynamic = 'force-dynamic';
 
@@ -13,7 +14,8 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
       return NextResponse.json({ data: null, error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { role, propertyId, isSuperAdmin, staffId } = session.user as any;
+    const { role, isSuperAdmin, staffId } = session.user as any;
+    const ctx = await requireOrganizationContext(session.user.id);
 
     if (!hasInventoryPermission(role, 'inventory.transfer', isSuperAdmin)) {
       return NextResponse.json({ data: null, error: 'Forbidden' }, { status: 403 });
@@ -23,7 +25,7 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
       ? { toWarehouse: { posOutlet: { staffAccess: { some: { staffId } } } } }
       : {};
     const transfer = await prisma.stockTransfer.findFirst({
-      where: { id: params.id, propertyId, ...outletHeadFilter },
+      where: { id: params.id, propertyId: ctx.propertyIds[0], ...outletHeadFilter },
       include: {
         fromWarehouse: true,
         toWarehouse: true,

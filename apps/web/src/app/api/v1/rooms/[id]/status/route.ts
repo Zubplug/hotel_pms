@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
@@ -8,6 +8,7 @@ import { assertPropertyAccess, ForbiddenError } from '@/lib/property-access';
 import { isValidTransition } from '@/lib/room-state-machine';
 import { roomStatusTransitionSchema } from '@hotel-pms/types';
 import { NotificationEngine } from '@/lib/notification-engine';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -15,6 +16,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   try {
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
     const { id } = await params;
     const room = await prisma.room.findUnique({ where: { id } });
     if (!room || room.deletedAt) return errorResponse('NOT_FOUND', 'Room not found', 404);
@@ -23,6 +25,8 @@ export async function POST(req: NextRequest, { params }: Params) {
     if (!canChangeStatus) return errorResponse('FORBIDDEN', 'Insufficient permissions', 403);
 
     const body = await req.json();
+        let reqPropertyId = body?.propertyId;
+        if (reqPropertyId && !ctx.propertyIds.includes(reqPropertyId)) return NextResponse.json({ error: 'Forbidden property' }, { status: 403 });
     const { newStatus, reason, source, referenceId } = roomStatusTransitionSchema.parse(body);
 
     if (newStatus === 'AVAILABLE' && ['DIRTY', 'MAINTENANCE', 'OUT_OF_ORDER'].includes(room.status)) {

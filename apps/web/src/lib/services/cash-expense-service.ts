@@ -5,9 +5,9 @@ import {
   ensureCashierControlAccountsForClient,
   ensureExpenseCounterpartyForClient,
 } from './cash-account-service';
+import { TenantContext } from '../organization-access';
 type ExpenseInput = {
   propertyId: string;
-  requestedBy: string;
   amount: number;
   currency?: string;
   categoryId: string;
@@ -18,15 +18,26 @@ type ExpenseInput = {
 };
 
 export class CashExpenseService {
-  static async list(propertyIds: string[]) {
+  static async list(ctx: TenantContext, propertyIds?: string[]) {
+    // If specific propertyIds provided, restrict them to authorized scope.
+    // Otherwise return all authorized properties.
+    const scopedIds = propertyIds
+      ? propertyIds.filter(id => ctx.propertyIds.includes(id))
+      : ctx.propertyIds;
+
+    if (scopedIds.length === 0) return [];
+
     return prisma.cashExpense.findMany({
-      where: { propertyId: { in: propertyIds } },
+      where: { propertyId: { in: scopedIds as string[] } },
       orderBy: { createdAt: 'desc' },
       include: { journal: true, audits: { orderBy: { createdAt: 'desc' }, take: 5 } },
     });
   }
 
-  static async create(input: ExpenseInput) {
+  static async create(ctx: TenantContext, input: ExpenseInput) {
+    if (!ctx.propertyIds.includes(input.propertyId)) {
+      throw new ShiftControlError('Access denied to property.', 'FORBIDDEN');
+    }
     if (!Number.isFinite(input.amount) || input.amount <= 0) {
       throw new ShiftControlError('Expense amount must be greater than zero.', 'BAD_REQUEST');
     }
@@ -56,46 +67,50 @@ export class CashExpenseService {
           receiptUrl: input.receiptUrl?.trim() || null,
           costCenter: costCenter?.name || null,
           costCenterId: costCenter?.id || null,
-          requestedBy: input.requestedBy,
+          requestedBy: ctx.userId,
         },
       });
-      await this.audit(tx, expense.id, input.requestedBy, 'SUBMITTED', 'Expense submitted for approval');
+      await this.audit(tx, expense.id, ctx.userId, 'SUBMITTED', 'Expense submitted for approval');
       return expense;
     });
   }
 
-  static async approve(expenseId: string, approverId: string, notes?: string) {
+  static async approve(ctx: TenantContext, expenseId: string, notes?: string) {
     return prisma.$transaction(async (tx) => {
+      // ENFORCE OWNERSHIP PATH
       const expense = await tx.cashExpense.findUnique({ where: { id: expenseId } });
-      if (!expense) throw new ShiftControlError('Expense not found.', 'NOT_FOUND', 404);
+      if (!expense || !ctx.propertyIds.includes(expense.propertyId)) throw new ShiftControlError('Expense not found or access denied', 'NOT_FOUND', 404);
       if (expense.status !== 'PENDING_APPROVAL') throw new ShiftControlError(`Expense is already ${expense.status}.`, 'BAD_REQUEST');
-      const updated = await tx.cashExpense.update({ where: { id: expenseId }, data: { status: 'APPROVED', approvedBy: approverId, approvedAt: new Date(), approvalNotes: notes?.trim() || null } });
-      await this.audit(tx, expense.id, approverId, 'APPROVED', notes);
+      const updated = await tx.cashExpense.update({ where: { id: expenseId }, data: { status: 'APPROVED', approvedBy: ctx.userId, approvedAt: new Date(), approvalNotes: notes?.trim() || null } });
+      await this.audit(tx, expense.id, ctx.userId, 'APPROVED', notes);
       return updated;
     });
   }
 
-  static async reject(expenseId: string, approverId: string, reason: string) {
+  static async reject(ctx: TenantContext, expenseId: string, reason: string) {
     if (!reason?.trim()) throw new ShiftControlError('A rejection reason is required.', 'BAD_REQUEST');
     return prisma.$transaction(async (tx) => {
+      // ENFORCE OWNERSHIP PATH
       const expense = await tx.cashExpense.findUnique({ where: { id: expenseId } });
-      if (!expense) throw new ShiftControlError('Expense not found.', 'NOT_FOUND', 404);
+      if (!expense || !ctx.propertyIds.includes(expense.propertyId)) throw new ShiftControlError('Expense not found or access denied', 'NOT_FOUND', 404);
       if (expense.status !== 'PENDING_APPROVAL') throw new ShiftControlError(`Expense is already ${expense.status}.`, 'BAD_REQUEST');
       const updated = await tx.cashExpense.update({ where: { id: expenseId }, data: { status: 'REJECTED', rejectionReason: reason.trim(), rejectedAt: new Date() } });
-      await this.audit(tx, expense.id, approverId, 'REJECTED', reason.trim());
+      await this.audit(tx, expense.id, ctx.userId, 'REJECTED', reason.trim());
       return updated;
     });
   }
 
-  static async pay(expenseId: string, cashierId: string) {
+  static async pay(ctx: TenantContext, expenseId: string) {
     return prisma.$transaction(async (tx) => {
+      // ENFORCE OWNERSHIP PATH
       const expense = await tx.cashExpense.findUnique({ where: { id: expenseId } });
-      if (!expense) throw new ShiftControlError('Expense not found.', 'NOT_FOUND', 404);
+      if (!expense || !ctx.propertyIds.includes(expense.propertyId)) throw new ShiftControlError('Expense not found or access denied', 'NOT_FOUND', 404);
       if (expense.status !== 'APPROVED') throw new ShiftControlError(`Only approved expenses can be paid. Current status: ${expense.status}.`, 'BAD_REQUEST');
-      const accounts = await ensureCashierControlAccountsForClient(tx, expense.propertyId);
+      
+      const accounts = await ensureCashierControlAccountsForClient(ctx, tx, expense.propertyId);
       const safe = accounts.find((account: any) => account.type === 'SAFE');
       if (!safe) throw new ShiftControlError('General Cashier Safe account is unavailable.', 'INTERNAL_ERROR', 500);
-      const clearing = await ensureExpenseCounterpartyForClient(tx, expense.propertyId);
+      const clearing = await ensureExpenseCounterpartyForClient(ctx, tx, expense.propertyId);
       const amount = Number(expense.amount);
 
       if (Number(safe.balance) < amount) {
@@ -115,18 +130,18 @@ export class CashExpenseService {
         if (remainingExpense <= 0) break;
         const reduction = Math.min(remainingExpense, Number(deposit.expectedAmount));
         await tx.bankDeposit.update({ where: { id: deposit.id }, data: { expectedAmount: { decrement: reduction }, notes: `${deposit.notes || ''}\n[Expense deducted ${expense.expenseReference}]: ${reduction.toFixed(2)}`.trim() } });
-        await this.audit(tx, expense.id, cashierId, 'DEPOSIT_ADJUSTED', `Reduced ${deposit.depositReference} by ${reduction.toFixed(2)}`, { depositId: deposit.id, amount: reduction });
+        await this.audit(tx, expense.id, ctx.userId, 'DEPOSIT_ADJUSTED', `Reduced ${deposit.depositReference} by ${reduction.toFixed(2)}`, { depositId: deposit.id, amount: reduction });
         remainingExpense -= reduction;
       }
 
       await tx.cashAccount.update({ where: { id: safe.id }, data: { balance: { decrement: amount } } });
       await tx.cashAccount.update({ where: { id: clearing.id }, data: { balance: { increment: amount } } });
-      const updated = await tx.cashExpense.update({ where: { id: expense.id }, data: { status: 'PAID', paidBy: cashierId, paidAt: new Date(), cashAccountId: safe.id } });
+      const updated = await tx.cashExpense.update({ where: { id: expense.id }, data: { status: 'PAID', paidBy: ctx.userId, paidAt: new Date(), cashAccountId: safe.id } });
       await tx.posCashMovement.create({
         data: {
           propertyId: expense.propertyId,
           deviceId: 'web-cash-management',
-          userId: cashierId,
+          userId: ctx.userId,
           amount,
           type: 'CASH_TRANSFER_OUT',
           sourceAccountId: safe.id,
@@ -137,8 +152,8 @@ export class CashExpenseService {
         },
       });
       const category = await tx.expenseCategory.findUnique({ where: { id: expense.categoryId! }, select: { debitAccount: true } });
-      await tx.cashExpenseJournal.create({ data: { expenseId: expense.id, debitAccount: category?.debitAccount || `EXPENSE:${expense.category}`, creditAccount: 'CASH:GENERAL_CASHIER_SAFE', amount, currency: expense.currency, postedBy: cashierId } });
-      await this.audit(tx, expense.id, cashierId, 'PAID', `Paid from ${safe.name}`);
+      await tx.cashExpenseJournal.create({ data: { expenseId: expense.id, debitAccount: category?.debitAccount || `EXPENSE:${expense.category}`, creditAccount: 'CASH:GENERAL_CASHIER_SAFE', amount, currency: expense.currency, postedBy: ctx.userId } });
+      await this.audit(tx, expense.id, ctx.userId, 'PAID', `Paid from ${safe.name}`);
       return updated;
     });
   }

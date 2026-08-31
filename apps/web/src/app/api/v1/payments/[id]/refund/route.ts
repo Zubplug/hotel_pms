@@ -1,20 +1,18 @@
+import { NextResponse } from 'next/server';
+import { requireOrganizationContext } from '@/lib/organization-access';
 import { NextRequest } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
-import { getUserPropertyIds } from '@/lib/property-access';
 import { encrypt } from '@/lib/encryption';
 import { getReducedStayEstimate } from '@/lib/refunds/reduced-stay';
 import { findActiveFrontdeskSession } from '@/lib/frontdesk/active-session';
 import { canOverrideNightAudit, getNightAuditOverrideReason, isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
-
 const ACTIVE_REQUEST_STATUSES = ['PENDING_APPROVAL', 'APPROVED', 'PROCESSING'] as const;
-
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth();
     if (!session?.user?.id) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
-
     const { id: paymentId } = await params;
     const body = await req.json();
     const amount = Number(body.amount);
@@ -33,24 +31,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (requestedMethod === 'BANK_TRANSFER' && (!bankAccountName || !/^\d{6,20}$/.test(bankAccountNumber) || !bankName)) {
       return errorResponse('BAD_REQUEST', 'Bank name, account name, and a valid account number are required for bank transfers', 400);
     }
-
     const capabilities = (session.user as any).capabilities || [];
     if (!capabilities.includes('ACCESS_REFUNDS')) {
       return errorResponse('FORBIDDEN', 'You do not have permission to request refunds.', 403);
     }
-
     const payment = await prisma.payment.findUnique({
       where: { id: paymentId },
       include: { folio: { include: { property: true, items: true } }, reservation: true }
     });
     if (!payment) return errorResponse('NOT_FOUND', 'Payment not found', 404);
-
     const overrideReason = getNightAuditOverrideReason(body.nightAuditOverrideReason);
     if (await isNightAuditTransactionLocked(payment.propertyId) && (!canOverrideNightAudit((session.user as any).role) || !overrideReason)) {
       return errorResponse('NIGHT_AUDIT_IN_PROGRESS', 'Night audit is in progress. New refunds are temporarily paused.', 409);
     }
-
-    const allowedProperties = await getUserPropertyIds(session.user.id);
+    const allowedProperties = (await requireOrganizationContext(session.user.id)).propertyIds;
     if (!allowedProperties.includes(payment.propertyId)) {
       return errorResponse('FORBIDDEN', 'No access to this property', 403);
     }
@@ -61,11 +55,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (payment.status !== 'COMPLETED') {
       return errorResponse('BAD_REQUEST', 'Only completed payments can be refunded', 400);
     }
-
     const result = await prisma.$transaction(async tx => {
       const existing = await tx.refundRequest.findUnique({ where: { idempotencyKey } });
       if (existing) return existing;
-
       const refunds = await tx.refund.aggregate({
         where: { paymentId, status: { not: 'FAILED' } },
         _sum: { amount: true }
@@ -78,7 +70,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       if (alreadyCommitted + amount > Number(payment.amount)) {
         throw new Error('REFUND_LIMIT_EXCEEDED');
       }
-
       if (category === 'FOLIO_CREDIT_BALANCE' && Number(payment.folio.balance) >= 0) {
         throw new Error('REFUND_REQUIRES_CREDIT_BALANCE');
       }
@@ -111,7 +102,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           throw new Error('INVALID_REDUCED_STAY_AMOUNT');
         }
       }
-
       const workflowRules = await tx.refundApprovalRule.findMany({ where: { propertyId: payment.propertyId, isActive: true }, orderBy: { stepOrder: 'asc' } });
       const matchingRules = workflowRules.filter(rule => (rule.minAmount == null || amount >= Number(rule.minAmount)) && (rule.maxAmount == null || amount <= Number(rule.maxAmount)));
       const firstRule = matchingRules[0];
@@ -120,7 +110,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const candidate = firstRule?.approverId
         ? { userId: firstRule.approverId }
         : role ? await tx.userRole.findFirst({ where: { roleId: role.id, userId: { not: session.user.id }, OR: [{ propertyId: payment.propertyId }, { propertyId: null }] }, select: { userId: true } }) : null;
-
       const request = await tx.refundRequest.create({
         data: {
           organizationId: payment.folio.property.organizationId,
@@ -152,7 +141,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
         }
       });
-
       await tx.approvalRequest.create({
         data: {
           propertyId: payment.propertyId,
@@ -166,10 +154,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           expiresAt: request.expiresAt
         }
       });
-
       return request;
     });
-
     return successResponse({ status: result.status, refundRequest: result }, 202);
   } catch (error: any) {
     const messages: Record<string, [string, string, number]> = {

@@ -33,6 +33,7 @@ model Organization {
   notifications  Notification[]
   auditLogs      AuditLog[]
   refundRequests RefundRequest[]
+  memberships    OrganizationMembership[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -1581,6 +1582,7 @@ model User {
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
 
+  membership              OrganizationMembership?
   roles                   UserRole[]
   requestedRefunds        RefundRequest[]              @relation("RefundRequestedBy")
   assignedRefunds         RefundRequest[]              @relation("RefundCurrentApprover")
@@ -1674,6 +1676,20 @@ model UserRole {
 
   // Using a unique index because propertyId can be null, meaning org-wide role
   @@unique([userId, roleId, propertyId])
+}
+
+model OrganizationMembership {
+  id             String       @id @default(uuid()) @db.Uuid
+  userId         String       @unique @db.Uuid
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role           String       @default("MEMBER")
+  status         String       @default("ACTIVE")
+  permissions    String[]     @default([])
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
 }
 
 // -----------------------------------------------------------------------------

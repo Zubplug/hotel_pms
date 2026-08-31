@@ -1,6 +1,7 @@
 import prisma, { Prisma, PosSessionStatus, FrontdeskSessionStatus } from '@hotel-pms/db';
 import { ShiftControlStatus, VarianceStatus, assertShiftTransition } from '@/lib/shift-control';
 import crypto from 'crypto';
+import { TenantContext } from '../organization-access';
 
 export class ShiftControlError extends Error {
   constructor(message: string, public code: string = 'BAD_REQUEST', public status: number = 400) {
@@ -113,10 +114,10 @@ export class ShiftControlService {
    *   session.controlStatus = SUBMITTED (awaiting Finance review)
    */
   static async submitShift(
+    ctx: TenantContext,
     tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
     type: 'POS' | 'FRONT_DESK',
     shiftId: string,
-    operatorId: string,
     params: {
       declaredCash: number;
       expectedCash: number;
@@ -125,6 +126,9 @@ export class ShiftControlService {
       propertyId: string;
     }
   ) {
+    if (!ctx.propertyIds.includes(params.propertyId)) {
+      throw new ShiftControlError('Access denied to property.', 'FORBIDDEN', 403);
+    }
     const fromControlStatus = await (async () => {
       if (type === 'POS') {
         const s = await tx.posSession.findUnique({ where: { id: shiftId }, select: { controlStatus: true } });
@@ -154,7 +158,7 @@ export class ShiftControlService {
               controlStatus: 'SUBMITTED',
               varianceStatus: params.varianceStatus,
               submittedAt: new Date(),
-              submittedBy: operatorId,
+              submittedBy: ctx.userId,
               closedAt: new Date(),
               actualCash: params.declaredCash,
               expectedCash: params.expectedCash,
@@ -171,7 +175,7 @@ export class ShiftControlService {
               controlStatus: 'SUBMITTED',
               varianceStatus: params.varianceStatus,
               submittedAt: new Date(),
-              submittedBy: operatorId,
+              submittedBy: ctx.userId,
               closedAt: new Date(),
               declaredCash: params.declaredCash,
               systemExpectedCash: params.expectedCash,
@@ -188,7 +192,7 @@ export class ShiftControlService {
       action: fromControlStatus === 'RETURNED' ? 'SHIFT_RESUBMITTED' : 'SHIFT_SUBMITTED',
       fromStatus: fromControlStatus,
       toStatus: 'SUBMITTED',
-      performedBy: operatorId,
+      performedBy: ctx.userId,
       metadata: {
         expectedCash: params.expectedCash,
         declaredCash: params.declaredCash,
@@ -206,12 +210,12 @@ export class ShiftControlService {
    * This IS a standalone public operation exposed via API endpoint.
    */
   static async startShiftReview(
+    ctx: TenantContext,
     type: 'POS' | 'FRONT_DESK',
-    shiftId: string,
-    reviewerId: string
+    shiftId: string
   ) {
     return prisma.$transaction(async tx => {
-      const shift = await this.validateAndGetShift(tx, type, shiftId, reviewerId);
+      const shift = await this.validateAndGetShift(ctx, tx, type, shiftId);
       assertShiftTransition(shift.controlStatus, 'UNDER_REVIEW');
 
       const updated =
@@ -226,7 +230,7 @@ export class ShiftControlService {
         action: 'SHIFT_REVIEW_STARTED',
         fromStatus: shift.controlStatus,
         toStatus: 'UNDER_REVIEW',
-        performedBy: reviewerId,
+        performedBy: ctx.userId,
       });
 
       return updated;
@@ -234,9 +238,9 @@ export class ShiftControlService {
   }
 
   // ─── approveShift ─────────────────────────────────────────────────────────
-  static async approveShift(type: 'POS' | 'FRONT_DESK', shiftId: string, reviewerId: string) {
+  static async approveShift(ctx: TenantContext, type: 'POS' | 'FRONT_DESK', shiftId: string) {
     return prisma.$transaction(async tx => {
-      const shift = await this.validateAndGetShift(tx, type, shiftId, reviewerId);
+      const shift = await this.validateAndGetShift(ctx, tx, type, shiftId);
       assertShiftTransition(shift.controlStatus, 'APPROVED');
 
       const expected = await this.recalculateExpectedCash(tx, type, shiftId);
@@ -254,7 +258,7 @@ export class ShiftControlService {
       const updateData = {
         controlStatus: 'APPROVED' as const,
         approvalDecision: 'APPROVED',
-        approvedBy: reviewerId,
+        approvedBy: ctx.userId,
         approvedAt: new Date(),
         variance: 0,
         status: type === 'POS'
@@ -270,7 +274,7 @@ export class ShiftControlService {
       if (type === 'POS') {
         updated = await tx.posSession.update({ where: { id: shiftId }, data: updateData });
         const settlement = await tx.posSettlement.findFirst({ where: { sessionId: shiftId }, orderBy: { settledAt: 'desc' } });
-        if (settlement) await tx.posSettlement.update({ where: { id: settlement.id }, data: { status: 'CLOSED', authorizerId: reviewerId } });
+        if (settlement) await tx.posSettlement.update({ where: { id: settlement.id }, data: { status: 'CLOSED', authorizerId: ctx.userId } });
       } else {
         updated = await tx.frontdeskSession.update({ where: { id: shiftId }, data: updateData });
       }
@@ -282,7 +286,7 @@ export class ShiftControlService {
         action: 'SHIFT_APPROVED',
         fromStatus: shift.controlStatus,
         toStatus: 'APPROVED',
-        performedBy: reviewerId,
+        performedBy: ctx.userId,
         metadata: { expected, declared, variance },
       });
 
@@ -292,15 +296,14 @@ export class ShiftControlService {
 
   // ─── approveShiftWithVariance ─────────────────────────────────────────────
   static async approveShiftWithVariance(
+    ctx: TenantContext,
     type: 'POS' | 'FRONT_DESK',
     shiftId: string,
-    reviewerId: string,
-    role: string,
     reasonCode: string,
     notes: string
   ) {
     return prisma.$transaction(async tx => {
-      const shift = await this.validateAndGetShift(tx, type, shiftId, reviewerId);
+      const shift = await this.validateAndGetShift(ctx, tx, type, shiftId);
       assertShiftTransition(shift.controlStatus, 'APPROVED_WITH_VARIANCE');
       if (!reasonCode) throw new ShiftControlError('Reason code is required', 'BAD_REQUEST');
       if (!notes) throw new ShiftControlError('Reviewer notes are required', 'BAD_REQUEST');
@@ -315,7 +318,7 @@ export class ShiftControlService {
       }
 
       const limits = await this.getPropertySettings(tx, shift.propertyId);
-      const userRole = role.toUpperCase();
+      const userRole = ctx.role.toUpperCase();
 
       if (absVariance > limits.financeManagerLimit && !['CEO', 'SUPER_ADMIN', 'MANAGER'].includes(userRole)) {
         throw new ShiftControlError('Variance exceeds your authority limit. Escalation required.', 'FORBIDDEN', 403);
@@ -331,7 +334,7 @@ export class ShiftControlService {
         approvalNotes: notes,
         reasonCode,
         reasonNotes: notes,
-        approvedBy: reviewerId,
+        approvedBy: ctx.userId,
         approvedAt: new Date(),
         variance,
         status: type === 'POS'
@@ -344,12 +347,12 @@ export class ShiftControlService {
       if (type === 'POS') {
         updated = await tx.posSession.update({ where: { id: shiftId }, data: updateData });
         const settlement = await tx.posSettlement.findFirst({ where: { sessionId: shiftId }, orderBy: { settledAt: 'desc' } });
-        if (settlement) await tx.posSettlement.update({ where: { id: settlement.id }, data: { status: 'CLOSED', authorizerId: reviewerId, variance } });
+        if (settlement) await tx.posSettlement.update({ where: { id: settlement.id }, data: { status: 'CLOSED', authorizerId: ctx.userId, variance } });
       } else {
         updated = await tx.frontdeskSession.update({ where: { id: shiftId }, data: updateData });
         await tx.reconciliationException.updateMany({
           where: { frontdeskSessionId: shiftId, status: 'OPEN' },
-          data: { status: 'ACCEPTED', acceptedBy: reviewerId, acceptedAt: new Date(), resolutionNotes: notes }
+          data: { status: 'ACCEPTED', acceptedBy: ctx.userId, acceptedAt: new Date(), resolutionNotes: notes }
         });
       }
 
@@ -360,7 +363,7 @@ export class ShiftControlService {
         action: 'VARIANCE_ACCEPTED',
         fromStatus: shift.controlStatus,
         toStatus: 'APPROVED_WITH_VARIANCE',
-        performedBy: reviewerId,
+        performedBy: ctx.userId,
         reason: reasonCode,
         metadata: { expected, declared, variance, notes },
       });
@@ -381,13 +384,13 @@ export class ShiftControlService {
    * calls ShiftControlService.submitShift() and advances controlStatus → SUBMITTED.
    */
   static async returnShift(
+    ctx: TenantContext,
     type: 'POS' | 'FRONT_DESK',
     shiftId: string,
-    reviewerId: string,
     notes: string
   ) {
     return prisma.$transaction(async tx => {
-      const shift = await this.validateAndGetShift(tx, type, shiftId, reviewerId);
+      const shift = await this.validateAndGetShift(ctx, tx, type, shiftId);
       assertShiftTransition(shift.controlStatus, 'RETURNED');
       if (!notes) throw new ShiftControlError('Notes are required to return a shift', 'BAD_REQUEST');
 
@@ -403,7 +406,7 @@ export class ShiftControlService {
       if (type === 'POS') {
         updated = await tx.posSession.update({ where: { id: shiftId }, data: updateData });
         const settlement = await tx.posSettlement.findFirst({ where: { sessionId: shiftId }, orderBy: { settledAt: 'desc' } });
-        if (settlement) await tx.posSettlement.update({ where: { id: settlement.id }, data: { status: 'REJECTED', authorizerId: reviewerId } });
+        if (settlement) await tx.posSettlement.update({ where: { id: settlement.id }, data: { status: 'REJECTED', authorizerId: ctx.userId } });
       } else {
         updated = await tx.frontdeskSession.update({ where: { id: shiftId }, data: updateData });
       }
@@ -415,7 +418,7 @@ export class ShiftControlService {
         action: 'SHIFT_RETURNED',
         fromStatus: shift.controlStatus,
         toStatus: 'RETURNED',
-        performedBy: reviewerId,
+        performedBy: ctx.userId,
         metadata: { notes },
       });
 
@@ -425,22 +428,22 @@ export class ShiftControlService {
 
   // ─── validateAndGetShift ──────────────────────────────────────────────────
   private static async validateAndGetShift(
+    ctx: TenantContext,
     tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
     type: 'POS' | 'FRONT_DESK',
-    shiftId: string,
-    reviewerId: string
+    shiftId: string
   ) {
     let shift: any;
     if (type === 'POS') {
       shift = await tx.posSession.findUnique({ where: { id: shiftId } });
-      if (!shift) throw new ShiftControlError('Shift not found', 'NOT_FOUND', 404);
-      if (shift.openedBy === reviewerId || shift.primaryOperatorId === reviewerId) {
+      if (!shift || !ctx.propertyIds.includes(shift.propertyId)) throw new ShiftControlError('Shift not found or access denied', 'NOT_FOUND', 404);
+      if (shift.openedBy === ctx.userId || shift.primaryOperatorId === ctx.userId) {
         throw new ShiftControlError('A shift cannot be reviewed by its own operator', 'FORBIDDEN', 403);
       }
     } else {
       shift = await tx.frontdeskSession.findUnique({ where: { id: shiftId } });
-      if (!shift) throw new ShiftControlError('Shift not found', 'NOT_FOUND', 404);
-      if (shift.staffId === reviewerId) {
+      if (!shift || !ctx.propertyIds.includes(shift.propertyId)) throw new ShiftControlError('Shift not found or access denied', 'NOT_FOUND', 404);
+      if (shift.staffId === ctx.userId) {
         throw new ShiftControlError('A shift cannot be reviewed by its own operator', 'FORBIDDEN', 403);
       }
     }

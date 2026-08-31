@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 export async function GET(req: NextRequest) {
   try {
@@ -8,6 +9,7 @@ export async function GET(req: NextRequest) {
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
 
     const { searchParams } = new URL(req.url);
     const propertyId = searchParams.get('propertyId') || (session.user as any).propertyId;

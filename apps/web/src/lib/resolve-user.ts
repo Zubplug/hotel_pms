@@ -28,22 +28,23 @@ export async function resolveUser(req: NextRequest): Promise<ResolvedUser | null
       isSuperAdmin: mobileSession.isSuperAdmin,
       role: mobileSession.role,
       capabilities: mobileSession.capabilities,
-      allowedProperties: mobileSession.allowedProperties ?? (mobileSession.propertyId ? [mobileSession.propertyId] : []),
+      allowedProperties: [...(mobileSession.allowedProperties ?? (mobileSession.propertyId ? [mobileSession.propertyId] : []))],
     };
   }
 
   // 2. Fall back to NextAuth web session
   const session = await auth();
   if (session?.user?.id) {
-    const { getUserPropertyIds } = await import('./property-access');
-    const allowedProperties = await getUserPropertyIds(session.user.id);
+    const { requireOrganizationContext } = await import('./organization-access');
+    const ctx = await requireOrganizationContext(session.user.id);
+    const allowedProperties = ctx.propertyIds;
     return {
       id: session.user.id,
       email: session.user.email ?? '',
       isSuperAdmin: (session.user as any).isSuperAdmin ?? false,
       role: (session.user as any).role ?? 'STAFF',
       capabilities: (session.user as any).capabilities ?? [],
-      allowedProperties,
+      allowedProperties: [...allowedProperties],
     };
   }
 

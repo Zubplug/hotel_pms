@@ -4,6 +4,7 @@ import { compare } from 'bcryptjs';
 import { auth } from '@/lib/auth';
 import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 import { getPropertyBusinessDate } from '@/lib/date-utils';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 export async function POST(req: NextRequest) {
   try {
@@ -61,8 +62,7 @@ export async function POST(req: NextRequest) {
 
       if (!emergencyBank) {
         emergencyBank = await tx.cashAccount.create({
-          data: {
-            propertyId,
+          data: { propertyId,
             outletId,
             name: 'Emergency Manager Bank',
             type: 'EMERGENCY_BANK',
@@ -86,8 +86,7 @@ export async function POST(req: NextRequest) {
 
       // Create new session linked      // 3. Create POS Session for Manager
       const newSession = await tx.posSession.create({
-        data: {
-          propertyId,
+        data: { propertyId,
           deviceId,
           outlet: { connect: { id: outletId } },
           bankingModel: 'CENTRAL_CASHIER',
@@ -102,8 +101,7 @@ export async function POST(req: NextRequest) {
 
       // Optional: Log emergency audit event
       await tx.posReceiptAudit.create({
-        data: {
-          propertyId,
+        data: { propertyId,
           deviceId,
           userId: manager.id,
           type: 'REPRINT',

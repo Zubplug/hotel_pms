@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 // POST /api/v1/pos/orders/[orderId]/split
 export async function POST(

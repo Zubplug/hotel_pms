@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 // GET /api/v1/pos/floor-plans/[floorPlanId]/tables
 // Used by the TableMap component (no auth required — floor plan data is non-sensitive)

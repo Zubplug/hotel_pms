@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
@@ -6,6 +6,7 @@ import { createAuditLog } from '@/lib/audit';
 import { hasPermission } from '@/lib/rbac';
 import { assertPropertyAccess, ForbiddenError } from '@/lib/property-access';
 import { createBuildingSchema } from '@hotel-pms/types';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -13,11 +14,12 @@ export async function GET(_req: NextRequest, { params }: Params) {
   try {
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
     const { id: propertyId } = await params;
     await assertPropertyAccess(session.user.id, propertyId);
 
     const buildings = await prisma.building.findMany({
-      where: { propertyId },
+      where: { propertyId: { in: ctx.propertyIds as string[] } },
       include: { floors: { orderBy: { number: 'asc' } }, _count: { select: { rooms: true } } },
       orderBy: { name: 'asc' },
     });
@@ -32,19 +34,22 @@ export async function POST(req: NextRequest, { params }: Params) {
   try {
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
     const { id: propertyId } = await params;
     await assertPropertyAccess(session.user.id, propertyId);
     const canCreate = await hasPermission(session.user.id, 'building', 'create', propertyId);
     if (!canCreate) return errorResponse('FORBIDDEN', 'Insufficient permissions', 403);
 
     const body = await req.json();
-    const data = createBuildingSchema.parse({ ...body, propertyId });
+        let reqPropertyId = body?.propertyId;
+        if (reqPropertyId && !ctx.propertyIds.includes(reqPropertyId)) return NextResponse.json({ error: 'Forbidden property' }, { status: 403 });
+    const data = createBuildingSchema.parse({ ...body, propertyId: (typeof reqPropertyId !== "undefined" ? reqPropertyId : ctx.propertyIds[0]) });
     const building = await prisma.building.create({ data });
 
     const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { organizationId: true } });
     await createAuditLog({
       organizationId: property!.organizationId,
-      propertyId,
+      propertyId: (typeof reqPropertyId !== "undefined" ? reqPropertyId : ctx.propertyIds[0]),
       userId: session.user.id,
       action: 'CREATE',
       resource: 'building',

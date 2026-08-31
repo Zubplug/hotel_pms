@@ -4,6 +4,7 @@ import prisma from '@hotel-pms/db';
 import { UnitOfMeasure } from '@hotel-pms/db';
 import { hasInventoryPermission } from '@/lib/inventory/permissions';
 import { resolveStockUnitConversion } from '@/lib/inventory/UnitConversionService';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 export const dynamic = 'force-dynamic';
 
@@ -13,13 +14,14 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
     const session = await auth();
     if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { role, propertyId, isSuperAdmin } = session.user as any;
+    const { role, isSuperAdmin } = session.user as any;
+    const ctx = await requireOrganizationContext(session.user.id);
     if (!hasInventoryPermission(role, 'inventory.read', isSuperAdmin)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const purchaseOrder = await prisma.purchaseOrder.findUnique({
-      where: { id: params.id, propertyId },
+      where: { id: params.id, propertyId: ctx.propertyIds[0] },
       include: {
         supplier: true,
         items: true,
@@ -43,7 +45,8 @@ export async function PATCH(req: Request, props: { params: Promise<{ id: string 
     const session = await auth();
     if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { role, propertyId, isSuperAdmin } = session.user as any;
+    const { role, isSuperAdmin } = session.user as any;
+    const ctx = await requireOrganizationContext(session.user.id);
     const body = await req.json();
     const isLineAdjustment = Array.isArray(body.items);
     const permission = isLineAdjustment ? 'procurement.po.adjust' : 'procurement.po.create';
@@ -54,7 +57,7 @@ export async function PATCH(req: Request, props: { params: Promise<{ id: string 
     const { notes, expectedDate, items } = body;
 
     const po = await prisma.purchaseOrder.findUnique({
-      where: { id: params.id, propertyId },
+      where: { id: params.id, propertyId: ctx.propertyIds[0] },
     });
 
     if (!po) {
@@ -113,7 +116,7 @@ export async function PATCH(req: Request, props: { params: Promise<{ id: string 
     }
 
     const updatedPo = await prisma.purchaseOrder.update({
-      where: { id: params.id, propertyId },
+      where: { id: params.id, propertyId: ctx.propertyIds[0] },
       data: {
         ...(notes !== undefined && { notes }),
         ...(expectedDate !== undefined && { expectedDate: expectedDate ? new Date(expectedDate) : null }),

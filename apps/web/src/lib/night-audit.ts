@@ -8,12 +8,12 @@ const BATCH_SIZE = 50;
 
 import { getOperationalReview, getSystemIntegrity, getFinancialAudit, getCashReconciliation } from './night-audit-service';
 
-export async function getNightAuditPreview(propertyId: string) {
+export async function getNightAuditPreview(ctx: any, propertyId: string) {
   const [operational, system, financial, cash] = await Promise.all([
-    getOperationalReview(propertyId),
-    getSystemIntegrity(propertyId),
-    getFinancialAudit(propertyId),
-    getCashReconciliation(propertyId)
+    getOperationalReview(ctx, propertyId),
+    getSystemIntegrity(ctx, propertyId),
+    getFinancialAudit(ctx, propertyId),
+    getCashReconciliation(ctx, propertyId)
   ]);
 
   let blockers = 0;
@@ -39,6 +39,7 @@ export async function getNightAuditPreview(propertyId: string) {
 }
 
 export async function executeNightAudit(
+  ctx: any,
   propertyId: string, 
   userId: string | null, 
   userEmail: string | null | undefined, 
@@ -63,7 +64,7 @@ export async function executeNightAudit(
   // Preparation checks happen before the short cutover lock. Existing shifts
   // must be reconciled before the old business date can be closed.
   if (!isRecovery) {
-    const { openPosSessions, openFrontdeskSessions, financialSyncConflicts } = await getSystemIntegrity(propertyId);
+    const { openPosSessions, openFrontdeskSessions, financialSyncConflicts } = await getSystemIntegrity(ctx, propertyId);
     if (openPosSessions.length > 0) throw new Error('BLOCKER:Cannot execute audit. There are open POS sessions.');
     if (openFrontdeskSessions.length > 0) throw new Error('BLOCKER:Cannot execute audit. There are open front-desk cashier shifts.');
     if (financialSyncConflicts.length > 0) throw new Error('BLOCKER:Cannot execute audit. There are unresolved financial sync conflicts.');

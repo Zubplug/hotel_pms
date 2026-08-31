@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { hasInventoryPermission } from '@/lib/inventory/permissions';
 import { InventoryService } from '@/lib/inventory/InventoryService';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -12,7 +13,8 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       return NextResponse.json({ data: null, error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { role, propertyId, isSuperAdmin, id: userId } = session.user as any;
+    const { role, isSuperAdmin, id: userId } = session.user as any;
+    const ctx = await requireOrganizationContext(session.user.id);
 
     const body = await request.json();
     const { operationId } = body;
@@ -23,7 +25,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
 
     // Verify it belongs to property
     const transfer = await prisma.stockTransfer.findFirst({
-      where: { id: params.id, propertyId }
+      where: { id: params.id, propertyId: ctx.propertyIds[0] }
     });
 
     if (!transfer) {
@@ -33,7 +35,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     const canIssue = hasInventoryPermission(role, 'inventory.transfer.issue', isSuperAdmin);
     if (!canIssue) return NextResponse.json({ data: null, error: 'Forbidden' }, { status: 403 });
 
-    const result = await InventoryService.postTransfer(params.id, userId, operationId);
+    const result = await InventoryService.postTransfer(ctx, params.id, userId, operationId);
 
     return NextResponse.json({ data: result, error: null });
   } catch (error: any) {

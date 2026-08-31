@@ -4,6 +4,7 @@ import { verifyOperatorToken } from '@/lib/pos/operatorAuth';
 import { PosOrderStatus, ProductionStation } from '@hotel-pms/db';
 import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 import { getPropertyBusinessDate } from '@/lib/date-utils';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 // POST /api/v1/pos/orders
 export async function POST(req: NextRequest) {
@@ -99,8 +100,7 @@ export async function POST(req: NextRequest) {
       const orderNumber = `ORD-${String(count + 1).padStart(5, '0')}`;
 
       const newOrder = await tx.posOrder.create({
-        data: {
-          propertyId,
+        data: { propertyId,
           outletId,
           sessionId,
           tableId:       tableId ?? null,

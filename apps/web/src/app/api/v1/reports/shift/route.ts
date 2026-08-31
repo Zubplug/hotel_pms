@@ -1,40 +1,33 @@
+import { requireOrganizationContext } from '@/lib/organization-access';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
-import { getUserPropertyIds } from '@/lib/property-access';
 import crypto from 'crypto';
-
 export async function GET(req: NextRequest) {
   try {
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
-
     const { searchParams } = new URL(req.url);
     const propertyId = searchParams.get('propertyId');
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
     const shiftId = searchParams.get('shiftId');
     let targetUserId = searchParams.get('userId');
-
     if (!propertyId || !startDate || !endDate) {
       return errorResponse('BAD_REQUEST', 'Missing required query parameters: propertyId, startDate, endDate', 400);
     }
-
-    const allowedPropertyIds = await getUserPropertyIds(session.user.id);
+    const allowedPropertyIds = (await requireOrganizationContext(session.user.id)).propertyIds;
     if (!allowedPropertyIds.includes(propertyId)) {
       return errorResponse('FORBIDDEN', 'No access to this property', 403);
     }
-
     const userRole = (session.user as any).role || 'STAFF';
     const capabilities = (session.user as any).capabilities || [];
-
     // Role-based restrictions
     const reportRoles = ['CEO', 'SUPER_ADMIN', 'MANAGER', 'ADMIN', 'ACCOUNTANT', 'GENERAL_CASHIER'];
     if (!capabilities.includes('ACCESS_REPORTS') && !capabilities.includes('ACCESS_MANAGEMENT') && !reportRoles.includes(String(userRole).toUpperCase())) {
       return errorResponse('FORBIDDEN', 'Insufficient permissions for shift reporting', 403);
     }
-
     const canViewAllUsers = capabilities.includes('ACCESS_MANAGEMENT') || ['CEO', 'SUPER_ADMIN', 'MANAGER', 'ADMIN', 'ACCOUNTANT', 'GENERAL_CASHIER'].includes(String(userRole).toUpperCase());
     if (!canViewAllUsers) {
       // Staff without management capability can only see their own transactions
@@ -42,16 +35,13 @@ export async function GET(req: NextRequest) {
     } else {
       // They can specify a targetUserId or leave it null to get all users
     }
-
     const dateFilter = {
       gte: new Date(startDate),
       lte: new Date(endDate)
     };
-
     const selectedFrontdeskSession = shiftId
       ? await prisma.frontdeskSession.findFirst({ where: { id: shiftId, propertyId }, select: { id: true } })
       : null;
-
     const paymentWhere: any = {
       propertyId,
       status: { in: ['COMPLETED', 'PARTIALLY_REFUNDED', 'REFUNDED'] }
@@ -65,11 +55,9 @@ export async function GET(req: NextRequest) {
       // payments from appearing in a POS shift report.
       paymentWhere.id = { in: [] };
     }
-    
     if (targetUserId) {
       paymentWhere.receivedBy = targetUserId;
     }
-
     // 1. Fetch Front Desk gross payments
     const payments = await prisma.payment.findMany({
       where: paymentWhere,
@@ -83,7 +71,6 @@ export async function GET(req: NextRequest) {
         }
       }
     });
-
     // 2. Fetch Front Desk refunds
     const refundWhere: any = {
       propertyId,
@@ -99,7 +86,6 @@ export async function GET(req: NextRequest) {
     if (targetUserId) {
       refundWhere.authorizedBy = targetUserId;
     }
-
     const refunds = await prisma.refund.findMany({
       where: refundWhere,
       include: {
@@ -116,7 +102,6 @@ export async function GET(req: NextRequest) {
         }
       }
     });
-
     // POS sessions are part of the cashier's accountability packet as well.
     // Keep them in this report instead of forcing General Cashier to reconcile
     // POS and Front Desk through separate, incomplete screens.
@@ -156,10 +141,8 @@ export async function GET(req: NextRequest) {
     const syncConflicts = await prisma.syncConflict.count({
       where: { propertyId, createdAt: dateFilter, status: 'PENDING' },
     });
-
     // 3. Aggregate Gross, Refunds, and Net by PaymentMethod
     const aggregation: Record<string, { count: number, refundCount: number, payments: number, refunds: number, net: number }> = {};
-
     for (const p of payments) {
       if (!aggregation[p.method]) aggregation[p.method] = { count: 0, refundCount: 0, payments: 0, refunds: 0, net: 0 };
       aggregation[p.method].count += 1;
@@ -167,7 +150,6 @@ export async function GET(req: NextRequest) {
       aggregation[p.method].payments += amount;
       aggregation[p.method].net += amount;
     }
-
     for (const r of refunds) {
       const method = r.method || r.payment.method;
       if (!aggregation[method]) aggregation[method] = { count: 0, refundCount: 0, payments: 0, refunds: 0, net: 0 };
@@ -176,7 +158,6 @@ export async function GET(req: NextRequest) {
       aggregation[method].refunds += amount;
       aggregation[method].net -= amount;
     }
-
     const posAggregation: Record<string, { count: number; gross: number; refunds: number; net: number }> = {};
     const posRows = posSessions.flatMap((posSession: any) => posSession.payments.map((payment: any) => ({
       id: payment.id,
@@ -196,7 +177,6 @@ export async function GET(req: NextRequest) {
       reference: payment.reference || payment.gatewayTransactionId || payment.operationId || null,
       receiptAudits: posSession.receiptAudits.filter((receipt: any) => receipt.orderId === payment.orderId),
     })));
-
     const posOrders = posSessions.flatMap((posSession: any) => posSession.orders.map((order: any) => ({
       ...order,
       sessionId: posSession.id,
@@ -218,7 +198,6 @@ export async function GET(req: NextRequest) {
       sessionId: posSession.id,
       outlet: posSession.outlet,
     })));
-
     for (const row of posRows.filter((row: any) => ['CONFIRMED', 'PAID'].includes(row.status))) {
       const method = row.method || 'OTHER';
       if (!posAggregation[method]) posAggregation[method] = { count: 0, gross: 0, refunds: 0, net: 0 };
@@ -226,13 +205,11 @@ export async function GET(req: NextRequest) {
       posAggregation[method].gross += row.amount;
       posAggregation[method].net += row.amount;
     }
-
     const posCash = posSessions.reduce((sum: number, item: any) => sum + Number(item.cashSales || 0), 0);
     const posCard = posSessions.reduce((sum: number, item: any) => sum + item.payments.filter((p: any) => ['CARD', 'CARD_OFFLINE', 'POS'].includes(p.method)).reduce((s: number, p: any) => s + Number(p.amount), 0), 0);
     const posBankTransfer = posSessions.reduce((sum: number, item: any) => sum + item.payments.filter((p: any) => p.method === 'BANK_TRANSFER').reduce((s: number, p: any) => s + Number(p.amount), 0), 0);
     const posTotal = posSessions.reduce((sum: number, item: any) => sum + item.payments.filter((p: any) => ['CONFIRMED', 'PAID'].includes(p.status)).reduce((s: number, p: any) => s + Number(p.amount), 0), 0);
     const posRefunds = posSessions.reduce((sum: number, item: any) => sum + Number(item.cashRefunds || 0), 0);
-
     const posShiftRows = posSessions.map((item: any) => {
       const settlement = item.settlements[0] || null;
       const movementTotal = (type: string) => item.cashMovements.filter((movement: any) => movement.type === type).reduce((sum: number, movement: any) => sum + Number(movement.amount), 0);
@@ -318,7 +295,6 @@ export async function GET(req: NextRequest) {
       till: session.cashAccount,
     })));
     const shifts = [...posShiftRows, ...frontdeskShiftRows];
-
     // 4. Audit Log the report access
     await prisma.auditLog.create({
       data: {
@@ -336,7 +312,6 @@ export async function GET(req: NextRequest) {
         requestId: req.headers.get('x-request-id') || crypto.randomUUID(),
       }
     });
-
     return successResponse({
       propertyId,
       startDate,
@@ -362,7 +337,6 @@ export async function GET(req: NextRequest) {
       items: { payments, refunds, posPayments: posRows, posOrders, posCashMovements, frontdeskCashMovements, posReceiptAudits, posAuthorizationAudits },
       shifts,
     }, 200);
-
   } catch (err: any) {
     console.error('[Shift Report GET]', err);
     return errorResponse('INTERNAL_ERROR', err.stack || err.message || 'Unexpected error generating shift report', 500);

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
-import { getUserPropertyIds } from '@/lib/property-access';
+import { requireOrganizationContext } from '@/lib/organization-access';
 
 const n = (value: unknown) => Number(value ?? 0);
 
@@ -9,6 +9,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   try {
     const session = await auth();
     if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
     const { sessionId } = await params;
     const posSession = await prisma.posSession.findUnique({
       where: { id: sessionId },
@@ -22,7 +23,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       },
     });
     if (!posSession) return NextResponse.json({ error: 'POS session not found' }, { status: 404 });
-    const allowed = await getUserPropertyIds(session.user.id);
+    const allowed = (await requireOrganizationContext(session.user.id)).propertyIds;
     if (!posSession.propertyId || !allowed.includes(posSession.propertyId)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const totalBy = (method: string) => posSession.payments.filter(payment => payment.method === method).reduce((sum, payment) => sum + n(payment.amount), 0);

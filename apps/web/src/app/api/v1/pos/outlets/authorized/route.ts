@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 export async function GET(req: NextRequest) {
   try {
@@ -8,6 +9,7 @@ export async function GET(req: NextRequest) {
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
 
     const { searchParams } = new URL(req.url);
     const deviceId = searchParams.get('deviceId');
@@ -52,7 +54,7 @@ export async function GET(req: NextRequest) {
     // Super Admins and Hotel Managers can access all outlets for the property
     if (session.user.role === 'SUPER_ADMIN' || session.user.role === 'HOTEL_MANAGER') {
       authorizedOutlets = await prisma.posOutlet.findMany({
-        where: { propertyId, isActive: true }
+        where: { propertyId: { in: ctx.propertyIds as string[] }, isActive: true }
       });
     } else {
       const staffAccess = await prisma.staffPosOutletAccess.findMany({

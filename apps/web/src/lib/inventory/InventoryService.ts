@@ -1,6 +1,7 @@
 import prisma, { StockTransactionSource } from '@hotel-pms/db';
 import { assertNightAuditAllowsTransaction } from '@/lib/night-audit-guard';
 import { GRN_STATUS, TRANSFER_STATUS, PO_STATUS } from '@/lib/inventory/types';
+import { TenantContext } from '../organization-access';
 
 export class InventoryService {
   /** Restore every committed ingredient for a cancelled/voided order. */
@@ -231,9 +232,10 @@ export class InventoryService {
    * Atomically increases quantityOnHand, creates StockTransaction(s), and marks GRN as POSTED.
    * If tied to a PO, increments receivedQty on the PO.
    */
-  static async postReceipt(grnId: string, actorId: string, operationId: string) {
+  static async postReceipt(ctx: TenantContext, grnId: string, actorId: string, operationId: string) {
     const guardRecord = await prisma.goodsReceivedNote.findUnique({ where: { id: grnId }, select: { propertyId: true } });
     if (!guardRecord) throw new Error('GRN not found');
+    if (!ctx.propertyIds.includes(guardRecord.propertyId)) throw new Error('FORBIDDEN');
     await assertNightAuditAllowsTransaction(guardRecord.propertyId);
     // Idempotency check
     const existingTx = await prisma.stockTransaction.findFirst({
@@ -359,9 +361,10 @@ export class InventoryService {
    * Atomically decreases source warehouse stock, increases destination warehouse stock,
    * and creates TRANSFER StockTransactions for both sides.
    */
-  static async postTransfer(transferId: string, actorId: string, operationId: string) {
+  static async postTransfer(ctx: TenantContext, transferId: string, actorId: string, operationId: string) {
     const guardRecord = await prisma.stockTransfer.findUnique({ where: { id: transferId }, select: { propertyId: true } });
     if (!guardRecord) throw new Error('Transfer not found');
+    if (!ctx.propertyIds.includes(guardRecord.propertyId)) throw new Error('FORBIDDEN');
     await assertNightAuditAllowsTransaction(guardRecord.propertyId);
     // Idempotency check
     const existingTransfer = await prisma.stockTransfer.findFirst({
@@ -498,7 +501,11 @@ export class InventoryService {
    * Process a POS Sale.
    * Atomically deducts inventory based on RecipeIngredient mappings of POS items.
    */
-  static async postSale(posOrderId: string, actorId?: string, operationId?: string) {
+  static async postSale(ctx: TenantContext, posOrderId: string, actorId?: string, operationId?: string) {
+    const order = await prisma.posOrder.findUnique({ where: { id: posOrderId }, select: { propertyId: true } });
+    if (!order) throw new Error('POS Order not found');
+    if (!ctx.propertyIds.includes(order.propertyId)) throw new Error('FORBIDDEN');
+
     const fallbackOpId = operationId || `op_sale_${posOrderId}`;
     return prisma.$transaction((tx: any) =>
       InventoryService.commitSaleInTransaction(tx, posOrderId, actorId || 'system', fallbackOpId)
@@ -509,7 +516,7 @@ export class InventoryService {
    * Approve a Cost Adjustment Request
    * Revalues the inventory and creates a financial StockTransaction without changing quantity.
    */
-  static async approveCostAdjustment(adjustmentId: string, actorId: string, operationId: string) {
+  static async approveCostAdjustment(ctx: TenantContext, adjustmentId: string, actorId: string, operationId: string) {
     return await prisma.$transaction(async (tx: any) => {
       const adjustment = await tx.costAdjustment.findUnique({
         where: { id: adjustmentId },
@@ -517,6 +524,7 @@ export class InventoryService {
       });
 
       if (!adjustment) throw new Error('Cost adjustment not found');
+      if (!ctx.propertyIds.includes(adjustment.propertyId)) throw new Error('FORBIDDEN');
       if (adjustment.status !== 'SUBMITTED') throw new Error('Cost adjustment must be SUBMITTED to approve');
 
       const stockItem = adjustment.stockItem;

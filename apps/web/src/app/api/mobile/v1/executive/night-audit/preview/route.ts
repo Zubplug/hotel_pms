@@ -3,6 +3,8 @@ import { successResponse, errorResponse } from '@/lib/api-response';
 import { resolveUser } from '@/lib/resolve-user';
 import { getNightAuditPreview } from '@/lib/night-audit';
 
+import { requireOrganizationContext } from '@/lib/organization-access';
+
 export async function GET(req: NextRequest) {
   try {
     const user = await resolveUser(req);
@@ -15,13 +17,13 @@ export async function GET(req: NextRequest) {
       return errorResponse('BAD_REQUEST', 'Please specify a single valid propertyId', 400);
     }
 
-    const hasGlobalAccess = user.isSuperAdmin;
-    const hasSpecificAccess = user.allowedProperties.includes(propertyId);
-    if (!hasGlobalAccess && !hasSpecificAccess) {
+    const ctx = await requireOrganizationContext(user.id);
+    const hasSpecificAccess = ctx.propertyIds.includes(propertyId);
+    if (!hasSpecificAccess) {
       return errorResponse('FORBIDDEN', 'No access to this property', 403);
     }
 
-    const preview = await getNightAuditPreview(propertyId);
+    const preview = await getNightAuditPreview(ctx, propertyId);
 
     return successResponse(preview);
 

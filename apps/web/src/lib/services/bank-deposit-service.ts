@@ -5,14 +5,14 @@ import {
   ensureBankAccountForClient,
   ensureCashierControlAccountsForClient,
 } from './cash-account-service';
+import { TenantContext } from '../organization-access';
 
 export class BankDepositService {
   /**
    * General Cashier bundles handed-over shifts into a Bank Deposit.
    */
-  static async createDeposit(params: {
+  static async createDeposit(ctx: TenantContext, params: {
     propertyId: string;
-    staffId: string;
     posSessionIds: string[];
     frontdeskSessionIds: string[];
     bankName?: string;
@@ -33,6 +33,7 @@ export class BankDepositService {
       const allocationsToCreate: any[] = [];
 
       for (const shift of posSessions) {
+        if (!ctx.propertyIds.includes(params.propertyId)) throw new ShiftControlError(`Access denied to property.`, 'FORBIDDEN');
         if (shift.propertyId !== params.propertyId) throw new ShiftControlError(`Shift ${shift.id} belongs to a different property.`, 'FORBIDDEN');
         if (shift.controlStatus !== 'HANDED_OVER') throw new ShiftControlError(`Shift ${shift.id} is not in HANDED_OVER state.`, 'BAD_REQUEST');
         
@@ -76,7 +77,7 @@ export class BankDepositService {
           status: 'PENDING_HANDOVER',
           bankName: params.bankName,
           bankAccount: params.bankAccount,
-          createdById: params.staffId,
+          createdById: ctx.userId,
           notes: params.notes,
           allocations: {
             create: allocationsToCreate.map(a => ({
@@ -89,7 +90,7 @@ export class BankDepositService {
         }
       });
 
-      const controlAccounts = await ensureCashierControlAccountsForClient(tx, params.propertyId);
+      const controlAccounts = await ensureCashierControlAccountsForClient(ctx, tx, params.propertyId);
       const safeAccount = controlAccounts.find((account: any) => account.type === 'SAFE');
       const transitAccount = controlAccounts.find((account: any) => account.type === 'CASH_IN_TRANSIT');
       if (!safeAccount || !transitAccount) {
@@ -102,7 +103,7 @@ export class BankDepositService {
           data: {
             propertyId: params.propertyId,
             deviceId: 'web-cash-management',
-            userId: params.staffId,
+            userId: ctx.userId,
             amount: expectedAmount,
             type: 'CASH_TRANSFER_OUT',
             sourceAccountId: safeAccount.id,
@@ -124,8 +125,8 @@ export class BankDepositService {
 
       // Audit
       for (const a of allocationsToCreate) {
-        if (a.posSessionId) await this.audit(tx, params.propertyId, params.staffId, a.posSessionId, undefined, 'SHIFT_ALLOCATED_TO_DEPOSIT', 'HANDED_OVER', 'DEPOSIT_PENDING', { depositId });
-        if (a.frontdeskSessionId) await this.audit(tx, params.propertyId, params.staffId, undefined, a.frontdeskSessionId, 'SHIFT_ALLOCATED_TO_DEPOSIT', 'HANDED_OVER', 'DEPOSIT_PENDING', { depositId });
+        if (a.posSessionId) await this.audit(tx, params.propertyId, ctx.userId, a.posSessionId, undefined, 'SHIFT_ALLOCATED_TO_DEPOSIT', 'HANDED_OVER', 'DEPOSIT_PENDING', { depositId });
+        if (a.frontdeskSessionId) await this.audit(tx, params.propertyId, ctx.userId, undefined, a.frontdeskSessionId, 'SHIFT_ALLOCATED_TO_DEPOSIT', 'HANDED_OVER', 'DEPOSIT_PENDING', { depositId });
       }
 
       return deposit;
@@ -135,13 +136,14 @@ export class BankDepositService {
   /**
    * General Cashier marks the deposit as sent to the bank.
    */
-  static async submitDeposit(params: { depositId: string, staffId: string, bankAccountId: string, bankReceiptUrl?: string, bankReference?: string }) {
+  static async submitDeposit(ctx: TenantContext, params: { depositId: string, bankAccountId: string, bankReceiptUrl?: string, bankReference?: string }) {
     return prisma.$transaction(async tx => {
+      // ENFORCE OWNERSHIP PATH: Find the deposit and ensure it belongs to an authorized property
       const deposit = await tx.bankDeposit.findUnique({ where: { id: params.depositId }, include: { allocations: true } });
-      if (!deposit) throw new ShiftControlError('Deposit not found', 'NOT_FOUND', 404);
+      if (!deposit || !ctx.propertyIds.includes(deposit.propertyId)) throw new ShiftControlError('Deposit not found or access denied', 'NOT_FOUND', 404);
       if (deposit.status !== 'PENDING_HANDOVER') throw new ShiftControlError(`Deposit cannot be submitted from status ${deposit.status}`, 'BAD_REQUEST');
 
-      const controlAccounts = await ensureCashierControlAccountsForClient(tx, deposit.propertyId);
+      const controlAccounts = await ensureCashierControlAccountsForClient(ctx, tx, deposit.propertyId);
       const transitAccount = controlAccounts.find((account: any) => account.type === 'CASH_IN_TRANSIT');
       const safeAccount = controlAccounts.find((account: any) => account.type === 'SAFE');
       if (!transitAccount) throw new ShiftControlError('Cash in Transit account is unavailable.', 'INTERNAL_ERROR', 500);
@@ -152,7 +154,7 @@ export class BankDepositService {
         where: { id: params.depositId },
         data: {
           status: 'DEPOSITED',
-          submittedById: params.staffId,
+          submittedById: ctx.userId,
           submittedAt: new Date(),
           depositedAt: new Date(),
           bankReceiptUrl: params.bankReceiptUrl || deposit.bankReceiptUrl,
@@ -177,7 +179,7 @@ export class BankDepositService {
             data: {
               propertyId: deposit.propertyId,
               deviceId: 'web-cash-management',
-              userId: params.staffId,
+              userId: ctx.userId,
               amount,
               type: 'CASH_TRANSFER_OUT',
               sourceAccountId: sourceAccount.id,
@@ -194,7 +196,7 @@ export class BankDepositService {
           data: {
             propertyId: deposit.propertyId,
             deviceId: 'web-cash-management',
-            userId: params.staffId,
+            userId: ctx.userId,
             amount,
             type: 'CASH_TRANSFER_OUT',
             sourceAccountId: transitAccount.id,
@@ -210,11 +212,11 @@ export class BankDepositService {
       for (const a of deposit.allocations) {
         if (a.posSessionId) {
           await tx.posSession.update({ where: { id: a.posSessionId }, data: { controlStatus: 'DEPOSITED' } });
-          await this.audit(tx, deposit.propertyId, params.staffId, a.posSessionId, undefined, 'DEPOSIT_SUBMITTED', 'DEPOSIT_PENDING', 'DEPOSITED', { depositId: deposit.id });
+          await this.audit(tx, deposit.propertyId, ctx.userId, a.posSessionId, undefined, 'DEPOSIT_SUBMITTED', 'DEPOSIT_PENDING', 'DEPOSITED', { depositId: deposit.id });
         }
         if (a.frontdeskSessionId) {
           await tx.frontdeskSession.update({ where: { id: a.frontdeskSessionId }, data: { status: 'DEPOSITED', controlStatus: 'DEPOSITED', depositedAt: new Date() } });
-          await this.audit(tx, deposit.propertyId, params.staffId, undefined, a.frontdeskSessionId, 'DEPOSIT_SUBMITTED', 'DEPOSIT_PENDING', 'DEPOSITED', { depositId: deposit.id });
+          await this.audit(tx, deposit.propertyId, ctx.userId, undefined, a.frontdeskSessionId, 'DEPOSIT_SUBMITTED', 'DEPOSIT_PENDING', 'DEPOSITED', { depositId: deposit.id });
         }
       }
 
@@ -225,17 +227,18 @@ export class BankDepositService {
   /**
    * Finance Manager starts verification of the deposit.
    */
-  static async startVerification(params: { depositId: string, staffId: string }) {
+  static async startVerification(ctx: TenantContext, params: { depositId: string }) {
     return prisma.$transaction(async tx => {
+      // ENFORCE OWNERSHIP PATH
       const deposit = await tx.bankDeposit.findUnique({ where: { id: params.depositId }, include: { allocations: true } });
-      if (!deposit) throw new ShiftControlError('Deposit not found', 'NOT_FOUND', 404);
+      if (!deposit || !ctx.propertyIds.includes(deposit.propertyId)) throw new ShiftControlError('Deposit not found or access denied', 'NOT_FOUND', 404);
       if (deposit.status !== 'DEPOSITED') throw new ShiftControlError(`Cannot start verification from status ${deposit.status}`, 'BAD_REQUEST');
 
       const updated = await tx.bankDeposit.update({
         where: { id: params.depositId },
         data: {
           status: 'UNDER_RECONCILIATION',
-          verifiedById: params.staffId,
+          verifiedById: ctx.userId,
           verifiedAt: new Date()
         }
       });
@@ -243,11 +246,11 @@ export class BankDepositService {
       for (const a of deposit.allocations) {
         if (a.posSessionId) {
           await tx.posSession.update({ where: { id: a.posSessionId }, data: { controlStatus: 'UNDER_RECONCILIATION' } });
-          await this.audit(tx, deposit.propertyId, params.staffId, a.posSessionId, undefined, 'DEPOSIT_VERIFICATION_STARTED', 'DEPOSITED', 'UNDER_RECONCILIATION', { depositId: deposit.id });
+          await this.audit(tx, deposit.propertyId, ctx.userId, a.posSessionId, undefined, 'DEPOSIT_VERIFICATION_STARTED', 'DEPOSITED', 'UNDER_RECONCILIATION', { depositId: deposit.id });
         }
         if (a.frontdeskSessionId) {
           await tx.frontdeskSession.update({ where: { id: a.frontdeskSessionId }, data: { status: 'UNDER_RECONCILIATION' } });
-          await this.audit(tx, deposit.propertyId, params.staffId, undefined, a.frontdeskSessionId, 'DEPOSIT_VERIFICATION_STARTED', 'DEPOSITED', 'UNDER_RECONCILIATION', { depositId: deposit.id });
+          await this.audit(tx, deposit.propertyId, ctx.userId, undefined, a.frontdeskSessionId, 'DEPOSIT_VERIFICATION_STARTED', 'DEPOSITED', 'UNDER_RECONCILIATION', { depositId: deposit.id });
         }
       }
       return updated;
@@ -257,10 +260,11 @@ export class BankDepositService {
   /**
    * Finance Manager completes verification. If bank amount != expected amount, marks as EXCEPTION.
    */
-  static async verifyAndReconcile(params: { depositId: string, staffId: string, bankConfirmedAmount: number, notes?: string }) {
+  static async verifyAndReconcile(ctx: TenantContext, params: { depositId: string, bankConfirmedAmount: number, notes?: string }) {
     return prisma.$transaction(async tx => {
+      // ENFORCE OWNERSHIP PATH
       const deposit = await tx.bankDeposit.findUnique({ where: { id: params.depositId }, include: { allocations: true } });
-      if (!deposit) throw new ShiftControlError('Deposit not found', 'NOT_FOUND', 404);
+      if (!deposit || !ctx.propertyIds.includes(deposit.propertyId)) throw new ShiftControlError('Deposit not found or access denied', 'NOT_FOUND', 404);
       if (!['UNDER_RECONCILIATION', 'EXCEPTION'].includes(deposit.status)) throw new ShiftControlError(`Cannot reconcile from status ${deposit.status}`, 'BAD_REQUEST');
 
       const expected = Number(deposit.expectedAmount);
@@ -273,7 +277,7 @@ export class BankDepositService {
           status: isException ? 'EXCEPTION' : 'RECONCILED',
           bankConfirmedAmount: params.bankConfirmedAmount,
           difference: diff,
-          reconciledById: isException ? null : params.staffId,
+          reconciledById: isException ? null : ctx.userId,
           reconciledAt: isException ? null : new Date(),
           notes: params.notes ? `${deposit.notes || ''}\n[Reconciliation]: ${params.notes}` : deposit.notes
         }
@@ -283,11 +287,11 @@ export class BankDepositService {
         const toStatus = isException ? 'EXCEPTION' : 'RECONCILED';
         if (a.posSessionId) {
           await tx.posSession.update({ where: { id: a.posSessionId }, data: { controlStatus: toStatus } });
-          await this.audit(tx, deposit.propertyId, params.staffId, a.posSessionId, undefined, isException ? 'DEPOSIT_EXCEPTION_CREATED' : 'DEPOSIT_RECONCILED', 'UNDER_RECONCILIATION', toStatus, { depositId: deposit.id, diff });
+          await this.audit(tx, deposit.propertyId, ctx.userId, a.posSessionId, undefined, isException ? 'DEPOSIT_EXCEPTION_CREATED' : 'DEPOSIT_RECONCILED', 'UNDER_RECONCILIATION', toStatus, { depositId: deposit.id, diff });
         }
         if (a.frontdeskSessionId) {
           await tx.frontdeskSession.update({ where: { id: a.frontdeskSessionId }, data: { status: toStatus } });
-          await this.audit(tx, deposit.propertyId, params.staffId, undefined, a.frontdeskSessionId, isException ? 'DEPOSIT_EXCEPTION_CREATED' : 'DEPOSIT_RECONCILED', 'UNDER_RECONCILIATION', toStatus, { depositId: deposit.id, diff });
+          await this.audit(tx, deposit.propertyId, ctx.userId, undefined, a.frontdeskSessionId, isException ? 'DEPOSIT_EXCEPTION_CREATED' : 'DEPOSIT_RECONCILED', 'UNDER_RECONCILIATION', toStatus, { depositId: deposit.id, diff });
         }
       }
 

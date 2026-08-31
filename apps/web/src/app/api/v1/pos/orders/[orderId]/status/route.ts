@@ -35,12 +35,22 @@ export async function PATCH(
       }
     }
     const order = await prisma.posOrder.findUnique({
-      where: { id: orderId }
+      where: { id: orderId },
+      include: { property: true }
     });
 
     if (!order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
+
+    const systemCtx: any = {
+      organizationId: order.property.organizationId,
+      userId: 'SYSTEM',
+      role: 'SYSTEM',
+      permissions: [],
+      propertyIds: [order.propertyId],
+      outletIds: [order.outletId]
+    };
     if (await isNightAuditTransactionLocked(order.propertyId, order.businessDate)) {
       return NextResponse.json({ error: 'POS order changes are temporarily paused while Night Audit is posting', code: 'NIGHT_AUDIT_IN_PROGRESS' }, { status: 409 });
     }
@@ -50,7 +60,7 @@ export async function PATCH(
 
     if (status === 'VOIDED' && order.status !== 'VOIDED') {
       try {
-        await InventoryService.restoreSale(orderId, 'system', `op_restore_voided_${orderId}`);
+        await InventoryService.restoreSale(systemCtx, orderId, 'system', `op_restore_voided_${orderId}`);
       } catch (inventoryError) {
         console.error(`[Inventory Error] Failed to restore stock for POS ${status} ${orderId}:`, inventoryError);
         return NextResponse.json({ error: 'Order status was not changed because inventory restoration failed' }, { status: 409 });
@@ -68,7 +78,7 @@ export async function PATCH(
 
     if (status === 'CLOSED' && order.status !== 'CLOSED') {
       try {
-        await InventoryService.postSale(orderId, 'system', `op_sale_status_${orderId}`);
+        await InventoryService.postSale(systemCtx, orderId, 'system', `op_sale_status_${orderId}`);
       } catch (inventoryError) {
         console.error(`[Inventory Error] Failed to deduct stock for POS Order ${orderId}:`, inventoryError);
       }

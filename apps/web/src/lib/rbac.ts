@@ -1,4 +1,5 @@
 import prisma from '@hotel-pms/db';
+import { assertPropertyAccess } from './property-access';
 
 export async function hasPermission(
   userId: string,
@@ -13,7 +14,15 @@ export async function hasPermission(
   });
 
   if (!user) return false;
-  if (user.isSuperAdmin) return true;
+  if (user.isSuperAdmin) {
+    if (!propertyId) return false;
+    try {
+      await assertPropertyAccess(userId, propertyId);
+      return true;
+    } catch {
+      return false;
+    }
+  }
 
   // Retrieve user roles that are either global (propertyId is null) or specific to the requested property
   const userRoles = await prisma.userRole.findMany({

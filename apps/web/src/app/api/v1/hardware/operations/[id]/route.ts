@@ -1,3 +1,5 @@
+import { NextResponse } from 'next/server';
+import { requireOrganizationContext } from '@/lib/organization-access';
 import { NextRequest } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
@@ -38,7 +40,7 @@ export async function GET(
     }
 
     try {
-      await assertPropertyAccess(session.user.id, operation.propertyId);
+      if (!(await requireOrganizationContext(session.user.id)).propertyIds.includes(operation.propertyId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     } catch {
       return errorResponse('FORBIDDEN', 'Access denied', 403);
     }

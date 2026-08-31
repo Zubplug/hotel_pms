@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { ProductionStation } from '@hotel-pms/db';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 // GET /api/v1/pos/outlets/[outletId]/production-batches?station=KITCHEN
 // Returns PENDING and ACKNOWLEDGED batches for the given station (KDS/Bar display).

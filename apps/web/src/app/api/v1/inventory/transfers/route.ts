@@ -6,6 +6,7 @@ import { hasInventoryPermission } from '@/lib/inventory/permissions';
 import { InventoryService } from '@/lib/inventory/InventoryService';
 import { resolveStockUnitConversion } from '@/lib/inventory/UnitConversionService';
 import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 export const dynamic = 'force-dynamic';
 
@@ -16,8 +17,8 @@ export async function GET(request: Request) {
       return NextResponse.json({ data: null, error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { role, propertyId, isSuperAdmin } = session.user as any;
-
+    const { role, isSuperAdmin } = session.user as any;
+    const ctx = await requireOrganizationContext(session.user.id);
     if (!hasInventoryPermission(role, 'inventory.transfer', isSuperAdmin)) {
       return NextResponse.json({ data: null, error: 'Forbidden' }, { status: 403 });
     }
@@ -27,7 +28,7 @@ export async function GET(request: Request) {
       ? { toWarehouse: { posOutlet: { staffAccess: { some: { staffId } } } } }
       : {};
     const transfers = await prisma.stockTransfer.findMany({
-      where: { propertyId, ...outletHeadFilter },
+      where: { propertyId: ctx.propertyIds[0], ...outletHeadFilter },
       include: {
         fromWarehouse: { select: { name: true } },
         toWarehouse: { select: { name: true } },
@@ -49,7 +50,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ data: null, error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { role, propertyId, isSuperAdmin, id: userId, staffId } = session.user as any;
+    const { role, isSuperAdmin, id: userId, staffId } = session.user as any;
+    const ctx = await requireOrganizationContext(session.user.id);
     const normalizedRole = String(role || '').toUpperCase();
 
     if (!hasInventoryPermission(role, 'inventory.transfer', isSuperAdmin)) {
@@ -63,7 +65,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ data: null, error: 'Source, destination, and at least one item are required' }, { status: 400 });
     }
 
-    if (await isNightAuditTransactionLocked(propertyId)) {
+    if (await isNightAuditTransactionLocked(ctx.propertyIds[0])) {
       return NextResponse.json({ data: null, error: 'Stock transfers cannot be created while Night Audit is posting. Retry after the new business date is active.', code: 'NIGHT_AUDIT_IN_PROGRESS' }, { status: 409 });
     }
 
@@ -71,7 +73,7 @@ export async function POST(request: Request) {
     const warehouses = await prisma.warehouse.findMany({
       where: {
         id: { in: [fromWarehouseId, toWarehouseId] },
-        propertyId,
+        propertyId: ctx.propertyIds[0],
         isActive: true,
       },
       include: { posOutlet: { select: { id: true, name: true } } },
@@ -107,7 +109,7 @@ export async function POST(request: Request) {
 
     const stockItemIds = items.map((item: any) => item.stockItemId);
     const sourceItems = await prisma.stockItem.findMany({
-      where: { id: { in: stockItemIds }, propertyId, warehouseId: fromWarehouseId, isActive: true },
+      where: { id: { in: stockItemIds }, propertyId: ctx.propertyIds[0], warehouseId: fromWarehouseId, isActive: true },
       select: { id: true, name: true, baseUnit: true, quantityOnHand: true, stockUnits: true },
     });
     const sourceById = new Map(sourceItems.map(item => [item.id, item]));
@@ -130,12 +132,12 @@ export async function POST(request: Request) {
     }
 
     // Auto-generate transferRef (TRF-00001) - naive implementation
-    const count = await prisma.stockTransfer.count({ where: { propertyId } });
+    const count = await prisma.stockTransfer.count({ where: { propertyId: { in: ctx.propertyIds as string[] } } });
     const transferRef = `TRF-${String(count + 1).padStart(5, '0')}`;
 
     const transfer = await prisma.stockTransfer.create({
       data: {
-        propertyId,
+        propertyId: ctx.propertyIds[0],
         transferRef,
         fromWarehouseId,
         toWarehouseId,
@@ -159,7 +161,7 @@ export async function POST(request: Request) {
     });
 
     if (autoPostOutletIssue) {
-      const result = await InventoryService.postTransfer(transfer.id, userId, crypto.randomUUID());
+      const result = await InventoryService.postTransfer(ctx, transfer.id, userId, crypto.randomUUID());
       return NextResponse.json({ data: (result as any).transfer || transfer, error: null });
     }
 

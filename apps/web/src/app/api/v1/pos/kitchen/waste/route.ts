@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
 import { hasInventoryPermission } from '@/lib/inventory/permissions';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 const REASONS = ['SPOILAGE', 'OVER_PRODUCTION', 'BURNED', 'DAMAGED', 'RETURNED', 'WRONG_ORDER', 'OTHER'] as const;
 

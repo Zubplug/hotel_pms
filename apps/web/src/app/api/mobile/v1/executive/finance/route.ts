@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { resolveUser } from '@/lib/resolve-user';
+import { requireOrganizationContext } from '@/lib/organization-access';
 import { getExecutiveKPISnapshot, getExecutiveRevenueTrend, getPropertyBusinessDate } from '@/lib/kpi';
 import { prisma } from '@hotel-pms/db';
 import { startOfDay, endOfDay } from 'date-fns';
@@ -10,23 +11,14 @@ export const dynamic = 'force-dynamic';
 export async function GET(req: NextRequest) {
   try {
     const user = await resolveUser(req);
-    
     if (!user) {
       return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
     }
-    
-    // Server-side RBAC validation
-    if (!['MANAGER', 'ADMIN', 'SUPER_ADMIN', 'DIRECTOR', 'EXECUTIVE'].includes(user.role) && !user.isSuperAdmin) {
-      return errorResponse('FORBIDDEN', 'Executive access required', 403);
-    }
-
-    const allowedPropertyIds = user.allowedProperties;
-
-    if (allowedPropertyIds.length === 0) {
+    const ctx = await requireOrganizationContext(user.id);
+    const primaryPropertyId = ctx.propertyIds[0];
+    if (!primaryPropertyId) {
       return errorResponse('FORBIDDEN', 'No property access', 403);
     }
-
-    const primaryPropertyId = allowedPropertyIds[0];
 
     const property = await prisma.property.findUnique({
       where: { id: primaryPropertyId },

@@ -1,3 +1,5 @@
+import { NextResponse } from 'next/server';
+import { requireOrganizationContext } from '@/lib/organization-access';
 import { NextRequest } from 'next/server';
 import { auth } from '@/lib/auth';
 import { successResponse, errorResponse } from '@/lib/api-response';
@@ -21,7 +23,7 @@ export async function POST(req: NextRequest) {
       return errorResponse('BAD_REQUEST', 'Missing required fields', 400);
     }
     
-    await assertPropertyAccess(session.user.id, propertyId);
+    if (!(await requireOrganizationContext(session.user.id)).propertyIds.includes(propertyId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     // If nightAuditId is not provided (e.g. acknowledging before first run), find or create a PENDING run
     if (!nightAuditId) {

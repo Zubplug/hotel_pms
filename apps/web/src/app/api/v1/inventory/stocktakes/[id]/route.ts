@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { hasInventoryPermission } from '@/lib/inventory/permissions';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 export const dynamic = 'force-dynamic';
 
@@ -10,13 +11,14 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
   try {
     const session = await auth();
     if (!session?.user) return NextResponse.json({ error: 'Unauthorized', data: null }, { status: 401 });
-    const { role, propertyId, isSuperAdmin } = session.user as any;
+    const { role, isSuperAdmin } = session.user as any;
+    const ctx = await requireOrganizationContext(session.user.id);
     if (!hasInventoryPermission(role, 'inventory.read', isSuperAdmin)) {
       return NextResponse.json({ error: 'Forbidden', data: null }, { status: 403 });
     }
 
     const stocktake = await prisma.stocktake.findUnique({
-      where: { id: params.id, propertyId },
+      where: { id: params.id, propertyId: ctx.propertyIds[0] },
       include: {
         warehouse: { select: { name: true } },
         category: { select: { name: true } },
@@ -44,7 +46,8 @@ export async function PATCH(request: Request, props: { params: Promise<{ id: str
   try {
     const session = await auth();
     if (!session?.user) return NextResponse.json({ error: 'Unauthorized', data: null }, { status: 401 });
-    const { role, propertyId, isSuperAdmin } = session.user as any;
+    const { role, isSuperAdmin } = session.user as any;
+    const ctx = await requireOrganizationContext(session.user.id);
     if (!hasInventoryPermission(role, 'inventory.stocktake', isSuperAdmin)) {
       return NextResponse.json({ error: 'Forbidden', data: null }, { status: 403 });
     }
@@ -57,7 +60,7 @@ export async function PATCH(request: Request, props: { params: Promise<{ id: str
 
     // Ensure it's in COUNTING state
     const stocktake = await prisma.stocktake.findUnique({
-      where: { id: params.id, propertyId }
+      where: { id: params.id, propertyId: ctx.propertyIds[0] }
     });
 
     if (!stocktake || stocktake.status !== 'COUNTING') {

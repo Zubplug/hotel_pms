@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { authenticateSyncRequest } from '@/lib/sync-auth';
 import prisma from '@hotel-pms/db';
 import { createHash, randomUUID } from 'crypto';
 import { compare } from 'bcryptjs';
@@ -39,18 +40,22 @@ async function queueCancellationRefunds(tx: any, reservation: any, propertyId: s
 export async function POST(req: NextRequest) {
   const requestId = randomUUID();
   try {
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Missing device token' }, { status: 401 });
-    }
-
-    const deviceToken = authHeader.substring(7);
     const body = await req.json();
     const { propertyId, events } = body;
     console.info(`[sync/frontdesk-push] request=${requestId} received propertyId=${propertyId ?? 'missing'} events=${Array.isArray(events) ? events.length : 'invalid'}`);
 
     if (!propertyId || !events || !Array.isArray(events)) {
       return NextResponse.json({ error: 'Invalid payload format' }, { status: 400 });
+    }
+
+    const authResult = await authenticateSyncRequest(req, propertyId);
+    if (!authResult.success) {
+      console.warn(`[sync/frontdesk-push] request=${requestId} rejected propertyId=${propertyId} error=${authResult.error}`);
+      return NextResponse.json({ error: authResult.error }, { status: authResult.status });
+    }
+    if (!authResult.isDevice) {
+      console.warn(`[sync/frontdesk-push] request=${requestId} rejected propertyId=${propertyId} error=Must be a device`);
+      return NextResponse.json({ error: 'Must be a device' }, { status: 403 });
     }
 
     // Verify terminal and property
@@ -62,34 +67,8 @@ export async function POST(req: NextRequest) {
        return NextResponse.json({ error: 'Night audit is in progress. Financial synchronization is temporarily paused.' }, { status: 409 });
     }
 
+    const device = { id: authResult.deviceId as string };
     const authoritativeBusinessDate = property.businessDate || getPropertyBusinessDate('Africa/Lagos', new Date());
-
-    const terminals = await prisma.posTerminal.findMany({
-      where: { propertyId, registrationState: 'REGISTERED' }
-    });
-
-    let device = null;
-    const sha256Hash = createHash('sha256').update(deviceToken).digest('hex');
-
-    for (const t of terminals) {
-      if (t.deviceCredentialHash) {
-        if (t.deviceCredentialHash === sha256Hash) {
-           device = t;
-           break;
-        }
-        if (t.deviceCredentialHash.length === 60) {
-           if (await compare(deviceToken, t.deviceCredentialHash)) {
-             device = t;
-             break;
-           }
-        }
-      }
-    }
-
-    if (!device) {
-      console.warn(`[sync/frontdesk-push] request=${requestId} rejected terminal credential propertyId=${propertyId}`);
-      return NextResponse.json({ error: 'Terminal not authorized' }, { status: 403 });
-    }
 
     console.info(`[sync/frontdesk-push] request=${requestId} authorized terminalId=${device.id} propertyId=${propertyId} events=${events.length}`);
 

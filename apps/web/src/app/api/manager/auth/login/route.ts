@@ -3,6 +3,7 @@ import prisma from '@hotel-pms/db';
 import bcrypt from 'bcryptjs';
 import { SignJWT } from 'jose';
 import { successResponse, errorResponse } from '@/lib/api-response';
+import { requireOrganizationContext } from '@/lib/organization-access';
 
 const JWT_SECRET = process.env.AUTH_SECRET || 'fallback-secret-for-development';
 
@@ -53,6 +54,7 @@ export async function POST(req: NextRequest) {
     
     capabilities = Array.from(new Set(capabilities));
     const primaryRole = user.roles?.[0]?.role?.name || 'STAFF';
+    const allowedProperties = (await requireOrganizationContext(user.id)).propertyIds;
 
     if (primaryRole !== 'MANAGER' && primaryRole !== 'ADMIN' && primaryRole !== 'SUPER_ADMIN' && primaryRole !== 'DIRECTOR' && primaryRole !== 'EXECUTIVE' && !user.isSuperAdmin) {
        return errorResponse('FORBIDDEN', 'Only managers, admins, and directors can access this app', 403);
@@ -67,8 +69,8 @@ export async function POST(req: NextRequest) {
       role: primaryRole,
       capabilities,
       sessionVersion: user.sessionVersion || 1,
-      propertyId: propertyIds.length > 0 ? propertyIds[0] : null,
-      allowedProperties: propertyIds
+      propertyId: allowedProperties[0] ?? propertyIds[0] ?? null,
+      allowedProperties
     };
 
     const secret = new TextEncoder().encode(JWT_SECRET);

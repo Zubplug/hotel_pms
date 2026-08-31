@@ -1,23 +1,21 @@
+import { requireOrganizationContext } from '@/lib/organization-access';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { CashHandoverService } from '@/lib/services/cash-handover-service';
 import prisma from '@hotel-pms/db';
-import { getUserPropertyIds } from '@/lib/property-access';
 import { CASH_HANDOVER_ROLES, hasFinancialRole } from '@/lib/financial-control-access';
 import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
-
 export async function POST(request: NextRequest, context: { params: Promise<{ handoverId: string }> }) {
   try {
     const actor = await auth();
     if (!actor?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     if (!(actor.user as any).isSuperAdmin && !hasFinancialRole((actor.user as any).role, CASH_HANDOVER_ROLES)) return NextResponse.json({ error: 'Only Cash Management staff can receive handovers' }, { status: 403 });
-
     const { handoverId } = await context.params;
     const body = await request.json();
     const { notes } = body;
     const handover = await prisma.cashHandover.findUnique({ where: { id: handoverId }, select: { propertyId: true } });
     if (!handover) return NextResponse.json({ error: 'Handover not found' }, { status: 404 });
-    if (!(await getUserPropertyIds(actor.user.id)).includes(handover.propertyId)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!((await requireOrganizationContext(actor.user.id)).propertyIds).includes(handover.propertyId)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     if (await isNightAuditTransactionLocked(handover.propertyId)) {
       return NextResponse.json({ error: 'Handover receipt cannot be recorded while Night Audit is posting. Retry after the new business date is active.', code: 'NIGHT_AUDIT_IN_PROGRESS' }, { status: 409 });
     }
@@ -33,13 +31,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ha
       select: { id: true } 
     });
     if (!staff) return NextResponse.json({ error: 'Staff record not found' }, { status: 401 });
-
-    const result = await CashHandoverService.receiveHandover({
+    const result = await CashHandoverService.receiveHandover(await requireOrganizationContext(actor.user.id), {
       handoverId,
-      receiverId: staff.id,
       notes
     });
-
     return NextResponse.json({ data: result });
   } catch (error: any) {
     console.error('[Receive Handover]', error);

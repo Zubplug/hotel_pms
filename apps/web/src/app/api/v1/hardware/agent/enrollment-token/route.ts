@@ -1,3 +1,5 @@
+import { NextResponse } from 'next/server';
+import { requireOrganizationContext } from '@/lib/organization-access';
 import { NextRequest } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
@@ -19,7 +21,7 @@ export async function POST(req: NextRequest) {
     const { propertyId } = body;
     if (!propertyId) return errorResponse('VALIDATION_ERROR', 'propertyId is required', 422);
 
-    await assertPropertyAccess(session.user.id, propertyId);
+    if (!(await requireOrganizationContext(session.user.id)).propertyIds.includes(propertyId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     const canManage = await hasPermission(session.user.id, 'hardware', 'manage', propertyId);
     if (!canManage) return errorResponse('FORBIDDEN', 'Insufficient permissions — requires Property Admin', 403);
 

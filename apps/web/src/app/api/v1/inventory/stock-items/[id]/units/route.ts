@@ -2,15 +2,17 @@ import { NextResponse } from 'next/server';
 import prisma, { UnitOfMeasure } from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
 import { hasInventoryPermission } from '@/lib/inventory/permissions';
+import { requireOrganizationContext } from "@/lib/organization-access";
 
 export const dynamic = 'force-dynamic';
 
 async function getContext(id: string, permission: 'inventory.read' | 'inventory.manage') {
   const session = await auth();
   if (!session?.user) return { error: NextResponse.json({ error: 'Unauthorized', data: null }, { status: 401 }) };
-  const { role, propertyId, isSuperAdmin } = session.user as any;
+  const { role, isSuperAdmin } = session.user as any;
+    const ctx = await requireOrganizationContext(session.user.id);
   if (!hasInventoryPermission(role, permission, isSuperAdmin)) return { error: NextResponse.json({ error: 'Forbidden', data: null }, { status: 403 }) };
-  const item = await prisma.stockItem.findFirst({ where: { id, propertyId }, select: { id: true, baseUnit: true } });
+  const item = await prisma.stockItem.findFirst({ where: { id, propertyId: ctx.propertyIds[0] }, select: { id: true, baseUnit: true } });
   if (!item) return { error: NextResponse.json({ error: 'Stock item not found', data: null }, { status: 404 }) };
   return { item };
 }

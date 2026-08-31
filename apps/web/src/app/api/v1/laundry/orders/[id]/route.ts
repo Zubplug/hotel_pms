@@ -1,13 +1,13 @@
+import { NextResponse } from 'next/server';
+import { requireOrganizationContext } from '@/lib/organization-access';
 import { NextRequest } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { hasPermission } from '@/lib/rbac';
-import { getUserPropertyIds } from '@/lib/property-access';
 import { findActiveFrontdeskSession } from '@/lib/frontdesk/active-session';
 import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 import { getPropertyBusinessDate } from '@/lib/date-utils';
-
 const TRANSITIONS: Record<string, string[]> = {
   'PENDING': ['COLLECTED', 'CANCELLED'],
   'COLLECTED': ['WASHING', 'CANCELLED'],
@@ -16,55 +16,44 @@ const TRANSITIONS: Record<string, string[]> = {
   'DELIVERED': [], // Cancelled requires formal refund
   'CANCELLED': []
 };
-
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
-
     const { id } = await params;
     const body = await req.json();
     const { status, notes, deviceId, version } = body;
-
     if (!status) return errorResponse('BAD_REQUEST', 'Missing status', 400);
-
     const order = await prisma.laundryOrder.findUnique({
       where: { id },
       include: { reservation: { include: { folios: { where: { type: 'ROOM', status: 'OPEN' } } } } }
     });
-
     if (!order) return errorResponse('NOT_FOUND', 'Laundry order not found', 404);
     const property = await prisma.property.findUnique({ where: { id: order.propertyId }, select: { businessDate: true, timezone: true } });
     if (await isNightAuditTransactionLocked(order.propertyId)) {
       return errorResponse('NIGHT_AUDIT_IN_PROGRESS', 'Night audit cutover is in progress. Laundry billing resumes after the new business date is active.', 409);
     }
-
-    const allowedProperties = await getUserPropertyIds(session.user.id);
+    const allowedProperties = (await requireOrganizationContext(session.user.id)).propertyIds;
     if (!allowedProperties.includes(order.propertyId)) {
       return errorResponse('FORBIDDEN', 'Access denied to property', 403);
     }
-
     const canManage = await hasPermission(session.user.id, 'laundry', 'update', order.propertyId);
     if (!canManage) return errorResponse('FORBIDDEN', 'Insufficient permissions', 403);
-
     const { session: activeFrontdeskSession } = status === 'DELIVERED'
       ? await findActiveFrontdeskSession(session.user.id, order.propertyId, body.frontdeskSessionId)
       : { session: null };
     if (status === 'DELIVERED' && !activeFrontdeskSession) {
       return errorResponse('CONFLICT', 'Open your front desk cashier session before delivering and charging laundry.', 409);
     }
-
     // Optimistic locking
     if (version !== undefined && order.version !== version) {
         return errorResponse('CONFLICT', 'Order has been modified by someone else', 409);
     }
-
     // State machine check
     const allowedNextStates = TRANSITIONS[order.status];
     if (!allowedNextStates || !allowedNextStates.includes(status)) {
         return errorResponse('BAD_REQUEST', `Invalid transition from ${order.status} to ${status}`, 400);
     }
-
     // Cancellation from WASHING or READY requires special permissions
     if (status === 'CANCELLED' && ['WASHING', 'READY'].includes(order.status)) {
         const canCancelLate = await hasPermission(session.user.id, 'laundry', 'delete', order.propertyId);
@@ -72,12 +61,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             return errorResponse('FORBIDDEN', 'Requires management permission to cancel active laundry', 403);
         }
     }
-
     const updateData: any = {
       status,
       version: { increment: 1 }
     };
-
     // Timestamp updates
     if (status === 'COLLECTED') {
       updateData.collectedAt = new Date();
@@ -88,16 +75,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       updateData.deliveredAt = new Date();
       updateData.deliveredBy = session.user.id;
     }
-
     const updatedOrder = await prisma.$transaction(async (tx: any) => {
       // If DELIVERED, we must post to Folio idempotently
       if (status === 'DELIVERED') {
         if (order.folioItemId) {
             throw new Error('Order is already billed');
         }
-
         let activeFolio;
-
         if (order.customerType === 'IN_HOUSE') {
             const reservation = order.reservation;
             if (!reservation) {
@@ -128,7 +112,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
                 },
                 take: 1
             });
-
             activeFolio = existingFolios.length > 0
                 ? existingFolios[0]
                 : await tx.folio.create({
@@ -144,7 +127,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         } else {
             throw new Error('Invalid customer type for billing');
         }
-
         const folioItem = await tx.folioItem.create({
             data: {
                 folioId: activeFolio.id,
@@ -161,9 +143,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
                 deviceId
             }
         });
-        
         updateData.folioItemId = folioItem.id;
-
         let creditApplied = 0;
         const credits = await tx.folioCredit.findMany({
           where: {
@@ -174,13 +154,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           },
           orderBy: { createdAt: 'asc' }
         });
-
         for (const credit of credits) {
           if (creditApplied >= Number(order.totalAmount)) break;
           const remainingCharge = Number(order.totalAmount) - creditApplied;
           const applied = Math.min(remainingCharge, Number(credit.remainingAmount));
           if (applied <= 0) continue;
-
           const updatedCredit = await tx.folioCredit.updateMany({
             where: { id: credit.id, remainingAmount: { gte: applied } },
             data: {
@@ -189,7 +167,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             }
           });
           if (updatedCredit.count !== 1) continue;
-
           const applicationKey = `CREDIT_APPLICATION:LAUNDRY:${order.id}:${credit.id}`;
           const application = await tx.folioCreditApplication.create({
             data: {
@@ -205,7 +182,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
               businessDate: property?.businessDate || getPropertyBusinessDate(property?.timezone)
             }
           });
-
           await tx.financialAuditLog.create({
             data: {
               operationId: applicationKey,
@@ -231,7 +207,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           });
           creditApplied += applied;
         }
-
         await tx.folio.update({
           where: { id: activeFolio.id },
           data: {
@@ -241,12 +216,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           }
         });
       }
-
       const updated = await tx.laundryOrder.update({
         where: { id },
         data: updateData
       });
-
       await tx.laundryOrderStatusHistory.create({
         data: {
           laundryOrderId: id,
@@ -257,10 +230,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           deviceId
         }
       });
-
       return updated;
     });
-
     return successResponse(updatedOrder);
   } catch (err: any) {
     console.error('[LaundryOrders PATCH]', err);

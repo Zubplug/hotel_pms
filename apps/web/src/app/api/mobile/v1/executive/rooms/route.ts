@@ -2,21 +2,21 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@hotel-pms/db';
 import { calculateRoomStatuses } from '@/lib/executive/room-status';
 import { getPropertyBusinessDate } from '@/lib/kpi';
+import { successResponse, errorResponse } from '@/lib/api-response';
 import { resolveUser } from '@/lib/resolve-user';
+import { requireOrganizationContext } from '@/lib/organization-access';
 
 export async function GET(req: NextRequest) {
   try {
     const user = await resolveUser(req);
-    
     if (!user) {
-      return NextResponse.json({ success: false, error: 'Authentication required' }, { status: 401 });
+      return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
     }
-    
-    if (!['MANAGER', 'ADMIN', 'SUPER_ADMIN', 'DIRECTOR', 'EXECUTIVE'].includes(user.role) && !user.isSuperAdmin) {
-      return NextResponse.json({ success: false, error: 'Executive access required' }, { status: 403 });
+    const ctx = await requireOrganizationContext(user.id);
+    const allowedPropertyIds = ctx.propertyIds;
+    if (allowedPropertyIds.length === 0) {
+      return errorResponse('FORBIDDEN', 'No property access', 403);
     }
-
-    const allowedPropertyIds = user.allowedProperties;
 
     if (allowedPropertyIds.length === 0) {
       return NextResponse.json({ success: false, error: 'No property access' }, { status: 403 });

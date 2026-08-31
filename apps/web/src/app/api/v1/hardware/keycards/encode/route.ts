@@ -1,3 +1,5 @@
+import { NextResponse } from 'next/server';
+import { requireOrganizationContext } from '@/lib/organization-access';
 import { NextRequest } from 'next/server';
 import { auth } from '@/lib/auth';
 import { assertPropertyAccess } from '@/lib/property-access';
@@ -21,7 +23,7 @@ export async function POST(req: NextRequest) {
     });
     if (!reservation) return errorResponse('NOT_FOUND', 'Reservation not found', 404);
 
-    await assertPropertyAccess(session.user.id, reservation.propertyId);
+    if (!(await requireOrganizationContext(session.user.id)).propertyIds.includes(reservation.propertyId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const assignedRoom = reservation.reservationRooms.find(item => item.roomId === roomId)?.room;
     if (!assignedRoom) return errorResponse('BAD_REQUEST', 'Reservation is not assigned to this room', 400);

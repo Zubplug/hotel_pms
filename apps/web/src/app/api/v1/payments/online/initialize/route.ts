@@ -1,75 +1,61 @@
+import { NextResponse } from 'next/server';
+import { requireOrganizationContext } from '@/lib/organization-access';
 import { NextRequest } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
-import { getUserPropertyIds } from '@/lib/property-access';
 import { PaystackProvider } from '@/lib/payment-providers/paystack';
 import crypto from 'crypto';
 import { findActiveFrontdeskSession, isFrontdeskCashierRole } from '@/lib/frontdesk/active-session';
 import { canOverrideNightAudit, getNightAuditOverrideReason, isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
-
 export async function POST(req: NextRequest) {
   try {
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
-
     const body = await req.json();
     const { folioId, amount, currency, terminalId, frontdeskSessionId, nightAuditOverrideReason } = body;
-
     if (!folioId || !amount || !currency) {
       return errorResponse('BAD_REQUEST', 'Missing required fields', 400);
     }
-
     const numericAmount = Number(amount);
     if (isNaN(numericAmount) || numericAmount <= 0) {
       return errorResponse('BAD_REQUEST', 'Amount must be greater than zero', 400);
     }
-
     const folio = await prisma.folio.findUnique({
       where: { id: folioId },
       include: { property: true, guest: true }
     });
-
     if (!folio) return errorResponse('NOT_FOUND', 'Folio not found', 404);
-
     const overrideReason = getNightAuditOverrideReason(nightAuditOverrideReason);
     if (await isNightAuditTransactionLocked(folio.propertyId) && (!canOverrideNightAudit((session.user as any).role) || !overrideReason)) {
       return errorResponse('NIGHT_AUDIT_IN_PROGRESS', 'Night audit is in progress. New financial transactions are temporarily paused.', 409);
     }
-
     // --- 7D.6 FINANCIAL GUARD ---
     if (folio.status === 'CLOSED') {
       return errorResponse('BAD_REQUEST', 'Cannot initialize payments for a CLOSED folio.', 400);
     }
     // ----------------------------
-
-    const allowedPropertyIds = await getUserPropertyIds(session.user.id);
+    const allowedPropertyIds = (await requireOrganizationContext(session.user.id)).propertyIds;
     if (!allowedPropertyIds.includes(folio.propertyId)) {
       return errorResponse('FORBIDDEN', 'No access to this property', 403);
     }
-
     const { staff, session: activeFrontdeskSession } = await findActiveFrontdeskSession(session.user.id, folio.propertyId, frontdeskSessionId);
     const role = String((session.user as any).role || '');
     if ((staff || isFrontdeskCashierRole(role)) && !activeFrontdeskSession) {
       return errorResponse('CONFLICT', 'Open a front desk cashier session before starting a payment.', 409);
     }
-
     if (currency !== folio.currency) {
       return errorResponse('BAD_REQUEST', `Currency mismatch. Expected ${folio.currency}`, 400);
     }
-
     const currentBalance = Number(folio.balance);
     if (numericAmount > currentBalance) {
       return errorResponse('BAD_REQUEST', 'Payment amount exceeds outstanding balance.', 400);
     }
-
     // Generate unique reference
     const providerRef = `PAY-${folioId.substring(0,8)}-${crypto.randomBytes(6).toString('hex').toUpperCase()}`;
     const callbackUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/payments/callback`;
-
     // Create the Paystack transaction
     const provider = new PaystackProvider();
-    
     // We create the payment record FIRST in our DB as PENDING, to ensure we have a record 
     // even if the user drops off before checking out.
     const payment = await prisma.$transaction(async (tx: any) => {
@@ -91,7 +77,6 @@ export async function POST(req: NextRequest) {
           receivedBy: session.user.id, // Who initiated the link
         }
       });
-
       await tx.auditLog.create({
         data: {
           organizationId: folio.property.organizationId,
@@ -108,10 +93,8 @@ export async function POST(req: NextRequest) {
           requestId: req.headers.get('x-request-id') || crypto.randomUUID(),
         }
       });
-
       return p;
     });
-
     // Now call Paystack
     try {
       const initResponse = await provider.initializeTransaction({
@@ -121,7 +104,6 @@ export async function POST(req: NextRequest) {
         reference: providerRef,
         callbackUrl,
       });
-
       return successResponse({
         paymentId: payment.id,
         authorizationUrl: initResponse.authorizationUrl,
@@ -135,7 +117,6 @@ export async function POST(req: NextRequest) {
       });
       return errorResponse('BAD_GATEWAY', 'Failed to initialize payment with provider', 502);
     }
-
   } catch (err: any) {
     console.error('[Payment Init POST]', err);
     return errorResponse('INTERNAL_ERROR', 'Unexpected error initializing payment', 500);

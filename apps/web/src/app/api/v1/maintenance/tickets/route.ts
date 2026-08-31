@@ -1,3 +1,5 @@
+import { NextResponse } from 'next/server';
+import { requireOrganizationContext } from '@/lib/organization-access';
 import { NextRequest } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
@@ -15,7 +17,7 @@ export async function GET(req: NextRequest) {
     const propertyId = searchParams.get('propertyId');
     if (!propertyId) return errorResponse('BAD_REQUEST', 'Missing propertyId', 400);
 
-    await assertPropertyAccess(session.user.id, propertyId);
+    if (!(await requireOrganizationContext(session.user.id)).propertyIds.includes(propertyId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const status = searchParams.get('status');
     const priority = searchParams.get('priority');
@@ -70,7 +72,7 @@ export async function POST(req: NextRequest) {
       return errorResponse('BAD_REQUEST', 'Missing required fields', 400);
     }
 
-    await assertPropertyAccess(session.user.id, propertyId);
+    if (!(await requireOrganizationContext(session.user.id)).propertyIds.includes(propertyId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     
     // In production, require permission check
     const canCreate = await hasPermission(session.user.id, 'housekeeping', 'create', propertyId); // fallback permission check
