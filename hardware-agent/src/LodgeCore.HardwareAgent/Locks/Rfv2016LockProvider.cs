@@ -32,7 +32,7 @@ public class Rfv2016LockProvider : ILockProvider
             string sourceWRCard = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "W-R-Card");
             string targetWRCard = Path.Combine(_workingDir, "W-R-Card");
             
-            if (Directory.Exists(sourceWRCard) && !Directory.Exists(targetWRCard))
+            if (Directory.Exists(sourceWRCard))
             {
                 CopyDirectory(sourceWRCard, targetWRCard);
             }
