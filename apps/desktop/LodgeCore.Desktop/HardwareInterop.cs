@@ -314,6 +314,11 @@ public class HardwareInterop
                     reservation.CheckOutDate.Date,
                     hotelTz.GetUtcOffset(reservation.CheckOutDate.Date));
 
+                // A reservation is valid until the end of the checkout date (23:59:59).
+                // If a guest arrives at 2 AM on their checkout date (late night check-in),
+                // they should absolutely still be allowed to get their key for the remaining hours.
+                var checkOutCutoff = checkOutMidnightLocal.AddHours(23).AddMinutes(59);
+                
                 var windowOpenLocal  = checkInMidnightLocal.AddHours(-earlyWindowHrs);
                 var nowUtc           = DateTimeOffset.UtcNow;
 
@@ -330,7 +335,7 @@ public class HardwareInterop
                         $"{opensAt:yyyy-MM-dd} (hotel local time).");
                 }
 
-                if (nowUtc >= checkOutMidnightLocal)
+                if (nowUtc >= checkOutCutoff)
                 {
                     await WriteAuditAsync(session, "ENCODE", false,
                         $"DENIED - Check-out date has passed " +
