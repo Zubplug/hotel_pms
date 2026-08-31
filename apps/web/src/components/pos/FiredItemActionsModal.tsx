@@ -7,8 +7,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Trash, RefreshCcw, AlertTriangle, CheckCircle2 } from 'lucide-react';
-import { usePOS } from '@/contexts/POSContext';
-import { useDataProvider } from '@/lib/desktop/DataProviderContext';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { toast } from 'sonner';
 
 export default function FiredItemActionsModal({
@@ -16,16 +15,17 @@ export default function FiredItemActionsModal({
   onClose,
   item,
   orderId,
+  allProducts,
   onSuccess
 }: {
   isOpen: boolean;
   onClose: () => void;
   item: any;
   orderId: string;
+  allProducts: any[];
   onSuccess: (order: any) => void;
 }) {
-  const { provider } = useDataProvider();
-  const { menuCategories } = usePOS();
+  const { provider } = useLodgeCoreProvider();
   
   const [activeTab, setActiveTab] = useState('replace');
   const [managerPin, setManagerPin] = useState('');
@@ -39,9 +39,6 @@ export default function FiredItemActionsModal({
   const [replacementProduct, setReplacementProduct] = useState<any>(null);
   
   if (!item) return null;
-
-  // Flatten products for dropdown
-  const allProducts = menuCategories?.flatMap((c: any) => c.products) || [];
   
   const handleReplace = async () => {
     if (!replacementProduct) {
@@ -215,7 +212,7 @@ export default function FiredItemActionsModal({
 
             <div className="space-y-2">
               <Label>Reason</Label>
-              <Select value={voidReason} onValueChange={setVoidReason}>
+              <Select value={voidReason} onValueChange={(val) => setVoidReason(val || '')}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>

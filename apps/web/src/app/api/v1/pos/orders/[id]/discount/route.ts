@@ -1,15 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
-import { getCurrentUser } from '@/lib/auth';
+import { auth } from '@/lib/auth';
 import { ApprovalService } from '@/lib/discounts/approval-service';
 import crypto from 'crypto';
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await getCurrentUser();
+    const params = await context.params;
+    const session = await auth();
+    const user = session?.user;
+    
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -54,7 +57,7 @@ export async function POST(
         else if (percentage > 0) effectiveDiscount = subtotal * (percentage / 100);
 
         // Update the order
-        const updatedTotal = subtotal + Number(order.tax) + Number(order.serviceCharge) - effectiveDiscount;
+        const updatedTotal = subtotal + Number(order.taxAmount) + Number(order.serviceCharge) - effectiveDiscount;
         await tx.posOrder.update({
           where: { id: order.id },
           data: { 

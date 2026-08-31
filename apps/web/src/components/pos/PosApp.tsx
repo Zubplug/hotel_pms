@@ -6,7 +6,7 @@ import {
   ShoppingCart, Search, Trash2, Plus, Minus, User, Utensils,
   Loader2, CreditCard, Banknote, LayoutGrid,
   ChefHat, Scissors, X, Building2, Send, Flame, Lock,
-  Sparkles, Star, Package2, PanelRightClose, PanelRightOpen, RefreshCcw
+  Sparkles, Star, Package2, PanelRightClose, PanelRightOpen, RefreshCcw, Percent
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AppSwitcher } from '@/components/layout/AppSwitcher';
@@ -1443,6 +1443,7 @@ export default function PosApp() {
         onClose={() => setItemToModify(null)}
         item={itemToModify}
         orderId={currentOrderId!}
+        allProducts={products}
         onSuccess={(updatedOrder) => {
           if (updatedOrder && updatedOrder.items) {
             setCart(updatedOrder.items);

@@ -12,7 +12,7 @@ type DiscountModalProps = {
 };
 
 export function DiscountModal({ isOpen, orderId, orderTotal, onClose, onSuccess }: DiscountModalProps) {
-  const { provider, isDesktop } = useLodgeCoreProvider();
+  const { provider, isDesktopMode } = useLodgeCoreProvider();
   const [type, setType] = useState<'percent' | 'amount'>('percent');
   const [value, setValue] = useState('');
   const [reason, setReason] = useState('');
@@ -56,8 +56,13 @@ export function DiscountModal({ isOpen, orderId, orderTotal, onClose, onSuccess 
       const res = await provider.approvals.requestDiscount(payload);
       
       if (res.requiresApproval) {
-        if (isDesktop) {
-          setShowOverride(true);
+        if (isDesktopMode) {
+          if (typeof window !== 'undefined' && (window as any).chrome?.webview) {
+            setShowOverride(true);
+          } else {
+            setError('Discount exceeds your limit. A request has been sent for manager approval.');
+            onSuccess();
+          }
         } else {
           setError('Discount exceeds your limit. A request has been sent for manager approval.');
           onSuccess();
