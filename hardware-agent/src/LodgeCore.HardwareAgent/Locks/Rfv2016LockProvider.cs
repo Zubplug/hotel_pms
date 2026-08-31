@@ -203,6 +203,9 @@ public class Rfv2016LockProvider : ILockProvider
                 try
                 {
                     Environment.CurrentDirectory = _workingDir;
+                    string targetWRCard = Path.Combine(_workingDir, "W-R-Card");
+                    string rrOutFile = Path.Combine(targetWRCard, "R-Card_Out.txt");
+                    if (File.Exists(rrOutFile)) File.Delete(rrOutFile);
                     
                     IntPtr ptr = Rfv2016LockSdkNative.R_Card(1);
                     string? resultStr = Marshal.PtrToStringAnsi(ptr);
