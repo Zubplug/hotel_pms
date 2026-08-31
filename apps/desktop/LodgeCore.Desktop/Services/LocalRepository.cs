@@ -303,6 +303,7 @@ public class LocalRepository
         if (res == null) throw new InvalidOperationException("Reservation not found");
         await AssertNightAuditAllowsAsync(res.PropertyId);
         var reservation = await _dbContext.Reservations.Include(r => r.Folio).FirstOrDefaultAsync(r => r.Id == reservationId);
+        if (reservation == null) throw new InvalidOperationException("Reservation not found");
         
         if (reservation.Status != "CONFIRMED") throw new InvalidOperationException("Late arrival can only be recorded for confirmed reservations.");
         reservation.LateArrivalExpected = true; reservation.LateArrivalNotes = notes; reservation.LateArrivalAt = DateTime.UtcNow; reservation.LateArrivalBy = userId; reservation.IsDirty = true; reservation.LocalSequence++;
@@ -317,6 +318,7 @@ public class LocalRepository
         if (res == null) throw new InvalidOperationException("Reservation not found");
         await AssertNightAuditAllowsAsync(res.PropertyId);
         var reservation = await _dbContext.Reservations.Include(r => r.Folio).FirstOrDefaultAsync(r => r.Id == reservationId);
+        if (reservation == null) throw new InvalidOperationException("Reservation not found");
         
         if (reservation.Status != "CONFIRMED") throw new InvalidOperationException($"Cannot assess a {reservation.Status} reservation as no-show.");
         if (reservation.LateArrivalExpected) throw new InvalidOperationException("Late arrival is authorized for this reservation.");
@@ -1295,7 +1297,7 @@ public class LocalRepository
             EventType = "POST_PAYMENT",
             Sequence = folio.LocalSequence,
             IdempotencyKey = idempotencyKey ?? Guid.NewGuid().ToString(),
-            PayloadJson = JsonSerializer.Serialize(new { amount, method, reservationId = folio.ReservationId, currency = folio.Currency ?? "NGN", businessDate = frontdeskSession.BusinessDate, originalBusinessDate = frontdeskSession.BusinessDate, idempotencyKey, frontdeskSessionId = frontdeskSession?.Id })
+            PayloadJson = JsonSerializer.Serialize(new { amount, method, reservationId = folio.ReservationId, currency = folio.Currency ?? "NGN", businessDate = frontdeskSession?.BusinessDate, originalBusinessDate = frontdeskSession?.BusinessDate, idempotencyKey, frontdeskSessionId = frontdeskSession?.Id })
         });
 
         await _dbContext.SaveChangesAsync();
@@ -2555,7 +2557,7 @@ public class LocalRepository
                 OrderId = order.Id,
                 OrderItemId = originalItem.Id,
                 ReplacedByItemId = newOrderItemId,
-                Reason = reason,
+                Reason = reason ?? "",
                 AuthorizerId = approverId,
                 OperationId = operationId,
                 BusinessDate = order.BusinessDate,
@@ -2679,7 +2681,7 @@ public class LocalRepository
                     DeviceId = deviceId,
                     OperatorId = userId,
                     AggregateType = "RESERVATION_ROOM",
-                    AggregateId = resRoomId,
+                    AggregateId = resRoomId ?? "",
                     AggregateVersion = 1,
                     EventType = "DISCOUNT_APPLIED",
                     Sequence = 1,
@@ -2712,7 +2714,7 @@ public class LocalRepository
                     { "baseAmount", -amount },
                     { "postedBy", userId },
                     { "discountApprovalId", approvalId },
-                    { "targetFolioItemId", targetFolioItemId }
+                    { "targetFolioItemId", targetFolioItemId ?? "" }
                 };
 
                 transactions.Add(JsonSerializer.SerializeToElement(discountItem));

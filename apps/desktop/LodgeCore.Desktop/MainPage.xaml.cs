@@ -276,12 +276,12 @@ public partial class MainPage : ContentPage
                     bool bypassKeycard = false;
                     if (parameters != null && parameters["bypassKeycard"] != null)
                     {
-                        bool.TryParse(parameters["bypassKeycard"].ToString(), out bypassKeycard);
+                        bool.TryParse(parameters["bypassKeycard"]?.ToString(), out bypassKeycard);
                     }
                     bool overrideDeposit = false;
                     if (parameters != null && parameters["overrideDeposit"] != null)
                     {
-                        bool.TryParse(parameters["overrideDeposit"].ToString(), out overrideDeposit);
+                        bool.TryParse(parameters["overrideDeposit"]?.ToString(), out overrideDeposit);
                     }
                     var encodedRoomId = parameters?["encodedRoomId"]?.ToString() ?? "";
                     var encodeData = parameters?["encodeData"]?.ToString();

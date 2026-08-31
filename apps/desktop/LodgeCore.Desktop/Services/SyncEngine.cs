@@ -25,7 +25,6 @@ public class SyncEngine : BackgroundService
     // We can wire this to MAUI Connectivity events. For now, assume online.
     private bool _isOnline = true; 
     private int _consecutiveFailures = 0; // Tracks failures for exponential backoff
-    private bool _isSyncing = false;
     private readonly SemaphoreSlim _forceSyncSemaphore = new SemaphoreSlim(0, 1);
 
     public enum NetworkState { ONLINE, OFFLINE }
