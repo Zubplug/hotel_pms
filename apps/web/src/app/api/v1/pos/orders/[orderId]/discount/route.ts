@@ -6,7 +6,7 @@ import crypto from 'crypto';
 
 export async function POST(
   req: NextRequest,
-  context: { params: Promise<{ id: string }> }
+  context: { params: Promise<{ orderId: string }> }
 ) {
   try {
     const params = await context.params;
