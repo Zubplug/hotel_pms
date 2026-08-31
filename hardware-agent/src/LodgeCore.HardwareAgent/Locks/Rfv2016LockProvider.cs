@@ -30,6 +30,11 @@ public class Rfv2016LockProvider : ILockProvider
             }
             
             string sourceWRCard = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "W-R-Card");
+            if (!Directory.Exists(sourceWRCard))
+            {
+                sourceWRCard = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Locks", "Rfv2016SdkFiles", "W-R-Card");
+            }
+
             string targetWRCard = Path.Combine(_workingDir, "W-R-Card");
             
             if (Directory.Exists(sourceWRCard))
@@ -112,6 +117,9 @@ public class Rfv2016LockProvider : ILockProvider
                     Environment.CurrentDirectory = _workingDir;
                     
                     // Format: yyyymmddhhmm
+                    string wrOutFile = Path.Combine(targetWRCard, "W-RCard_Out.txt");
+                    if (File.Exists(wrOutFile)) File.Delete(wrOutFile);
+
                     string startStr = checkInDate.ToString("yyyyMMddHHmm");
                     string endStr = checkOutDate.ToString("yyyyMMddHHmm");
 
@@ -149,6 +157,12 @@ public class Rfv2016LockProvider : ILockProvider
                 try
                 {
                     Environment.CurrentDirectory = _workingDir;
+                    string targetWRCard = Path.Combine(_workingDir, "W-R-Card");
+                    string rrOutFile = Path.Combine(targetWRCard, "R-Card_Out.txt");
+                    string rIdOutFile = Path.Combine(targetWRCard, "RID_Out.txt");
+                    if (File.Exists(rrOutFile)) File.Delete(rrOutFile);
+                    if (File.Exists(rIdOutFile)) File.Delete(rIdOutFile);
+
                     IntPtr ptr = Rfv2016LockSdkNative.R_CardID(1);
                     string? resultStr = Marshal.PtrToStringAnsi(ptr);
                     

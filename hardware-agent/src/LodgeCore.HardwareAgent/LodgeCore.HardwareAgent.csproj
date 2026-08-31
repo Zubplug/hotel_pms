@@ -65,6 +65,7 @@
     </Content>
     <Content Include="Locks\Rfv2016SdkFiles\W-R-Card\**\*.*">
       <Link>W-R-Card\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <TargetPath>W-R-Card\%(RecursiveDir)%(Filename)%(Extension)</TargetPath>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
