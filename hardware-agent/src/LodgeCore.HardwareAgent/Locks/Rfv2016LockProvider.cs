@@ -115,6 +115,7 @@ public class Rfv2016LockProvider : ILockProvider
                 try
                 {
                     Environment.CurrentDirectory = _workingDir;
+                    string targetWRCard = Path.Combine(_workingDir, "W-R-Card");
                     
                     // Format: yyyymmddhhmm
                     string wrOutFile = Path.Combine(targetWRCard, "W-RCard_Out.txt");
