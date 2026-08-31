@@ -1631,9 +1631,9 @@ public class OfflinePMSInterop
     {
         try
         {
-            var posCtx = EnsurePosContext();
+            var posCtx = await _sessionManager.GetActiveContextAsync();
             var res = await _repo.RequestItemModificationAsync(payloadJson, posCtx.StaffId, posCtx.DeviceId, posCtx.SessionId);
-            return SerializeResponse(res);
+            return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
         catch (Exception ex)
         {
@@ -1645,9 +1645,9 @@ public class OfflinePMSInterop
     {
         try
         {
-            var posCtx = EnsurePosContext();
+            var posCtx = await _sessionManager.GetActiveContextAsync();
             var res = await _repo.RequestDiscountAsync(payloadJson, posCtx.StaffId, posCtx.DeviceId, posCtx.SessionId);
-            return SerializeResponse(res);
+            return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
         catch (Exception ex)
         {
