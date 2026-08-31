@@ -209,7 +209,6 @@ public class SyncEngine : BackgroundService
         {
             if (_isOnline)
             {
-                _isSyncing = true;
                 try
                 {
                     _logger.LogInformation("[SYNC-CYCLE] Starting sync cycle. Online={Online}", _isOnline);
@@ -252,7 +251,6 @@ public class SyncEngine : BackgroundService
                 finally
                 {
                     await LogSyncDiagnosticSummary(stoppingToken);
-                    _isSyncing = false;
                 }
             }
             else
