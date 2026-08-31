@@ -21,7 +21,7 @@ export async function POST(
 
     // Load the order to validate property access
     const order = await prisma.posOrder.findUnique({
-      where: { id: params.id },
+      where: { id: params.orderId },
       include: { outlet: true }
     });
 

@@ -20,17 +20,18 @@ export async function GET(req: NextRequest) {
 
     if (!property) return errorResponse('NOT_FOUND', 'Property not found', 404);
 
-    // 1. Get today's business date in the property's timezone
+    // The property business date is authoritative. The server clock is only
+    // a fallback for properties that have not been initialized yet.
     const tz = property.timezone || 'Africa/Lagos';
     const todayString = new Intl.DateTimeFormat('en-CA', {
       timeZone: tz,
       year: 'numeric',
       month: '2-digit',
       day: '2-digit'
-    }).format(new Date()); // YYYY-MM-DD
-    
-    // Parse into UTC boundaries for the property's "Today"
-    const businessDate = new Date(`${todayString}T00:00:00.000Z`);
+    }).format(new Date());
+    const businessDate = property.businessDate
+      ? new Date(property.businessDate)
+      : new Date(`${todayString}T00:00:00.000Z`);
     const nextBusinessDate = new Date(businessDate);
     nextBusinessDate.setUTCDate(nextBusinessDate.getUTCDate() + 1);
     const todayDateRange = { gte: businessDate, lt: nextBusinessDate };
