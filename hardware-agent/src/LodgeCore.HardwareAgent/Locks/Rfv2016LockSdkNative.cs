@@ -23,7 +23,7 @@ internal static class Rfv2016LockSdkNative
         string Wstartdate,
         string Wenddate,
         string Op,
-        int nCode,
+        string nCode,
         string jLift);
 
     // function R_Card(i_display:integer):pchar;
@@ -37,9 +37,9 @@ internal static class Rfv2016LockSdkNative
     [DllImport(DllName, CallingConvention = CallingConvention.StdCall, CharSet = CharSet.Ansi)]
     public static extern IntPtr R_CardID(int i_display);
 
-    // function Woff_Card(I):integer; // actually wait, doc says "Woff_Card is a card cancellation function without parameters" but signature says Woff_Card(I). I'll pass 0.
+    // function Woff_Card():integer;
     [DllImport(DllName, CallingConvention = CallingConvention.StdCall, CharSet = CharSet.Ansi)]
-    public static extern int Woff_Card(int i);
+    public static extern int Woff_Card();
 
     // function Getcardid(IntnPort:pchar):pchar;
     [DllImport(DllName, CallingConvention = CallingConvention.StdCall, CharSet = CharSet.Ansi)]

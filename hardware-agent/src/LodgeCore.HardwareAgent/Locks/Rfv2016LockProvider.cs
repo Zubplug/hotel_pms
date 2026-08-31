@@ -31,9 +31,9 @@ public class Rfv2016LockProvider : ILockProvider
                 string startStr = checkInDate.ToString("yyyyMMddHHmm");
                 string endStr = checkOutDate.ToString("yyyyMMddHHmm");
 
-                // nCode = 1 (new guest card)
+                // nCode = "1" (new guest card)
                 // jLift = "0" (no elevator by default, or configurable if needed)
-                int res = Rfv2016LockSdkNative.W_Card(lockCode, startStr, endStr, "API", 1, "0");
+                int res = Rfv2016LockSdkNative.W_Card(lockCode, startStr, endStr, "API", "1", "0");
 
                 if (res == (int)Rfv2016LockSdkNative.RfvError.SUCCESS)
                 {
@@ -121,7 +121,7 @@ public class Rfv2016LockProvider : ILockProvider
         {
             try
             {
-                int res = Rfv2016LockSdkNative.Woff_Card(0);
+                int res = Rfv2016LockSdkNative.Woff_Card();
                 if (res == (int)Rfv2016LockSdkNative.RfvError.SUCCESS)
                 {
                     return LockResult.Ok(VendorId);
