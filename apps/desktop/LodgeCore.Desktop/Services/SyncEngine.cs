@@ -1253,8 +1253,8 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     res.ConfirmationNumber = el.TryGetProperty("confirmationNumber", out var cn) && cn.ValueKind != System.Text.Json.JsonValueKind.Null ? cn.GetString() : res.ConfirmationNumber;
                     if (el.TryGetProperty("depositRequired", out var dr) && dr.ValueKind != System.Text.Json.JsonValueKind.Null && decimal.TryParse(dr.GetString() ?? dr.GetRawText(), out var drv))
                         res.DepositRequired = drv;
-                    if (el.TryGetProperty("depositPaid", out var dp2) && dp2.ValueKind != System.Text.Json.JsonValueKind.Null && decimal.TryParse(dp2.GetString() ?? dp2.GetRawText(), out var dpv))
-                        res.DepositPaid = dpv;
+                    if (el.TryGetProperty("depositPaid", out var dp2) && dp2.ValueKind != System.Text.Json.JsonValueKind.Null && decimal.TryParse(dp2.GetString() ?? dp2.GetRawText(), out var dpaid))
+                        res.DepositPaid = dpaid;
                         
                     res.CompanyId = el.TryGetProperty("companyId", out var comp) && comp.ValueKind != System.Text.Json.JsonValueKind.Null ? comp.GetString() : null;
                     res.Source = el.TryGetProperty("source", out var src) && src.ValueKind != System.Text.Json.JsonValueKind.Null ? src.GetString() : null;

@@ -2450,19 +2450,7 @@ public class LocalRepository
 
         var propertyId = order.PropertyId;
         var property = await _dbContext.Properties.FirstOrDefaultAsync(p => p.Id == propertyId);
-        var settingsJson = property?.SettingsJson;
-        double autoApproveLimit = 0;
-
-        if (!string.IsNullOrEmpty(settingsJson))
-        {
-            try
-            {
-                var settings = System.Text.Json.JsonDocument.Parse(settingsJson);
-                if (settings.RootElement.TryGetProperty("replacementAutoApproveReductionAmount", out var amtEl)) 
-                    autoApproveLimit = amtEl.GetDouble();
-            }
-            catch { }
-        }
+        double autoApproveLimit = 1000;
 
         bool requiresApproval = action == "VOID"; // VOID defaults to true
 
@@ -2472,7 +2460,7 @@ public class LocalRepository
             var voidProduct = await _dbContext.PosProducts.FirstOrDefaultAsync(p => p.Id == originalItem.ProductId);
             if (voidProduct != null)
             {
-                var voidCategory = await _dbContext.PosCategories.FirstOrDefaultAsync(c => c.Id == voidProduct.CategoryId);
+                var voidCategory = await _dbContext.ProductCategories.FirstOrDefaultAsync(c => c.Id == voidProduct.CategoryId);
                 var resolvedStation = voidProduct.ProductionStation ?? voidCategory?.ProductionStation ?? "KITCHEN";
                 if (resolvedStation == "BAR")
                 {
@@ -2647,20 +2635,8 @@ public class LocalRepository
         if (string.IsNullOrEmpty(propertyId)) throw new Exception("Property context not found");
 
         var property = await _dbContext.Properties.FirstOrDefaultAsync(p => p.Id == propertyId);
-        var settingsJson = property?.SettingsJson;
         double autoAmount = 0;
         double autoPercent = 0;
-        if (!string.IsNullOrEmpty(settingsJson))
-        {
-            try
-            {
-                var settings = JsonDocument.Parse(settingsJson);
-                if (settings.RootElement.TryGetProperty("autoApproveDiscountAmount", out var amtEl)) autoAmount = amtEl.GetDouble();
-                if (settings.RootElement.TryGetProperty("autoApproveDiscountPercent", out var pctEl)) autoPercent = pctEl.GetDouble();
-            }
-            catch { }
-        }
-
         bool requiresApproval = false;
         if (amount > autoAmount && autoAmount > 0) requiresApproval = true;
         if (percentage > autoPercent && autoPercent > 0) requiresApproval = true;
@@ -2767,11 +2743,11 @@ public class LocalRepository
                 if (order == null) throw new Exception("Order not found");
                 await AssertNightAuditAllowsAsync(order.PropertyId, order.BusinessDate);
 
-                double subtotal = (double)order.Items.Sum(i => i.Quantity * i.Price);
+                double subtotal = (double)order.Items.Sum(i => i.Quantity * i.UnitPrice);
                 double effectiveDiscount = amount > 0 ? amount : subtotal * (percentage / 100);
 
                 order.Discount = (decimal)effectiveDiscount;
-                order.Total = (decimal)subtotal + order.Tax + order.ServiceCharge - order.Discount;
+                order.Total = (decimal)subtotal + order.TaxAmount + order.ServiceCharge - order.Discount;
                 order.UpdatedAt = DateTime.UtcNow;
 
                 evt = new LocalOutboxEvent
