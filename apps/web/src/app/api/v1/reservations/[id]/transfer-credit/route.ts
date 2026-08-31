@@ -47,6 +47,7 @@ export async function POST(
     if (!canCheckOut && !isNightAuditor) return errorResponse('FORBIDDEN', 'Insufficient permissions', 403);
 
     const idempotencyKey = req.headers.get('x-idempotency-key') || `SKIPPER_REFUND_TRANSFER_${id}_${crypto.randomUUID()}`;
+    let creditAmount = 0;
 
     const txResult = await prisma.$transaction(async (tx: any) => {
       // 1. Lock Folios and Calculate Authoritative Net Balance
@@ -66,7 +67,7 @@ export async function POST(
         throw new Error('INVALID_BALANCE');
       }
 
-      const creditAmount = Math.abs(totalBalance);
+      creditAmount = Math.abs(totalBalance);
 
       // 2. Find or Create City Ledger Account for Refund Payables
       // The user advised configuring this property-wide. We fallback to creating one if not found.
