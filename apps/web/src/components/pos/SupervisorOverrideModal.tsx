@@ -6,7 +6,7 @@ import { PinPad } from './PinPad';
 type SupervisorOverrideModalProps = {
   isOpen: boolean;
   actionName: string; // e.g., 'Void Item', 'Cash Drawer Open'
-  onAuthorized: (supervisorId: string, supervisorName: string) => void;
+  onAuthorized: (supervisorId: string, supervisorName: string, pin?: string) => void;
   onCancel: () => void;
 };
 
@@ -43,7 +43,7 @@ export function SupervisorOverrideModal({ isOpen, actionName, onAuthorized, onCa
     try {
       const res = await provider.pos.validateSupervisorPin(pin);
       if (!res.error && res.data) {
-        onAuthorized(res.data.staffId, res.data.name);
+        onAuthorized(res.data.staffId, res.data.name, pin);
       } else {
         setError(res.error || 'Invalid supervisor PIN.');
         setPin('');

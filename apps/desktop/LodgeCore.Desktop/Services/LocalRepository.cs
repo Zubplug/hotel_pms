@@ -2429,6 +2429,190 @@ public class LocalRepository
         await _dbContext.SaveChangesAsync();
         return order;
     }
+
+    public async Task<object> RequestDiscountAsync(string payloadJson, string userId, string deviceId, string sessionId)
+    {
+        using var document = JsonDocument.Parse(payloadJson);
+        var root = document.RootElement;
+        
+        var targetType = root.TryGetProperty("targetType", out var tt) ? tt.GetString() : "POS_ORDER";
+        var discountType = root.TryGetProperty("discountType", out var dt) ? dt.GetString() : "PERCENTAGE";
+        var amount = root.TryGetProperty("discountAmount", out var amt) ? amt.GetDouble() : 0.0;
+        var percentage = root.TryGetProperty("discountPercent", out var pct) ? pct.GetDouble() : (root.TryGetProperty("percentage", out var oldPct) ? oldPct.GetDouble() : 0.0);
+        var reason = root.TryGetProperty("reason", out var rsn) ? rsn.GetString() : "";
+        var managerPin = root.TryGetProperty("managerPin", out var pin) ? pin.GetString() : "";
+
+        // Determine Property ID to fetch settings and staff
+        string propertyId = "";
+        if (targetType == "POS_ORDER" && root.TryGetProperty("orderId", out var orderIdProp)) {
+            var order = await _dbContext.PosOrders.FirstOrDefaultAsync(o => o.Id == orderIdProp.GetString());
+            if (order == null) throw new Exception("Order not found");
+            propertyId = order.PropertyId;
+        } else {
+            var props = await _dbContext.Properties.ToListAsync();
+            propertyId = props.FirstOrDefault()?.Id ?? "";
+        }
+
+        if (string.IsNullOrEmpty(propertyId)) throw new Exception("Property context not found");
+
+        var property = await _dbContext.Properties.FirstOrDefaultAsync(p => p.Id == propertyId);
+        var settingsJson = property?.SettingsJson;
+        double autoAmount = 0;
+        double autoPercent = 0;
+        if (!string.IsNullOrEmpty(settingsJson))
+        {
+            try
+            {
+                var settings = JsonDocument.Parse(settingsJson);
+                if (settings.RootElement.TryGetProperty("autoApproveDiscountAmount", out var amtEl)) autoAmount = amtEl.GetDouble();
+                if (settings.RootElement.TryGetProperty("autoApproveDiscountPercent", out var pctEl)) autoPercent = pctEl.GetDouble();
+            }
+            catch { }
+        }
+
+        bool requiresApproval = false;
+        if (amount > autoAmount && autoAmount > 0) requiresApproval = true;
+        if (percentage > autoPercent && autoPercent > 0) requiresApproval = true;
+
+        string? approverId = null;
+        if (requiresApproval)
+        {
+            if (string.IsNullOrEmpty(managerPin))
+                return new { requiresApproval = true };
+
+            var allStaff = await _dbContext.Staff.Where(s => s.PropertyId == propertyId && s.PosPinHash != null).ToListAsync();
+            var approver = allStaff.FirstOrDefault(s => BCrypt.Net.BCrypt.Verify(managerPin, s.PosPinHash));
+            if (approver == null || (approver.Role != "MANAGER" && approver.Role != "ADMIN"))
+                throw new Exception("Invalid manager PIN or insufficient permissions");
+            approverId = approver.Id;
+        }
+
+        using var transaction = await _dbContext.Database.BeginTransactionAsync();
+        try
+        {
+            var approvalId = Guid.NewGuid().ToString();
+            LocalOutboxEvent? evt = null;
+
+            if (targetType == "RESERVATION_ROOM")
+            {
+                var resRoomId = root.GetProperty("reservationRoomId").GetString();
+                var resRoom = await _dbContext.ReservationRooms.FirstOrDefaultAsync(r => r.Id == resRoomId);
+                if (resRoom == null) throw new Exception("Reservation Room not found");
+
+                resRoom.DiscountType = discountType;
+                resRoom.DiscountAmount = (decimal)amount;
+                resRoom.DiscountPercent = (decimal)percentage;
+                resRoom.DiscountReason = reason;
+                resRoom.DiscountApprovalId = approvalId;
+
+                evt = new LocalOutboxEvent
+                {
+                    Id = approvalId,
+                    PropertyId = propertyId,
+                    DeviceId = deviceId,
+                    OperatorId = userId,
+                    AggregateType = "RESERVATION_ROOM",
+                    AggregateId = resRoomId,
+                    AggregateVersion = 1,
+                    EventType = "DISCOUNT_APPLIED",
+                    Sequence = 1,
+                    PayloadJson = JsonSerializer.Serialize(new {
+                        discountType, discountAmount = amount, discountPercent = percentage, reason, approverId
+                    })
+                };
+            }
+            else if (targetType == "FOLIO_ITEM")
+            {
+                var folioId = root.GetProperty("folioId").GetString();
+                var targetFolioItemId = root.GetProperty("targetFolioItemId").GetString();
+                var folio = await _dbContext.Folios.FirstOrDefaultAsync(f => f.Id == folioId);
+                if (folio == null) throw new Exception("Folio not found");
+
+                // Inject discount transaction directly into TransactionsJson
+                var transactions = string.IsNullOrEmpty(folio.TransactionsJson) ? new List<JsonElement>() : JsonSerializer.Deserialize<List<JsonElement>>(folio.TransactionsJson) ?? new List<JsonElement>();
+                
+                var discountItem = new Dictionary<string, object>
+                {
+                    { "id", Guid.NewGuid().ToString() },
+                    { "folioId", folio.Id },
+                    { "businessDate", DateTime.UtcNow.ToString("yyyy-MM-dd") },
+                    { "type", "DISCOUNT" },
+                    { "source", "MANUAL" },
+                    { "description", reason ?? "Discount Approved (Offline)" },
+                    { "quantity", 1 },
+                    { "unitAmount", -amount },
+                    { "amount", -amount },
+                    { "baseAmount", -amount },
+                    { "postedBy", userId },
+                    { "discountApprovalId", approvalId },
+                    { "targetFolioItemId", targetFolioItemId }
+                };
+
+                transactions.Add(JsonSerializer.SerializeToElement(discountItem));
+                folio.TransactionsJson = JsonSerializer.Serialize(transactions);
+                
+                folio.TotalCharges -= (decimal)amount;
+                folio.IsDirty = true;
+                folio.UpdatedAt = DateTime.UtcNow;
+
+                evt = new LocalOutboxEvent
+                {
+                    Id = approvalId,
+                    PropertyId = propertyId,
+                    DeviceId = deviceId,
+                    OperatorId = userId,
+                    AggregateType = "FOLIO",
+                    AggregateId = folio.Id,
+                    AggregateVersion = folio.Version,
+                    EventType = "FOLIO_DISCOUNT_APPLIED",
+                    Sequence = folio.LocalSequence++,
+                    PayloadJson = JsonSerializer.Serialize(discountItem)
+                };
+            }
+            else // POS_ORDER
+            {
+                var orderId = root.GetProperty("orderId").GetString();
+                var order = await _dbContext.PosOrders.Include(o => o.Items).FirstOrDefaultAsync(o => o.Id == orderId);
+                if (order == null) throw new Exception("Order not found");
+                await AssertNightAuditAllowsAsync(order.PropertyId, order.BusinessDate);
+
+                double subtotal = (double)order.Items.Sum(i => i.Quantity * i.Price);
+                double effectiveDiscount = amount > 0 ? amount : subtotal * (percentage / 100);
+
+                order.Discount = (decimal)effectiveDiscount;
+                order.Total = (decimal)subtotal + order.Tax + order.ServiceCharge - order.Discount;
+                order.UpdatedAt = DateTime.UtcNow;
+
+                evt = new LocalOutboxEvent
+                {
+                    Id = approvalId,
+                    PropertyId = propertyId,
+                    DeviceId = deviceId,
+                    OperatorId = userId,
+                    AggregateType = "POS_ORDER",
+                    AggregateId = order.Id,
+                    AggregateVersion = 1,
+                    EventType = "DISCOUNT_APPLIED",
+                    Sequence = 1,
+                    PayloadJson = JsonSerializer.Serialize(new {
+                        amount = effectiveDiscount, percentage, reason, approverId
+                    })
+                };
+            }
+
+            if (evt != null) _dbContext.OutboxEvents.Add(evt);
+            await _dbContext.SaveChangesAsync();
+            await transaction.CommitAsync();
+
+            return new { success = true, approvalId };
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync();
+            throw new Exception($"Failed to apply discount: {ex.Message}");
+        }
+    }
+
     public async Task<LocalPosOrder> UpdateOrderStatusAsync(string orderId, string status, string reason, string userId, string deviceId)
     {
         var order = await _dbContext.PosOrders

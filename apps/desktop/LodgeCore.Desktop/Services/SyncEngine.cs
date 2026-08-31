@@ -1228,6 +1228,11 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                         if (el.TryGetProperty("checkOut", out var rco) && rco.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(rco.GetString(), out var rcod)) rr.CheckOutDate = rcod;
                         rr.Adults = el.TryGetProperty("adults", out var radl) ? radl.GetInt32() : 1;
                         rr.Children = el.TryGetProperty("children", out var rchl) ? rchl.GetInt32() : 0;
+                        rr.DiscountType = el.TryGetProperty("discountType", out var dt) && dt.ValueKind != System.Text.Json.JsonValueKind.Null ? dt.GetString() : null;
+                        if (el.TryGetProperty("discountAmount", out var da) && da.ValueKind != System.Text.Json.JsonValueKind.Null && decimal.TryParse(da.GetString() ?? da.GetRawText(), out var dav)) rr.DiscountAmount = dav;
+                        if (el.TryGetProperty("discountPercent", out var dp) && dp.ValueKind != System.Text.Json.JsonValueKind.Null && decimal.TryParse(dp.GetString() ?? dp.GetRawText(), out var dpv)) rr.DiscountPercent = dpv;
+                        rr.DiscountReason = el.TryGetProperty("discountReason", out var drea) && drea.ValueKind != System.Text.Json.JsonValueKind.Null ? drea.GetString() : null;
+                        rr.DiscountApprovalId = el.TryGetProperty("discountApprovalId", out var dai) && dai.ValueKind != System.Text.Json.JsonValueKind.Null ? dai.GetString() : null;
                         
                         dbContext.ReservationRooms.Add(rr);
                     }

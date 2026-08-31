@@ -695,6 +695,12 @@ model ReservationRoom {
   rateAmount Decimal @db.Decimal(18, 4)
   currency   String
 
+  discountType       String? // 'PERCENTAGE', 'FIXED_AMOUNT'
+  discountAmount     Decimal? @db.Decimal(18, 4)
+  discountPercent    Decimal? @db.Decimal(5, 2)
+  discountReason     String?
+  discountApprovalId String?
+
   status String // 'ACTIVE', 'CANCELLED', 'NO_SHOW'
 
   createdAt DateTime @default(now()) @db.Timestamptz
@@ -957,6 +963,9 @@ model FolioItem {
   taxId            String? @db.Uuid
   discountId       String? @db.Uuid
   posTransactionId String?
+  discountApprovalId String?
+  targetFolioItemId  String? @db.Uuid
+
 
   voidedAt   DateTime? @db.Timestamptz
   voidedBy   String?   @db.Uuid
@@ -3476,7 +3485,15 @@ enum ApprovalRequestStatus {
   PENDING
   APPROVED
   REJECTED
+  CANCELLED
   EXPIRED
+}
+
+enum ApprovalExecutionStatus {
+  NOT_APPLIED
+  APPLYING
+  APPLIED
+  FAILED
 }
 
 model ApprovalRequest {
@@ -3485,8 +3502,9 @@ model ApprovalRequest {
   property   Property @relation(fields: [propertyId], references: [id])
   outletId   String?  @db.Uuid
 
-  type   String // 'REFUND', 'VOID', 'DISCOUNT', 'INVENTORY_ADJUSTMENT'
-  status ApprovalRequestStatus @default(PENDING)
+  type            String // 'REFUND', 'VOID', 'DISCOUNT', 'INVENTORY_ADJUSTMENT'
+  status          ApprovalRequestStatus   @default(PENDING)
+  executionStatus ApprovalExecutionStatus @default(NOT_APPLIED)
 
   requestedBy String   @db.Uuid // Staff ID
   requestedAt DateTime @default(now()) @db.Timestamptz
@@ -3498,7 +3516,8 @@ model ApprovalRequest {
   currency String?
 
   reason         String
-  details        Json? // Detailed payload/snapshot of the request
+  details        Json? // Payload/Context
+  snapshot       Json? // Immutable snapshot of what was approved
   idempotencyKey String? @unique
 
   expiresAt DateTime? @db.Timestamptz

@@ -23,6 +23,7 @@ import { CategoryTileGrid } from '@/components/pos/CategoryTileGrid';
 import { ProductCardStepper } from '@/components/pos/ProductCardStepper';
 // PosStaffStrip removed from header — orders accessible via sidebar
 import { ChargeModal } from '@/components/pos/ChargeModal';
+import { DiscountModal } from '@/components/pos/DiscountModal';
 import { ActionSuccessModal } from '@/components/pos/ActionSuccessModal';
 import { WaiterTicketsModal } from '@/components/pos/WaiterTicketsModal';
 import { MySalesModal } from '@/components/pos/MySalesModal';
@@ -103,6 +104,7 @@ export default function PosApp() {
   const [showMyOrders, setShowMyOrders] = useState(false);
   const [showActiveOrders, setShowActiveOrders] = useState(false);
   const [showChargeModal, setShowChargeModal] = useState(false);
+  const [showDiscountModal, setShowDiscountModal] = useState(false);
   const [isPrintingCustomerReceipt, setIsPrintingCustomerReceipt] = useState(false);
   const [activeOrderType, setActiveOrderType] = useState<string>('TABLE');
   const [activeDisplayName, setActiveDisplayName] = useState<string>('');
@@ -1171,23 +1173,33 @@ export default function PosApp() {
                 </button>
               )}
               {currentOrderId && (
-                <button
-                  className={`w-full h-11 font-black text-sm tracking-wide rounded-xl transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 flex items-center justify-center gap-2 touch-manipulation ${
-                    cart.some(item => !item.fired) 
-                      ? 'bg-white border-2 border-indigo-100 text-indigo-600 hover:border-indigo-200' 
-                      : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/25'
-                  }`}
-                  onClick={() => setShowChargeModal(true)}
-                  disabled={isProcessing}
-                >
-                  <CreditCard className="w-4 h-4" />
-                  CHARGE
-                </button>
+                <div className="flex gap-2 w-full">
+                  <button
+                    className={`flex-1 h-11 font-black text-sm tracking-wide rounded-xl transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 flex items-center justify-center gap-2 touch-manipulation bg-white border-2 border-slate-200 text-slate-700 hover:border-slate-300`}
+                    onClick={() => setShowDiscountModal(true)}
+                    disabled={isProcessing}
+                  >
+                    <Percent className="w-4 h-4" />
+                    DISCOUNT
+                  </button>
+                  <button
+                    className={`flex-1 h-11 font-black text-sm tracking-wide rounded-xl transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 flex items-center justify-center gap-2 touch-manipulation ${
+                      cart.some(item => !item.fired) 
+                        ? 'bg-white border-2 border-indigo-100 text-indigo-600 hover:border-indigo-200' 
+                        : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/25'
+                    }`}
+                    onClick={() => setShowChargeModal(true)}
+                    disabled={isProcessing}
+                  >
+                    <CreditCard className="w-4 h-4" />
+                    CHARGE
+                  </button>
+                </div>
               )}
             </div>
           </div>
         </div>
-        )}{/* end cartOpen */}
+        )}
 
           </div>{/* end content+cart row */}
         </div>{/* end main workspace */}
@@ -1342,6 +1354,17 @@ export default function PosApp() {
         posSessionId={posSessionId}
         bankingModel={bankingModel}
         currentOperatorId={activeOperator?.id}
+      />
+
+      {/* Discount Modal */}
+      <DiscountModal
+        isOpen={showDiscountModal}
+        orderId={currentOrderId || ''}
+        orderTotal={total}
+        onClose={() => setShowDiscountModal(false)}
+        onSuccess={() => {
+          setTableRefreshTrigger(Date.now());
+        }}
       />
 
       {/* My Sales */}

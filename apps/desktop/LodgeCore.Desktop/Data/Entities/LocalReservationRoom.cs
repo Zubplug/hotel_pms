@@ -16,5 +16,11 @@ public class LocalReservationRoom
     public int Adults { get; set; } = 1;
     public int Children { get; set; } = 0;
 
+    public string? DiscountType { get; set; }
+    public decimal? DiscountAmount { get; set; }
+    public decimal? DiscountPercent { get; set; }
+    public string? DiscountReason { get; set; }
+    public string? DiscountApprovalId { get; set; }
+
     public string Status { get; set; } = "PENDING";
 }

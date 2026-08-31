@@ -15,12 +15,13 @@ import { FrontDeskAddPaymentDialog } from './FrontDeskAddPaymentDialog';
 import { FrontDeskExtendStayDialog } from './FrontDeskExtendStayDialog';
 import { FrontDeskQuickCheckoutDialog } from './FrontDeskQuickCheckoutDialog';
 import { FrontDeskReceiptDialog } from './FrontDeskReceiptDialog';
+import { FrontDeskDiscountModal } from './FrontDeskDiscountModal';
 import { FolioSection } from '../reservations/FolioSection';
 import { FrontDeskCardInformationSection } from './FrontDeskCardInformationSection';
 import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
 import { toast } from 'sonner';
 import { formatRoomNumber } from '@/lib/format-room';
-import { LogIn, User, MapPin, CalendarClock, CreditCard, Receipt, LogOut, ChevronDown, Edit3, XCircle, Loader2 } from 'lucide-react';
+import { LogIn, User, MapPin, CalendarClock, CreditCard, Receipt, LogOut, ChevronDown, Edit3, XCircle, Loader2, Percent } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,6 +40,7 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
   const [isExtendStayOpen, setIsExtendStayOpen] = useState(false);
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
   const [isQuickCheckoutOpen, setIsQuickCheckoutOpen] = useState(false);
+  const [isDiscountOpen, setIsDiscountOpen] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
 
   const resRoom = reservation.reservationRooms?.[0];
@@ -174,6 +176,37 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
                   <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Check-Out</p>
                   <p className="font-bold text-slate-800">{resRoom?.checkOut ? format(new Date(resRoom.checkOut), 'MMM d, yyyy') : 'N/A'}</p>
                 </div>
+              </div>
+
+              {/* Rate & Discount display */}
+              <div className="pt-4 border-t border-slate-100 flex items-center justify-between mt-4">
+                <div>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Nightly Rate</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-bold text-slate-900 text-lg">{formatCurrency(Number(resRoom?.rateAmount || 0))}</p>
+                    {resRoom?.discountAmount > 0 && (
+                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
+                        -{formatCurrency(Number(resRoom?.discountAmount || 0))} discount
+                      </Badge>
+                    )}
+                    {resRoom?.discountPercent > 0 && (
+                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
+                        -{resRoom?.discountPercent}% discount
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+                {canManageReservation && resRoom && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 rounded-lg font-semibold text-emerald-700 border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800"
+                    onClick={() => setIsDiscountOpen(true)}
+                  >
+                    <Percent className="w-3.5 h-3.5 mr-1.5" />
+                    Apply Discount
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -349,6 +382,20 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
           onOpenChange={setIsQuickCheckoutOpen}
           propertyId={reservation.propertyId}
           initialReservation={reservation}
+        />
+      )}
+      
+      {isDiscountOpen && resRoom && (
+        <FrontDeskDiscountModal
+          isOpen={isDiscountOpen}
+          targetType="RESERVATION_ROOM"
+          targetId={resRoom.id}
+          targetTotal={Number(resRoom.rateAmount || 0)}
+          onClose={() => setIsDiscountOpen(false)}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ['reservation', reservation.id] });
+            setIsDiscountOpen(false);
+          }}
         />
       )}
     </div>

@@ -254,6 +254,122 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         return { status: 'EXECUTED', approval: updated, creditId: credit.id };
       }
 
+      if (approval.type === 'DISCOUNT') {
+        if (approval.status !== 'PENDING') throw new Error('CONFLICT');
+        
+        // Ensure not self-approving (unless user is SuperAdmin or Owner maybe)
+        if (approval.requestedBy === user.id && !user.isSuperAdmin) {
+           throw new Error('SELF_APPROVAL');
+        }
+
+        // Apply discount execution logic based on target type
+        const snapshot = (approval.snapshot || {}) as any;
+        const targetType = snapshot.targetType || 'POS_ORDER'; // fallback to existing
+        
+        if (targetType === 'RESERVATION_ROOM') {
+            const reservationRoomId = snapshot.reservationRoomId;
+            const originalRate = Number(snapshot.originalRate || 0);
+            
+            const resRoom = await tx.reservationRoom.findUnique({ 
+                where: { id: reservationRoomId },
+                include: { reservation: true }
+            });
+            if (!resRoom) throw new Error('RESERVATION_ROOM_NOT_FOUND');
+            if (resRoom.reservation.propertyId !== approval.propertyId) throw new Error('PROPERTY_MISMATCH');
+            
+            // Validate original rate hasn't changed
+            if (Number(resRoom.rateAmount) !== originalRate) {
+                throw new Error('RATE_CHANGED_REJECT_APPROVAL');
+            }
+            
+            // Validate valid discount type (PERCENTAGE or FIXED_AMOUNT)
+            const dType = snapshot.discountType;
+            if (dType !== 'PERCENTAGE' && dType !== 'FIXED_AMOUNT') {
+                throw new Error('INVALID_DISCOUNT_TYPE');
+            }
+            
+            await tx.reservationRoom.update({
+                where: { id: reservationRoomId },
+                data: {
+                    discountType: dType,
+                    discountAmount: dType === 'FIXED_AMOUNT' ? Number(snapshot.discountAmount || 0) : 0,
+                    discountPercent: dType === 'PERCENTAGE' ? Number(snapshot.discountPercent || 0) : 0,
+                    discountReason: snapshot.reason || approval.reason,
+                    discountApprovalId: approval.id
+                }
+            });
+            
+        } else if (targetType === 'FOLIO_ITEM') {
+            const targetFolioItemId = snapshot.targetFolioItemId;
+            const folioId = snapshot.folioId;
+            
+            const originalItem = await tx.folioItem.findUnique({ where: { id: targetFolioItemId } });
+            if (!originalItem) throw new Error('FOLIO_ITEM_NOT_FOUND');
+            
+            const folio = await tx.folio.findUnique({ where: { id: folioId } });
+            if (!folio) throw new Error('FOLIO_NOT_AVAILABLE');
+            
+            const amount = Number(snapshot.discountAmount || approval.amount || 0);
+            
+            await tx.folioItem.create({
+                data: {
+                    folioId: folio.id,
+                    businessDate: new Date(), // This adheres to the current system's businessDate logic
+                    type: 'DISCOUNT',
+                    source: 'MANUAL',
+                    description: snapshot.reason || approval.reason || 'Discount Approved',
+                    quantity: 1,
+                    unitAmount: -amount,
+                    amount: -amount,
+                    baseAmount: -amount,
+                    currency: folio.currency,
+                    postedBy: user.id,
+                    posTransactionId: approval.id, // Legacy reference
+                    discountApprovalId: approval.id, // Structured reference
+                    targetFolioItemId: targetFolioItemId // Structured reference
+                }
+            });
+
+            await tx.folio.update({
+                where: { id: folio.id },
+                data: { 
+                    totalCharges: { decrement: amount }, 
+                    balance: { decrement: amount } 
+                }
+            });
+            
+        } else if (targetType === 'POS_ORDER') {
+            // Apply it to the POS order
+            const orderId = snapshot.orderId;
+            const amount = Number(snapshot.discountAmount || approval.amount || 0);
+            const percentage = Number(snapshot.discountPercent || snapshot.percentage || 0);
+            
+            const order = await tx.posOrder.findUnique({ where: { id: orderId } });
+            if (!order) throw new Error('ORDER_NOT_FOUND');
+            
+            const subtotal = Number(order.subtotal);
+            const effectiveDiscount = amount > 0 ? amount : subtotal * (percentage / 100);
+            const updatedTotal = subtotal + Number(order.tax) + Number(order.serviceCharge) - effectiveDiscount;
+            
+            await tx.posOrder.update({
+              where: { id: orderId },
+              data: { discount: effectiveDiscount, total: updatedTotal, updatedAt: new Date() }
+            });
+        }
+        
+        const updated = await tx.approvalRequest.update({
+          where: { id: approval.id },
+          data: { 
+             status: 'APPROVED', 
+             reviewedBy: user.id, 
+             reviewedAt: new Date(),
+             executionStatus: 'APPLIED'
+          }
+        });
+
+        return { status: 'EXECUTED', approval: updated };
+      }
+
       // 4. State Transition
       const updatedApproval = await tx.approvalRequest.update({
         where: { id: (await params).id },

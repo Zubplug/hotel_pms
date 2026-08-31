@@ -179,21 +179,38 @@ export async function executeNightAudit(
 
             if (!existingCharge) {
               const activeRoom = reservation.reservationRooms[0];
-              const baseRate = activeRoom ? Number(activeRoom.rateAmount || 0) : Number(reservation.ratePlan?.baseRate || 0);
+              const originalRate = activeRoom ? Number(activeRoom.rateAmount || 0) : Number(reservation.ratePlan?.baseRate || 0);
+              
+              // Calculate discount if applicable
+              let discountDeduction = 0;
+              if (activeRoom && activeRoom.discountType) {
+                if (activeRoom.discountType === 'FIXED_AMOUNT') {
+                  discountDeduction = Number(activeRoom.discountAmount || 0);
+                } else if (activeRoom.discountType === 'PERCENTAGE') {
+                  discountDeduction = originalRate * (Number(activeRoom.discountPercent || 0) / 100);
+                }
+              }
+              
+              const effectiveRate = Math.max(0, originalRate - discountDeduction);
+              const discountApprovalId = activeRoom?.discountApprovalId || null;
+
               await tx.folioItem.create({
                 data: {
                   folioId: mainFolio.id,
                   businessDate,
                   type: 'CHARGE',
                   source: 'ROOM_CHARGE',
-                  description: `Room Charge for ${businessDate.toISOString().split('T')[0]}`,
+                  description: discountDeduction > 0 
+                    ? `Room Charge for ${businessDate.toISOString().split('T')[0]} (incl. discount)` 
+                    : `Room Charge for ${businessDate.toISOString().split('T')[0]}`,
                   quantity: 1,
-                  unitAmount: baseRate,
-                  amount: baseRate,
-                  baseAmount: baseRate,
+                  unitAmount: effectiveRate,
+                  amount: effectiveRate,
+                  baseAmount: effectiveRate, // Base amount tracks the effective amount actually posted
                   currency: property.supportedCurrencies[0] || 'NGN',
                   postedBy: userId || 'SYSTEM',
-                  nightAuditRunId: auditRun.id
+                  nightAuditRunId: auditRun.id,
+                  discountApprovalId: discountApprovalId
                 }
               });
 
@@ -201,8 +218,8 @@ export async function executeNightAudit(
                 await tx.folio.update({
                   where: { id: mainFolio.id },
                   data: { 
-                    balance: { increment: baseRate },
-                    totalCharges: { increment: baseRate }
+                    balance: { increment: effectiveRate },
+                    totalCharges: { increment: effectiveRate }
                   }
                 });
 
@@ -212,7 +229,7 @@ export async function executeNightAudit(
                   propertyId,
                   guestId: reservation.primaryGuestId,
                   reservationId: reservation.id,
-                  amount: baseRate,
+                  amount: effectiveRate,
                   currency: property.supportedCurrencies[0] || 'NGN',
                   source: 'NIGHT_AUDIT_ROOM_CHARGE',
                   description: `Applied guest credit to room charge - ${businessDate.toISOString().split('T')[0]}`,

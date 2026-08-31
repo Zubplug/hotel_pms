@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@hotel-pms/db";
-import { randomUUID } from "crypto";
+import crypto, { randomUUID } from "crypto";
 import { InventoryService } from "@/lib/inventory/InventoryService";
 import { isNightAuditCutoverActive } from "@/lib/night-audit-guard";
 import { requireOrganizationContext } from "@/lib/organization-access";
@@ -374,6 +374,47 @@ export async function POST(req: NextRequest) {
                  }
              }
           }
+          else if (event.eventType === 'DISCOUNT_APPLIED') {
+              const orderId = event.aggregateId;
+              const { amount, percentage, reason, requestHash, approverId, newTotal } = payload;
+              
+              const property = await tx.property.findUnique({ where: { id: event.propertyId } });
+              const settings = property?.settings as any || {};
+              const autoAmount = settings.autoApproveDiscountAmount || 0;
+              const autoPercent = settings.autoApproveDiscountPercent || 0;
+
+              let requiresApproval = false;
+              if (amount > autoAmount && autoAmount > 0) requiresApproval = true;
+              if (percentage > autoPercent && autoPercent > 0) requiresApproval = true;
+
+              if (requiresApproval && !approverId) {
+                  throw new Error('SECURITY: Discount requires manager approval but none was provided');
+              }
+              
+              const expectedPayload = `${event.propertyId}:${terminal.outletId}:${event.deviceId}:${orderId}:${amount}:${percentage}:${reason}:${event.operatorId}:${approverId || ''}`;
+              const expectedHash = crypto.createHash('sha256').update(expectedPayload).digest('hex');
+              
+              if (requestHash !== expectedHash) {
+                  throw new Error(`SECURITY: Discount hash mismatch. Expected ${expectedHash} but got ${requestHash}`);
+              }
+
+              const order = await tx.posOrder.findUnique({ where: { id: orderId } });
+              if (!order) {
+                  throw new Error(`RETRYABLE_ORDER_NOT_FOUND: POS order ${orderId} has not reached the cloud yet`);
+              }
+
+              const subtotal = Number(order.subtotal);
+              const effectiveDiscount = amount > 0 ? amount : subtotal * (percentage / 100);
+
+              await tx.posOrder.update({
+                  where: { id: orderId },
+                  data: {
+                      discount: effectiveDiscount,
+                      total: newTotal || (subtotal + Number(order.tax) + Number(order.serviceCharge) - effectiveDiscount),
+                      updatedAt: new Date()
+                  }
+              });
+          }
           else if (event.eventType === 'ORDER_UPDATED') {
               const existingOrder = await tx.posOrder.findUnique({ where: { id: event.aggregateId }, select: { id: true } });
               if (!existingOrder) {
@@ -488,6 +529,49 @@ export async function POST(req: NextRequest) {
               );
               // ─────────────────────────────────────────────────────────────
           }
+          else if (event.eventType === 'OFFLINE_DISCOUNT_APPROVAL') {
+              // 1. Cloud reconciliation of offline manager PIN approvals
+              // The desktop POS verified the manager PIN. Now we validate and persist the approval.
+              const amount = Math.abs(Number(payload.Amount ?? payload.amount ?? 0));
+              const percentage = Number(payload.Percentage ?? payload.percentage ?? 0);
+              
+              if (amount === 0 && percentage === 0) throw new Error('Discount amount or percentage must be positive');
+              
+              // Find if this idempotency key already exists to prevent duplicate applications
+              const existing = await tx.approvalRequest.findUnique({
+                 where: { idempotencyKey: event.idempotencyKey }
+              });
+              
+              if (!existing) {
+                 await tx.approvalRequest.create({
+                    data: {
+                       propertyId: propertyId,
+                       outletId: terminal.outletId,
+                       type: 'DISCOUNT',
+                       // An offline approval is inherently APPROVED by the local manager PIN check.
+                       // However, if the payload indicates a cloud validation failure later, this could change.
+                       status: 'APPROVED',
+                       executionStatus: 'APPLIED', // If the desktop already applied it to the order
+                       requestedBy: operatorId,
+                       reviewedBy: isUuid(payload.ManagerId || payload.managerId) ? (payload.ManagerId || payload.managerId) : null,
+                       reviewedAt: new Date(event.occurredAt),
+                       amount: amount,
+                       reason: payload.Reason || payload.reason || 'Offline Manager Approval',
+                       snapshot: {
+                          offlineApproval: true,
+                          percentage: percentage,
+                          orderId: payload.OrderId || payload.orderId,
+                          terminalId: terminalId,
+                          deviceId: event.deviceId,
+                       },
+                       idempotencyKey: event.idempotencyKey
+                    }
+                 });
+                 // We don't execute a financial mutation here because the Desktop client 
+                 // will simultaneously sync the updated ORDER_ITEMS with the discounted subtotal.
+                 // The server will accept the discount field ONLY IF an ApprovalRequest exists.
+              }
+          }
           else if (event.eventType === 'ORDER_ITEMS_ADDED') {
               const parentOrderId = event.aggregateId;
               const parentOrder = await tx.posOrder.findUnique({ where: { id: parentOrderId }, select: { id: true } });
@@ -506,6 +590,33 @@ export async function POST(req: NextRequest) {
                   ? nestedItems.filter((item: any) => nestedItemIds.has(item.Id || item.id))
                   : nestedItems));
               for (const item of items) {
+                  const discountAmount = Number(item.Discount ?? item.discount ?? 0);
+                  
+                  if (discountAmount > 0) {
+                      // 5. Strict Cloud Reconciliation / Validation for Offline Approvals
+                      // Before blindly accepting a discount amount from the desktop client,
+                      // verify that an authorized manager PIN override event was synced.
+                      const recentApprovals = await tx.approvalRequest.findMany({
+                          where: {
+                              propertyId: propertyId,
+                              type: 'DISCOUNT',
+                              status: 'APPROVED'
+                          },
+                          orderBy: { createdAt: 'desc' },
+                          take: 50
+                      });
+                      
+                      const hasApproval = recentApprovals.some((a: any) => 
+                          (a.snapshot as any)?.orderId === (item.OrderId || item.orderId || event.aggregateId)
+                      );
+                      
+                      if (!hasApproval) {
+                          // Flagging/rejection logic for suspicious approvals
+                          console.warn(`[sync] request=${requestId} rejected UNAUTHORIZED_DISCOUNT on order ${event.aggregateId}`);
+                          throw new Error(`UNAUTHORIZED_DISCOUNT: Discount of ${discountAmount} applied to item ${item.Id || item.id} without a valid Manager PIN approval event.`);
+                      }
+                  }
+
                   await tx.posOrderItem.create({
                       data: {
                           id: item.Id || item.id || crypto.randomUUID(),
@@ -515,7 +626,7 @@ export async function POST(req: NextRequest) {
                           quantity: Number(item.Quantity ?? item.quantity ?? 0),
                           unitPrice: Number(item.UnitPrice ?? item.unitPrice ?? 0),
                           subtotal: Number(item.Subtotal ?? item.subtotal ?? item.Total ?? item.total ?? 0),
-                          discount: Number(item.Discount ?? item.discount ?? 0),
+                          discount: discountAmount,
                           taxRate: Number(item.TaxRate ?? item.taxRate ?? 0),
                           taxAmount: Number(item.TaxAmount ?? item.taxAmount ?? 0),
                           total: Number(item.Total ?? item.total ?? 0),
