@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { verifyMobileToken } from '@/lib/mobile-auth';
+import { requireOrganizationContext } from '@/lib/organization-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,11 +16,22 @@ export async function GET(req: NextRequest) {
     const cursor = searchParams.get('cursor'); // notification ID
     const category = searchParams.get('category'); // 'Finance', 'Operations', etc.
 
+    const ctx = await requireOrganizationContext(session.id);
+    const activePropertyId = session.propertyId || ctx.propertyIds[0];
+
     // Base query logic
     const whereClause: any = {
       recipientId: session.id,
       channel: 'in_app',
+      organizationId: ctx.organizationId,
     };
+
+    if (activePropertyId) {
+      whereClause.OR = [
+        { propertyId: activePropertyId },
+        { propertyId: null } // Org-wide notifications
+      ];
+    }
 
     if (category && category !== 'All') {
       if (category === 'Critical') {
