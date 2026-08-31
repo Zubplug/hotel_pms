@@ -108,26 +108,28 @@ export function FolioSection({ reservation }: { reservation: any }) {
   const renderItemActions = (item: any) => {
     const linkedPayment = findLinkedPayment(item);
     if (!linkedPayment) {
-      <div className="flex flex-wrap items-center gap-1.5">
-        {(item.type === 'CHARGE' || item.type === 'ROOM_CHARGE') && !isClosed && (
+      return (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {(item.type === 'CHARGE' || item.type === 'ROOM_CHARGE') && !isClosed && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
+              onClick={() => setDiscountTarget({ id: item.id, total: Number(item.amount) })}
+            >
+              <Percent className="mr-1 h-3 w-3" /> Discount
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 px-2 text-xs text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
-            onClick={() => setDiscountTarget({ id: item.id, total: Number(item.amount) })}
+            className="h-7 px-2 text-xs text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+            onClick={printFolio}
           >
-            <Percent className="mr-1 h-3 w-3" /> Discount
+            <Printer className="mr-1 h-3 w-3" /> Print folio
           </Button>
-        )}
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 px-2 text-xs text-slate-700 hover:bg-slate-100 hover:text-slate-900"
-          onClick={printFolio}
-        >
-          <Printer className="mr-1 h-3 w-3" /> Print folio
-        </Button>
-      </div>
+        </div>
+      );
     }
 
     return (
