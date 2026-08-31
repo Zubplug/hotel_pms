@@ -7,12 +7,49 @@ public class Rfv2016LockProvider : ILockProvider
 {
     private readonly ILogger<Rfv2016LockProvider> _logger;
     private const string VendorId = "RFV2016";
+    private readonly string _workingDir;
+    private readonly object _syncLock = new object();
 
     public string VendorName => VendorId;
 
     public Rfv2016LockProvider(ILogger<Rfv2016LockProvider> logger)
     {
         _logger = logger;
+        
+        // The RFV2016 DLL relies on launching '.\W-R-Card\WriteCard.exe' and writing TXT files.
+        // In MSIX apps, the BaseDirectory is read-only and CurrentDirectory is often System32.
+        // We must copy the folder to LocalAppData and set it as the CurrentDirectory.
+        string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        _workingDir = Path.Combine(localAppData, "Rfv2016WorkingDir");
+        
+        lock (_syncLock)
+        {
+            if (!Directory.Exists(_workingDir))
+            {
+                Directory.CreateDirectory(_workingDir);
+            }
+            
+            string sourceWRCard = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "W-R-Card");
+            string targetWRCard = Path.Combine(_workingDir, "W-R-Card");
+            
+            if (Directory.Exists(sourceWRCard) && !Directory.Exists(targetWRCard))
+            {
+                CopyDirectory(sourceWRCard, targetWRCard);
+            }
+        }
+    }
+
+    private void CopyDirectory(string sourceDir, string destinationDir)
+    {
+        Directory.CreateDirectory(destinationDir);
+        foreach (var file in Directory.GetFiles(sourceDir))
+        {
+            File.Copy(file, Path.Combine(destinationDir, Path.GetFileName(file)), true);
+        }
+        foreach (var dir in Directory.GetDirectories(sourceDir))
+        {
+            CopyDirectory(dir, Path.Combine(destinationDir, Path.GetFileName(dir)));
+        }
     }
 
     public Task<bool> WaitForCardAsync(TimeSpan timeout, CancellationToken cancellationToken)
@@ -25,27 +62,37 @@ public class Rfv2016LockProvider : ILockProvider
     {
         return Task.Run(() =>
         {
-            try
+            lock (_syncLock)
             {
-                // Format: yyyymmddhhmm
-                string startStr = checkInDate.ToString("yyyyMMddHHmm");
-                string endStr = checkOutDate.ToString("yyyyMMddHHmm");
-
-                // nCode = "1" (new guest card)
-                // jLift = "0" (no elevator by default, or configurable if needed)
-                int res = Rfv2016LockSdkNative.W_Card(lockCode, startStr, endStr, "API", "1", "0");
-
-                if (res == (int)Rfv2016LockSdkNative.RfvError.SUCCESS)
+                string prevDir = Environment.CurrentDirectory;
+                try
                 {
-                    return LockResult.Ok(VendorId);
-                }
+                    Environment.CurrentDirectory = _workingDir;
+                    
+                    // Format: yyyymmddhhmm
+                    string startStr = checkInDate.ToString("yyyyMMddHHmm");
+                    string endStr = checkOutDate.ToString("yyyyMMddHHmm");
 
-                return LockResult.Fail(res.ToString(), GetErrorMessage(res), VendorId);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "RFV2016 encode failed");
-                return LockResult.Fail("-1", ex.Message, VendorId);
+                    // nCode = "1" (new guest card)
+                    // jLift = "0" (no elevator by default, or configurable if needed)
+                    int res = Rfv2016LockSdkNative.W_Card(lockCode, startStr, endStr, "API", "1", "0");
+
+                    if (res == (int)Rfv2016LockSdkNative.RfvError.SUCCESS)
+                    {
+                        return LockResult.Ok(VendorId);
+                    }
+
+                    return LockResult.Fail(res.ToString(), GetErrorMessage(res), VendorId);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "RFV2016 encode failed");
+                    return LockResult.Fail("-1", ex.Message, VendorId);
+                }
+                finally
+                {
+                    Environment.CurrentDirectory = prevDir;
+                }
             }
         });
     }
@@ -59,58 +106,68 @@ public class Rfv2016LockProvider : ILockProvider
     {
         return Task.Run(() =>
         {
-            try
+            lock (_syncLock)
             {
-                IntPtr ptr = Rfv2016LockSdkNative.R_Card(1);
-                string? resultStr = Marshal.PtrToStringAnsi(ptr);
-
-                if (string.IsNullOrEmpty(resultStr))
+                string prevDir = Environment.CurrentDirectory;
+                try
                 {
-                    return ReadCardResult.Fail("-1", "Read empty from encoder", VendorId);
-                }
+                    Environment.CurrentDirectory = _workingDir;
+                    
+                    IntPtr ptr = Rfv2016LockSdkNative.R_Card(1);
+                    string? resultStr = Marshal.PtrToStringAnsi(ptr);
 
-                // Check for numeric errors
-                if (int.TryParse(resultStr, out int errCode))
-                {
-                    if (errCode == (int)Rfv2016LockSdkNative.RfvError.NO_CARD_INFO)
+                    if (string.IsNullOrEmpty(resultStr))
                     {
-                        return ReadCardResult.Blank(VendorId);
+                        return ReadCardResult.Fail("-1", "Read empty from encoder", VendorId);
                     }
-                    if (errCode == (int)Rfv2016LockSdkNative.RfvError.NO_CARD)
+
+                    // Check for numeric errors
+                    if (int.TryParse(resultStr, out int errCode))
                     {
-                        return ReadCardResult.Fail(errCode.ToString(), "No Card", VendorId);
+                        if (errCode == (int)Rfv2016LockSdkNative.RfvError.NO_CARD_INFO)
+                        {
+                            return ReadCardResult.Blank(VendorId);
+                        }
+                        if (errCode == (int)Rfv2016LockSdkNative.RfvError.NO_CARD)
+                        {
+                            return ReadCardResult.Fail(errCode.ToString(), "No Card", VendorId);
+                        }
+                        return ReadCardResult.Fail(errCode.ToString(), GetErrorMessage(errCode), VendorId);
                     }
-                    return ReadCardResult.Fail(errCode.ToString(), GetErrorMessage(errCode), VendorId);
-                }
 
-                if (resultStr.StartsWith("WOFF"))
-                {
-                    return ReadCardResult.Blank(VendorId); // Cancelled
-                }
-
-                // Expected format: ok + 1101 + guest card + 2009-03-31 08: 00 + 2009-12-31 12: 00 + ...
-                if (resultStr.StartsWith("ok", StringComparison.OrdinalIgnoreCase))
-                {
-                    var parts = resultStr.Split('+');
-                    if (parts.Length >= 5)
+                    if (resultStr.StartsWith("WOFF"))
                     {
-                        string roomNo = parts[1].Trim();
-                        string checkIn = parts[3].Trim();
-                        string checkOut = parts[4].Trim();
-
-                        // Try to get card SNR if available (often the last part)
-                        string snr = parts.Length > 8 ? parts[parts.Length - 1].Trim() : "";
-                        
-                        return ReadCardResult.WithData(roomNo, snr, checkIn, checkOut, VendorId);
+                        return ReadCardResult.Blank(VendorId); // Cancelled
                     }
-                }
 
-                return ReadCardResult.Fail("-1", $"Unexpected response: {resultStr}", VendorId);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "RFV2016 read failed");
-                return ReadCardResult.Fail("-1", ex.Message, VendorId);
+                    // Expected format: ok + 1101 + guest card + 2009-03-31 08: 00 + 2009-12-31 12: 00 + ...
+                    if (resultStr.StartsWith("ok", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var parts = resultStr.Split('+');
+                        if (parts.Length >= 5)
+                        {
+                            string roomNo = parts[1].Trim();
+                            string checkIn = parts[3].Trim();
+                            string checkOut = parts[4].Trim();
+
+                            // Try to get card SNR if available (often the last part)
+                            string snr = parts.Length > 8 ? parts[parts.Length - 1].Trim() : "";
+                            
+                            return ReadCardResult.WithData(roomNo, snr, checkIn, checkOut, VendorId);
+                        }
+                    }
+
+                    return ReadCardResult.Fail("-1", $"Unexpected response: {resultStr}", VendorId);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "RFV2016 read failed");
+                    return ReadCardResult.Fail("-1", ex.Message, VendorId);
+                }
+                finally
+                {
+                    Environment.CurrentDirectory = prevDir;
+                }
             }
         });
     }
@@ -119,19 +176,28 @@ public class Rfv2016LockProvider : ILockProvider
     {
         return Task.Run(() =>
         {
-            try
+            lock (_syncLock)
             {
-                int res = Rfv2016LockSdkNative.Woff_Card();
-                if (res == (int)Rfv2016LockSdkNative.RfvError.SUCCESS)
+                string prevDir = Environment.CurrentDirectory;
+                try
                 {
-                    return LockResult.Ok(VendorId);
+                    Environment.CurrentDirectory = _workingDir;
+                    int res = Rfv2016LockSdkNative.Woff_Card();
+                    if (res == (int)Rfv2016LockSdkNative.RfvError.SUCCESS)
+                    {
+                        return LockResult.Ok(VendorId);
+                    }
+                    return LockResult.Fail(res.ToString(), GetErrorMessage(res), VendorId);
                 }
-                return LockResult.Fail(res.ToString(), GetErrorMessage(res), VendorId);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "RFV2016 cancel failed");
-                return LockResult.Fail("-1", ex.Message, VendorId);
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "RFV2016 cancel failed");
+                    return LockResult.Fail("-1", ex.Message, VendorId);
+                }
+                finally
+                {
+                    Environment.CurrentDirectory = prevDir;
+                }
             }
         });
     }
