@@ -3310,6 +3310,7 @@ model PosVoid {
   orderId     String   @db.Uuid
   order       PosOrder @relation(fields: [orderId], references: [id])
   orderItemId String?  @db.Uuid
+  replacedByItemId String? @db.Uuid
 
   reason       String
   authorizerId String? @db.Uuid

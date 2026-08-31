@@ -486,6 +486,9 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     },
   },
   approvals: {
+    requestItemModification: async (payload: any) => {
+      return invokeDesktop('approvals.requestItemModification', payload);
+    },
     requestDiscount: async (payload: any) => {
       return invokeDesktop('approvals.requestDiscount', payload);
     },

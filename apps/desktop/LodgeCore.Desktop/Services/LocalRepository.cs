@@ -2430,6 +2430,197 @@ public class LocalRepository
         return order;
     }
 
+    public async Task<object> RequestItemModificationAsync(string payloadJson, string userId, string deviceId, string sessionId)
+    {
+        using var document = System.Text.Json.JsonDocument.Parse(payloadJson);
+        var root = document.RootElement;
+
+        var action = root.GetProperty("action").GetString(); // "VOID" or "REPLACE"
+        var orderId = root.GetProperty("orderId").GetString();
+        var originalOrderItemId = root.GetProperty("originalOrderItemId").GetString();
+        var reason = root.TryGetProperty("reason", out var rsn) ? rsn.GetString() : "Customer changed mind";
+        var inventoryAction = root.TryGetProperty("inventoryAction", out var inv) ? inv.GetString() : "RESTOCK";
+        var managerPin = root.TryGetProperty("managerPin", out var pin) ? pin.GetString() : "";
+
+        var order = await _dbContext.PosOrders.Include(o => o.Items).FirstOrDefaultAsync(o => o.Id == orderId);
+        if (order == null) throw new Exception("Order not found");
+
+        var originalItem = order.Items.FirstOrDefault(i => i.Id == originalOrderItemId);
+        if (originalItem == null) throw new Exception("Original item not found");
+
+        var propertyId = order.PropertyId;
+        var property = await _dbContext.Properties.FirstOrDefaultAsync(p => p.Id == propertyId);
+        var settingsJson = property?.SettingsJson;
+        double autoApproveLimit = 0;
+
+        if (!string.IsNullOrEmpty(settingsJson))
+        {
+            try
+            {
+                var settings = System.Text.Json.JsonDocument.Parse(settingsJson);
+                if (settings.RootElement.TryGetProperty("replacementAutoApproveReductionAmount", out var amtEl)) 
+                    autoApproveLimit = amtEl.GetDouble();
+            }
+            catch { }
+        }
+
+        bool requiresApproval = action == "VOID"; // VOID defaults to true
+
+        // For Voids, bypass approval if it's a BAR item
+        if (action == "VOID")
+        {
+            var voidProduct = await _dbContext.PosProducts.FirstOrDefaultAsync(p => p.Id == originalItem.ProductId);
+            if (voidProduct != null)
+            {
+                var voidCategory = await _dbContext.PosCategories.FirstOrDefaultAsync(c => c.Id == voidProduct.CategoryId);
+                var resolvedStation = voidProduct.ProductionStation ?? voidCategory?.ProductionStation ?? "KITCHEN";
+                if (resolvedStation == "BAR")
+                {
+                    requiresApproval = false;
+                }
+            }
+        }
+
+        System.Text.Json.JsonElement replacementItemEl = default;
+        decimal originalPrice = originalItem.UnitPrice * originalItem.Quantity;
+        decimal replacementPrice = 0;
+
+        if (action == "REPLACE")
+        {
+            replacementItemEl = root.GetProperty("replacementItem");
+            replacementPrice = replacementItemEl.GetProperty("unitPrice").GetDecimal() * replacementItemEl.GetProperty("quantity").GetDecimal();
+            var priceReduction = originalPrice - replacementPrice;
+
+            if (replacementPrice == 0) requiresApproval = true; // Free replacement
+            else if (priceReduction > (decimal)autoApproveLimit) requiresApproval = true;
+        }
+
+        string? approverId = null;
+        if (requiresApproval)
+        {
+            if (string.IsNullOrEmpty(managerPin)) return new { requiresApproval = true };
+            
+            var allStaff = await _dbContext.Staff.Where(s => s.PropertyId == propertyId && s.PosPinHash != null).ToListAsync();
+            var approver = allStaff.FirstOrDefault(s => BCrypt.Net.BCrypt.Verify(managerPin, s.PosPinHash));
+            if (approver == null || (approver.Role != "MANAGER" && approver.Role != "ADMIN"))
+                throw new Exception("Invalid manager PIN or insufficient permissions");
+            approverId = approver.Id;
+        }
+
+        using var transaction = await _dbContext.Database.BeginTransactionAsync();
+        try
+        {
+            var voidId = Guid.NewGuid().ToString();
+            var operationId = Guid.NewGuid().ToString();
+
+            // Process Inventory for the original item if it was RESTOCKED
+            if (inventoryAction == "RESTOCK")
+            {
+                var product = await _dbContext.PosProducts.FirstOrDefaultAsync(p => p.Id == originalItem.ProductId);
+                if (product != null && product.InventoryMode == "STOCK")
+                {
+                    var stockTx = new LocalStockTransaction
+                    {
+                        Id = Guid.NewGuid().ToString(),
+                        PropertyId = propertyId,
+                        StockItemId = originalItem.ProductId ?? "",
+                        TransactionType = "ADJUSTMENT_ADD",
+                        Quantity = originalItem.Quantity,
+                        UnitCost = 0,
+                        TotalValue = 0,
+                        Source = "POS_VOID_RESTOCK",
+                        ReferenceId = orderId,
+                        OperationId = operationId,
+                        UserId = userId,
+                        Notes = "Restocked from Void",
+                        BusinessDate = order.BusinessDate
+                    };
+                    _dbContext.StockTransactions.Add(stockTx);
+                }
+            }
+
+            string? newOrderItemId = null;
+            if (action == "REPLACE")
+            {
+                newOrderItemId = replacementItemEl.GetProperty("id").GetString();
+                var newItem = new LocalPosOrderItem
+                {
+                    Id = newOrderItemId ?? Guid.NewGuid().ToString(),
+                    OrderId = order.Id,
+                    ProductId = replacementItemEl.GetProperty("productId").GetString(),
+                    ProductName = replacementItemEl.GetProperty("productName").GetString() ?? "Unknown",
+                    Quantity = replacementItemEl.GetProperty("quantity").GetDecimal(),
+                    UnitPrice = replacementItemEl.GetProperty("unitPrice").GetDecimal(),
+                    TaxRate = replacementItemEl.TryGetProperty("taxRate", out var taxEl) ? taxEl.GetDecimal() : 0,
+                    TaxAmount = replacementItemEl.TryGetProperty("taxAmount", out var taxAmtEl) ? taxAmtEl.GetDecimal() : 0,
+                    Total = replacementItemEl.GetProperty("unitPrice").GetDecimal() * replacementItemEl.GetProperty("quantity").GetDecimal(),
+                    CreatedAt = DateTime.UtcNow,
+                    Subtotal = replacementItemEl.GetProperty("unitPrice").GetDecimal() * replacementItemEl.GetProperty("quantity").GetDecimal(),
+                    Discount = 0
+                };
+                _dbContext.PosOrderItems.Add(newItem);
+            }
+
+            var posVoid = new LocalPosVoid
+            {
+                Id = voidId,
+                OrderId = order.Id,
+                OrderItemId = originalItem.Id,
+                ReplacedByItemId = newOrderItemId,
+                Reason = reason,
+                AuthorizerId = approverId,
+                OperationId = operationId,
+                BusinessDate = order.BusinessDate,
+                DeviceId = deviceId,
+                CreatedAt = DateTime.UtcNow
+            };
+            _dbContext.PosVoids.Add(posVoid);
+
+            originalItem.VoidReason = reason;
+            originalItem.Total = 0;
+            originalItem.Subtotal = 0;
+            originalItem.TaxAmount = 0;
+            originalItem.UnitPrice = 0;
+            
+            // Recalculate Order Totals
+            order.Subtotal = order.Items.Sum(i => i.Subtotal);
+            order.TaxAmount = order.Items.Sum(i => i.TaxAmount);
+            order.Total = order.Items.Sum(i => i.Total);
+            order.UpdatedAt = DateTime.UtcNow;
+
+            var evt = new LocalOutboxEvent
+            {
+                Id = operationId,
+                PropertyId = propertyId,
+                DeviceId = deviceId,
+                OperatorId = userId,
+                AggregateType = "POS_ORDER",
+                AggregateId = order.Id,
+                AggregateVersion = order.Version + 1,
+                EventType = action == "REPLACE" ? "ITEM_REPLACED" : "ITEM_VOIDED",
+                Sequence = 1,
+                PayloadJson = System.Text.Json.JsonSerializer.Serialize(new {
+                    action,
+                    originalOrderItemId = originalItem.Id,
+                    replacedByItemId = newOrderItemId,
+                    reason,
+                    inventoryAction,
+                    approverId
+                })
+            };
+            _dbContext.OutboxEvents.Add(evt);
+
+            await _dbContext.SaveChangesAsync();
+            await transaction.CommitAsync();
+            return new { success = true, requiresApproval = false, order };
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync();
+            throw new Exception($"Failed to modify item: {ex.Message}", ex);
+        }
+    }
+
     public async Task<object> RequestDiscountAsync(string payloadJson, string userId, string deviceId, string sessionId)
     {
         using var document = JsonDocument.Parse(payloadJson);

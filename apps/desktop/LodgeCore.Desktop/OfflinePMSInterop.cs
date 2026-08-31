@@ -1626,18 +1626,24 @@ public class OfflinePMSInterop
         }
     }
 
+    public async Task<string> RequestItemModificationAsync(string payloadJson)
+    {
+        return await ExceptionHandler.HandleAsync(async () =>
+        {
+            var posCtx = EnsurePosContext();
+            var res = await _repo.RequestItemModificationAsync(payloadJson, posCtx.StaffId, posCtx.DeviceId, posCtx.SessionId);
+            return SerializeResponse(res);
+        });
+    }
+
     public async Task<string> RequestDiscountAsync(string payloadJson)
     {
-        try
+        return await ExceptionHandler.HandleAsync(async () =>
         {
-            var posCtx = await _sessionManager.GetActiveContextAsync();
+            var posCtx = EnsurePosContext();
             var res = await _repo.RequestDiscountAsync(payloadJson, posCtx.StaffId, posCtx.DeviceId, posCtx.SessionId);
-            return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
-        }
-        catch (Exception ex)
-        {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
-        }
+            return SerializeResponse(res);
+        });
     }
 
     public async Task<string> UpdateOrderStatusAsync(string orderId, string status, string reason)

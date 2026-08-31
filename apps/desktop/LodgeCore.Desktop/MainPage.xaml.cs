@@ -529,6 +529,9 @@ public partial class MainPage : ContentPage
                         parameters?["status"]?.ToString() ?? "",
                         parameters?["reason"]?.ToString() ?? "");
                     break;
+                case "approvals.requestItemModification":
+                    responseData = await pmsInterop.RequestItemModificationAsync(parameters?.ToJsonString() ?? "{}");
+                    break;
                 case "approvals.requestDiscount":
                     responseData = await pmsInterop.RequestDiscountAsync(parameters?.ToJsonString() ?? "{}");
                     break;

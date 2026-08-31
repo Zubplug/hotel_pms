@@ -140,6 +140,7 @@ export interface LodgeCoreDataProvider {
     updateBatchStatus(batchId: string, status: string): Promise<{ data: any, error: string | null }>;
   };
   approvals: {
+    requestItemModification(payload: any): Promise<{ success: boolean, requiresApproval?: boolean, error?: string, order?: any }>;
     requestDiscount(payload: any): Promise<{ success: boolean, approvalId?: string, requiresApproval?: boolean, error?: string }>;
   };
   laundry: {

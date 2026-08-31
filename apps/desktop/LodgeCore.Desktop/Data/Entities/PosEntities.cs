@@ -281,6 +281,7 @@ public class LocalPosVoid
     [Key] public string Id { get; set; } = string.Empty;
     public string OrderId { get; set; } = string.Empty;
     public string? OrderItemId { get; set; }
+    public string? ReplacedByItemId { get; set; }
     public string Reason { get; set; } = string.Empty;
     public string? AuthorizerId { get; set; }
     public string? OperationId { get; set; }

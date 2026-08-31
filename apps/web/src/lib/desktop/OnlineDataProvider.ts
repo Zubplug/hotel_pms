@@ -475,6 +475,15 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
     },
   },
   approvals: {
+    requestItemModification: async (payload: any) => {
+      // Stub for online REST API
+      const res = await fetch(`/api/v1/pos/orders/${payload.orderId}/modification`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      return res.json();
+    },
     requestDiscount: async (payload: any) => {
       // NOTE: managerPin is intentionally ignored online for security. 
       // The backend will create a PENDING request if it requires approval.

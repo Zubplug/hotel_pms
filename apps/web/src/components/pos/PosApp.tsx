@@ -6,7 +6,7 @@ import {
   ShoppingCart, Search, Trash2, Plus, Minus, User, Utensils,
   Loader2, CreditCard, Banknote, LayoutGrid,
   ChefHat, Scissors, X, Building2, Send, Flame, Lock,
-  Sparkles, Star, Package2, PanelRightClose, PanelRightOpen
+  Sparkles, Star, Package2, PanelRightClose, PanelRightOpen, RefreshCcw
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AppSwitcher } from '@/components/layout/AppSwitcher';
@@ -36,6 +36,7 @@ import { KotPanel } from '@/components/pos/KotPanel';
 import { PosSidebar } from '@/components/pos/PosSidebar';
 import { PrinterSettingsView } from '@/components/pos/PrinterSettingsView';
 import { SyncCenterPanel } from '@/components/sync/SyncCenterPanel';
+import FiredItemActionsModal from '@/components/pos/FiredItemActionsModal';
 
 import { usePosOnlineStatus } from '@/lib/pos/usePosOnlineStatus';
 import { useLicenseGuard } from '@/lib/pos/useLicenseGuard';
@@ -98,6 +99,7 @@ export default function PosApp() {
   const operatorSwitchOverride = useRef(false);
   const [showSwitchPad, setShowSwitchPad] = useState(false);
   const [showMySales, setShowMySales] = useState(false);
+  const [itemToModify, setItemToModify] = useState<any | null>(null);
   const [showShiftBank, setShowShiftBank] = useState(false);
   const [showHandovers, setShowHandovers] = useState(false);
   const [showEmergencyModal, setShowEmergencyModal] = useState(false);
@@ -1081,6 +1083,15 @@ export default function PosApp() {
                         </button>
                       )}
 
+                      {hasFired && !hasPending && (
+                        <button
+                          onClick={() => setItemToModify(item)}
+                          className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-white border border-slate-200 text-slate-400 hover:text-amber-500 hover:border-amber-200 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm z-10"
+                        >
+                          <RefreshCcw className="w-3 h-3" />
+                        </button>
+                      )}
+
                       {/* Top row: name + total price */}
                       <div className="flex justify-between items-start gap-2">
                         <div className="flex flex-col min-w-0">
@@ -1426,6 +1437,18 @@ export default function PosApp() {
           <SyncCenterPanel onClose={() => setShowSyncCenter(false)} allowPosStaff />
         </div>
       )}
+
+      <FiredItemActionsModal
+        isOpen={!!itemToModify}
+        onClose={() => setItemToModify(null)}
+        item={itemToModify}
+        orderId={currentOrderId!}
+        onSuccess={(updatedOrder) => {
+          if (updatedOrder && updatedOrder.items) {
+            setCart(updatedOrder.items);
+          }
+        }}
+      />
     </div>
     </AutoLockScreen>
   );
