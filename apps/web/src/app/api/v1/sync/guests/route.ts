@@ -35,9 +35,10 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Build compound cursor where clause using the authenticated organization ID
+    // Build compound cursor where clause using the authenticated organization ID and property ID
     let whereClause: any = {
-      organizationId: authResult.organizationId
+      organizationId: authResult.organizationId,
+      propertyId: propertyId
     };
 
     if (cursorUpdatedAt && cursorId) {

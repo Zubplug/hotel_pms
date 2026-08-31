@@ -263,12 +263,16 @@ export async function POST(req: NextRequest) {
              // If a GuestId is provided, check if it exists in the cloud DB
              if (finalGuestId) {
                const existingGuest = await tx.guest.findUnique({ where: { id: finalGuestId } });
+               if (existingGuest && existingGuest.propertyId !== propertyId) {
+                 throw new Error("Guest does not belong to this property");
+               }
                if (!existingGuest && payload.Guest) {
                  // C# generated a local GuestId, but it's not in the cloud yet.
                  await tx.guest.create({
                    data: {
                      id: finalGuestId,
                      organizationId: property?.organizationId || '',
+                     propertyId,
                      firstName: payload.Guest.FirstName || 'Unknown',
                      lastName: payload.Guest.LastName || 'Guest',
                      email: payload.Guest.Email,
@@ -284,6 +288,7 @@ export async function POST(req: NextRequest) {
                const g = await tx.guest.create({
                  data: {
                    organizationId: property?.organizationId || '',
+                   propertyId,
                    firstName: payload.Guest.FirstName || 'Unknown',
                    lastName: payload.Guest.LastName || 'Guest',
                    email: payload.Guest.Email,
@@ -1187,8 +1192,10 @@ export async function POST(req: NextRequest) {
           else if (eventType === 'EDIT_GUEST' && aggregateType === 'GUEST') {
              const guestId = payload.guestId;
              if (guestId) {
-                await tx.guest.update({
-                  where: { id: guestId },
+                const existingGuest = await tx.guest.findUnique({ where: { id: guestId } });
+                if (existingGuest && existingGuest.propertyId === propertyId) {
+                   await tx.guest.update({
+                     where: { id: guestId },
                   data: {
                     firstName: payload.firstName,
                     lastName: payload.lastName,
@@ -1196,6 +1203,7 @@ export async function POST(req: NextRequest) {
                     phone: payload.phone
                   }
                 });
+                }
              }
           }
           else if (eventType === 'ROOM_STATUS_UPDATE' && aggregateType === 'ROOM') {
@@ -1317,7 +1325,8 @@ export async function POST(req: NextRequest) {
                          const existingGuest = await tx.guest.findFirst({
                              where: {
                                  phone: phone,
-                                 organizationId: property?.organizationId || ''
+                                 organizationId: property?.organizationId || '',
+                                 propertyId: propertyId
                              }
                          });
                          if (existingGuest) {
@@ -1327,6 +1336,7 @@ export async function POST(req: NextRequest) {
                                  data: {
                                      id: finalGuestId,
                                      organizationId: property?.organizationId || '',
+                                     propertyId,
                                      firstName: payload.guest.FirstName || payload.guest.firstName || 'Walk-In',
                                      lastName: payload.guest.LastName || payload.guest.lastName || 'Guest',
                                      phone: phone,

@@ -126,10 +126,12 @@ export async function POST(req: NextRequest) {
     const reservation = await prisma.$transaction(async (tx: any) => {
       // Resolve Guest
       let finalGuestId = guestId;
+      const prop = await tx.property.findUnique({ where: { id: propertyId } });
       if (!finalGuestId) {
         const newGuest = await tx.guest.create({
           data: {
-            organizationId: (await tx.property.findUnique({ where: { id: propertyId } }))?.organizationId || '',
+            organizationId: prop?.organizationId || '',
+            propertyId: propertyId,
             firstName: guestDetails.firstName,
             lastName: guestDetails.lastName,
             email: guestDetails.email,
@@ -137,6 +139,12 @@ export async function POST(req: NextRequest) {
           },
         });
         finalGuestId = newGuest.id;
+      } else {
+        // Validate that the provided guestId belongs to this property
+        const existingGuest = await tx.guest.findUnique({ where: { id: finalGuestId } });
+        if (!existingGuest || existingGuest.propertyId !== propertyId) {
+          throw new Error('Guest not found or does not belong to this property');
+        }
       }
 
       const confirmationNumber = 'RES-' + Math.floor(Math.random() * 1000000).toString().padStart(6, '0');

@@ -308,13 +308,11 @@ export async function GET(req: NextRequest) {
     });
 
     let allGuests: any[] = [];
-    if (property.organizationId) {
-      allGuests = await prisma.guest.findMany({
-        where: buildOrganizationWhere({ organizationId: property.organizationId }),
-        take: limit,
-        orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }]
-      });
-    }
+    allGuests = await prisma.guest.findMany({
+      where: buildWhere({ propertyId }),
+      take: limit,
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }]
+    });
 
     // ---- Merge and Paginate ---------------------------------------------
     

@@ -15,6 +15,8 @@ export async function GET(req: NextRequest) {
 
     const guests = await prisma.guest.findMany({
       where: {
+        organizationId: ctx.organizationId,
+        propertyId: { in: [...ctx.propertyIds] },
         ...(search
           ? {
               OR: [

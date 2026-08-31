@@ -152,10 +152,12 @@ export async function POST(req: NextRequest) {
           const lockId = numericPhone ? Number(BigInt(numericPhone) % BigInt(2147483647)) : 123456789;
           await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockId})`;
           // Try to reuse guest by phone number
+          const prop = await tx.property.findUnique({ where: { id: propertyId } });
           const existingGuest = await tx.guest.findFirst({
               where: { 
                   phone: walkInDetails.phone,
-                  organizationId: (await tx.property.findUnique({ where: { id: propertyId } }))?.organizationId || ''
+                  organizationId: prop?.organizationId || '',
+                  propertyId: propertyId
               }
           });
           if (existingGuest) {
@@ -163,7 +165,8 @@ export async function POST(req: NextRequest) {
           } else {
               const newGuest = await tx.guest.create({
                   data: {
-                      organizationId: (await tx.property.findUnique({ where: { id: propertyId } }))?.organizationId || '',
+                      organizationId: prop?.organizationId || '',
+                      propertyId: propertyId,
                       firstName: walkInDetails.firstName,
                       lastName: walkInDetails.lastName || '',
                       phone: walkInDetails.phone,
