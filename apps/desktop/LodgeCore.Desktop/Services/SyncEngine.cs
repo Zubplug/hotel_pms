@@ -1064,6 +1064,7 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
 
                     var g = existing ?? new LodgeCore.Desktop.Data.Entities.LocalGuest { Id = id };
                     g.OrganizationId = el.TryGetProperty("organizationId", out var org) && org.ValueKind != System.Text.Json.JsonValueKind.Null ? org.GetString() ?? "" : "";
+                    g.PropertyId = el.TryGetProperty("propertyId", out var prop) && prop.ValueKind != System.Text.Json.JsonValueKind.Null ? prop.GetString() ?? "" : "";
                     g.FirstName = el.TryGetProperty("firstName", out var fn) && fn.ValueKind != System.Text.Json.JsonValueKind.Null ? fn.GetString() ?? "" : "";
                     g.LastName = el.TryGetProperty("lastName", out var ln) && ln.ValueKind != System.Text.Json.JsonValueKind.Null ? ln.GetString() ?? "" : "";
                     g.Email = el.TryGetProperty("email", out var em) && em.ValueKind != System.Text.Json.JsonValueKind.Null ? em.GetString() : null;
@@ -2806,6 +2807,7 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                             {
                                 Id = id,
                                 OrganizationId = el.TryGetProperty("organizationId", out var org) && org.ValueKind != System.Text.Json.JsonValueKind.Null ? org.GetString() ?? "" : "",
+                                PropertyId = el.TryGetProperty("propertyId", out var prop) && prop.ValueKind != System.Text.Json.JsonValueKind.Null ? prop.GetString() ?? "" : "",
                                 FirstName = el.TryGetProperty("firstName", out var fn) && fn.ValueKind != System.Text.Json.JsonValueKind.Null ? fn.GetString() ?? "" : "",
                                 LastName = el.TryGetProperty("lastName", out var ln) && ln.ValueKind != System.Text.Json.JsonValueKind.Null ? ln.GetString() ?? "" : "",
                                 Email = el.TryGetProperty("email", out var em) && em.ValueKind != System.Text.Json.JsonValueKind.Null ? em.GetString() : null,

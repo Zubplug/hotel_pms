@@ -1092,6 +1092,7 @@ public class OfflinePMSInterop
                 var newGuest = new LodgeCore.Desktop.Data.Entities.LocalGuest {
                     Id = Guid.NewGuid().ToString(),
                     OrganizationId = "",
+                    PropertyId = res.PropertyId,
                     FirstName = guestDetails.GetProperty("firstName").GetString() ?? "",
                     LastName = guestDetails.GetProperty("lastName").GetString() ?? "",
                     Email = guestDetails.TryGetProperty("email", out var email) ? email.GetString() : null,
