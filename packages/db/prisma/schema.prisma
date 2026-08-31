@@ -84,6 +84,7 @@ model Property {
   cashHandovers            CashHandover[]
   bankDeposits             BankDeposit[]
   buildings                Building[]
+  guests                   Guest[]
   roomTypes                RoomType[]
   rooms                    Room[]
   amenities                Amenity[]
@@ -754,32 +755,32 @@ enum TransactionExceptionStatus {
 
 model TransactionException {
   id String @id @default(uuid()) @db.Uuid
-  
-  paymentId String? @db.Uuid
+
+  paymentId String?  @db.Uuid
   payment   Payment? @relation(fields: [paymentId], references: [id])
-  
-  posPaymentId String? @db.Uuid
+
+  posPaymentId String?     @db.Uuid
   posPayment   PosPayment? @relation(fields: [posPaymentId], references: [id])
-  
+
   status TransactionExceptionStatus @default(OPEN)
-  
+
   questionReason String
-  questionedById String @db.Uuid
+  questionedById String   @db.Uuid
   questionedAt   DateTime @default(now()) @db.Timestamptz(3)
-  
+
   proposedResolution TransactionExceptionReason?
   resolutionNotes    String?
-  requestedById      String? @db.Uuid
-  requestedAt        DateTime? @db.Timestamptz(3)
-  
+  requestedById      String?                     @db.Uuid
+  requestedAt        DateTime?                   @db.Timestamptz(3)
+
   rejectionReason String?
-  rejectedById    String? @db.Uuid
+  rejectedById    String?   @db.Uuid
   rejectedAt      DateTime? @db.Timestamptz(3)
-  
-  approvedById String? @db.Uuid
+
+  approvedById String?   @db.Uuid
   approvedAt   DateTime? @db.Timestamptz(3)
-  
-  propertyId   String @db.Uuid
+
+  propertyId   String   @db.Uuid
   businessDate DateTime @db.Timestamptz(3)
 
   @@index([propertyId])
@@ -966,12 +967,11 @@ model FolioItem {
   baseAmount   Decimal  @db.Decimal(18, 4)
   exchangeRate Decimal? @db.Decimal(18, 8)
 
-  taxId            String? @db.Uuid
-  discountId       String? @db.Uuid
-  posTransactionId String?
+  taxId              String? @db.Uuid
+  discountId         String? @db.Uuid
+  posTransactionId   String?
   discountApprovalId String?
   targetFolioItemId  String? @db.Uuid
-
 
   voidedAt   DateTime? @db.Timestamptz
   voidedBy   String?   @db.Uuid
@@ -1046,13 +1046,13 @@ model Payment {
   syncedAt             DateTime? @db.Timestamptz
 
   // Transaction Verification
-  verificationStatus   TransactionVerificationStatus @default(UNVERIFIED)
-  verifiedAt           DateTime? @db.Timestamptz
-  verifiedById         String?   @db.Uuid
-  verificationNotes    String?
+  verificationStatus TransactionVerificationStatus @default(UNVERIFIED)
+  verifiedAt         DateTime?                     @db.Timestamptz
+  verifiedById       String?                       @db.Uuid
+  verificationNotes  String?
 
-  refunds        Refund[]
-  refundRequests RefundRequest[]
+  refunds               Refund[]
+  refundRequests        RefundRequest[]
   transactionExceptions TransactionException[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
@@ -3301,10 +3301,10 @@ model PosPayment {
   paidAt DateTime? @db.Timestamptz
 
   // Transaction Verification
-  verificationStatus   TransactionVerificationStatus @default(UNVERIFIED)
-  verifiedAt           DateTime? @db.Timestamptz
-  verifiedById         String?   @db.Uuid
-  verificationNotes    String?
+  verificationStatus    TransactionVerificationStatus @default(UNVERIFIED)
+  verifiedAt            DateTime?                     @db.Timestamptz
+  verifiedById          String?                       @db.Uuid
+  verificationNotes     String?
   transactionExceptions TransactionException[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
@@ -3312,11 +3312,11 @@ model PosPayment {
 }
 
 model PosVoid {
-  id          String   @id @default(uuid()) @db.Uuid
-  orderId     String   @db.Uuid
-  order       PosOrder @relation(fields: [orderId], references: [id])
-  orderItemId String?  @db.Uuid
-  replacedByItemId String? @db.Uuid
+  id               String   @id @default(uuid()) @db.Uuid
+  orderId          String   @db.Uuid
+  order            PosOrder @relation(fields: [orderId], references: [id])
+  orderItemId      String?  @db.Uuid
+  replacedByItemId String?  @db.Uuid
 
   reason       String
   authorizerId String? @db.Uuid
@@ -3861,9 +3861,9 @@ model CashHandover {
   receivedAt        DateTime?
   notes             String?
 
-  actualAmount      Decimal?       @db.Decimal(18, 4)
-  variance          Decimal?       @db.Decimal(18, 4)
-  reasonCode        VarianceReasonCode?
+  actualAmount Decimal?            @db.Decimal(18, 4)
+  variance     Decimal?            @db.Decimal(18, 4)
+  reasonCode   VarianceReasonCode?
 
   posSessions       PosSession[]
   frontdeskSessions FrontdeskSession[]
