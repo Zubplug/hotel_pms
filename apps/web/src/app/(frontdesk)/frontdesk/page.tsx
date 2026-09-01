@@ -180,7 +180,7 @@ export default function ReceptionistDashboardPage() {
               {greeting}, <span className="capitalize">{firstName}</span>
             </h1>
             <p className="text-slate-500 mt-2 font-medium text-lg min-h-[28px]">
-              <ClientOnlyDate date={bDate} format="date" locale="en-GB" options={{ weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }} />
+              <ClientOnlyDate date={bDate} format="date" locale="en-GB" options={{ timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }} />
             </p>
           </div>
           

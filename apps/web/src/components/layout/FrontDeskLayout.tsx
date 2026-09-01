@@ -208,7 +208,7 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
           <div className="hidden xl:flex flex-col items-end justify-center min-w-[120px]">
             {businessDate ? (
               <span className="text-xs font-semibold text-foreground leading-tight">
-                {businessDate.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
+                {businessDate.toLocaleDateString('en-GB', { timeZone: 'UTC', weekday: 'short', day: 'numeric', month: 'short' })}
               </span>
             ) : (
               <span className="h-4 w-24 bg-muted animate-pulse rounded" />

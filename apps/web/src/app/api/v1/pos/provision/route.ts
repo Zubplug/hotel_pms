@@ -12,6 +12,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 });
     }
 
+    const cleanPropertyId = propertyId.trim();
+    const cleanOutletId = outletId.trim();
+
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(cleanPropertyId)) {
+      return NextResponse.json({ success: false, error: 'Invalid Property ID format. Please ensure you copied the entire 36-character UUID.' }, { status: 400 });
+    }
+    if (!uuidRegex.test(cleanOutletId)) {
+      return NextResponse.json({ success: false, error: 'Invalid Outlet ID format. Please ensure you copied the entire 36-character UUID.' }, { status: 400 });
+    }
+
     // 1. Authenticate Admin (Simplified for MVP, would normally use bcrypt on admin credentials)
     const adminUser = await prisma.user.findUnique({
       where: { email }
@@ -32,7 +43,7 @@ export async function POST(req: NextRequest) {
     }
 
     const property = await prisma.property.findUnique({
-      where: { id: propertyId }
+      where: { id: cleanPropertyId }
     });
 
     if (!property) {
@@ -50,8 +61,8 @@ export async function POST(req: NextRequest) {
         name: terminalName,
         terminalType: (terminalType === 'STATIONARY' || !terminalType) ? 'RESTAURANT_POS' : terminalType,
         organisationId: adminStaff.organizationId,
-        propertyId,
-        outletId,
+        propertyId: cleanPropertyId,
+        outletId: cleanOutletId,
         deviceCredentialHash,
         registrationState: 'REGISTERED',
         licenseState: 'VALID',
@@ -65,9 +76,9 @@ export async function POST(req: NextRequest) {
       select: { id: true, firstName: true, lastName: true }
     });
 
-    const categories = await prisma.productCategory.findMany({ where: { outletId } });
-    const products = await prisma.posProduct.findMany({ where: { propertyId } });
-    const outlet = await prisma.posOutlet.findUnique({ where: { id: outletId } });
+    const categories = await prisma.productCategory.findMany({ where: { outletId: cleanOutletId } });
+    const products = await prisma.posProduct.findMany({ where: { propertyId: cleanPropertyId } });
+    const outlet = await prisma.posOutlet.findUnique({ where: { id: cleanOutletId } });
 
     // 4. Return Snapshot
     return NextResponse.json({
