@@ -1,0 +1,18 @@
+[req]
+default_bits = 4096
+prompt = no
+default_md = sha256
+distinguished_name = dn
+x509_extensions = v3_req
+
+[dn]
+C=NG
+ST=Lagos
+L=Lagos
+O=LodgeCore
+CN=LodgeCore
+
+[v3_req]
+keyUsage = digitalSignature
+extendedKeyUsage = codeSigning
+basicConstraints = CA:FALSE

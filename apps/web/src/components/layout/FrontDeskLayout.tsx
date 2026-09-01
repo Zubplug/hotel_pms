@@ -106,7 +106,7 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
     ? session.user.email.slice(0, 2).toUpperCase()
     : '??';
 
-  const role = (session?.user as any)?.role || 'STAFF';
+  const role = ((session?.user as any)?.role || 'STAFF').toUpperCase();
   const isSuperAdmin = (session?.user as any)?.isSuperAdmin;
 
   return (
