@@ -1998,17 +1998,17 @@ public class OfflinePMSInterop
                 throw new Exception("General Cashier cannot open the POS bank. A POS cashier must open it.");
             }
 
-            if (!string.IsNullOrEmpty(deviceId) && !string.IsNullOrEmpty(outletId))
+            if (!string.IsNullOrEmpty(deviceId))
             {
                 if (actualBankingModel == "SERVER_BANKING")
                 {
-                    var openSession = await _repo.GetActiveServerBankAsync(staff.Id, propertyId, outletId);
+                    var openSession = await _repo.GetActiveServerBankAsync(staff.Id, propertyId, outletId ?? string.Empty);
                     if (openSession != null)
                     {
                         posSessionId = openSession.Id;
                     }
                 }
-                else
+                else if (!string.IsNullOrEmpty(outletId))
                 {
                     var openSession = await _repo.GetActiveCentralBankAsync(propertyId, outletId);
                     if (openSession != null)

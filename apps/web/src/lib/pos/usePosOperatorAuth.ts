@@ -252,10 +252,11 @@ export function usePosOperatorAuth({
           openingCash,
         });
 
-        if (res?.data?.sessionId) {
-          localStorage.setItem('lodgecore_pos_session_id', res.data.sessionId);
+        const returnedSessionId = res?.data?.sessionId || res?.data?.id;
+        if (returnedSessionId) {
+          localStorage.setItem('lodgecore_pos_session_id', returnedSessionId);
           localStorage.setItem('lodgecore_pos_operator_token', pendingToken);
-          onAuthenticated(verifiedOperator, pendingToken, { bankingModel: 'CENTRAL_CASHIER', sessionId: res.data.sessionId });
+          onAuthenticated(verifiedOperator, pendingToken, { bankingModel: 'CENTRAL_CASHIER', sessionId: returnedSessionId });
         } else {
           setError(res?.error || 'Failed to open shift. Try again.');
         }

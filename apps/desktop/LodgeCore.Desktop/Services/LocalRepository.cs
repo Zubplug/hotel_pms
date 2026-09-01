@@ -5080,7 +5080,7 @@ public class LocalRepository
     public async Task<LodgeCore.Desktop.Data.Entities.LocalPosSession?> GetActiveServerBankAsync(string staffId, string propertyId, string outletId)
     {
         return await _dbContext.PosSessions
-            .FirstOrDefaultAsync(s => s.PrimaryOperatorId == staffId && s.OutletId == outletId && s.Status == "OPEN" && s.BankType == "SERVER");
+            .FirstOrDefaultAsync(s => s.PrimaryOperatorId == staffId && (string.IsNullOrEmpty(outletId) || s.OutletId == outletId) && s.Status == "OPEN" && s.BankType == "SERVER");
     }
 
     /// <summary>
