@@ -30,15 +30,16 @@ public class Rfv2016LockProvider : ILockProvider
             }
             
             // The VB6 SDK apps appear to have a hardcoded log directory in their strings.
-            // If this is missing, they might throw Error 76 (Path not found) when trying to write logs.
+            // We have patched the EXEs to use .\Lock_Rec_ instead of C:\Lock_Rec_, so we create it in CWD.
             try
             {
-                if (!Directory.Exists(@"C:\Lock_Rec_"))
+                string lockRecDir = Path.Combine(_workingDir, "Lock_Rec_");
+                if (!Directory.Exists(lockRecDir))
                 {
-                    Directory.CreateDirectory(@"C:\Lock_Rec_");
+                    Directory.CreateDirectory(lockRecDir);
                 }
             }
-            catch { /* Ignore if no permission to write to C: */ }
+            catch { /* Ignore */ }
             
             string sourceWRCard = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "W-R-Card");
             if (!Directory.Exists(sourceWRCard))
