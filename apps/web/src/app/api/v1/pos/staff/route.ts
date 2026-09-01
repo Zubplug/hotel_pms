@@ -22,29 +22,23 @@ export async function GET(req: NextRequest) {
     let staff;
 
     if (outletId) {
-      // Outlet-scoped: only return staff explicitly assigned to this outlet
-      // This ensures cashiers/waiters/waitresses only see themselves in the POS PIN screen
+      // Outlet-scoped: only return staff explicitly assigned to this outlet.
+      // Prisma to-one includes don't support `where`, so we filter in JS.
       const outletAccess = await prisma.staffPosOutletAccess.findMany({
         where: { outletId },
-        include: {
-          staff: {
-            where: {
-              isActive: true,
-              position: { in: ['WAITER', 'WAITRESS', 'CASHIER'] },
-            },
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              department: true,
-              position: true,
-            }
-          }
-        }
+        include: { staff: true }
       });
       staff = outletAccess
         .map(a => a.staff)
-        .filter(Boolean);
+        .filter(s => s && s.isActive && ['WAITER', 'WAITRESS', 'CASHIER'].includes(s.position))
+        .map(s => ({
+          id: s!.id,
+          firstName: s!.firstName,
+          lastName: s!.lastName,
+          department: s!.department,
+          position: s!.position,
+        }))
+        .sort((a, b) => a.firstName.localeCompare(b.firstName));
     } else {
       // Fallback: property-level query (for admin/manager views)
       staff = await prisma.staff.findMany({
