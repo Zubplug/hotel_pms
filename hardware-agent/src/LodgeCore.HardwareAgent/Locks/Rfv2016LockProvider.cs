@@ -29,6 +29,17 @@ public class Rfv2016LockProvider : ILockProvider
                 Directory.CreateDirectory(_workingDir);
             }
             
+            // The VB6 SDK apps appear to have a hardcoded log directory in their strings.
+            // If this is missing, they might throw Error 76 (Path not found) when trying to write logs.
+            try
+            {
+                if (!Directory.Exists(@"C:\Lock_Rec_"))
+                {
+                    Directory.CreateDirectory(@"C:\Lock_Rec_");
+                }
+            }
+            catch { /* Ignore if no permission to write to C: */ }
+            
             string sourceWRCard = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "W-R-Card");
             if (!Directory.Exists(sourceWRCard))
             {
@@ -40,6 +51,18 @@ public class Rfv2016LockProvider : ILockProvider
             if (Directory.Exists(sourceWRCard))
             {
                 CopyDirectory(sourceWRCard, targetWRCard);
+                
+                // Dynamically patch nConDB.ini to use the absolute path
+                string iniPath = Path.Combine(targetWRCard, "nConDB.ini");
+                if (File.Exists(iniPath))
+                {
+                    string iniContent = File.ReadAllText(iniPath);
+                    // Replace nDbpath line with the absolute path
+                    string pattern = @"nDbpath=.*";
+                    string replacement = "nDbpath=" + targetWRCard + "\\";
+                    iniContent = System.Text.RegularExpressions.Regex.Replace(iniContent, pattern, replacement);
+                    File.WriteAllText(iniPath, iniContent);
+                }
             }
         }
     }
