@@ -237,12 +237,40 @@ export async function POST(req: NextRequest) {
           if (event.eventType === 'POS_SESSION_STARTED') {
              const existingSession = await tx.posSession.findUnique({ where: { id: event.aggregateId }});
              if (!existingSession) {
+                 // The desktop sends its local identifier string (e.g. dev_xxx) as DeviceId.
+                 // PosSession.deviceId is a UUID FK — resolve it to the real PosDevice.id.
+                 const rawDeviceId = payload.DeviceId || event.deviceId;
+                 let resolvedDeviceId: string | null = null;
+
+                 if (isUuid(rawDeviceId)) {
+                   // Already a UUID — verify it exists
+                   const devById = await tx.posDevice.findUnique({ where: { id: rawDeviceId }, select: { id: true } });
+                   if (devById) resolvedDeviceId = devById.id;
+                 }
+                 if (!resolvedDeviceId && rawDeviceId) {
+                   // Identifier string — look up by identifier
+                   const devByIdent = await tx.posDevice.findUnique({ where: { identifier: String(rawDeviceId) }, select: { id: true } });
+                   if (devByIdent) resolvedDeviceId = devByIdent.id;
+                 }
+                 if (!resolvedDeviceId) {
+                   // Fallback: use any active device for this outlet
+                   const fallbackDev = await tx.posDevice.findFirst({
+                     where: { outletId: payload.OutletId || terminal.outletId, status: 'ACTIVE' },
+                     select: { id: true }
+                   });
+                   resolvedDeviceId = fallbackDev?.id ?? null;
+                 }
+
+                 if (!resolvedDeviceId) {
+                   throw new Error(`POS_DEVICE_NOT_FOUND: No active device found for outlet ${payload.OutletId || terminal.outletId}. Register a device first.`);
+                 }
+
                  await tx.posSession.create({
                      data: {
                          id: event.aggregateId,
                          propertyId: payload.PropertyId || terminal.propertyId,
                          outletId: payload.OutletId || terminal.outletId,
-                         deviceId: payload.DeviceId || event.deviceId,
+                         deviceId: resolvedDeviceId,
                          bankingModel: payload.BankingModel || 'SERVER_BANKING',
                          bankType: payload.BankType || 'SERVER',
                          primaryOperatorId: isUuid(payload.PrimaryOperatorId) ? payload.PrimaryOperatorId : operatorId,
@@ -256,13 +284,14 @@ export async function POST(req: NextRequest) {
                  });
              }
              
-             // Also create the Operator Session
+             // Also create the Operator Session.
+             // terminalId must be the PosTerminal UUID from the authenticated terminal context.
              const existingOpSession = await tx.posOperatorSession.findUnique({ where: { id: event.aggregateId }});
              if (!existingOpSession) {
                  await tx.posOperatorSession.create({
                      data: {
                          id: event.aggregateId,
-                         terminalId: event.deviceId,
+                         terminalId: terminal.id, // Use the authenticated terminal UUID, not raw event.deviceId
                          outletId: terminal.outletId,
                          operatorId,
                          status: "ACTIVE",
