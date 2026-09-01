@@ -22,13 +22,13 @@ public static class MauiProgram
         {
             var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
             // Retrieve configured provider, defaulting to rfv2016
-            var providerType = Microsoft.Maui.Storage.Preferences.Default.Get("LockProviderType", "hslock");
+            var providerType = Microsoft.Maui.Storage.Preferences.Default.Get("LockProviderType", "Elock");
             
             return providerType.ToLowerInvariant() switch
             {
                 "hslock" => new HsLockProvider(loggerFactory.CreateLogger<HsLockProvider>()),
                 "rfv2016" => new Rfv2016LockProvider(loggerFactory.CreateLogger<Rfv2016LockProvider>()),
-                _        => new HsLockProvider(loggerFactory.CreateLogger<HsLockProvider>()) // Enluns is the default
+                _        => new DelunsLockProvider(loggerFactory.CreateLogger<DelunsLockProvider>()) // Elock is the default
             };
         });
         builder.Services.AddSingleton<HardwareInterop>();
