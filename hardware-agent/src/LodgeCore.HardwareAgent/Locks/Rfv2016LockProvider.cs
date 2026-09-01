@@ -339,4 +339,10 @@ public class Rfv2016LockProvider : ILockProvider
             _ => $"Unknown error {code}"
         };
     }
+
+    public Task<LockResult> EncodeMasterCardAsync(DateTime? startDate, DateTime? endDate, CancellationToken cancellationToken)
+    {
+        // Not yet supported for Rfv2016 provider, as requested specifically for Deluns
+        return Task.FromResult(LockResult.Fail("-1", "Master Card encoding is only implemented for Deluns", VendorName));
+    }
 }

@@ -332,7 +332,7 @@ public class OfflinePMSInterop
         }
     }
 
-    public async Task<string> StartEmergencyBankAsync(string pin, string reason, string operatorToken)
+    public async Task<string> StartEmergencyBankAsync(string managerId, string pin, string reason, string operatorToken)
     {
         try
         {
@@ -349,10 +349,10 @@ public class OfflinePMSInterop
             }
 
             // Authenticate the Manager PIN
-            var managerRes = await _repo.ValidateSupervisorPinAsync(pin, desktopSession.PropertyId);
+            var managerRes = await _repo.AuthorizeManagerOverrideAsync(managerId, pin, desktopSession.PropertyId);
             if (managerRes == null)
             {
-                return JsonSerializer.Serialize(new { success = false, error = "Invalid manager PIN." }, _jsonOptions);
+                return JsonSerializer.Serialize(new { success = false, error = "Invalid manager PIN or insufficient permissions." }, _jsonOptions);
             }
 
             // Validate reason
@@ -377,6 +377,16 @@ public class OfflinePMSInterop
                 deviceId: desktopSession.DeviceId, 
                 outletId: posCtx.OutletId ?? "", 
                 propertyId: property.Id, 
+                reason: reason
+            );
+
+            _repo.LogOverrideAudit(
+                propertyId: property.Id,
+                operatorStaffId: primaryOperatorId,
+                managerStaffId: managerRes.Id,
+                action: "POS_EMERGENCY_CASH_BANK",
+                entityType: "PosSession",
+                entityId: posSessionId,
                 reason: reason
             );
 
@@ -726,7 +736,7 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
-    public async Task<string> ProcessCheckInAsync(string reservationId, bool bypassKeycard = false, string encodedRoomId = "", string? encodeData = null, bool overrideDeposit = false)
+    public async Task<string> ProcessCheckInAsync(string reservationId, bool bypassKeycard = false, string encodedRoomId = "", string? encodeData = null, bool overrideDeposit = false, string? managerId = null, string? managerPin = null, string? reason = null)
     {
         try
         {
@@ -763,7 +773,7 @@ public class OfflinePMSInterop
                 });
             }
 
-            var success = await _repo.ProcessCheckInAsync(reservationId, ctx.UserId, ctx.DeviceId, encodeData);
+            var success = await _repo.ProcessCheckInAsync(reservationId, ctx.UserId, ctx.DeviceId, encodeData, overrideDeposit, managerId, managerPin, reason);
             return JsonSerializer.Serialize(new { success }, _jsonOptions);
         }
         catch (Exception ex)
@@ -771,12 +781,12 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
-    public async Task<string> ProcessCheckOutAsync(string reservationId)
+    public async Task<string> ProcessCheckOutAsync(string reservationId, string? managerId = null, string? managerPin = null, string? reason = null)
     {
         try
         {
             var ctx = await GetSecureContextAsync();
-            var success = await _repo.ProcessCheckOutAsync(reservationId, ctx.UserId, ctx.DeviceId);
+            var success = await _repo.ProcessCheckOutAsync(reservationId, ctx.UserId, ctx.DeviceId, managerId, managerPin, reason);
             return JsonSerializer.Serialize(new { success }, _jsonOptions);
         }
         catch (Exception ex)
@@ -1053,6 +1063,19 @@ public class OfflinePMSInterop
         try
         {
             var data = (await _repo.GetRoomTypesAsync(propertyId)).Select(rt => new { id = rt.Id, name = rt.Name, description = rt.Description, baseRate = rt.BasePrice, maxOccupancy = rt.MaxOccupancy, totalRooms = rt.TotalRooms });
+            return JsonSerializer.Serialize(new { success = true, data }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
+    public async Task<string> GetCorporateAccountsAsync(string propertyId)
+    {
+        try
+        {
+            var data = (await _repo.GetCorporateAccountsAsync(propertyId)).Select(ca => new { id = ca.Id, name = ca.Name, code = ca.Code, contactPerson = ca.ContactPerson, contactEmail = ca.ContactEmail, contactPhone = ca.ContactPhone, ratePlanId = ca.RatePlanId, cityLedgerAccountId = ca.CityLedgerAccountId, creditLimit = ca.CreditLimit, exemptFromHighBalance = ca.ExemptFromHighBalance, depositPolicy = ca.DepositPolicy });
             return JsonSerializer.Serialize(new { success = true, data }, _jsonOptions);
         }
         catch (Exception ex)
@@ -2272,13 +2295,13 @@ public class OfflinePMSInterop
         }
     }
 
-    public async Task<string> CreateCashMovementAsync(string propertyId, string sessionId, decimal amount, string type, string reasonCode, string? notes, string? receiptReference, string? authorizerId)
+    public async Task<string> CreateCashMovementAsync(string propertyId, string sessionId, decimal amount, string type, string reasonCode, string? notes, string? receiptReference, string? managerId, string? managerPin)
     {
         try
         {
             var posCtx = await _sessionManager.GetActiveContextAsync();
             // Enforce identity
-            var movement = await _repo.RecordCashMovementAsync(posCtx.PropertyId, posCtx.SessionId, amount, type, reasonCode, notes, receiptReference, authorizerId, posCtx.StaffId, posCtx.DeviceId);
+            var movement = await _repo.RecordCashMovementAsync(posCtx.PropertyId, posCtx.SessionId, amount, type, reasonCode, notes, receiptReference, managerId, managerPin, posCtx.StaffId, posCtx.DeviceId);
             return JsonSerializer.Serialize(new { success = true, data = movement }, _jsonOptions);
         }
         catch (Exception ex)
@@ -2322,11 +2345,11 @@ public class OfflinePMSInterop
         } catch (Exception ex) { return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions); }
     }
 
-    public async Task<string> OpenSafeAsync(string propertyId, decimal amount, string managerPin)
+    public async Task<string> OpenSafeAsync(string propertyId, decimal amount, string managerId, string managerPin, string reason)
     {
         try {
             var ctx = await _sessionManager.GetActiveContextAsync();
-            var data = await _repo.OpenSafeAsync(propertyId, amount, managerPin, ctx.DeviceId);
+            var data = await _repo.OpenSafeAsync(propertyId, amount, managerId, managerPin, ctx.DeviceId, reason);
             return JsonSerializer.Serialize(new { success = true, data }, _jsonOptions);
         } catch (Exception ex) { return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions); }
     }
@@ -2339,11 +2362,11 @@ public class OfflinePMSInterop
         } catch (Exception ex) { return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions); }
     }
 
-    public async Task<string> RecordBankDepositAsync(string propertyId, decimal amount, string reference, string managerPin)
+    public async Task<string> RecordBankDepositAsync(string propertyId, decimal amount, string reference, string managerId, string managerPin, string reason)
     {
         try {
             var ctx = await _sessionManager.GetActiveContextAsync();
-            var data = await _repo.RecordBankDepositAsync(propertyId, amount, reference, managerPin, ctx.DeviceId);
+            var data = await _repo.RecordBankDepositAsync(propertyId, amount, reference, managerId, managerPin, ctx.DeviceId, reason);
             return JsonSerializer.Serialize(new { success = true, data }, _jsonOptions);
         } catch (Exception ex) { return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions); }
     }

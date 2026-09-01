@@ -6,6 +6,7 @@ public interface ILockProvider
 
     Task<bool> WaitForCardAsync(TimeSpan timeout, CancellationToken cancellationToken);
     Task<LockResult> EncodeCardAsync(string lockCode, DateTime checkInDate, DateTime checkOutDate, CancellationToken cancellationToken);
+    Task<LockResult> EncodeMasterCardAsync(DateTime? startDate, DateTime? endDate, CancellationToken cancellationToken);
     Task<DiagnosticResult> ReadDiagnosticAsync(CancellationToken cancellationToken);
 
     /// <summary>

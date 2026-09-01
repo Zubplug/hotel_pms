@@ -23,7 +23,7 @@ export async function POST(
 
     const reservation = await prisma.reservation.findUnique({
       where: { id },
-      select: { id: true, status: true, propertyId: true, reservationRooms: { include: { room: true } } },
+      select: { id: true, status: true, propertyId: true, corporateAccountId: true, reservationRooms: { include: { room: true } } },
     });
 
     if (!reservation) return errorResponse('NOT_FOUND', 'Reservation not found', 404);
@@ -57,7 +57,44 @@ export async function POST(
       }
 
       if (totalBalance > 0) {
-        throw new Error('PAYMENT_REQUIRED');
+        if (reservation.corporateAccountId) {
+          const corporateAccount = await tx.corporateAccount.findUnique({
+            where: { id: reservation.corporateAccountId }
+          });
+          if (!corporateAccount || !corporateAccount.cityLedgerAccountId) {
+            throw new Error('PAYMENT_REQUIRED');
+          }
+          
+          // Automatically route balance to City Ledger
+          for (const folio of folios) {
+            if (Number(folio.balance) > 0) {
+              await tx.cityLedgerEntry.create({
+                data: {
+                  accountId: corporateAccount.cityLedgerAccountId,
+                  propertyId: reservation.propertyId,
+                  reservationId: reservation.id,
+                  folioId: folio.id,
+                  amount: folio.balance,
+                  currency: 'NGN',
+                  type: 'TRANSFER_IN',
+                  reason: 'Auto-routed to City Ledger upon checkout',
+                  createdBy: session.user.id
+                }
+              });
+
+              await tx.folio.update({
+                where: { id: folio.id },
+                data: {
+                  balance: 0,
+                  totalPayments: { increment: folio.balance },
+                  version: { increment: 1 }
+                }
+              });
+            }
+          }
+        } else {
+          throw new Error('PAYMENT_REQUIRED');
+        }
       } else if (totalBalance < 0) {
         throw new Error('REFUND_REQUIRED');
       }

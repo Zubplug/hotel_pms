@@ -111,6 +111,34 @@ public class DelunsLockProvider : ILockProvider
         }
     }
 
+    public async Task<LockResult> EncodeMasterCardAsync(DateTime? startDate, DateTime? endDate, CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Encoding Deluns MASTER card...");
+        EnsureInitialized();
+        if (!_initialized) return LockResult.Fail("-999", $"SDK not initialized (Config error: {_lastInitError})", VendorName);
+
+        var cardSnr = new StringBuilder(20);
+        
+        // Use provided dates or default to now -> +10 years
+        string checkinStr = (startDate ?? DateTime.UtcNow).ToString(DateFormat);
+        string checkoutStr = (endDate ?? DateTime.UtcNow.AddYears(10)).ToString(DateFormat);
+        
+        int flags = 1; // 1 = master card
+
+        int result = NativeSdkBridge.TP_MakeGuestCardEx2(cardSnr, "", checkinStr, checkoutStr, flags, 0);
+
+        if (result == (int)LockSdkError.OPR_OK)
+        {
+            _logger.LogInformation("Deluns MASTER Card Encoding successful.");
+            return LockResult.Ok(VendorName);
+        }
+        else
+        {
+            _logger.LogError("Failed to encode Deluns MASTER card. SDK returned: {Error}", result);
+            return LockResult.Fail(result.ToString(), $"Deluns SDK error code: {result}", VendorName);
+        }
+    }
+
     public async Task<DiagnosticResult> ReadDiagnosticAsync(CancellationToken cancellationToken)
     {
         _logger.LogInformation("Running Deluns Diagnostic Read...");

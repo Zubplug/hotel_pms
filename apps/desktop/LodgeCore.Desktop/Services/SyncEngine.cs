@@ -981,6 +981,100 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     rt.UpdatedAt = DateTime.UtcNow;
                 }
             }
+
+            // 1.5. Corporate Accounts
+            if (root.TryGetProperty("corporateAccounts", out var corpAccArray))
+            {
+                var len = corpAccArray.GetArrayLength();
+                var i = 0;
+                foreach (var el in corpAccArray.EnumerateArray())
+                {
+                    i++;
+                    BroadcastHealth(SyncState.SYNCING, null, "CORPORATE_ACCOUNTS", i, len, "Syncing corporate accounts...");
+                    var id = el.GetProperty("id").GetString();
+                    if (string.IsNullOrEmpty(id)) continue;
+                    
+                    var ca = await dbContext.CorporateAccounts.FirstOrDefaultAsync(x => x.Id == id, stoppingToken);
+                    if (ca == null)
+                    {
+                        ca = new LodgeCore.Desktop.Data.Entities.LocalCorporateAccount { Id = id, PropertyId = propertyId, CreatedAt = DateTime.UtcNow };
+                        dbContext.CorporateAccounts.Add(ca);
+                    }
+                    ca.OrganizationId = el.TryGetProperty("organizationId", out var org) && org.ValueKind != System.Text.Json.JsonValueKind.Null ? org.GetString() ?? "" : "";
+                    ca.Name = el.TryGetProperty("name", out var n) && n.ValueKind != System.Text.Json.JsonValueKind.Null ? n.GetString() ?? "" : "";
+                    ca.Code = el.TryGetProperty("code", out var cd) && cd.ValueKind != System.Text.Json.JsonValueKind.Null ? cd.GetString() ?? "" : "";
+                    ca.ContactPerson = el.TryGetProperty("contactPerson", out var cp) && cp.ValueKind != System.Text.Json.JsonValueKind.Null ? cp.GetString() : null;
+                    ca.ContactEmail = el.TryGetProperty("contactEmail", out var ce) && ce.ValueKind != System.Text.Json.JsonValueKind.Null ? ce.GetString() : null;
+                    ca.ContactPhone = el.TryGetProperty("contactPhone", out var ph) && ph.ValueKind != System.Text.Json.JsonValueKind.Null ? ph.GetString() : null;
+                    ca.RatePlanId = el.TryGetProperty("ratePlanId", out var rp) && rp.ValueKind != System.Text.Json.JsonValueKind.Null ? rp.GetString() : null;
+                    ca.CityLedgerAccountId = el.TryGetProperty("cityLedgerAccountId", out var cla) && cla.ValueKind != System.Text.Json.JsonValueKind.Null ? cla.GetString() : null;
+                    ca.CreditLimit = el.TryGetProperty("creditLimit", out var cl) && cl.ValueKind != System.Text.Json.JsonValueKind.Null && decimal.TryParse(cl.GetString(), out var cld) ? cld : 0m;
+                    ca.ExemptFromHighBalance = el.TryGetProperty("exemptFromHighBalance", out var ef) && ef.GetBoolean();
+                    ca.DepositPolicy = el.TryGetProperty("depositPolicy", out var dp) && dp.ValueKind != System.Text.Json.JsonValueKind.Null ? dp.GetString() ?? "STANDARD" : "STANDARD";
+                    ca.IsActive = el.TryGetProperty("isActive", out var ia) ? ia.GetBoolean() : true;
+                    ca.UpdatedAt = DateTime.UtcNow;
+                }
+            }
+            
+            if (root.TryGetProperty("ratePlans", out var ratePlansArray))
+            {
+                var len = ratePlansArray.GetArrayLength();
+                var i = 0;
+                foreach (var el in ratePlansArray.EnumerateArray())
+                {
+                    i++;
+                    BroadcastHealth(SyncState.SYNCING, null, "RATE_PLANS", i, len, "Syncing rate plans...");
+                    var id = el.GetProperty("id").GetString();
+                    if (string.IsNullOrEmpty(id)) continue;
+                    
+                    var rp = await dbContext.RatePlans.FirstOrDefaultAsync(x => x.Id == id, stoppingToken);
+                    if (rp == null)
+                    {
+                        rp = new LodgeCore.Desktop.Data.Entities.LocalRatePlan { Id = id, PropertyId = propertyId };
+                        dbContext.RatePlans.Add(rp);
+                    }
+                    rp.Name = el.TryGetProperty("name", out var n) && n.ValueKind != System.Text.Json.JsonValueKind.Null ? n.GetString() ?? "" : "";
+                    rp.Code = el.TryGetProperty("code", out var cd) && cd.ValueKind != System.Text.Json.JsonValueKind.Null ? cd.GetString() ?? "" : "";
+                    rp.Type = el.TryGetProperty("type", out var t) && t.ValueKind != System.Text.Json.JsonValueKind.Null ? t.GetString() ?? "STANDARD" : "STANDARD";
+                    rp.IsPublic = el.TryGetProperty("isPublic", out var pub) ? pub.GetBoolean() : true;
+                    rp.IsActive = el.TryGetProperty("isActive", out var act) ? act.GetBoolean() : true;
+                    rp.UpdatedAt = DateTime.UtcNow;
+                }
+            }
+
+            if (root.TryGetProperty("rates", out var ratesArray))
+            {
+                var len = ratesArray.GetArrayLength();
+                var i = 0;
+                foreach (var el in ratesArray.EnumerateArray())
+                {
+                    i++;
+                    BroadcastHealth(SyncState.SYNCING, null, "RATES", i, len, "Syncing rates...");
+                    var id = el.GetProperty("id").GetString();
+                    if (string.IsNullOrEmpty(id)) continue;
+                    
+                    var r = await dbContext.Rates.FirstOrDefaultAsync(x => x.Id == id, stoppingToken);
+                    if (r == null)
+                    {
+                        r = new LodgeCore.Desktop.Data.Entities.LocalRate { Id = id, PropertyId = propertyId };
+                        dbContext.Rates.Add(r);
+                    }
+                    r.RatePlanId = el.TryGetProperty("ratePlanId", out var rpid) && rpid.ValueKind != System.Text.Json.JsonValueKind.Null ? rpid.GetString() ?? "" : "";
+                    r.RoomTypeId = el.TryGetProperty("roomTypeId", out var rtid) && rtid.ValueKind != System.Text.Json.JsonValueKind.Null ? rtid.GetString() ?? "" : "";
+                    
+                    if (el.TryGetProperty("amount", out var amnt) && amnt.ValueKind != System.Text.Json.JsonValueKind.Null && decimal.TryParse(amnt.GetString(), out var amtD))
+                    {
+                        r.Amount = amtD;
+                    }
+                    else if (el.TryGetProperty("baseAmount", out var baseAmnt) && baseAmnt.ValueKind != System.Text.Json.JsonValueKind.Null && decimal.TryParse(baseAmnt.GetString(), out var bamtD))
+                    {
+                        r.Amount = bamtD;
+                    }
+
+                    r.Currency = el.TryGetProperty("currency", out var curr) && curr.ValueKind != System.Text.Json.JsonValueKind.Null ? curr.GetString() ?? "NGN" : "NGN";
+                    r.UpdatedAt = DateTime.UtcNow;
+                }
+            }
             
             // 2. Rooms
             if (root.TryGetProperty("rooms", out var roomsArray))
@@ -1199,6 +1293,7 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                         dbContext.Reservations.Add(res);
                     }
                     res.GuestId = el.TryGetProperty("primaryGuestId", out var pg) && pg.ValueKind != System.Text.Json.JsonValueKind.Null ? pg.GetString() : null;
+                    res.CorporateAccountId = el.TryGetProperty("corporateAccountId", out var ca) && ca.ValueKind != System.Text.Json.JsonValueKind.Null ? ca.GetString() : null;
                     
                     if (!string.IsNullOrEmpty(res.GuestId))
                     {

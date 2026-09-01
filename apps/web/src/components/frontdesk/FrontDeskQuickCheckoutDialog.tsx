@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
 import { FrontDeskRefundDialog } from './FrontDeskRefundDialog';
+import { ManagerOverrideModal } from '../pos/ManagerOverrideModal';
 
 interface FrontDeskQuickCheckoutDialogProps {
   open: boolean;
@@ -30,6 +31,7 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [reservation, setReservation] = useState<any>(null);
   const [refundPaymentId, setRefundPaymentId] = useState<string | null>(null);
+  const [showManagerOverride, setShowManagerOverride] = useState(false);
 
   // Reset state when opened and hydrate list/detail reservations before confirmation.
   useEffect(() => {
@@ -127,11 +129,15 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
     }
   };
 
-  const handleCheckout = async () => {
+  const handleCheckout = async (managerId?: string, managerPin?: string, reason?: string) => {
     if (!reservation) return;
     setStep('CHECKING_OUT');
     try {
-      const data = await provider.reservations.checkOut(reservation.id, "System", "Device1");
+      const data = await provider.reservations.checkOut(reservation.id, "System", "Device1", {
+        managerId,
+        managerPin,
+        reason
+      });
       if (!data || data.error) throw new Error(data?.error?.message || 'Checkout failed');
 
       setStep('ERASING');
@@ -160,9 +166,20 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
       queryClient.invalidateQueries({ queryKey: ['reservations'] });
       triggerPrint();
     } catch (err: any) {
-      setErrorMsg(err.message);
+      const msg = err.message || 'Checkout failed';
+      if (msg.includes('CREDIT_LIMIT_EXCEEDED')) {
+        setStep('CONFIRMING');
+        setShowManagerOverride(true);
+        return;
+      }
+      setErrorMsg(msg);
       setStep('ERROR');
     }
+  };
+
+  const handleOverrideAuthorized = (managerId: string, managerPin: string, reason: string) => {
+    setShowManagerOverride(false);
+    handleCheckout(managerId, managerPin, reason);
   };
 
   const [printStatus, setPrintStatus] = useState<'IDLE' | 'PRINTING' | 'SUCCESS' | 'FAILED'>('IDLE');
@@ -429,6 +446,12 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
         initialCategory="FOLIO_CREDIT_BALANCE"
       />
       )}
+      <ManagerOverrideModal
+        isOpen={showManagerOverride}
+        actionName="City Ledger Checkout Override"
+        onAuthorized={handleOverrideAuthorized}
+        onCancel={() => setShowManagerOverride(false)}
+      />
     </>
   );
 }

@@ -9,6 +9,7 @@ import { PropertySelector } from '@/components/properties/PropertySelector';
 import {
   Hotel,
   LogOut,
+  Key,
   ChevronDown,
   Menu,
   CheckCircle2,
@@ -41,6 +42,7 @@ import { AppSwitcher } from '@/components/layout/AppSwitcher';
 import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
 import { toast } from 'sonner';
 import { ReceptionistShiftStartReport } from '@/components/frontdesk/ReceptionistShiftStartReport';
+import { FrontDeskMasterCardModal } from '@/components/frontdesk/FrontDeskMasterCardModal';
 
 export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useLodgeCoreSession();
@@ -50,6 +52,7 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [time, setTime] = useState<Date | null>(null);
   const [showShiftStartReport, setShowShiftStartReport] = useState(false);
+  const [showMasterCardModal, setShowMasterCardModal] = useState(false);
 
   const isDesktop = process.env.NEXT_PUBLIC_IS_DESKTOP === 'true';
 
@@ -109,6 +112,7 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex flex-col min-h-screen bg-slate-50/50">
       {res?.data && propertyId && <ReceptionistShiftStartReport open={showShiftStartReport} onOpenChange={setShowShiftStartReport} dashboardData={res.data} propertyId={propertyId} />}
+      <FrontDeskMasterCardModal isOpen={showMasterCardModal} onClose={() => setShowMasterCardModal(false)} />
       {/* Top App Bar */}
       <header className="sticky top-0 z-40 w-full flex items-center h-16 px-4 md:px-6 bg-background/95 backdrop-blur border-b shadow-sm">
         
@@ -342,6 +346,10 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
                 <p className="text-sm font-medium truncate">{session?.user?.name || session?.user?.email}</p>
                 <p className="text-xs text-muted-foreground capitalize">{role.toLowerCase().replace('_', ' ')}</p>
               </div>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setShowMasterCardModal(true)} className="cursor-pointer font-medium text-blue-600">
+                <Key className="mr-2 h-4 w-4" /> Create Master Card
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => logout()} className="text-destructive cursor-pointer">
                 <LogOut className="mr-2 h-4 w-4" /> Sign Out

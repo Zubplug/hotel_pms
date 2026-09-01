@@ -26,14 +26,15 @@ model Organization {
   defaultLocale   String  @default("en-NG")
   settings        Json?
 
-  properties     Property[]
-  guests         Guest[]
-  staff          Staff[]
-  roles          Role[]
-  notifications  Notification[]
-  auditLogs      AuditLog[]
-  refundRequests RefundRequest[]
-  memberships    OrganizationMembership[]
+  properties        Property[]
+  guests            Guest[]
+  staff             Staff[]
+  roles             Role[]
+  notifications     Notification[]
+  auditLogs         AuditLog[]
+  refundRequests    RefundRequest[]
+  memberships       OrganizationMembership[]
+  corporateAccounts CorporateAccount[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -43,6 +44,8 @@ model Property {
   id             String       @id @default(uuid()) @db.Uuid
   organizationId String       @db.Uuid
   organization   Organization @relation(fields: [organizationId], references: [id])
+
+  corporateAccounts CorporateAccount[]
 
   name         String
   code         String  @unique
@@ -405,9 +408,10 @@ model RatePlan {
   seasonalRates SeasonalRate[]
   reservations  Reservation[]
 
-  createdAt DateTime  @default(now()) @db.Timestamptz
-  updatedAt DateTime  @updatedAt @db.Timestamptz
-  deletedAt DateTime? @db.Timestamptz
+  createdAt        DateTime           @default(now()) @db.Timestamptz
+  updatedAt        DateTime           @updatedAt @db.Timestamptz
+  deletedAt        DateTime?          @db.Timestamptz
+  CorporateAccount CorporateAccount[]
 }
 
 model Rate {
@@ -594,15 +598,46 @@ enum ReservationStatus {
   EXPIRED
 }
 
+model CorporateAccount {
+  id                    String  @id @default(uuid()) @db.Uuid
+  organizationId        String  @db.Uuid
+  propertyId            String  @db.Uuid
+  name                  String
+  code                  String
+  contactPerson         String?
+  contactEmail          String?
+  contactPhone          String?
+  creditLimit           Decimal @default(0) @db.Decimal(18, 4)
+  exemptFromHighBalance Boolean @default(false)
+  depositPolicy         String  @default("STANDARD") // 'WAIVED', 'STANDARD'
+  isActive              Boolean @default(true)
+  ratePlanId            String? @db.Uuid
+  cityLedgerAccountId   String? @db.Uuid
+
+  property          Property           @relation(fields: [propertyId], references: [id])
+  organization      Organization       @relation(fields: [organizationId], references: [id])
+  ratePlan          RatePlan?          @relation(fields: [ratePlanId], references: [id])
+  cityLedgerAccount CityLedgerAccount? @relation(fields: [cityLedgerAccountId], references: [id])
+
+  reservations Reservation[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@unique([propertyId, code])
+}
+
 model Reservation {
   id                 String   @id @default(uuid()) @db.Uuid
   propertyId         String   @db.Uuid
   property           Property @relation(fields: [propertyId], references: [id])
   confirmationNumber String   @unique
 
-  primaryGuestId String  @db.Uuid
-  primaryGuest   Guest   @relation(fields: [primaryGuestId], references: [id])
-  companyId      String? @db.Uuid
+  primaryGuestId     String            @db.Uuid
+  primaryGuest       Guest             @relation(fields: [primaryGuestId], references: [id])
+  companyId          String?           @db.Uuid // Legacy field
+  corporateAccountId String?           @db.Uuid
+  corporateAccount   CorporateAccount? @relation(fields: [corporateAccountId], references: [id])
 
   source     ReservationSource
   channelRef String?
@@ -1002,6 +1037,7 @@ enum PaymentMethod {
   MOBILE_PAYMENT
   CHEQUE
   ROOM_CHARGE
+  CITY_LEDGER
   OTHER
 }
 
@@ -3932,10 +3968,11 @@ model CityLedgerAccount {
   balance        Decimal @default(0) @db.Decimal(18, 4)
   currency       String
 
-  property  Property          @relation(fields: [propertyId], references: [id])
-  entries   CityLedgerEntry[]
-  createdAt DateTime          @default(now()) @db.Timestamptz
-  updatedAt DateTime          @updatedAt @db.Timestamptz
+  property         Property           @relation(fields: [propertyId], references: [id])
+  entries          CityLedgerEntry[]
+  createdAt        DateTime           @default(now()) @db.Timestamptz
+  updatedAt        DateTime           @updatedAt @db.Timestamptz
+  CorporateAccount CorporateAccount[]
 }
 
 model CityLedgerEntry {

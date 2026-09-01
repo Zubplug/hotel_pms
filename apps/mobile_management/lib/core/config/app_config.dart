@@ -6,12 +6,14 @@ class AppConfig {
   /// Override at build time: flutter run --dart-define=API_BASE_URL=https://your-domain.com/api
   static const String apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'https://hotel-pms-web-nine.vercel.app/api',
+    // defaultValue: 'https://hotel-pms-web-nine.vercel.app/api', // Staging Fallback
+    defaultValue: 'https://lodgecore.vercel.app/api',
   );
 
   /// WebSocket endpoint for real-time events.
   static const String wsUrl = String.fromEnvironment(
     'WS_URL',
-    defaultValue: 'wss://hotel-pms-web-nine.vercel.app/api/ws',
+    // defaultValue: 'wss://hotel-pms-web-nine.vercel.app/api/ws', // Staging Fallback
+    defaultValue: 'wss://lodgecore.vercel.app/api/ws',
   );
 }

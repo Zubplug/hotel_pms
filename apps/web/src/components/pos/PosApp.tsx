@@ -16,7 +16,6 @@ import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { formatCurrency } from '@/lib/utils';
 import { TerminalAuthScreen } from '@/components/pos/TerminalAuthScreen';
 import { MyShiftBankModal } from '@/components/pos/MyShiftBankModal';
-import { PendingHandoversModal } from '@/components/pos/PendingHandoversModal';
 import { EmergencyCashBankModal } from '@/components/pos/EmergencyCashBankModal';
 import { AutoLockScreen } from '@/components/pos/AutoLockScreen';
 import { CategoryTileGrid } from '@/components/pos/CategoryTileGrid';
@@ -101,7 +100,6 @@ export default function PosApp() {
   const [showMySales, setShowMySales] = useState(false);
   const [itemToModify, setItemToModify] = useState<any | null>(null);
   const [showShiftBank, setShowShiftBank] = useState(false);
-  const [showHandovers, setShowHandovers] = useState(false);
   const [showEmergencyModal, setShowEmergencyModal] = useState(false);
   const [showMyOrders, setShowMyOrders] = useState(false);
   const [showActiveOrders, setShowActiveOrders] = useState(false);
@@ -777,7 +775,6 @@ export default function PosApp() {
           onOpenMyOrders={() => setShowActiveOrders(true)}
           onOpenMySales={() => setShowMySales(true)}
           onOpenShiftBank={() => setShowShiftBank(true)}
-          onOpenHandovers={() => setShowHandovers(true)}
           onOpenKitchen={() => setShowKitchenModal(true)}
           onOpenPrinterSettings={() => setShowPrinterSettings(true)}
           onOpenSyncCenter={() => setShowSyncCenter(true)}
@@ -1285,26 +1282,6 @@ export default function PosApp() {
             localStorage.removeItem('lodgecore_pos_operator_token');
             localStorage.removeItem('lodgecore_pos_session_id');
             setPosSessionId('');
-            setShowSwitchPad(true);
-          }}
-        />
-      )}
-
-      {/* Pending Handovers Modal */}
-      {showHandovers && (
-        <PendingHandoversModal
-          isOpen={showHandovers}
-          onClose={() => setShowHandovers(false)}
-          provider={provider}
-          propertyId={propertyId}
-          onHandoverComplete={() => {
-            setActiveOperator(null);
-            setOperatorToken(null);
-            setPosSessionId('');
-            setCart([]);
-            localStorage.removeItem('lodgecore_pos_operator_token');
-            localStorage.removeItem('lodgecore_pos_session_id');
-            setShowHandovers(false);
             setShowSwitchPad(true);
           }}
         />

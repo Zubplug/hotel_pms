@@ -30,6 +30,7 @@ const formSchema = z.object({
   }).optional(),
   roomTypeId: z.string().min(1, 'Please select a room type'),
   roomId: z.string().min(1, 'Please select an available room'),
+  corporateAccountId: z.string().optional(),
   checkIn: z.date({ required_error: 'Check-in date is required' }),
   checkOut: z.date({ required_error: 'Check-out date is required' }),
   adults: z.coerce.number().min(1, 'At least 1 adult is required'),
@@ -68,6 +69,7 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
       guestDetails: { firstName: '', lastName: '', email: '', phone: '' },
       roomTypeId: '',
       roomId: '',
+      corporateAccountId: 'none',
       adults: 1,
       children: 0,
     },
@@ -145,6 +147,15 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
   });
   const availableRooms = (availableRoomsRes as any)?.data || [];
 
+  const { data: corporateAccountsRes, isLoading: loadingCorporateAccounts } = useQuery({
+    queryKey: ['corporate-accounts', propertyId],
+    queryFn: async () => {
+      return provider.corporateAccounts.list(propertyId);
+    },
+    enabled: !!propertyId,
+  });
+  const corporateAccounts = (corporateAccountsRes as any)?.data || [];
+
   // Reset roomId when dependencies change
   useEffect(() => {
     form.setValue('roomId', '');
@@ -155,6 +166,7 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
       const selectedRoom = availableRooms?.find((r: any) => r.id === values.roomId);
       const payload = {
         ...values,
+        corporateAccountId: values.corporateAccountId === 'none' ? undefined : values.corporateAccountId,
         roomNumber: selectedRoom?.number || undefined,
         checkIn: format(values.checkIn, 'yyyy-MM-dd'),
         checkOut: format(values.checkOut, 'yyyy-MM-dd'),
@@ -508,6 +520,38 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
                               <SelectItem key={room.id} value={room.id} className="focus:bg-slate-700 focus:text-white flex justify-between">
                                 Room {formatRoomNumber(room.number)}
                                 {room.status === 'CLEAN' && <span className="ml-4 text-emerald-400 text-xs">READY</span>}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="corporateAccountId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-slate-400 ml-1">Corporate Client (Optional)</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value || 'none'} disabled={loadingCorporateAccounts}>
+                          <FormControl>
+                            <SelectTrigger className="h-12 rounded-xl bg-slate-800/50 border-slate-700 text-white">
+                              <SelectValue placeholder="No corporate account">
+                                {field.value && field.value !== 'none'
+                                  ? corporateAccounts?.find((ca: any) => ca.id === field.value)?.name || 'Unknown Account'
+                                  : 'No corporate account'}
+                              </SelectValue>
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent className="bg-slate-800 border-slate-700 text-white max-h-60">
+                            <SelectItem value="none" className="focus:bg-slate-700 focus:text-white">
+                              No corporate account
+                            </SelectItem>
+                            {corporateAccounts?.map((ca: any) => (
+                              <SelectItem key={ca.id} value={ca.id} className="focus:bg-slate-700 focus:text-white flex justify-between">
+                                {ca.name} ({ca.code})
                               </SelectItem>
                             ))}
                           </SelectContent>

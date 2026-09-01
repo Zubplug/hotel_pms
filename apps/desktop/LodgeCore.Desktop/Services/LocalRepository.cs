@@ -49,6 +49,32 @@ public class LocalRepository
             {
                 baseRate = roomType.BasePrice;
                 if (!string.IsNullOrEmpty(roomType.Currency)) currency = roomType.Currency;
+                
+                string? ratePlanId = null;
+                if (!string.IsNullOrEmpty(reservation.CorporateAccountId))
+                {
+                    var ca = await _dbContext.CorporateAccounts.FirstOrDefaultAsync(c => c.Id == reservation.CorporateAccountId);
+                    if (ca != null && !string.IsNullOrEmpty(ca.RatePlanId))
+                    {
+                        ratePlanId = ca.RatePlanId;
+                    }
+                }
+                
+                if (string.IsNullOrEmpty(ratePlanId))
+                {
+                    var propertyRatePlan = await _dbContext.RatePlans.FirstOrDefaultAsync(rp => rp.PropertyId == reservation.PropertyId && rp.IsActive);
+                    if (propertyRatePlan != null) ratePlanId = propertyRatePlan.Id;
+                }
+                
+                if (!string.IsNullOrEmpty(ratePlanId))
+                {
+                    var rate = await _dbContext.Rates.FirstOrDefaultAsync(r => r.RatePlanId == ratePlanId && r.RoomTypeId == reservation.RoomTypeId);
+                    if (rate != null)
+                    {
+                        baseRate = rate.Amount;
+                        currency = rate.Currency;
+                    }
+                }
             }
         }
         
@@ -131,6 +157,7 @@ public class LocalRepository
                 Adults = reservation.Adults,
                 Children = reservation.Children,
                 SpecialRequests = reservation.SpecialRequests,
+                CorporateAccountId = reservation.CorporateAccountId,
                 Status = reservation.Status,
                 Source = reservation.Source,
                 DepositRequired = reservation.DepositRequired,
@@ -771,6 +798,18 @@ public class LocalRepository
             : null;
         if (requireFrontdeskSession && frontdeskSession == null)
             throw new InvalidOperationException("Open your front desk cashier session before posting a charge.");
+
+        var reservation = await _dbContext.Reservations
+            .Include(r => r.CorporateAccount)
+            .FirstOrDefaultAsync(r => r.Id == folio.ReservationId);
+
+        if (reservation?.CorporateAccount != null && reservation.CorporateAccount.CreditLimit > 0 && !reservation.CorporateAccount.ExemptFromHighBalance)
+        {
+            if (folio.NetBalance + amount > reservation.CorporateAccount.CreditLimit)
+            {
+                throw new InvalidOperationException("CREDIT_LIMIT_EXCEEDED: Adding this charge exceeds the corporate account's credit limit.");
+            }
+        }
 
         folio.TotalCharges += amount;
         var creditApplicationAmount = Math.Min(folio.AvailableCredit, amount);
@@ -1474,14 +1513,58 @@ public class LocalRepository
         }
     }
 
-    public async Task<bool> ProcessCheckInAsync(string reservationId, string userId, string deviceId, string? encodeData = null)
+    public async Task<bool> ProcessCheckInAsync(string reservationId, string userId, string deviceId, string? encodeData = null, bool overrideDeposit = false, string? managerId = null, string? managerPin = null, string? reason = null)
     {
         var res = await _dbContext.Reservations
             .Include(r => r.Folio)
             .Include(r => r.Rooms)
+            .Include(r => r.CorporateAccount)
             .FirstOrDefaultAsync(r => r.Id == reservationId);
         if (res == null || (res.Status != "PENDING" && res.Status != "CONFIRMED")) return false;
         await AssertNightAuditAllowsAsync(res.PropertyId);
+        
+        bool waiveDeposit = overrideDeposit || (res.CorporateAccount != null && res.CorporateAccount.DepositPolicy == "WAIVED");
+        if (!waiveDeposit && res.DepositPaid < res.DepositRequired)
+        {
+            throw new InvalidOperationException($"Check-in blocked: A deposit of {res.DepositRequired:N2} is required but only {res.DepositPaid:N2} has been paid.");
+        }
+        
+        if (overrideDeposit && res.DepositPaid < res.DepositRequired && !(res.CorporateAccount != null && res.CorporateAccount.DepositPolicy == "WAIVED"))
+        {
+            if (string.IsNullOrEmpty(managerId) || string.IsNullOrEmpty(managerPin))
+            {
+                throw new InvalidOperationException("Manager authorization required to override deposit.");
+            }
+            var authorizer = await AuthorizeManagerOverrideAsync(managerId, managerPin, res.PropertyId);
+            await LogOverrideAuditAsync(res.PropertyId, authorizer.Id, "CHECK_IN_DEPOSIT_OVERRIDE", $"Overriding {res.DepositRequired - res.DepositPaid:N2} deposit. Reason: {reason}");
+        }
+        
+        if (res.CorporateAccount != null && res.CorporateAccount.CreditLimit > 0)
+        {
+            decimal projectedCharges = 0;
+            if (!string.IsNullOrEmpty(res.RatePlanSnapshotJson))
+            {
+                try {
+                    using var doc = System.Text.Json.JsonDocument.Parse(res.RatePlanSnapshotJson);
+                    if (doc.RootElement.TryGetProperty("total", out var totalEl) && totalEl.TryGetDecimal(out var totalDec))
+                        projectedCharges = totalDec;
+                } catch { }
+            }
+            if (projectedCharges == 0 && res.Rooms.Any())
+            {
+                var roomType = await _dbContext.RoomTypes.FirstOrDefaultAsync(rt => rt.Id == res.Rooms.First().RoomTypeId);
+                if (roomType != null) {
+                    projectedCharges = roomType.BasePrice * Math.Max(1, (res.CheckOutDate - res.CheckInDate).Days);
+                }
+            }
+            
+            decimal currentBalance = res.Folio?.NetBalance ?? 0m;
+            if (currentBalance + projectedCharges > res.CorporateAccount.CreditLimit && !res.CorporateAccount.ExemptFromHighBalance)
+            {
+                throw new InvalidOperationException("CREDIT_LIMIT_EXCEEDED: The projected charges exceed the corporate account's credit limit.");
+            }
+        }
+
         if (res.Folio != null && res.Folio.NetBalance > 0.01m)
             throw new InvalidOperationException("Cannot check in with an outstanding balance. Settle the folio first.");
 
@@ -1512,15 +1595,101 @@ public class LocalRepository
         return true;
     }
 
-    public async Task<bool> ProcessCheckOutAsync(string reservationId, string userId, string deviceId)
+    public async Task<bool> ProcessCheckOutAsync(string reservationId, string userId, string deviceId, string? managerId = null, string? managerPin = null, string? reason = null)
     {
         var res = await _dbContext.Reservations
             .Include(r => r.Folio)
+            .Include(r => r.CorporateAccount)
             .Include(r => r.Rooms)
                 .ThenInclude(rr => rr.Room)
             .FirstOrDefaultAsync(r => r.Id == reservationId);
         if (res == null || res.Status != "CHECKED_IN") return false;
         await AssertNightAuditAllowsAsync(res.PropertyId);
+
+        if (res.CorporateAccountId != null && res.CorporateAccount != null && res.Folio != null && res.Folio.NetBalance > 0.01m)
+        {
+            if (string.IsNullOrEmpty(res.CorporateAccount.CityLedgerAccountId))
+            {
+                throw new InvalidOperationException($"Corporate Account '{res.CorporateAccount.Name}' is not linked to a City Ledger account.");
+            }
+            
+            if (res.CorporateAccount.CreditLimit > 0 && !res.CorporateAccount.ExemptFromHighBalance)
+            {
+                if (res.Folio.NetBalance > res.CorporateAccount.CreditLimit)
+                {
+                    if (string.IsNullOrEmpty(managerId) || string.IsNullOrEmpty(managerPin))
+                    {
+                        throw new InvalidOperationException("CREDIT_LIMIT_EXCEEDED: Checking out this reservation will exceed the corporate account's credit limit. Manager authorization required.");
+                    }
+                    var authorizer = await AuthorizeManagerOverrideAsync(managerId, managerPin, res.PropertyId);
+                    await LogOverrideAuditAsync(res.PropertyId, authorizer.Id, "CHECK_OUT_CREDIT_LIMIT_OVERRIDE", $"Overriding city ledger checkout. Folio balance {res.Folio.NetBalance:N2} exceeds limit {res.CorporateAccount.CreditLimit:N2}. Reason: {reason}");
+                }
+            }
+
+            var idempotencyKey = Guid.NewGuid().ToString();
+            decimal settleAmount = res.Folio.NetBalance;
+            var frontdeskSession = await GetActiveFrontdeskSessionAsync(res.PropertyId, userId);
+            
+            res.Folio.TotalPayments += settleAmount;
+            res.Folio.UpdatedAt = DateTime.UtcNow;
+            res.Folio.IsDirty = true;
+            res.Folio.LocalSequence++;
+            int folioEventVersion = res.Folio.Version++;
+
+            var newItem = new
+            {
+                id = Guid.NewGuid().ToString(),
+                amount = -settleAmount,
+                description = $"Transfer to Corporate Receivable: {res.CorporateAccount.Name}",
+                type = "CITY_LEDGER_TRANSFER",
+                idempotencyKey = idempotencyKey,
+                frontdeskSessionId = frontdeskSession?.Id,
+                createdAt = DateTime.UtcNow
+            };
+            UpdateFolioTransactionsJson(res.Folio, "items", newItem);
+
+            var ledgerEntry = new LocalCityLedgerEntry
+            {
+                Id = Guid.NewGuid().ToString(),
+                PropertyId = res.PropertyId,
+                OrganizationId = res.CorporateAccount.OrganizationId,
+                AccountId = res.CorporateAccount.CityLedgerAccountId,
+                Type = "TRANSFER_IN",
+                Amount = settleAmount,
+                Currency = res.Folio.Currency ?? "NGN",
+                ReservationId = res.Id,
+                GuestId = res.GuestId,
+                FolioId = res.Folio.Id,
+                Description = $"Auto-routed from Folio upon checkout",
+                OperatorId = userId,
+                DeviceId = deviceId,
+                IdempotencyKey = idempotencyKey,
+                BusinessDate = frontdeskSession?.BusinessDate ?? DateTime.UtcNow,
+                CreatedAt = DateTime.UtcNow
+            };
+            _dbContext.CityLedgerEntries.Add(ledgerEntry);
+
+            _dbContext.OutboxEvents.Add(new LocalOutboxEvent
+            {
+                PropertyId = res.PropertyId,
+                DeviceId = deviceId,
+                OperatorId = userId,
+                AggregateType = "FOLIO",
+                AggregateId = res.Folio.Id,
+                AggregateVersion = folioEventVersion,
+                EventType = "CITY_LEDGER_SETTLEMENT",
+                Sequence = res.Folio.LocalSequence,
+                IdempotencyKey = idempotencyKey,
+                PayloadJson = JsonSerializer.Serialize(new { 
+                    amount = settleAmount, 
+                    accountId = res.CorporateAccount.CityLedgerAccountId,
+                    reservationId = res.Id,
+                    guestId = res.GuestId,
+                    currency = res.Folio.Currency ?? "NGN", 
+                    businessDate = frontdeskSession?.BusinessDate
+                })
+            });
+        }
 
         if (res.Folio != null && res.Folio.NetBalance > 0.01m)
         {
@@ -1991,6 +2160,13 @@ public class LocalRepository
             .ToListAsync();
     }
 
+    public async Task<List<LocalCorporateAccount>> GetCorporateAccountsAsync(string propertyId)
+    {
+        return await _dbContext.CorporateAccounts
+            .Where(ca => string.IsNullOrEmpty(propertyId) || ca.PropertyId == propertyId)
+            .ToListAsync();
+    }
+
     public async Task<object> GetRoomsAsync(string propertyId)
     {
         var rooms = await _dbContext.Rooms.Where(r => r.PropertyId == propertyId).ToListAsync();
@@ -2456,20 +2632,6 @@ public class LocalRepository
 
         bool requiresApproval = action == "VOID"; // VOID defaults to true
 
-        // For Voids, bypass approval if it's a BAR item
-        if (action == "VOID")
-        {
-            var voidProduct = await _dbContext.PosProducts.FirstOrDefaultAsync(p => p.Id == originalItem.ProductId);
-            if (voidProduct != null)
-            {
-                var voidCategory = await _dbContext.ProductCategories.FirstOrDefaultAsync(c => c.Id == voidProduct.CategoryId);
-                var resolvedStation = voidProduct.ProductionStation ?? voidCategory?.ProductionStation ?? "KITCHEN";
-                if (resolvedStation == "BAR")
-                {
-                    requiresApproval = false;
-                }
-            }
-        }
 
         System.Text.Json.JsonElement replacementItemEl = default;
         decimal originalPrice = originalItem.UnitPrice * originalItem.Quantity;
@@ -2488,13 +2650,24 @@ public class LocalRepository
         string? approverId = null;
         if (requiresApproval)
         {
-            if (string.IsNullOrEmpty(managerPin)) return new { requiresApproval = true };
+            var managerId = root.TryGetProperty("managerId", out var mid) ? mid.GetString() : "";
+            if (string.IsNullOrEmpty(managerPin) || string.IsNullOrEmpty(managerId)) return new { requiresApproval = true };
             
-            var allStaff = await _dbContext.Staff.Where(s => s.PropertyId == propertyId && s.PosPinHash != null).ToListAsync();
-            var approver = allStaff.FirstOrDefault(s => BCrypt.Net.BCrypt.Verify(managerPin, s.PosPinHash));
-            if (approver == null || (approver.Role != "MANAGER" && approver.Role != "ADMIN"))
+            var approver = await AuthorizeManagerOverrideAsync(managerId, managerPin, propertyId);
+            if (approver == null)
                 throw new Exception("Invalid manager PIN or insufficient permissions");
             approverId = approver.Id;
+            
+            LogOverrideAudit(
+                propertyId: propertyId,
+                operatorStaffId: userId,
+                managerStaffId: approver.Id,
+                action: action == "VOID" ? "POS_KITCHEN_ITEM_VOID" : "POS_ITEM_REPLACE",
+                entityType: "PosOrderItem",
+                entityId: originalOrderItemId,
+                reason: reason,
+                amount: action == "VOID" ? originalPrice : (originalPrice - replacementPrice)
+            );
         }
 
         using var transaction = await _dbContext.Database.BeginTransactionAsync();
@@ -2646,14 +2819,25 @@ public class LocalRepository
         string? approverId = null;
         if (requiresApproval)
         {
-            if (string.IsNullOrEmpty(managerPin))
+            var managerId = root.TryGetProperty("managerId", out var mid) ? mid.GetString() : "";
+            if (string.IsNullOrEmpty(managerPin) || string.IsNullOrEmpty(managerId))
                 return new { requiresApproval = true };
 
-            var allStaff = await _dbContext.Staff.Where(s => s.PropertyId == propertyId && s.PosPinHash != null).ToListAsync();
-            var approver = allStaff.FirstOrDefault(s => BCrypt.Net.BCrypt.Verify(managerPin, s.PosPinHash));
-            if (approver == null || (approver.Role != "MANAGER" && approver.Role != "ADMIN"))
+            var approver = await AuthorizeManagerOverrideAsync(managerId, managerPin, propertyId);
+            if (approver == null)
                 throw new Exception("Invalid manager PIN or insufficient permissions");
             approverId = approver.Id;
+            
+            LogOverrideAudit(
+                propertyId: propertyId,
+                operatorStaffId: userId,
+                managerStaffId: approver.Id,
+                action: targetType == "POS_ORDER" ? "POS_DISCOUNT_OVERRIDE" : "FRONTDESK_DISCOUNT_OVERRIDE",
+                entityType: targetType,
+                entityId: targetType == "POS_ORDER" ? root.GetProperty("orderId").GetString() : root.TryGetProperty("reservationRoomId", out var rri) ? rri.GetString() ?? "" : "",
+                reason: reason,
+                amount: (decimal)amount
+            );
         }
 
         using var transaction = await _dbContext.Database.BeginTransactionAsync();
@@ -3954,13 +4138,27 @@ public class LocalRepository
         return payment;
     }
 
-    public async Task<LocalPosCashMovement> RecordCashMovementAsync(string propertyId, string sessionId, decimal amount, string type, string reasonCode, string? notes, string? receiptReference, string? authorizedBy, string userId, string deviceId, string sourceAccountId = "", string destinationAccountId = "")
+    public async Task<LocalPosCashMovement> RecordCashMovementAsync(string propertyId, string sessionId, decimal amount, string type, string reasonCode, string? notes, string? receiptReference, string? managerId, string? managerPin, string userId, string deviceId, string sourceAccountId = "", string destinationAccountId = "")
     {
         string operationId = $"op_cashmvt_{deviceId}_{DateTime.UtcNow.Ticks}";
         
         var prop = await _dbContext.Properties.FindAsync(propertyId);
         await AssertNightAuditAllowsAsync(propertyId);
         string currency = prop?.Currency ?? "NGN";
+
+        // Optional Manager Override if explicitly requested
+        string? authorizerId = null;
+        if (!string.IsNullOrEmpty(managerPin) && !string.IsNullOrEmpty(managerId))
+        {
+            var manager = await AuthorizeManagerOverrideAsync(managerId, managerPin, propertyId);
+            if (manager == null) throw new UnauthorizedAccessException("Invalid manager PIN or insufficient permissions");
+            authorizerId = manager.Id;
+        }
+        else if (type == PosConstants.CashMovementTypes.Payout || type == PosConstants.CashMovementTypes.Drop)
+        {
+            // Cash payouts/drops require manager authorization
+            throw new UnauthorizedAccessException("Manager authorization is required for this cash movement.");
+        }
 
         var movement = new LocalPosCashMovement
         {
@@ -3978,12 +4176,27 @@ public class LocalRepository
             Notes = notes,
             ReceiptReference = receiptReference,
             OperationId = operationId,
-            AuthorizedBy = authorizedBy,
+            AuthorizedBy = authorizerId,
             BusinessDate = prop?.BusinessDate.Date ?? DateTime.UtcNow.Date,
             CreatedAt = DateTime.UtcNow
         };
 
         _dbContext.PosCashMovements.Add(movement);
+        
+        if (authorizerId != null)
+        {
+            LogOverrideAudit(
+                propertyId: propertyId,
+                operatorStaffId: userId,
+                managerStaffId: authorizerId,
+                action: $"CASH_MOVEMENT_{type.ToUpper()}",
+                entityType: "PosCashMovement",
+                entityId: movement.Id,
+                reason: notes ?? reasonCode,
+                amount: amount,
+                metadata: receiptReference
+            );
+        }
 
         _dbContext.SyncEvents.Add(new LocalSyncEvent
         {
@@ -4067,11 +4280,11 @@ public class LocalRepository
         };
     }
 
-    public async Task<LocalPosCashMovement> OpenSafeAsync(string propertyId, decimal amount, string managerPin, string deviceId)
+    public async Task<LocalPosCashMovement> OpenSafeAsync(string propertyId, decimal amount, string managerId, string managerPin, string deviceId, string reason)
     {
         await AssertNightAuditAllowsAsync(propertyId);
-        var authorizer = await ValidateSupervisorPinAsync(managerPin, propertyId);
-        if (authorizer == null) throw new UnauthorizedAccessException("Invalid Manager PIN");
+        var authorizer = await AuthorizeManagerOverrideAsync(managerId, managerPin, propertyId);
+        if (authorizer == null) throw new UnauthorizedAccessException("Invalid manager PIN or insufficient permissions");
 
         var safeAccount = await EnsureCashAccountAsync(propertyId, PosConstants.CashAccountTypes.Safe, "Central Safe");
         var externalAccount = await EnsureCashAccountAsync(propertyId, PosConstants.CashAccountTypes.External, "External Funds");
@@ -4103,6 +4316,18 @@ public class LocalRepository
         };
 
         _dbContext.PosCashMovements.Add(movement);
+
+        LogOverrideAudit(
+            propertyId: propertyId,
+            operatorStaffId: authorizer.Id,
+            managerStaffId: authorizer.Id,
+            action: "SAFE_OPENING_FLOAT",
+            entityType: "PosCashMovement",
+            entityId: movement.Id,
+            reason: reason,
+            amount: amount
+        );
+
         await _dbContext.SaveChangesAsync();
         return movement;
     }
@@ -4116,11 +4341,11 @@ public class LocalRepository
             .ToListAsync();
     }
 
-    public async Task<LocalPosCashMovement> RecordBankDepositAsync(string propertyId, decimal amount, string reference, string managerPin, string deviceId)
+    public async Task<LocalPosCashMovement> RecordBankDepositAsync(string propertyId, decimal amount, string reference, string managerId, string managerPin, string deviceId, string reason)
     {
         await AssertNightAuditAllowsAsync(propertyId);
-        var authorizer = await ValidateSupervisorPinAsync(managerPin, propertyId);
-        if (authorizer == null) throw new UnauthorizedAccessException("Invalid Manager PIN");
+        var authorizer = await AuthorizeManagerOverrideAsync(managerId, managerPin, propertyId);
+        if (authorizer == null) throw new UnauthorizedAccessException("Invalid manager PIN or insufficient permissions");
 
         var safeAccount = await EnsureCashAccountAsync(propertyId, PosConstants.CashAccountTypes.Safe, "Central Safe");
         var bankAccount = await EnsureCashAccountAsync(propertyId, PosConstants.CashAccountTypes.BankAccount, "Main Bank Account");
@@ -4157,6 +4382,19 @@ public class LocalRepository
         };
 
         _dbContext.PosCashMovements.Add(movement);
+
+        LogOverrideAudit(
+            propertyId: propertyId,
+            operatorStaffId: authorizer.Id,
+            managerStaffId: authorizer.Id,
+            action: "SAFE_BANK_DEPOSIT",
+            entityType: "PosCashMovement",
+            entityId: movement.Id,
+            reason: reason,
+            amount: amount,
+            metadata: reference
+        );
+
         await _dbContext.SaveChangesAsync();
         return movement;
     }
@@ -4285,6 +4523,60 @@ public class LocalRepository
         }
 
         return null;
+    }
+
+    public async Task<LocalStaff?> AuthorizeManagerOverrideAsync(string managerStaffId, string pin, string propertyId)
+    {
+        var manager = await _dbContext.Staff
+            .FirstOrDefaultAsync(s => s.Id == managerStaffId && s.PropertyId == propertyId && s.IsActive && (s.Role == "MANAGER" || s.Role == "ADMIN"));
+
+        if (manager == null || string.IsNullOrEmpty(manager.PosPinHash) || !BCrypt.Net.BCrypt.Verify(pin, manager.PosPinHash))
+        {
+            return null;
+        }
+
+        return manager;
+    }
+
+    public void LogOverrideAudit(
+        string propertyId,
+        string operatorStaffId,
+        string managerStaffId,
+        string action,
+        string entityType,
+        string entityId,
+        string? reason,
+        decimal? amount = null,
+        string? metadata = null)
+    {
+        var audit = new LocalOverrideAudit
+        {
+            Id = Guid.NewGuid().ToString(),
+            PropertyId = propertyId,
+            OperatorStaffId = operatorStaffId,
+            ManagerStaffId = managerStaffId,
+            Action = action,
+            EntityType = entityType,
+            EntityId = entityId,
+            Reason = reason,
+            Amount = amount,
+            Metadata = metadata,
+            CreatedAt = DateTime.UtcNow,
+            SyncStatus = "PENDING"
+        };
+        _dbContext.OverrideAudits.Add(audit);
+
+        var outbox = new LocalOutboxEvent
+        {
+            Id = Guid.NewGuid().ToString(),
+            PropertyId = propertyId,
+            EventType = "OVERRIDE_AUDIT_CREATED",
+            EntityId = audit.Id,
+            PayloadJson = System.Text.Json.JsonSerializer.Serialize(audit),
+            CreatedAt = DateTime.UtcNow,
+            Status = "PENDING"
+        };
+        _dbContext.OutboxEvents.Add(outbox);
     }
 
     public async Task<LocalPosOperatorSession> SwitchOperatorAsync(string deviceId, string posSessionId, string staffId, string operationId)

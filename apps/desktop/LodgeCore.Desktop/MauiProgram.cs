@@ -65,7 +65,8 @@ public static class MauiProgram
         builder.Services.AddSingleton(sp => 
         {
             var baseUrl = Environment.GetEnvironmentVariable("LODGECORE_API_URL") 
-                          ?? Microsoft.Maui.Storage.Preferences.Default.Get("ApiBaseUrl", "https://hotel-pms-web-nine.vercel.app/api/v1/");
+                          // ?? Microsoft.Maui.Storage.Preferences.Default.Get("ApiBaseUrl", "https://hotel-pms-web-nine.vercel.app/api/v1/"); // Staging Fallback
+                          ?? Microsoft.Maui.Storage.Preferences.Default.Get("ApiBaseUrl", "https://lodgecore.vercel.app/api/v1/");
 
 #if !DEBUG
             if (baseUrl.Contains("localhost") || baseUrl.Contains("127.0.0.1") || baseUrl.Contains("0.0.0.0"))
@@ -94,6 +95,7 @@ public static class MauiProgram
             db.Database.EnsureCreated();
             db.ApplyNoShowSchemaAsync().GetAwaiter().GetResult();
             db.ApplyFinancialControlSchemaAsync().GetAwaiter().GetResult();
+            db.ApplyManagerOverrideSchemaAsync().GetAwaiter().GetResult();
         }
 
         return app;

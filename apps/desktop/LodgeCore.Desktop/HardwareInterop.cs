@@ -444,4 +444,62 @@ public class HardwareInterop
     // -----------------------------------------------------------------------
     private static string Fail(string message)
         => JsonSerializer.Serialize(new { success = false, error = message }, _jsonOptions);
+
+    public async Task<string> EncodeMasterCardAsync(string? startDateStr, string? endDateStr, string? managerId, string? managerPin, string? reason)
+    {
+        var session = await _authManager.GetSessionAsync();
+        if (session == null) return Fail("UNAUTHORIZED: No active session.");
+
+        if (string.IsNullOrEmpty(managerId) || string.IsNullOrEmpty(managerPin) || string.IsNullOrEmpty(reason))
+        {
+            return Fail("Manager override required (managerId, pin, and reason).");
+        }
+
+        using var scope = _scopeFactory.CreateScope();
+        var repo = scope.ServiceProvider.GetRequiredService<LocalRepository>();
+
+        var manager = await repo.AuthorizeManagerOverrideAsync(managerId, managerPin, session.PropertyId);
+        if (manager == null)
+        {
+            return Fail("UNAUTHORIZED: Invalid manager PIN or insufficient permissions.");
+        }
+
+        try
+        {
+            DateTime? startDate = null;
+            if (!string.IsNullOrEmpty(startDateStr) && DateTime.TryParse(startDateStr, out var sd))
+                startDate = sd;
+
+            DateTime? endDate = null;
+            if (!string.IsNullOrEmpty(endDateStr) && DateTime.TryParse(endDateStr, out var ed))
+                endDate = ed;
+
+            var result = await _lockProvider.EncodeMasterCardAsync(startDate, endDate, CancellationToken.None);
+
+            if (result.Success)
+            {
+                await WriteAuditAsync(session, "ENCODE_MASTER_CARD", true, $"Start: {startDate}, End: {endDate}");
+                
+                // Also log to the central override audit
+                await repo.LogOverrideAuditAsync(
+                    session.PropertyId,
+                    manager.Id,
+                    "HARDWARE_MASTER_KEYCARD",
+                    reason ?? "No reason provided"
+                );
+
+                return JsonSerializer.Serialize(new { success = true }, _jsonOptions);
+            }
+            else
+            {
+                await WriteAuditAsync(session, "ENCODE_MASTER_CARD", false, result.ErrorMessage ?? "SDK Error");
+                return Fail(result.ErrorMessage ?? "Failed to encode master card");
+            }
+        }
+        catch (Exception ex)
+        {
+            await WriteAuditAsync(session, "ENCODE_MASTER_CARD", false, $"EXCEPTION - {ex.Message}");
+            return Fail("Hardware fault: " + ex.Message);
+        }
+    }
 }

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Percent, Hash } from 'lucide-react';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
-import { SupervisorOverrideModal } from './SupervisorOverrideModal';
+import { ManagerOverrideModal } from './ManagerOverrideModal';
 
 type DiscountModalProps = {
   isOpen: boolean;
@@ -84,13 +84,13 @@ export function DiscountModal({ isOpen, orderId, orderTotal, onClose, onSuccess 
     }
   };
 
-  const handleOverrideAuthorized = (supervisorId: string, supervisorName: string, pin?: string) => {
+  const handleOverrideAuthorized = (managerId: string, managerPin: string, reasonFromModal: string) => {
     setShowOverride(false);
     // Retry with the PIN
-    if (pin) {
-      handleSubmit(pin);
+    if (managerPin) {
+      handleSubmit(managerPin);
     } else {
-      setError('Failed to capture supervisor PIN.');
+      setError('Failed to capture manager PIN.');
     }
   };
 
@@ -184,10 +184,10 @@ export function DiscountModal({ isOpen, orderId, orderTotal, onClose, onSuccess 
         </div>
       </div>
 
-      <SupervisorOverrideModal
+      <ManagerOverrideModal
         isOpen={showOverride}
         actionName="Discount Override"
-        onAuthorized={(id, name, pin) => handleOverrideAuthorized(id, name, pin)}
+        onAuthorized={(id, pin, r) => handleOverrideAuthorized(id, pin, r)}
         onCancel={() => setShowOverride(false)}
       />
     </>,

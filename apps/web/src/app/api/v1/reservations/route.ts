@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
         let reqPropertyId = body?.propertyId;
         if (reqPropertyId && !ctx.propertyIds.includes(reqPropertyId)) return NextResponse.json({ error: 'Forbidden property' }, { status: 403 });
-    const { propertyId, guestId, guestDetails, checkIn, checkOut, roomTypeId, roomId, adults, children } = body;
+    const { propertyId, guestId, guestDetails, checkIn, checkOut, roomTypeId, roomId, adults, children, corporateAccountId } = body;
 
     if (!propertyId || (!guestId && !guestDetails) || !checkIn || !checkOut || !roomTypeId || !roomId) {
       return errorResponse('BAD_REQUEST', 'Missing required fields', 400);
@@ -118,8 +118,35 @@ export async function POST(req: NextRequest) {
       return errorResponse('NOT_FOUND', 'Room not found or does not belong to property/room type', 404);
     }
 
-    const baseRate = room.roomType.baseRate;
+    let baseRate = room.roomType.baseRate;
     const currency = room.roomType.currency || 'NGN';
+    let ratePlanId = '';
+
+    if (corporateAccountId) {
+      const corporateAccount = await prisma.corporateAccount.findUnique({
+        where: { id: corporateAccountId },
+        include: { ratePlan: true }
+      });
+      if (corporateAccount?.ratePlan) {
+        ratePlanId = corporateAccount.ratePlan.id;
+        const rate = await prisma.rate.findFirst({
+          where: { ratePlanId, roomTypeId }
+        });
+        if (rate && (rate as any).amount) {
+          baseRate = (rate as any).amount;
+        } else if (rate && (rate as any).baseAmount) {
+          baseRate = (rate as any).baseAmount;
+        }
+      }
+    }
+
+    if (!ratePlanId) {
+      const defaultRatePlan = await prisma.ratePlan.findFirst({
+        where: { propertyId: { in: ctx.propertyIds as string[] } }
+      });
+      if (defaultRatePlan) ratePlanId = defaultRatePlan.id;
+    }
+
     const totalAmount = Number(baseRate) * nights;
 
     // 2. Create the Reservation transactionally
@@ -160,9 +187,10 @@ export async function POST(req: NextRequest) {
           checkOut: checkOutDate,
           adults: parseInt(adults) || 1,
           children: parseInt(children) || 0,
-          ratePlanId: (await tx.ratePlan.findFirst({ where: { propertyId: { in: ctx.propertyIds as string[] } } }))?.id || '',
+          ratePlanId: ratePlanId,
           ratePlanSnapshot: { baseRate, total: totalAmount, currency },
           currency: currency,
+          corporateAccountId: corporateAccountId || null,
           createdBy: (session.user.staffId || session.user.id) as string,
         },
       });

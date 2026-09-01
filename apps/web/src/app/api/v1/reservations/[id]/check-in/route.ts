@@ -38,6 +38,7 @@ export async function POST(
       where: { id: reservationId },
       include: {
         property: true,
+        corporateAccount: true,
         reservationRooms: {
           include: { room: true }
         }
@@ -110,8 +111,17 @@ export async function POST(
 
       // 7D.6 FINANCIAL GUARD: ENFORCE DEPOSIT REQUIREMENT (INCREMENTAL MODEL)
       // Since room charges are posted incrementally via Night Audit, the outstanding balance is $0 at check-in.
-      // We must check if the wallet's available credit covers the expected cost, UNLESS the manager has explicitly overridden it.
-      if (!overrideDeposit && reservation.ratePlanSnapshot) {
+      // We must check if the wallet's available credit covers the expected cost, UNLESS the manager has explicitly overridden it
+      // OR the corporate account policy explicitly waives it.
+      
+      let requireDeposit = true;
+      if (overrideDeposit) {
+        requireDeposit = false;
+      } else if (reservation.corporateAccount && reservation.corporateAccount.depositPolicy === 'WAIVED') {
+        requireDeposit = false;
+      }
+
+      if (requireDeposit && reservation.ratePlanSnapshot) {
         const snapshot = reservation.ratePlanSnapshot as any;
         const expectedCost = snapshot.total || 0;
         

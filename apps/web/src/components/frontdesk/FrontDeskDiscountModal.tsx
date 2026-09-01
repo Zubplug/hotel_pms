@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { X, Percent, Hash } from 'lucide-react';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
-import { SupervisorOverrideModal } from '../pos/SupervisorOverrideModal';
+import { ManagerOverrideModal } from '../pos/ManagerOverrideModal';
 
 type TargetType = 'RESERVATION_ROOM' | 'FOLIO_ITEM';
 
@@ -87,27 +87,25 @@ export function FrontDeskDiscountModal({ isOpen, targetType, targetId, targetTot
     }
   };
 
-  const handleOverrideAuthorized = (supervisorId: string, supervisorName: string, pin?: string) => {
+  const handleOverrideAuthorized = (managerId: string, managerPin: string, reasonFromModal: string) => {
     setShowOverride(false);
-    if (pin) {
-      handleSubmit(pin);
+    if (managerPin) {
+      // The modal reason could potentially override the form reason, but we'll stick to the form reason if they match or just pass managerPin.
+      handleSubmit(managerPin);
     } else {
-      setError('Failed to capture supervisor PIN.');
+      setError('Failed to capture manager PIN.');
     }
   };
 
-  return createPortal(
+  return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-        <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
-          <div className="flex items-center justify-between p-6 border-b border-slate-100">
+      <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+        <DialogContent className="sm:max-w-md p-0 overflow-hidden rounded-3xl border-0 shadow-2xl flex flex-col max-h-[90vh]">
+          <div className="flex items-center justify-between p-6 border-b border-slate-100 shrink-0">
             <h2 className="text-xl font-bold text-slate-800">Apply Discount</h2>
-            <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-              <X className="w-6 h-6" />
-            </button>
           </div>
 
-          <div className="p-6 space-y-6">
+          <div className="p-6 space-y-6 overflow-y-auto">
             {error && (
               <div className="p-3 rounded-lg bg-red-50 text-red-600 text-sm font-medium border border-red-100">
                 {error}
@@ -168,7 +166,7 @@ export function FrontDeskDiscountModal({ isOpen, targetType, targetId, targetTot
             </div>
           </div>
 
-          <div className="p-6 bg-slate-50 border-t border-slate-100 flex gap-3">
+          <div className="p-6 bg-slate-50 border-t border-slate-100 flex gap-3 shrink-0">
             <button
               onClick={onClose}
               className="flex-1 py-3 px-4 rounded-xl font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition-colors"
@@ -183,16 +181,15 @@ export function FrontDeskDiscountModal({ isOpen, targetType, targetId, targetTot
               {isLoading ? 'Applying...' : 'Apply Discount'}
             </button>
           </div>
-        </div>
-      </div>
+        </DialogContent>
+      </Dialog>
 
-      <SupervisorOverrideModal
+      <ManagerOverrideModal
         isOpen={showOverride}
         actionName="Discount Override"
-        onAuthorized={(id, name, pin) => handleOverrideAuthorized(id, name, pin)}
+        onAuthorized={(id, pin, r) => handleOverrideAuthorized(id, pin, r)}
         onCancel={() => setShowOverride(false)}
       />
-    </>,
-    document.body
+    </>
   );
 }

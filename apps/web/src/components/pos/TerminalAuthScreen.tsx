@@ -566,32 +566,14 @@ function ShiftPanel({
         </div>
       </div>
 
-      {/* Float input */}
-      <div className="flex-1">
-        <label className="block text-sm font-bold text-slate-700 mb-1">Opening Float</label>
-        <p className="text-xs text-slate-400 mb-2.5">
-            Count the opening cash assigned to this POS bank. Set to 0 if starting empty.
-        </p>
-        <div className="relative">
-          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">
-            ₦
-          </span>
-          <input
-            ref={inputRef}
-            type="number"
-            min="0"
-            step="100"
-            value={openingFloat}
-            onChange={(e) => onFloatChange(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && onConfirm()}
-            className="w-full pl-8 pr-4 py-3 bg-white border-2 border-slate-200 rounded-xl text-lg font-black text-slate-800 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 outline-none transition-all"
-          />
+      <div className="flex-1 flex flex-col justify-center items-center text-center">
+        <div className="w-16 h-16 rounded-full bg-indigo-50 flex items-center justify-center mb-4">
+          <Banknote className="w-8 h-8 text-indigo-500" />
         </div>
-        {error && (
-          <div className="mt-2.5 flex items-center gap-1.5 text-rose-600 text-[11px] font-bold bg-rose-50 px-3 py-2 rounded-lg">
-            {error}
-          </div>
-        )}
+        <h3 className="font-black text-slate-800 text-lg">Shift Starting</h3>
+        <p className="text-sm text-slate-500 mt-2 max-w-[250px]">
+          Click below to open your shift and enter the POS.
+        </p>
       </div>
 
       <button

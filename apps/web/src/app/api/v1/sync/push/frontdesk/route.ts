@@ -329,13 +329,36 @@ export async function POST(req: NextRequest) {
                throw new Error('Check-out must be after check-in');
              }
              const nights = Math.max(1, Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24)));
-             const baseRate = Number(roomType.baseRate);
-             const amount = baseRate * nights;
+             let baseRate = Number(roomType.baseRate);
              const currency = roomType.currency || 'NGN';
+             
+             let finalRatePlanId = '';
+             const corporateAccountId = payload.CorporateAccountId || payload.corporateAccountId;
+             if (corporateAccountId) {
+               const corporateAccount = await tx.corporateAccount.findUnique({
+                 where: { id: corporateAccountId },
+                 include: { ratePlan: true }
+               });
+               if (corporateAccount?.ratePlan) {
+                 finalRatePlanId = corporateAccount.ratePlan.id;
+                 const rate = await tx.rate.findFirst({
+                   where: { ratePlanId: finalRatePlanId, roomTypeId: roomType.id }
+                 });
+                 if (rate && (rate as any).amount) {
+                   baseRate = Number((rate as any).amount);
+                 } else if (rate && (rate as any).baseAmount) {
+                   baseRate = Number((rate as any).baseAmount);
+                 }
+               }
+             }
 
-             // Resolve property-level rate plan (required FK)
-             const ratePlan = await tx.ratePlan.findFirst({ where: { propertyId, isActive: true } });
-             if (!ratePlan) throw new Error('No active RatePlan found for property');
+             if (!finalRatePlanId) {
+               const ratePlan = await tx.ratePlan.findFirst({ where: { propertyId, isActive: true } });
+               if (!ratePlan) throw new Error('No active RatePlan found for property');
+               finalRatePlanId = ratePlan.id;
+             }
+
+             const amount = baseRate * nights;
 
              await tx.reservation.create({
                data: {
@@ -348,10 +371,11 @@ export async function POST(req: NextRequest) {
                  checkOut: checkOutDate,
                  adults: payload.Adults || payload.adults || 1,
                  children: payload.Children || payload.children || 0,
-                 ratePlanId: ratePlan.id,
+                 ratePlanId: finalRatePlanId,
                  ratePlanSnapshot: { baseRate, currency, nights, total: amount },
                  confirmationNumber: `RES-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 1000)}`,
                  currency,
+                 corporateAccountId: corporateAccountId || null,
                  createdBy: actorId,
                  version: aggregateVersion,
                }
@@ -745,6 +769,42 @@ export async function POST(req: NextRequest) {
                });
              }
           }
+          else if (eventType === 'CITY_LEDGER_SETTLEMENT') {
+             const amount = Number(payload.amount ?? payload.Amount);
+             const accountId = payload.accountId || payload.AccountId;
+             if (!Number.isFinite(amount) || amount <= 0) throw new Error('Settlement amount must be positive');
+             if (!accountId) throw new Error('accountId is required for CITY_LEDGER_SETTLEMENT');
+
+             const folio = await tx.folio.findUnique({ where: { id: aggregateId, propertyId } });
+             if (!folio) throw new Error('Folio not found or unauthorized');
+
+             const existing = await tx.cityLedgerEntry.findFirst({
+               where: { idempotencyKey }
+             });
+             if (!existing) {
+               await tx.cityLedgerEntry.create({
+                 data: {
+                   accountId,
+                   propertyId,
+                   reservationId: folio.reservationId,
+                   folioId: aggregateId,
+                   amount,
+                   currency: payload.currency || 'NGN',
+                   type: 'TRANSFER_IN',
+                   reason: 'Auto-routed to City Ledger upon checkout (Offline sync)',
+                   createdBy: actorId,
+                   idempotencyKey
+                 }
+               });
+               await tx.folio.update({
+                 where: { id: aggregateId },
+                 data: {
+                   totalPayments: { increment: amount },
+                   balance: { decrement: amount }
+                 }
+               });
+             }
+           }
           else if (eventType === 'REFUND_REQUESTED') {
              const amount = Math.abs(Number(payload.amount ?? payload.Amount));
              const paymentId = payload.paymentId || payload.PaymentId || aggregateId;

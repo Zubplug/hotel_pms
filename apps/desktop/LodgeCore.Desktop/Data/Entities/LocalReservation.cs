@@ -9,6 +9,9 @@ public class LocalReservation
     public string? GuestId { get; set; }
     public LocalGuest? Guest { get; set; }
     
+    public string? CorporateAccountId { get; set; }
+    public LocalCorporateAccount? CorporateAccount { get; set; }
+
     public string? CompanyId { get; set; }
     public string? Source { get; set; }
     public string? ChannelRef { get; set; }

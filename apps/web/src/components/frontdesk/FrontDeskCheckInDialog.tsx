@@ -15,6 +15,7 @@ import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { formatRoomNumber } from '@/lib/format-room';
 import { FrontDeskAddPaymentDialog } from './FrontDeskAddPaymentDialog';
 import { formatCurrency } from '@/lib/utils';
+import { ManagerOverrideModal } from '../pos/ManagerOverrideModal';
 
 interface FrontDeskCheckInDialogProps {
   open: boolean;
@@ -33,6 +34,7 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [existingCardData, setExistingCardData] = useState<any>(null);
   const [isDepositOverride, setIsDepositOverride] = useState(false);
+  const [showManagerOverride, setShowManagerOverride] = useState(false);
   const [isCollectDepositOpen, setIsCollectDepositOpen] = useState(false);
 
   // Fetch full reservation data since the dashboard only passed an ID
@@ -56,6 +58,7 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
       setErrorMsg(null);
       setExistingCardData(null);
       setIsDepositOverride(false);
+      setShowManagerOverride(false);
       setIsCollectDepositOpen(false);
     }
   }, [open, reservationId]);
@@ -136,13 +139,18 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
     }
   };
 
-  const executeCheckInEncoding = async () => {
+  const executeCheckInEncoding = async (managerId?: string, managerPin?: string, reason?: string) => {
     try {
       setPhase('ENCODING');
       setErrorMsg(null);
       setOperationId(null); 
 
-      const data = await provider.reservations.checkIn(reservationId!, "System", "Device1", { overrideDeposit: isDepositOverride });
+      const data = await provider.reservations.checkIn(reservationId!, "System", "Device1", { 
+        overrideDeposit: isDepositOverride,
+        managerId,
+        managerPin,
+        reason
+      });
 
       if (!data || data.error) {
         setPhase('FAILED');
@@ -162,6 +170,13 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
       setPhase('FAILED');
       setErrorMsg(err instanceof Error ? err.message : 'Network error occurred');
     }
+  };
+
+  const handleOverrideAuthorized = (managerId: string, managerPin: string, reason: string) => {
+    setShowManagerOverride(false);
+    setIsDepositOverride(true);
+    // Proceed to check-in encoding with override credentials
+    executeCheckInEncoding(managerId, managerPin, reason);
   };
 
   const [printStatus, setPrintStatus] = useState<'IDLE' | 'PRINTING' | 'SUCCESS' | 'FAILED'>('IDLE');
@@ -285,7 +300,7 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
                             </Button>
                             <Button 
                               variant="outline" 
-                              onClick={() => setIsDepositOverride(true)}
+                              onClick={() => setShowManagerOverride(true)}
                               className="font-bold border-amber-300 text-amber-800 hover:bg-amber-100"
                             >
                               Manager Override
@@ -424,6 +439,13 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
           }}
         />
       )}
+
+      <ManagerOverrideModal
+        isOpen={showManagerOverride}
+        actionName="Deposit Check-In Override"
+        onAuthorized={handleOverrideAuthorized}
+        onCancel={() => setShowManagerOverride(false)}
+      />
     </Dialog>
   );
 }

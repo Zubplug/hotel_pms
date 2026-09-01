@@ -9,6 +9,10 @@ public class LocalDbContext : DbContext
     public DbSet<LocalReservation> Reservations { get; set; } = null!;
     public DbSet<LocalReservationRoom> ReservationRooms { get; set; } = null!;
     public DbSet<LocalGuest> Guests { get; set; } = null!;
+    public DbSet<LocalCorporateAccount> CorporateAccounts { get; set; } = null!;
+    public DbSet<LocalRatePlan> RatePlans { get; set; } = null!;
+    public DbSet<LocalRate> Rates { get; set; } = null!;
+    public DbSet<LocalCityLedgerEntry> CityLedgerEntries { get; set; } = null!;
     public DbSet<LocalFolio> Folios { get; set; } = null!;
     public DbSet<LocalSyncEvent> SyncEvents { get; set; } = null!;
     public DbSet<LocalOutboxEvent> OutboxEvents { get; set; } = null!;
@@ -61,6 +65,7 @@ public class LocalDbContext : DbContext
     public DbSet<LocalLaundryOrder> LaundryOrders { get; set; } = null!;
     public DbSet<LocalLaundryOrderItem> LaundryOrderItems { get; set; } = null!;
     public DbSet<LocalLaundryOrderStatusHistory> LaundryOrderStatusHistory { get; set; } = null!;
+    public DbSet<LocalOverrideAudit> OverrideAudits { get; set; } = null!;
 
     public LocalDbContext(DbContextOptions<LocalDbContext> options) : base(options)
     {
@@ -162,6 +167,27 @@ public class LocalDbContext : DbContext
         }
     }
 
+    public async Task ApplyManagerOverrideSchemaAsync()
+    {
+        var sql = @"
+            CREATE TABLE IF NOT EXISTS OverrideAudits (
+                Id TEXT NOT NULL PRIMARY KEY,
+                PropertyId TEXT NOT NULL,
+                OperatorStaffId TEXT NOT NULL,
+                ManagerStaffId TEXT NOT NULL,
+                Action TEXT NOT NULL,
+                EntityType TEXT NOT NULL,
+                EntityId TEXT NOT NULL,
+                Reason TEXT NULL,
+                Amount TEXT NULL,
+                Metadata TEXT NULL,
+                CreatedAt TEXT NOT NULL,
+                SyncStatus TEXT NOT NULL DEFAULT 'PENDING'
+            );
+        ";
+        await Database.ExecuteSqlRawAsync(sql);
+    }
+
     public async Task ApplyPosRoutingSchemaAsync()
     {
         var columns = new[]
@@ -219,6 +245,12 @@ public class LocalDbContext : DbContext
             .HasOne(r => r.Guest)
             .WithMany(g => g.Reservations)
             .HasForeignKey(r => r.GuestId)
+            .IsRequired(false);
+
+        modelBuilder.Entity<LocalReservation>()
+            .HasOne(r => r.CorporateAccount)
+            .WithMany()
+            .HasForeignKey(r => r.CorporateAccountId)
             .IsRequired(false);
 
         modelBuilder.Entity<LocalReservationRoom>()
@@ -283,6 +315,26 @@ public class LocalDbContext : DbContext
         modelBuilder.Entity<LocalSyncEvent>()
             .HasIndex(e => new { e.TerminalId, e.SequenceNumber })
             .IsUnique();
+
+        modelBuilder.Entity<LocalCityLedgerEntry>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.AccountId);
+            entity.HasIndex(e => e.PropertyId);
+        });
+
+        modelBuilder.Entity<LocalRatePlan>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.PropertyId);
+        });
+
+        modelBuilder.Entity<LocalRate>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => new { e.RatePlanId, e.RoomTypeId });
+            entity.HasIndex(e => e.PropertyId);
+        });
 
         modelBuilder.Entity<LocalPosProductionBatch>()
             .HasMany(b => b.Items)

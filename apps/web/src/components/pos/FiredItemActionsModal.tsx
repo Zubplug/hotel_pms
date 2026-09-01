@@ -7,8 +7,8 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Trash, RefreshCcw, AlertTriangle, CheckCircle2 } from 'lucide-react';
-import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { toast } from 'sonner';
+import { ManagerOverrideModal } from './ManagerOverrideModal';
 
 export default function FiredItemActionsModal({
   isOpen,
@@ -28,19 +28,21 @@ export default function FiredItemActionsModal({
   const { provider } = useLodgeCoreProvider();
   
   const [activeTab, setActiveTab] = useState('replace');
-  const [managerPin, setManagerPin] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Void State
-  const [voidReason, setVoidReason] = useState('Customer changed mind');
   const [inventoryAction, setInventoryAction] = useState<'RESTOCK' | 'WASTE'>('RESTOCK');
   
   // Replace State
   const [replacementProduct, setReplacementProduct] = useState<any>(null);
+
+  // Override State
+  const [showOverride, setShowOverride] = useState(false);
+  const [pendingAction, setPendingAction] = useState<'VOID' | 'REPLACE' | null>(null);
   
   if (!item) return null;
   
-  const handleReplace = async () => {
+  const handleReplace = async (managerId?: string, managerPin?: string, reason?: string) => {
     if (!replacementProduct) {
       toast.error('Please select a replacement product');
       return;
@@ -52,8 +54,9 @@ export default function FiredItemActionsModal({
         action: 'REPLACE',
         orderId,
         originalOrderItemId: item.id,
-        reason: 'Customer changed mind',
+        reason: reason || 'Customer changed mind',
         inventoryAction: 'RESTOCK',
+        managerId,
         managerPin,
         replacementItem: {
           id: crypto.randomUUID(),
@@ -67,7 +70,8 @@ export default function FiredItemActionsModal({
       const result = await provider.approvals.requestItemModification(payload);
       
       if (result.requiresApproval) {
-        toast.error('This replacement requires a Manager PIN (exceeds threshold or is free).');
+        setPendingAction('REPLACE');
+        setShowOverride(true);
         setIsSubmitting(false);
         return;
       }
@@ -86,22 +90,24 @@ export default function FiredItemActionsModal({
     }
   };
 
-  const handleVoid = async () => {
+  const handleVoid = async (managerId?: string, managerPin?: string, reason?: string) => {
     setIsSubmitting(true);
     try {
       const payload = {
         action: 'VOID',
         orderId,
         originalOrderItemId: item.id,
-        reason: voidReason,
+        reason: reason || 'Customer changed mind',
         inventoryAction,
+        managerId,
         managerPin
       };
       
       const result = await provider.approvals.requestItemModification(payload);
       
       if (result.requiresApproval) {
-        toast.error('Invalid Manager PIN');
+        setPendingAction('VOID');
+        setShowOverride(true);
         setIsSubmitting(false);
         return;
       }
@@ -124,8 +130,14 @@ export default function FiredItemActionsModal({
     ? (item.unitPrice * item.quantity) - replacementProduct.price 
     : 0;
 
-  const isBarItem = item.station === 'BAR';
-  const requiresVoidPin = !isBarItem;
+  const handleOverrideAuthorized = (managerId: string, managerPin: string, reason: string) => {
+    setShowOverride(false);
+    if (pendingAction === 'REPLACE') {
+      handleReplace(managerId, managerPin, reason);
+    } else if (pendingAction === 'VOID') {
+      handleVoid(managerId, managerPin, reason);
+    }
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -166,7 +178,7 @@ export default function FiredItemActionsModal({
             </div>
 
             {replacementProduct && (
-              <div className="bg-blue-50 border border-blue-100 p-3 rounded-md">
+              <div className="bg-blue-50 border border-blue-100 p-3 rounded-md mb-2">
                 <div className="text-sm">Price difference: 
                   <span className={`font-semibold ml-2 ${priceDiff > 0 ? 'text-red-600' : 'text-green-600'}`}>
                     {priceDiff > 0 ? '-' : '+'}₦{Math.abs(priceDiff).toLocaleString()}
@@ -174,56 +186,20 @@ export default function FiredItemActionsModal({
                 </div>
                 {priceDiff > 0 && (
                   <div className="text-xs text-blue-700 mt-1">
-                    Large reductions may require a manager PIN.
+                    Large reductions require manager approval.
                   </div>
                 )}
               </div>
             )}
-
-            <div className="space-y-2">
-              <Label>Manager PIN (if required)</Label>
-              <Input 
-                type="password" 
-                placeholder="****" 
-                value={managerPin}
-                onChange={(e) => setManagerPin(e.target.value)}
-              />
-            </div>
           </TabsContent>
           
           <TabsContent value="void" className="space-y-4 pt-4">
-            {requiresVoidPin ? (
-              <div className="bg-red-50 text-red-700 p-3 rounded-md text-sm flex items-start gap-2">
-                <AlertTriangle className="w-5 h-5 flex-shrink-0" />
-                <div>
-                  <strong>Manager Approval Required</strong>
-                  <p>Kitchen/Restaurant voids require a PIN.</p>
-                </div>
+            <div className="bg-red-50 text-red-700 p-3 rounded-md text-sm flex items-start gap-2">
+              <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+              <div>
+                <strong>Manager Approval Required</strong>
+                <p>All voids require Manager override.</p>
               </div>
-            ) : (
-              <div className="bg-green-50 text-green-700 p-3 rounded-md text-sm flex items-start gap-2">
-                <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
-                <div>
-                  <strong>Bar Item Auto-Approval</strong>
-                  <p>Bar items can be voided without a Manager PIN.</p>
-                </div>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <Label>Reason</Label>
-              <Select value={voidReason} onValueChange={(val) => setVoidReason(val || '')}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Customer changed mind">Customer changed mind</SelectItem>
-                  <SelectItem value="Entry error">Entry error</SelectItem>
-                  <SelectItem value="Spilled/Ruined">Spilled/Ruined</SelectItem>
-                  <SelectItem value="Quality issue">Quality issue</SelectItem>
-                  <SelectItem value="Duplicate order">Duplicate order</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
 
             <div className="flex items-center justify-between border p-3 rounded-md">
@@ -240,34 +216,29 @@ export default function FiredItemActionsModal({
                 onCheckedChange={(c) => setInventoryAction(c ? 'WASTE' : 'RESTOCK')}
               />
             </div>
-
-            {requiresVoidPin && (
-              <div className="space-y-2">
-                <Label>Manager PIN</Label>
-                <Input 
-                  type="password" 
-                  placeholder="Enter Manager PIN..." 
-                  value={managerPin}
-                  onChange={(e) => setManagerPin(e.target.value)}
-                />
-              </div>
-            )}
           </TabsContent>
         </Tabs>
 
         <DialogFooter className="mt-6">
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           {activeTab === 'replace' ? (
-            <Button onClick={handleReplace} disabled={isSubmitting || !replacementProduct}>
+            <Button onClick={() => handleReplace()} disabled={isSubmitting || !replacementProduct}>
               {isSubmitting ? 'Replacing...' : 'Replace Item'}
             </Button>
           ) : (
-            <Button variant="destructive" onClick={handleVoid} disabled={isSubmitting || (requiresVoidPin && !managerPin)}>
+            <Button variant="destructive" onClick={() => handleVoid()} disabled={isSubmitting}>
               {isSubmitting ? 'Voiding...' : 'Confirm Void'}
             </Button>
           )}
         </DialogFooter>
       </DialogContent>
+      
+      <ManagerOverrideModal
+        isOpen={showOverride}
+        actionName={pendingAction === 'VOID' ? 'Void Item' : 'Replace Item'}
+        onAuthorized={handleOverrideAuthorized}
+        onCancel={() => setShowOverride(false)}
+      />
     </Dialog>
   );
 }

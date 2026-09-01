@@ -110,6 +110,7 @@ export function AddPaymentDialog({ open, onOpenChange, folio, collectionSource =
                 <SelectItem value="POS">POS Terminal</SelectItem>
                 <SelectItem value="BANK_TRANSFER">Bank Transfer</SelectItem>
                 <SelectItem value="CARD">Manual Card</SelectItem>
+                <SelectItem value="CITY_LEDGER">City Ledger / Direct Bill</SelectItem>
                 <SelectItem value="PAYMENT_GATEWAY">Online Payment (Paystack)</SelectItem>
               </SelectContent>
             </Select>

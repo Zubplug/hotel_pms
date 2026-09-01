@@ -104,6 +104,12 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     }
   },
   
+  corporateAccounts: {
+    list: async (propertyId: string) => {
+      return invokeDesktop('corporateAccounts.list', { propertyId });
+    }
+  },
+  
   roomTypes: {
     list: async (propertyId: string) => {
       return invokeDesktop('roomTypes.list', { propertyId });
@@ -153,7 +159,7 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     markLateArrival: async (id: string, notes: string) => invokeDesktop('reservations.lateArrival', { id, notes }),
     assessNoShow: async (id: string) => invokeDesktop('reservations.noShow', { id }),
     reinstate: async (id: string, reason: string) => invokeDesktop('reservations.reinstate', { id, reason }),
-    checkIn: async (id: string, userId: string, deviceId: string, options?: { bypassKeycard?: boolean, overrideDeposit?: boolean }) => {
+    checkIn: async (id: string, userId: string, deviceId: string, options?: { bypassKeycard?: boolean, overrideDeposit?: boolean, managerId?: string, managerPin?: string, reason?: string }) => {
       const bypass = options?.bypassKeycard === true;
       let encodedRoomId = '';
       let encodeRes: any = { success: true, data: { status: 'SUCCESS' } };
@@ -189,6 +195,9 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
         deviceId, 
         bypassKeycard: bypass, 
         overrideDeposit: options?.overrideDeposit,
+        managerId: options?.managerId,
+        managerPin: options?.managerPin,
+        reason: options?.reason,
         encodedRoomId, 
         encodeData: encodeRes.data ? JSON.stringify(encodeRes.data) : undefined 
       });
@@ -216,8 +225,15 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
         }
       };
     },
-    checkOut: async (id: string, userId: string, deviceId: string) => {
-      return invokeDesktop('reservations.checkOut', { id, userId, deviceId });
+    checkOut: async (id: string, userId: string, deviceId: string, options?: { managerId?: string, managerPin?: string, reason?: string }) => {
+      return invokeDesktop('reservations.checkOut', { 
+        id, 
+        userId, 
+        deviceId, 
+        managerId: options?.managerId, 
+        managerPin: options?.managerPin, 
+        reason: options?.reason 
+      });
     },
     extendStay: async (id: string, newCheckOutDate: string) => {
       return invokeDesktop('reservations.extendStay', { reservationId: id, newCheckOutDate });
@@ -274,6 +290,14 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
   },
   
   keycards: {
+    encodeMasterCard: async (payload: { startDate?: string, endDate?: string, managerId?: string, pin?: string, reason?: string }) => {
+      const res = await invokeDesktop('hardware.encodeMasterCard', payload);
+      return {
+        success: res.success,
+        error: typeof res.error === 'string' ? { message: res.error } : res.error,
+        data: res.data
+      };
+    },
     encode: async (roomId, lockCode, reservationId) => {
       const res = await invokeDesktop('keycards.encode', { roomId, lockCode, reservationId });
       return {
@@ -368,8 +392,8 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     startSession: async (data: { userId: string; propertyId: string; deviceId: string; outletId: string; openingCash: number }) => {
       return invokeDesktop('pos.startSession', { ...data, openingBalance: data.openingCash });
     },
-    startEmergencyBank: async (pin: string, reason: string, operatorToken: string) => {
-      return invokeDesktop('pos.startEmergencyBank', { pin, reason, operatorToken });
+    startEmergencyBank: async (managerId: string, pin: string, reason: string, operatorToken: string) => {
+      return invokeDesktop('pos.startEmergencyBank', { managerId, pin, reason, operatorToken });
     },
     keepAlive: async () => {
       return invokeDesktop('pos.keepAlive');
@@ -440,8 +464,8 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     getCashMovements: async (sessionId: string) => {
       return invokeDesktop('pos.getCashMovements', { sessionId });
     },
-    createCashMovement: async (propertyId: string, sessionId: string, amount: number, type: string, reasonCode: string, notes?: string, receiptReference?: string, authorizerId?: string) => {
-      return invokeDesktop('pos.createCashMovement', { propertyId, sessionId, amount, type, reasonCode, notes, receiptReference, authorizerId });
+    createCashMovement: async (propertyId: string, sessionId: string, amount: number, type: string, reasonCode: string, notes?: string, receiptReference?: string, managerId?: string, managerPin?: string) => {
+      return invokeDesktop('pos.createCashMovement', { propertyId, sessionId, amount, type, reasonCode, notes, receiptReference, managerId, managerPin });
     },
     getSessionSettlementDetails: async (sessionId: string) => {
       return invokeDesktop('pos.getSessionSettlementDetails', { sessionId });
@@ -462,14 +486,14 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     getCashOfficeOverview: async (propertyId: string) => {
       return invokeDesktop('pos.getCashOfficeOverview', { propertyId });
     },
-    openSafe: async (propertyId: string, amount: number, managerPin: string) => {
-      return invokeDesktop('pos.openSafe', { propertyId, amount, managerPin });
+    openSafe: async (propertyId: string, amount: number, managerId: string, managerPin: string, reason: string) => {
+      return invokeDesktop('pos.openSafe', { propertyId, amount, managerId, managerPin, reason });
     },
     getSafeLedger: async (propertyId: string) => {
       return invokeDesktop('pos.getSafeLedger', { propertyId });
     },
-    recordBankDeposit: async (propertyId: string, amount: number, reference: string, managerPin: string) => {
-      return invokeDesktop('pos.recordBankDeposit', { propertyId, amount, reference, managerPin });
+    recordBankDeposit: async (propertyId: string, amount: number, reference: string, managerId: string, managerPin: string, reason: string) => {
+      return invokeDesktop('pos.recordBankDeposit', { propertyId, amount, reference, managerId, managerPin, reason });
     },
     // Service-first waiter flow
     fireItems: async (orderId: string, items: any[], operatorToken: string) => {

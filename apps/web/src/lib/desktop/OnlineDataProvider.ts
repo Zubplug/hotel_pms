@@ -100,6 +100,11 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
       return apiFetch(`/api/v1/guests?search=${encodeURIComponent(query)}&limit=50`);
     }
   },
+  corporateAccounts: {
+    async list(propertyId: string) {
+      return apiFetch(`/api/v1/corporate-accounts?propertyId=${propertyId}`);
+    }
+  },
   roomTypes: {
     async list(propertyId: string) {
       return apiFetch(`/api/v1/room-types?propertyId=${propertyId}`);
@@ -223,6 +228,9 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
     addDeposit: async () => ({ success: false, error: 'Advance deposits are available on the desktop front desk.' })
   },
   keycards: {
+    encodeMasterCard: async () => {
+      throw new Error('Master Card encoding is only supported on the Desktop Client with hardware connected.');
+    },
     encode: async (roomId, lockCode, reservationId) => {
       return apiFetch(`/api/v1/hardware/keycards/encode`, {
         method: 'POST',

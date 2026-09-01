@@ -81,6 +81,7 @@ export interface LodgeCoreDataProvider {
   };
   keycards: {
     encode(roomId: string, lockCode: string, reservationId: string): Promise<any>;
+    encodeMasterCard(payload: { startDate?: string, endDate?: string }): Promise<any>;
     read(): Promise<any>;
     cancel(): Promise<any>;
   };

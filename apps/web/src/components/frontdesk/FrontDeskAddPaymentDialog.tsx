@@ -141,6 +141,7 @@ export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio, initialAm
     { id: 'CASH', label: 'Cash', icon: Banknote, color: 'text-emerald-600', bg: 'bg-emerald-100', border: 'border-emerald-200' },
     { id: 'POS', label: 'POS Terminal', icon: CreditCard, color: 'text-blue-600', bg: 'bg-blue-100', border: 'border-blue-200' },
     { id: 'BANK_TRANSFER', label: 'Bank Transfer', icon: Landmark, color: 'text-purple-600', bg: 'bg-purple-100', border: 'border-purple-200' },
+    { id: 'CITY_LEDGER', label: 'City Ledger / Direct Bill', icon: Receipt, color: 'text-indigo-600', bg: 'bg-indigo-100', border: 'border-indigo-200' },
     { id: 'PAYMENT_GATEWAY', label: 'Paystack Online', icon: ArrowUpRight, color: 'text-orange-600', bg: 'bg-orange-100', border: 'border-orange-200' },
   ];
 

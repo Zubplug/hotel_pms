@@ -85,10 +85,28 @@ export async function GET(req: NextRequest) {
       orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     });
 
-    // Active Front Desk sessions are always included so a reinstalled desktop
-    // can recover an open till even when its incremental cursor is current.
+    // We include active Front Desk sessions, PLUS any that have changed recently
+    // so the desktop knows when a session is submitted/completed/approved.
+    const twoDaysAgo = new Date(watermark.getTime() - 2 * 24 * 60 * 60 * 1000);
+    const frontdeskSessionsWhere: any = since 
+      ? {
+          propertyId,
+          OR: [
+            { status: 'OPEN' as any },
+            { updatedAt: { gt: since, lte: watermark } }
+          ]
+        }
+      : {
+          propertyId,
+          updatedAt: { lte: watermark },
+          OR: [
+            { status: 'OPEN' as any },
+            { closedAt: { gte: twoDaysAgo } }
+          ]
+        };
+
     const frontdeskSessions = await prisma.frontdeskSession.findMany({
-      where: { propertyId, status: 'OPEN' },
+      where: frontdeskSessionsWhere,
       include: { cashMovements: true },
       take: limit,
       orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
@@ -116,6 +134,24 @@ export async function GET(req: NextRequest) {
 
     const roomTypes = await prisma.roomType.findMany({
       where: buildWhere({ propertyId, isActive: true }),
+      take: limit,
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+    });
+
+    const corporateAccounts = await prisma.corporateAccount.findMany({
+      where: buildWhere({ propertyId }),
+      take: limit,
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+    });
+
+    const ratePlans = await prisma.ratePlan.findMany({
+      where: buildWhere({ propertyId, isActive: true }),
+      take: limit,
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+    });
+
+    const rates = await prisma.rate.findMany({
+      where: buildWhere({ propertyId }),
       take: limit,
       orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     });
@@ -323,6 +359,9 @@ export async function GET(req: NextRequest) {
     staffList.forEach(s => allEntities.push({ type: 'Staff', updatedAt: s.updatedAt, data: s }));
     rooms.forEach(s => allEntities.push({ type: 'Room', updatedAt: s.updatedAt, data: s }));
     roomTypes.forEach(s => allEntities.push({ type: 'RoomType', updatedAt: s.updatedAt, data: s }));
+    corporateAccounts.forEach(s => allEntities.push({ type: 'CorporateAccount', updatedAt: s.updatedAt, data: s }));
+    ratePlans.forEach(s => allEntities.push({ type: 'RatePlan', updatedAt: s.updatedAt, data: s }));
+    rates.forEach(s => allEntities.push({ type: 'Rate', updatedAt: s.updatedAt, data: s }));
     reservations.forEach(s => allEntities.push({ type: 'Reservation', updatedAt: s.updatedAt, data: s }));
     posOutlets.forEach(s => allEntities.push({ type: 'PosOutlet', updatedAt: s.updatedAt, data: s }));
     posCategories.forEach(s => allEntities.push({ type: 'ProductCategory', updatedAt: s.updatedAt, data: s }));
@@ -364,6 +403,9 @@ export async function GET(req: NextRequest) {
     const finalStaff = allEntities.filter(e => e.type === 'Staff').map(e => e.data);
     const finalRooms = allEntities.filter(e => e.type === 'Room').map(e => e.data);
     const finalRoomTypes = allEntities.filter(e => e.type === 'RoomType').map(e => e.data);
+    const finalCorporateAccounts = allEntities.filter(e => e.type === 'CorporateAccount').map(e => e.data);
+    const finalRatePlans = allEntities.filter(e => e.type === 'RatePlan').map(e => e.data);
+    const finalRates = allEntities.filter(e => e.type === 'Rate').map(e => e.data);
     const finalReservations = allEntities.filter(e => e.type === 'Reservation').map(e => e.data);
     const finalOutlets = allEntities.filter(e => e.type === 'PosOutlet').map(e => e.data);
     const finalCategories = allEntities.filter(e => e.type === 'ProductCategory').map(e => e.data);
@@ -468,6 +510,9 @@ export async function GET(req: NextRequest) {
       staff:      staffWithPermissions,
       rooms:      finalRooms,
       roomTypes:  finalRoomTypes,
+      corporateAccounts: finalCorporateAccounts,
+      ratePlans: finalRatePlans,
+      rates: finalRates,
       reservations: plainReservations,
       guests:     Array.from(guestMap.values()),
       folios,

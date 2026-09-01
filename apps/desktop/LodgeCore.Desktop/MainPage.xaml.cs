@@ -220,6 +220,14 @@ public partial class MainPage : ContentPage
                         parameters?["lockCode"]?.ToString() ?? "",
                         parameters?["reservationId"]?.ToString() ?? "");
                     break;
+                case "hardware.encodeMasterCard":
+                    responseData = await hardwareInterop.EncodeMasterCardAsync(
+                        parameters?["startDate"]?.ToString(),
+                        parameters?["endDate"]?.ToString(),
+                        parameters?["managerId"]?.ToString(),
+                        parameters?["pin"]?.ToString(),
+                        parameters?["reason"]?.ToString());
+                    break;
                 case "hardware.cancelCard":
                     responseData = await hardwareInterop.CancelCardAsync();
                     break;
@@ -285,11 +293,17 @@ public partial class MainPage : ContentPage
                     }
                     var encodedRoomId = parameters?["encodedRoomId"]?.ToString() ?? "";
                     var encodeData = parameters?["encodeData"]?.ToString();
-                    responseData = await pmsInterop.ProcessCheckInAsync(resId, bypassKeycard, encodedRoomId, encodeData, overrideDeposit);
+                    var managerId = parameters?["managerId"]?.ToString();
+                    var managerPin = parameters?["managerPin"]?.ToString();
+                    var reason = parameters?["reason"]?.ToString();
+                    responseData = await pmsInterop.ProcessCheckInAsync(resId, bypassKeycard, encodedRoomId, encodeData, overrideDeposit, managerId, managerPin, reason);
                     break;
                 case "reservations.checkOut":
                     string outResId = parameters?["id"]?.ToString() ?? "";
-                    responseData = await pmsInterop.ProcessCheckOutAsync(outResId);
+                    var checkOutManagerId = parameters?["managerId"]?.ToString();
+                    var checkOutManagerPin = parameters?["managerPin"]?.ToString();
+                    var checkOutReason = parameters?["reason"]?.ToString();
+                    responseData = await pmsInterop.ProcessCheckOutAsync(outResId, checkOutManagerId, checkOutManagerPin, checkOutReason);
                     break;
                 case "dashboard.get":
                     responseData = await pmsInterop.GetDashboardAsync(parameters?["propertyId"]?.ToString() ?? "");
@@ -591,7 +605,8 @@ public partial class MainPage : ContentPage
                         parameters?["reasonCode"]?.ToString() ?? "",
                         parameters?["notes"]?.ToString() ?? "",
                         parameters?["receiptReference"]?.ToString() ?? "",
-                        parameters?["authorizerId"]?.ToString() ?? "");
+                        parameters?["managerId"]?.ToString() ?? "",
+                        parameters?["managerPin"]?.ToString() ?? "");
                     break;
                 case "pos.getSessionSettlementDetails":
                     responseData = await pmsInterop.GetSessionSettlementDetailsAsync(parameters?["sessionId"]?.ToString() ?? "");
@@ -637,7 +652,9 @@ public partial class MainPage : ContentPage
                     responseData = await pmsInterop.OpenSafeAsync(
                         parameters?["propertyId"]?.ToString() ?? "",
                         parameters?["amount"]?.GetValue<decimal>() ?? 0,
-                        parameters?["managerPin"]?.ToString() ?? ""
+                        parameters?["managerId"]?.ToString() ?? "",
+                        parameters?["managerPin"]?.ToString() ?? "",
+                        parameters?["reason"]?.ToString() ?? ""
                     );
                     break;
                 case "pos.getSafeLedger":
@@ -650,7 +667,9 @@ public partial class MainPage : ContentPage
                         parameters?["propertyId"]?.ToString() ?? "",
                         parameters?["amount"]?.GetValue<decimal>() ?? 0,
                         parameters?["reference"]?.ToString() ?? "",
-                        parameters?["managerPin"]?.ToString() ?? ""
+                        parameters?["managerId"]?.ToString() ?? "",
+                        parameters?["managerPin"]?.ToString() ?? "",
+                        parameters?["reason"]?.ToString() ?? ""
                     );
                     break;
                 case "pos.authorizeVoid":
@@ -697,6 +716,7 @@ public partial class MainPage : ContentPage
                     break;
                 case "pos.startEmergencyBank":
                     responseData = await pmsInterop.StartEmergencyBankAsync(
+                        parameters?["managerId"]?.ToString() ?? "",
                         parameters?["pin"]?.ToString() ?? "",
                         parameters?["reason"]?.ToString() ?? "",
                         parameters?["operatorToken"]?.ToString() ?? "");
