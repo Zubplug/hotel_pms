@@ -41,6 +41,13 @@ export async function GET(
     });
 
     // Fetch syncing data
+    // 0. Property settings (needed for bankingModel)
+    const property = await prisma.property.findUnique({
+      where: { id: terminal.propertyId },
+      select: { id: true, name: true, settings: true, businessDate: true, timezone: true }
+    });
+    const bankingModel = (property?.settings as any)?.pos?.bankingModel || 'CENTRAL_CASHIER';
+
     // 1. Staff (including PIN hashes)
     const staffAccess = await prisma.staffPosOutletAccess.findMany({
       where: { outletId: terminal.outletId },
@@ -70,6 +77,14 @@ export async function GET(
           terminalType: terminal.terminalType,
           licenseState: terminal.licenseState,
           autoLockSeconds: terminal.autoLockSeconds ?? terminal.outlet.autoLockSeconds
+        },
+        // Property config — desktop SyncEngine reads bankingModel from here
+        property: {
+          id: property?.id,
+          name: property?.name,
+          bankingModel,
+          businessDate: property?.businessDate,
+          timezone: property?.timezone
         },
         staff: staff.map((s: any) => ({
           id: s.id,
