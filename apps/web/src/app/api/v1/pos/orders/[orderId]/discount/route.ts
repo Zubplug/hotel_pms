@@ -57,7 +57,7 @@ export async function POST(
         else if (percentage > 0) effectiveDiscount = subtotal * (percentage / 100);
 
         // Update the order
-        const updatedTotal = subtotal + Number(order.taxAmount) + Number(order.serviceCharge) - effectiveDiscount;
+        const updatedTotal = subtotal + Number(order.serviceCharge) - effectiveDiscount;
         await tx.posOrder.update({
           where: { id: order.id },
           data: { 

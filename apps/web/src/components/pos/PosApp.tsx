@@ -503,7 +503,7 @@ export default function PosApp() {
           quantity: item.pendingQty ?? item.quantity, // only fire pending qty
           unitPrice: item.price,
           taxRate: item.taxRate,
-          taxAmount: item.price * (item.pendingQty ?? item.quantity) * (item.taxRate / 100),
+          taxAmount: item.price * (item.pendingQty ?? item.quantity) - (item.price * (item.pendingQty ?? item.quantity) / (1 + item.taxRate / 100)),
           total: item.price * (item.pendingQty ?? item.quantity),
           kitchenStatus: item.kitchenStatus,
           modifiers: item.modifiers ?? [],
@@ -543,7 +543,7 @@ export default function PosApp() {
         quantity: item.pendingQty!, // only fire the pending delta
         unitPrice: item.price,
         taxRate: item.taxRate,
-        taxAmount: item.price * item.pendingQty! * (item.taxRate / 100),
+        taxAmount: item.price * item.pendingQty! - (item.price * item.pendingQty! / (1 + item.taxRate / 100)),
         total: item.price * item.pendingQty!,
         modifiers: item.modifiers ?? [],
       })), operatorToken);
@@ -650,10 +650,14 @@ export default function PosApp() {
   // ─────────────────────────────────────────────────────────────────
   const subtotal = cart.reduce((sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0), 0);
   const tax = cart.reduce(
-    (sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0) * (Number(item.taxRate || 0) / 100),
+    (sum, item) => {
+      const lineTotal = Number(item.price || 0) * Number(item.quantity || 0);
+      const rate = Number(item.taxRate || 0) / 100;
+      return sum + (lineTotal - (lineTotal / (1 + rate)));
+    },
     0
   );
-  const total = subtotal + tax;
+  const total = subtotal;
 
 
   const filteredProducts = products.filter(

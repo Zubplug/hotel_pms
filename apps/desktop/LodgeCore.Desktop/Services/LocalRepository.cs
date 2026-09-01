@@ -2933,7 +2933,7 @@ public class LocalRepository
                 double effectiveDiscount = amount > 0 ? amount : subtotal * (percentage / 100);
 
                 order.Discount = (decimal)effectiveDiscount;
-                order.Total = (decimal)subtotal + order.TaxAmount + order.ServiceCharge - order.Discount;
+                order.Total = (decimal)subtotal + order.ServiceCharge - order.Discount;
                 order.UpdatedAt = DateTime.UtcNow;
 
                 evt = new LocalOutboxEvent
