@@ -481,10 +481,13 @@ public class HardwareInterop
                 await WriteAuditAsync(session, "ENCODE_MASTER_CARD", true, $"Start: {startDate}, End: {endDate}");
                 
                 // Also log to the central override audit
-                await repo.LogOverrideAuditAsync(
+                repo.LogOverrideAudit(
                     session.PropertyId,
+                    session.UserId,
                     manager.Id,
                     "HARDWARE_MASTER_KEYCARD",
+                    "MasterKeycard",
+                    Guid.NewGuid().ToString(),
                     reason ?? "No reason provided"
                 );
 

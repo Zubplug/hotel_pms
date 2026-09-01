@@ -1536,7 +1536,7 @@ public class LocalRepository
                 throw new InvalidOperationException("Manager authorization required to override deposit.");
             }
             var authorizer = await AuthorizeManagerOverrideAsync(managerId, managerPin, res.PropertyId);
-            await LogOverrideAuditAsync(res.PropertyId, authorizer.Id, "CHECK_IN_DEPOSIT_OVERRIDE", $"Overriding {res.DepositRequired - res.DepositPaid:N2} deposit. Reason: {reason}");
+            LogOverrideAudit(res.PropertyId, userId, authorizer.Id, "CHECK_IN_DEPOSIT_OVERRIDE", "Reservation", res.Id, $"Overriding {res.DepositRequired - res.DepositPaid:N2} deposit. Reason: {reason}");
         }
         
         if (res.CorporateAccount != null && res.CorporateAccount.CreditLimit > 0)
@@ -1622,7 +1622,7 @@ public class LocalRepository
                         throw new InvalidOperationException("CREDIT_LIMIT_EXCEEDED: Checking out this reservation will exceed the corporate account's credit limit. Manager authorization required.");
                     }
                     var authorizer = await AuthorizeManagerOverrideAsync(managerId, managerPin, res.PropertyId);
-                    await LogOverrideAuditAsync(res.PropertyId, authorizer.Id, "CHECK_OUT_CREDIT_LIMIT_OVERRIDE", $"Overriding city ledger checkout. Folio balance {res.Folio.NetBalance:N2} exceeds limit {res.CorporateAccount.CreditLimit:N2}. Reason: {reason}");
+                    LogOverrideAudit(res.PropertyId, userId, authorizer.Id, "CHECK_OUT_CREDIT_LIMIT_OVERRIDE", "Reservation", res.Id, $"Overriding city ledger checkout. Folio balance {res.Folio.NetBalance:N2} exceeds limit {res.CorporateAccount.CreditLimit:N2}. Reason: {reason}");
                 }
             }
 
@@ -2664,7 +2664,7 @@ public class LocalRepository
                 managerStaffId: approver.Id,
                 action: action == "VOID" ? "POS_KITCHEN_ITEM_VOID" : "POS_ITEM_REPLACE",
                 entityType: "PosOrderItem",
-                entityId: originalOrderItemId,
+                entityId: originalOrderItemId ?? "UNKNOWN",
                 reason: reason,
                 amount: action == "VOID" ? originalPrice : (originalPrice - replacementPrice)
             );
@@ -2833,8 +2833,8 @@ public class LocalRepository
                 operatorStaffId: userId,
                 managerStaffId: approver.Id,
                 action: targetType == "POS_ORDER" ? "POS_DISCOUNT_OVERRIDE" : "FRONTDESK_DISCOUNT_OVERRIDE",
-                entityType: targetType,
-                entityId: targetType == "POS_ORDER" ? root.GetProperty("orderId").GetString() : root.TryGetProperty("reservationRoomId", out var rri) ? rri.GetString() ?? "" : "",
+                entityType: targetType ?? "Unknown",
+                entityId: targetType == "POS_ORDER" ? (root.TryGetProperty("orderId", out var ordId) ? ordId.GetString() ?? "Unknown" : "Unknown") : (root.TryGetProperty("reservationRoomId", out var rri) ? rri.GetString() ?? "Unknown" : "Unknown"),
                 reason: reason,
                 amount: (decimal)amount
             );
@@ -4571,7 +4571,8 @@ public class LocalRepository
             Id = Guid.NewGuid().ToString(),
             PropertyId = propertyId,
             EventType = "OVERRIDE_AUDIT_CREATED",
-            EntityId = audit.Id,
+            AggregateType = "OVERRIDE_AUDIT",
+            AggregateId = audit.Id,
             PayloadJson = System.Text.Json.JsonSerializer.Serialize(audit),
             CreatedAt = DateTime.UtcNow,
             Status = "PENDING"

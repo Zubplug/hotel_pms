@@ -1920,7 +1920,7 @@ public class OfflinePMSInterop
             }
 
             // Create movement
-            var res = await _repo.RecordCashMovementAsync(propertyId, sessionId, amount, type, reasonCode, notes, null, authorizer.Id, ctx.UserId, ctx.DeviceId);
+            var res = await _repo.RecordCashMovementAsync(propertyId, sessionId, amount, type, reasonCode, notes, null, authorizer.Id, supervisorPin, ctx.UserId, ctx.DeviceId);
             
             // Log authorization explicitly
             await _repo.LogAuthorizationAsync(propertyId, sessionId, ctx.UserId, authorizer.Id, type, reasonCode, res.OperationId, ctx.DeviceId);

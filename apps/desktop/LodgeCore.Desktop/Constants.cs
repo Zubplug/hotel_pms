@@ -41,6 +41,8 @@ namespace LodgeCore.Desktop
         {
             public const string SafeOpeningBalance = "SAFE_OPENING_BALANCE";
             public const string BankDeposit = "BANK_DEPOSIT";
+            public const string Payout = "PAYOUT";
+            public const string Drop = "DROP";
         }
 
         public static class PaymentMethods

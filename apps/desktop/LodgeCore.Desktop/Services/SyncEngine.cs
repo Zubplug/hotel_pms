@@ -997,7 +997,7 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     var ca = await dbContext.CorporateAccounts.FirstOrDefaultAsync(x => x.Id == id, stoppingToken);
                     if (ca == null)
                     {
-                        ca = new LodgeCore.Desktop.Data.Entities.LocalCorporateAccount { Id = id, PropertyId = propertyId, CreatedAt = DateTime.UtcNow };
+                        ca = new LodgeCore.Desktop.Data.Entities.LocalCorporateAccount { Id = id, PropertyId = propertyId, UpdatedAt = DateTime.UtcNow };
                         dbContext.CorporateAccounts.Add(ca);
                     }
                     ca.OrganizationId = el.TryGetProperty("organizationId", out var org) && org.ValueKind != System.Text.Json.JsonValueKind.Null ? org.GetString() ?? "" : "";
