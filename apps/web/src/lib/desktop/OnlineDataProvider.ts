@@ -322,7 +322,7 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
         body: JSON.stringify(data)
       });
     },
-    startEmergencyBank: async (pin: string, reason: string, operatorToken: string) => {
+    startEmergencyBank: async (managerId: string, pin: string, reason: string, operatorToken: string) => {
       let deviceId = 'web-browser';
       let outletId = '';
       if (typeof window !== 'undefined') {
@@ -446,13 +446,13 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
     getSafeLedger: async (propertyId: string) => {
       return apiFetchResult(`/api/v1/pos/cash-office/safe?propertyId=${propertyId}`);
     },
-    openSafe: async (propertyId: string, amount: number, managerPin: string) => {
+    openSafe: async (propertyId: string, amount: number, managerId: string, managerPin: string, reason: string) => {
       return apiFetchResult(`/api/v1/pos/cash-office/open-safe`, {
         method: 'POST',
         body: JSON.stringify({ propertyId, amount, managerPin })
       });
     },
-    recordBankDeposit: async (propertyId: string, amount: number, reference: string, managerPin: string) => {
+    recordBankDeposit: async (propertyId: string, amount: number, reference: string, managerId: string, managerPin: string, reason: string) => {
       return apiFetchResult(`/api/v1/pos/cash-office/deposit`, {
         method: 'POST',
         body: JSON.stringify({ propertyId, amount, reference, managerPin })

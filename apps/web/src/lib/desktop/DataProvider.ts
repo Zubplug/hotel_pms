@@ -60,8 +60,8 @@ export interface LodgeCoreDataProvider {
     markLateArrival(id: string, notes: string): Promise<any>;
     assessNoShow(id: string): Promise<any>;
     reinstate(id: string, reason: string): Promise<any>;
-    checkIn(id: string, userId: string, deviceId: string, options?: { overrideDeposit?: boolean }): Promise<any>;
-    checkOut(id: string, userId: string, deviceId: string): Promise<any>;
+    checkIn(id: string, userId: string, deviceId: string, options?: { overrideDeposit?: boolean, managerId?: string, managerPin?: string, reason?: string }): Promise<any>;
+    checkOut(id: string, userId: string, deviceId: string, options?: { managerId?: string, managerPin?: string, reason?: string }): Promise<any>;
     extendStay(id: string, newCheckOutDate: string): Promise<any>;
     previewExtendStay(id: string, newCheckOutDate: string): Promise<any>;
     reassignRoom(id: string, data: any): Promise<any>;
@@ -81,7 +81,7 @@ export interface LodgeCoreDataProvider {
   };
   keycards: {
     encode(roomId: string, lockCode: string, reservationId: string): Promise<any>;
-    encodeMasterCard(payload: { startDate?: string, endDate?: string }): Promise<any>;
+    encodeMasterCard(payload: { startDate?: string, endDate?: string, managerId?: string, pin?: string, reason?: string }): Promise<any>;
     read(): Promise<any>;
     cancel(): Promise<any>;
   };
@@ -105,7 +105,7 @@ export interface LodgeCoreDataProvider {
     authenticateOperator(staffId: string, pin: string, propertyId: string, sessionId: string, outletId: string, deviceId: string): Promise<{ data: any, error: string | null }>;
     validateSupervisorPin(pin: string, propertyId?: string): Promise<{ data: any, error: string | null }>;
     startSession(data: { userId: string; propertyId: string; deviceId: string; outletId: string; openingCash: number }): Promise<{ data: any, error: string | null }>;
-    startEmergencyBank(pin: string, reason: string, operatorToken: string): Promise<{ data: any, error: string | null }>;
+    startEmergencyBank(managerId: string, pin: string, reason: string, operatorToken: string): Promise<{ data: any, error: string | null }>;
     keepAlive?: () => Promise<{ data?: any, error: string | null }>;
     getSessionContext(sessionId: string): Promise<{ data: any, error: string | null }>;
     getAuthorizedOutlets(propertyId: string, deviceId: string): Promise<{ data: { outlets: any[], device: any } | null, error: string | null }>;
@@ -132,8 +132,8 @@ export interface LodgeCoreDataProvider {
     getPendingHandovers: (propertyId: string) => Promise<{ data: any[], error: string | null }>;
     getMyApprovedShifts: (propertyId: string) => Promise<{ data: any[], error: string | null }>;
     getSafeLedger: (propertyId: string) => Promise<{ data: any, error: string | null }>;
-    openSafe: (propertyId: string, amount: number, managerPin: string) => Promise<{ data: any, error: string | null }>;
-    recordBankDeposit: (propertyId: string, amount: number, reference: string, managerPin: string) => Promise<{ data: any, error: string | null }>;
+    openSafe: (propertyId: string, amount: number, managerId: string, managerPin: string, reason: string) => Promise<{ data: any, error: string | null }>;
+    recordBankDeposit: (propertyId: string, amount: number, reference: string, managerId: string, managerPin: string, reason: string) => Promise<{ data: any, error: string | null }>;
     // Service-first waiter flow
     fireItems(orderId: string, items: any[], operatorToken: string): Promise<{ data: any, error: string | null }>;
     getActiveOrders(sessionId: string, operatorToken: string, filter?: string): Promise<{ data: any[], error: string | null }>;
@@ -143,6 +143,9 @@ export interface LodgeCoreDataProvider {
   approvals: {
     requestItemModification(payload: any): Promise<{ success: boolean, requiresApproval?: boolean, error?: string, order?: any }>;
     requestDiscount(payload: any): Promise<{ success: boolean, approvalId?: string, requiresApproval?: boolean, error?: string }>;
+  };
+  corporateAccounts: {
+    list(propertyId: string): Promise<any>;
   };
   laundry: {
     getItems(propertyId: string): Promise<{ data: any[], error: string | null }>;

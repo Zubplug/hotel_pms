@@ -5,15 +5,16 @@ import { successResponse, errorResponse } from '@/lib/api-response';
 import { createAuditLog } from '@/lib/audit';
 import { requireOrganizationContext } from '@/lib/organization-access';
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
     
     const { propertyIds, organizationId } = await requireOrganizationContext((session.user as any).id);
+    const { id } = await params;
     
     const account = await prisma.corporateAccount.findUnique({
-        where: { id: params.id }
+        where: { id }
     });
 
     if (!account || !propertyIds.includes(account.propertyId)) {
@@ -28,7 +29,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     delete body.id;
 
     const updatedAccount = await prisma.corporateAccount.update({ 
-        where: { id: params.id },
+        where: { id },
         data: body
     });
 
@@ -39,7 +40,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       action: 'UPDATE', 
       resource: 'corporate_account', 
       resourceId: account.id, 
-      oldValue: account,
+      previousValue: account,
       newValue: updatedAccount,
     });
     
@@ -52,15 +53,16 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
     
     const { propertyIds, organizationId } = await requireOrganizationContext((session.user as any).id);
+    const { id } = await params;
     
     const account = await prisma.corporateAccount.findUnique({
-        where: { id: params.id }
+        where: { id }
     });
 
     if (!account || !propertyIds.includes(account.propertyId)) {
@@ -68,7 +70,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     }
 
     await prisma.corporateAccount.update({ 
-        where: { id: params.id },
+        where: { id },
         data: { isActive: false }
     });
 

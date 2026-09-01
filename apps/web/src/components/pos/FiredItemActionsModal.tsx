@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Trash, RefreshCcw, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { ManagerOverrideModal } from './ManagerOverrideModal';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
 export default function FiredItemActionsModal({
   isOpen,

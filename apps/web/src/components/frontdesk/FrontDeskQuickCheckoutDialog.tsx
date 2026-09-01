@@ -376,7 +376,7 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
                 </Button>
                 <Button 
                   className="flex-1 h-12 rounded-xl font-bold shadow-sm"
-                  onClick={handleCheckout} 
+                  onClick={() => handleCheckout()} 
                   disabled={!isFolioSettled}
                   variant={!isFolioSettled ? "secondary" : "default"}
                 >

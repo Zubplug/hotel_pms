@@ -390,7 +390,7 @@ export async function POST(req: NextRequest) {
                  checkOut: checkOutDate,
                  adults: payload.Adults || payload.adults || 1,
                  children: payload.Children || payload.children || 0,
-                 ratePlanId: ratePlan.id,
+                 ratePlanId: finalRatePlanId,
                  rateAmount: baseRate,
                  currency,
                  status: 'ACTIVE'
@@ -779,7 +779,7 @@ export async function POST(req: NextRequest) {
              if (!folio) throw new Error('Folio not found or unauthorized');
 
              const existing = await tx.cityLedgerEntry.findFirst({
-               where: { idempotencyKey }
+               where: { folioId: aggregateId, type: 'TRANSFER_IN', amount }
              });
              if (!existing) {
                await tx.cityLedgerEntry.create({
@@ -792,8 +792,7 @@ export async function POST(req: NextRequest) {
                    currency: payload.currency || 'NGN',
                    type: 'TRANSFER_IN',
                    reason: 'Auto-routed to City Ledger upon checkout (Offline sync)',
-                   createdBy: actorId,
-                   idempotencyKey
+                   createdBy: actorId
                  }
                });
                await tx.folio.update({

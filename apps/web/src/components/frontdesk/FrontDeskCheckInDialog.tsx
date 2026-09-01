@@ -361,7 +361,7 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
                     <Button variant="outline" className="flex-1 h-12 rounded-xl border-slate-200 font-bold" onClick={() => setPhase('IDLE')}>
                       Cancel
                     </Button>
-                    <Button variant="default" className="flex-1 h-12 rounded-xl bg-amber-600 hover:bg-amber-700 font-bold shadow-sm" onClick={executeCheckInEncoding}>
+                    <Button variant="default" className="flex-1 h-12 rounded-xl bg-amber-600 hover:bg-amber-700 font-bold shadow-sm" onClick={() => executeCheckInEncoding()}>
                       Overwrite Card
                     </Button>
                   </div>
