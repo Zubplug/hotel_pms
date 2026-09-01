@@ -13,28 +13,56 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const propertyId = searchParams.get('propertyId') || (session.user as any).propertyId;
+    const outletId = searchParams.get('outletId');
 
     if (!propertyId) {
       return NextResponse.json({ error: 'Property ID required' }, { status: 400 });
     }
 
-    // Get staff who have access to this property and are active
-    const staff = await prisma.staff.findMany({
-      where: {
-        propertyAccess: { has: propertyId },
-        isActive: true,
-        position: { in: ['WAITER', 'WAITRESS', 'CASHIER'] },
-      },
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        department: true,
-        position: true,
-        // Don't send posPinHash or other sensitive data
-      },
-      orderBy: { firstName: 'asc' }
-    });
+    let staff;
+
+    if (outletId) {
+      // Outlet-scoped: only return staff explicitly assigned to this outlet
+      // This ensures cashiers/waiters/waitresses only see themselves in the POS PIN screen
+      const outletAccess = await prisma.staffPosOutletAccess.findMany({
+        where: { outletId },
+        include: {
+          staff: {
+            where: {
+              isActive: true,
+              position: { in: ['WAITER', 'WAITRESS', 'CASHIER'] },
+            },
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              department: true,
+              position: true,
+            }
+          }
+        }
+      });
+      staff = outletAccess
+        .map(a => a.staff)
+        .filter(Boolean);
+    } else {
+      // Fallback: property-level query (for admin/manager views)
+      staff = await prisma.staff.findMany({
+        where: {
+          propertyAccess: { has: propertyId },
+          isActive: true,
+          position: { in: ['WAITER', 'WAITRESS', 'CASHIER'] },
+        },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          department: true,
+          position: true,
+        },
+        orderBy: { firstName: 'asc' }
+      });
+    }
 
     return NextResponse.json({ data: staff });
   } catch (error) {
