@@ -34,10 +34,10 @@ public class Rfv2016LockProvider : ILockProvider
             try
             {
                 string lockRecDir = Path.Combine(_workingDir, "Lock_Rec_");
-                if (!Directory.Exists(lockRecDir))
-                {
-                    Directory.CreateDirectory(lockRecDir);
-                }
+                if (!Directory.Exists(lockRecDir)) Directory.CreateDirectory(lockRecDir);
+
+                string netdataDir = Path.Combine(_workingDir, "Netdata");
+                if (!Directory.Exists(netdataDir)) Directory.CreateDirectory(netdataDir);
             }
             catch { /* Ignore */ }
             
