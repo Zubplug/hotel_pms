@@ -252,18 +252,12 @@ export async function POST(req: NextRequest) {
                    const devByIdent = await tx.posDevice.findUnique({ where: { identifier: String(rawDeviceId) }, select: { id: true } });
                    if (devByIdent) resolvedDeviceId = devByIdent.id;
                  }
-                 if (!resolvedDeviceId) {
-                   // Fallback: use any active device for this outlet
-                   const fallbackDev = await tx.posDevice.findFirst({
-                     where: { outletId: payload.OutletId || terminal.outletId, status: 'ACTIVE' },
-                     select: { id: true }
-                   });
-                   resolvedDeviceId = fallbackDev?.id ?? null;
-                 }
-
-                 if (!resolvedDeviceId) {
-                   throw new Error(`POS_DEVICE_NOT_FOUND: No active device found for outlet ${payload.OutletId || terminal.outletId}. Register a device first.`);
-                 }
+                 // NOTE: deviceId is nullable on PosSession (schema: "Made optional to allow
+                 // Cashier Takeovers across devices"). If the desktop sent an unresolvable
+                 // identifier — e.g. a local SQLite ID not yet registered in production —
+                 // we store null rather than guessing among multiple active devices on the
+                 // same outlet (which would link the session to the wrong terminal).
+                 // resolvedDeviceId remains null if neither lookup succeeded.
 
                  await tx.posSession.create({
                      data: {
