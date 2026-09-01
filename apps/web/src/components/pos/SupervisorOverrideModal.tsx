@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Shield, AlertCircle, X } from 'lucide-react';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { PinPad } from './PinPad';
@@ -62,9 +63,12 @@ export function SupervisorOverrideModal({ isOpen, actionName, onAuthorized, onCa
     }
   }, [pin]);
 
-  if (!isOpen) return null;
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
-  return (
+  if (!isOpen || !mounted) return null;
+
+  return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col p-8 animate-in zoom-in-95 duration-200">
         
@@ -105,6 +109,7 @@ export function SupervisorOverrideModal({ isOpen, actionName, onAuthorized, onCa
         <PinPad pin={pin} onNumPad={handleNumPad} onDelete={handleDelete} disabled={isLoading} />
         
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

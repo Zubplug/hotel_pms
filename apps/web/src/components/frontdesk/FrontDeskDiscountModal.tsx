@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Percent, Hash } from 'lucide-react';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { SupervisorOverrideModal } from '../pos/SupervisorOverrideModal';
@@ -25,8 +26,11 @@ export function FrontDeskDiscountModal({ isOpen, targetType, targetId, targetTot
   
   // Supervisor Override State
   const [showOverride, setShowOverride] = useState(false);
+  
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
-  if (!isOpen) return null;
+  if (!isOpen || !mounted) return null;
 
   const handleSubmit = async (pin?: string) => {
     if (!value || isNaN(Number(value)) || Number(value) <= 0) {
@@ -92,7 +96,7 @@ export function FrontDeskDiscountModal({ isOpen, targetType, targetId, targetTot
     }
   };
 
-  return (
+  return createPortal(
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
         <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
@@ -188,6 +192,7 @@ export function FrontDeskDiscountModal({ isOpen, targetType, targetId, targetTot
         onAuthorized={(id, name, pin) => handleOverrideAuthorized(id, name, pin)}
         onCancel={() => setShowOverride(false)}
       />
-    </>
+    </>,
+    document.body
   );
 }
