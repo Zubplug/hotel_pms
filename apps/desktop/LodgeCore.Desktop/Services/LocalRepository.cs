@@ -987,6 +987,23 @@ public class LocalRepository
                     }
                 }
 
+                if (root.TryGetProperty("credits", out var credits) && credits.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var credit in credits.EnumerateArray())
+                    {
+                        if (!credit.TryGetProperty("frontdeskSessionId", out var creditSession) || creditSession.GetString() != sessionId) continue;
+                        var amount = ReadDecimal(credit, "amount");
+                        var method = credit.TryGetProperty("method", out var methodValue) ? methodValue.GetString() ?? "OTHER" : "OTHER";
+                        var createdAt = credit.TryGetProperty("createdAt", out var dateValue) && DateTime.TryParse(dateValue.GetString(), out var parsedDate) ? parsedDate : folio.UpdatedAt;
+                        paymentCount++;
+                        if (method.Equals("CASH", StringComparison.OrdinalIgnoreCase)) cashPayments += amount;
+                        else if (method.Contains("CARD", StringComparison.OrdinalIgnoreCase) || method.Equals("POS", StringComparison.OrdinalIgnoreCase)) cardPayments += amount;
+                        else if (method.Contains("BANK", StringComparison.OrdinalIgnoreCase) || method.Contains("TRANSFER", StringComparison.OrdinalIgnoreCase)) bankTransfers += amount;
+                        else otherPayments += amount;
+                        rows.Add(new Dictionary<string, object?> { ["kind"] = "PAYMENT", ["date"] = createdAt, ["amount"] = amount, ["method"] = method, ["description"] = $"{method} top-up", ["folioId"] = folio.Id });
+                    }
+                }
+
                 if (root.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array)
                 {
                     foreach (var item in items.EnumerateArray())
@@ -1381,6 +1398,17 @@ public class LocalRepository
             frontdeskSessionId = frontdeskSession.Id,
             createdAt = DateTime.UtcNow
         });
+
+        if (!requiresApproval && frontdeskSession != null && string.Equals(method, "CASH", StringComparison.OrdinalIgnoreCase))
+        {
+            _dbContext.PosCashMovements.Add(new LocalPosCashMovement
+            {
+                Id = Guid.NewGuid().ToString(), PropertyId = folio.PropertyId, DeviceId = deviceId, PosSessionId = null, FrontdeskSessionId = frontdeskSession.Id,
+                UserId = userId, Amount = amount, Type = "PAYMENT", SourceAccountId = frontdeskSession.CashAccountId,
+                DestinationAccountId = frontdeskSession.CashAccountId, ReasonCode = "ADVANCE_DEPOSIT", OperationId = $"FD-DEPOSIT-{idempotencyKey}",
+                BusinessDate = frontdeskSession.BusinessDate, CreatedAt = DateTime.UtcNow
+            });
+        }
 
         _dbContext.OutboxEvents.Add(new LocalOutboxEvent
         {

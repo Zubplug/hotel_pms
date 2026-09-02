@@ -695,6 +695,32 @@ export async function POST(req: NextRequest) {
                  businessDate: authoritativeBusinessDate,
                }
              });
+
+             await tx.payment.create({
+               data: {
+                 folioId: aggregateId,
+                 propertyId,
+                 reservationId: folio.reservationId,
+                 method: methodStr as any,
+                 amount: amount,
+                 currency: payload.currency || 'NGN',
+                 baseAmount: amount,
+                 status: 'COMPLETED',
+                 idempotencyKey: `dep_pay_${idempotencyKey}`,
+                 receivedBy: actorId,
+                 frontdeskSessionId: payload.frontdeskSessionId || null,
+                 terminalId: payload.terminalId || device.id,
+                 reference: payload.reference || null
+               }
+             });
+
+             if (payload.frontdeskSessionId && methodStr === 'CASH') {
+               const session = await tx.frontdeskSession.findUnique({ where: { id: payload.frontdeskSessionId } });
+               if (session && session.status === 'OPEN') {
+                 await tx.cashAccount.update({ where: { id: session.cashAccountId }, data: { balance: { increment: amount } } });
+                 await tx.posCashMovement.create({ data: { propertyId, deviceId: device.id, frontdeskSessionId: session.id, userId: actorId, amount, currency: payload.currency || 'NGN', type: 'PAYMENT', sourceAccountId: session.cashAccountId, destinationAccountId: session.cashAccountId, reasonCode: 'ADVANCE_DEPOSIT', receiptReference: payload.reference || null, operationId: `FD-DEPOSIT-${idempotencyKey}`, businessDate: session.businessDate } });
+               }
+             }
           }
           else if (eventType === 'POST_PAYMENT') {
              // Folio-level payment — idempotent via posTransactionId uniqueness
