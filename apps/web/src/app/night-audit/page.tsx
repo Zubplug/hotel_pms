@@ -36,7 +36,7 @@ function Metric({ label, value, tone = 'slate', icon: Icon }: { label: string; v
 }
 
 export default function NightAuditDashboard() {
-  const { propertyId } = useProperty();
+  const { propertyId, isLoading: propertyLoading } = useProperty();
   const [data, setData] = useState<AuditData>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -138,6 +138,7 @@ export default function NightAuditDashboard() {
     setRechecking(false);
   };
 
+  if (propertyLoading) return <div className="flex min-h-[60vh] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-indigo-600" /></div>;
   if (!propertyId) return <div className="flex min-h-[60vh] items-center justify-center text-center"><div><MoonStar className="mx-auto h-10 w-10 text-indigo-500" /><h2 className="mt-4 text-xl font-semibold">Select a property</h2><p className="mt-1 text-muted-foreground">Choose a property to open the audit workspace.</p></div>
   
     </div>;

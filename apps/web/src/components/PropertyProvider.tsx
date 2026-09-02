@@ -5,18 +5,21 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 interface PropertyContextType {
   propertyId: string;
   setPropertyId: (id: string) => void;
+  isLoading: boolean;
 }
 
 const PropertyContext = createContext<PropertyContextType | undefined>(undefined);
 
 export function PropertyProvider({ children }: { children: React.ReactNode }) {
   const [propertyId, setPropertyId] = useState<string>('');
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
   useEffect(() => {
     // 1. If we already have a stored selection, use it immediately
     const stored = localStorage.getItem('selectedPropertyId');
     if (stored) {
       setPropertyId(stored);
+      setIsLoading(false);
       return;
     }
 
@@ -41,6 +44,8 @@ export function PropertyProvider({ children }: { children: React.ReactNode }) {
         }
       } catch {
         // Silently fail — user can still pick manually from the dropdown
+      } finally {
+        setIsLoading(false);
       }
     }
 
@@ -53,7 +58,7 @@ export function PropertyProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <PropertyContext.Provider value={{ propertyId, setPropertyId: handleSetPropertyId }}>
+    <PropertyContext.Provider value={{ propertyId, setPropertyId: handleSetPropertyId, isLoading }}>
       {children}
     </PropertyContext.Provider>
   );
