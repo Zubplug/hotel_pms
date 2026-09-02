@@ -136,11 +136,13 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
                 <PropertySelector />
               </div>
               {res?.data?.property?.name ? (
-                <div className="px-3 py-1.5 bg-blue-50 text-blue-800 border border-blue-200 rounded-lg text-sm font-bold shadow-sm whitespace-nowrap">
-                  {res.data.property.name}
+                <div className="flex items-center">
+                  <span className="text-sm font-semibold text-slate-800 whitespace-nowrap tracking-tight">
+                    {res.data.property.name}
+                  </span>
                 </div>
               ) : (
-                <div className="h-8 w-32 bg-muted animate-pulse rounded-lg" />
+                <div className="h-5 w-32 bg-slate-200 animate-pulse rounded" />
               )}
             </div>
           )}
@@ -153,11 +155,6 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
           <Button variant="ghost" onClick={() => setShowShiftStartReport(true)} className="hidden md:inline-flex rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted hover:text-foreground">
             <Printer className="mr-2 h-4 w-4" /> Shift Report
           </Button>
-          {role !== 'RECEPTIONIST' && (
-            <Link href="/frontdesk/reconciliation" className="hidden md:inline-flex rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted hover:text-foreground">
-              Reconciliation
-            </Link>
-          )}
           <Link href="/frontdesk/housekeeping" className="hidden md:inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted hover:text-foreground">
             <Brush className="h-4 w-4" />
             Housekeeping
@@ -171,42 +168,7 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
         {/* Center/Right: Hardware, Date/Time, User */}
         <div className="flex items-center gap-3 lg:gap-6 shrink-0 ml-auto">
           
-          {/* Operations Menu */}
-          {role !== 'RECEPTIONIST' && (
-            <DropdownMenu>
-              <DropdownMenuTrigger className="outline-none">
-                <Button variant="ghost" className="hidden lg:flex gap-2 h-9 px-3 text-muted-foreground hover:text-foreground">
-                  Operations <ChevronDown className="h-4 w-4 opacity-50" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuLabel>Departments</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => router.push('/frontdesk/housekeeping')} className="w-full cursor-pointer">
-                  <Brush className="mr-2 h-4 w-4" /> Housekeeping
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => router.push('/frontdesk/maintenance')} className="w-full cursor-pointer">
-                  <Wrench className="mr-2 h-4 w-4" /> Maintenance
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => router.push('/frontdesk/refunds')} className="w-full cursor-pointer">
-                  <Activity className="mr-2 h-4 w-4" /> Refund Status
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => router.push('/reports')} className="w-full cursor-pointer">
-                  <Activity className="mr-2 h-4 w-4" /> Room Status
-                </DropdownMenuItem>
-                {(isSuperAdmin || role === 'CEO' || role === 'MANAGER') && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => router.push('/dashboard')} className="w-full cursor-pointer">
-                      Admin Dashboard
-                    </DropdownMenuItem>
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
 
-          {role !== 'RECEPTIONIST' && <div className="h-6 w-px bg-border hidden lg:block" />}
 
           {/* Business Date & Clock */}
           <div className="hidden xl:flex flex-col items-end justify-center min-w-[120px]">
