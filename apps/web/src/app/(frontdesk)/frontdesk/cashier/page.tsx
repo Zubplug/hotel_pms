@@ -166,7 +166,7 @@ export default function FrontdeskCashierPage() {
 
   if (loading) return <div className="flex justify-center p-16"><Loader2 className="animate-spin" /></div>;
 
-  return <div className="mx-auto max-w-6xl space-y-6 pb-10">
+  return <div className="mx-auto max-w-[800px] space-y-6 pb-10">
     <Dialog open={showCloseConfirm} onOpenChange={setShowCloseConfirm}>
       <DialogContent>
         <DialogHeader><DialogTitle>Confirm shift submission</DialogTitle><DialogDescription>Are you sure you want to close and submit this Front Desk shift? The till will be locked and the report will be sent for cashier or manager review.</DialogDescription></DialogHeader>
