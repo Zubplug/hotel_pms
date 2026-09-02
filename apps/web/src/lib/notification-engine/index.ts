@@ -1,4 +1,4 @@
-import { prisma } from '@hotel-pms/db';
+import { prisma } from "@hotel-pms/db";
 
 export interface NotificationEvent {
   type: string;
@@ -32,8 +32,8 @@ export const NotificationEngine = {
   async emit(event: NotificationEvent) {
     try {
       if (!event.propertyId) {
-         // If no property scope, skip policy evaluation for now (or fetch org policy)
-         return;
+        // If no property scope, skip policy evaluation for now (or fetch org policy)
+        return;
       }
 
       const policy = await fetchPolicy(event.propertyId);
@@ -44,7 +44,10 @@ export const NotificationEngine = {
       if (!payload) return; // Event did not meet threshold or criteria
 
       // 2. Resolve Recipients
-      const recipientIds = await resolveRecipients(event.organizationId, event.propertyId);
+      const recipientIds = await resolveRecipients(
+        event.organizationId,
+        event.propertyId,
+      );
       if (recipientIds.length === 0) return;
 
       // 3. Deduplicate
@@ -54,13 +57,13 @@ export const NotificationEngine = {
       }
 
       // 4. Persist
-      const notificationRecords = recipientIds.map(recipientId => ({
+      const notificationRecords = recipientIds.map((recipientId) => ({
         organizationId: event.organizationId,
         propertyId: event.propertyId,
-        recipientType: 'staff',
+        recipientType: "staff",
         recipientId,
-        status: 'sent',
-        channel: 'in_app',
+        status: "sent",
+        channel: "in_app",
         subject: payload.subject,
         body: payload.body,
         category: payload.category,
@@ -75,33 +78,35 @@ export const NotificationEngine = {
 
       // 5. Firebase Push Dispatch
       try {
-        const { sendPushNotification } = await import('@/lib/firebase-admin');
+        const { sendPushNotification } = await import("@/lib/firebase-admin");
         const tokens = await prisma.deviceToken.findMany({
-          where: { userId: { in: recipientIds } }
+          where: { userId: { in: recipientIds } },
         });
-        
+
         for (const t of tokens) {
           // Fire and forget (don't block the engine)
           sendPushNotification(t.token, payload.subject, payload.body, {
-            click_action: 'FLUTTER_NOTIFICATION_CLICK',
-            actionUrl: `/${event.entityType}/${event.entityId}`
-          }).catch(err => console.error('[FCM] Push failed:', err));
+            click_action: "FLUTTER_NOTIFICATION_CLICK",
+            actionUrl: `/${event.entityType}/${event.entityId}`,
+          }).catch((err) => console.error("[FCM] Push failed:", err));
         }
       } catch (err) {
-         console.error('[NotificationEngine] Failed to dispatch FCM:', err);
+        console.error("[NotificationEngine] Failed to dispatch FCM:", err);
       }
-
     } catch (error) {
-      console.error('[NotificationEngine] Failed to process event:', error);
+      console.error("[NotificationEngine] Failed to process event:", error);
     }
-  }
+  },
 };
 
 /**
  * Resolves which users should receive this notification based on RBAC.
  */
-async function resolveRecipients(organizationId: string, propertyId?: string): Promise<string[]> {
-  const targetRoles = ['EXECUTIVE', 'MANAGER', 'GENERAL_MANAGER', 'DIRECTOR'];
+async function resolveRecipients(
+  organizationId: string,
+  propertyId?: string,
+): Promise<string[]> {
+  const targetRoles = ["EXECUTIVE", "MANAGER", "GENERAL_MANAGER", "DIRECTOR"];
 
   const whereClause: any = {
     role: {
@@ -109,15 +114,15 @@ async function resolveRecipients(organizationId: string, propertyId?: string): P
     },
     user: {
       membership: {
-        organizationId: organizationId
-      }
-    }
+        organizationId: organizationId,
+      },
+    },
   };
 
   if (propertyId) {
     whereClause.OR = [
       { propertyId: propertyId },
-      { propertyId: null } // Org-wide executives
+      { propertyId: null }, // Org-wide executives
     ];
   } else {
     whereClause.propertyId = null;
@@ -126,22 +131,22 @@ async function resolveRecipients(organizationId: string, propertyId?: string): P
   const [userRoles, orgAdmins] = await Promise.all([
     prisma.userRole.findMany({
       where: whereClause,
-      select: { userId: true }
+      select: { userId: true },
     }),
     prisma.organizationMembership.findMany({
       where: {
         organizationId,
-        role: { in: ['OWNER', 'ADMIN', 'SUPER_ADMIN'] },
-        status: 'ACTIVE'
+        role: { in: ["OWNER", "ADMIN", "SUPER_ADMIN"] },
+        status: "ACTIVE",
       },
-      select: { userId: true }
-    })
+      select: { userId: true },
+    }),
   ]);
 
   // Unique list of user IDs
   const allUserIds = [
     ...userRoles.map((ur: any) => ur.userId),
-    ...orgAdmins.map((oa: any) => oa.userId)
+    ...orgAdmins.map((oa: any) => oa.userId),
   ];
   return Array.from(new Set(allUserIds));
 }
@@ -149,7 +154,10 @@ async function resolveRecipients(organizationId: string, propertyId?: string): P
 /**
  * Checks if a notification already exists based on incident or idempotency keys.
  */
-async function checkDuplicate(recipientIds: string[], event: NotificationEvent): Promise<boolean> {
+async function checkDuplicate(
+  recipientIds: string[],
+  event: NotificationEvent,
+): Promise<boolean> {
   const key = event.idempotencyKey || event.incidentKey;
   if (!key) return false;
 
@@ -158,13 +166,13 @@ async function checkDuplicate(recipientIds: string[], event: NotificationEvent):
   const existing = await prisma.notification.findFirst({
     where: {
       recipientId: { in: recipientIds },
-      channel: 'in_app',
+      channel: "in_app",
       readAt: null,
       metadata: {
-        path: [event.idempotencyKey ? 'idempotencyKey' : 'incidentKey'],
-        equals: key
-      }
-    }
+        path: [event.idempotencyKey ? "idempotencyKey" : "incidentKey"],
+        equals: key,
+      },
+    },
   });
 
   return !!existing;
@@ -173,10 +181,12 @@ async function checkDuplicate(recipientIds: string[], event: NotificationEvent):
 /**
  * Fetches the notification policy thresholds directly from the Property settings.
  */
-async function fetchPolicy(propertyId: string): Promise<NotificationPolicy | null> {
+async function fetchPolicy(
+  propertyId: string,
+): Promise<NotificationPolicy | null> {
   const property = await prisma.property.findUnique({
     where: { id: propertyId },
-    select: { settings: true }
+    select: { settings: true },
   });
 
   const settings = (property?.settings as any) || {};
@@ -202,7 +212,10 @@ async function fetchPolicy(propertyId: string): Promise<NotificationPolicy | nul
  * Evaluates the event against policies to determine if a notification should be sent,
  * and formats the subject/body/category/priority.
  */
-async function evaluateEvent(event: NotificationEvent, policy: NotificationPolicy) {
+async function evaluateEvent(
+  event: NotificationEvent,
+  policy: NotificationPolicy,
+) {
   // Enhance event metadata with keys for deduplication storage
   event.metadata = {
     ...event.metadata,
@@ -211,7 +224,7 @@ async function evaluateEvent(event: NotificationEvent, policy: NotificationPolic
   };
 
   switch (event.type) {
-    case 'PAYMENT_RECEIVED': {
+    case "PAYMENT_RECEIVED": {
       if (!policy.notifyOnPayment) return null;
 
       const folio = await prisma.folio.findUnique({
@@ -224,35 +237,45 @@ async function evaluateEvent(event: NotificationEvent, policy: NotificationPolic
       if (!folio) return null;
 
       const guest = folio.reservation?.primaryGuest || folio.guest;
-      const guestName = guest?.firstName ? `${guest.firstName} ${guest.lastName}` : 'Guest';
+      const guestName = guest?.firstName
+        ? `${guest.firstName} ${guest.lastName}`
+        : "Guest";
       const amount = Number(event.metadata?.amount || 0);
       const currency = event.metadata?.currency || folio.currency;
-      const method = String(event.metadata?.method || 'PAYMENT').replaceAll('_', ' ');
+      const method = String(event.metadata?.method || "PAYMENT").replaceAll(
+        "_",
+        " ",
+      );
 
       return {
         subject: `Payment Received — ${guestName}`,
         body: `💳 ${currency} ${amount.toLocaleString()} received via ${method}\n👤 Guest: ${guestName}\n🧾 Folio: ${folio.folioNumber}`,
-        category: 'Finance',
-        priority: 'Normal',
+        category: "Finance",
+        priority: "Normal",
       };
     }
 
-    case 'PAYMENT_LARGE': {
+    case "PAYMENT_LARGE": {
       if (!policy.largePaymentThreshold) return null;
-      const payment = await prisma.payment.findUnique({ where: { id: event.entityId } });
-      if (!payment || Number(payment.amount) < policy.largePaymentThreshold) return null;
-      
+      const payment = await prisma.payment.findUnique({
+        where: { id: event.entityId },
+      });
+      if (!payment || Number(payment.amount) < policy.largePaymentThreshold)
+        return null;
+
       return {
-        subject: 'Large Payment Received',
+        subject: "Large Payment Received",
         body: `A payment of ${payment.currency} ${Number(payment.amount).toLocaleString()} was received via ${payment.method}.`,
-        category: 'Finance',
-        priority: 'Normal',
+        category: "Finance",
+        priority: "Normal",
       };
     }
-    
-    case 'REFUND_HIGH_VALUE': {
+
+    case "REFUND_HIGH_VALUE": {
       if (!policy.highValueRefundThreshold) return null;
-      const refund = await prisma.refund.findUnique({ where: { id: event.entityId } });
+      const refund = await prisma.refund.findUnique({
+        where: { id: event.entityId },
+      });
       if (!refund) return null;
 
       const amount = Number(refund.amount);
@@ -262,338 +285,470 @@ async function evaluateEvent(event: NotificationEvent, policy: NotificationPolic
       if (amount < policy.highValueRefundThreshold && !isOverride) return null;
 
       return {
-        subject: isOverride ? 'Unusual Refund / Manager Override' : 'High-Value Refund',
-        body: `A refund of ${refund.currency} ${amount.toLocaleString()} was processed. Reason: ${refund.reason || 'Not specified'}.`,
-        category: 'Finance',
-        priority: 'Critical',
+        subject: isOverride
+          ? "Unusual Refund / Manager Override"
+          : "High-Value Refund",
+        body: `A refund of ${refund.currency} ${amount.toLocaleString()} was processed. Reason: ${refund.reason || "Not specified"}.`,
+        category: "Finance",
+        priority: "Critical",
       };
     }
 
-    case 'CASH_VARIANCE': {
+    case "CASH_VARIANCE": {
       if (!policy.cashVarianceThreshold) return null;
       const amount = event.metadata?.varianceAmount;
-      if (!amount || Math.abs(amount) < policy.cashVarianceThreshold) return null;
+      if (!amount || Math.abs(amount) < policy.cashVarianceThreshold)
+        return null;
 
       return {
-        subject: 'Cash Variance Detected',
+        subject: "Cash Variance Detected",
         body: `A cash variance of ₦${Math.abs(amount).toLocaleString()} was detected at POS Shift close.`,
-        category: 'Finance',
-        priority: 'Critical',
+        category: "Finance",
+        priority: "Critical",
       };
     }
 
-    case 'SYSTEM_INCIDENT': {
+    case "SYSTEM_INCIDENT": {
       return {
-        subject: event.metadata?.incidentTitle || 'System Incident',
-        body: event.metadata?.incidentDescription || 'A critical system integration is offline.',
-        category: 'Critical',
-        priority: 'Critical',
+        subject: event.metadata?.incidentTitle || "System Incident",
+        body:
+          event.metadata?.incidentDescription ||
+          "A critical system integration is offline.",
+        category: "Critical",
+        priority: "Critical",
       };
     }
-    
-    case 'ROOM_OOO_CRITICAL': {
-      const room = await prisma.room.findUnique({ where: { id: event.entityId } });
+
+    case "ROOM_OOO_CRITICAL": {
+      const room = await prisma.room.findUnique({
+        where: { id: event.entityId },
+      });
       if (!room) return null;
 
       return {
         subject: `Room ${room.number} Out of Order`,
         body: `Operationally significant room ${room.number} was placed Out of Order.`,
-        category: 'Operations',
-        priority: 'Normal', // Or Critical depending on occupancy
+        category: "Operations",
+        priority: "Normal", // Or Critical depending on occupancy
       };
     }
 
-    case 'SIGNIFICANT_CANCELLATION': {
-      if (!policy.significantCancellationThreshold && !event.metadata?.isVip) return null;
-      
+    case "SIGNIFICANT_CANCELLATION": {
+      if (!policy.significantCancellationThreshold && !event.metadata?.isVip)
+        return null;
+
       const amount = event.metadata?.bookingValue || 0;
       const isVip = event.metadata?.isVip === true;
 
-      if (amount < (policy.significantCancellationThreshold || Infinity) && !isVip) return null;
+      if (
+        amount < (policy.significantCancellationThreshold || Infinity) &&
+        !isVip
+      )
+        return null;
 
       return {
-        subject: isVip ? 'VIP Cancellation' : 'Significant Cancellation',
+        subject: isVip ? "VIP Cancellation" : "Significant Cancellation",
         body: `A booking valued at ₦${amount.toLocaleString()} has been cancelled.`,
-        category: 'Operations',
-        priority: 'High',
+        category: "Operations",
+        priority: "High",
       };
     }
 
-    case 'SIGNIFICANT_BOOKING': {
-      if (!policy.significantBookingThreshold && !event.metadata?.isVip) return null;
-      
+    case "SIGNIFICANT_BOOKING": {
+      if (!policy.significantBookingThreshold && !event.metadata?.isVip)
+        return null;
+
       const amount = event.metadata?.bookingValue || 0;
       const isVip = event.metadata?.isVip === true;
 
-      if (amount < (policy.significantBookingThreshold || Infinity) && !isVip) return null;
+      if (amount < (policy.significantBookingThreshold || Infinity) && !isVip)
+        return null;
 
       return {
-        subject: isVip ? 'VIP Booking Received' : 'High-Value Booking Received',
+        subject: isVip ? "VIP Booking Received" : "High-Value Booking Received",
         body: `A new booking valued at ₦${amount.toLocaleString()} was just created.`,
-        category: 'Operations',
-        priority: 'Normal',
+        category: "Operations",
+        priority: "Normal",
       };
     }
 
-    case 'CRITICAL_STOCKOUT': {
-      const stockItem = await prisma.stockItem.findUnique({ where: { id: event.entityId } });
+    case "CRITICAL_STOCKOUT": {
+      const stockItem = await prisma.stockItem.findUnique({
+        where: { id: event.entityId },
+      });
       if (!stockItem) return null;
 
       return {
-        subject: 'Critical Stockout Alert',
+        subject: "Critical Stockout Alert",
         body: `Inventory for ${stockItem.name} has dropped to ${stockItem.quantityOnHand}, triggering a critical stockout alert.`,
-        category: 'Operations',
-        priority: 'High',
+        category: "Operations",
+        priority: "High",
       };
     }
 
-    case 'SECURITY_EXCEPTION': {
+    case "SECURITY_EXCEPTION": {
       return {
-        subject: event.metadata?.alertTitle || 'Security Exception',
-        body: event.metadata?.alertDescription || 'A sensitive security or audit event occurred.',
-        category: 'Critical',
-        priority: 'Critical',
+        subject: event.metadata?.alertTitle || "Security Exception",
+        body:
+          event.metadata?.alertDescription ||
+          "A sensitive security or audit event occurred.",
+        category: "Critical",
+        priority: "Critical",
       };
     }
 
-    case 'CHECK_IN': {
+    case "CHECK_IN": {
       if (!policy.notifyOnCheckIn && !event.metadata?.isVip) return null;
-      
+
       const resIn = await prisma.reservation.findUnique({
         where: { id: event.entityId },
         include: {
           primaryGuest: true,
-          reservationRooms: { include: { room: { include: { roomType: true } } } },
-          folios: { where: { type: 'ROOM' }, orderBy: { createdAt: 'asc' }, take: 1 },
-        }
+          reservationRooms: {
+            include: { room: { include: { roomType: true } } },
+          },
+        },
       });
       if (!resIn) return null;
-      const guestNameIn = resIn.primaryGuest?.firstName ? `${resIn.primaryGuest.firstName} ${resIn.primaryGuest.lastName}` : 'A guest';
+      const guestNameIn = resIn.primaryGuest?.firstName
+        ? `${resIn.primaryGuest.firstName} ${resIn.primaryGuest.lastName}`
+        : "A guest";
       const rawRoomIn = resIn.reservationRooms?.[0]?.room?.number;
-      const roomNumIn = rawRoomIn ? rawRoomIn.split('.').pop() : 'N/A';
-      const roomTypeIn = resIn.reservationRooms?.[0]?.room?.roomType?.name || 'Room';
-      const phoneIn = resIn.primaryGuest?.phone || 'N/A';
-      const checkOutIn = resIn.checkOut.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-      const nightsIn = Math.ceil((resIn.checkOut.getTime() - resIn.checkIn.getTime()) / (1000 * 60 * 60 * 24));
+      const roomNumIn = rawRoomIn ? rawRoomIn.split(".").pop() : "N/A";
+      const roomTypeIn =
+        resIn.reservationRooms?.[0]?.room?.roomType?.name || "Room";
+      const phoneIn = resIn.primaryGuest?.phone || "N/A";
+      const checkOutIn = resIn.checkOut.toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+      const nightsIn = Math.ceil(
+        (resIn.checkOut.getTime() - resIn.checkIn.getTime()) /
+          (1000 * 60 * 60 * 24),
+      );
       const adultsIn = resIn.adults || 1;
-      const folioIn = resIn.folios?.[0];
-      const bookingValueIn = folioIn ? `${resIn.currency} ${Number(folioIn.totalCharges).toLocaleString()}` : 'N/A';
 
       return {
-        subject: event.metadata?.isVip ? `⭐ VIP Checked In — ${guestNameIn}` : `✅ Guest Checked In — ${guestNameIn}`,
-        body: `${event.metadata?.isVip ? '⭐ VIP ' : ''}📋 Conf: ${resIn.confirmationNumber || event.entityId}\n👤 Guest: ${guestNameIn} | 📞 ${phoneIn}\n🏠 Room ${roomNumIn} (${roomTypeIn})\n📅 Check-out: ${checkOutIn} (${nightsIn} night${nightsIn !== 1 ? 's' : ''})\n👥 Adults: ${adultsIn}\n💰 Booking Value: ${bookingValueIn}`,
-        category: 'Operations',
-        priority: event.metadata?.isVip ? 'High' : 'Normal',
+        subject: event.metadata?.isVip
+          ? `⭐ VIP Checked In — ${guestNameIn}`
+          : `✅ Guest Checked In — ${guestNameIn}`,
+        body: `${event.metadata?.isVip ? "⭐ VIP " : ""}📋 Conf: ${resIn.confirmationNumber || event.entityId}\n👤 Guest: ${guestNameIn} | 📞 ${phoneIn}\n🏠 Room ${roomNumIn} (${roomTypeIn})\n📅 Check-out: ${checkOutIn} (${nightsIn} night${nightsIn !== 1 ? "s" : ""})\n👥 Adults: ${adultsIn}`,
+        category: "Operations",
+        priority: event.metadata?.isVip ? "High" : "Normal",
       };
     }
 
-    case 'CHECK_OUT': {
+    case "CHECK_OUT": {
       if (!policy.notifyOnCheckOut && !event.metadata?.isVip) return null;
-      
+
       const resOut = await prisma.reservation.findUnique({
         where: { id: event.entityId },
         include: {
           primaryGuest: true,
-          reservationRooms: { include: { room: { include: { roomType: true } } } },
-          folios: { where: { type: 'ROOM' }, orderBy: { createdAt: 'asc' }, take: 1 },
-        }
+          reservationRooms: {
+            include: { room: { include: { roomType: true } } },
+          },
+          folios: {
+            where: { type: "ROOM" },
+            orderBy: { createdAt: "asc" },
+            take: 1,
+          },
+        },
       });
       if (!resOut) return null;
-      const guestNameOut = resOut.primaryGuest?.firstName ? `${resOut.primaryGuest.firstName} ${resOut.primaryGuest.lastName}` : 'A guest';
+      const guestNameOut = resOut.primaryGuest?.firstName
+        ? `${resOut.primaryGuest.firstName} ${resOut.primaryGuest.lastName}`
+        : "A guest";
       const rawRoomOut = resOut.reservationRooms?.[0]?.room?.number;
-      const roomNumOut = rawRoomOut ? rawRoomOut.split('.').pop() : 'N/A';
-      const roomTypeOut = resOut.reservationRooms?.[0]?.room?.roomType?.name || 'Room';
-      const phoneOut = resOut.primaryGuest?.phone || 'N/A';
-      const checkInOut = resOut.checkIn.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-      const nightsOut = Math.ceil((resOut.checkOut.getTime() - resOut.checkIn.getTime()) / (1000 * 60 * 60 * 24));
+      const roomNumOut = rawRoomOut ? rawRoomOut.split(".").pop() : "N/A";
+      const roomTypeOut =
+        resOut.reservationRooms?.[0]?.room?.roomType?.name || "Room";
+      const phoneOut = resOut.primaryGuest?.phone || "N/A";
+      const checkInOut = resOut.checkIn.toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+      const nightsOut = Math.ceil(
+        (resOut.checkOut.getTime() - resOut.checkIn.getTime()) /
+          (1000 * 60 * 60 * 24),
+      );
       const folioOut = resOut.folios?.[0];
-      const totalOut = folioOut ? `${resOut.currency} ${Number(folioOut.totalCharges).toLocaleString()}` : 'N/A';
-      const balanceOut = folioOut ? (Number(folioOut.balance) === 0 ? 'Settled' : `${resOut.currency} ${Number(folioOut.balance).toLocaleString()}`) : 'N/A';
+      const totalOut = folioOut
+        ? `${resOut.currency} ${Number(folioOut.totalCharges).toLocaleString()}`
+        : "N/A";
+      const balanceOut = folioOut
+        ? Number(folioOut.balance) === 0
+          ? "Settled"
+          : `${resOut.currency} ${Number(folioOut.balance).toLocaleString()}`
+        : "N/A";
 
       return {
-        subject: event.metadata?.isVip ? `⭐ VIP Checked Out — ${guestNameOut}` : `🚪 Guest Checked Out — ${guestNameOut}`,
-        body: `${event.metadata?.isVip ? '⭐ VIP ' : ''}📋 Conf: ${resOut.confirmationNumber || event.entityId}\n👤 Guest: ${guestNameOut} | 📞 ${phoneOut}\n🏠 Room ${roomNumOut} (${roomTypeOut})\n📅 Stayed: ${checkInOut} (${nightsOut} night${nightsOut !== 1 ? 's' : ''})\n💰 Total Charged: ${totalOut}\n🧾 Balance: ${balanceOut}`,
-        category: 'Operations',
-        priority: event.metadata?.isVip ? 'High' : 'Normal',
+        subject: event.metadata?.isVip
+          ? `⭐ VIP Checked Out — ${guestNameOut}`
+          : `🚪 Guest Checked Out — ${guestNameOut}`,
+        body: `${event.metadata?.isVip ? "⭐ VIP " : ""}📋 Conf: ${resOut.confirmationNumber || event.entityId}\n👤 Guest: ${guestNameOut} | 📞 ${phoneOut}\n🏠 Room ${roomNumOut} (${roomTypeOut})\n📅 Stayed: ${checkInOut} (${nightsOut} night${nightsOut !== 1 ? "s" : ""})\n💰 Total Charged: ${totalOut}\n🧾 Balance: ${balanceOut}`,
+        category: "Operations",
+        priority: event.metadata?.isVip ? "High" : "Normal",
       };
     }
 
-    case 'CREDIT_RETAINED': {
+    case "CREDIT_RETAINED": {
       const res = await prisma.reservation.findUnique({
-         where: { id: event.entityId },
-         include: { primaryGuest: true }
+        where: { id: event.entityId },
+        include: { primaryGuest: true },
       });
       if (!res) return null;
-      const guestName = res.primaryGuest?.firstName ? `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}` : 'A guest';
+      const guestName = res.primaryGuest?.firstName
+        ? `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}`
+        : "A guest";
       const amount = event.metadata?.amount || 0;
-      const reasonCode = event.metadata?.reasonCode || 'Early Departure';
-      
+      const reasonCode = event.metadata?.reasonCode || "Early Departure";
+
       return {
         subject: `Credit Retained — ${guestName}`,
         body: `Guest checked out, and a credit balance of ${res.currency} ${amount.toLocaleString()} was retained by the property.\nReason: ${reasonCode}`,
-        category: 'Finance',
-        priority: 'High', // High priority so executives see revenue retentions clearly
+        category: "Finance",
+        priority: "High", // High priority so executives see revenue retentions clearly
       };
     }
 
-    case 'CREDIT_TRANSFERRED': {
+    case "CREDIT_TRANSFERRED": {
       const res = await prisma.reservation.findUnique({
-         where: { id: event.entityId },
-         include: { primaryGuest: true }
+        where: { id: event.entityId },
+        include: { primaryGuest: true },
       });
       if (!res) return null;
-      const guestName = res.primaryGuest?.firstName ? `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}` : 'A guest';
+      const guestName = res.primaryGuest?.firstName
+        ? `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}`
+        : "A guest";
       const amount = event.metadata?.amount || 0;
-      const reason = event.metadata?.reason || 'Unknown';
-      
+      const reason = event.metadata?.reason || "Unknown";
+
       return {
         subject: `Credit Transferred (Refund Payable) — ${guestName}`,
         body: `A credit of ${res.currency} ${amount.toLocaleString()} was transferred to City Ledger / Refund Payables at check-out.\nReason: ${reason}`,
-        category: 'Finance',
-        priority: 'High', 
+        category: "Finance",
+        priority: "High",
       };
     }
 
-    case 'RESERVATION_CREATED': {
+    case "RESERVATION_CREATED": {
       if (!policy.notifyOnReservationCreated) return null;
       const res = await prisma.reservation.findUnique({
         where: { id: event.entityId },
         include: {
           primaryGuest: true,
-          reservationRooms: { include: { room: { include: { roomType: true } } } },
-          folios: { where: { type: 'ROOM' }, orderBy: { createdAt: 'asc' }, take: 1 },
-        }
+          reservationRooms: {
+            include: { room: { include: { roomType: true } } },
+          },
+          folios: {
+            where: { type: "ROOM" },
+            orderBy: { createdAt: "asc" },
+            take: 1,
+          },
+        },
       });
       if (!res) return null;
-      const guestName = res.primaryGuest?.firstName ? `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}` : 'A guest';
-      const checkIn = res.checkIn.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-      const checkOut = res.checkOut.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-      const nights = Math.ceil((res.checkOut.getTime() - res.checkIn.getTime()) / (1000 * 60 * 60 * 24));
-      const roomDetails = res.reservationRooms.map((rr: any) => {
-        const roomNum = rr.room?.number.split('.').pop() || 'N/A';
-        const type = rr.room?.roomType?.name || 'Room';
-        return `Room ${roomNum} (${type})`;
-      }).join(', ');
+      const guestName = res.primaryGuest?.firstName
+        ? `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}`
+        : "A guest";
+      const checkIn = res.checkIn.toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+      const checkOut = res.checkOut.toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+      const nights = Math.ceil(
+        (res.checkOut.getTime() - res.checkIn.getTime()) /
+          (1000 * 60 * 60 * 24),
+      );
+      const roomDetails = res.reservationRooms
+        .map((rr: any) => {
+          const roomNum = rr.room?.number.split(".").pop() || "N/A";
+          const type = rr.room?.roomType?.name || "Room";
+          return `Room ${roomNum} (${type})`;
+        })
+        .join(", ");
       const folio = res.folios?.[0];
-      const totalAmount = folio ? `${res.currency} ${Number(folio.totalCharges).toLocaleString()}` : 'N/A';
+      const totalAmount = folio
+        ? `${res.currency} ${Number(folio.totalCharges).toLocaleString()}`
+        : "N/A";
       const adults = res.adults || 1;
-      const phone = res.primaryGuest?.phone || 'N/A';
-      
+      const phone = res.primaryGuest?.phone || "N/A";
+
       return {
         subject: `New Reservation — ${guestName}`,
-        body: `📋 Conf: ${res.confirmationNumber || event.entityId}\n👤 Guest: ${guestName} | 📞 ${phone}\n🏠 ${roomDetails}\n📅 Check-in: ${checkIn} → Check-out: ${checkOut} (${nights} night${nights !== 1 ? 's' : ''})\n👥 Adults: ${adults}\n💰 Total: ${totalAmount}`,
-        category: 'Operations',
-        priority: 'Normal',
+        body: `📋 Conf: ${res.confirmationNumber || event.entityId}\n👤 Guest: ${guestName} | 📞 ${phone}\n🏠 ${roomDetails}\n📅 Check-in: ${checkIn} → Check-out: ${checkOut} (${nights} night${nights !== 1 ? "s" : ""})\n👥 Adults: ${adults}\n💰 Total: ${totalAmount}`,
+        category: "Operations",
+        priority: "Normal",
       };
     }
 
-    case 'RESERVATION_CANCELLED': {
+    case "RESERVATION_CANCELLED": {
       if (!policy.notifyOnReservationCancelled) return null;
       const res = await prisma.reservation.findUnique({
         where: { id: event.entityId },
         include: {
           primaryGuest: true,
-          reservationRooms: { include: { room: { include: { roomType: true } } } },
-          folios: { where: { type: 'ROOM' }, orderBy: { createdAt: 'asc' }, take: 1 },
-        }
+          reservationRooms: {
+            include: { room: { include: { roomType: true } } },
+          },
+          folios: {
+            where: { type: "ROOM" },
+            orderBy: { createdAt: "asc" },
+            take: 1,
+          },
+        },
       });
       if (!res) return null;
-      const guestName = res.primaryGuest?.firstName ? `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}` : 'A guest';
-      const checkIn = res.checkIn.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-      const checkOut = res.checkOut.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-      const nights = Math.ceil((res.checkOut.getTime() - res.checkIn.getTime()) / (1000 * 60 * 60 * 24));
-      const roomDetails = res.reservationRooms.map((rr: any) => {
-        const roomNum = rr.room?.number.split('.').pop() || 'N/A';
-        const type = rr.room?.roomType?.name || 'Room';
-        return `Room ${roomNum} (${type})`;
-      }).join(', ');
+      const guestName = res.primaryGuest?.firstName
+        ? `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}`
+        : "A guest";
+      const checkIn = res.checkIn.toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+      const checkOut = res.checkOut.toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+      const nights = Math.ceil(
+        (res.checkOut.getTime() - res.checkIn.getTime()) /
+          (1000 * 60 * 60 * 24),
+      );
+      const roomDetails = res.reservationRooms
+        .map((rr: any) => {
+          const roomNum = rr.room?.number.split(".").pop() || "N/A";
+          const type = rr.room?.roomType?.name || "Room";
+          return `Room ${roomNum} (${type})`;
+        })
+        .join(", ");
       const folio = res.folios?.[0];
-      const totalAmount = folio ? `${res.currency} ${Number(folio.totalCharges).toLocaleString()}` : 'N/A';
-      const phone = res.primaryGuest?.phone || 'N/A';
-      const cancelReason = (event.metadata?.reason as string) || res.cancellationReason || 'No reason provided';
-      
+      const totalAmount = folio
+        ? `${res.currency} ${Number(folio.totalCharges).toLocaleString()}`
+        : "N/A";
+      const phone = res.primaryGuest?.phone || "N/A";
+      const cancelReason =
+        (event.metadata?.reason as string) ||
+        res.cancellationReason ||
+        "No reason provided";
+
       return {
         subject: `Reservation Cancelled — ${guestName}`,
-        body: `❌ Conf: ${res.confirmationNumber || event.entityId}\n👤 Guest: ${guestName} | 📞 ${phone}\n🏠 ${roomDetails || 'N/A'}\n📅 Was: ${checkIn} → ${checkOut} (${nights} night${nights !== 1 ? 's' : ''})\n💰 Value: ${totalAmount}\n📝 Reason: ${cancelReason}`,
-        category: 'Operations',
-        priority: 'High',
+        body: `❌ Conf: ${res.confirmationNumber || event.entityId}\n👤 Guest: ${guestName} | 📞 ${phone}\n🏠 ${roomDetails || "N/A"}\n📅 Was: ${checkIn} → ${checkOut} (${nights} night${nights !== 1 ? "s" : ""})\n💰 Value: ${totalAmount}\n📝 Reason: ${cancelReason}`,
+        category: "Operations",
+        priority: "High",
       };
     }
 
-    case 'STAY_EXTENDED': {
+    case "STAY_EXTENDED": {
       if (!policy.notifyOnStayExtended) return null;
       const res = await prisma.reservation.findUnique({
         where: { id: event.entityId },
         include: {
           primaryGuest: true,
-          reservationRooms: { include: { room: { include: { roomType: true } } } },
-          folios: { where: { type: 'ROOM' }, orderBy: { createdAt: 'asc' }, take: 1 },
-        }
+          reservationRooms: {
+            include: { room: { include: { roomType: true } } },
+          },
+          folios: {
+            where: { type: "ROOM" },
+            orderBy: { createdAt: "asc" },
+            take: 1,
+          },
+        },
       });
       if (!res) return null;
-      const guestName = res.primaryGuest?.firstName ? `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}` : 'A guest';
+      const guestName = res.primaryGuest?.firstName
+        ? `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}`
+        : "A guest";
       const rawRoom = res.reservationRooms?.[0]?.room?.number;
-      const roomNum = rawRoom ? rawRoom.split('.').pop() : 'N/A';
-      const roomType = res.reservationRooms?.[0]?.room?.roomType?.name || 'Room';
-      const phone = res.primaryGuest?.phone || 'N/A';
+      const roomNum = rawRoom ? rawRoom.split(".").pop() : "N/A";
+      const roomType =
+        res.reservationRooms?.[0]?.room?.roomType?.name || "Room";
+      const phone = res.primaryGuest?.phone || "N/A";
       const prevCheckOut = event.metadata?.previousCheckOut
-        ? new Date(event.metadata.previousCheckOut as string).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-        : 'N/A';
-      const newCheckOut = res.checkOut.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-      const totalNights = Math.ceil((res.checkOut.getTime() - res.checkIn.getTime()) / (1000 * 60 * 60 * 24));
+        ? new Date(
+            event.metadata.previousCheckOut as string,
+          ).toLocaleDateString("en-GB", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+          })
+        : "N/A";
+      const newCheckOut = res.checkOut.toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+      const totalNights = Math.ceil(
+        (res.checkOut.getTime() - res.checkIn.getTime()) /
+          (1000 * 60 * 60 * 24),
+      );
       const folio = res.folios?.[0];
-      const totalAmount = folio ? `${res.currency} ${Number(folio.totalCharges).toLocaleString()}` : 'N/A';
-      
+      const totalAmount = folio
+        ? `${res.currency} ${Number(folio.totalCharges).toLocaleString()}`
+        : "N/A";
+
       return {
         subject: `📆 Stay Extended — ${guestName}`,
-        body: `📋 Conf: ${res.confirmationNumber || event.entityId}\n👤 Guest: ${guestName} | 📞 ${phone}\n🏠 Room ${roomNum} (${roomType})\n📅 Previous Check-out: ${prevCheckOut}\n📅 New Check-out: ${newCheckOut} (${totalNights} night${totalNights !== 1 ? 's' : ''} total)\n💰 Updated Total: ${totalAmount}`,
-        category: 'Operations',
-        priority: 'Normal',
+        body: `📋 Conf: ${res.confirmationNumber || event.entityId}\n👤 Guest: ${guestName} | 📞 ${phone}\n🏠 Room ${roomNum} (${roomType})\n📅 Previous Check-out: ${prevCheckOut}\n📅 New Check-out: ${newCheckOut} (${totalNights} night${totalNights !== 1 ? "s" : ""} total)\n💰 Updated Total: ${totalAmount}`,
+        category: "Operations",
+        priority: "Normal",
       };
     }
 
-    case 'NIGHT_AUDIT_COMPLETED': {
+    case "NIGHT_AUDIT_COMPLETED": {
       return {
-        subject: 'Night Audit Completed Successfully',
+        subject: "Night Audit Completed Successfully",
         body: `Business day closed. Processed ${event.metadata?.tasksCreated} stayover tasks.`,
-        category: 'Operations',
-        priority: 'Normal', // Optional / low-priority
+        category: "Operations",
+        priority: "Normal", // Optional / low-priority
       };
     }
 
-    case 'NIGHT_AUDIT_DISCREPANCY': {
+    case "NIGHT_AUDIT_DISCREPANCY": {
       return {
-        subject: 'Night Audit Completed with Discrepancies',
+        subject: "Night Audit Completed with Discrepancies",
         body: `Business day closed but ${event.metadata?.errors} errors occurred.`,
-        category: 'Critical',
-        priority: 'Critical',
+        category: "Critical",
+        priority: "Critical",
       };
     }
 
-    case 'NIGHT_AUDIT_FAILED': {
+    case "NIGHT_AUDIT_FAILED": {
       return {
-        subject: 'Night Audit Failed!',
+        subject: "Night Audit Failed!",
         body: `CRITICAL: The property day could not close. Error: ${event.metadata?.error}`,
-        category: 'Critical',
-        priority: 'Critical',
+        category: "Critical",
+        priority: "Critical",
       };
     }
 
-    case 'APPROVAL_REQUESTED': {
+    case "APPROVAL_REQUESTED": {
       return {
-        subject: 'Approval Required',
-        body: event.metadata?.requestReason || `A staff member requested an override requiring your approval.`,
-        category: 'Approvals',
-        priority: 'High',
+        subject: "Approval Required",
+        body:
+          event.metadata?.requestReason ||
+          `A staff member requested an override requiring your approval.`,
+        category: "Approvals",
+        priority: "High",
       };
     }
 
-    case 'CREDIT_LIMIT_BREACH': {
+    case "CREDIT_LIMIT_BREACH": {
       return {
-        subject: 'Credit Limit Breached',
+        subject: "Credit Limit Breached",
         body: `Folio balance has crossed the credit limit threshold. Current Balance: ₦${event.metadata?.newBalance}.`,
-        category: 'Finance',
-        priority: 'Critical',
+        category: "Finance",
+        priority: "Critical",
       };
     }
 
