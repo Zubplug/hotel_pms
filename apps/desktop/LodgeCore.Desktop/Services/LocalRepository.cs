@@ -969,57 +969,56 @@ public class LocalRepository
             try
             {
                 using var document = JsonDocument.Parse(folio.TransactionsJson);
-                var root = document.RootElement;
-                if (root.TryGetProperty("payments", out var payments) && payments.ValueKind == JsonValueKind.Array)
-                {
-                    foreach (var payment in payments.EnumerateArray())
-                    {
-                        if (!payment.TryGetProperty("frontdeskSessionId", out var paymentSession) || paymentSession.GetString() != sessionId) continue;
-                        var amount = ReadDecimal(payment, "amount");
-                        var method = payment.TryGetProperty("method", out var methodValue) ? methodValue.GetString() ?? "OTHER" : "OTHER";
-                        var createdAt = payment.TryGetProperty("createdAt", out var dateValue) && DateTime.TryParse(dateValue.GetString(), out var parsedDate) ? parsedDate : folio.UpdatedAt;
-                        paymentCount++;
-                        if (method.Equals("CASH", StringComparison.OrdinalIgnoreCase)) cashPayments += amount;
-                        else if (method.Contains("CARD", StringComparison.OrdinalIgnoreCase) || method.Equals("POS", StringComparison.OrdinalIgnoreCase)) cardPayments += amount;
-                        else if (method.Contains("BANK", StringComparison.OrdinalIgnoreCase) || method.Contains("TRANSFER", StringComparison.OrdinalIgnoreCase)) bankTransfers += amount;
-                        else otherPayments += amount;
-                        rows.Add(new Dictionary<string, object?> { ["kind"] = "PAYMENT", ["date"] = createdAt, ["amount"] = amount, ["method"] = method, ["description"] = $"{method} payment", ["folioId"] = folio.Id });
-                    }
-                }
+                
+                var reservation = folio.Reservation;
+                var guestName = reservation?.Guest == null ? null : $"{reservation.Guest.FirstName} {reservation.Guest.LastName}".Trim();
+                var rooms = reservation?.Rooms.Select(room => room.Room?.DisplayName ?? room.Room?.Number).Where(number => !string.IsNullOrWhiteSpace(number)).ToArray() ?? Array.Empty<string>();
 
-                if (root.TryGetProperty("credits", out var credits) && credits.ValueKind == JsonValueKind.Array)
+                Action<JsonElement, string, string> processArray = (arrayElement, defaultType, defaultKind) =>
                 {
-                    foreach (var credit in credits.EnumerateArray())
+                    foreach (var item in arrayElement.EnumerateArray())
                     {
-                        if (!credit.TryGetProperty("frontdeskSessionId", out var creditSession) || creditSession.GetString() != sessionId) continue;
-                        var amount = ReadDecimal(credit, "amount");
-                        var method = credit.TryGetProperty("method", out var methodValue) ? methodValue.GetString() ?? "OTHER" : "OTHER";
-                        var createdAt = credit.TryGetProperty("createdAt", out var dateValue) && DateTime.TryParse(dateValue.GetString(), out var parsedDate) ? parsedDate : folio.UpdatedAt;
-                        paymentCount++;
-                        if (method.Equals("CASH", StringComparison.OrdinalIgnoreCase)) cashPayments += amount;
-                        else if (method.Contains("CARD", StringComparison.OrdinalIgnoreCase) || method.Equals("POS", StringComparison.OrdinalIgnoreCase)) cardPayments += amount;
-                        else if (method.Contains("BANK", StringComparison.OrdinalIgnoreCase) || method.Contains("TRANSFER", StringComparison.OrdinalIgnoreCase)) bankTransfers += amount;
-                        else otherPayments += amount;
-                        rows.Add(new Dictionary<string, object?> { ["kind"] = "PAYMENT", ["date"] = createdAt, ["amount"] = amount, ["method"] = method, ["description"] = $"{method} top-up", ["folioId"] = folio.Id });
-                    }
-                }
+                        var createdAt = item.TryGetProperty("createdAt", out var createdAtElement) && DateTime.TryParse(createdAtElement.GetString(), out var parsedCreatedAt) ? parsedCreatedAt : folio.UpdatedAt;
+                        if (createdAt < startDate || createdAt > endDate) continue;
+                        var amount = ReadDecimal(item, "amount");
+                        if (amount == 0) continue;
+                        
+                        var type = item.TryGetProperty("type", out var itemType) ? itemType.GetString() : defaultType;
+                        // Skip items that are payments, since we process the actual "payments" and "credits" arrays separately.
+                        if (defaultKind == "FOLIO_ITEM" && type == "PAYMENT") continue;
 
-                if (root.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array)
-                {
-                    foreach (var item in items.EnumerateArray())
-                    {
-                        if (!item.TryGetProperty("frontdeskSessionId", out var itemSession) || itemSession.GetString() != sessionId) continue;
-                        var type = item.TryGetProperty("type", out var typeValue) ? typeValue.GetString() ?? "CHARGE" : "CHARGE";
-                        if (!type.Equals("CHARGE", StringComparison.OrdinalIgnoreCase)) continue;
-                        var amount = Math.Abs(ReadDecimal(item, "amount"));
-                        var description = item.TryGetProperty("description", out var descriptionValue) ? descriptionValue.GetString() ?? "Front Desk charge" : "Front Desk charge";
-                        var createdAt = item.TryGetProperty("createdAt", out var dateValue) && DateTime.TryParse(dateValue.GetString(), out var parsedDate) ? parsedDate : folio.UpdatedAt;
-                        chargeCount++;
-                        if (description.Contains("LAUNDRY", StringComparison.OrdinalIgnoreCase)) laundryCharges += amount;
-                        else if (description.Contains("ROOM", StringComparison.OrdinalIgnoreCase)) roomCharges += amount;
-                        else otherCharges += amount;
-                        rows.Add(new Dictionary<string, object?> { ["kind"] = "CHARGE", ["date"] = createdAt, ["amount"] = amount, ["method"] = "FOLIO", ["description"] = description, ["folioId"] = folio.Id });
+                        rows.Add(new Dictionary<string, object?>
+                        {
+                            ["id"] = item.TryGetProperty("id", out var itemId) ? itemId.GetString() : Guid.NewGuid().ToString(),
+                            ["kind"] = defaultKind,
+                            ["date"] = createdAt,
+                            ["direction"] = (defaultKind == "PAYMENT" || defaultKind == "CREDIT") ? "INFLOW" : (amount >= 0 ? "INFLOW" : "OUTFLOW"),
+                            ["amount"] = Math.Abs(amount),
+                            ["currency"] = folio.Currency ?? "NGN",
+                            ["method"] = item.TryGetProperty("method", out var methodVal) ? methodVal.GetString() ?? "FOLIO" : "FOLIO",
+                            ["type"] = type,
+                            ["description"] = item.TryGetProperty("description", out var description) ? description.GetString() : (item.TryGetProperty("notes", out var notes) ? notes.GetString() : "Folio transaction"),
+                            ["reference"] = item.TryGetProperty("idempotencyKey", out var key) ? key.GetString() : null,
+                            ["shiftReference"] = "",
+                            ["folioNumber"] = folio.Id,
+                            ["confirmationNumber"] = reservation?.ConfirmationNumber,
+                            ["guest"] = guestName,
+                            ["rooms"] = rooms,
+                        });
                     }
+                };
+
+                if (document.RootElement.TryGetProperty("items", out var itemsArray) && itemsArray.ValueKind == JsonValueKind.Array)
+                {
+                    processArray(itemsArray, "CHARGE", "FOLIO_ITEM");
+                }
+                if (document.RootElement.TryGetProperty("payments", out var paymentsArray) && paymentsArray.ValueKind == JsonValueKind.Array)
+                {
+                    processArray(paymentsArray, "PAYMENT", "PAYMENT");
+                }
+                if (document.RootElement.TryGetProperty("credits", out var creditsArray) && creditsArray.ValueKind == JsonValueKind.Array)
+                {
+                    processArray(creditsArray, "CREDIT_ADJUSTMENT", "CREDIT");
                 }
             }
             catch (JsonException) { }
