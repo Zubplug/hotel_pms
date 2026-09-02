@@ -1796,14 +1796,14 @@ public class OfflinePMSInterop
     {
         try
         {
-            var ctx = await GetSecureContextAsync();
+            var posCtx = await _sessionManager.GetActiveContextAsync();
             var property = await _repo.GetPropertyAsync(propertyId);
             var actualBankingModel = property?.BankingModel ?? "CENTRAL_CASHIER";
             var actualBankType = string.Equals(actualBankingModel, "SERVER_BANKING", StringComparison.OrdinalIgnoreCase)
                 ? "SERVER"
                 : "CENTRAL";
 
-            var openingStaff = await _repo.GetStaffByIdAsync(ctx.UserId);
+            var openingStaff = await _repo.GetStaffByIdAsync(posCtx.StaffId);
             var openingRole = openingStaff?.Role ?? string.Empty;
             var normalizedOpeningRole = new string(openingRole
                 .Where(char.IsLetter)
@@ -1824,8 +1824,8 @@ public class OfflinePMSInterop
                 actualBankType,
                 actualBankingModel,
                 openingBalance,
-                ctx.UserId,
-                ctx.DeviceId);
+                posCtx.StaffId,
+                posCtx.DeviceId);
             return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
         catch (Exception ex)
@@ -2149,11 +2149,29 @@ public class OfflinePMSInterop
             var outlet = terminal != null ? await _repo.GetOutletAsync(terminal.OutletId) : null;
             var posSession = string.IsNullOrWhiteSpace(sessionId) ? null : await _repo.GetSessionContextAsync(sessionId);
 
+            // In Server Banking, ensure we don't load another waiter's session 
+            // if React sent a stale sessionId from a previous user.
+            if (posSession != null 
+                && string.Equals(property?.BankingModel, "SERVER_BANKING", StringComparison.OrdinalIgnoreCase)
+                && posSession.UserId != operatorContext.StaffId)
+            {
+                posSession = null;
+            }
+
             // Never let a stale React/localStorage ID break shift-bank loading.
             // The trusted C# operator context is authoritative after a waiter switch.
             if (posSession == null && !string.IsNullOrWhiteSpace(operatorContext.SessionId))
             {
                 posSession = await _repo.GetSessionContextAsync(operatorContext.SessionId);
+                
+                // Also ensure that the session we load from operatorContext actually belongs to them 
+                // in case it's a stale reference.
+                if (posSession != null 
+                    && string.Equals(property?.BankingModel, "SERVER_BANKING", StringComparison.OrdinalIgnoreCase)
+                    && posSession.UserId != operatorContext.StaffId)
+                {
+                    posSession = null;
+                }
             }
 
             if (posSession == null && !string.Equals(property?.BankingModel, "SERVER_BANKING", StringComparison.OrdinalIgnoreCase))
@@ -2301,7 +2319,8 @@ public class OfflinePMSInterop
         {
             var posCtx = await _sessionManager.GetActiveContextAsync();
             // Enforce identity
-            var movement = await _repo.RecordCashMovementAsync(posCtx.PropertyId, posCtx.SessionId, amount, type, reasonCode, notes, receiptReference, managerId, managerPin, posCtx.StaffId, posCtx.DeviceId);
+            string targetSessionId = string.IsNullOrEmpty(sessionId) ? posCtx.SessionId : sessionId;
+            var movement = await _repo.RecordCashMovementAsync(posCtx.PropertyId, targetSessionId, amount, type, reasonCode, notes, receiptReference, managerId, managerPin, posCtx.StaffId, posCtx.DeviceId);
             return JsonSerializer.Serialize(new { success = true, data = movement }, _jsonOptions);
         }
         catch (Exception ex)
@@ -2316,8 +2335,9 @@ public class OfflinePMSInterop
         {
             var posCtx = await _sessionManager.GetActiveContextAsync();
             // Enforce identity
-            var settlement = await _repo.SettleSessionAsync(posCtx.SessionId, actualCash, posCtx.StaffId, authorizerId, posCtx.DeviceId);
-            var closedSession = await _repo.GetSessionContextAsync(posCtx.SessionId);
+            string targetSessionId = string.IsNullOrEmpty(sessionId) ? posCtx.SessionId : sessionId;
+            var settlement = await _repo.SettleSessionAsync(targetSessionId, actualCash, posCtx.StaffId, authorizerId, posCtx.DeviceId);
+            var closedSession = await _repo.GetSessionContextAsync(targetSessionId);
             
             // Log out the operator securely after settling
             await _sessionManager.ClearOperatorSessionAsync();
