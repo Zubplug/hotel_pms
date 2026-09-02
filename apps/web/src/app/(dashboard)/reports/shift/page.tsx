@@ -238,7 +238,7 @@ export default function ShiftReportPage() {
     <div className="min-h-screen bg-slate-50">
       {/* ─── Hero Header ─── */}
       <div className="bg-gradient-to-r from-[#0b1120] via-[#0e1829] to-[#0b1120] px-8 py-7 print:hidden">
-        <div className="max-w-screen-xl mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="max-w-[800px] mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <p className="text-emerald-400 text-xs font-semibold uppercase tracking-widest mb-1">
               Financial Reports
@@ -272,7 +272,7 @@ export default function ShiftReportPage() {
         </div>
       </div>
 
-      <div className="max-w-screen-xl mx-auto px-6 py-7 space-y-6">
+      <div className="max-w-[800px] mx-auto px-6 py-7 space-y-6">
         {/* Loading */}
         {isLoading && (
           <div className="flex flex-col items-center justify-center py-24">
