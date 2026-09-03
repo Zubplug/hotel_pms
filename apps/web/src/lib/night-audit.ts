@@ -178,6 +178,19 @@ export async function executeNightAudit(
   });
 
   try {
+    // Resolve a valid UUID actor for DB fields that require one (postedBy, appliedBy).
+    // When the audit is triggered by a logged-in user userId is already a UUID;
+    // for scheduled / system runs we fall back to the first Night Auditor / Manager
+    // on this property so the UUID constraint is never violated.
+    let actorId = userId;
+    if (!actorId) {
+      const fallbackStaff = await prisma.staff.findFirst({
+        where: { propertyAccess: { has: propertyId }, position: { in: ['NIGHT_AUDITOR', 'HOTEL_MANAGER', 'MANAGER', 'ADMIN', 'SUPER_ADMIN'] }, isActive: true },
+        select: { id: true }
+      });
+      actorId = fallbackStaff?.id ?? null;
+    }
+
     // 3. Post Room Charges
     const eligibleReservations = await prisma.reservation.findMany({
     where: {
@@ -251,7 +264,7 @@ export async function executeNightAudit(
                   amount: effectiveRate,
                   baseAmount: effectiveRate, // Base amount tracks the effective amount actually posted
                   currency: property.supportedCurrencies[0] || 'NGN',
-                  postedBy: userId || 'SYSTEM',
+                  postedBy: actorId!,
                   nightAuditRunId: auditRun.id,
                   discountApprovalId: discountApprovalId
                 }
@@ -276,7 +289,7 @@ export async function executeNightAudit(
                   currency: property.supportedCurrencies[0] || 'NGN',
                   source: 'NIGHT_AUDIT_ROOM_CHARGE',
                   description: `Applied guest credit to room charge - ${businessDate.toISOString().split('T')[0]}`,
-                  appliedBy: userId || 'SYSTEM',
+                  appliedBy: actorId!,
                   operationKey: roomChargeKey,
                   businessDate: businessDate
                 });
