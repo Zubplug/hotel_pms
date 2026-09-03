@@ -12,7 +12,6 @@ const _textPrimary = Color(0xFFF8FAFC);
 const _textSecondary = Color(0xFFCBD5E1);
 const _textMuted = Color(0xFF94A3B8);
 const _gold = Color(0xFFD4AF37);
-const _goldDim = Color(0xFF92750A);
 const _green = Color(0xFF22C55E);
 const _red = Color(0xFFEF4444);
 const _orange = Color(0xFFF97316);
@@ -75,57 +74,47 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
               _RevenueStatusSection(data: data, fmtAmount: _fmtAmount, fmtDate: _fmtDate, period: period),
               const SizedBox(height: 20),
 
-              // 3. Revenue KPI Grid
-              _SectionHeader(label: 'REVENUE BREAKDOWN'),
+              // 3. Revenue KPI Grid (Audited)
+              _SectionHeader(label: 'AUDITED BREAKDOWN ($period)'),
               const SizedBox(height: 10),
-              _RevenueKpiGrid(rev: data.auditedRevenue, fmtAmount: _fmtAmount),
+              _RevenueKpiGrid(rev: data.audited, fmtAmount: _fmtAmount),
               const SizedBox(height: 20),
 
-              // 4. Revenue Trend Chart
-              _SectionHeader(label: 'REVENUE PERFORMANCE', trailing: '7-DAY AUDITED'),
+              // 4. Live Unaudited Activity
+              _SectionHeader(label: 'LIVE UNAUDITED ACTIVITY', trailing: 'SINCE AUDIT'),
               const SizedBox(height: 10),
-              _TrendChart(trend: data.trend, fmtAmount: _fmtAmount),
+              _LiveActivityCard(live: data.liveSinceLastAudit, fmtAmount: _fmtAmount),
               const SizedBox(height: 20),
 
-              // 5. Revenue Mix
-              _SectionHeader(label: 'REVENUE MIX'),
-              const SizedBox(height: 10),
-              _RevenueMixCard(mix: data.revenueMix),
-              const SizedBox(height: 20),
-
-              // 6. Collections
-              _SectionHeader(label: 'COLLECTIONS', trailing: periodSuffix),
-              const SizedBox(height: 10),
-              _CollectionsCard(collections: data.collections, fmtAmount: _fmtAmount),
-              const SizedBox(height: 8),
-
-              // 7. Outstanding Receivables
-              _OutstandingCard(outstanding: data.outstanding, fmtAmount: _fmtAmount),
-              const SizedBox(height: 20),
-
-              // 8. Cash Control
+              // 5. Cash Control
               _SectionHeader(label: 'CASH CONTROL', trailing: period == 'TODAY' ? 'TODAY\'S SHIFTS' : 'SHIFTS ($period)'),
               const SizedBox(height: 10),
-              _CashControlCard(cashControl: data.cashControl, fmtAmount: _fmtAmount),
+              _CashControlCard(cashControl: data.cashControl, fmtAmount: _fmtAmount, period: period),
               const SizedBox(height: 20),
 
-              // 9. Transaction Controls
+              // 6. Transaction Controls
               _SectionHeader(label: 'TRANSACTION CONTROLS', trailing: periodSuffix),
               const SizedBox(height: 10),
               _TransactionControlsCard(controls: data.transactionControls, fmtAmount: _fmtAmount),
               const SizedBox(height: 20),
 
-              // 10. Guest Credits
-              _SectionHeader(label: 'GUEST CREDITS & DEPOSITS'),
+              // 7. Outstanding Receivables
+              _SectionHeader(label: 'OUTSTANDING RECEIVABLES', trailing: 'CURRENT'),
+              const SizedBox(height: 10),
+              _OutstandingCard(outstanding: data.outstanding, fmtAmount: _fmtAmount),
+              const SizedBox(height: 20),
+
+              // 8. Guest Credits
+              _SectionHeader(label: 'GUEST CREDITS & DEPOSITS', trailing: 'CURRENT'),
               const SizedBox(height: 10),
               _GuestCreditsCard(credits: data.guestCredits, fmtAmount: _fmtAmount),
               const SizedBox(height: 20),
 
-              // 11. Financial Alerts
-              if (data.attention.isNotEmpty) ...[
-                _SectionHeader(label: 'REQUIRES ATTENTION', count: data.attention.length),
+              // 9. Financial Alerts
+              if (data.currentAlerts.isNotEmpty) ...[
+                _SectionHeader(label: 'CURRENT ALERTS', count: data.currentAlerts.length),
                 const SizedBox(height: 10),
-                ...data.attention.map((a) => Padding(
+                ...data.currentAlerts.map((a) => Padding(
                   padding: const EdgeInsets.only(bottom: 10),
                   child: _AttentionCard(alert: a, fmtAmount: _fmtAmount),
                 )),
@@ -237,7 +226,7 @@ class _NightAuditBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isAudited = data.auditStatus == AuditStatus.audited;
+    final isAudited = data.lastAuditedBusinessDate != null;
     final color = isAudited ? _green : _orange;
 
     return Container(
@@ -266,8 +255,8 @@ class _NightAuditBanner extends StatelessWidget {
                   style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: color),
                 ),
                 const SizedBox(height: 2),
-                if (isAudited && data.lastAudit != null)
-                  Text('Business date ${fmtDate(data.lastAudit!.businessDate)} • Completed ${fmtDateTime(data.lastAudit!.completedAt)}',
+                if (isAudited)
+                  Text('Business date ${fmtDate(data.lastAuditedBusinessDate!)}',
                       style: const TextStyle(fontSize: 11, color: _textMuted))
                 else
                   const Text('Official revenue has not yet been finalised for today.', style: TextStyle(fontSize: 11, color: _textMuted)),
@@ -310,8 +299,8 @@ class _RevenueStatusSection extends StatelessWidget {
         Expanded(
           child: _RevenueCard(
             label: 'OFFICIAL / AUDITED',
-            amount: data.auditedRevenue.total,
-            subtitle: fmtDate(data.auditedRevenue.businessDate),
+            amount: data.audited.revenue,
+            subtitle: data.lastAuditedBusinessDate != null ? fmtDate(data.lastAuditedBusinessDate!) : 'No audits yet',
             badge: '✓ AUDITED',
             badgeColor: _green,
             isAudited: true,
@@ -319,18 +308,18 @@ class _RevenueStatusSection extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 10),
-        // Live Today
+        // Live Since Last Audit
         Expanded(
           child: _RevenueCard(
-            label: 'LIVE $period',
-            amount: data.liveToday.total,
-            subtitle: period == 'TODAY' ? fmtDate(data.businessDate) : 'Unaudited Activity',
+            label: 'LIVE SINCE AUDIT',
+            amount: data.liveSinceLastAudit.revenueActivity,
+            subtitle: 'Unaudited Activity',
             badge: '*UNAUDITED',
             badgeColor: _orange,
             isAudited: false,
             breakdown: [
-              ('Rooms', data.liveToday.roomCharges),
-              ('POS', data.liveToday.posSales),
+              ('Rooms', data.liveSinceLastAudit.roomCharges),
+              ('POS', data.liveSinceLastAudit.posSales),
             ],
             fmtAmount: fmtAmount,
           ),
@@ -409,7 +398,7 @@ class _RevenueCard extends StatelessWidget {
 
 // ─── 3. Revenue KPI Grid ──────────────────────────────────────────────────────
 class _RevenueKpiGrid extends StatelessWidget {
-  final AuditedRevenue rev;
+  final AuditedPeriodData rev;
   final String Function(double) fmtAmount;
 
   const _RevenueKpiGrid({required this.rev, required this.fmtAmount});
@@ -417,14 +406,13 @@ class _RevenueKpiGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = [
-      ('Rooms', rev.room, _blue, false),
-      ('F&B', rev.fb, _purple, false),
-      ('Other', rev.other, _textMuted, false),
-      ('Net Revenue', rev.net, _gold, false),
+      ('Rooms', rev.roomRevenue, _blue, false),
+      ('F&B / POS', rev.fbRevenue, _purple, false),
+      ('Other', rev.otherRevenue, _textMuted, false),
+      ('Net Revenue', rev.netRevenue, _gold, false),
       ('Discounts', rev.discounts, _orange, true),
       ('Refunds', rev.refunds, _red, true),
-      ('Voids', rev.voids, _red, true),
-      ('Total', rev.total, _green, false),
+      ('Gross Revenue', rev.revenue, _green, false),
     ];
 
     return Container(
@@ -480,266 +468,50 @@ class _KpiItem extends StatelessWidget {
   }
 }
 
-// ─── 4. Trend Chart ───────────────────────────────────────────────────────────
-class _TrendChart extends StatelessWidget {
-  final RevenueTrend trend;
+// ─── 4. Live Unaudited Activity ───────────────────────────────────────────────
+class _LiveActivityCard extends StatelessWidget {
+  final LiveActivityData live;
   final String Function(double) fmtAmount;
 
-  const _TrendChart({required this.trend, required this.fmtAmount});
-
-  String _dayLabel(String dateStr) {
-    try {
-      final d = DateTime.parse(dateStr);
-      return ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'][d.weekday % 7];
-    } catch (_) { return ''; }
-  }
+  const _LiveActivityCard({required this.live, required this.fmtAmount});
 
   @override
   Widget build(BuildContext context) {
-    final days = trend.days;
-    if (days.isEmpty) {
-      return Container(
-        height: 120,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(color: _surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: _border)),
-        child: const Text('No audited revenue data yet', style: TextStyle(color: _textMuted, fontSize: 12)),
-      );
-    }
-
-    final maxRev = days.map((d) => d.revenue).reduce((a, b) => a > b ? a : b);
-    final today = DateTime.now().toIso8601String().substring(0, 10);
-
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(color: _surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: _border)),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('MTD REVENUE', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, letterSpacing: 1.2, color: _textMuted)),
-                  const SizedBox(height: 3),
-                  Text(fmtAmount(trend.mtdTotal), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: _textPrimary)),
-                ],
-              ),
-              _TrendBadge(changePercent: trend.mtdChangePercent),
-            ],
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            height: 110,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: days.map((day) {
-                final ratio = maxRev > 0 ? (day.revenue / maxRev) : 0.0;
-                final isToday = day.businessDate == today;
-                return Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 3),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              Stack(
-                                alignment: Alignment.bottomCenter,
-                                children: [
-                                  Container(height: 80, decoration: BoxDecoration(color: _border.withValues(alpha: 0.4), borderRadius: BorderRadius.circular(6))),
-                                  Container(
-                                    height: 80 * ratio,
-                                    decoration: BoxDecoration(
-                                      gradient: LinearGradient(
-                                        begin: Alignment.bottomCenter, end: Alignment.topCenter,
-                                        colors: isToday ? [_gold, _goldDim] : [_blue.withValues(alpha: 0.8), _blue.withValues(alpha: 0.4)],
-                                      ),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(_dayLabel(day.businessDate), style: TextStyle(color: isToday ? _gold : _textMuted, fontSize: 10, fontWeight: isToday ? FontWeight.w700 : FontWeight.normal)),
-                      ],
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text('Audited figures only', style: TextStyle(fontSize: 10, color: _textMuted, fontStyle: FontStyle.italic)),
+          _RowItem(label: 'Room Charges', amount: live.roomCharges, color: _blue, fmtAmount: fmtAmount),
+          const Divider(color: _border, height: 20),
+          _RowItem(label: 'F&B / POS Sales', amount: live.posSales, color: _purple, fmtAmount: fmtAmount),
+          const Divider(color: _border, height: 20),
+          _RowItem(label: 'Collections (Payments)', amount: live.collections, color: _gold, fmtAmount: fmtAmount),
         ],
       ),
     );
   }
 }
 
-class _TrendBadge extends StatelessWidget {
-  final double changePercent;
-  const _TrendBadge({required this.changePercent});
-
-  @override
-  Widget build(BuildContext context) {
-    if (changePercent == 0) return const SizedBox.shrink();
-    final isUp = changePercent > 0;
-    final color = isUp ? _green : _red;
-    final icon = isUp ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withValues(alpha: 0.3))),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 12, color: color),
-        const SizedBox(width: 3),
-        Text('${changePercent.abs()}% vs prev month', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color)),
-      ]),
-    );
-  }
-}
-
-// ─── 5. Revenue Mix ───────────────────────────────────────────────────────────
-class _RevenueMixCard extends StatelessWidget {
-  final RevenueMix mix;
-  const _RevenueMixCard({required this.mix});
-
-  @override
-  Widget build(BuildContext context) {
-    final segments = [
-      ('Rooms', mix.rooms, _blue),
-      ('F&B', mix.fb, _purple),
-      if (mix.bar > 0) ('Bar', mix.bar, _orange),
-      if (mix.other > 0) ('Other', mix.other, _textMuted),
-    ];
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: _surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: _border)),
-      child: Column(
-        children: [
-          // Stacked bar
-          ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: SizedBox(
-              height: 12,
-              child: Row(
-                children: segments.map((s) => Flexible(flex: (s.$2 * 10).round(), child: Container(color: s.$3))).toList(),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          // Legend rows
-          ...segments.map((s) => Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Row(
-              children: [
-                Container(width: 10, height: 10, decoration: BoxDecoration(color: s.$3, borderRadius: BorderRadius.circular(3))),
-                const SizedBox(width: 10),
-                Text(s.$1, style: const TextStyle(fontSize: 13, color: _textSecondary)),
-                const Spacer(),
-                // Progress bar
-                SizedBox(
-                  width: 100,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: LinearProgressIndicator(
-                      value: s.$2 / 100,
-                      backgroundColor: _border,
-                      valueColor: AlwaysStoppedAnimation<Color>(s.$3),
-                      minHeight: 6,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                SizedBox(
-                  width: 40,
-                  child: Text('${s.$2.toStringAsFixed(1)}%', textAlign: TextAlign.right, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: s.$3)),
-                ),
-              ],
-            ),
-          )),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── 6. Collections ───────────────────────────────────────────────────────────
-class _CollectionsCard extends StatelessWidget {
-  final Collections collections;
+// Shared row helper
+class _RowItem extends StatelessWidget {
+  final String label;
+  final double amount;
+  final Color color;
   final String Function(double) fmtAmount;
-
-  const _CollectionsCard({required this.collections, required this.fmtAmount});
-
-  String _methodLabel(String m) {
-    switch (m.toUpperCase()) {
-      case 'CASH': return 'Cash';
-      case 'CARD': case 'CARD_OFFLINE': return 'Card';
-      case 'BANK_TRANSFER': return 'Bank Transfer';
-      case 'ROOM_CHARGE': return 'Room Credit';
-      case 'MOBILE_PAYMENT': return 'Mobile Pay';
-      case 'CITY_LEDGER': return 'City Ledger';
-      default: return m.replaceAll('_', ' ');
-    }
-  }
-
-  IconData _methodIcon(String m) {
-    switch (m.toUpperCase()) {
-      case 'CASH': return Icons.payments_rounded;
-      case 'CARD': case 'CARD_OFFLINE': return Icons.credit_card_rounded;
-      case 'BANK_TRANSFER': return Icons.account_balance_rounded;
-      case 'ROOM_CHARGE': return Icons.hotel_rounded;
-      case 'MOBILE_PAYMENT': return Icons.phone_android_rounded;
-      default: return Icons.attach_money_rounded;
-    }
-  }
+  const _RowItem({required this.label, required this.amount, required this.color, required this.fmtAmount});
 
   @override
-  Widget build(BuildContext context) {
-    final sorted = [...collections.byMethod]..sort((a, b) => b.amount.compareTo(a.amount));
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: _surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: _border)),
-      child: Column(
-        children: [
-          ...sorted.map((m) => Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(color: _blue.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-                  child: Icon(_methodIcon(m.method), color: _blue, size: 16),
-                ),
-                const SizedBox(width: 12),
-                Text(_methodLabel(m.method), style: const TextStyle(fontSize: 13, color: _textSecondary)),
-                const Spacer(),
-                Text(fmtAmount(m.amount), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _textPrimary)),
-              ],
-            ),
-          )),
-          const Divider(color: _border, height: 1),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              const Text('Total Collected', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _textPrimary)),
-              const Spacer(),
-              Text(fmtAmount(collections.total), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: _gold)),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Row(
+    children: [
+      Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+      const SizedBox(width: 10),
+      Expanded(child: Text(label, style: const TextStyle(fontSize: 13, color: _textSecondary))),
+      Text(fmtAmount(amount), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: color)),
+    ],
+  );
 }
+
 
 // ─── 7. Outstanding ───────────────────────────────────────────────────────────
 class _OutstandingCard extends StatelessWidget {
@@ -803,10 +575,11 @@ class _OutstandingCard extends StatelessWidget {
 
 // ─── 8. Cash Control ─────────────────────────────────────────────────────────
 class _CashControlCard extends StatelessWidget {
-  final CashControl cashControl;
+  final CashControlAggregate cashControl;
   final String Function(double) fmtAmount;
+  final String period;
 
-  const _CashControlCard({required this.cashControl, required this.fmtAmount});
+  const _CashControlCard({required this.cashControl, required this.fmtAmount, required this.period});
 
   Color _statusColor(String status) {
     switch (status) {
@@ -828,6 +601,59 @@ class _CashControlCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // MTD/YTD: show aggregate summary + variance count only
+    if (period != 'TODAY') {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(color: _surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: _border)),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Expanded(child: _CashSummaryChip(label: 'Expected', amount: fmtAmount(cashControl.expected), color: _textSecondary)),
+                Expanded(child: _CashSummaryChip(label: 'Declared', amount: fmtAmount(cashControl.declared), color: _textSecondary)),
+                Expanded(child: _CashSummaryChip(
+                  label: 'Net Variance',
+                  amount: '${cashControl.variance >= 0 ? '+' : ''}${fmtAmount(cashControl.variance)}',
+                  color: cashControl.variance == 0 ? _green : cashControl.variance < 0 ? _red : _orange,
+                )),
+              ],
+            ),
+            if (cashControl.sessionsWithVariance > 0) ...[
+              const Divider(color: _border, height: 20),
+              Row(
+                children: [
+                  Text('${cashControl.sessionsWithVariance} sessions with variance',
+                      style: const TextStyle(fontSize: 12, color: _textMuted)),
+                  const Spacer(),
+                  if (cashControl.significantVariances > 0)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(color: _red.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+                      child: Text('${cashControl.significantVariances} significant',
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _red)),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: () {},
+                  style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: _gold),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                  child: const Text('View Variances →',
+                      style: TextStyle(color: _gold, fontSize: 13, fontWeight: FontWeight.w600)),
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+
+    // TODAY: show individual sessions
     if (cashControl.sessions.isEmpty) {
       return Container(
         height: 70,
@@ -842,20 +668,18 @@ class _CashControlCard extends StatelessWidget {
       decoration: BoxDecoration(color: _surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: _border)),
       child: Column(
         children: [
-          // Header totals
           Row(
             children: [
-              Expanded(child: _CashSummaryChip(label: 'Expected', amount: fmtAmount(cashControl.totalExpected), color: _textSecondary)),
-              Expanded(child: _CashSummaryChip(label: 'Declared', amount: fmtAmount(cashControl.totalDeclared), color: _textSecondary)),
+              Expanded(child: _CashSummaryChip(label: 'Expected', amount: fmtAmount(cashControl.expected), color: _textSecondary)),
+              Expanded(child: _CashSummaryChip(label: 'Declared', amount: fmtAmount(cashControl.declared), color: _textSecondary)),
               Expanded(child: _CashSummaryChip(
                 label: 'Variance',
-                amount: '${cashControl.totalVariance >= 0 ? '+' : ''}${fmtAmount(cashControl.totalVariance)}',
-                color: cashControl.totalVariance == 0 ? _green : cashControl.totalVariance < 0 ? _red : _orange,
+                amount: '${cashControl.variance >= 0 ? '+' : ''}${fmtAmount(cashControl.variance)}',
+                color: cashControl.variance == 0 ? _green : cashControl.variance < 0 ? _red : _orange,
               )),
             ],
           ),
           const Divider(color: _border, height: 20),
-          // Per-session rows
           ...cashControl.sessions.map((s) => Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: Column(
@@ -930,7 +754,7 @@ class _SessionStat extends StatelessWidget {
 
 // ─── 9. Transaction Controls ──────────────────────────────────────────────────
 class _TransactionControlsCard extends StatelessWidget {
-  final TransactionControls controls;
+  final TransactionControlAggregate controls;
   final String Function(double) fmtAmount;
 
   const _TransactionControlsCard({required this.controls, required this.fmtAmount});
@@ -942,32 +766,11 @@ class _TransactionControlsCard extends StatelessWidget {
       decoration: BoxDecoration(color: _surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: _border)),
       child: Column(
         children: [
-          _TxRow(
-            label: 'Discounts',
-            amount: fmtAmount(controls.discounts.total),
-            count: controls.discounts.count,
-            changePercent: controls.discounts.changePercent,
-            color: _orange,
-            icon: Icons.discount_rounded,
-          ),
+          _TxRow(label: 'Discounts', amount: fmtAmount(controls.discounts), color: _orange, icon: Icons.discount_rounded),
           const Divider(color: _border, height: 16),
-          _TxRow(
-            label: 'Voids',
-            amount: fmtAmount(controls.voids.total),
-            count: controls.voids.count,
-            changePercent: 0,
-            color: _red,
-            icon: Icons.block_rounded,
-          ),
+          _TxRow(label: 'Voids', amount: fmtAmount(controls.voids), color: _red, icon: Icons.block_rounded),
           const Divider(color: _border, height: 16),
-          _TxRow(
-            label: 'Refunds',
-            amount: fmtAmount(controls.refunds.total),
-            count: controls.refunds.count,
-            changePercent: 0,
-            color: _red,
-            icon: Icons.undo_rounded,
-          ),
+          _TxRow(label: 'Refunds', amount: fmtAmount(controls.refunds), color: _red, icon: Icons.undo_rounded),
           const Divider(color: _border, height: 16),
           Row(
             children: [
@@ -977,30 +780,15 @@ class _TransactionControlsCard extends StatelessWidget {
                 child: const Icon(Icons.admin_panel_settings_rounded, color: _textMuted, size: 16),
               ),
               const SizedBox(width: 12),
-              const Text('Overrides', style: TextStyle(fontSize: 13, color: _textSecondary)),
+              const Text('Overrides / Approvals', style: TextStyle(fontSize: 13, color: _textSecondary)),
               const Spacer(),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(color: _border, borderRadius: BorderRadius.circular(20)),
-                child: Text('${controls.overrides.count}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _textPrimary)),
+                child: Text('${controls.overrides}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _textPrimary)),
               ),
             ],
           ),
-          // Spike alert
-          if (controls.discounts.changePercent > 20) ...[
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: _red.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(10), border: Border.all(color: _red.withValues(alpha: 0.25))),
-              child: Row(
-                children: [
-                  const Icon(Icons.trending_up_rounded, color: _red, size: 16),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text('Discounts up ${controls.discounts.changePercent.toStringAsFixed(0)}% vs previous audit day', style: const TextStyle(fontSize: 11, color: _red))),
-                ],
-              ),
-            ),
-          ],
         ],
       ),
     );
@@ -1010,12 +798,10 @@ class _TransactionControlsCard extends StatelessWidget {
 class _TxRow extends StatelessWidget {
   final String label;
   final String amount;
-  final int count;
-  final double changePercent;
   final Color color;
   final IconData icon;
 
-  const _TxRow({required this.label, required this.amount, required this.count, required this.changePercent, required this.color, required this.icon});
+  const _TxRow({required this.label, required this.amount, required this.color, required this.icon});
 
   @override
   Widget build(BuildContext context) => Row(
@@ -1028,12 +814,6 @@ class _TxRow extends StatelessWidget {
       const SizedBox(width: 12),
       Expanded(child: Text(label, style: const TextStyle(fontSize: 13, color: _textSecondary))),
       Text(amount, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: color)),
-      const SizedBox(width: 12),
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(color: _border, borderRadius: BorderRadius.circular(20)),
-        child: Text('$count', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _textMuted)),
-      ),
     ],
   );
 }
@@ -1080,7 +860,7 @@ class _GuestCreditsCard extends StatelessWidget {
 
 // ─── 11. Financial Alerts ─────────────────────────────────────────────────────
 class _AttentionCard extends StatelessWidget {
-  final FinancialAttention alert;
+  final CurrentAlert alert;
   final String Function(double) fmtAmount;
 
   const _AttentionCard({required this.alert, required this.fmtAmount});
