@@ -58,19 +58,8 @@ public class Rfv2016LockProvider : ILockProvider
             if (Directory.Exists(sourceWRCard))
             {
                 CopyDirectory(sourceWRCard, targetWRCard);
-                
-                // Ensure nConDB.ini uses relative path to avoid long path issues in VB6
-                string iniPath = Path.Combine(targetWRCard, "nConDB.ini");
-                if (File.Exists(iniPath))
-                {
-                    string iniContent = File.ReadAllText(iniPath);
-                    string pattern = @"nDbpath=.*";
-                    // Using an empty string instead of .\ to prevent VB6 from trying to parse dots and slashes
-                    // When empty, nDbpath & 'Database.mdb' becomes 'Database.mdb', which safely resolves to CWD.
-                    string replacement = @"nDbpath=";
-                    iniContent = System.Text.RegularExpressions.Regex.Replace(iniContent, pattern, replacement);
-                    File.WriteAllText(iniPath, iniContent);
-                }
+                // We no longer modify nConDB.ini. The original vendor path (even if it points to D:\)
+                // is necessary for the VB6 executable's internal string parsing to not fail with Error 9.
             }
         }
     }
