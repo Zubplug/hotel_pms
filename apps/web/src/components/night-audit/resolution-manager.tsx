@@ -510,8 +510,8 @@ function PosSessionResolution({ item, onSuccess, onClose }: { item: any; onSucce
   const [declared, setDeclared] = useState('');
   const [reason, setReason] = useState('');
   
-  // Fake expected for demo purposes; normally fetched from /api/v1/pos/sessions/[id]/summary
-  const expected = 150000;
+  // expected is fetched from the session summary
+  const expected = Number(item.expectedCash || 0);
   const variance = Number(declared || 0) - expected;
 
   const handleClose = async () => {
@@ -584,8 +584,8 @@ function FrontdeskShiftResolution({ item, onSuccess, onClose }: { item: any; onS
   const [declared, setDeclared] = useState('');
   const [reason, setReason] = useState('');
   
-  // Fake expected for demo purposes
-  const expected = 50000;
+  // expected is fetched from the session summary
+  const expected = Number(item.systemExpectedCash || item.expectedCash || 0);
   const variance = Number(declared || 0) - expected;
 
   const handleClose = async () => {
