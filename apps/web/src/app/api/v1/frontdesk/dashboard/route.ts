@@ -32,9 +32,13 @@ export async function GET(req: NextRequest) {
     const businessDate = property.businessDate
       ? new Date(property.businessDate)
       : new Date(`${todayString}T00:00:00.000Z`);
-    const nextBusinessDate = new Date(businessDate);
-    nextBusinessDate.setUTCDate(nextBusinessDate.getUTCDate() + 1);
-    const todayDateRange = { gte: businessDate, lt: nextBusinessDate };
+    
+    // For Arrivals and Departures, we always use the physical calendar date 
+    // so staff can see real-world today's activity even if Night Audit hasn't run.
+    const physicalToday = new Date(`${todayString}T00:00:00.000Z`);
+    const physicalTomorrow = new Date(physicalToday);
+    physicalTomorrow.setUTCDate(physicalTomorrow.getUTCDate() + 1);
+    const todayDateRange = { gte: physicalToday, lt: physicalTomorrow };
 
     // 2. Fetch KPIs
     const [arrivalsCount, departuresCount, inHouseCount, hardwareAgent, rooms] = await Promise.all([
@@ -131,7 +135,7 @@ export async function GET(req: NextRequest) {
         arrivalTime: property.checkInTime || '14:00', // Uses property config instead of hardcoded time
         checkOutDate: res.checkOut.toISOString(),
         checkOutTime: property.checkOutTime || '12:00',
-        stayEndsToday: res.status === 'CHECKED_IN' && res.checkOut >= businessDate && res.checkOut < nextBusinessDate,
+        stayEndsToday: res.status === 'CHECKED_IN' && res.checkOut >= physicalToday && res.checkOut < physicalTomorrow,
         balance,
         status: res.status,
         arrivalState: { label: arrivalStatus, color: arrivalColor },

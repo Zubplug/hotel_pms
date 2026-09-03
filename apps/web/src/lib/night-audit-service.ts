@@ -41,7 +41,7 @@ export async function getOperationalReview(ctx: TenantContext, propertyId: strin
     const expected = room.status === 'OUT_OF_ORDER'
       ? 'OOO'
       : reservationStatus === 'CHECKED_IN' ? 'OCCUPIED' : reservationStatus === 'CONFIRMED' ? 'RESERVED' : 'AVAILABLE';
-    const pmsMismatch = expected !== 'OOO' && room.status !== expected;
+    const pmsMismatch = expected !== 'OOO' && room.status !== expected && !(expected === 'AVAILABLE' && room.status === 'RESERVED');
     const housekeepingMismatch = expected === 'OCCUPIED'
       ? room.housekeepingStatus === 'INSPECTED'
       : expected === 'AVAILABLE' && room.housekeepingStatus === 'CLEANING';
