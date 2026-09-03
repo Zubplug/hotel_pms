@@ -311,10 +311,15 @@ export async function getRoomIntelligenceView(
       checkOut: { gt: startOfDay }
     },
     include: {
-      reservation: {
+      reservation: { 
         include: { 
           primaryGuest: true, 
-          folios: { include: { items: { where: { voidedAt: null } } } } 
+          folios: { 
+            include: { 
+              items: { where: { voidedAt: null } },
+              credits: { where: { status: { in: ['AVAILABLE'] } } }
+            } 
+          } 
         }
       }
     }
@@ -329,13 +334,17 @@ export async function getRoomIntelligenceView(
       let totalCharges = 0;
       let totalPaid = 0;
       let folioBalanceSum = 0;
+      let availableCreditSum = 0;
 
       for (const folio of currentRes.reservation.folios) {
         folioBalanceSum += Number(folio.balance);
-        for (const item of folio.items) {
-          if (item.type === 'CHARGE') totalCharges += Number(item.amount);
-          if (item.type === 'PAYMENT') totalPaid += Number(item.amount);
-          // Credit is basically negative balance if overpaid, but we can just use balance
+        totalCharges += Number(folio.totalCharges || 0);
+        totalPaid += Number(folio.totalPayments || 0);
+        
+        if (folio.credits) {
+          for (const credit of folio.credits) {
+             availableCreditSum += Number(credit.remainingAmount || 0);
+          }
         }
       }
       
@@ -345,7 +354,7 @@ export async function getRoomIntelligenceView(
       folioData = {
         totalCharges,
         paid: totalPaid,
-        credit: folioBalanceSum < 0 ? Math.abs(folioBalanceSum) : 0,
+        credit: availableCreditSum,
         balance: computedBalanceDue
       };
     }
