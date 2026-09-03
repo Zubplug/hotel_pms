@@ -348,14 +348,14 @@ export async function getRoomIntelligenceView(
         }
       }
       
-      const reservationTotal = Number((currentRes.reservation as any).totalAmount || 0);
-      const computedBalanceDue = Math.max(folioBalanceSum, reservationTotal - totalPaid);
+      // True net balance: positive means they owe money, negative means they have a credit balance
+      const netBalance = folioBalanceSum - availableCreditSum;
 
       folioData = {
         totalCharges,
         paid: totalPaid,
         credit: availableCreditSum,
-        balance: computedBalanceDue
+        balance: netBalance
       };
     }
 
