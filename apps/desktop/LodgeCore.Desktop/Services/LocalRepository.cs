@@ -1807,7 +1807,7 @@ public class LocalRepository
                 ?? await _dbContext.Rooms.FirstOrDefaultAsync(r => r.Id == checkoutRoomId);
             if (room != null)
             {
-                room.Status = "CLEANING";
+                room.Status = "DIRTY";
                 room.HousekeepingStatus = "CLEANING";
                 room.IsOccupied = false;
                 room.UpdatedAt = DateTime.UtcNow;
@@ -1867,8 +1867,8 @@ public class LocalRepository
             room.HousekeepingStatus = task.Status;
             room.Status = task.Status switch
             {
-                "CLEANING" => "CLEANING",
-                "INSPECTED" => "AVAILABLE",
+                "CLEANING" => room.Status == "OCCUPIED" ? "OCCUPIED" : "DIRTY",
+                "INSPECTED" => room.Status == "OCCUPIED" ? "OCCUPIED" : "AVAILABLE",
                 "MAINTENANCE_REQUIRED" => "MAINTENANCE",
                 _ => room.Status
             };
