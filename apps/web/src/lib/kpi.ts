@@ -87,6 +87,55 @@ export async function calculateDailyRevenue(propertyId: string, businessDate: Da
     }
   }
 
+  // Include expected room revenue for stayovers tonight that haven't been audited/posted yet
+  const stayovers = await prisma.reservation.findMany({
+    where: {
+      propertyId,
+      status: 'CHECKED_IN',
+      checkOut: { gt: businessDate }
+    },
+    include: {
+      reservationRooms: { where: { status: 'ACTIVE' } },
+      ratePlan: true,
+      folios: {
+        where: { type: { in: ['MAIN', 'ROOM'] } },
+        include: {
+          items: {
+            where: {
+              source: 'ROOM_CHARGE',
+              businessDate: {
+                gte: startOfDay(businessDate),
+                lte: endOfDay(businessDate)
+              },
+              voidedAt: null
+            }
+          }
+        }
+      }
+    }
+  });
+
+  let expectedRoomRevenue = 0;
+  for (const res of stayovers) {
+    const hasPostedChargeToday = res.folios.some((f: any) => f.items && f.items.length > 0);
+    if (hasPostedChargeToday) continue;
+
+    const activeRoom = res.reservationRooms[0];
+    const originalRate = activeRoom ? Number(activeRoom.rateAmount || 0) : 0;
+    let discountDeduction = 0;
+    if (activeRoom && activeRoom.discountType) {
+      if (activeRoom.discountType === 'FIXED_AMOUNT') {
+        discountDeduction = Number(activeRoom.discountAmount || 0);
+      } else if (activeRoom.discountType === 'PERCENTAGE') {
+        discountDeduction = originalRate * (Number(activeRoom.discountPercent || 0) / 100);
+      }
+    }
+    const effectiveRate = Math.max(0, originalRate - discountDeduction);
+    expectedRoomRevenue += effectiveRate;
+  }
+
+  roomRevenue += expectedRoomRevenue;
+
   return {
     totalRevenue: roomRevenue + fbRevenue + barRevenue + otherRevenue,
     roomRevenue,
