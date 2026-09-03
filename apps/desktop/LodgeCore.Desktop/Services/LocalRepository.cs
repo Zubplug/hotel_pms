@@ -980,31 +980,80 @@ public class LocalRepository
                 var guestName = reservation?.Guest == null ? null : $"{reservation.Guest.FirstName} {reservation.Guest.LastName}".Trim();
                 var rooms = reservation?.Rooms.Select(room => room.Room?.DisplayName ?? room.Room?.Number).Where(number => !string.IsNullOrWhiteSpace(number)).ToArray() ?? Array.Empty<string>();
 
+                // Only include transactions that belong to this session.
+                // Each item/payment/credit in TransactionsJson carries a frontdeskSessionId
+                // field written at recording time. Filtering here prevents transactions from
+                // other sessions (or night-audit postings) from appearing in this shift's
+                // activity view and prevents double-counting across sessions.
+                bool BelongsToSession(JsonElement item)
+                {
+                    if (item.TryGetProperty("frontdeskSessionId", out var sid))
+                    {
+                        var sidStr = sid.ValueKind == JsonValueKind.Null ? null : sid.GetString();
+                        // If the item has a session ID it must match this session.
+                        // If it has no session ID (older records / night-audit) include it
+                        // only when the session has no closed time (still open) and the
+                        // item timestamp falls within the session window.
+                        if (!string.IsNullOrEmpty(sidStr))
+                            return sidStr == sessionId;
+                    }
+                    // Fallback: include un-tagged items within the session time window.
+                    if (item.TryGetProperty("createdAt", out var ca) &&
+                        DateTime.TryParse(ca.GetString(), out var caDate))
+                        return caDate >= session.OpenedAt && caDate <= (session.ClosedAt ?? DateTime.UtcNow);
+                    return false;
+                }
+
                 Action<JsonElement, string, string> processArray = (arrayElement, defaultType, defaultKind) =>
                 {
                     foreach (var item in arrayElement.EnumerateArray())
                     {
+                        // Skip items belonging to a different session.
+                        if (!BelongsToSession(item)) continue;
+
                         var createdAt = item.TryGetProperty("createdAt", out var createdAtElement) && DateTime.TryParse(createdAtElement.GetString(), out var parsedCreatedAt) ? parsedCreatedAt : folio.UpdatedAt;
                         var amount = ReadDecimal(item, "amount");
                         if (amount == 0) continue;
-                        
+
                         var type = item.TryGetProperty("type", out var itemType) ? itemType.GetString() : defaultType;
-                        // Skip items that are payments, since we process the actual "payments" and "credits" arrays separately.
+
+                        // PAYMENT-type entries in the items[] array are mirror records of
+                        // the entries in payments[]. Skip them here to prevent double-counting
+                        // — payments[] is processed separately as kind=PAYMENT below.
                         if (defaultKind == "FOLIO_ITEM" && type == "PAYMENT") continue;
+
+                        // Accumulate totals.
+                        if (defaultKind == "PAYMENT")
+                        {
+                            paymentCount++;
+                            var method = item.TryGetProperty("method", out var mv) ? mv.GetString() ?? "" : "";
+                            if (method.Equals("CASH", StringComparison.OrdinalIgnoreCase)) cashPayments += Math.Abs(amount);
+                            else if (method.Equals("CARD", StringComparison.OrdinalIgnoreCase) || method.Equals("CREDIT_CARD", StringComparison.OrdinalIgnoreCase) || method.Equals("DEBIT_CARD", StringComparison.OrdinalIgnoreCase)) cardPayments += Math.Abs(amount);
+                            else if (method.Equals("BANK_TRANSFER", StringComparison.OrdinalIgnoreCase) || method.Equals("TRANSFER", StringComparison.OrdinalIgnoreCase)) bankTransfers += Math.Abs(amount);
+                            else otherPayments += Math.Abs(amount);
+                        }
+                        else if (defaultKind == "FOLIO_ITEM")
+                        {
+                            chargeCount++;
+                            var src = item.TryGetProperty("source", out var sv) ? sv.GetString() ?? "" : "";
+                            if (src.Equals("ROOM_CHARGE", StringComparison.OrdinalIgnoreCase) || type?.Equals("ROOM_CHARGE", StringComparison.OrdinalIgnoreCase) == true) roomCharges += Math.Abs(amount);
+                            else if (src.Contains("LAUNDRY", StringComparison.OrdinalIgnoreCase)) laundryCharges += Math.Abs(amount);
+                            else otherCharges += Math.Abs(amount);
+                        }
 
                         rows.Add(new Dictionary<string, object?>
                         {
                             ["id"] = item.TryGetProperty("id", out var itemId) ? itemId.GetString() : Guid.NewGuid().ToString(),
                             ["kind"] = defaultKind,
                             ["date"] = createdAt,
-                            ["direction"] = (defaultKind == "PAYMENT" || defaultKind == "CREDIT") ? "INFLOW" : (amount >= 0 ? "INFLOW" : "OUTFLOW"),
+                            ["direction"] = (defaultKind == "PAYMENT" || defaultKind == "CREDIT") ? "INFLOW" : (amount >= 0 ? "CHARGE" : "OUTFLOW"),
                             ["amount"] = Math.Abs(amount),
                             ["currency"] = folio.Currency ?? "NGN",
                             ["method"] = item.TryGetProperty("method", out var methodVal) ? methodVal.GetString() ?? "FOLIO" : "FOLIO",
                             ["type"] = type,
                             ["description"] = item.TryGetProperty("description", out var description) ? description.GetString() : (item.TryGetProperty("notes", out var notes) ? notes.GetString() : "Folio transaction"),
                             ["reference"] = item.TryGetProperty("idempotencyKey", out var key) ? key.GetString() : null,
-                            ["shiftReference"] = "",
+                            ["shiftReference"] = session.ShiftReference ?? "",
                             ["folioNumber"] = folio.Id,
                             ["confirmationNumber"] = reservation?.ConfirmationNumber,
                             ["guest"] = guestName,
@@ -1014,17 +1063,13 @@ public class LocalRepository
                 };
 
                 if (document.RootElement.TryGetProperty("items", out var itemsArray) && itemsArray.ValueKind == JsonValueKind.Array)
-                {
                     processArray(itemsArray, "CHARGE", "FOLIO_ITEM");
-                }
+
                 if (document.RootElement.TryGetProperty("payments", out var paymentsArray) && paymentsArray.ValueKind == JsonValueKind.Array)
-                {
                     processArray(paymentsArray, "PAYMENT", "PAYMENT");
-                }
+
                 if (document.RootElement.TryGetProperty("credits", out var creditsArray) && creditsArray.ValueKind == JsonValueKind.Array)
-                {
                     processArray(creditsArray, "CREDIT_ADJUSTMENT", "CREDIT");
-                }
             }
             catch (JsonException) { }
         }
@@ -2372,7 +2417,10 @@ public class LocalRepository
         var availableRooms = rooms.Count(r => r.Status == "AVAILABLE" || r.Status == "CLEAN");
 
         var arrivals = arrivalsRaw.Select(r => {
-            var balance = r.Folio != null ? (decimal?)(r.Folio.TotalCharges - r.Folio.TotalPayments) : null;
+            // Use the canonical folio balance so applied credits reduce the
+            // amount due in the offline dashboard as they do at checkout.
+            var balance = r.Folio?.OutstandingBalance;
+            var availableCredit = r.Folio?.AvailableCredit ?? 0m;
             var room = r.RoomId != null && roomDict.ContainsKey(r.RoomId) ? roomDict[r.RoomId] : null;
             var roomType = room != null && room.RoomTypeId != null && roomTypeDict.ContainsKey(room.RoomTypeId) ? roomTypeDict[room.RoomTypeId] : null;
             var roomStatus = room?.Status ?? "UNKNOWN";
@@ -2403,6 +2451,7 @@ public class LocalRepository
                 roomTypeName = roomType?.Name ?? "",
                 arrivalTime = "14:00", // Fallback, would normally use property.checkInTime
                 balance = balance,
+                availableCredit = availableCredit,
                 status = r.Status,
                 arrivalState = new { label = arrivalStatus, color = arrivalColor },
                 roomStatus = roomStatus
@@ -2410,7 +2459,10 @@ public class LocalRepository
         }).ToList();
 
         var departures = departuresRaw.Select(r => {
-            var balance = r.Folio != null ? (decimal?)(r.Folio.TotalCharges - r.Folio.TotalPayments) : null;
+            // Use the canonical folio balance so applied credits reduce the
+            // amount due in the offline dashboard as they do at checkout.
+            var balance = r.Folio?.OutstandingBalance;
+            var availableCredit = r.Folio?.AvailableCredit ?? 0m;
             var room = r.RoomId != null && roomDict.ContainsKey(r.RoomId) ? roomDict[r.RoomId] : null;
             var roomType = room != null && room.RoomTypeId != null && roomTypeDict.ContainsKey(room.RoomTypeId) ? roomTypeDict[room.RoomTypeId] : null;
             
@@ -2425,6 +2477,7 @@ public class LocalRepository
                 checkOutTime = "12:00",
                 stayEndsToday = true,
                 balance = balance,
+                availableCredit = availableCredit,
                 status = r.Status,
                 roomStatus = room?.Status ?? "UNKNOWN"
             };
