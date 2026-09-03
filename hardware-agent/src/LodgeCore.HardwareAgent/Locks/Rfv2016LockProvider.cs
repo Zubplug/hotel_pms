@@ -30,11 +30,11 @@ public class Rfv2016LockProvider : ILockProvider
             }
             
             // The VB6 SDK apps appear to have a hardcoded log directory in their strings.
-            // We have patched the EXEs to use .\Lck_Record instead of C:\Lock_Rec_, so we create it in CWD.
+            // We have patched the EXEs to use Lock_Record_ instead of C:\Lock_Rec_, so we create it in CWD.
             // However, in case an unpatched EXE is used, we also attempt to create them on C:\
             try
             {
-                string lockRecDir = Path.Combine(_workingDir, "Lck_Record");
+                string lockRecDir = Path.Combine(_workingDir, "Lock_Record_");
                 if (!Directory.Exists(lockRecDir)) Directory.CreateDirectory(lockRecDir);
 
                 string netdataDir = Path.Combine(_workingDir, "Netdata");
