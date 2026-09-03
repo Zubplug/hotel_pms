@@ -3760,6 +3760,7 @@ public class LocalRepository
             Id = Guid.NewGuid().ToString(),
             SessionId = sessionId,
             PropertyId = session.PropertyId,
+            OutletId = session.OutletId,
             DeviceId = deviceId,
             OperatorId = operatorId,
             SessionOwnerId = session.UserId,
@@ -3776,6 +3777,9 @@ public class LocalRepository
         _dbContext.PosSettlements.Add(settlement);
 
         // Record the actual settlement as a movement for immutable ledger
+        var prop = await _dbContext.Properties.FindAsync(session.PropertyId);
+        string currency = prop?.Currency ?? "NGN";
+
         var movement = new LocalPosCashMovement
         {
             Id = Guid.NewGuid().ToString(),
@@ -3784,11 +3788,13 @@ public class LocalRepository
             DeviceId = deviceId,
             UserId = operatorId,
             Amount = actualCash,
+            Currency = currency,
             Type = "SETTLED_ACTUAL",
             ReasonCode = "SETTLEMENT",
             OperationId = $"op_cashmvt_settle_{deviceId}_{DateTime.UtcNow.Ticks}",
             AuthorizedBy = authorizerId,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            BusinessDate = session.OpenedAt.Date
         };
         _dbContext.PosCashMovements.Add(movement);
 
@@ -3817,11 +3823,13 @@ public class LocalRepository
                 DeviceId = deviceId,
                 UserId = operatorId,
                 Amount = settlement.Variance,
+                Currency = currency,
                 Type = "VARIANCE",
                 ReasonCode = "SETTLEMENT_VARIANCE",
                 OperationId = $"op_cashmvt_var_{deviceId}_{DateTime.UtcNow.Ticks}",
                 AuthorizedBy = authorizerId,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow,
+                BusinessDate = session.OpenedAt.Date
             };
             _dbContext.PosCashMovements.Add(varMovement);
 

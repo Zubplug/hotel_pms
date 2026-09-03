@@ -31,6 +31,7 @@ public class Rfv2016LockProvider : ILockProvider
             
             // The VB6 SDK apps appear to have a hardcoded log directory in their strings.
             // We have patched the EXEs to use .\Lock_Rec_ instead of C:\Lock_Rec_, so we create it in CWD.
+            // However, in case an unpatched EXE is used, we also attempt to create them on C:\
             try
             {
                 string lockRecDir = Path.Combine(_workingDir, "Lock_Rec_");
@@ -38,8 +39,12 @@ public class Rfv2016LockProvider : ILockProvider
 
                 string netdataDir = Path.Combine(_workingDir, "Netdata");
                 if (!Directory.Exists(netdataDir)) Directory.CreateDirectory(netdataDir);
+                
+                // Fallback for unpatched EXEs
+                if (!Directory.Exists(@"C:\Lock_Rec_")) Directory.CreateDirectory(@"C:\Lock_Rec_");
+                if (!Directory.Exists(@"C:\Netdata")) Directory.CreateDirectory(@"C:\Netdata");
             }
-            catch { /* Ignore */ }
+            catch { /* Ignore permission errors */ }
             
             string sourceWRCard = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "W-R-Card");
             if (!Directory.Exists(sourceWRCard))
@@ -53,14 +58,13 @@ public class Rfv2016LockProvider : ILockProvider
             {
                 CopyDirectory(sourceWRCard, targetWRCard);
                 
-                // Dynamically patch nConDB.ini to use the absolute path
+                // Ensure nConDB.ini uses relative path to avoid long path issues in VB6
                 string iniPath = Path.Combine(targetWRCard, "nConDB.ini");
                 if (File.Exists(iniPath))
                 {
                     string iniContent = File.ReadAllText(iniPath);
-                    // Replace nDbpath line with the absolute path
                     string pattern = @"nDbpath=.*";
-                    string replacement = "nDbpath=" + targetWRCard + "\\";
+                    string replacement = @"nDbpath=.\";
                     iniContent = System.Text.RegularExpressions.Regex.Replace(iniContent, pattern, replacement);
                     File.WriteAllText(iniPath, iniContent);
                 }
