@@ -278,7 +278,7 @@ export async function getRoomSummary(propertyId: string) {
   let ooo = 0;
 
   for (const room of rooms) {
-    if (room.status === 'OCCUPIED' || room.status === 'CHECKED_IN') occupied++;
+    if (room.status === 'OCCUPIED') occupied++;
     else if (room.status === 'AVAILABLE' || room.status === 'CLEAN' || room.status === 'INSPECTED') vacant++;
     else if (room.status === 'DIRTY') dirty++;
     else ooo++;

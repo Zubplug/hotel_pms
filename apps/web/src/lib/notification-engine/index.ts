@@ -427,6 +427,7 @@ async function evaluateEvent(
         (resIn.checkOut.getTime() - resIn.checkIn.getTime()) /
           (1000 * 60 * 60 * 24),
       );
+      const adultsIn = resIn.adults || 1;
       const checkInTimeIn = new Date().toLocaleString("en-GB", {
         day: "numeric",
         month: "short",
