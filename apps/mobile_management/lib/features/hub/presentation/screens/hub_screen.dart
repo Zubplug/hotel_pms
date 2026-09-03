@@ -134,11 +134,11 @@ class HubScreen extends ConsumerWidget {
           if (!hasAlerts)
             const Text('All clear. No immediate action required.', style: TextStyle(color: _textSecondary, fontSize: 14)),
           if (alerts.oooRooms > 0)
-            _buildAlertRow(Icons.hotel, '\${alerts.oooRooms} Rooms Out of Order', _red),
+            _buildAlertRow(Icons.hotel, '${alerts.oooRooms} Rooms Out of Order', _red),
           if (alerts.cashVariances > 0)
-            _buildAlertRow(Icons.account_balance_wallet, '\${alerts.cashVariances} Cash Variances', _orange),
+            _buildAlertRow(Icons.account_balance_wallet, '${alerts.cashVariances} Cash Variances', _orange),
           if (alerts.offlineTerminals > 0)
-            _buildAlertRow(Icons.wifi_off, '\${alerts.offlineTerminals} Terminals Offline', _orange),
+            _buildAlertRow(Icons.wifi_off, '${alerts.offlineTerminals} Terminals Offline', _orange),
         ],
       ),
     );
@@ -234,11 +234,11 @@ class HubScreen extends ConsumerWidget {
         children: [
           const Text('APPROVALS', style: TextStyle(color: _textMuted, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
           const SizedBox(height: 16),
-          Text('\${summary.totalPending} Pending', style: const TextStyle(color: _textPrimary, fontSize: 24, fontWeight: FontWeight.bold)),
+          Text('${summary.totalPending} Pending', style: const TextStyle(color: _textPrimary, fontSize: 24, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           if (summary.byType.isNotEmpty)
             Text(
-              summary.byType.map((t) => '\${t.type} \${t.count}').join(' • '),
+              summary.byType.map((t) => '${t.type} ${t.count}').join(' • '),
               style: const TextStyle(color: _textSecondary, fontSize: 13),
             ),
           const SizedBox(height: 12),
@@ -309,15 +309,27 @@ class HubScreen extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 12),
-          Row(
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              const Text('Front Desk', style: TextStyle(color: _textSecondary, fontSize: 14)),
-              const SizedBox(width: 8),
-              Text('\${status.frontDeskOnline.online}/\${status.frontDeskOnline.total}', style: const TextStyle(color: _textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
-              const SizedBox(width: 24),
-              const Text('POS', style: TextStyle(color: _textSecondary, fontSize: 14)),
-              const SizedBox(width: 8),
-              Text('\${status.posOnline.online}/\${status.posOnline.total}', style: const TextStyle(color: _textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Front Desk', style: TextStyle(color: _textSecondary, fontSize: 14)),
+                  const SizedBox(width: 8),
+                  Text('${status.frontDeskOnline.online}/${status.frontDeskOnline.total}', style: const TextStyle(color: _textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
+                ],
+              ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('POS', style: TextStyle(color: _textSecondary, fontSize: 14)),
+                  const SizedBox(width: 8),
+                  Text('${status.posOnline.online}/${status.posOnline.total}', style: const TextStyle(color: _textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
+                ],
+              ),
             ],
           ),
           const SizedBox(height: 12),
