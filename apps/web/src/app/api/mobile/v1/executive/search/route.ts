@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const searchResults = [];
+    const searchResults: any[] = [];
 
     // 1. Search Rooms
     const rooms = await prisma.room.findMany({
@@ -89,7 +89,7 @@ export async function GET(req: NextRequest) {
     // 3. Search Staff
     const staffMembers = await prisma.staff.findMany({
       where: {
-        organisationId: ctx.organisationId,
+        organizationId: ctx.organizationId,
         OR: [
           { firstName: { contains: query, mode: 'insensitive' } },
           { lastName: { contains: query, mode: 'insensitive' } }

@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
     const oooRoomsCount = await prisma.room.count({
       where: {
         propertyId: { in: targetProperties },
-        maintenanceStatus: 'OUT_OF_ORDER',
+        status: 'OUT_OF_ORDER',
         isActive: true
       }
     });
