@@ -122,7 +122,7 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
             </div>
             <div className="flex min-w-0 flex-1 flex-col items-start overflow-hidden">
               <span className="w-full truncate text-left text-sm font-medium text-slate-200">{userDisplay}</span>
-              <span className="w-full truncate text-left text-xs capitalize text-slate-500">{role === 'MANAGER' ? 'Night manager' : 'Auditor'}</span>
+              <span className="w-full truncate text-left text-xs capitalize text-slate-500">{role === 'MANAGER' ? 'Night manager' : role === 'GENERAL_CASHIER' ? 'General Cashier' : 'Auditor'}</span>
             </div>
             <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-500 transition-colors group-hover:text-slate-300" />
           </DropdownMenuTrigger>
