@@ -4,8 +4,9 @@ import 'package:intl/intl.dart';
 
 class ExecutiveKpiRow extends StatelessWidget {
   final ExecutiveOverview overview;
+  final String businessDate; // e.g. '2026-09-03'
 
-  const ExecutiveKpiRow({super.key, required this.overview});
+  const ExecutiveKpiRow({super.key, required this.overview, required this.businessDate});
 
   @override
   Widget build(BuildContext context) {
@@ -67,7 +68,7 @@ class ExecutiveKpiRow extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text('${_formatCurrency(overview.liveRevenue)}*', style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 4),
-                      const Text('Since 00:00', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+                      Text(_formatDate(businessDate), style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
                       const SizedBox(height: 2),
                       const Text('*Unaudited', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontStyle: FontStyle.italic)),
                     ],

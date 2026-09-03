@@ -322,25 +322,41 @@ export async function getExecutiveOverview(propertyId: string, businessDate: Dat
 }
 
 export async function getRoomSummary(propertyId: string) {
+  const businessDate = await getPropertyBusinessDate(propertyId);
+
   const rooms = await prisma.room.findMany({
     where: { propertyId, isActive: true },
-    select: { status: true, housekeepingStatus: true }
+    select: { id: true, status: true, housekeepingStatus: true }
   });
 
-  let occupied = 0;
-  let vacant = 0;
-  let dirty = 0;
-  let ooo = 0;
+  const totalRooms = rooms.length;
 
-  for (const room of rooms) {
-    if (room.status === 'OCCUPIED') occupied++;
-    else if (room.status === 'AVAILABLE' || room.status === 'CLEAN' || room.status === 'INSPECTED') vacant++;
-    else if (room.status === 'DIRTY') dirty++;
-    else ooo++;
-  }
+  // OOO = rooms with status OUT_OF_ORDER or BLOCKED (not available for sale)
+  const ooo = rooms.filter(r =>
+    r.status === 'OUT_OF_ORDER' || r.status === 'BLOCKED'
+  ).length;
+
+  // Dirty = rooms with DIRTY status (they cannot also be OUT_OF_ORDER or BLOCKED)
+  const dirty = rooms.filter(r => r.status === 'DIRTY').length;
+
+  // Occupied = rooms with an active CHECKED_IN reservation on today's business date
+  // This is the same source as the occupancy KPI — they will always be consistent.
+  const occupied = await prisma.reservationRoom.count({
+    where: {
+      reservation: { propertyId, status: 'CHECKED_IN' },
+      checkIn: { lte: businessDate },
+      checkOut: { gt: businessDate },
+      status: { notIn: ['CANCELLED', 'NO_SHOW'] },
+      roomId: { not: null },
+    }
+  });
+
+  // Vacant = everything that is not occupied, dirty, or OOO
+  const vacant = Math.max(0, totalRooms - occupied - dirty - ooo);
 
   return { occupied, vacant, dirty, ooo };
 }
+
 
 export async function getSyncSummary(propertyId: string) {
   const terminals = await prisma.posTerminal.findMany({

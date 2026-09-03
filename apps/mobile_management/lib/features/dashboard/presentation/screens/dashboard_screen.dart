@@ -128,7 +128,7 @@ class DashboardScreen extends ConsumerWidget {
             child: ListView(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
               children: [
-                ExecutiveKpiRow(overview: data.executiveOverview),
+                ExecutiveKpiRow(overview: data.executiveOverview, businessDate: data.businessDate),
                 if (data.requiresAttention.isNotEmpty) const SizedBox(height: 24),
                 if (data.requiresAttention.isNotEmpty) RequiresAttentionCard(alerts: data.requiresAttention),
                 const SizedBox(height: 24),

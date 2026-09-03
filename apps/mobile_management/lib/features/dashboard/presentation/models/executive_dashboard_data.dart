@@ -1,7 +1,8 @@
 class ExecutiveDashboardData {
   final String propertyName;
   final DateTime lastUpdatedAt;
-  
+  final String businessDate; // e.g. '2026-09-03'
+
   final ExecutiveOverview executiveOverview;
   final TodaySnapshot todaySnapshot;
   final RoomSummary roomSummary;
@@ -12,6 +13,7 @@ class ExecutiveDashboardData {
   ExecutiveDashboardData({
     required this.propertyName,
     required this.lastUpdatedAt,
+    required this.businessDate,
     required this.executiveOverview,
     required this.todaySnapshot,
     required this.roomSummary,
@@ -24,6 +26,7 @@ class ExecutiveDashboardData {
     return ExecutiveDashboardData(
       propertyName: json['property']['name'] ?? 'LodgeCore Property',
       lastUpdatedAt: DateTime.parse(json['generatedAt']),
+      businessDate: json['businessDate'] ?? '',
       executiveOverview: ExecutiveOverview.fromJson(json['executiveOverview']),
       todaySnapshot: TodaySnapshot.fromJson(json['todaySnapshot']),
       roomSummary: RoomSummary.fromJson(json['roomSummary']),
