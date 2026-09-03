@@ -2174,12 +2174,13 @@ export async function POST(req: NextRequest) {
                 throw new Error(
                   "Housekeeping task room not found or unauthorized",
                 );
+              const taskType = payload.TaskType || payload.taskType || "CLEANING";
               await tx.housekeepingTask.create({
                 data: {
                   id: aggregateId,
                   propertyId,
                   roomId,
-                  type: payload.TaskType || payload.taskType || "CLEANING",
+                  type: taskType,
                   priority: payload.Priority || payload.priority || "NORMAL",
                   status: String(
                     payload.Status || payload.status || "CLEANING",
@@ -2192,6 +2193,27 @@ export async function POST(req: NextRequest) {
                     : null,
                 },
               });
+
+              // When a CLEANING or STAYOVER task is created the room must
+              // immediately become DIRTY so it never shows as AVAILABLE while
+              // housekeeping is pending. Only skip this if the room is already
+              // OCCUPIED (checked-in guest with a stayover task) — in that case
+              // keep OCCUPIED but still record the housekeepingStatus.
+              if (taskType === "CLEANING" || taskType === "STAYOVER") {
+                const currentRoom = await tx.room.findUnique({
+                  where: { id: roomId },
+                  select: { status: true },
+                });
+                const newRoomStatus =
+                  currentRoom?.status === "OCCUPIED" ? "OCCUPIED" : "DIRTY";
+                await tx.room.update({
+                  where: { id: roomId },
+                  data: {
+                    status: newRoomStatus as any,
+                    housekeepingStatus: "CLEANING",
+                  },
+                });
+              }
             } else if (eventType === "UPDATE_STATUS") {
               const currentStatus = String(
                 payload.Status || payload.status || "CLEANING",
