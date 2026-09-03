@@ -56,8 +56,8 @@ export async function POST(req: NextRequest) {
     const primaryRole = user.roles?.[0]?.role?.name || 'STAFF';
     const allowedProperties = (await requireOrganizationContext(user.id)).propertyIds;
 
-    if (primaryRole !== 'MANAGER' && primaryRole !== 'ADMIN' && primaryRole !== 'SUPER_ADMIN' && primaryRole !== 'DIRECTOR' && primaryRole !== 'EXECUTIVE' && !user.isSuperAdmin) {
-       return errorResponse('FORBIDDEN', 'Only managers, admins, and directors can access this app', 403);
+    if (primaryRole !== 'MANAGER' && primaryRole !== 'ADMIN' && primaryRole !== 'SUPER_ADMIN' && primaryRole !== 'DIRECTOR' && primaryRole !== 'EXECUTIVE' && primaryRole !== 'NIGHT_AUDITOR' && !user.isSuperAdmin) {
+       return errorResponse('FORBIDDEN', 'Only managers, admins, directors, and auditors can access this app', 403);
     }
 
     // Generate JWT
