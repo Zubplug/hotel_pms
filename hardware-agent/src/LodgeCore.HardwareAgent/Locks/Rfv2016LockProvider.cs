@@ -17,10 +17,11 @@ public class Rfv2016LockProvider : ILockProvider
         _logger = logger;
         
         // The RFV2016 DLL relies on launching '.\W-R-Card\WriteCard.exe' and writing TXT files.
-        // In MSIX apps, the BaseDirectory is read-only and CurrentDirectory is often System32.
-        // We must copy the folder to LocalAppData and set it as the CurrentDirectory.
-        string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        _workingDir = Path.Combine(localAppData, "Rfv2016WorkingDir");
+        // Legacy VB6 applications often use fixed-length string buffers (e.g. 50 characters) for file paths.
+        // LocalAppData paths can easily exceed this and get truncated, causing Error 76 (Path Not Found).
+        // We will use C:\Users\Public\Rfv2016 to guarantee a universally writable, extremely short path.
+        string publicFolder = Environment.GetEnvironmentVariable("PUBLIC") ?? @"C:\Users\Public";
+        _workingDir = Path.Combine(publicFolder, "Rfv2016");
         
         lock (_syncLock)
         {
