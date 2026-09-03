@@ -68,6 +68,26 @@ export async function executeNightAudit(
     if (openPosSessions.length > 0) throw new Error('BLOCKER:Cannot execute audit. There are open POS sessions.');
     if (openFrontdeskSessions.length > 0) throw new Error('BLOCKER:Cannot execute audit. There are open front-desk cashier shifts.');
     if (financialSyncConflicts.length > 0) throw new Error('BLOCKER:Cannot execute audit. There are unresolved financial sync conflicts.');
+
+    // Auto-close RECONCILIATION_REQUIRED POS sessions with zero expected cash.
+    // These are SERVER-banking waiter sessions already submitted; no physical
+    // cash handover is needed so the Night Audit closes them automatically.
+    const zeroVarianceSessions = await prisma.posSession.findMany({
+      where: {
+        propertyId,
+        businessDate: property.businessDate ?? getPropertyBusinessDate(property.timezone, new Date()),
+        status: 'RECONCILIATION_REQUIRED',
+        expectedCash: 0,
+      },
+      select: { id: true }
+    });
+    if (zeroVarianceSessions.length > 0) {
+      await prisma.posSession.updateMany({
+        where: { id: { in: zeroVarianceSessions.map(s => s.id) } },
+        data: { status: 'CLOSED', closedAt: new Date() }
+      });
+      console.log(`[Night Audit] Auto-closed ${zeroVarianceSessions.length} zero-variance RECONCILIATION_REQUIRED POS session(s).`);
+    }
   }
 
   // Serialize audit starts on the property row. The old date is locked only

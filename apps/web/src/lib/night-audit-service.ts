@@ -66,10 +66,25 @@ export async function getSystemIntegrity(ctx: TenantContext, propertyId: string)
   if (!property) throw new Error('NOT_FOUND:Property not found');
   const businessDate = property.businessDate ?? getPropertyBusinessDate(property.timezone, new Date());
 
-  const openPosSessions = await prisma.posSession.findMany({
+  const rawPosSessions = await prisma.posSession.findMany({
     where: { propertyId, businessDate, status: { in: ['OPEN', 'RECONCILIATION_REQUIRED'] } },
-    select: { id: true, outletId: true, outlet: { select: { name: true } }, status: true, openedAt: true }
+    select: {
+      id: true,
+      outletId: true,
+      outlet: { select: { name: true } },
+      status: true,
+      openedAt: true,
+      expectedCash: true,
+      actualCash: true,
+    }
   });
+
+  // RECONCILIATION_REQUIRED sessions with zero expected cash are waiter-submitted
+  // SERVER-banking sessions where no physical cash handover is needed.
+  // They are auto-closed by the Night Audit itself, so exclude them from blockers.
+  const openPosSessions = rawPosSessions.filter(s =>
+    s.status === 'OPEN' || (s.status === 'RECONCILIATION_REQUIRED' && Number(s.expectedCash ?? 0) !== 0)
+  );
 
   const openFrontdeskSessions = await prisma.frontdeskSession.findMany({
     where: { propertyId, businessDate, status: { in: ['OPEN', 'CLOSING'] }, controlStatus: 'OPEN' },
