@@ -167,7 +167,7 @@ export async function executeNightAudit(
     },
     include: {
       priorities: true,
-      reservationRooms: { include: { room: true } },
+      reservationRooms: { where: { status: 'ACTIVE' }, include: { room: true } },
       folios: { where: { type: 'MAIN', status: 'OPEN' } },
       ratePlan: true
     }

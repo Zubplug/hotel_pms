@@ -1865,10 +1865,21 @@ export async function POST(req: NextRequest) {
                 });
               }
             }
-            // Occupy new room
+            // Occupy new room based on reservation status
+            const propertyBusinessDateStr = (authoritativeBusinessDate || new Date()).toISOString().split('T')[0];
+            const checkInStr = res.checkIn.toISOString().split('T')[0];
+            const isToday = checkInStr === propertyBusinessDateStr;
+            
+            let newStatus = "AVAILABLE";
+            if (res.status === "CHECKED_IN") {
+              newStatus = "OCCUPIED";
+            } else if (res.status === "CONFIRMED" && isToday) {
+              newStatus = "RESERVED";
+            }
+
             await tx.room.update({
               where: { id: newRoomId },
-              data: { status: "OCCUPIED" },
+              data: { status: newStatus as any },
             });
           } else if (eventType === "EXTEND_STAY") {
             const newCheckOut = new Date(payload.newCheckOutDate);

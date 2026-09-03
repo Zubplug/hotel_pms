@@ -54,6 +54,7 @@ export async function GET(req: NextRequest) {
           primaryGuest: { select: { firstName: true, lastName: true, email: true, phone: true } },
           property: { select: { name: true, city: true } },
           reservationRooms: {
+            where: { status: 'ACTIVE' },
             include: {
               room: { select: { number: true, status: true, roomType: { select: { name: true } } } },
             },
