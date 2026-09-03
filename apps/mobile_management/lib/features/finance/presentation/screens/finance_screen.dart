@@ -51,6 +51,8 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(financeDataProvider);
+    final period = ref.watch(financePeriodProvider);
+    final periodSuffix = period == 'TODAY' ? 'TODAY' : period;
 
     return Scaffold(
       backgroundColor: _navy,
@@ -70,7 +72,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
               const SizedBox(height: 16),
 
               // 2. Revenue — Audited + Live (side by side)
-              _RevenueStatusSection(data: data, fmtAmount: _fmtAmount, fmtDate: _fmtDate),
+              _RevenueStatusSection(data: data, fmtAmount: _fmtAmount, fmtDate: _fmtDate, period: period),
               const SizedBox(height: 20),
 
               // 3. Revenue KPI Grid
@@ -92,7 +94,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
               const SizedBox(height: 20),
 
               // 6. Collections
-              _SectionHeader(label: 'COLLECTIONS', trailing: 'TODAY'),
+              _SectionHeader(label: 'COLLECTIONS', trailing: periodSuffix),
               const SizedBox(height: 10),
               _CollectionsCard(collections: data.collections, fmtAmount: _fmtAmount),
               const SizedBox(height: 8),
@@ -102,13 +104,13 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
               const SizedBox(height: 20),
 
               // 8. Cash Control
-              _SectionHeader(label: 'CASH CONTROL', trailing: 'TODAY\'S SHIFTS'),
+              _SectionHeader(label: 'CASH CONTROL', trailing: period == 'TODAY' ? 'TODAY\'S SHIFTS' : 'SHIFTS ($period)'),
               const SizedBox(height: 10),
               _CashControlCard(cashControl: data.cashControl, fmtAmount: _fmtAmount),
               const SizedBox(height: 20),
 
               // 9. Transaction Controls
-              _SectionHeader(label: 'TRANSACTION CONTROLS', trailing: 'TODAY'),
+              _SectionHeader(label: 'TRANSACTION CONTROLS', trailing: periodSuffix),
               const SizedBox(height: 10),
               _TransactionControlsCard(controls: data.transactionControls, fmtAmount: _fmtAmount),
               const SizedBox(height: 20),
@@ -156,6 +158,10 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
         ),
         const SizedBox(width: 8),
       ],
+      bottom: PreferredSize(
+        preferredSize: const Size.fromHeight(50),
+        child: _PeriodTabs(),
+      ),
     );
   }
 
@@ -182,6 +188,43 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
       ),
     ]),
   );
+}
+
+class _PeriodTabs extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final period = ref.watch(financePeriodProvider);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 8, 12),
+      child: Row(
+        children: ['TODAY', 'MTD', 'YTD'].map((p) {
+          final isSelected = p == period;
+          return Expanded(
+            child: GestureDetector(
+              onTap: () => ref.read(financePeriodProvider.notifier).state = p,
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                margin: const EdgeInsets.only(right: 8),
+                decoration: BoxDecoration(
+                  color: isSelected ? _gold : _surface,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  p,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: isSelected ? _navy : _textMuted,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
 }
 
 // ─── 1. Night Audit Banner ────────────────────────────────────────────────────
@@ -254,8 +297,9 @@ class _RevenueStatusSection extends StatelessWidget {
   final FinanceDashboardData data;
   final String Function(double) fmtAmount;
   final String Function(String) fmtDate;
+  final String period;
 
-  const _RevenueStatusSection({required this.data, required this.fmtAmount, required this.fmtDate});
+  const _RevenueStatusSection({required this.data, required this.fmtAmount, required this.fmtDate, required this.period});
 
   @override
   Widget build(BuildContext context) {
@@ -278,9 +322,9 @@ class _RevenueStatusSection extends StatelessWidget {
         // Live Today
         Expanded(
           child: _RevenueCard(
-            label: 'LIVE TODAY',
+            label: 'LIVE $period',
             amount: data.liveToday.total,
-            subtitle: fmtDate(data.businessDate),
+            subtitle: period == 'TODAY' ? fmtDate(data.businessDate) : 'Unaudited Activity',
             badge: '*UNAUDITED',
             badgeColor: _orange,
             isAudited: false,
@@ -487,7 +531,7 @@ class _TrendChart extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           SizedBox(
-            height: 90,
+            height: 110,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: days.map((day) {

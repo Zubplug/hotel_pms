@@ -4,7 +4,7 @@ import { resolveUser } from '@/lib/resolve-user';
 import { requireOrganizationContext } from '@/lib/organization-access';
 import { getPropertyBusinessDate } from '@/lib/kpi';
 import { prisma } from '@hotel-pms/db';
-import { startOfDay, endOfDay } from 'date-fns';
+import { startOfDay, endOfDay, startOfMonth, startOfYear } from 'date-fns';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,6 +24,16 @@ export async function GET(req: NextRequest) {
     if (!property) return errorResponse('NOT_FOUND', 'Property not found', 404);
 
     const businessDate = await getPropertyBusinessDate(primaryPropertyId);
+    const period = req.nextUrl.searchParams.get('period')?.toUpperCase() || 'TODAY';
+
+    let startDate = startOfDay(businessDate);
+    const endDate = endOfDay(businessDate);
+
+    if (period === 'MTD') {
+      startDate = startOfMonth(businessDate);
+    } else if (period === 'YTD') {
+      startDate = startOfYear(businessDate);
+    }
 
     // ── 1. Night Audit Status ───────────────────────────────────────────────
     const lastAudit = await prisma.nightAudit.findFirst({
@@ -35,6 +45,17 @@ export async function GET(req: NextRequest) {
     const auditStatus: 'AUDITED' | 'PENDING_AUDIT' = lastAudit ? 'AUDITED' : 'PENDING_AUDIT';
     const auditedBusinessDate = lastAudit?.businessDate ?? null;
 
+    let auditedStartDate = auditedBusinessDate ? startOfDay(auditedBusinessDate) : null;
+    const auditedEndDate = auditedBusinessDate ? endOfDay(auditedBusinessDate) : null;
+
+    if (auditedBusinessDate) {
+      if (period === 'MTD') {
+        auditedStartDate = startOfMonth(auditedBusinessDate);
+      } else if (period === 'YTD') {
+        auditedStartDate = startOfYear(auditedBusinessDate);
+      }
+    }
+
     // ── 2. Audited Revenue Breakdown ────────────────────────────────────────
     let auditedRevenue = {
       total: 0, room: 0, fb: 0, bar: 0, other: 0,
@@ -42,12 +63,12 @@ export async function GET(req: NextRequest) {
       businessDate: '',
     };
 
-    if (auditedBusinessDate) {
+    if (auditedBusinessDate && auditedStartDate && auditedEndDate) {
       const [chargeItems, voidedItems] = await Promise.all([
         prisma.folioItem.findMany({
           where: {
             folio: { propertyId: primaryPropertyId },
-            businessDate: { gte: startOfDay(auditedBusinessDate), lte: endOfDay(auditedBusinessDate) },
+            businessDate: { gte: auditedStartDate, lte: auditedEndDate },
             voidedAt: null,
           },
           select: { amount: true, type: true, source: true },
@@ -55,7 +76,7 @@ export async function GET(req: NextRequest) {
         prisma.folioItem.findMany({
           where: {
             folio: { propertyId: primaryPropertyId },
-            businessDate: { gte: startOfDay(auditedBusinessDate), lte: endOfDay(auditedBusinessDate) },
+            businessDate: { gte: auditedStartDate, lte: auditedEndDate },
             type: 'CHARGE',
             voidedAt: { not: null },
           },
@@ -80,27 +101,32 @@ export async function GET(req: NextRequest) {
       auditedRevenue.voids = voidedItems.reduce((s: number, i: any) => s + Number(i.amount), 0);
       auditedRevenue.total = auditedRevenue.room + auditedRevenue.fb + auditedRevenue.bar + auditedRevenue.other;
       auditedRevenue.net = auditedRevenue.total - auditedRevenue.discounts - auditedRevenue.refunds;
-      auditedRevenue.businessDate = auditedBusinessDate.toISOString().split('T')[0];
+      auditedRevenue.businessDate = period === 'TODAY' 
+        ? auditedBusinessDate.toISOString().split('T')[0]
+        : auditedStartDate.toISOString().split('T')[0] + ' to ' + auditedEndDate.toISOString().split('T')[0];
     }
 
-    // ── 3. Live Today (unaudited, current business date) ───────────────────
-    const todayPosItems = await prisma.folioItem.findMany({
+    // ── 3. Live Activity (unaudited, for the selected period) ──────────────
+    const livePosItems = await prisma.folioItem.findMany({
       where: {
         folio: { propertyId: primaryPropertyId },
-        businessDate: { gte: startOfDay(businessDate), lte: endOfDay(businessDate) },
+        businessDate: { gte: startDate, lte: endDate },
         type: 'CHARGE',
         source: { in: ['POS', 'RESTAURANT', 'BAR'] },
         voidedAt: null,
       },
       select: { amount: true },
     });
-    const posSales = todayPosItems.reduce((s: number, i: any) => s + Number(i.amount), 0);
+    const posSales = livePosItems.reduce((s: number, i: any) => s + Number(i.amount), 0);
 
     const stayovers = await prisma.reservation.findMany({
-      where: { propertyId: primaryPropertyId, status: 'CHECKED_IN', checkOut: { gt: businessDate } },
+      where: { propertyId: primaryPropertyId, status: 'CHECKED_IN', checkOut: { gt: startDate } }, // CheckOut strictly after startDate to count
       include: { reservationRooms: { where: { status: 'ACTIVE' } } },
     });
     let roomCharges = 0;
+    // Note: Live MTD/YTD room charges calculation is complex without actual posted folios. 
+    // We will estimate based on the current stayovers for now, since this is "live unaudited". 
+    // This will mostly reflect tonight's expected room charges.
     for (const res of stayovers) {
       const rr = res.reservationRooms[0];
       if (!rr) continue;
@@ -157,12 +183,12 @@ export async function GET(req: NextRequest) {
         }
       : { rooms: 0, fb: 0, bar: 0, other: 0 };
 
-    // ── 6. Collections (payments received today) ───────────────────────────
+    // ── 6. Collections (payments received in period) ───────────────────────
     const payments = await prisma.payment.findMany({
       where: {
         propertyId: primaryPropertyId,
         status: 'COMPLETED',
-        createdAt: { gte: startOfDay(businessDate), lte: endOfDay(businessDate) },
+        createdAt: { gte: startDate, lte: endDate },
       },
       select: { amount: true, method: true },
     });
@@ -174,7 +200,7 @@ export async function GET(req: NextRequest) {
       collectionsTotal += amt;
     }
 
-    // ── 7. Outstanding Receivables ─────────────────────────────────────────
+    // ── 7. Outstanding Receivables (globally active) ───────────────────────
     const openFolios = await prisma.folio.findMany({
       where: { propertyId: primaryPropertyId, status: 'OPEN', balance: { gt: 0 } },
       select: { balance: true, reservation: { select: { corporateAccountId: true } } },
@@ -188,14 +214,13 @@ export async function GET(req: NextRequest) {
     }
 
     // ── 8. Cash Control ────────────────────────────────────────────────────
-    // Separate queries so TS doesn't lose the includes
     const fdSessions = await prisma.frontdeskSession.findMany({
-      where: { propertyId: primaryPropertyId, businessDate },
+      where: { propertyId: primaryPropertyId, businessDate: { gte: startDate, lte: endDate } },
       include: { staff: { select: { firstName: true, lastName: true } } },
     });
     
     const posSessions = await prisma.posSession.findMany({
-      where: { outlet: { propertyId: primaryPropertyId }, businessDate },
+      where: { outlet: { propertyId: primaryPropertyId }, businessDate: { gte: startDate, lte: endDate } },
       include: { outlet: { select: { name: true } } },
     });
 
@@ -204,12 +229,13 @@ export async function GET(req: NextRequest) {
 
     const cashSessions = [
       ...fdSessions.map(s => ({
-        label: `Front Desk – ${s.staff.firstName} ${s.staff.lastName}`,
+        label: `FD – ${s.staff.firstName} ${s.staff.lastName}`,
         type: 'FRONT_DESK',
         expected: Number(s.systemExpectedCash),
         declared: s.declaredCash !== null ? Number(s.declaredCash) : null,
         variance: s.variance !== null ? Number(s.variance) : null,
         status: toStatus(s.variance !== null ? Number(s.variance) : null),
+        businessDate: s.businessDate.toISOString().split('T')[0],
       })),
       ...posSessions.map(s => ({
         label: s.outlet.name,
@@ -218,9 +244,16 @@ export async function GET(req: NextRequest) {
         declared: s.actualCash !== null ? Number(s.actualCash) : null,
         variance: s.variance !== null ? Number(s.variance) : null,
         status: toStatus(s.variance !== null ? Number(s.variance) : null),
+        businessDate: s.businessDate.toISOString().split('T')[0],
       })),
     ];
+    
+    // Sort by most recent for MTD/YTD
+    cashSessions.sort((a, b) => b.businessDate.localeCompare(a.businessDate));
 
+    // Limit to 25 to prevent extremely long lists on MTD/YTD, or return all
+    // Since this is an executive view, we'll return all but they can be optimized later
+    
     const cashControl = {
       totalExpected: cashSessions.reduce((s: number, c: any) => s + c.expected, 0),
       totalDeclared: cashSessions.reduce((s: number, c: any) => s + (c.declared ?? 0), 0),
@@ -231,22 +264,25 @@ export async function GET(req: NextRequest) {
     // ── 9. Transaction Controls ────────────────────────────────────────────
     const [discountAgg, voidedItems, refundAgg, overrideCount, prevDiscountAgg] = await Promise.all([
       prisma.folioItem.aggregate({
-        where: { folio: { propertyId: primaryPropertyId }, type: 'DISCOUNT', voidedAt: null, businessDate: { gte: startOfDay(businessDate), lte: endOfDay(businessDate) } },
+        where: { folio: { propertyId: primaryPropertyId }, type: 'DISCOUNT', voidedAt: null, businessDate: { gte: startDate, lte: endDate } },
         _sum: { amount: true }, _count: { id: true },
       }),
       prisma.folioItem.findMany({
-        where: { folio: { propertyId: primaryPropertyId }, type: 'CHARGE', voidedAt: { gte: startOfDay(businessDate), lte: endOfDay(businessDate) } },
+        where: { folio: { propertyId: primaryPropertyId }, type: 'CHARGE', voidedAt: { gte: startDate, lte: endDate } },
         select: { amount: true },
       }),
       prisma.folioItem.aggregate({
-        where: { folio: { propertyId: primaryPropertyId }, type: 'REFUND', voidedAt: null, businessDate: { gte: startOfDay(businessDate), lte: endOfDay(businessDate) } },
+        where: { folio: { propertyId: primaryPropertyId }, type: 'REFUND', voidedAt: null, businessDate: { gte: startDate, lte: endDate } },
         _sum: { amount: true }, _count: { id: true },
       }),
       prisma.approvalRequest.count({
-        where: { propertyId: primaryPropertyId, createdAt: { gte: startOfDay(businessDate), lte: endOfDay(businessDate) } },
+        where: { propertyId: primaryPropertyId, createdAt: { gte: startDate, lte: endDate } },
       }),
       auditedBusinessDate
         ? prisma.folioItem.aggregate({
+            // Using the single auditedBusinessDate for trend comparison, 
+            // but if period is MTD, this comparison isn't extremely useful. 
+            // We'll leave it as comparing to the last audited day for simplicity.
             where: { folio: { propertyId: primaryPropertyId }, type: 'DISCOUNT', voidedAt: null, businessDate: { gte: startOfDay(auditedBusinessDate), lte: endOfDay(auditedBusinessDate) } },
             _sum: { amount: true },
           })
@@ -266,29 +302,29 @@ export async function GET(req: NextRequest) {
       overrides: { count: overrideCount },
     };
 
-    // ── 10. Guest Credits ──────────────────────────────────────────────────
+    // ── 10. Guest Credits (globally active for the most part) ──────────────
     const [availableAgg, consumedAgg, allAgg] = await Promise.all([
       prisma.folioCredit.aggregate({
         where: { propertyId: primaryPropertyId, status: { in: ['AVAILABLE', 'PARTIALLY_APPLIED'] } },
         _sum: { remainingAmount: true },
       }),
       prisma.folioCreditApplication.aggregate({
-        where: { credit: { propertyId: primaryPropertyId }, businessDate: { gte: startOfDay(businessDate), lte: endOfDay(businessDate) } },
+        where: { credit: { propertyId: primaryPropertyId }, businessDate: { gte: startDate, lte: endDate } },
         _sum: { amount: true },
       }),
       prisma.folioCredit.aggregate({
-        where: { propertyId: primaryPropertyId, status: { not: 'REFUNDED' } },
+        where: { propertyId: primaryPropertyId, status: { not: 'REFUNDED' }, createdAt: { gte: startDate, lte: endDate } },
         _sum: { amount: true },
       }),
     ]);
 
     const guestCredits = {
-      depositsHeld: Number(allAgg._sum.amount || 0),
-      creditsAvailable: Number(availableAgg._sum.remainingAmount || 0),
-      creditsConsumed: Number(consumedAgg._sum.amount || 0),
+      depositsHeld: Number(allAgg._sum.amount || 0), // Deposits taken in this period
+      creditsAvailable: Number(availableAgg._sum.remainingAmount || 0), // Total currently available
+      creditsConsumed: Number(consumedAgg._sum.amount || 0), // Credits used in this period
     };
 
-    // ── 11. Financial Alerts ───────────────────────────────────────────────
+    // ── 11. Financial Alerts (always global/current state) ─────────────────
     const attention: Array<{ id: string; priority: string; category: string; title: string; summary: string; affectedCount: number; totalAmount: number }> = [];
     const settings = (property.settings as Record<string, any>) || {};
     const highBalThreshold = settings.financial?.highBalanceThreshold || 150000;

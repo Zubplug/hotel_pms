@@ -10,7 +10,10 @@ final liveFinanceRepositoryProvider = Provider<LiveFinanceRepository>((ref) {
   );
 });
 
+final financePeriodProvider = StateProvider<String>((ref) => 'TODAY');
+
 final financeDataProvider = FutureProvider<FinanceDashboardData>((ref) async {
   final repository = ref.watch(liveFinanceRepositoryProvider);
-  return await repository.fetchFinanceData();
+  final period = ref.watch(financePeriodProvider);
+  return await repository.fetchFinanceData(period: period);
 });
