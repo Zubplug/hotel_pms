@@ -27,19 +27,23 @@ export async function evaluatePropertyAlerts(propertyId: string): Promise<Manage
   const businessDate = await getPropertyBusinessDate(propertyId);
   const startOfBizDay = startOfDay(businessDate);
 
-  // 1. Evaluate PENDING APPROVALS
-  const pendingApprovals = await prisma.approvalRequest.count({
-    where: { propertyId, status: 'PENDING' }
+  // 1. Evaluate MANAGER OVERRIDES & APPROVALS (Unusual volume today)
+  const todaysApprovals = await prisma.approvalRequest.count({
+    where: { 
+      propertyId, 
+      createdAt: { gte: startOfBizDay }
+    }
   });
 
-  if (pendingApprovals > 0) {
+  // If there's an unusually high number of overrides (e.g., > 5 in a day)
+  if (todaysApprovals >= 5) {
     alerts.push({
-      id: `approval-${propertyId}-pending`,
+      id: `approval-${propertyId}-volume`,
       priority: 'P1',
       category: 'APPROVALS',
-      title: 'Approvals Required',
-      summary: `${pendingApprovals} request(s) awaiting your decision`,
-      affectedCount: pendingApprovals,
+      title: 'High Volume of Overrides',
+      summary: `${todaysApprovals} manager overrides requested today`,
+      affectedCount: todaysApprovals,
       propertyId,
       action: 'VIEW_APPROVALS',
       createdAt: now,
@@ -58,12 +62,12 @@ export async function evaluatePropertyAlerts(propertyId: string): Promise<Manage
     include: { room: true }
   });
 
-  if (outOfOrderRooms.length >= 3) {
+  if (outOfOrderRooms.length > 0) {
     alerts.push({
       id: `maintenance-${propertyId}-ooo`,
-      priority: 'P1',
+      priority: outOfOrderRooms.length >= 3 ? 'P0' : 'P1',
       category: 'OPERATIONS',
-      title: 'High Out-of-Order Rooms',
+      title: 'Rooms Out of Order',
       summary: `${outOfOrderRooms.length} rooms are currently out of order`,
       affectedCount: outOfOrderRooms.length,
       propertyId,
@@ -72,54 +76,46 @@ export async function evaluatePropertyAlerts(propertyId: string): Promise<Manage
     });
   }
 
-  // 3. Evaluate FINANCE / Outstanding Balances for In-House Guests
-  const highBalanceFolios = await prisma.folio.findMany({
+  // 3. Evaluate CASHIER VARIANCES
+  // Find any frontdesk shifts for today that closed with a non-zero variance
+  const frontdeskShifts = await prisma.frontdeskSession.findMany({
     where: {
       propertyId,
-      status: 'OPEN',
-      reservation: { status: 'CHECKED_IN' },
-      balance: { gt: 150000 } // Configurable threshold (e.g. > 150,000 NGN)
+      businessDate: { gte: startOfBizDay },
+      variance: { not: null, notIn: [0] }
     },
-    select: { balance: true }
+    select: { variance: true }
   });
 
-  if (highBalanceFolios.length > 0) {
-    const totalExposure = highBalanceFolios.reduce((acc: any, f: any) => acc + Number(f.balance), 0);
-    
+  const posShifts = await prisma.posSession.findMany({
+    where: {
+      propertyId,
+      businessDate: { gte: startOfBizDay },
+      variance: { not: null, notIn: [0] }
+    },
+    select: { variance: true }
+  });
+
+  const totalVarianceShifts = frontdeskShifts.length + posShifts.length;
+  if (totalVarianceShifts > 0) {
+    let totalVarianceAmt = 0;
+    frontdeskShifts.forEach(s => totalVarianceAmt += Math.abs(Number(s.variance || 0)));
+    posShifts.forEach(s => totalVarianceAmt += Math.abs(Number(s.variance || 0)));
+
     alerts.push({
-      id: `finance-${propertyId}-balance`,
+      id: `finance-${propertyId}-variance`,
       priority: 'P0',
       category: 'FINANCE',
-      title: 'High Outstanding Balances',
-      summary: `₦${totalExposure.toLocaleString()} outstanding across ${highBalanceFolios.length} in-house guest(s)`,
-      affectedCount: highBalanceFolios.length,
+      title: 'Cashier Variance Detected',
+      summary: `₦${totalVarianceAmt.toLocaleString()} variance across ${totalVarianceShifts} shift(s)`,
+      affectedCount: totalVarianceShifts,
       propertyId,
       action: 'VIEW_FINANCE',
       createdAt: now,
     });
   }
 
-  // 4. Evaluate HOUSEKEEPING
-  const dirtyRooms = await prisma.room.count({
-    where: {
-      propertyId,
-      status: 'DIRTY'
-    }
-  });
-
-  if (dirtyRooms > 10) {
-    alerts.push({
-      id: `hk-${propertyId}-dirty`,
-      priority: 'P2',
-      category: 'OPERATIONS',
-      title: 'Housekeeping Backlog',
-      summary: `${dirtyRooms} rooms currently await cleaning`,
-      affectedCount: dirtyRooms,
-      propertyId,
-      action: 'VIEW_HOUSEKEEPING',
-      createdAt: now,
-    });
-  }
+  // Note: Sync Health is evaluated directly in the dashboard API
 
   return alerts.sort((a, b) => {
     // Sort P0 > P1 > P2 > P3

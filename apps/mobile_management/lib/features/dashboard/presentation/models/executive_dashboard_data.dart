@@ -2,85 +2,180 @@ class ExecutiveDashboardData {
   final String propertyName;
   final DateTime lastUpdatedAt;
   
-  final PerformanceData performance;
-  final HotelPulse? hotelPulse;
-  final List<AlertData>? attention;
-  final ApprovalSummary? approvals;
-  final RevenueTrend? revenueTrend;
-  final List<ArrivalData>? arrivals;
-  final GuestPulse? guestPulse;
-  final OperationsPulse? operationsPulse;
-  final ExecutiveBrief? executiveBrief;
+  final ExecutiveOverview executiveOverview;
+  final TodaySnapshot todaySnapshot;
+  final RoomSummary roomSummary;
+  final PerformanceTrends performanceTrends;
+  final List<AlertData> requiresAttention;
+  final SyncSummary syncSummary;
 
   ExecutiveDashboardData({
     required this.propertyName,
     required this.lastUpdatedAt,
-    required this.performance,
-    this.hotelPulse,
-    this.attention,
-    this.approvals,
-    this.revenueTrend,
-    this.arrivals,
-    this.guestPulse,
-    this.operationsPulse,
-    this.executiveBrief,
+    required this.executiveOverview,
+    required this.todaySnapshot,
+    required this.roomSummary,
+    required this.performanceTrends,
+    required this.requiresAttention,
+    required this.syncSummary,
   });
+
+  factory ExecutiveDashboardData.fromJson(Map<String, dynamic> json) {
+    return ExecutiveDashboardData(
+      propertyName: json['property']['name'] ?? 'LodgeCore Property',
+      lastUpdatedAt: DateTime.parse(json['generatedAt']),
+      executiveOverview: ExecutiveOverview.fromJson(json['executiveOverview']),
+      todaySnapshot: TodaySnapshot.fromJson(json['todaySnapshot']),
+      roomSummary: RoomSummary.fromJson(json['roomSummary']),
+      performanceTrends: PerformanceTrends.fromJson(json['performanceTrends']),
+      requiresAttention: (json['requiresAttention'] as List?)
+              ?.map((item) => AlertData.fromJson(item))
+              .toList() ??
+          [],
+      syncSummary: SyncSummary.fromJson(json['syncSummary']),
+    );
+  }
 }
 
-class ApprovalSummary {
-  final int pendingCount;
-  final double totalAmount;
-  final List<ApprovalData> items;
-
-  ApprovalSummary({
-    required this.pendingCount,
-    required this.totalAmount,
-    required this.items,
-  });
-}
-
-class PerformanceData {
-  final double todayRevenue;
-  final double revenueTrendPercent;
+class ExecutiveOverview {
   final double occupancyPercent;
-  final double occupancyTrendPercent;
   final double adr;
-  final double adrTrendPercent;
   final double revpar;
-  final double revparTrendPercent;
+  final int availableRooms;
+  final int occupiedRooms;
+  final double totalRevenue;
+  final double roomRevenue;
+  final double fbRevenue;
+  
+  final double occupancyTrend;
+  final double adrTrend;
+  final double revparTrend;
+  final double totalRevenueTrend;
+  final double roomRevenueTrend;
+  final double fbRevenueTrend;
 
-  PerformanceData({
-    required this.todayRevenue,
-    required this.revenueTrendPercent,
+  ExecutiveOverview({
     required this.occupancyPercent,
-    required this.occupancyTrendPercent,
     required this.adr,
-    required this.adrTrendPercent,
     required this.revpar,
-    required this.revparTrendPercent,
+    required this.availableRooms,
+    required this.occupiedRooms,
+    required this.totalRevenue,
+    required this.roomRevenue,
+    required this.fbRevenue,
+    required this.occupancyTrend,
+    required this.adrTrend,
+    required this.revparTrend,
+    required this.totalRevenueTrend,
+    required this.roomRevenueTrend,
+    required this.fbRevenueTrend,
   });
+
+  factory ExecutiveOverview.fromJson(Map<String, dynamic> json) {
+    final revenue = json['revenue'] ?? {};
+    return ExecutiveOverview(
+      occupancyPercent: (json['occupancyPercent'] ?? 0).toDouble(),
+      adr: (json['adr'] ?? 0).toDouble(),
+      revpar: (json['revpar'] ?? 0).toDouble(),
+      availableRooms: json['availableRooms'] ?? 0,
+      occupiedRooms: json['occupiedRooms'] ?? 0,
+      totalRevenue: (revenue['totalRevenue'] ?? 0).toDouble(),
+      roomRevenue: (revenue['roomRevenue'] ?? 0).toDouble(),
+      fbRevenue: (revenue['fbRevenue'] ?? 0).toDouble(),
+      occupancyTrend: (json['occupancyTrend'] ?? 0).toDouble(),
+      adrTrend: (json['adrTrend'] ?? 0).toDouble(),
+      revparTrend: (json['revparTrend'] ?? 0).toDouble(),
+      totalRevenueTrend: (json['totalRevenueTrend'] ?? 0).toDouble(),
+      roomRevenueTrend: (json['roomRevenueTrend'] ?? 0).toDouble(),
+      fbRevenueTrend: (json['fbRevenueTrend'] ?? 0).toDouble(),
+    );
+  }
 }
 
-class HotelPulse {
-  final int totalRooms;
-  final int occupiedRooms;
-  final int vacantRooms;
-  final int outOfOrderRooms;
-  final int arrivalsToday;
-  final int departuresToday;
+class TodaySnapshot {
+  final int arrivals;
+  final int departures;
   final int inHouseGuests;
-  final int vipArrivals;
+  final int occupiedRooms;
+  final int availableRooms;
+  final int outOfOrderRooms;
 
-  HotelPulse({
-    required this.totalRooms,
-    required this.occupiedRooms,
-    required this.vacantRooms,
-    required this.outOfOrderRooms,
-    required this.arrivalsToday,
-    required this.departuresToday,
+  TodaySnapshot({
+    required this.arrivals,
+    required this.departures,
     required this.inHouseGuests,
-    required this.vipArrivals,
+    required this.occupiedRooms,
+    required this.availableRooms,
+    required this.outOfOrderRooms,
   });
+
+  factory TodaySnapshot.fromJson(Map<String, dynamic> json) {
+    return TodaySnapshot(
+      arrivals: json['arrivals'] ?? 0,
+      departures: json['departures'] ?? 0,
+      inHouseGuests: json['inHouseGuests'] ?? 0,
+      occupiedRooms: json['occupiedRooms'] ?? 0,
+      availableRooms: json['availableRooms'] ?? 0,
+      outOfOrderRooms: json['outOfOrderRooms'] ?? 0,
+    );
+  }
+}
+
+class RoomSummary {
+  final int occupied;
+  final int vacant;
+  final int dirty;
+  final int ooo;
+
+  RoomSummary({
+    required this.occupied,
+    required this.vacant,
+    required this.dirty,
+    required this.ooo,
+  });
+
+  factory RoomSummary.fromJson(Map<String, dynamic> json) {
+    return RoomSummary(
+      occupied: json['occupied'] ?? 0,
+      vacant: json['vacant'] ?? 0,
+      dirty: json['dirty'] ?? 0,
+      ooo: json['ooo'] ?? 0,
+    );
+  }
+}
+
+class PerformanceTrends {
+  final double total;
+  final double changePercent;
+  final List<TrendDay> days;
+
+  PerformanceTrends({
+    required this.total,
+    required this.changePercent,
+    required this.days,
+  });
+
+  factory PerformanceTrends.fromJson(Map<String, dynamic> json) {
+    return PerformanceTrends(
+      total: (json['total'] ?? 0).toDouble(),
+      changePercent: (json['changePercent'] ?? 0).toDouble(),
+      days: (json['days'] as List?)?.map((d) => TrendDay.fromJson(d)).toList() ?? [],
+    );
+  }
+}
+
+class TrendDay {
+  final String businessDate;
+  final double revenue;
+
+  TrendDay({required this.businessDate, required this.revenue});
+
+  factory TrendDay.fromJson(Map<String, dynamic> json) {
+    return TrendDay(
+      businessDate: json['businessDate'] ?? '',
+      revenue: (json['revenue'] ?? 0).toDouble(),
+    );
+  }
 }
 
 class AlertData {
@@ -89,6 +184,7 @@ class AlertData {
   final String title;
   final String summary;
   final String category;
+  final String action;
 
   AlertData({
     required this.id,
@@ -96,112 +192,37 @@ class AlertData {
     required this.title,
     required this.summary,
     required this.category,
+    required this.action,
   });
+
+  factory AlertData.fromJson(Map<String, dynamic> json) {
+    return AlertData(
+      id: json['id'] ?? '',
+      priority: json['priority'] ?? 'P3',
+      title: json['title'] ?? '',
+      summary: json['summary'] ?? '',
+      category: json['category'] ?? 'OPERATIONS',
+      action: json['action'] ?? '',
+    );
+  }
 }
 
-class ApprovalData {
-  final String id;
-  final String type;
-  final String title;
-  final double amount;
-  final String requestedBy;
-  final String department;
-  final DateTime createdAt;
-  final String priority;
-  final String status;
+class SyncSummary {
+  final int online;
+  final int offline;
+  final int total;
 
-  ApprovalData({
-    required this.id,
-    required this.type,
-    required this.title,
-    required this.amount,
-    required this.requestedBy,
-    required this.department,
-    required this.createdAt,
-    required this.priority,
-    required this.status,
+  SyncSummary({
+    required this.online,
+    required this.offline,
+    required this.total,
   });
-}
 
-class RevenueTrend {
-  final double last7DaysRevenue;
-  final double trendPercent;
-  final List<double> dailyRevenueData; // 7 items for sparkline
-
-  RevenueTrend({
-    required this.last7DaysRevenue,
-    required this.trendPercent,
-    required this.dailyRevenueData,
-  });
-}
-
-class ArrivalData {
-  final String id;
-  final String guestName;
-  final String roomNumber;
-  final String status; // 'VIP', 'Corporate', 'Repeat guest'
-  final int nights;
-  final bool isVip;
-
-  ArrivalData({
-    required this.id,
-    required this.guestName,
-    required this.roomNumber,
-    required this.status,
-    required this.nights,
-    this.isVip = false,
-  });
-}
-
-class GuestPulse {
-  final int vipCount;
-  final int openComplaints;
-  final int resolvedRequests;
-  final double guestRating;
-  final AlertData? criticalExperienceAlert;
-
-  GuestPulse({
-    required this.vipCount,
-    required this.openComplaints,
-    required this.resolvedRequests,
-    required this.guestRating,
-    this.criticalExperienceAlert,
-  });
-}
-
-enum DepartmentStatus { normal, attention, critical }
-
-class OperationsPulse {
-  final DepartmentStatus frontDeskStatus;
-  final String frontDeskMessage;
-  
-  final DepartmentStatus housekeepingStatus;
-  final String housekeepingMessage;
-  
-  final DepartmentStatus maintenanceStatus;
-  final String maintenanceMessage;
-  
-  final DepartmentStatus fbStatus;
-  final String fbMessage;
-
-  OperationsPulse({
-    required this.frontDeskStatus,
-    required this.frontDeskMessage,
-    required this.housekeepingStatus,
-    required this.housekeepingMessage,
-    required this.maintenanceStatus,
-    required this.maintenanceMessage,
-    required this.fbStatus,
-    required this.fbMessage,
-  });
-}
-
-class ExecutiveBrief {
-  final String title;
-  final String summary;
-
-  ExecutiveBrief({
-    required this.title,
-    required this.summary,
-  });
+  factory SyncSummary.fromJson(Map<String, dynamic> json) {
+    return SyncSummary(
+      online: json['online'] ?? 0,
+      offline: json['offline'] ?? 0,
+      total: json['total'] ?? 0,
+    );
+  }
 }

@@ -231,3 +231,87 @@ export async function getExecutiveRevenueTrend(propertyId: string, endBusinessDa
     changePercent: 0 // Placeholder until period-over-period is requested
   };
 }
+
+export type ExecutiveOverview = KPISnapshot & {
+  occupancyTrend: number;
+  adrTrend: number;
+  revparTrend: number;
+  totalRevenueTrend: number;
+  roomRevenueTrend: number;
+  fbRevenueTrend: number;
+};
+
+export async function getExecutiveOverview(propertyId: string, businessDate: Date): Promise<ExecutiveOverview> {
+  const yesterday = new Date(businessDate);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  const [todayKpi, yesterdayKpi] = await Promise.all([
+    getExecutiveKPISnapshot(propertyId, businessDate),
+    getExecutiveKPISnapshot(propertyId, yesterday)
+  ]);
+
+  const calcTrend = (todayVal: number, yesterdayVal: number) => {
+    if (yesterdayVal === 0) return todayVal > 0 ? 100 : 0;
+    return Number((((todayVal - yesterdayVal) / yesterdayVal) * 100).toFixed(1));
+  };
+
+  return {
+    ...todayKpi,
+    occupancyTrend: calcTrend(todayKpi.occupancyPercent, yesterdayKpi.occupancyPercent),
+    adrTrend: calcTrend(todayKpi.adr, yesterdayKpi.adr),
+    revparTrend: calcTrend(todayKpi.revpar, yesterdayKpi.revpar),
+    totalRevenueTrend: calcTrend(todayKpi.revenue.totalRevenue, yesterdayKpi.revenue.totalRevenue),
+    roomRevenueTrend: calcTrend(todayKpi.revenue.roomRevenue, yesterdayKpi.revenue.roomRevenue),
+    fbRevenueTrend: calcTrend(todayKpi.revenue.fbRevenue, yesterdayKpi.revenue.fbRevenue)
+  };
+}
+
+export async function getRoomSummary(propertyId: string) {
+  const rooms = await prisma.room.findMany({
+    where: { propertyId, isActive: true },
+    select: { status: true, housekeepingStatus: true }
+  });
+
+  let occupied = 0;
+  let vacant = 0;
+  let dirty = 0;
+  let ooo = 0;
+
+  for (const room of rooms) {
+    if (room.status === 'OCCUPIED' || room.status === 'CHECKED_IN') occupied++;
+    else if (room.status === 'AVAILABLE' || room.status === 'CLEAN' || room.status === 'INSPECTED') vacant++;
+    else if (room.status === 'DIRTY') dirty++;
+    else ooo++;
+  }
+
+  return { occupied, vacant, dirty, ooo };
+}
+
+export async function getSyncSummary(propertyId: string) {
+  const terminals = await prisma.posTerminal.findMany({
+    where: { propertyId, registrationState: 'REGISTERED' },
+    select: { id: true, name: true, lastSeenAt: true }
+  });
+
+  const now = new Date();
+  const OFFLINE_THRESHOLD_MINS = 30;
+
+  let onlineCount = 0;
+  let offlineCount = 0;
+
+  for (const t of terminals) {
+    if (t.lastSeenAt) {
+      const diffMins = (now.getTime() - t.lastSeenAt.getTime()) / 60000;
+      if (diffMins > OFFLINE_THRESHOLD_MINS) {
+        offlineCount++;
+      } else {
+        onlineCount++;
+      }
+    } else {
+      offlineCount++;
+    }
+  }
+
+  return { online: onlineCount, offline: offlineCount, total: terminals.length };
+}
+

@@ -4,10 +4,12 @@ import '../providers/dashboard_provider.dart';
 import 'package:mobile_management/features/notifications/presentation/providers/notifications_provider.dart';
 import 'package:mobile_management/features/notifications/presentation/screens/notifications_screen.dart';
 import 'package:mobile_management/features/profile/presentation/screens/profile_screen.dart';
-import '../widgets/performance_card.dart';
-import '../widgets/hotel_pulse.dart';
-import '../widgets/attention_required.dart';
-import '../widgets/pending_approvals.dart';
+import '../widgets/director/ExecutiveKpiRow.dart';
+import '../widgets/director/RequiresAttentionCard.dart';
+import '../widgets/director/TodaySnapshotWidget.dart';
+import '../widgets/director/PerformanceTrendChart.dart';
+import '../widgets/director/CompactRoomStatusWidget.dart';
+import '../widgets/director/SyncSummaryWidget.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -126,13 +128,17 @@ class DashboardScreen extends ConsumerWidget {
             child: ListView(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
               children: [
-                PerformanceCard(data: data.performance),
+                ExecutiveKpiRow(overview: data.executiveOverview),
+                if (data.requiresAttention.isNotEmpty) const SizedBox(height: 24),
+                if (data.requiresAttention.isNotEmpty) RequiresAttentionCard(alerts: data.requiresAttention),
                 const SizedBox(height: 24),
-                HotelPulseWidget(data: data.hotelPulse),
+                CompactRoomStatusWidget(summary: data.roomSummary),
                 const SizedBox(height: 24),
-                AttentionRequiredWidget(alerts: data.attention),
+                PerformanceTrendChart(trends: data.performanceTrends),
                 const SizedBox(height: 24),
-                PendingApprovalsWidget(approvals: data.approvals),
+                TodaySnapshotWidget(snapshot: data.todaySnapshot),
+                const SizedBox(height: 24),
+                SyncSummaryWidget(summary: data.syncSummary),
                 const SizedBox(height: 48), // Bottom padding
               ],
             ),

@@ -45,6 +45,7 @@ dependencies:
   local_auth: ^3.0.2
   shared_preferences: ^2.5.5
   timeago: ^3.7.1
+  fl_chart: ^1.2.0
 
 dev_dependencies:
   flutter_test:

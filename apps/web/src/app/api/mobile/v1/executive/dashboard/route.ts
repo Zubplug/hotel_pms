@@ -2,10 +2,9 @@ import { NextRequest } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { resolveUser } from '@/lib/resolve-user';
 import { requireOrganizationContext } from '@/lib/organization-access';
-import { getExecutiveKPISnapshot, getPropertyBusinessDate } from '@/lib/kpi';
+import { getPropertyBusinessDate, getExecutiveOverview, getRoomSummary, getExecutiveRevenueTrend, getSyncSummary } from '@/lib/kpi';
 import { evaluatePropertyAlerts } from '@/lib/attention-engine';
 import { fetchHotelPulse } from '@/lib/executive/hotel-pulse';
-import { fetchPendingApprovals } from '@/lib/executive/approvals';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,11 +33,20 @@ export async function GET(req: NextRequest) {
 
     const businessDate = await getPropertyBusinessDate(primaryPropertyId);
 
-    const [snapshot, activeAlerts, hotelPulse, approvals] = await Promise.all([
-      getExecutiveKPISnapshot(primaryPropertyId, businessDate),
+    const [
+      executiveOverview,
+      roomSummary,
+      performanceTrends,
+      syncSummary,
+      activeAlerts,
+      hotelPulse
+    ] = await Promise.all([
+      getExecutiveOverview(primaryPropertyId, businessDate),
+      getRoomSummary(primaryPropertyId),
+      getExecutiveRevenueTrend(primaryPropertyId, businessDate, 7),
+      getSyncSummary(primaryPropertyId),
       evaluatePropertyAlerts(primaryPropertyId),
-      fetchHotelPulse(primaryPropertyId),
-      fetchPendingApprovals(primaryPropertyId)
+      fetchHotelPulse(primaryPropertyId)
     ]);
 
     const now = new Date();
@@ -52,16 +60,19 @@ export async function GET(req: NextRequest) {
       businessDate: businessDate.toISOString().split('T')[0],
       generatedAt: now.toISOString(),
       
-      performance: snapshot,
-      hotelPulse,
-      attention: activeAlerts,
-      approvals,
-      
-      revenueTrend: null,
-      arrivals: null,
-      guestPulse: null,
-      operationsPulse: null,
-      executiveBrief: null
+      executiveOverview,
+      todaySnapshot: {
+        arrivals: hotelPulse.arrivals,
+        departures: hotelPulse.departures,
+        inHouseGuests: hotelPulse.inHouseGuests,
+        occupiedRooms: executiveOverview.occupiedRooms,
+        availableRooms: executiveOverview.availableRooms,
+        outOfOrderRooms: roomSummary.ooo
+      },
+      roomSummary,
+      performanceTrends,
+      requiresAttention: activeAlerts,
+      syncSummary
     }, 200);
 
   } catch (err: any) {
