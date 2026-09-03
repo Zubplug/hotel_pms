@@ -64,7 +64,9 @@ public class Rfv2016LockProvider : ILockProvider
                 {
                     string iniContent = File.ReadAllText(iniPath);
                     string pattern = @"nDbpath=.*";
-                    string replacement = @"nDbpath=.\";
+                    // Using an empty string instead of .\ to prevent VB6 from trying to parse dots and slashes
+                    // When empty, nDbpath & 'Database.mdb' becomes 'Database.mdb', which safely resolves to CWD.
+                    string replacement = @"nDbpath=";
                     iniContent = System.Text.RegularExpressions.Regex.Replace(iniContent, pattern, replacement);
                     File.WriteAllText(iniPath, iniContent);
                 }
