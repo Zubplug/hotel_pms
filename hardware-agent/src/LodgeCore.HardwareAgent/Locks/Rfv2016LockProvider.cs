@@ -58,26 +58,26 @@ public class Rfv2016LockProvider : ILockProvider
             if (Directory.Exists(sourceWRCard))
             {
                 CopyDirectory(sourceWRCard, targetWRCard);
-                
-                // Allow the user to specify their actual SmartDoor.mdb path via a text file.
-                // This prevents Error 72 (Failed to connect to database) caused by the vendor's hardcoded D:\ path.
+                // Allow the user to specify their actual SmartDoor.mdb path via a text file,
+                // or fallback to the known working path provided by the user.
+                string customDbPath = @"C:\Users\VOLCANOE PEAK HOTEL\Desktop\Douwin\";
                 string dbPathConfig = @"C:\Users\Public\Rfv2016\DbPath.txt";
+                
                 if (File.Exists(dbPathConfig))
                 {
-                    string customDbPath = File.ReadAllText(dbPathConfig).Trim();
+                    customDbPath = File.ReadAllText(dbPathConfig).Trim();
                     if (!customDbPath.EndsWith("\\")) customDbPath += "\\";
-                    
-                    string iniPath = Path.Combine(targetWRCard, "nConDB.ini");
-                    if (File.Exists(iniPath))
-                    {
-                        string iniContent = File.ReadAllText(iniPath);
-                        string pattern = @"nDbpath=.*";
-                        string replacement = $"nDbpath={customDbPath}";
-                        iniContent = System.Text.RegularExpressions.Regex.Replace(iniContent, pattern, replacement);
-                        File.WriteAllText(iniPath, iniContent);
-                    }
                 }
-            }
+                
+                string iniPath = Path.Combine(targetWRCard, "nConDB.ini");
+                if (File.Exists(iniPath))
+                {
+                    string iniContent = File.ReadAllText(iniPath);
+                    string pattern = @"nDbpath=.*";
+                    string replacement = $"nDbpath={customDbPath}";
+                    iniContent = System.Text.RegularExpressions.Regex.Replace(iniContent, pattern, replacement);
+                    File.WriteAllText(iniPath, iniContent);
+                }
         }
     }
 
