@@ -183,10 +183,17 @@ export interface RoomIntelligenceData {
   };
   currentGuest: {
     name: string | null;
+    guests: number;
     vipLevel: string | null;
     checkIn: string;
     checkOut: string;
     folioBalance: number | null;
+    folio: {
+      totalCharges: number;
+      paid: number;
+      credit: number;
+      balance: number;
+    } | null;
   } | null;
   nextArrival: {
     reservationId: string;
@@ -305,7 +312,10 @@ export async function getRoomIntelligenceView(
     },
     include: {
       reservation: {
-        include: { primaryGuest: true, folios: true }
+        include: { 
+          primaryGuest: true, 
+          folios: { include: { items: { where: { voidedAt: null } } } } 
+        }
       }
     }
   });
@@ -313,24 +323,48 @@ export async function getRoomIntelligenceView(
   let currentGuest = null;
   if (currentRes && permissions.includes('rooms.guest.view')) {
     const showFolio = permissions.includes('rooms.folio.view');
-    const balance = showFolio && currentRes.reservation.folios.length > 0
-        ? currentRes.reservation.folios.reduce((sum: any, f: any) => sum + Number(f.balance), 0)
-        : null;
+    let folioData = null;
+    
+    if (showFolio && currentRes.reservation.folios.length > 0) {
+      let totalCharges = 0;
+      let totalPaid = 0;
+      let balance = 0;
+
+      for (const folio of currentRes.reservation.folios) {
+        balance += Number(folio.balance);
+        for (const item of folio.items) {
+          if (item.type === 'CHARGE') totalCharges += Number(item.amount);
+          if (item.type === 'PAYMENT') totalPaid += Number(item.amount);
+          // Credit is basically negative balance if overpaid, but we can just use balance
+        }
+      }
+      
+      folioData = {
+        totalCharges,
+        paid: totalPaid,
+        credit: balance < 0 ? Math.abs(balance) : 0,
+        balance
+      };
+    }
 
     currentGuest = {
       name: `${currentRes.reservation.primaryGuest.firstName} ${currentRes.reservation.primaryGuest.lastName}`,
+      guests: currentRes.adults || 1,
       vipLevel: currentRes.reservation.primaryGuest.vipLevel ?? null,
       checkIn: currentRes.checkIn.toISOString(),
       checkOut: currentRes.checkOut.toISOString(),
-      folioBalance: balance
+      folio: folioData,
+      folioBalance: folioData?.balance ?? null
     };
   } else if (currentRes) {
     // Guest exists but caller lacks rooms.guest.view permission
     currentGuest = {
       name: null,
+      guests: currentRes.adults || 1,
       vipLevel: null,
       checkIn: currentRes.checkIn.toISOString(),
       checkOut: currentRes.checkOut.toISOString(),
+      folio: null,
       folioBalance: null
     };
   }
