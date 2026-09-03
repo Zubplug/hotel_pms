@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../../providers/hub_provider.dart';
-import '../widgets/approval_card.dart';
-import '../widgets/intervention_card.dart';
-import '../widgets/quick_action_button.dart';
 import '../widgets/property_filter_dropdown.dart';
 import '../../data/hub_model.dart';
-import 'approval_review_screen.dart';
-import 'night_audit_review_screen.dart';
+import 'global_search_screen.dart';
+
 // ─── Design Tokens ───────────────────────────────────────────────────────────
 const _bgDeep = Color(0xFF070D1A);
 const _cardBg = Color(0xFF111D33);
@@ -17,6 +15,7 @@ const _textPrimary = Color(0xFFEEF2FF);
 const _textSecondary = Color(0xFF94A3B8);
 const _textMuted = Color(0xFF6B7FA3);
 const _red = Color(0xFFEF4444);
+const _orange = Color(0xFFF97316);
 const _green = Color(0xFF22C55E);
 
 class HubScreen extends ConsumerWidget {
@@ -25,6 +24,7 @@ class HubScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final hubState = ref.watch(hubDataProvider);
+    final todayStr = DateFormat('dd MMM yyyy').format(DateTime.now());
 
     return Scaffold(
       backgroundColor: _bgDeep,
@@ -32,13 +32,24 @@ class HubScreen extends ConsumerWidget {
         backgroundColor: _bgDeep,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
-        title: const Column(
+        title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('HUB', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _textPrimary, letterSpacing: 1.2)),
-            Text('Executive Action Center', style: TextStyle(fontSize: 12, color: _textMuted)),
+            const Text('HUB', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _textPrimary, letterSpacing: 1.2)),
+            Text(todayStr, style: const TextStyle(fontSize: 12, color: _textMuted)),
           ],
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.search, color: _textPrimary),
+            onPressed: () {
+              Navigator.push(context, MaterialPageRoute(
+                builder: (ctx) => const GlobalSearchScreen(),
+              ));
+            },
+          ),
+          const SizedBox(width: 8),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(60),
           child: Container(
@@ -75,169 +86,244 @@ class HubScreen extends ConsumerWidget {
   }
 
   Widget _buildBody(BuildContext context, HubData data, WidgetRef ref) {
-    final hasNoActions = data.approvals.isEmpty && data.interventions.isEmpty;
-
     return RefreshIndicator(
       color: _goldLight,
       backgroundColor: _surfaceNavy,
       onRefresh: () async => ref.invalidate(hubDataProvider),
       child: ListView(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.symmetric(vertical: 16.0),
         children: [
-          if (hasNoActions) _buildAllClear(),
-          
-          if (data.approvals.isNotEmpty) ...[
-            _buildSectionHeader('⚡ NEEDS YOUR DECISION', '\${data.summary.pendingApprovals} pending approvals'),
-            const SizedBox(height: 12),
-            ...data.approvals.map((a) => ApprovalCard(
-              approval: a,
-              onTap: () {
-                Navigator.push(context, MaterialPageRoute(
-                  builder: (ctx) => ApprovalReviewScreen(approval: a),
-                ));
-              },
-            )),
-            _buildViewAllButton('View all approvals'),
-            const SizedBox(height: 32),
-          ],
+          _buildAlerts(data.alerts),
+          _buildDivider(),
+          _buildManagementGrid(data.modules),
+          _buildDivider(),
+          _buildApprovals(data.approvalsSummary),
+          _buildDivider(),
+          _buildQuickActions(),
+          _buildDivider(),
+          _buildSystemStatus(data.systemStatus),
+        ],
+      ),
+    );
+  }
 
-          if (data.interventions.isNotEmpty) ...[
-            _buildSectionHeader('🚨 EXECUTIVE INTERVENTIONS', '\${data.summary.criticalInterventions} critical alerts'),
-            const SizedBox(height: 12),
-            ...data.interventions.map((i) => InterventionCard(intervention: i)),
-            _buildViewAllButton('View all alerts'),
-            const SizedBox(height: 32),
-          ],
+  Widget _buildDivider() {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 24.0, horizontal: 16.0),
+      child: Divider(color: _surfaceNavy, height: 1),
+    );
+  }
 
-          if (data.quickActions.isNotEmpty) ...[
-            const Text('QUICK ACTIONS', style: TextStyle(color: _textMuted, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
-            const SizedBox(height: 12),
-            GridView.count(
+  Widget _buildAlerts(HubAlerts alerts) {
+    final hasAlerts = alerts.oooRooms > 0 || alerts.cashVariances > 0 || alerts.offlineTerminals > 0;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(hasAlerts ? Icons.warning_amber_rounded : Icons.check_circle_outline, 
+                   color: hasAlerts ? _goldLight : _green, size: 18),
+              const SizedBox(width: 8),
+              const Text('REQUIRES ATTENTION', style: TextStyle(color: _textMuted, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (!hasAlerts)
+            const Text('All clear. No immediate action required.', style: TextStyle(color: _textSecondary, fontSize: 14)),
+          if (alerts.oooRooms > 0)
+            _buildAlertRow(Icons.hotel, '\${alerts.oooRooms} Rooms Out of Order', _red),
+          if (alerts.cashVariances > 0)
+            _buildAlertRow(Icons.account_balance_wallet, '\${alerts.cashVariances} Cash Variances', _orange),
+          if (alerts.offlineTerminals > 0)
+            _buildAlertRow(Icons.wifi_off, '\${alerts.offlineTerminals} Terminals Offline', _orange),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAlertRow(IconData icon, String text, Color color) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12.0),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 16),
+          const SizedBox(width: 12),
+          Text(text, style: const TextStyle(color: _textPrimary, fontSize: 14, fontWeight: FontWeight.w500)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildManagementGrid(List<HubModule> modules) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('MANAGEMENT', style: TextStyle(color: _textMuted, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+          const SizedBox(height: 16),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              mainAxisSpacing: 12,
               crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
               childAspectRatio: 2.5,
-              children: data.quickActions.map((qa) => QuickActionButton(
-                action: qa,
-                onTap: () {
-                  if (qa.id == 'run_night_audit') {
-                    if (data.scope.property == 'ALL_AUTHORIZED') {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: const Text('Please select a specific property from the dropdown to run Night Audit.'),
-                          backgroundColor: Theme.of(context).colorScheme.primary,
-                        ),
-                      );
-                      return;
-                    }
-                    final propertyId = data.scope.property;
-                    final propertyName = data.scope.availableProperties
-                            .where((p) => p.id == propertyId)
-                            .firstOrNull
-                            ?.name ??
-                        'Property ${propertyId.substring(0, 4)}...';
-
-                    Navigator.push(context, MaterialPageRoute(
-                      builder: (ctx) => NightAuditReviewScreen(
-                        propertyId: propertyId,
-                        propertyName: propertyName,
-                      ),
-                    ));
-                  } else {
-                    // Handle other quick actions...
-                  }
-                },
-              )).toList(),
             ),
-            const SizedBox(height: 32),
-          ],
-
-          if (data.executiveBrief != null) ...[
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
+            itemCount: modules.length,
+            itemBuilder: (context, index) {
+              final mod = modules[index];
+              return Material(
                 color: _cardBg,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF1E3355)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                borderRadius: BorderRadius.circular(8),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: () {
+                    // Navigate to module
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: _surfaceNavy),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(_getIconForModule(mod.icon), color: _goldLight, size: 20),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(mod.title, style: const TextStyle(color: _textPrimary, fontSize: 14, fontWeight: FontWeight.w500)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  IconData _getIconForModule(String iconName) {
+    switch (iconName) {
+      case 'book_online': return Icons.book_online;
+      case 'people': return Icons.people;
+      case 'account_balance': return Icons.account_balance;
+      case 'assessment': return Icons.assessment;
+      case 'point_of_sale': return Icons.point_of_sale;
+      case 'cleaning_services': return Icons.cleaning_services;
+      case 'build': return Icons.build;
+      case 'badge': return Icons.badge;
+      case 'security': return Icons.security;
+      case 'sync': return Icons.sync;
+      default: return Icons.widgets;
+    }
+  }
+
+  Widget _buildApprovals(ApprovalsSummary summary) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('APPROVALS', style: TextStyle(color: _textMuted, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+          const SizedBox(height: 16),
+          Text('\${summary.totalPending} Pending', style: const TextStyle(color: _textPrimary, fontSize: 24, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          if (summary.byType.isNotEmpty)
+            Text(
+              summary.byType.map((t) => '\${t.type} \${t.count}').join(' • '),
+              style: const TextStyle(color: _textSecondary, fontSize: 13),
+            ),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: () {},
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text('EXECUTIVE BRIEF', style: TextStyle(color: _textMuted, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
-                  const SizedBox(height: 12),
-                  Text(data.executiveBrief!.summary, style: const TextStyle(color: _textPrimary, fontSize: 14, height: 1.5)),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: const [
-                      Text('View Brief', style: TextStyle(color: _goldLight, fontWeight: FontWeight.w600)),
-                      SizedBox(width: 4),
-                      Icon(Icons.arrow_forward_rounded, color: _goldLight, size: 16),
-                    ],
-                  )
+                  Text('View All', style: TextStyle(color: _goldLight, fontSize: 13, fontWeight: FontWeight.w600)),
+                  SizedBox(width: 4),
+                  Icon(Icons.arrow_forward, color: _goldLight, size: 14),
                 ],
               ),
             ),
-            const SizedBox(height: 32),
-          ],
+          )
         ],
       ),
     );
   }
 
-  Widget _buildAllClear() {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 32, top: 16),
-      padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
-      decoration: BoxDecoration(
-        color: _cardBg.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF1E3355), width: 0.5),
-      ),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: const BoxDecoration(
-              color: Color(0xFF1E293B),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.check_circle_outline, color: _green, size: 48),
-          ),
-          const SizedBox(height: 24),
-          const Text('ALL CLEAR', style: TextStyle(color: _textPrimary, fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 2)),
-          const SizedBox(height: 12),
-          const Text(
-            'No approvals or critical interventions require your attention right now.',
-            style: TextStyle(color: _textSecondary, fontSize: 14, height: 1.5),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSectionHeader(String title, String subtitle) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title, style: const TextStyle(color: _goldLight, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
-        const SizedBox(height: 4),
-        Text(subtitle, style: const TextStyle(color: _textSecondary, fontSize: 13)),
-      ],
-    );
-  }
-
-  Widget _buildViewAllButton(String text) {
+  Widget _buildQuickActions() {
     return Padding(
-      padding: const EdgeInsets.only(top: 8.0),
-      child: Center(
-        child: TextButton(
-          onPressed: () {},
-          child: Text(text, style: const TextStyle(color: _textMuted, fontSize: 13)),
-        ),
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('QUICK ACTIONS', style: TextStyle(color: _textMuted, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 16,
+            runSpacing: 12,
+            children: [
+              _buildActionLink('Arrivals'),
+              _buildActionLink('Departures'),
+              _buildActionLink('Rooms'),
+              _buildActionLink('Cash'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionLink(String label) {
+    return InkWell(
+      onTap: () {},
+      child: Text(label, style: const TextStyle(color: _textPrimary, fontSize: 14, fontWeight: FontWeight.w500)),
+    );
+  }
+
+  Widget _buildSystemStatus(SystemStatus status) {
+    final lastSyncStr = status.lastSync != null ? DateFormat('HH:mm').format(status.lastSync!) : 'Never';
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('SYSTEM STATUS', style: TextStyle(color: _textMuted, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Icon(Icons.cloud_done, color: status.cloudConnected ? _green : _red, size: 16),
+              const SizedBox(width: 8),
+              const Text('Cloud Connected', style: TextStyle(color: _textPrimary, fontSize: 14)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              const Text('Front Desk', style: TextStyle(color: _textSecondary, fontSize: 14)),
+              const SizedBox(width: 8),
+              Text('\${status.frontDeskOnline.online}/\${status.frontDeskOnline.total}', style: const TextStyle(color: _textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
+              const SizedBox(width: 24),
+              const Text('POS', style: TextStyle(color: _textSecondary, fontSize: 14)),
+              const SizedBox(width: 8),
+              Text('\${status.posOnline.online}/\${status.posOnline.total}', style: const TextStyle(color: _textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text('Last sync: $lastSyncStr', style: const TextStyle(color: _textMuted, fontSize: 12)),
+          const SizedBox(height: 32),
+        ],
       ),
     );
   }

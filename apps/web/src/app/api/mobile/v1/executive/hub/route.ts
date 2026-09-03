@@ -3,6 +3,7 @@ import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { resolveUser } from '@/lib/resolve-user';
 import { requireOrganizationContext } from '@/lib/organization-access';
+import { subMinutes } from 'date-fns';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,21 +29,9 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url);
-    const propertyId = searchParams.get('propertyId'); // 'ALL_AUTHORIZED' or a specific UUID
+    const propertyId = searchParams.get('propertyId');
 
-    if (allowedPropertyIds.length === 0) {
-      return successResponse({
-        generatedAt: new Date().toISOString(),
-        scope: { property: 'NONE' },
-        summary: { pendingApprovals: 0, criticalInterventions: 0 },
-        approvals: [],
-        interventions: [],
-        quickActions: [],
-        executiveBrief: null
-      }, 200);
-    }
-
-    // Filter by requested property if specified and authorized
+    // 1. Resolve Property Scope
     let targetProperties = [...allowedPropertyIds];
     let resolvedPropertyScope = propertyId || 'ALL_AUTHORIZED';
 
@@ -58,63 +47,101 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // 2. Fetch Pending Approvals
-    const pendingApprovalsRaw = await prisma.approvalRequest.findMany({
+    // 2. Compute Alerts
+    // 2a. OOO Rooms
+    const oooRoomsCount = await prisma.room.count({
+      where: {
+        propertyId: { in: targetProperties },
+        maintenanceStatus: 'OUT_OF_ORDER',
+        isActive: true
+      }
+    });
+
+    // 2b. Unresolved Cash Variances (PosSessions that are submitted/under_review with non-zero variance)
+    const cashVariancesCount = await prisma.posSession.count({
+      where: {
+        outlet: { propertyId: { in: targetProperties } },
+        controlStatus: { in: ['SUBMITTED', 'UNDER_REVIEW'] },
+        variance: { not: 0 }
+      }
+    });
+
+    // 2c. Offline Terminals
+    const fiveMinutesAgo = subMinutes(new Date(), 5);
+    const offlineTerminalsCount = await prisma.posTerminal.count({
+      where: {
+        propertyId: { in: targetProperties },
+        OR: [
+          { lastSeenAt: { lt: fiveMinutesAgo } },
+          { lastSeenAt: null }
+        ],
+        registrationState: 'REGISTERED' // Only count registered terminals as offline
+      }
+    });
+
+    // 3. Compute Approvals Summary
+    const pendingApprovalsRaw = await prisma.approvalRequest.groupBy({
+      by: ['type'],
       where: {
         propertyId: { in: targetProperties },
         status: 'PENDING'
       },
-      include: {
-        property: {
-          select: { id: true, name: true, code: true }
-        }
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 10
+      _count: {
+        id: true
+      }
     });
 
-    const staffIds = pendingApprovalsRaw.map((a: any) => a.requestedBy);
-    const staffMembers = await prisma.staff.findMany({
-      where: { id: { in: staffIds } },
-      select: { id: true, firstName: true, lastName: true, department: true }
-    });
-    
-    const pendingApprovals = pendingApprovalsRaw.map((app: any) => {
-      const staff = staffMembers.find((s: any) => s.id === app.requestedBy);
+    let totalPendingApprovals = 0;
+    const approvalsByType = pendingApprovalsRaw.map(group => {
+      totalPendingApprovals += group._count.id;
       return {
-        ...app,
-        requester: staff || { firstName: 'Unknown', lastName: 'Staff', department: 'Unknown' }
+        type: group.type,
+        count: group._count.id
       };
     });
 
-    // 3. Fetch P0/P1 Critical Interventions (from Notifications or a dedicated Alerts table)
-    // We'll use the Notification table filtering for Critical/High priority
-    const criticalInterventions = await prisma.notification.findMany({
-      where: {
-        recipientId: user.id,
-        channel: 'in_app',
-        priority: { in: ['Critical', 'High'] }, // Map to Critical/High
-        readAt: null
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 5
+    // 4. Compute System Status
+    const frontDeskTerminalsTotal = await prisma.posTerminal.count({
+      where: { propertyId: { in: targetProperties }, terminalType: 'FRONT_DESK', registrationState: 'REGISTERED' }
+    });
+    const frontDeskTerminalsOnline = await prisma.posTerminal.count({
+      where: { propertyId: { in: targetProperties }, terminalType: 'FRONT_DESK', registrationState: 'REGISTERED', lastSeenAt: { gte: fiveMinutesAgo } }
     });
 
-    // 4. Determine Quick Actions based on Role/Capabilities
-    const quickActions = [];
-    if (isSystemAdmin || ['MANAGER', 'EXECUTIVE'].includes(user.role)) {
-      quickActions.push({ id: 'approvals', label: 'Approvals', icon: 'check_circle', capability: 'approvals.view' });
-      quickActions.push({ id: 'alerts', label: 'Alerts', icon: 'warning', capability: 'alerts.view' });
-      quickActions.push({ id: 'broadcast', label: 'Broadcast', icon: 'campaign', capability: 'notifications.broadcast' });
-      quickActions.push({ id: 'executive_brief', label: 'Executive Brief', icon: 'analytics', capability: 'reports.view' });
-      quickActions.push({ id: 'run_night_audit', label: 'Run Night Audit', icon: 'nightlight_round', capability: 'night_audit.run' });
+    const posTerminalsTotal = await prisma.posTerminal.count({
+      where: { propertyId: { in: targetProperties }, terminalType: { in: ['RESTAURANT_POS', 'BAR_POS'] }, registrationState: 'REGISTERED' }
+    });
+    const posTerminalsOnline = await prisma.posTerminal.count({
+      where: { propertyId: { in: targetProperties }, terminalType: { in: ['RESTAURANT_POS', 'BAR_POS'] }, registrationState: 'REGISTERED', lastSeenAt: { gte: fiveMinutesAgo } }
+    });
+
+    // Determine latest sync time across any terminal
+    const latestSyncTerminal = await prisma.posTerminal.findFirst({
+      where: { propertyId: { in: targetProperties } },
+      orderBy: { lastSyncAt: 'desc' },
+      select: { lastSyncAt: true }
+    });
+
+    // 5. Build Dynamic Management Modules based on permissions
+    const modules = [];
+    modules.push({ id: "reservations", title: "Reservations", icon: "book_online", route: "/reservations", enabled: true });
+    modules.push({ id: "guests", title: "Guests", icon: "people", route: "/guests", enabled: true });
+    
+    if (isSystemAdmin || ['MANAGER', 'DIRECTOR', 'EXECUTIVE'].includes(user.role)) {
+      modules.push({ id: "finance", title: "Finance", icon: "account_balance", route: "/finance", enabled: true });
+      modules.push({ id: "reports", title: "Reports", icon: "assessment", route: "/reports", enabled: true });
     }
 
-    // 5. Generate Dynamic Executive Brief
-    const executiveBrief = {
-      title: "Today's Executive Brief",
-      summary: `You have ${pendingApprovals.length} pending approvals and ${criticalInterventions.length} critical interventions requiring your attention today.`
-    };
+    modules.push({ id: "pos", title: "POS", icon: "point_of_sale", route: "/pos", enabled: true });
+    modules.push({ id: "housekeeping", title: "Housekeeping", icon: "cleaning_services", route: "/housekeeping", enabled: true });
+    
+    // Some modules might be restricted to certain roles
+    if (isSystemAdmin || user.role === 'DIRECTOR' || user.role === 'MANAGER') {
+      modules.push({ id: "maintenance", title: "Maintenance", icon: "build", route: "/maintenance", enabled: true });
+      modules.push({ id: "staff", title: "Staff", icon: "badge", route: "/staff", enabled: true });
+      modules.push({ id: "security", title: "Security", icon: "security", route: "/security", enabled: true });
+      modules.push({ id: "sync", title: "Sync", icon: "sync", route: "/sync", enabled: true });
+    }
 
     const authorizedPropertiesDetails = await prisma.property.findMany({
       where: { id: { in: [...allowedPropertyIds] } },
@@ -127,41 +154,29 @@ export async function GET(req: NextRequest) {
         property: resolvedPropertyScope,
         availableProperties: authorizedPropertiesDetails
       },
-      summary: {
-        pendingApprovals: pendingApprovals.length,
-        criticalInterventions: criticalInterventions.length
+      alerts: {
+        oooRooms: oooRoomsCount,
+        cashVariances: cashVariancesCount,
+        offlineTerminals: offlineTerminalsCount,
       },
-      approvals: pendingApprovals.map((app: any) => ({
-        id: app.id,
-        type: app.type,
-        amount: app.amount ? Number(app.amount) : null,
-        currency: app.currency,
-        reason: app.reason,
-        status: app.status,
-        createdAt: app.createdAt,
-        requester: {
-          name: `${app.requester.firstName} ${app.requester.lastName}`.trim(),
-          department: app.requester.department
+      approvalsSummary: {
+        totalPending: totalPendingApprovals,
+        byType: approvalsByType
+      },
+      systemStatus: {
+        cloudConnected: true, // We are literally running in the cloud right now answering the API request
+        frontDeskOnline: {
+          online: frontDeskTerminalsOnline,
+          total: frontDeskTerminalsTotal
         },
-        property: {
-          id: app.property.id,
-          name: app.property.name,
-          code: app.property.code
+        posOnline: {
+          online: posTerminalsOnline,
+          total: posTerminalsTotal
         },
-        details: app.details
-      })),
-      interventions: criticalInterventions.map((int: any) => ({
-        id: int.id,
-        title: int.subject || 'Intervention Required',
-        message: int.body,
-        priority: int.priority,
-        category: int.category,
-        createdAt: int.createdAt,
-        actionUrl: int.action,
-        meta: int.metadata
-      })),
-      quickActions,
-      executiveBrief
+        lastSync: latestSyncTerminal?.lastSyncAt?.toISOString() || null,
+        dataAsOf: new Date().toISOString()
+      },
+      modules
     }, 200);
 
   } catch (err: any) {

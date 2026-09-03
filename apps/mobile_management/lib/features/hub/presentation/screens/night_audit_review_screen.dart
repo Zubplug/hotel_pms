@@ -9,10 +9,10 @@ class NightAuditReviewScreen extends ConsumerStatefulWidget {
   final String propertyName;
 
   const NightAuditReviewScreen({
-    Key? key,
+    super.key,
     required this.propertyId,
     required this.propertyName,
-  }) : super(key: key);
+  });
 
   @override
   ConsumerState<NightAuditReviewScreen> createState() => _NightAuditReviewScreenState();

@@ -1,42 +1,31 @@
 class HubData {
   final String generatedAt;
   final HubScope scope;
-  final HubSummary summary;
-  final List<HubApproval> approvals;
-  final List<HubIntervention> interventions;
-  final List<HubQuickAction> quickActions;
-  final ExecutiveBrief? executiveBrief;
+  final HubAlerts alerts;
+  final ApprovalsSummary approvalsSummary;
+  final SystemStatus systemStatus;
+  final List<HubModule> modules;
 
   HubData({
     required this.generatedAt,
     required this.scope,
-    required this.summary,
-    required this.approvals,
-    required this.interventions,
-    required this.quickActions,
-    this.executiveBrief,
+    required this.alerts,
+    required this.approvalsSummary,
+    required this.systemStatus,
+    required this.modules,
   });
 
   factory HubData.fromJson(Map<String, dynamic> json) {
     return HubData(
       generatedAt: json['generatedAt'] ?? '',
       scope: HubScope.fromJson(json['scope'] ?? {}),
-      summary: HubSummary.fromJson(json['summary'] ?? {}),
-      approvals: (json['approvals'] as List<dynamic>?)
-              ?.map((e) => HubApproval.fromJson(e))
+      alerts: HubAlerts.fromJson(json['alerts'] ?? {}),
+      approvalsSummary: ApprovalsSummary.fromJson(json['approvalsSummary'] ?? {}),
+      systemStatus: SystemStatus.fromJson(json['systemStatus'] ?? {}),
+      modules: (json['modules'] as List<dynamic>?)
+              ?.map((e) => HubModule.fromJson(e))
               .toList() ??
           [],
-      interventions: (json['interventions'] as List<dynamic>?)
-              ?.map((e) => HubIntervention.fromJson(e))
-              .toList() ??
-          [],
-      quickActions: (json['quickActions'] as List<dynamic>?)
-              ?.map((e) => HubQuickAction.fromJson(e))
-              .toList() ??
-          [],
-      executiveBrief: json['executiveBrief'] != null
-          ? ExecutiveBrief.fromJson(json['executiveBrief'])
-          : null,
     );
   }
 }
@@ -58,78 +47,6 @@ class HubScope {
   }
 }
 
-class HubSummary {
-  final int pendingApprovals;
-  final int criticalInterventions;
-
-  HubSummary({
-    required this.pendingApprovals,
-    required this.criticalInterventions,
-  });
-
-  factory HubSummary.fromJson(Map<String, dynamic> json) {
-    return HubSummary(
-      pendingApprovals: json['pendingApprovals'] ?? 0,
-      criticalInterventions: json['criticalInterventions'] ?? 0,
-    );
-  }
-}
-
-class HubApproval {
-  final String id;
-  final String type;
-  final double? amount;
-  final String? currency;
-  final String reason;
-  final String status;
-  final DateTime createdAt;
-  final HubRequester requester;
-  final HubProperty property;
-  final Map<String, dynamic>? details;
-
-  HubApproval({
-    required this.id,
-    required this.type,
-    this.amount,
-    this.currency,
-    required this.reason,
-    required this.status,
-    required this.createdAt,
-    required this.requester,
-    required this.property,
-    this.details,
-  });
-
-  factory HubApproval.fromJson(Map<String, dynamic> json) {
-    return HubApproval(
-      id: json['id'] ?? '',
-      type: json['type'] ?? '',
-      amount: json['amount'] != null ? (json['amount'] as num).toDouble() : null,
-      currency: json['currency'],
-      reason: json['reason'] ?? '',
-      status: json['status'] ?? '',
-      createdAt: DateTime.tryParse(json['createdAt'] ?? '') ?? DateTime.now(),
-      requester: HubRequester.fromJson(json['requester'] ?? {}),
-      property: HubProperty.fromJson(json['property'] ?? {}),
-      details: json['details'],
-    );
-  }
-}
-
-class HubRequester {
-  final String name;
-  final String department;
-
-  HubRequester({required this.name, required this.department});
-
-  factory HubRequester.fromJson(Map<String, dynamic> json) {
-    return HubRequester(
-      name: json['name'] ?? 'Unknown',
-      department: json['department'] ?? 'Unknown Dept',
-    );
-  }
-}
-
 class HubProperty {
   final String id;
   final String name;
@@ -146,74 +63,122 @@ class HubProperty {
   }
 }
 
-class HubIntervention {
+class HubAlerts {
+  final int oooRooms;
+  final int cashVariances;
+  final int offlineTerminals;
+
+  HubAlerts({
+    required this.oooRooms,
+    required this.cashVariances,
+    required this.offlineTerminals,
+  });
+
+  factory HubAlerts.fromJson(Map<String, dynamic> json) {
+    return HubAlerts(
+      oooRooms: json['oooRooms'] ?? 0,
+      cashVariances: json['cashVariances'] ?? 0,
+      offlineTerminals: json['offlineTerminals'] ?? 0,
+    );
+  }
+}
+
+class ApprovalsSummary {
+  final int totalPending;
+  final List<ApprovalTypeCount> byType;
+
+  ApprovalsSummary({
+    required this.totalPending,
+    required this.byType,
+  });
+
+  factory ApprovalsSummary.fromJson(Map<String, dynamic> json) {
+    return ApprovalsSummary(
+      totalPending: json['totalPending'] ?? 0,
+      byType: (json['byType'] as List<dynamic>?)
+              ?.map((e) => ApprovalTypeCount.fromJson(e))
+              .toList() ??
+          [],
+    );
+  }
+}
+
+class ApprovalTypeCount {
+  final String type;
+  final int count;
+
+  ApprovalTypeCount({required this.type, required this.count});
+
+  factory ApprovalTypeCount.fromJson(Map<String, dynamic> json) {
+    return ApprovalTypeCount(
+      type: json['type'] ?? '',
+      count: json['count'] ?? 0,
+    );
+  }
+}
+
+class SystemStatus {
+  final bool cloudConnected;
+  final DeviceStatusCounts frontDeskOnline;
+  final DeviceStatusCounts posOnline;
+  final DateTime? lastSync;
+  final DateTime? dataAsOf;
+
+  SystemStatus({
+    required this.cloudConnected,
+    required this.frontDeskOnline,
+    required this.posOnline,
+    this.lastSync,
+    this.dataAsOf,
+  });
+
+  factory SystemStatus.fromJson(Map<String, dynamic> json) {
+    return SystemStatus(
+      cloudConnected: json['cloudConnected'] ?? false,
+      frontDeskOnline: DeviceStatusCounts.fromJson(json['frontDeskOnline'] ?? {}),
+      posOnline: DeviceStatusCounts.fromJson(json['posOnline'] ?? {}),
+      lastSync: json['lastSync'] != null ? DateTime.tryParse(json['lastSync']) : null,
+      dataAsOf: json['dataAsOf'] != null ? DateTime.tryParse(json['dataAsOf']) : null,
+    );
+  }
+}
+
+class DeviceStatusCounts {
+  final int online;
+  final int total;
+
+  DeviceStatusCounts({required this.online, required this.total});
+
+  factory DeviceStatusCounts.fromJson(Map<String, dynamic> json) {
+    return DeviceStatusCounts(
+      online: json['online'] ?? 0,
+      total: json['total'] ?? 0,
+    );
+  }
+}
+
+class HubModule {
   final String id;
   final String title;
-  final String message;
-  final String priority;
-  final String category;
-  final DateTime createdAt;
-  final String? actionUrl;
-  final Map<String, dynamic>? meta;
+  final String icon;
+  final String route;
+  final bool enabled;
 
-  HubIntervention({
+  HubModule({
     required this.id,
     required this.title,
-    required this.message,
-    required this.priority,
-    required this.category,
-    required this.createdAt,
-    this.actionUrl,
-    this.meta,
-  });
-
-  factory HubIntervention.fromJson(Map<String, dynamic> json) {
-    return HubIntervention(
-      id: json['id'] ?? '',
-      title: json['title'] ?? '',
-      message: json['message'] ?? '',
-      priority: json['priority'] ?? '',
-      category: json['category'] ?? '',
-      createdAt: DateTime.tryParse(json['createdAt'] ?? '') ?? DateTime.now(),
-      actionUrl: json['actionUrl'],
-      meta: json['meta'],
-    );
-  }
-}
-
-class HubQuickAction {
-  final String id;
-  final String label;
-  final String icon;
-  final String capability;
-
-  HubQuickAction({
-    required this.id,
-    required this.label,
     required this.icon,
-    required this.capability,
+    required this.route,
+    required this.enabled,
   });
 
-  factory HubQuickAction.fromJson(Map<String, dynamic> json) {
-    return HubQuickAction(
+  factory HubModule.fromJson(Map<String, dynamic> json) {
+    return HubModule(
       id: json['id'] ?? '',
-      label: json['label'] ?? '',
-      icon: json['icon'] ?? '',
-      capability: json['capability'] ?? '',
-    );
-  }
-}
-
-class ExecutiveBrief {
-  final String title;
-  final String summary;
-
-  ExecutiveBrief({required this.title, required this.summary});
-
-  factory ExecutiveBrief.fromJson(Map<String, dynamic> json) {
-    return ExecutiveBrief(
       title: json['title'] ?? '',
-      summary: json['summary'] ?? '',
+      icon: json['icon'] ?? '',
+      route: json['route'] ?? '',
+      enabled: json['enabled'] ?? false,
     );
   }
 }
