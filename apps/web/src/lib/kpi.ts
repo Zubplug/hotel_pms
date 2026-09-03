@@ -233,6 +233,9 @@ export async function getExecutiveRevenueTrend(propertyId: string, endBusinessDa
 }
 
 export type ExecutiveOverview = KPISnapshot & {
+  lastAuditedDate: string;
+  lastAuditedRevenue: number;
+  liveRevenue: number;
   occupancyTrend: number;
   adrTrend: number;
   revparTrend: number;
@@ -257,6 +260,9 @@ export async function getExecutiveOverview(propertyId: string, businessDate: Dat
 
   return {
     ...todayKpi,
+    lastAuditedDate: yesterday.toISOString().split('T')[0],
+    lastAuditedRevenue: yesterdayKpi.revenue.totalRevenue,
+    liveRevenue: todayKpi.revenue.totalRevenue,
     occupancyTrend: calcTrend(todayKpi.occupancyPercent, yesterdayKpi.occupancyPercent),
     adrTrend: calcTrend(todayKpi.adr, yesterdayKpi.adr),
     revparTrend: calcTrend(todayKpi.revpar, yesterdayKpi.revpar),

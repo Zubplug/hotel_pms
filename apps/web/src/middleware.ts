@@ -93,7 +93,7 @@ function hasModuleAccess(req: any, pathname: string): { allowed: boolean; redire
       ? { allowed: true } : { allowed: false, redirectTo: '/hub' };
   }
   if (pathname === '/night-audit' || pathname.startsWith('/night-audit/')) {
-    return can('ACCESS_NIGHT_AUDIT', [...MANAGEMENT_ROLES, 'NIGHT_AUDITOR'])
+    return can('ACCESS_NIGHT_AUDIT', [...MANAGEMENT_ROLES, 'NIGHT_AUDITOR', 'GENERAL_CASHIER'])
       ? { allowed: true } : { allowed: false, redirectTo: '/hub' };
   }
   if (pathname === '/reservations' || pathname.startsWith('/reservations/')) {

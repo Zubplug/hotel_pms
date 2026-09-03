@@ -38,6 +38,9 @@ class ExecutiveDashboardData {
 }
 
 class ExecutiveOverview {
+  final String lastAuditedDate;
+  final double lastAuditedRevenue;
+  final double liveRevenue;
   final double occupancyPercent;
   final double adr;
   final double revpar;
@@ -55,6 +58,9 @@ class ExecutiveOverview {
   final double fbRevenueTrend;
 
   ExecutiveOverview({
+    required this.lastAuditedDate,
+    required this.lastAuditedRevenue,
+    required this.liveRevenue,
     required this.occupancyPercent,
     required this.adr,
     required this.revpar,
@@ -74,6 +80,9 @@ class ExecutiveOverview {
   factory ExecutiveOverview.fromJson(Map<String, dynamic> json) {
     final revenue = json['revenue'] ?? {};
     return ExecutiveOverview(
+      lastAuditedDate: json['lastAuditedDate'] ?? '',
+      lastAuditedRevenue: (json['lastAuditedRevenue'] ?? 0).toDouble(),
+      liveRevenue: (json['liveRevenue'] ?? 0).toDouble(),
       occupancyPercent: (json['occupancyPercent'] ?? 0).toDouble(),
       adr: (json['adr'] ?? 0).toDouble(),
       revpar: (json['revpar'] ?? 0).toDouble(),

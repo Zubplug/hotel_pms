@@ -15,10 +15,15 @@ class ExecutiveKpiRow extends StatelessWidget {
           children: [
             Expanded(child: _buildKpiCard('OCCUPANCY', '${overview.occupancyPercent}%', overview.occupancyTrend, false)),
             const SizedBox(width: 8),
-            Expanded(child: _buildKpiCard('ADR', _formatCurrency(overview.adr), overview.adrTrend, true)),
+            Expanded(child: _buildKpiCard('ADR', _formatCurrency(overview.adr), overview.adrTrend, true, isUnaudited: true)),
             const SizedBox(width: 8),
-            Expanded(child: _buildKpiCard('REVPAR', _formatCurrency(overview.revpar), overview.revparTrend, true)),
+            Expanded(child: _buildKpiCard('REVPAR', _formatCurrency(overview.revpar), overview.revparTrend, true, isUnaudited: true)),
           ],
+        ),
+        const SizedBox(height: 4),
+        const Align(
+          alignment: Alignment.centerRight,
+          child: Text('*Based on current operational data', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10, fontStyle: FontStyle.italic)),
         ),
         const SizedBox(height: 8),
         Container(
@@ -31,25 +36,44 @@ class ExecutiveKpiRow extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('TODAY\'S REVENUE', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10, letterSpacing: 1.2, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 4),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
-                children: [
-                  Text(_formatCurrency(overview.totalRevenue), style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-                  const SizedBox(width: 8),
-                  _buildTrendIndicator(overview.totalRevenueTrend),
-                ],
-              ),
+              const Text('REVENUE', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10, letterSpacing: 1.2, fontWeight: FontWeight.bold)),
               const SizedBox(height: 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildSubRevenue('Rooms', overview.roomRevenue),
-                  _buildSubRevenue('F&B', overview.fbRevenue),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('OFFICIAL / LAST AUDIT', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 4),
+                      Text(_formatCurrency(overview.lastAuditedRevenue), style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 4),
+                      Text(_formatDate(overview.lastAuditedDate), style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: const [
+                          Icon(Icons.check, color: Colors.greenAccent, size: 12),
+                          SizedBox(width: 4),
+                          Text('Audited', style: TextStyle(color: Colors.greenAccent, fontSize: 12)),
+                        ],
+                      ),
+                    ],
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('LIVE TODAY', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 4),
+                      Text('${_formatCurrency(overview.liveRevenue)}*', style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 4),
+                      const Text('Since 00:00', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+                    ],
+                  ),
                 ],
-              )
+              ),
+              const SizedBox(height: 12),
+              const Text('*Unaudited', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10, fontStyle: FontStyle.italic)),
             ],
           ),
         ),
@@ -67,7 +91,7 @@ class ExecutiveKpiRow extends StatelessWidget {
     );
   }
 
-  Widget _buildKpiCard(String title, String value, double trend, bool isCurrency) {
+  Widget _buildKpiCard(String title, String value, double trend, bool isCurrency, {bool isUnaudited = false}) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -79,7 +103,7 @@ class ExecutiveKpiRow extends StatelessWidget {
         children: [
           Text(title, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10, letterSpacing: 1.0, fontWeight: FontWeight.bold)),
           const SizedBox(height: 4),
-          Text(value, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+          Text(isUnaudited ? '$value*' : value, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(height: 4),
           _buildTrendIndicator(trend),
         ],
@@ -111,5 +135,15 @@ class ExecutiveKpiRow extends StatelessWidget {
       return '₦${(amount / 1000).toStringAsFixed(1)}K';
     }
     return NumberFormat.currency(symbol: '₦', decimalDigits: 0).format(amount);
+  }
+
+  String _formatDate(String dateStr) {
+    if (dateStr.isEmpty) return '';
+    try {
+      final date = DateTime.parse(dateStr);
+      return DateFormat('dd MMM yyyy').format(date);
+    } catch (e) {
+      return dateStr;
+    }
   }
 }
