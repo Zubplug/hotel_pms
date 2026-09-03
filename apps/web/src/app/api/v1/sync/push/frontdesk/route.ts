@@ -300,6 +300,42 @@ export async function POST(req: NextRequest) {
                 data: { version: { increment: 1 } },
               });
               updatedCount = res.count;
+
+              // Safe version-mismatch bypass for CHECK_OUT.
+              // Night Audit folio operations can increment the server version
+              // while the desktop still holds an older cached version. A checkout
+              // is idempotent and safe to force-apply when:
+              //   (a) the reservation is still CHECKED_IN (not already checked out), AND
+              //   (b) the folio balance is zero (no outstanding charges or refunds).
+              // In this case we accept the event at the current server version
+              // rather than raising a conflict that a manager must manually resolve.
+              if (updatedCount === 0 && eventType === "CHECK_OUT") {
+                const current = await tx.reservation.findUnique({
+                  where: { id: aggregateId },
+                  select: { status: true },
+                });
+                if (current?.status === "CHECKED_IN") {
+                  const folioBalances = await tx.folio.findMany({
+                    where: { reservationId: aggregateId, propertyId },
+                    select: { balance: true },
+                  });
+                  const totalBalance = folioBalances.reduce(
+                    (sum: number, f: any) => sum + Number(f.balance), 0
+                  );
+                  if (Math.abs(totalBalance) <= 0.01) {
+                    // Accept at current server version — bump version to maintain monotonicity
+                    await tx.reservation.updateMany({
+                      where: { id: aggregateId },
+                      data: { version: { increment: 1 } },
+                    });
+                    updatedCount = 1;
+                    console.log(
+                      `[sync/push] CHECK_OUT version-mismatch auto-resolved for ${aggregateId} ` +
+                      `(desktop v${aggregateVersion}, balance ${totalBalance})`
+                    );
+                  }
+                }
+              }
             }
           } else if (
             aggregateType === "HOUSEKEEPING_TASK" ||
