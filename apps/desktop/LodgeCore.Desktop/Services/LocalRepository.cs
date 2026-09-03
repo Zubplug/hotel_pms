@@ -1028,7 +1028,7 @@ public class LocalRepository
                             paymentCount++;
                             var method = item.TryGetProperty("method", out var mv) ? mv.GetString() ?? "" : "";
                             if (method.Equals("CASH", StringComparison.OrdinalIgnoreCase)) cashPayments += Math.Abs(amount);
-                            else if (method.Equals("CARD", StringComparison.OrdinalIgnoreCase) || method.Equals("CREDIT_CARD", StringComparison.OrdinalIgnoreCase) || method.Equals("DEBIT_CARD", StringComparison.OrdinalIgnoreCase)) cardPayments += Math.Abs(amount);
+                            else if (method.Equals("CARD", StringComparison.OrdinalIgnoreCase) || method.Equals("CREDIT_CARD", StringComparison.OrdinalIgnoreCase) || method.Equals("DEBIT_CARD", StringComparison.OrdinalIgnoreCase) || method.Equals("POS", StringComparison.OrdinalIgnoreCase) || method.Equals("CARD_OFFLINE", StringComparison.OrdinalIgnoreCase)) cardPayments += Math.Abs(amount);
                             else if (method.Equals("BANK_TRANSFER", StringComparison.OrdinalIgnoreCase) || method.Equals("TRANSFER", StringComparison.OrdinalIgnoreCase)) bankTransfers += Math.Abs(amount);
                             else otherPayments += Math.Abs(amount);
                         }

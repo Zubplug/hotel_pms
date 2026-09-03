@@ -1,27 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dashboard_screen.dart';
+import 'auditor_dashboard_screen.dart';
 import 'package:mobile_management/features/rooms/presentation/screens/rooms_screen.dart';
 import 'package:mobile_management/features/finance/presentation/screens/finance_screen.dart';
 import 'package:mobile_management/features/profile/presentation/screens/profile_screen.dart';
+import 'package:mobile_management/features/profile/presentation/providers/profile_provider.dart';
 import 'package:mobile_management/features/hub/presentation/screens/hub_screen.dart';
 
-class MainScreen extends StatefulWidget {
+class MainScreen extends ConsumerStatefulWidget {
   const MainScreen({super.key});
 
   @override
-  State<MainScreen> createState() => _MainScreenState();
+  ConsumerState<MainScreen> createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> {
+class _MainScreenState extends ConsumerState<MainScreen> {
   int _currentIndex = 0;
-
-  final List<Widget> _screens = [
-    const DashboardScreen(),
-    const RoomsScreen(),
-    const FinanceScreen(),
-    const HubScreen(),
-    const ProfileScreen(),
-  ];
 
   @override
   Widget build(BuildContext context) {
@@ -29,9 +24,24 @@ class _MainScreenState extends State<MainScreen> {
     const goldAccent = Color(0xFFD4AF37);
     const textSecondary = Color(0xFF94A3B8);
 
+    final profileState = ref.watch(profileProvider);
+    final String userRole = profileState.value?.authorization.role.toUpperCase() ?? '';
+
+    final Widget homeDashboard = (userRole == 'NIGHT_AUDITOR')
+        ? const AuditorDashboardScreen()
+        : const DashboardScreen();
+
+    final List<Widget> screens = [
+      homeDashboard,
+      const RoomsScreen(),
+      const FinanceScreen(),
+      const HubScreen(),
+      const ProfileScreen(),
+    ];
+
     return Scaffold(
       backgroundColor: primaryNavy,
-      body: _screens[_currentIndex],
+      body: screens[_currentIndex],
       bottomNavigationBar: Theme(
         data: Theme.of(context).copyWith(
           splashColor: Colors.transparent,
