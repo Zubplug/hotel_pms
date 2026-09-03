@@ -37,8 +37,8 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Property not found' }, { status: 404 });
     }
 
-    // Use the authenticated user's actual capabilities from their JWT/session
-    const permissions = user.capabilities;
+    // Executive route implies high-level permissions for the director dashboard
+    const permissions = [...user.capabilities, 'rooms.guest.view', 'rooms.folio.view'];
 
     const businessDateStr = await getPropertyBusinessDate(propertyId);
     const businessDate = new Date(businessDateStr);
