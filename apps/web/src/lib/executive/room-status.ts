@@ -328,10 +328,10 @@ export async function getRoomIntelligenceView(
     if (showFolio && currentRes.reservation.folios.length > 0) {
       let totalCharges = 0;
       let totalPaid = 0;
-      let balance = 0;
+      let folioBalanceSum = 0;
 
       for (const folio of currentRes.reservation.folios) {
-        balance += Number(folio.balance);
+        folioBalanceSum += Number(folio.balance);
         for (const item of folio.items) {
           if (item.type === 'CHARGE') totalCharges += Number(item.amount);
           if (item.type === 'PAYMENT') totalPaid += Number(item.amount);
@@ -339,11 +339,14 @@ export async function getRoomIntelligenceView(
         }
       }
       
+      const reservationTotal = Number((currentRes.reservation as any).totalAmount || 0);
+      const computedBalanceDue = Math.max(folioBalanceSum, reservationTotal - totalPaid);
+
       folioData = {
         totalCharges,
         paid: totalPaid,
-        credit: balance < 0 ? Math.abs(balance) : 0,
-        balance
+        credit: folioBalanceSum < 0 ? Math.abs(folioBalanceSum) : 0,
+        balance: computedBalanceDue
       };
     }
 
