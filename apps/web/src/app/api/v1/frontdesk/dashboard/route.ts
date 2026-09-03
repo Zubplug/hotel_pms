@@ -88,7 +88,7 @@ export async function GET(req: NextRequest) {
       include: {
         primaryGuest: true,
         reservationRooms: { include: { room: { include: { roomType: true } } } },
-        folios: true
+        folios: { include: { credits: true } }
       }
     });
 
@@ -98,13 +98,14 @@ export async function GET(req: NextRequest) {
       include: {
         primaryGuest: true,
         reservationRooms: { include: { room: true } },
-        folios: true
+        folios: { include: { credits: true } }
       }
     });
 
     const formatGuestList = (resList: any[]) => resList.map(res => {
       const folio = res.folios?.[0];
       const balance = folio ? Number(folio.balance || 0) : null;
+      const availableCredit = folio?.credits?.reduce((sum: number, credit: any) => sum + Math.max(0, Number(credit.remainingAmount || 0)), 0) || 0;
       
       let arrivalStatus = 'Ready';
       let arrivalColor = 'green';
@@ -137,6 +138,7 @@ export async function GET(req: NextRequest) {
         checkOutTime: property.checkOutTime || '12:00',
         stayEndsToday: res.status === 'CHECKED_IN' && res.checkOut >= physicalToday && res.checkOut < physicalTomorrow,
         balance,
+        availableCredit,
         status: res.status,
         arrivalState: { label: arrivalStatus, color: arrivalColor },
         roomStatus

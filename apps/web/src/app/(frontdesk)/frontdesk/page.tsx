@@ -304,6 +304,12 @@ export default function ReceptionistDashboardPage() {
                           ) : (
                             <span className="text-xs font-semibold text-amber-600 flex items-center gap-1"><CreditCard className="w-3.5 h-3.5"/> {formatCurrency(arr.balance)} Due</span>
                           )}
+                          {Number(arr.availableCredit || 0) > 0 && (
+                            <>
+                              <span className="text-slate-300 text-xs">•</span>
+                              <span className="text-xs font-medium text-blue-600">{formatCurrency(Number(arr.availableCredit))} Credit available</span>
+                            </>
+                          )}
                           <span className="text-slate-300 text-xs">•</span>
                           {/* Room Status */}
                           {renderRoomStatus(arr.roomStatus)}
@@ -383,6 +389,12 @@ export default function ReceptionistDashboardPage() {
                             <span className="text-xs font-medium text-emerald-600 flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5"/> {formatCurrency(0)} Due</span>
                           ) : (
                             <span className="text-xs font-semibold text-red-600 flex items-center gap-1"><CreditCard className="w-3.5 h-3.5"/> {formatCurrency(dep.balance)} Due</span>
+                          )}
+                          {Number(dep.availableCredit || 0) > 0 && (
+                            <>
+                              <span className="text-slate-300 text-xs">•</span>
+                              <span className="text-xs font-medium text-blue-600">{formatCurrency(Number(dep.availableCredit))} Credit available</span>
+                            </>
                           )}
                         </div>
                         <div className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-orange-700">
