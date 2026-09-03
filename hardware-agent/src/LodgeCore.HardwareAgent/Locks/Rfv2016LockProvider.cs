@@ -185,37 +185,73 @@ public class Rfv2016LockProvider : ILockProvider
                 string prevDir = Environment.CurrentDirectory;
                 try
                 {
+                    _logger.LogInformation("RFV2016 ReadDiagnosticAsync started. Setting working directory to: {Dir}", _workingDir);
                     Environment.CurrentDirectory = _workingDir;
                     string targetWRCard = Path.Combine(_workingDir, "W-R-Card");
                     string rrOutFile = Path.Combine(targetWRCard, "R-Card_Out.txt");
                     string rIdOutFile = Path.Combine(targetWRCard, "RID_Out.txt");
+                    
+                    _logger.LogInformation("Checking W-R-Card directory existence: {Exists}", Directory.Exists(targetWRCard));
+                    _logger.LogInformation("Checking Lock_Record_ directory existence: {Exists}", Directory.Exists(Path.Combine(_workingDir, "Lock_Record_")));
+                    
                     if (File.Exists(rrOutFile)) File.Delete(rrOutFile);
                     if (File.Exists(rIdOutFile)) File.Delete(rIdOutFile);
 
+                    _logger.LogInformation("Calling native Rfv2016LockSdkNative.R_CardID(1)...");
                     IntPtr ptr = Rfv2016LockSdkNative.R_CardID(1);
                     string? resultStr = Marshal.PtrToStringAnsi(ptr);
                     
+                    _logger.LogInformation("Native R_CardID returned: '{Result}'", resultStr);
+                    
+                    // Let's dump any files created in Lock_Record_ by the VB6 app just in case it logged an error
+                    string lockRecDir = Path.Combine(_workingDir, "Lock_Record_");
+                    if (Directory.Exists(lockRecDir))
+                    {
+                        var files = Directory.GetFiles(lockRecDir);
+                        if (files.Length > 0)
+                        {
+                            _logger.LogWarning("Found {Count} files in Lock_Record_. This usually means the VB6 app logged an error:", files.Length);
+                            foreach (var file in files)
+                            {
+                                try
+                                {
+                                    string content = File.ReadAllText(file);
+                                    _logger.LogWarning("Content of {File}: {Content}", Path.GetFileName(file), content);
+                                }
+                                catch (Exception fileEx)
+                                {
+                                    _logger.LogWarning("Could not read {File}: {Error}", Path.GetFileName(file), fileEx.Message);
+                                }
+                            }
+                        }
+                    }
+                    
                     if (string.IsNullOrEmpty(resultStr) || resultStr == "75" || resultStr == "0" || resultStr == "00000000")
                     {
+                        _logger.LogWarning("RFV2016 diagnostic determined no card or invalid card. Result string: '{Result}'", resultStr);
                         return new DiagnosticResult { Success = false, ErrorMessage = "No card detected or invalid card", Vendor = VendorId };
                     }
                     
                     // The SDK might return an error code like 75, let's parse and check
                     if (int.TryParse(resultStr, out int errCode) && errCode < 100)
                     {
-                         return new DiagnosticResult { Success = false, ErrorMessage = GetErrorMessage(errCode), Vendor = VendorId };
+                         string mappedError = GetErrorMessage(errCode);
+                         _logger.LogWarning("RFV2016 diagnostic returned error code: {Code} ({Message})", errCode, mappedError);
+                         return new DiagnosticResult { Success = false, ErrorMessage = mappedError, Vendor = VendorId };
                     }
 
+                    _logger.LogInformation("RFV2016 diagnostic successful. Card data: {Data}", resultStr);
                     return new DiagnosticResult { Success = true, RawDataHex = resultStr, Vendor = VendorId };
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "RFV2016 diagnostic failed");
+                    _logger.LogError(ex, "RFV2016 diagnostic failed completely with an exception.");
                     return new DiagnosticResult { Success = false, ErrorMessage = ex.Message, Vendor = VendorId };
                 }
                 finally
                 {
                     Environment.CurrentDirectory = prevDir;
+                    _logger.LogInformation("RFV2016 ReadDiagnosticAsync finished. Restored working directory to: {Dir}", prevDir);
                 }
             }
         });
