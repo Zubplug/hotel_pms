@@ -78,9 +78,9 @@ public class Rfv2016LockProvider : ILockProvider
                     iniContent = System.Text.RegularExpressions.Regex.Replace(iniContent, pattern, replacement);
                     File.WriteAllText(iniPath, iniContent);
                 }
+            }
         }
     }
-
     private void CopyDirectory(string sourceDir, string destinationDir)
     {
         Directory.CreateDirectory(destinationDir);
