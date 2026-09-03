@@ -110,10 +110,10 @@ export async function GET(req: NextRequest) {
       quickActions.push({ id: 'run_night_audit', label: 'Run Night Audit', icon: 'nightlight_round', capability: 'night_audit.run' });
     }
 
-    // 5. Mock Executive Brief (to be replaced with actual brief logic later)
+    // 5. Generate Dynamic Executive Brief
     const executiveBrief = {
       title: "Today's Executive Brief",
-      summary: "Hotel performance is trending positively today. Occupancy is 72%, up 4.2% from yesterday. Two approvals require your decision."
+      summary: `You have ${pendingApprovals.length} pending approvals and ${criticalInterventions.length} critical interventions requiring your attention today.`
     };
 
     const authorizedPropertiesDetails = await prisma.property.findMany({

@@ -146,7 +146,7 @@ export function useGlobalTerminalAuth({
           setPin('');
         }
       } else {
-        // Web preview: use POS operator auth for demo purposes only
+        // Web preview: use POS operator auth directly when not running in the desktop client
         const sessionId = localStorage.getItem('lodgecore_pos_session_id') || '';
         const deviceId = localStorage.getItem('lodgecore_pos_device_id') || '';
         const res = await provider.pos.authenticateOperator(
