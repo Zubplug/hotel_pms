@@ -103,17 +103,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       }
     } catch (e) {
       HapticFeedback.heavyImpact();
-      String errorMsg = 'Invalid email or password. Please try again.';
+      String errorMsg = 'An unexpected error occurred. Please try again.';
+      
       if (e.runtimeType.toString().contains('DioException')) {
         final dynamic dioError = e;
+        final statusCode = dioError.response?.statusCode;
         final data = dioError.response?.data;
-        if (data != null && data is Map && data['message'] != null) {
-          errorMsg = '${dioError.response?.statusCode}: ${data['message']}';
+        
+        if (statusCode == 401 || statusCode == 403) {
+          errorMsg = 'Invalid email or password. Please try again.';
+        } else if (data != null && data is Map && data['message'] != null) {
+          errorMsg = data['message'].toString();
+        } else if (statusCode != null) {
+          errorMsg = 'Server error ($statusCode). Please try again later.';
         } else {
-          errorMsg = '${dioError.response?.statusCode}: ${dioError.message}';
+          errorMsg = 'Network error. Please check your connection.';
         }
       } else {
-        errorMsg = e.toString();
+        errorMsg = 'An unexpected error occurred.';
       }
       debugPrint('LOGIN ERROR: $e');
       setState(() => _errorMessage = errorMsg);
