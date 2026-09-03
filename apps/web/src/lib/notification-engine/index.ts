@@ -427,13 +427,19 @@ async function evaluateEvent(
         (resIn.checkOut.getTime() - resIn.checkIn.getTime()) /
           (1000 * 60 * 60 * 24),
       );
-      const adultsIn = resIn.adults || 1;
+      const checkInTimeIn = new Date().toLocaleString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
 
       return {
         subject: event.metadata?.isVip
           ? `⭐ VIP Checked In — ${guestNameIn}`
           : `✅ Guest Checked In — ${guestNameIn}`,
-        body: `${event.metadata?.isVip ? "⭐ VIP " : ""}📋 Conf: ${resIn.confirmationNumber || event.entityId}\n👤 Guest: ${guestNameIn} | 📞 ${phoneIn}\n🏠 Room ${roomNumIn} (${roomTypeIn})\n📅 Check-out: ${checkOutIn} (${nightsIn} night${nightsIn !== 1 ? "s" : ""})\n👥 Adults: ${adultsIn}`,
+        body: `${event.metadata?.isVip ? "⭐ VIP " : ""}📋 Conf: ${resIn.confirmationNumber || event.entityId}\n👤 Guest: ${guestNameIn} | 📞 ${phoneIn}\n🏠 Room ${roomNumIn} (${roomTypeIn})\n🕒 Checked In: ${checkInTimeIn}\n📅 Check-out: ${checkOutIn} (${nightsIn} night${nightsIn !== 1 ? "s" : ""})\n👥 Adults: ${adultsIn}`,
         category: "Operations",
         priority: event.metadata?.isVip ? "High" : "Normal",
       };
@@ -484,11 +490,19 @@ async function evaluateEvent(
           : `${resOut.currency} ${Number(folioOut.balance).toLocaleString()}`
         : "N/A";
 
+      const checkOutTimeOut = new Date().toLocaleString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+
       return {
         subject: event.metadata?.isVip
           ? `⭐ VIP Checked Out — ${guestNameOut}`
           : `🚪 Guest Checked Out — ${guestNameOut}`,
-        body: `${event.metadata?.isVip ? "⭐ VIP " : ""}📋 Conf: ${resOut.confirmationNumber || event.entityId}\n👤 Guest: ${guestNameOut} | 📞 ${phoneOut}\n🏠 Room ${roomNumOut} (${roomTypeOut})\n📅 Stayed: ${checkInOut} (${nightsOut} night${nightsOut !== 1 ? "s" : ""})\n💰 Total Charged: ${totalOut}\n🧾 Balance: ${balanceOut}`,
+        body: `${event.metadata?.isVip ? "⭐ VIP " : ""}📋 Conf: ${resOut.confirmationNumber || event.entityId}\n👤 Guest: ${guestNameOut} | 📞 ${phoneOut}\n🏠 Room ${roomNumOut} (${roomTypeOut})\n🕒 Checked Out: ${checkOutTimeOut}\n📅 Stayed: ${checkInOut} (${nightsOut} night${nightsOut !== 1 ? "s" : ""})\n💰 Total Charged: ${totalOut}\n🧾 Balance: ${balanceOut}`,
         category: "Operations",
         priority: event.metadata?.isVip ? "High" : "Normal",
       };

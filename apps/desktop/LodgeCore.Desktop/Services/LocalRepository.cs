@@ -169,11 +169,16 @@ public class LocalRepository
         
         if (!string.IsNullOrEmpty(reservation.RoomId) && reservation.Status == "CONFIRMED")
         {
-            var room = await _dbContext.Rooms.FirstOrDefaultAsync(r => r.Id == reservation.RoomId);
-            if (room != null && room.Status is "AVAILABLE" or "CLEAN" or "INSPECTED")
+            var property = await _dbContext.Properties.FirstOrDefaultAsync(p => p.Id == reservation.PropertyId);
+            var businessDate = property?.BusinessDate.Date ?? DateTime.UtcNow.Date;
+            if (reservation.CheckInDate.Date == businessDate)
             {
-                room.Status = "RESERVED";
-                room.UpdatedAt = DateTime.UtcNow;
+                var room = await _dbContext.Rooms.FirstOrDefaultAsync(r => r.Id == reservation.RoomId);
+                if (room != null && room.Status is "AVAILABLE" or "CLEAN" or "INSPECTED")
+                {
+                    room.Status = "RESERVED";
+                    room.UpdatedAt = DateTime.UtcNow;
+                }
             }
         }
         else if (!string.IsNullOrEmpty(reservation.RoomId) && reservation.Status == "CHECKED_IN")
@@ -389,10 +394,11 @@ public class LocalRepository
         var property = await _dbContext.Properties.FindAsync(res.PropertyId);
         if (property?.NoShowAllowReinstatement == false) throw new InvalidOperationException("Reinstatement is disabled by property policy.");
         res.Status = "CONFIRMED"; res.ReinstatedAt = DateTime.UtcNow; res.ReinstatedBy = userId; res.ReinstatementReason = reason; res.IsDirty = true; res.LocalSequence++;
+        var businessDate = property?.BusinessDate.Date ?? DateTime.UtcNow.Date;
         foreach (var reservationRoom in await _dbContext.ReservationRooms.Where(rr => rr.ReservationId == reservationId && rr.Status == "NO_SHOW").ToListAsync())
         {
             reservationRoom.Status = "ACTIVE";
-            if (!string.IsNullOrEmpty(reservationRoom.RoomId))
+            if (!string.IsNullOrEmpty(reservationRoom.RoomId) && reservationRoom.CheckInDate.Date == businessDate)
             {
                 var room = await _dbContext.Rooms.FindAsync(reservationRoom.RoomId);
                 if (room != null) room.Status = "RESERVED";
@@ -979,7 +985,6 @@ public class LocalRepository
                     foreach (var item in arrayElement.EnumerateArray())
                     {
                         var createdAt = item.TryGetProperty("createdAt", out var createdAtElement) && DateTime.TryParse(createdAtElement.GetString(), out var parsedCreatedAt) ? parsedCreatedAt : folio.UpdatedAt;
-                        if (createdAt < startDate || createdAt > endDate) continue;
                         var amount = ReadDecimal(item, "amount");
                         if (amount == 0) continue;
                         
@@ -3140,11 +3145,22 @@ public class LocalRepository
         return newCheck;
     }
 
-    public async Task<List<LocalPosProduct>> GetPosProductsAsync(string propertyId)
+    public async Task<List<LocalPosProduct>> GetPosProductsAsync(string propertyId, string outletId = "")
     {
-        var products = await _dbContext.PosProducts
-            .Where(p => p.PropertyId == propertyId && p.IsActive)
-            .ToListAsync();
+        var query = _dbContext.PosProducts
+            .Where(p => p.PropertyId == propertyId && p.IsActive);
+
+        // If outletId given, filter products to only those in categories belonging to that outlet
+        if (!string.IsNullOrWhiteSpace(outletId))
+        {
+            var outletCategoryIds = await _dbContext.ProductCategories
+                .Where(c => c.OutletId == outletId && c.IsActive)
+                .Select(c => c.Id)
+                .ToListAsync();
+            query = query.Where(p => outletCategoryIds.Contains(p.CategoryId));
+        }
+
+        var products = await query.ToListAsync();
         var categoryIds = products.Select(p => p.CategoryId).Where(id => !string.IsNullOrWhiteSpace(id)).Distinct().ToList();
         var categories = await _dbContext.ProductCategories
             .Where(c => categoryIds.Contains(c.Id))
@@ -4463,15 +4479,41 @@ public class LocalRepository
         return audit;
     }
 
-    public async Task<List<LocalStaff>> GetActiveStaffAsync(string propertyId, string? roleScope = null)
+    public async Task<List<LocalStaff>> GetActiveStaffAsync(string propertyId, string? roleScope = null, string? outletId = null)
     {
-        var staff = await _dbContext.Staff
+        // If no outletId supplied, fall back to the terminal's own registered outlet
+        if (string.IsNullOrWhiteSpace(outletId))
+        {
+            var terminal = await _dbContext.PosTerminals.FirstOrDefaultAsync();
+            outletId = terminal?.OutletId;
+        }
+
+        var allStaff = await _dbContext.Staff
             .Where(s => s.PropertyId == propertyId && s.IsActive && s.HasPosAccess)
             .ToListAsync();
-        if (string.IsNullOrWhiteSpace(roleScope)) return staff;
+
+        // Filter by outlet: if staff has explicit outlet assignments, only show them
+        // for their allowed outlets. An empty AllowedOutletIds means unrestricted
+        // (e.g. managers, admins who can operate anywhere).
+        if (!string.IsNullOrWhiteSpace(outletId))
+        {
+            allStaff = allStaff.Where(s =>
+            {
+                if (string.IsNullOrWhiteSpace(s.AllowedOutletIds) || s.AllowedOutletIds == "[]") 
+                    return true; // unrestricted staff always visible
+                try
+                {
+                    var ids = System.Text.Json.JsonSerializer.Deserialize<List<string>>(s.AllowedOutletIds) ?? new List<string>();
+                    return ids.Count == 0 || ids.Contains(outletId, StringComparer.OrdinalIgnoreCase);
+                }
+                catch { return true; }
+            }).ToList();
+        }
+
+        if (string.IsNullOrWhiteSpace(roleScope)) return allStaff;
         var roles = roleScope.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        return staff.Where(s => roles.Contains(s.Role)).ToList();
+        return allStaff.Where(s => roles.Contains(s.Role)).ToList();
     }
 
     public async Task<LocalStaff?> AuthenticateOperatorAsync(string staffId, string pin, string propertyId)
@@ -4705,8 +4747,18 @@ public class LocalRepository
         return audit;
     }
 
-    public async Task<List<LocalProductCategory>> GetCategoriesAsync(string propertyId)
+    public async Task<List<LocalProductCategory>> GetCategoriesAsync(string propertyId, string outletId = "")
     {
+        if (!string.IsNullOrWhiteSpace(outletId))
+        {
+            // Filter strictly to the requested outlet
+            return await _dbContext.ProductCategories
+                .Where(c => c.IsActive && c.OutletId == outletId)
+                .OrderBy(c => c.SortOrder)
+                .ToListAsync();
+        }
+
+        // Fallback: all active categories for the property
         return await _dbContext.ProductCategories
             .Where(c => c.IsActive && _dbContext.PosOutlets.Any(o => o.Id == c.OutletId && o.PropertyId == propertyId))
             .OrderBy(c => c.SortOrder)

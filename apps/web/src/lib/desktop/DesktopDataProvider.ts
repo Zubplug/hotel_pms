@@ -372,14 +372,14 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     }
   },
   pos: {
-    getProducts: async (propertyId: string) => {
-      return invokeDesktop('pos.getProducts', { propertyId });
+    getProducts: async (propertyId: string, outletId?: string) => {
+      return invokeDesktop('pos.getProducts', { propertyId, outletId });
     },
-    getCategories: async (propertyId: string) => {
-      return invokeDesktop('pos.getCategories', { propertyId });
+    getCategories: async (propertyId: string, outletId?: string) => {
+      return invokeDesktop('pos.getCategories', { propertyId, outletId });
     },
-    getActiveStaff: async (propertyId: string) => {
-      return invokeDesktop('pos.getActiveStaff', { propertyId });
+    getActiveStaff: async (propertyId: string, outletId?: string) => {
+      return invokeDesktop('pos.getActiveStaff', { propertyId, outletId });
     },
     validateSupervisorPin: async (pin: string, propertyId?: string) => { return invokeDesktop("pos.validateSupervisorPin", { pin, propertyId }); },
 

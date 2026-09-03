@@ -290,14 +290,17 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
     }
   },
   pos: {
-    getProducts: async (propertyId: string) => {
-      return apiFetchResult(`/api/v1/pos/products?propertyId=${propertyId}`);
+    getProducts: async (propertyId: string, outletId?: string) => {
+      const qs = outletId ? `&outletId=${outletId}` : '';
+      return apiFetchResult(`/api/v1/pos/products?propertyId=${propertyId}${qs}`);
     },
-    getCategories: async (propertyId: string) => {
-      return apiFetchResult(`/api/v1/pos/categories?propertyId=${propertyId}`);
+    getCategories: async (propertyId: string, outletId?: string) => {
+      const qs = outletId ? `&outletId=${outletId}` : '';
+      return apiFetchResult(`/api/v1/pos/categories?propertyId=${propertyId}${qs}`);
     },
-    getActiveStaff: async (propertyId: string) => {
-      return apiFetchResult(`/api/v1/pos/staff?propertyId=${propertyId}`);
+    getActiveStaff: async (propertyId: string, outletId?: string) => {
+      const qs = outletId ? `&outletId=${outletId}` : '';
+      return apiFetchResult(`/api/v1/pos/staff?propertyId=${propertyId}${qs}`);
     },
     getCurrentOperator: async (sessionId: string, operatorToken?: string | null) => {
       if (!sessionId) return { success: false, data: null, error: 'No active session' };

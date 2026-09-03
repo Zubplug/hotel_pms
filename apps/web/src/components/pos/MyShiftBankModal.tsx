@@ -60,6 +60,12 @@ export function MyShiftBankModal({
     }
   };
 
+  useEffect(() => {
+    if (sessionDetails && Number(sessionDetails.expectedCash || 0) === 0) {
+      setActualCashStr('0');
+    }
+  }, [sessionDetails]);
+
   const actualCash = parseFloat(actualCashStr) || 0;
   const expectedCash = Number(sessionDetails?.expectedCash || 0);
   const variance = actualCash - expectedCash;
@@ -206,6 +212,15 @@ export function MyShiftBankModal({
                   />
                 </div>
 
+                {expectedCash === 0 && (
+                  <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-3 rounded-xl flex items-center gap-2">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                    <div className="text-sm">
+                      <span className="font-semibold">Cashless Shift Detected:</span> No expected cash to drop.
+                    </div>
+                  </div>
+                )}
+
                 {actualCashStr !== '' && (
                   <div className={`flex items-center gap-2 p-3 rounded-xl border ${variance === 0 ? 'bg-green-50 border-green-200 text-green-700' : variance < 0 ? 'bg-red-50 border-red-200 text-red-700' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
                     <ArrowRightLeft className="w-5 h-5 shrink-0" />
@@ -230,7 +245,7 @@ export function MyShiftBankModal({
             disabled={isLoading || isSubmitting || !sessionDetails || (!!currentOperatorId && currentOperatorId !== sessionDetails.primaryOperatorId)}
             className="w-full h-14 text-lg font-semibold rounded-xl bg-indigo-600 hover:bg-indigo-700"
           >
-            {isSubmitting ? 'Submitting...' : 'Close and Submit Shift'}
+            {isSubmitting ? 'Submitting...' : (expectedCash === 0 && actualCashStr === '0' ? 'Submit Cashless Shift' : 'Close and Submit Shift')}
           </Button>
           {!!currentOperatorId && currentOperatorId !== sessionDetails?.primaryOperatorId && (
             <p className="mt-2 text-center text-xs font-medium text-amber-700">Only the POS cashier who opened this shift can submit it.</p>

@@ -912,6 +912,8 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                         existing.HasPosAccess = staffEl.TryGetProperty("hasPosAccess", out var hpa)
                             ? hpa.GetBoolean() : existing.HasPosAccess;
                         existing.PermissionsJson = staffEl.TryGetProperty("permissionsJson", out var pj) && pj.ValueKind != System.Text.Json.JsonValueKind.Null ? pj.GetString() ?? existing.PermissionsJson : existing.PermissionsJson;
+                        existing.AllowedOutletIds = staffEl.TryGetProperty("allowedOutletIds", out var aoi) && aoi.ValueKind == System.Text.Json.JsonValueKind.Array
+                            ? aoi.GetRawText() : existing.AllowedOutletIds;
                     }
                     else
                     {
@@ -928,6 +930,7 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                             IsActive        = staffEl.TryGetProperty("isActive",   out var ia2) && ia2.GetBoolean(),
                             HasPosAccess    = staffEl.TryGetProperty("hasPosAccess", out var hpa2) && hpa2.GetBoolean(),
                             PermissionsJson = staffEl.TryGetProperty("permissionsJson", out var pj2) && pj2.ValueKind != System.Text.Json.JsonValueKind.Null ? pj2.GetString() ?? "[]" : "[]",
+                            AllowedOutletIds = staffEl.TryGetProperty("allowedOutletIds", out var aoi2) && aoi2.ValueKind == System.Text.Json.JsonValueKind.Array ? aoi2.GetRawText() : "[]",
                         });
                     }
                     

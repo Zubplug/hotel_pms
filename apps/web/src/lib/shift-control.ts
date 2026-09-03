@@ -41,8 +41,8 @@ export function legacyControlStatus(status: string, settlementStatus?: string | 
 export function assertShiftTransition(from: string, to: ShiftControlStatus): void {
   const allowed: Record<string, ShiftControlStatus[]> = {
     OPEN: ['SUBMITTED'],
-    SUBMITTED: ['UNDER_REVIEW', 'APPROVED', 'APPROVED_WITH_VARIANCE', 'RETURNED'],
-    UNDER_REVIEW: ['APPROVED', 'APPROVED_WITH_VARIANCE', 'RETURNED'],
+    SUBMITTED: ['UNDER_REVIEW', 'APPROVED', 'APPROVED_WITH_VARIANCE', 'RETURNED', 'RECONCILED'],
+    UNDER_REVIEW: ['APPROVED', 'APPROVED_WITH_VARIANCE', 'RETURNED', 'RECONCILED'],
     RETURNED: ['SUBMITTED'],
     APPROVED: ['HANDOVER_PENDING', 'DEPOSITED', 'RECONCILED'],
     APPROVED_WITH_VARIANCE: ['HANDOVER_PENDING', 'DEPOSITED', 'RECONCILED'],

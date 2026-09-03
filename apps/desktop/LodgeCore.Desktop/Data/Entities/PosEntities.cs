@@ -385,6 +385,9 @@ public class LocalStaff
     public string Role { get; set; } = string.Empty;
     public string PermissionsJson { get; set; } = "[]"; // Added for granular hardware permissions
     public int PosTokenVersion { get; set; } = 1;
+    /// <summary>JSON array of outlet IDs this staff member is authorised to operate in.
+    /// Empty array means no outlet-level restriction (e.g. managers).</summary>
+    public string AllowedOutletIds { get; set; } = "[]";
 }
 
 public class LocalLoginAttempt

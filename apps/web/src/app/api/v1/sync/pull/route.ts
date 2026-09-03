@@ -460,6 +460,13 @@ export async function GET(req: NextRequest) {
           ) || ['RECEPTIONIST', 'MANAGER', 'ADMIN', 'WAITER'].includes(staff.position?.toUpperCase() ?? '');
         }
 
+        // Fetch which outlets this staff member can operate in
+        const outletAccess = await prisma.staffPosOutletAccess.findMany({
+          where: { staffId: staff.id },
+          select: { outletId: true },
+        });
+        const allowedOutletIds = outletAccess.map((a: any) => a.outletId);
+
         return {
           id:              staff.id,
           firstName:       staff.firstName,
@@ -470,6 +477,7 @@ export async function GET(req: NextRequest) {
           isActive:        staff.isActive,
           hasPosAccess,
           permissionsJson: JSON.stringify(permissions),
+          allowedOutletIds,
         };
       })
     );

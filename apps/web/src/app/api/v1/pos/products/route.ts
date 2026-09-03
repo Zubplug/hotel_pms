@@ -12,10 +12,15 @@ export async function GET(req: NextRequest) {
 
     const url = new URL(req.url);
     const propertyId = url.searchParams.get('propertyId');
+    const outletId = url.searchParams.get('outletId');
     if (!propertyId) return errorResponse('BAD_REQUEST', 'Property ID is required', 400);
 
     const products = await prisma.posProduct.findMany({
-      where: { propertyId: { in: ctx.propertyIds as string[] }, isActive: true },
+      where: { 
+        propertyId: { in: ctx.propertyIds as string[] }, 
+        ...(outletId ? { category: { outletId } } : {}),
+        isActive: true 
+      },
       include: {
         category: {
           select: { id: true, name: true, productionStation: true },

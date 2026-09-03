@@ -221,10 +221,15 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      await tx.room.update({
-        where: { id: room.id },
-        data: { status: 'RESERVED' },
-      });
+      const propertyBusinessDateStr = (prop?.businessDate ?? new Date()).toISOString().split('T')[0];
+      const checkInStr = checkInDate.toISOString().split('T')[0];
+      
+      if (checkInStr === propertyBusinessDateStr) {
+        await tx.room.update({
+          where: { id: room.id },
+          data: { status: 'RESERVED' },
+        });
+      }
 
       // 7D.1: Create Folio
       const folioNumber = 'FOL-' + Math.floor(Math.random() * 1000000).toString().padStart(6, '0');

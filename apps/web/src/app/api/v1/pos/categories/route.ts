@@ -12,18 +12,23 @@ export async function GET(req: NextRequest) {
 
     const url = new URL(req.url);
     const propertyId = url.searchParams.get('propertyId');
+    const outletId = url.searchParams.get('outletId');
     if (!propertyId) return errorResponse('BAD_REQUEST', 'Property ID is required', 400);
 
-    // Categories are linked via outlet. Let's get outlets for this property first, then categories.
-    const outlets = await prisma.posOutlet.findMany({
-      where: { propertyId: { in: ctx.propertyIds as string[] }, isActive: true },
-      select: { id: true }
-    });
-    
-    const outletIds = outlets.map((o: any) => o.id);
+    let outletIdsToQuery = [];
+    if (outletId) {
+      outletIdsToQuery = [outletId];
+    } else {
+      // Categories are linked via outlet. Let's get outlets for this property first, then categories.
+      const outlets = await prisma.posOutlet.findMany({
+        where: { propertyId: { in: ctx.propertyIds as string[] }, isActive: true },
+        select: { id: true }
+      });
+      outletIdsToQuery = outlets.map((o: any) => o.id);
+    }
 
     const categories = await prisma.productCategory.findMany({
-      where: { outletId: { in: outletIds }, isActive: true },
+      where: { outletId: { in: outletIdsToQuery }, isActive: true },
       orderBy: { sortOrder: 'asc' }
     });
 

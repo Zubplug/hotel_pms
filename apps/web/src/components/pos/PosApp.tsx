@@ -160,9 +160,11 @@ export default function PosApp() {
       try {
         const configuredBankingModel = (session as any)?.user?.bankingModel;
         if (configuredBankingModel) setBankingModel(configuredBankingModel);
+        // Read the active outlet from localStorage — set when the operator selects their outlet at session start
+        const activeOutletId = localStorage.getItem('lodgecore_pos_outlet_id') || undefined;
         const [prodRes, catRes] = await Promise.all([
-          provider.pos.getProducts(propertyId),
-          provider.pos.getCategories(propertyId),
+          provider.pos.getProducts(propertyId, activeOutletId),
+          provider.pos.getCategories(propertyId, activeOutletId),
         ]);
         if (prodRes.data) {
           setProducts((prodRes.data || []).map((product: any) => ({

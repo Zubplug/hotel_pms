@@ -220,7 +220,7 @@ public class OfflinePMSInterop
                 System.Diagnostics.Debug.WriteLine($"[GetActiveStaffAsync] Fallback propertyId: {propertyId}");
             }
             
-            var staff = await _repo.GetActiveStaffAsync(propertyId, roleScope);
+            var staff = await _repo.GetActiveStaffAsync(propertyId, roleScope, outletId: null);
             System.Diagnostics.Debug.WriteLine($"[GetActiveStaffAsync] Retrieved {staff?.Count ?? 0} staff members from local database.");
             
             // SECURITY: Never expose PosPinHash or sensitive sync fields to the React UI
@@ -1465,11 +1465,11 @@ public class OfflinePMSInterop
         }
     }
 
-    public async Task<string> GetPosProductsAsync(string propertyId)
+    public async Task<string> GetPosProductsAsync(string propertyId, string outletId = "")
     {
         try
         {
-            var data = await _repo.GetPosProductsAsync(propertyId);
+            var data = await _repo.GetPosProductsAsync(propertyId, outletId);
             return JsonSerializer.Serialize(new { success = true, data }, _jsonOptions);
         }
         catch (Exception ex)
@@ -1478,11 +1478,11 @@ public class OfflinePMSInterop
         }
     }
 
-    public async Task<string> GetCategoriesAsync(string propertyId)
+    public async Task<string> GetCategoriesAsync(string propertyId, string outletId = "")
     {
         try
         {
-            var data = await _repo.GetCategoriesAsync(propertyId);
+            var data = await _repo.GetCategoriesAsync(propertyId, outletId);
             return JsonSerializer.Serialize(new { success = true, data }, _jsonOptions);
         }
         catch (Exception ex)
@@ -2064,11 +2064,11 @@ public class OfflinePMSInterop
         }
     }
 
-    public async Task<string> GetActiveStaffAsync(string propertyId, string? roleScope = null)
+    public async Task<string> GetActiveStaffAsync(string propertyId, string? roleScope = null, string? outletId = null)
     {
         try
         {
-            var res = await _repo.GetActiveStaffAsync(propertyId, roleScope);
+            var res = await _repo.GetActiveStaffAsync(propertyId, roleScope, outletId);
             return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
         catch (Exception ex)

@@ -372,6 +372,72 @@ export class ShiftControlService {
     });
   }
 
+  // ─── acknowledgeCashlessShift ─────────────────────────────────────────────
+  /**
+   * General Cashier acknowledges receipt of POS slips/receipts for a cashless shift.
+   * Shift transitions directly to RECONCILED, bypassing cash handover.
+   */
+  static async acknowledgeCashlessShift(
+    ctx: TenantContext,
+    type: 'POS' | 'FRONT_DESK',
+    shiftId: string
+  ) {
+    return prisma.$transaction(async tx => {
+      const shift = await this.validateAndGetShift(ctx, tx, type, shiftId);
+      assertShiftTransition(shift.controlStatus, 'RECONCILED');
+
+      const expected = await this.recalculateExpectedCash(tx, type, shiftId);
+      const declared = type === 'POS' ? Number(shift.actualCash ?? 0) : Number(shift.declaredCash ?? 0);
+      const variance = declared - expected;
+
+      // Strict enforcement of cashless rules
+      if (expected !== 0 || declared !== 0 || variance !== 0) {
+        throw new ShiftControlError(
+          'Shift is not genuinely cashless. Expected, declared, and variance must all be exactly 0.',
+          'FORBIDDEN',
+          403
+        );
+      }
+
+      const updateData = {
+        controlStatus: 'RECONCILED' as const,
+        approvalDecision: 'APPROVED', // Still an approval conceptually
+        approvedBy: ctx.userId,
+        approvedAt: new Date(),
+        variance: 0,
+        status: type === 'POS'
+          ? PosSessionStatus.CLOSED
+          : FrontdeskSessionStatus.CLOSED,
+        ...(type === 'POS'
+          ? { actualCash: 0, expectedCash: 0 }
+          : { systemExpectedCash: 0 }
+        )
+      } as any;
+
+      let updated;
+      if (type === 'POS') {
+        updated = await tx.posSession.update({ where: { id: shiftId }, data: updateData });
+        const settlement = await tx.posSettlement.findFirst({ where: { sessionId: shiftId }, orderBy: { settledAt: 'desc' } });
+        if (settlement) await tx.posSettlement.update({ where: { id: settlement.id }, data: { status: 'CLOSED', authorizerId: ctx.userId } });
+      } else {
+        updated = await tx.frontdeskSession.update({ where: { id: shiftId }, data: updateData });
+      }
+
+      await this.audit(tx, {
+        propertyId: shift.propertyId,
+        posSessionId: type === 'POS' ? shiftId : undefined,
+        frontdeskSessionId: type === 'FRONT_DESK' ? shiftId : undefined,
+        action: 'SHIFT_CASHLESS_ACKNOWLEDGED',
+        fromStatus: shift.controlStatus,
+        toStatus: 'RECONCILED',
+        performedBy: ctx.userId,
+        metadata: { expectedCash: 0, declaredCash: 0, variance: 0 },
+      });
+
+      return updated;
+    });
+  }
+
   // ─── returnShift ──────────────────────────────────────────────────────────
   /**
    * Finance returns a shift for correction.

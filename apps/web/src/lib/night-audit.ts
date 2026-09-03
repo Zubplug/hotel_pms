@@ -131,6 +131,29 @@ export async function executeNightAudit(
     } else {
       await tx.property.update({ where: { id: propertyId }, data: { auditStatus: 'POSTING' } });
     }
+
+    // Activate rooms for reservations starting on the new business date
+    const nextBusinessDateStr = nextBusinessDate.toISOString().split('T')[0];
+    const newArrivals = await tx.reservationRoom.findMany({
+      where: {
+        reservation: { propertyId, status: 'CONFIRMED' },
+        status: 'ACTIVE',
+        roomId: { not: null },
+      },
+      include: { room: true }
+    });
+
+    for (const arrival of newArrivals) {
+      if (arrival.checkIn.toISOString().split('T')[0] === nextBusinessDateStr) {
+        if (arrival.room && (arrival.room.status === 'AVAILABLE' || arrival.room.status === 'CLEAN' || arrival.room.status === 'INSPECTED')) {
+          await tx.room.update({
+            where: { id: arrival.room.id },
+            data: { status: 'RESERVED' }
+          });
+        }
+      }
+    }
+
     return run;
   });
 

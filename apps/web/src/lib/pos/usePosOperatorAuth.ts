@@ -74,10 +74,10 @@ export function usePosOperatorAuth({
     setStaffLoading(true);
     try {
       let res: any;
-      if (isDesktopMode) {
-        res = await provider.auth.getActiveStaff(allowedRoles.join(','));
-      } else if (propertyId) {
-        res = await provider.pos.getActiveStaff(propertyId);
+      // Always use pos.getActiveStaff with outletId so both web and desktop
+      // only show staff assigned to the active outlet
+      if (propertyId) {
+        res = await provider.pos.getActiveStaff(propertyId, outletId);
       }
       if (res?.data) {
         const roles = new Set(allowedRoles.map(role => role.toUpperCase().replace(/[^A-Z]/g, '')));

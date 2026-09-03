@@ -432,7 +432,7 @@ export default function ShiftReportPage() {
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-3" role="group" aria-label="Review decision">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3" role="group" aria-label="Review decision">
                       {[
                         {
                           value: 'APPROVED',
@@ -451,6 +451,15 @@ export default function ShiftReportPage() {
                           disabled: shiftVariance === 0,
                           selected: 'border-amber-300 bg-amber-50/80 ring-2 ring-amber-100',
                           iconColor: 'text-amber-600',
+                        },
+                        {
+                          value: 'CASHLESS_ACKNOWLEDGED',
+                          title: 'Acknowledge non-cash handover',
+                          description: 'Physical documents received (no cash).',
+                          icon: CheckCircle2,
+                          disabled: (selectedShift?.expectedCash != null ? Number(selectedShift.expectedCash) : 0) !== 0 || shiftVariance !== 0,
+                          selected: 'border-blue-300 bg-blue-50/80 ring-2 ring-blue-100',
+                          iconColor: 'text-blue-600',
                         },
                         {
                           value: 'REJECTED',

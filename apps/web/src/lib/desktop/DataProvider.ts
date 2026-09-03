@@ -98,9 +98,9 @@ export interface LodgeCoreDataProvider {
     generate(folioId: string): Promise<any>;
   };
   pos: {
-    getProducts(propertyId: string): Promise<{ data: any[], error: string | null }>;
-    getCategories(propertyId: string): Promise<{ data: any[], error: string | null }>;
-    getActiveStaff(propertyId: string): Promise<{ data: any[], error: string | null }>;
+    getProducts(propertyId: string, outletId?: string): Promise<{ data: any[], error: string | null }>;
+    getCategories(propertyId: string, outletId?: string): Promise<{ data: any[], error: string | null }>;
+    getActiveStaff(propertyId: string, outletId?: string): Promise<{ data: any[], error: string | null }>;
     getCurrentOperator(sessionId: string, operatorToken?: string | null): Promise<{ data: any, error: string | null }>;
     authenticateOperator(staffId: string, pin: string, propertyId: string, sessionId: string, outletId: string, deviceId: string): Promise<{ data: any, error: string | null }>;
     validateSupervisorPin(pin: string, propertyId?: string): Promise<{ data: any, error: string | null }>;

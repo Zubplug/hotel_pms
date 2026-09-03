@@ -60,7 +60,11 @@ export default function FrontdeskCashierPage() {
     setCurrent(nextSession);
     if (nextSession && provider.frontdesk.getSessionSummary) {
       const summaryData = await provider.frontdesk.getSessionSummary(nextSession.id);
-      setSummary(summaryData.data || null);
+      const fetchedSummary = summaryData.data || null;
+      setSummary(fetchedSummary);
+      if (fetchedSummary && fetchedSummary.cash.expected === 0) {
+        setDeclaredCash('0');
+      }
     } else {
       setSummary(null);
     }
@@ -212,7 +216,16 @@ export default function FrontdeskCashierPage() {
 
         <Card><CardHeader><CardTitle>Cash reconciliation</CardTitle></CardHeader><CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><SummaryRow label="Opening float" value={money(summary.cash.openingFloat)} /><SummaryRow label="Cash received" value={money(summary.payments.cash)} /><SummaryRow label="Cash in" value={money(summary.cash.cashIn)} /><SummaryRow label="Refunds / drops / paid out" value={money(summary.cash.refunds + summary.cash.cashDrops + summary.cash.paidOuts + summary.cash.transfersOut)} /><SummaryRow label="Expected cash" value={money(summary.cash.expected)} strong /><SummaryRow label="Declared cash" value={summary.cash.declared == null ? 'Not declared' : money(summary.cash.declared)} /><SummaryRow label="Variance" value={summary.cash.variance == null ? '—' : money(summary.cash.variance)} strong valueClass={varianceTone} /></CardContent></Card>
 
-        <Card><CardHeader className="flex flex-row items-center justify-between"><CardTitle>Close and submit shift</CardTitle><Badge variant={summary.exceptions.failedSync ? 'destructive' : 'secondary'}>{summary.exceptions.failedSync ? `${summary.exceptions.failedSync} failed sync` : 'No sync failures'}</Badge></CardHeader><CardContent className="space-y-4"><p className="text-sm text-muted-foreground">Count the physical till, enter the exact amount, then close the session. The system will lock Front Desk transactions and send the report for management review.</p>{summary.exceptions.failedSync > 0 && <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">Resolve failed synchronization events before submitting this shift.</p>}<div className="flex flex-col gap-3 sm:flex-row sm:items-end"><div><label className="text-sm font-medium">Physical cash counted</label><Input value={declaredCash} onChange={event => setDeclaredCash(event.target.value)} placeholder="0.00" type="number" /></div><Button disabled={busy || !declaredCash || current.status !== 'OPEN' || summary.exceptions.failedSync > 0} onClick={() => setShowCloseConfirm(true)}><LockKeyhole className="mr-2 h-4 w-4" />Close and submit shift</Button></div></CardContent></Card>
+        <Card><CardHeader className="flex flex-row items-center justify-between"><CardTitle>Close and submit shift</CardTitle><Badge variant={summary.exceptions.failedSync ? 'destructive' : 'secondary'}>{summary.exceptions.failedSync ? `${summary.exceptions.failedSync} failed sync` : 'No sync failures'}</Badge></CardHeader><CardContent className="space-y-4"><p className="text-sm text-muted-foreground">Count the physical till, enter the exact amount, then close the session. The system will lock Front Desk transactions and send the report for management review.</p>{summary.exceptions.failedSync > 0 && <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">Resolve failed synchronization events before submitting this shift.</p>}
+        {summary.cash.expected === 0 && (
+          <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-xl flex items-center gap-2">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+            <div className="text-sm">
+              <span className="font-semibold">Cashless Shift Detected:</span> No expected cash to drop.
+            </div>
+          </div>
+        )}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end"><div><label className="text-sm font-medium">Physical cash counted</label><Input value={declaredCash} onChange={event => setDeclaredCash(event.target.value)} placeholder="0.00" type="number" /></div><Button disabled={busy || !declaredCash || current.status !== 'OPEN' || summary.exceptions.failedSync > 0} onClick={() => setShowCloseConfirm(true)}><LockKeyhole className="mr-2 h-4 w-4" />{summary.cash.expected === 0 && declaredCash === '0' ? 'Submit Cashless Shift' : 'Close and submit shift'}</Button></div></CardContent></Card>
 
         <Card><CardHeader><CardTitle>Recent session activity</CardTitle></CardHeader><CardContent><div className="divide-y rounded-md border">{summary.rows.slice(0, 8).map((row, index) => <div key={`${row.date}-${index}`} className="flex items-center justify-between gap-4 px-4 py-3 text-sm"><div><p className="font-medium">{row.description || row.kind}</p><p className="text-xs text-muted-foreground">{dateTime(row.date)} · {row.method || '—'}</p></div><span className="font-semibold">{money(row.amount)}</span></div>)}{summary.rows.length === 0 && <p className="p-6 text-center text-sm text-muted-foreground">No session activity recorded yet.</p>}</div></CardContent></Card>
       </>}

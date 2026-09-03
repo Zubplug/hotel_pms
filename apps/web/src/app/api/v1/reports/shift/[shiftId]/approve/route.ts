@@ -49,6 +49,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ shi
       updated = await ShiftControlService.approveShiftWithVariance(await requireOrganizationContext(actorUserId), type, shiftId, reasonCode, reviewNotes);
     } else if (decision === 'REJECTED') {
       updated = await ShiftControlService.returnShift(await requireOrganizationContext(actorUserId), type, shiftId, reviewNotes);
+    } else if (decision === 'CASHLESS_ACKNOWLEDGED') {
+      updated = await ShiftControlService.acknowledgeCashlessShift(await requireOrganizationContext(actorUserId), type, shiftId);
     } else {
       return errorResponse('BAD_REQUEST', 'Invalid approval decision', 400);
     }

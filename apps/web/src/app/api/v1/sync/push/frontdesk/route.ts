@@ -738,9 +738,12 @@ export async function POST(req: NextRequest) {
               },
             });
 
+            const propertyBusinessDateStr = (property?.businessDate ?? new Date()).toISOString().split('T')[0];
+            const checkInStr = checkInDate.toISOString().split('T')[0];
             if (
               room &&
-              (payload.Status || payload.status || "CONFIRMED") === "CONFIRMED"
+              (payload.Status || payload.status || "CONFIRMED") === "CONFIRMED" &&
+              checkInStr === propertyBusinessDateStr
             ) {
               await tx.room.update({
                 where: { id: room.id },
@@ -1589,12 +1592,17 @@ export async function POST(req: NextRequest) {
               where: { reservationId: aggregateId, status: "NO_SHOW" },
               data: { status: "ACTIVE" },
             });
+            const propertyBusinessDateStr = (authoritativeBusinessDate || new Date()).toISOString().split('T')[0];
             for (const reservationRoom of reinstatedRooms) {
-              if (reservationRoom.roomId)
-                await tx.room.update({
-                  where: { id: reservationRoom.roomId },
-                  data: { status: "RESERVED" },
-                });
+              if (reservationRoom.roomId) {
+                const checkInStr = reservationRoom.checkIn.toISOString().split('T')[0];
+                if (checkInStr === propertyBusinessDateStr) {
+                  await tx.room.update({
+                    where: { id: reservationRoom.roomId },
+                    data: { status: "RESERVED" },
+                  });
+                }
+              }
             }
           } else if (eventType === "CANCEL") {
             // Idempotent — if already cancelled, treat as success

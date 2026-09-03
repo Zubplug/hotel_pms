@@ -525,7 +525,9 @@ public partial class MainPage : ContentPage
                     responseData = await pmsInterop.GenerateReceiptAsync(parameters?["folioId"]?.ToString() ?? "");
                     break;
                 case "pos.getProducts":
-                    responseData = await pmsInterop.GetPosProductsAsync(parameters?["propertyId"]?.ToString() ?? "");
+                    responseData = await pmsInterop.GetPosProductsAsync(
+                        parameters?["propertyId"]?.ToString() ?? "",
+                        parameters?["outletId"]?.ToString() ?? "");
                     break;
                 case "pos.createOrder":
                     responseData = await pmsInterop.CreatePosOrderAsync(parameters?["data"]?.ToString() ?? "");
@@ -734,10 +736,15 @@ public partial class MainPage : ContentPage
                         parameters?["operatorToken"]?.ToString() ?? "");
                     break;
                 case "pos.getActiveStaff":
-                    responseData = await pmsInterop.GetActiveStaffAsync(parameters?["propertyId"]?.ToString() ?? "", "WAITER,WAITRESS,CASHIER");
+                    responseData = await pmsInterop.GetActiveStaffAsync(
+                        parameters?["propertyId"]?.ToString() ?? "",
+                        "WAITER,WAITRESS,CASHIER",
+                        parameters?["outletId"]?.ToString());
                     break;
                 case "pos.getCategories":
-                    responseData = await pmsInterop.GetCategoriesAsync(parameters?["propertyId"]?.ToString() ?? "");
+                    responseData = await pmsInterop.GetCategoriesAsync(
+                        parameters?["propertyId"]?.ToString() ?? "",
+                        parameters?["outletId"]?.ToString() ?? "");
                     break;
                 case "pos.getFloorPlans":
                     responseData = await pmsInterop.GetFloorPlansAsync(parameters?["outletId"]?.ToString() ?? "");
