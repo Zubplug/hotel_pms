@@ -307,14 +307,20 @@ export async function POST(req: NextRequest) {
               // is idempotent and safe to force-apply when:
               //   (a) the reservation is still CHECKED_IN (not already checked out), AND
               //   (b) the folio balance is zero (no outstanding charges or refunds).
-              // In this case we accept the event at the current server version
-              // rather than raising a conflict that a manager must manually resolve.
+              // If the reservation is already CHECKED_OUT (e.g. processed server-side
+              // while the desktop was offline), we also succeed silently — pure idempotency.
               if (updatedCount === 0 && eventType === "CHECK_OUT") {
                 const current = await tx.reservation.findUnique({
                   where: { id: aggregateId },
                   select: { status: true },
                 });
-                if (current?.status === "CHECKED_IN") {
+                if (current?.status === "CHECKED_OUT") {
+                  // Already checked out — idempotent, succeed silently
+                  updatedCount = 1;
+                  console.log(
+                    `[sync/push] CHECK_OUT idempotent accept for already-CHECKED_OUT reservation ${aggregateId}`
+                  );
+                } else if (current?.status === "CHECKED_IN") {
                   const folioBalances = await tx.folio.findMany({
                     where: { reservationId: aggregateId, propertyId },
                     select: { balance: true },
