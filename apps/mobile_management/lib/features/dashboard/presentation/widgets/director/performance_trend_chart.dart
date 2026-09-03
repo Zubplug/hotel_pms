@@ -76,7 +76,7 @@ class PerformanceTrendChart extends StatelessWidget {
                     dotData: const FlDotData(show: false),
                     belowBarData: BarAreaData(
                       show: true,
-                      color: const Color(0xFFD4AF37).withOpacity(0.1),
+                      color: const Color(0xFFD4AF37).withValues(alpha: 0.1),
                     ),
                   ),
                 ],

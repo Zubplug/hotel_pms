@@ -82,16 +82,6 @@ class ExecutiveKpiRow extends StatelessWidget {
     );
   }
 
-  Widget _buildSubRevenue(String label, double amount) {
-    return Row(
-      children: [
-        Text(label, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
-        const SizedBox(width: 8),
-        Text(_formatCurrency(amount), style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
-      ],
-    );
-  }
-
   Widget _buildKpiCard(String title, String value, double trend, bool isCurrency, {bool isUnaudited = false}) {
     return Container(
       padding: const EdgeInsets.all(12),

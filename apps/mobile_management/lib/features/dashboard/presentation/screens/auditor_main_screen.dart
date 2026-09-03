@@ -1,21 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'dashboard_screen.dart';
-import 'auditor_main_screen.dart';
-import 'package:mobile_management/features/rooms/presentation/screens/rooms_screen.dart';
-import 'package:mobile_management/features/finance/presentation/screens/finance_screen.dart';
+import 'auditor_dashboard_screen.dart';
 import 'package:mobile_management/features/profile/presentation/screens/profile_screen.dart';
-import 'package:mobile_management/features/profile/presentation/providers/profile_provider.dart';
-import 'package:mobile_management/features/hub/presentation/screens/hub_screen.dart';
 
-class MainScreen extends ConsumerStatefulWidget {
-  const MainScreen({super.key});
+class AuditorMainScreen extends ConsumerStatefulWidget {
+  const AuditorMainScreen({super.key});
 
   @override
-  ConsumerState<MainScreen> createState() => _MainScreenState();
+  ConsumerState<AuditorMainScreen> createState() => _AuditorMainScreenState();
 }
 
-class _MainScreenState extends ConsumerState<MainScreen> {
+class _AuditorMainScreenState extends ConsumerState<AuditorMainScreen> {
   int _currentIndex = 0;
 
   @override
@@ -24,18 +19,8 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     const goldAccent = Color(0xFFD4AF37);
     const textSecondary = Color(0xFF94A3B8);
 
-    final profileState = ref.watch(profileProvider);
-    final String userRole = profileState.value?.authorization.role.toUpperCase() ?? '';
-
-    if (userRole == 'NIGHT_AUDITOR') {
-      return const AuditorMainScreen();
-    }
-
     final List<Widget> screens = [
-      const DashboardScreen(),
-      const RoomsScreen(),
-      const FinanceScreen(),
-      const HubScreen(),
+      const AuditorDashboardScreen(),
       const ProfileScreen(),
     ];
 
@@ -67,22 +52,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
             BottomNavigationBarItem(
               icon: Padding(padding: EdgeInsets.only(bottom: 4), child: Icon(Icons.home_outlined)),
               activeIcon: Padding(padding: EdgeInsets.only(bottom: 4), child: Icon(Icons.home_rounded)),
-              label: 'Home',
-            ),
-            BottomNavigationBarItem(
-              icon: Padding(padding: EdgeInsets.only(bottom: 4), child: Icon(Icons.king_bed_outlined)),
-              activeIcon: Padding(padding: EdgeInsets.only(bottom: 4), child: Icon(Icons.king_bed_rounded)),
-              label: 'Rooms',
-            ),
-            BottomNavigationBarItem(
-              icon: Padding(padding: EdgeInsets.only(bottom: 4), child: Icon(Icons.account_balance_wallet_outlined)),
-              activeIcon: Padding(padding: EdgeInsets.only(bottom: 4), child: Icon(Icons.account_balance_wallet_rounded)),
-              label: 'Finance',
-            ),
-            BottomNavigationBarItem(
-              icon: Padding(padding: EdgeInsets.only(bottom: 4), child: Icon(Icons.apps_outlined)),
-              activeIcon: Padding(padding: EdgeInsets.only(bottom: 4), child: Icon(Icons.apps_rounded)),
-              label: 'Hub',
+              label: 'Dashboard',
             ),
             BottomNavigationBarItem(
               icon: Padding(padding: EdgeInsets.only(bottom: 4), child: Icon(Icons.person_outline)),

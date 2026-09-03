@@ -18,7 +18,16 @@ class LiveAuditorDashboardRepository {
       });
 
       if (response.statusCode == 200) {
-        final rawData = response.data['data'] ?? response.data;
+        dynamic responseData = response.data;
+        if (responseData is String) {
+          try {
+            responseData = jsonDecode(responseData);
+          } catch (_) {}
+        }
+        
+        final Map<String, dynamic> rawData = (responseData is Map && responseData.containsKey('data')) 
+            ? responseData['data'] 
+            : (responseData is Map ? responseData : {});
         
         // Map the backend response to the AuditorDashboardData structure
         final mappedData = _mapBackendToAuditorData(rawData);
@@ -41,7 +50,7 @@ class LiveAuditorDashboardRepository {
   Map<String, dynamic> _mapBackendToAuditorData(Map<String, dynamic> data) {
     final auditState = data['auditState'] ?? 'NOT_STARTED';
     final businessDate = data['businessDate'] ?? '';
-    final propertyName = data['property']?['name'] ?? 'LodgeCore Property';
+    final propertyName = data['property']?['name'] ?? '';
     final summary = data['summary'] ?? {};
     final operational = data['operational'] ?? {};
     final system = data['system'] ?? {};
@@ -59,7 +68,7 @@ class LiveAuditorDashboardRepository {
         'currentStep': data['activeAudit']?['status'] ?? '',
         'progressPercent': _calculateProgress(auditState),
         'lastSuccessfulAudit': data['property']?['lastAuditAt'],
-        'blockingErrors': [], // Extract from blockers if available
+        'blockingErrors': summary['blockers'] ?? [],
       },
       'auditExceptions': {
         'criticalCount': summary['blockers'] ?? 0,
@@ -67,7 +76,7 @@ class LiveAuditorDashboardRepository {
       },
       'criticalDiscrepancies': {
         'roomStatusDiscrepancies': (operational['roomReconciliation'] as List?)?.length ?? 0,
-        'occupancyDiscrepancies': 0, // Mock or extract if available
+        'occupancyDiscrepancies': data['analytics']?['occupancyDiscrepancies'] ?? 0,
         'unpostedCharges': data['analytics']?['latePostings'] ?? 0,
         'openFolios': (financial['highBalances'] as List?)?.length ?? 0, // Approximation
         'reservationsRequiringAttention': (operational['arrivals'] as List?)?.length ?? 0 + ((operational['departures'] as List?)?.length ?? 0),
@@ -75,7 +84,7 @@ class LiveAuditorDashboardRepository {
       'cashReconciliation': {
         'openShifts': (system['openFrontdeskSessions'] as List?)?.length ?? 0,
         'pendingHandovers': (cash['cashHandovers'] as List?)?.length ?? 0,
-        'unreconciledCash': data['analytics']?['cashVariance'] ?? 0.0,
+        'unreconciledCash': (data['analytics']?['cashVariance'] ?? 0).toDouble(),
         'posSessionsRequiringClosure': (system['openPosSessions'] as List?)?.length ?? 0,
         'outstandingDeposits': (cash['bankDeposits'] as List?)?.length ?? 0,
       },

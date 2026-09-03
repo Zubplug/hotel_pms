@@ -26,8 +26,6 @@ class FCMService {
     // Get FCM Token
     final token = await _messaging.getToken();
     debugPrint('FCM Token: $token');
-    // TODO: Send token to LodgeCore API to register device for this manager
-
     // Handle foreground messages
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       debugPrint('Received foreground message: ${message.notification?.title}');

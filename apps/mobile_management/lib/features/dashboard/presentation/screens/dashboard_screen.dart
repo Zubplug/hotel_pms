@@ -4,12 +4,12 @@ import '../providers/dashboard_provider.dart';
 import 'package:mobile_management/features/notifications/presentation/providers/notifications_provider.dart';
 import 'package:mobile_management/features/notifications/presentation/screens/notifications_screen.dart';
 import 'package:mobile_management/features/profile/presentation/screens/profile_screen.dart';
-import '../widgets/director/ExecutiveKpiRow.dart';
-import '../widgets/director/RequiresAttentionCard.dart';
-import '../widgets/director/TodaySnapshotWidget.dart';
-import '../widgets/director/PerformanceTrendChart.dart';
-import '../widgets/director/CompactRoomStatusWidget.dart';
-import '../widgets/director/SyncSummaryWidget.dart';
+import '../widgets/director/executive_kpi_row.dart';
+import '../widgets/director/requires_attention_card.dart';
+import '../widgets/director/today_snapshot_widget.dart';
+import '../widgets/director/performance_trend_chart.dart';
+import '../widgets/director/compact_room_status_widget.dart';
+import '../widgets/director/sync_summary_widget.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});

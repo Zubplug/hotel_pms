@@ -3,6 +3,7 @@ import { requireOrganizationContext } from '@/lib/organization-access';
 import { NextRequest } from 'next/server';
 import { auth } from '@/lib/auth';
 import { successResponse, errorResponse } from '@/lib/api-response';
+import { resolveUser } from '@/lib/resolve-user';
 import { assertPropertyAccess } from '@/lib/property-access';
 import prisma from '@hotel-pms/db';
 import { getPropertyBusinessDate } from '@/lib/date-utils';
@@ -10,10 +11,17 @@ import { getOperationalReview, getSystemIntegrity, getFinancialAudit, getCashRec
 
 export async function GET(req: NextRequest) {
   try {
+    let user: any = null;
     const session = await auth();
-    if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    if (session?.user) {
+      user = session.user;
+    } else {
+      user = await resolveUser(req);
+    }
+    
+    if (!user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
 
-    const userRole = (session.user as any).role;
+    const userRole = user.role;
     const ALLOWED_ROLES = ['NIGHT_AUDITOR', 'MANAGER', 'HOTEL_MANAGER', 'ADMIN', 'SUPER_ADMIN', 'CEO', 'FINANCE_MANAGER', 'GENERAL_CASHIER', 'FRONT_DESK_SUPERVISOR'];
     if (!ALLOWED_ROLES.includes(userRole)) {
       return errorResponse('FORBIDDEN', 'Insufficient permissions to view night audit status', 403);

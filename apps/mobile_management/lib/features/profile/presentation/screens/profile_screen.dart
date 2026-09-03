@@ -125,7 +125,7 @@ class ProfileScreen extends ConsumerWidget {
                     trailingWidget: Switch(
                       value: profile.preferences.dailyBrief,
                       onChanged: (val) {},
-                      activeColor: _goldLight,
+                      activeThumbColor: _goldLight,
                       activeTrackColor: _goldLight.withValues(alpha: 0.3),
                       inactiveThumbColor: _textMuted,
                       inactiveTrackColor: _surfaceNavy,
@@ -139,7 +139,7 @@ class ProfileScreen extends ConsumerWidget {
                     trailingWidget: Switch(
                       value: true,
                       onChanged: (val) {},
-                      activeColor: _goldLight,
+                      activeThumbColor: _goldLight,
                       activeTrackColor: _goldLight.withValues(alpha: 0.3),
                       inactiveThumbColor: _textMuted,
                       inactiveTrackColor: _surfaceNavy,

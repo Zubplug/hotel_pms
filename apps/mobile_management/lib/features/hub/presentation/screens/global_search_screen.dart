@@ -3,10 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import 'dart:async';
 import '../../data/search_model.dart';
-import '../../providers/hub_provider.dart';
 
 const _bgDeep = Color(0xFF070D1A);
-const _cardBg = Color(0xFF111D33);
 const _surfaceNavy = Color(0xFF1E293B);
 const _goldLight = Color(0xFFD4A853);
 const _textPrimary = Color(0xFFEEF2FF);

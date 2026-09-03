@@ -17,7 +17,7 @@ class RequiresAttentionCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF1E293B),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.redAccent.withOpacity(0.3)),
+        border: Border.all(color: Colors.redAccent.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -25,7 +25,7 @@ class RequiresAttentionCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: Colors.redAccent.withOpacity(0.1),
+              color: Colors.redAccent.withValues(alpha: 0.1),
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(12),
                 topRight: Radius.circular(12),

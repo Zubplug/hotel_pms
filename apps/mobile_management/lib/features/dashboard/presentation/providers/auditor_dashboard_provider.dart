@@ -16,7 +16,7 @@ final liveAuditorDashboardRepositoryProvider = Provider<LiveAuditorDashboardRepo
 
 final auditorDashboardDataProvider = FutureProvider<AuditorDashboardData>((ref) async {
   final repository = ref.watch(liveAuditorDashboardRepositoryProvider);
-  final propertyId = ref.watch(selectedHubPropertyProvider);
+  final propertyId = ref.watch(effectivePropertyIdProvider);
   
   // If propertyId is AUTO_SELECT_FIRST, you might need to handle it or assume it's resolved by the API or other means,
   // but we'll pass it as is.
