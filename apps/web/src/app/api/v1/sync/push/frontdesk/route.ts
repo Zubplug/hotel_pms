@@ -1763,53 +1763,11 @@ export async function POST(req: NextRequest) {
               },
             });
 
-            if (upgradeAmount > 0 && res.folios[0]) {
-              const upgradeKey = `ROOM_UPGRADE:${aggregateId}:${newRoomId}:${new Date(activeRoom?.checkOut || res.checkOut).toISOString().slice(0, 10)}`;
-              const existingUpgrade = await tx.folioItem.findFirst({
-                where: {
-                  folioId: res.folios[0].id,
-                  posTransactionId: upgradeKey,
-                },
-              });
-              if (!existingUpgrade) {
-                await tx.folioItem.create({
-                  data: {
-                    folioId: res.folios[0].id,
-                    businessDate: authoritativeBusinessDate,
-                    type: "CHARGE",
-                    source: "ROOM_UPGRADE",
-                    description: `Room upgrade - ${nights} night${nights === 1 ? "" : "s"}`,
-                    quantity: 1,
-                    unitAmount: upgradeAmount,
-                    amount: upgradeAmount,
-                    currency: res.currency,
-                    baseAmount: upgradeAmount,
-                    postedBy: actorId,
-                    posTransactionId: upgradeKey,
-                  },
-                });
-                await tx.folio.update({
-                  where: { id: res.folios[0].id },
-                  data: {
-                    totalCharges: { increment: upgradeAmount },
-                    balance: { increment: upgradeAmount },
-                  },
-                });
-                await applyAvailableFolioCredit(tx, {
-                  folioId: res.folios[0].id,
-                  propertyId,
-                  guestId: res.primaryGuestId,
-                  reservationId: res.id,
-                  amount: upgradeAmount,
-                  currency: res.currency || "NGN",
-                  source: "ROOM_UPGRADE",
-                  description: `Applied guest credit to room upgrade - ${nights} night${nights === 1 ? "" : "s"}`,
-                  appliedBy: actorId,
-                  operationKey: upgradeKey,
-                  businessDate: authoritativeBusinessDate,
-                });
-              }
-            }
+            // NOTE: The upgrade rate difference (newRate - oldRate) is NOT charged
+            // immediately. The Night Audit posts room charges based on the current
+            // reservationRoom.rateAmount, so the new rate will be picked up
+            // automatically on the next audit run. Charging here would cause
+            // double-billing when the Night Audit also runs.
 
             const downgradeCredit = Math.max(0, oldRate - newRate) * nights;
             if (downgradeCredit > 0 && res.folios[0]) {
