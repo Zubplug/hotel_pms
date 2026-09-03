@@ -355,7 +355,7 @@ export async function getRoomIntelligenceView(
         totalCharges,
         paid: totalPaid,
         credit: availableCreditSum,
-        balance: netBalance
+        balance: Math.abs(netBalance)
       };
     }
 
