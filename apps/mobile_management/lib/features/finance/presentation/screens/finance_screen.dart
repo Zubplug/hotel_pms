@@ -304,6 +304,10 @@ class _RevenueStatusSection extends StatelessWidget {
             badge: '✓ AUDITED',
             badgeColor: _green,
             isAudited: true,
+            breakdown: [
+              ('Rooms', data.audited.roomRevenue),
+              ('POS', data.audited.fbRevenue),
+            ],
             fmtAmount: fmtAmount,
           ),
         ),
