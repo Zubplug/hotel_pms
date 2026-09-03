@@ -178,7 +178,7 @@ export async function GET(req: NextRequest) {
       include: {
         primaryGuest: true,
         reservationGuests: { include: { guest: true } },
-        reservationRooms: { include: { room: true } },
+        reservationRooms: { where: { status: 'ACTIVE' }, include: { room: true } },
         folios: { include: { items: true, payments: true, credits: true } },
         lockCredentials: true,
         lockOperations: { orderBy: { requestedAt: 'desc' }, take: 20 }
