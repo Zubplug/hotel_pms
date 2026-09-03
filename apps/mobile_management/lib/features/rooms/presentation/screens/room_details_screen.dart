@@ -380,7 +380,7 @@ class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen> {
             _InfoItem(Icons.logout, 'Check-Out', fmt.format(guest.checkOut)),
             _InfoItem(Icons.nights_stay, 'Nights', '$nights'),
             if (guest.folioBalance != null)
-              _InfoItem(Icons.receipt_long, 'Balance', '\$${guest.folioBalance!.toStringAsFixed(2)}'),
+              _InfoItem(Icons.receipt_long, 'Balance', '₦${guest.folioBalance!.toStringAsFixed(2)}'),
           ]),
         ],
       ),
