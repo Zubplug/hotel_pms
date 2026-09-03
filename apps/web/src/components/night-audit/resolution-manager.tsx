@@ -522,10 +522,10 @@ function PosSessionResolution({ item, onSuccess, onClose }: { item: any; onSucce
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/v1/pos/sessions/${item.id}/close`, {
+      const res = await fetch(`/api/v1/pos/sessions/${item.id}/settle`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Idempotency-Key': crypto.randomUUID() },
-        body: JSON.stringify({ declaredAmount: Number(declared), reason })
+        body: JSON.stringify({ actualCash: Number(declared), authorizerId: null, reason })
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -599,7 +599,7 @@ function FrontdeskShiftResolution({ item, onSuccess, onClose }: { item: any; onS
       const res = await fetch(`/api/v1/frontdesk/sessions/${item.id}/close`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Idempotency-Key': crypto.randomUUID() },
-        body: JSON.stringify({ declaredAmount: Number(declared), reason })
+        body: JSON.stringify({ declaredCash: Number(declared), reason })
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
