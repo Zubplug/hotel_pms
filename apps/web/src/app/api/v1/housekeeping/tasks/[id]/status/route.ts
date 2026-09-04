@@ -74,8 +74,8 @@ export async function PATCH(
       let roomHskUpdate = targetStatus;
 
       // Sync Room status based on Task status
-      if (targetStatus === 'CLEANING') roomStatusUpdate = 'CLEANING';
-      if (targetStatus === 'INSPECTED') roomStatusUpdate = 'AVAILABLE';
+      if (targetStatus === 'CLEANING' && task.room.status !== 'OCCUPIED') roomStatusUpdate = 'CLEANING';
+      if (targetStatus === 'INSPECTED' && task.room.status !== 'OCCUPIED') roomStatusUpdate = 'AVAILABLE';
       if (targetStatus === 'MAINTENANCE_REQUIRED') roomStatusUpdate = 'MAINTENANCE';
 
       const updateData: any = {
