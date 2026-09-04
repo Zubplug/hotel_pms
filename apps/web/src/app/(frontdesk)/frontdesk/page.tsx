@@ -12,6 +12,7 @@ import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { FrontDeskCheckInDialog } from '@/components/frontdesk/FrontDeskCheckInDialog';
 import { FrontDeskQuickCheckoutDialog } from '@/components/frontdesk/FrontDeskQuickCheckoutDialog';
 import { FrontDeskReadCardDialog } from '@/components/frontdesk/FrontDeskReadCardDialog';
+import { FrontDeskReencodeCardDialog } from '@/components/frontdesk/FrontDeskReencodeCardDialog';
 import { LoadingState } from '@/components/ui/EmptyState';
 import { ClientOnlyDate } from '@/components/ClientOnlyDate';
 import { formatCurrency } from '@/lib/utils';
@@ -34,6 +35,7 @@ import {
   ArrowRight,
   Info,
   Shirt,
+  KeySquare,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -46,6 +48,7 @@ export default function ReceptionistDashboardPage() {
   const [checkInReservationId, setCheckInReservationId] = useState<string | null>(null);
   const [checkOutReservation, setCheckOutReservation] = useState<any | null>(null);
   const [quickCheckoutOpen, setQuickCheckoutOpen] = useState(false);
+  const [reencodeCardOpen, setReencodeCardOpen] = useState(false);
   const [readCardOpen, setReadCardOpen] = useState(false);
   const [showStartShift, setShowStartShift] = useState(false);
   const [cashAccounts, setCashAccounts] = useState<any[]>([]);
@@ -455,8 +458,18 @@ export default function ReceptionistDashboardPage() {
         />
       )}
 
-      {/* Floating Action Button: Quick Checkout */}
-      <div className="fixed bottom-8 right-8 z-50">
+      {/* Floating Action Buttons */}
+      <div className="fixed bottom-8 right-8 z-50 flex flex-col gap-4 items-end">
+        <Button 
+          onClick={() => setReencodeCardOpen(true)}
+          className="h-16 px-6 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-2xl hover:shadow-[0_10px_40px_-10px_rgba(0,0,0,0.5)] transition-all hover:-translate-y-1 flex items-center gap-3 border border-blue-500/50"
+        >
+          <div className="bg-white/10 p-2 rounded-full">
+            <KeySquare className="w-5 h-5 text-white" />
+          </div>
+          <span className="font-bold text-lg">Re-Encode Card</span>
+        </Button>
+
         <Button 
           onClick={() => setQuickCheckoutOpen(true)}
           className="h-16 px-6 rounded-full bg-slate-900 hover:bg-slate-800 text-white shadow-2xl hover:shadow-[0_10px_40px_-10px_rgba(0,0,0,0.5)] transition-all hover:-translate-y-1 flex items-center gap-3 border border-slate-700/50"
@@ -471,6 +484,12 @@ export default function ReceptionistDashboardPage() {
       <FrontDeskQuickCheckoutDialog 
         open={quickCheckoutOpen}
         onOpenChange={setQuickCheckoutOpen}
+        propertyId={propertyId}
+      />
+
+      <FrontDeskReencodeCardDialog 
+        open={reencodeCardOpen}
+        onOpenChange={setReencodeCardOpen}
         propertyId={propertyId}
       />
 
