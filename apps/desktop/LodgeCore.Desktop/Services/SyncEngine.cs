@@ -2378,7 +2378,14 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
             }
             catch (Exception ex)
             {
-                throw new Exception($"Failed to apply sync page {pageCount}: {ex.Message}", ex);
+                var fullError = ex.Message;
+                var inner = ex.InnerException;
+                while (inner != null)
+                {
+                    fullError += " -> " + inner.Message;
+                    inner = inner.InnerException;
+                }
+                throw new Exception($"Failed to apply sync page {pageCount}: {fullError}");
             }
         }
         
