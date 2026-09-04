@@ -50,7 +50,7 @@ public static class MauiProgram
             System.Diagnostics.Debug.WriteLine($"DB Backup failed: {ex.Message}");
         }
 
-        builder.Services.AddDbContext<LocalDbContext>(options => options.UseSqlite($"Data Source={dbPath}"));
+        builder.Services.AddDbContext<LocalDbContext>(options => options.UseSqlite($"Data Source={dbPath};Foreign Keys=False"));
         
         // Register Local Services & Sync Engine
         builder.Services.AddSingleton<LodgeCore.Desktop.Services.AuthManager>();
