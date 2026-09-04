@@ -176,15 +176,15 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
   });
   const corporateAccounts = (corporateAccountsRes as any)?.data || [];
 
-  // Fetch management staff from LOCAL DB via desktop provider (works 100% offline)
-  // LocalStaff is synced by SyncEngine so manager data is always available offline
+  // Fetch ALL active staff from local DB — front desk can select themselves
+  // or any management staff as the discount acknowledgement person
   const { data: managersRes } = useQuery({
     queryKey: ['managers-local', propertyId],
     queryFn: async () => {
-      return provider.auth.getActiveStaff('MANAGER,ADMIN,HOTEL_MANAGER,NIGHT_AUDITOR,SUPER_ADMIN');
+      return provider.auth.getActiveStaff(); // no role filter — all active staff
     },
     enabled: !!propertyId,
-    staleTime: 300_000, // 5 min — stable data, don't re-fetch constantly
+    staleTime: 300_000,
   });
   const managers = (managersRes as any)?.data || [];
 
@@ -685,11 +685,11 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
                         name="discountApprovingManagerId"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-slate-400 ml-1">Acknowledged By (Manager)</FormLabel>
+                            <FormLabel className="text-slate-400 ml-1">Acknowledged By</FormLabel>
                             <Select onValueChange={field.onChange} value={field.value}>
                               <FormControl>
                                 <SelectTrigger className="h-12 rounded-xl bg-slate-900 border-slate-700 text-white">
-                                  <SelectValue placeholder="Select approving manager..." />
+                                  <SelectValue placeholder="Select acknowledging staff..." />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent className="bg-slate-800 border-slate-700 text-white max-h-60">
