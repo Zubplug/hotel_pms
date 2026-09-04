@@ -96,6 +96,7 @@ public static class MauiProgram
             db.ApplyNoShowSchemaAsync().GetAwaiter().GetResult();
             db.ApplyFinancialControlSchemaAsync().GetAwaiter().GetResult();
             db.ApplyManagerOverrideSchemaAsync().GetAwaiter().GetResult();
+            db.ApplyDiscountSchemaAsync().GetAwaiter().GetResult();
         }
 
         return app;

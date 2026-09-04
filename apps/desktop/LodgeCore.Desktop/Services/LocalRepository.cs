@@ -161,7 +161,14 @@ public class LocalRepository
                 Status = reservation.Status,
                 Source = reservation.Source,
                 DepositRequired = reservation.DepositRequired,
-                DepositPaid = reservation.DepositPaid
+                DepositPaid = reservation.DepositPaid,
+                // Discount fields — only included when a discount is being applied
+                DiscountType = reservation.Rooms.FirstOrDefault()?.DiscountType,
+                DiscountValue = reservation.Rooms.FirstOrDefault()?.DiscountType == "FIXED_AMOUNT"
+                    ? reservation.Rooms.FirstOrDefault()?.DiscountAmount
+                    : reservation.Rooms.FirstOrDefault()?.DiscountPercent,
+                DiscountReason = reservation.Rooms.FirstOrDefault()?.DiscountReason,
+                DiscountApprovingManagerId = reservation.Rooms.FirstOrDefault()?.DiscountApprovingManagerId,
             })
         };
         

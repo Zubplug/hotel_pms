@@ -777,8 +777,43 @@ export async function POST(req: NextRequest) {
                 rateAmount: baseRate,
                 currency,
                 status: "ACTIVE",
+                // Discount fields from front desk
+                discountType: payload.discountType || payload.DiscountType || null,
+                discountAmount: (payload.discountType === 'FIXED_AMOUNT' || payload.DiscountType === 'FIXED_AMOUNT')
+                  ? Number(payload.discountValue || payload.DiscountValue || 0) : null,
+                discountPercent: (payload.discountType === 'PERCENTAGE' || payload.DiscountType === 'PERCENTAGE')
+                  ? Number(payload.discountValue || payload.DiscountValue || 0) : null,
+                discountReason: payload.discountReason || payload.DiscountReason || null,
               },
             });
+
+            // Create a PENDING ApprovalRequest if a discount was applied
+            const hasDiscount = !!(payload.discountType || payload.DiscountType);
+            if (hasDiscount) {
+              const managerId = payload.discountApprovingManagerId || payload.DiscountApprovingManagerId || null;
+              const discountApproval = await tx.approvalRequest.create({
+                data: {
+                  propertyId,
+                  type: 'DISCOUNT',
+                  status: 'PENDING',
+                  requestedBy: actorId!,
+                  reason: payload.discountReason || payload.DiscountReason || 'Front-desk discount',
+                  details: {
+                    reservationId: aggregateId,
+                    discountType: payload.discountType || payload.DiscountType,
+                    discountValue: payload.discountValue || payload.DiscountValue,
+                    acknowledgedByManagerId: managerId,
+                    requestedByStaffId: actorId,
+                  },
+                  idempotencyKey: `DISCOUNT:${aggregateId}`,
+                },
+              });
+              // Link the approval back to the reservationRoom
+              await tx.reservationRoom.updateMany({
+                where: { reservationId: aggregateId },
+                data: { discountApprovalId: discountApproval.id },
+              });
+            }
 
             const propertyBusinessDateStr = (property?.businessDate ?? new Date()).toISOString().split('T')[0];
             const checkInStr = checkInDate.toISOString().split('T')[0];

@@ -197,7 +197,24 @@ export async function getFinancialAudit(ctx: TenantContext, propertyId: string) 
   
   const rateVariances = roomCharges.filter(charge => Number(charge.unitAmount) !== Number(charge.baseAmount));
 
-  return { openFolios, highBalances, rateVariances };
+  // Fetch pending discount approvals for checked-in reservations
+  // so the Night Auditor can review and approve them before running the audit
+  const pendingDiscounts = await prisma.approvalRequest.findMany({
+    where: {
+      propertyId,
+      type: 'DISCOUNT',
+      status: 'PENDING',
+    },
+    select: {
+      id: true,
+      reason: true,
+      createdAt: true,
+      details: true,
+      requestedBy: true,
+    }
+  });
+
+  return { openFolios, highBalances, rateVariances, pendingDiscounts };
 }
 
 export async function getCashReconciliation(ctx: TenantContext, propertyId: string) {

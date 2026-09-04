@@ -219,6 +219,19 @@ public class LocalDbContext : DbContext
         }
     }
 
+    public async Task ApplyDiscountSchemaAsync()
+    {
+        var columns = new[]
+        {
+            "ALTER TABLE ReservationRooms ADD COLUMN DiscountApprovingManagerId TEXT NULL",
+        };
+        foreach (var sql in columns)
+        {
+            try { await Database.ExecuteSqlRawAsync(sql); }
+            catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
+        }
+    }
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
         if (!optionsBuilder.IsConfigured)

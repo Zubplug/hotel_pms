@@ -21,6 +21,7 @@ public class LocalReservationRoom
     public decimal? DiscountPercent { get; set; }
     public string? DiscountReason { get; set; }
     public string? DiscountApprovalId { get; set; }
+    public string? DiscountApprovingManagerId { get; set; }
 
     public string Status { get; set; } = "PENDING";
 }

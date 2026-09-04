@@ -237,18 +237,33 @@ export async function executeNightAudit(
               const activeRoom = reservation.reservationRooms[0];
               const originalRate = activeRoom ? Number(activeRoom.rateAmount || 0) : Number(reservation.ratePlan?.baseRate || 0);
               
-              // Calculate discount if applicable
+              // Calculate discount only if Night Auditor has APPROVED it
               let discountDeduction = 0;
-              if (activeRoom && activeRoom.discountType) {
-                if (activeRoom.discountType === 'FIXED_AMOUNT') {
-                  discountDeduction = Number(activeRoom.discountAmount || 0);
-                } else if (activeRoom.discountType === 'PERCENTAGE') {
-                  discountDeduction = originalRate * (Number(activeRoom.discountPercent || 0) / 100);
+              let discountApprovalId = activeRoom?.discountApprovalId || null;
+              let discountNote = '';
+
+              if (activeRoom?.discountType && discountApprovalId) {
+                // Check approval status
+                const approval = await tx.approvalRequest.findUnique({
+                  where: { id: discountApprovalId },
+                  select: { status: true },
+                });
+
+                if (approval?.status === 'APPROVED') {
+                  if (activeRoom.discountType === 'FIXED_AMOUNT') {
+                    discountDeduction = Number(activeRoom.discountAmount || 0);
+                  } else if (activeRoom.discountType === 'PERCENTAGE') {
+                    discountDeduction = originalRate * (Number(activeRoom.discountPercent || 0) / 100);
+                  }
+                } else {
+                  // Discount not approved — charge full rate and note it
+                  const statusLabel = approval?.status === 'PENDING' ? 'pending auditor approval' : 'rejected';
+                  discountNote = ` (discount ${statusLabel} — full rate applied)`;
+                  discountApprovalId = null; // don't link unapproved discount to folio
                 }
               }
               
               const effectiveRate = Math.max(0, originalRate - discountDeduction);
-              const discountApprovalId = activeRoom?.discountApprovalId || null;
 
               await tx.folioItem.create({
                 data: {
@@ -257,12 +272,12 @@ export async function executeNightAudit(
                   type: 'CHARGE',
                   source: 'ROOM_CHARGE',
                   description: discountDeduction > 0 
-                    ? `Room Charge for ${businessDate.toISOString().split('T')[0]} (incl. discount)` 
-                    : `Room Charge for ${businessDate.toISOString().split('T')[0]}`,
+                    ? `Room Charge for ${businessDate.toISOString().split('T')[0]} (discount approved)` 
+                    : `Room Charge for ${businessDate.toISOString().split('T')[0]}${discountNote}`,
                   quantity: 1,
                   unitAmount: effectiveRate,
                   amount: effectiveRate,
-                  baseAmount: effectiveRate, // Base amount tracks the effective amount actually posted
+                  baseAmount: effectiveRate,
                   currency: property.supportedCurrencies[0] || 'NGN',
                   postedBy: actorId!,
                   nightAuditRunId: auditRun.id,

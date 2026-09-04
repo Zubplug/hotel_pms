@@ -14,8 +14,9 @@ import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { DatePicker } from '@/components/ui/date-picker';
-import { Loader2, Plus, ArrowRight, UserPlus, Calendar, Search, X, CheckCircle2, Phone, Mail } from 'lucide-react';
+import { Loader2, Plus, ArrowRight, UserPlus, Calendar, Search, X, CheckCircle2, Phone, Mail, Tag } from 'lucide-react';
 import { useProperty } from '@/components/PropertyProvider';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
@@ -35,6 +36,11 @@ const formSchema = z.object({
   checkOut: z.date({ required_error: 'Check-out date is required' }),
   adults: z.coerce.number().min(1, 'At least 1 adult is required'),
   children: z.coerce.number().min(0, 'Cannot be negative'),
+  // Discount fields
+  discountType: z.enum(['NONE', 'PERCENTAGE', 'FIXED_AMOUNT']).default('NONE'),
+  discountValue: z.coerce.number().min(0).optional(),
+  discountReason: z.string().optional(),
+  discountApprovingManagerId: z.string().optional(),
 }).refine((data) => data.checkOut > data.checkIn, {
   message: 'Check-out must be after check-in',
   path: ['checkOut'],
@@ -46,6 +52,14 @@ const formSchema = z.object({
 }, {
   message: 'Please provide guest details or select an existing guest',
   path: ['guestId'],
+}).refine((data) => {
+  if (data.discountType !== 'NONE') {
+    return !!data.discountValue && data.discountValue > 0 && !!data.discountApprovingManagerId;
+  }
+  return true;
+}, {
+  message: 'Discount value and approving manager are required when applying a discount',
+  path: ['discountValue'],
 });
 
 interface FrontDeskReservationFormProps {
@@ -72,6 +86,10 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
       corporateAccountId: 'none',
       adults: 1,
       children: 0,
+      discountType: 'NONE',
+      discountValue: 0,
+      discountReason: '',
+      discountApprovingManagerId: '',
     },
   });
 
@@ -100,6 +118,8 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
   const checkIn = form.watch('checkIn');
   const checkOut = form.watch('checkOut');
   const roomTypeId = form.watch('roomTypeId');
+  const discountType = form.watch('discountType');
+  const discountValue = form.watch('discountValue') || 0;
 
   const [guestSearch, setGuestSearch] = useState('');
   const [guestDropdownOpen, setGuestDropdownOpen] = useState(false);
@@ -156,6 +176,19 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
   });
   const corporateAccounts = (corporateAccountsRes as any)?.data || [];
 
+  // Fetch management staff for discount approval
+  const { data: managersRes } = useQuery({
+    queryKey: ['managers', propertyId],
+    queryFn: async () => {
+      const res = await fetch(`/api/v1/staff?propertyId=${propertyId}`);
+      return res.json();
+    },
+    enabled: !!propertyId,
+  });
+  const managers = ((managersRes as any)?.data || []).filter((s: any) =>
+    ['MANAGER', 'ADMIN', 'SUPER_ADMIN', 'HOTEL_MANAGER', 'NIGHT_AUDITOR'].includes((s.role || s.position || '').toUpperCase())
+  );
+
   // Reset roomId when dependencies change
   useEffect(() => {
     form.setValue('roomId', '');
@@ -164,13 +197,19 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
   const createReservation = useMutation({
     mutationFn: async (values: z.infer<typeof formSchema>) => {
       const selectedRoom = availableRooms?.find((r: any) => r.id === values.roomId);
+      const hasDiscount = values.discountType !== 'NONE' && values.discountValue && values.discountValue > 0;
       const payload = {
         ...values,
         corporateAccountId: values.corporateAccountId === 'none' ? undefined : values.corporateAccountId,
         roomNumber: selectedRoom?.number || undefined,
         checkIn: format(values.checkIn, 'yyyy-MM-dd'),
         checkOut: format(values.checkOut, 'yyyy-MM-dd'),
-        propertyId
+        propertyId,
+        // Only send discount fields if a discount is actually being applied
+        discountType: hasDiscount ? values.discountType : undefined,
+        discountValue: hasDiscount ? values.discountValue : undefined,
+        discountReason: hasDiscount ? values.discountReason : undefined,
+        discountApprovingManagerId: hasDiscount ? values.discountApprovingManagerId : undefined,
       };
 
       const res = await provider.reservations.create(payload);
@@ -207,6 +246,13 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
 
   const nightlyRate = Number(selectedRoomType?.baseRate || 0);
   const estimatedTotal = nightlyRate * nights;
+
+  // Discount calculation for preview
+  const discountDeduction = discountType === 'PERCENTAGE'
+    ? nightlyRate * (discountValue / 100)
+    : discountType === 'FIXED_AMOUNT' ? discountValue : 0;
+  const effectiveNightlyRate = Math.max(0, nightlyRate - discountDeduction);
+  const effectiveTotal = effectiveNightlyRate * nights;
 
   const formatter = selectedRoomType ? new Intl.NumberFormat('en-NG', {
     style: 'currency',
@@ -562,6 +608,110 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
                   />
                 </div>
 
+                {/* Discount Section */}
+                <div className="bg-slate-800/50 rounded-2xl p-4 border border-slate-700 space-y-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Tag className="w-4 h-4 text-amber-400" />
+                    <h3 className="text-sm font-bold text-slate-300">Discount <span className="text-slate-500 font-normal">(Optional)</span></h3>
+                  </div>
+
+                  <FormField
+                    control={form.control}
+                    name="discountType"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-slate-400 ml-1">Discount Type</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger className="h-12 rounded-xl bg-slate-900 border-slate-700 text-white">
+                              <SelectValue placeholder="No discount" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent className="bg-slate-800 border-slate-700 text-white">
+                            <SelectItem value="NONE" className="focus:bg-slate-700 focus:text-white">No discount</SelectItem>
+                            <SelectItem value="PERCENTAGE" className="focus:bg-slate-700 focus:text-white">Percentage (%)</SelectItem>
+                            <SelectItem value="FIXED_AMOUNT" className="focus:bg-slate-700 focus:text-white">Fixed Amount</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {discountType !== 'NONE' && (
+                    <>
+                      <FormField
+                        control={form.control}
+                        name="discountValue"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-slate-400 ml-1">
+                              {discountType === 'PERCENTAGE' ? 'Discount (%)' : 'Discount Amount'}
+                            </FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                min="0"
+                                max={discountType === 'PERCENTAGE' ? 100 : undefined}
+                                className="h-12 rounded-xl bg-slate-900 border-slate-700 text-white"
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="discountReason"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-slate-400 ml-1">Reason</FormLabel>
+                            <FormControl>
+                              <Textarea
+                                placeholder="e.g. Loyalty guest, management approved..."
+                                className="rounded-xl bg-slate-900 border-slate-700 text-white text-sm resize-none"
+                                rows={2}
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="discountApprovingManagerId"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-slate-400 ml-1">Acknowledged By (Manager)</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl>
+                                <SelectTrigger className="h-12 rounded-xl bg-slate-900 border-slate-700 text-white">
+                                  <SelectValue placeholder="Select approving manager..." />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent className="bg-slate-800 border-slate-700 text-white max-h-60">
+                                {managers.length === 0 && (
+                                  <SelectItem value="none" disabled className="text-slate-500">No managers found</SelectItem>
+                                )}
+                                {managers.map((m: any) => (
+                                  <SelectItem key={m.id} value={m.id} className="focus:bg-slate-700 focus:text-white">
+                                    {m.firstName} {m.lastName} <span className="text-slate-400 text-xs ml-1">({m.role || m.position})</span>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </>
+                  )}
+                </div>
+
                 {/* Total Estimate */}
                 <div className="bg-blue-600/20 border border-blue-500/30 rounded-2xl p-5 mt-4">
                   <div className="flex justify-between items-center mb-3">
@@ -581,12 +731,27 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
                         <span>{nights} × {formatter.format(nightlyRate)} per night</span>
                         <span className="font-semibold">Room rate</span>
                       </div>
+                      {discountType !== 'NONE' && discountDeduction > 0 && (
+                        <div className="flex items-center justify-between text-sm text-amber-300">
+                          <span>Discount ({discountType === 'PERCENTAGE' ? `${discountValue}%` : formatter.format(discountDeduction)}/night)</span>
+                          <span className="font-semibold">− {formatter.format(discountDeduction * nights)}</span>
+                        </div>
+                      )}
                       <div className="mt-2 text-3xl font-bold text-white tracking-tight">
-                        {formatter.format(estimatedTotal)}
+                        {formatter.format(discountType !== 'NONE' && discountDeduction > 0 ? effectiveTotal : estimatedTotal)}
+                        {discountType !== 'NONE' && discountDeduction > 0 && (
+                          <span className="ml-2 text-base line-through text-slate-400 font-normal">{formatter.format(estimatedTotal)}</span>
+                        )}
                       </div>
+                      {discountType !== 'NONE' && discountDeduction > 0 && (
+                        <div className="flex items-center gap-1.5 mt-1 text-xs text-amber-300/80">
+                          <Tag className="w-3 h-3" />
+                          <span>Pending Night Auditor approval</span>
+                        </div>
+                      )}
                       <div className="mt-2 flex items-center justify-between border-t border-blue-400/20 pt-2 text-xs text-blue-200">
                         <span>Average nightly total</span>
-                        <span className="font-semibold">{formatter.format(estimatedTotal / nights)}</span>
+                        <span className="font-semibold">{formatter.format((discountType !== 'NONE' && discountDeduction > 0 ? effectiveTotal : estimatedTotal) / nights)}</span>
                       </div>
                     </>
                   ) : (
