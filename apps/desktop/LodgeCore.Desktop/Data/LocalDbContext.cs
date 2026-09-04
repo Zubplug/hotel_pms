@@ -72,23 +72,45 @@ public class LocalDbContext : DbContext
     }
 
     /// <summary>
-    /// Defers SQLite foreign key constraint checks to transaction commit.
-    /// Without this, SQLite validates FKs immediately after each INSERT/DELETE,
-    /// which causes "FOREIGN KEY constraint failed" when a parent and its children
-    /// are written in the same EF Core SaveChanges batch (e.g. Reservation + ReservationRoom).
-    /// PRAGMA defer_foreign_keys = ON makes SQLite behave like PostgreSQL/SQL Server:
-    /// FKs are only checked when the transaction is committed, by which point all rows exist.
+    /// Defers SQLite foreign key constraint checks to transaction commit time.
+    ///
+    /// IMPORTANT: PRAGMA defer_foreign_keys = ON only has effect when set INSIDE an
+    /// active transaction. If called outside a transaction it is silently ignored.
+    ///
+    /// This override:
+    ///   1. Opens an explicit transaction (if one isn't already active)
+    ///   2. Sets PRAGMA defer_foreign_keys = ON inside that transaction
+    ///   3. Calls base.SaveChangesAsync() — EF Core reuses the existing transaction
+    ///   4. Commits — SQLite validates all FKs at this point, by which time every
+    ///      parent and child row exists in the database
+    ///
+    /// This permanently fixes "FOREIGN KEY constraint failed" for ANY entity pair
+    /// (Reservation/ReservationRoom, Order/OrderItem, etc.) written in a single batch.
     /// </summary>
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
+        // If already inside an explicit transaction, just save — PRAGMA is already set
+        if (Database.CurrentTransaction != null)
+            return await base.SaveChangesAsync(cancellationToken);
+
+        await using var tx = await Database.BeginTransactionAsync(cancellationToken);
+        // PRAGMA must be executed WITHIN the transaction to defer FK checks to commit
         await Database.ExecuteSqlRawAsync("PRAGMA defer_foreign_keys = ON;", cancellationToken);
-        return await base.SaveChangesAsync(cancellationToken);
+        var result = await base.SaveChangesAsync(cancellationToken);
+        await tx.CommitAsync(cancellationToken);
+        return result;
     }
 
     public override int SaveChanges()
     {
+        if (Database.CurrentTransaction != null)
+            return base.SaveChanges();
+
+        using var tx = Database.BeginTransaction();
         Database.ExecuteSqlRaw("PRAGMA defer_foreign_keys = ON;");
-        return base.SaveChanges();
+        var result = base.SaveChanges();
+        tx.Commit();
+        return result;
     }
 
     public async Task ApplyMigrationsSafelyAsync()
