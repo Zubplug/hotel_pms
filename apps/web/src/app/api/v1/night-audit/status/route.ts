@@ -54,10 +54,10 @@ export async function GET(req: NextRequest) {
 
     // Run all checks in parallel for maximum performance
     const [operational, system, financial, cash] = await Promise.all([
-      getOperationalReview(await requireOrganizationContext(session.user.id), propertyId),
-      getSystemIntegrity(await requireOrganizationContext(session.user.id), propertyId),
-      getFinancialAudit(await requireOrganizationContext(session.user.id), propertyId),
-      getCashReconciliation(await requireOrganizationContext(session.user.id), propertyId)
+      getOperationalReview(await requireOrganizationContext(user.id), propertyId),
+      getSystemIntegrity(await requireOrganizationContext(user.id), propertyId),
+      getFinancialAudit(await requireOrganizationContext(user.id), propertyId),
+      getCashReconciliation(await requireOrganizationContext(user.id), propertyId)
     ]);
 
     const trendStart = new Date(businessDate);
