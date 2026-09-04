@@ -2263,9 +2263,10 @@ export async function POST(req: NextRequest) {
               });
               const task = await tx.housekeepingTask.findUnique({
                 where: { id: aggregateId },
+                include: { room: { select: { status: true } } }
               });
               if (task) {
-                const roomStatus =
+                let roomStatus =
                   currentStatus === "CLEANING"
                     ? "CLEANING"
                     : currentStatus === "CLEAN"
@@ -2275,6 +2276,11 @@ export async function POST(req: NextRequest) {
                         : currentStatus === "MAINTENANCE_REQUIRED"
                           ? "MAINTENANCE"
                           : undefined;
+
+                if (task.room?.status === "OCCUPIED" && (roomStatus === "CLEANING" || roomStatus === "AVAILABLE")) {
+                  roomStatus = "OCCUPIED"; // Or undefined, to not change it
+                }
+
                 await tx.room.update({
                   where: { id: task.roomId },
                   data: {
