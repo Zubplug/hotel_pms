@@ -42,9 +42,10 @@ export async function GET(req: NextRequest) {
     const businessDate = property.businessDate ?? getPropertyBusinessDate(property.timezone);
     // Normalise to a plain YYYY-MM-DD string so the mobile client always receives
     // a predictable format regardless of whether Prisma returned a Date or string.
-    const businessDateStr = businessDate instanceof Date
-      ? businessDate.toISOString().slice(0, 10)
-      : (typeof businessDate === 'string' ? businessDate.slice(0, 10) : String(businessDate).slice(0, 10));
+    const bDate: any = businessDate;
+    const businessDateStr = bDate instanceof Date
+      ? bDate.toISOString().slice(0, 10)
+      : (typeof bDate === 'string' ? bDate.slice(0, 10) : String(bDate).slice(0, 10));
     const localToday = getPropertyBusinessDate(property.timezone);
     const [currentAudit, activeAudit] = await Promise.all([
       prisma.nightAudit.findUnique({ 
