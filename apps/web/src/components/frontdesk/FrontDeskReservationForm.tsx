@@ -176,18 +176,17 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
   });
   const corporateAccounts = (corporateAccountsRes as any)?.data || [];
 
-  // Fetch management staff for discount approval
+  // Fetch management staff from LOCAL DB via desktop provider (works 100% offline)
+  // LocalStaff is synced by SyncEngine so manager data is always available offline
   const { data: managersRes } = useQuery({
-    queryKey: ['managers', propertyId],
+    queryKey: ['managers-local', propertyId],
     queryFn: async () => {
-      const res = await fetch(`/api/v1/staff?propertyId=${propertyId}`);
-      return res.json();
+      return provider.auth.getActiveStaff('MANAGER,ADMIN,HOTEL_MANAGER,NIGHT_AUDITOR,SUPER_ADMIN');
     },
     enabled: !!propertyId,
+    staleTime: 300_000, // 5 min — stable data, don't re-fetch constantly
   });
-  const managers = ((managersRes as any)?.data || []).filter((s: any) =>
-    ['MANAGER', 'ADMIN', 'SUPER_ADMIN', 'HOTEL_MANAGER', 'NIGHT_AUDITOR'].includes((s.role || s.position || '').toUpperCase())
-  );
+  const managers = (managersRes as any)?.data || [];
 
   // Reset roomId when dependencies change
   useEffect(() => {
