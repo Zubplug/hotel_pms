@@ -71,6 +71,26 @@ public class LocalDbContext : DbContext
     {
     }
 
+    /// <summary>
+    /// Defers SQLite foreign key constraint checks to transaction commit.
+    /// Without this, SQLite validates FKs immediately after each INSERT/DELETE,
+    /// which causes "FOREIGN KEY constraint failed" when a parent and its children
+    /// are written in the same EF Core SaveChanges batch (e.g. Reservation + ReservationRoom).
+    /// PRAGMA defer_foreign_keys = ON makes SQLite behave like PostgreSQL/SQL Server:
+    /// FKs are only checked when the transaction is committed, by which point all rows exist.
+    /// </summary>
+    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        await Database.ExecuteSqlRawAsync("PRAGMA defer_foreign_keys = ON;", cancellationToken);
+        return await base.SaveChangesAsync(cancellationToken);
+    }
+
+    public override int SaveChanges()
+    {
+        Database.ExecuteSqlRaw("PRAGMA defer_foreign_keys = ON;");
+        return base.SaveChanges();
+    }
+
     public async Task ApplyMigrationsSafelyAsync()
     {
         var dbPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LodgeCoreOffline.db");
