@@ -24,7 +24,7 @@ interface FrontDeskExtendStayDialogProps {
 export function FrontDeskExtendStayDialog({ open, onOpenChange, reservation }: FrontDeskExtendStayDialogProps) {
   const router = useRouter();
 
-  const [phase, setPhase] = useState<'SELECT' | 'PREVIEW' | 'PROCESSING' | 'ENCODING' | 'SUCCESS' | 'FAILED'>('SELECT');
+  const [phase, setPhase] = useState<'SELECT' | 'PREVIEW' | 'PROCESSING' | 'PROMPT_ENCODE' | 'ENCODING' | 'SUCCESS' | 'FAILED'>('SELECT');
   const [newCheckoutDate, setNewCheckoutDate] = useState<Date | undefined>(undefined);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [previewData, setPreviewData] = useState<any>(null);
@@ -92,7 +92,7 @@ export function FrontDeskExtendStayDialog({ open, onOpenChange, reservation }: F
       const res = await provider.reservations.extendStay(reservation.id, newCheckoutDate.toISOString());
       if (!res.success) { setPhase('FAILED'); setErrorMsg(res.error?.message || res.error || 'Extension failed'); return; }
       setExtensionApplied(true);
-      await handleEncodeCard();
+      setPhase('PROMPT_ENCODE');
     } catch (err: unknown) {
       setPhase('FAILED');
       setErrorMsg(err instanceof Error ? err.message : 'Network error');
@@ -184,7 +184,21 @@ export function FrontDeskExtendStayDialog({ open, onOpenChange, reservation }: F
 
               <div className="flex gap-3 p-4 rounded-xl text-sm border border-amber-200 bg-amber-50 text-amber-800 shadow-sm items-start">
                 <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-amber-500" />
-                <p className="font-medium leading-relaxed">This amount will be posted to the guest&apos;s folio immediately. You will need to physically encode the key card separately if applicable.</p>
+                <p className="font-medium leading-relaxed">This amount is an estimate. Room charges for the extended nights will be automatically posted to the guest&apos;s folio during the nightly audit. You will be prompted to encode their key card next.</p>
+              </div>
+            </div>
+          )}
+
+          {phase === 'PROMPT_ENCODE' && (
+            <div className="flex flex-col items-center py-10 space-y-4 text-center">
+              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center shadow-inner">
+                <CreditCard className="w-8 h-8 text-blue-600" />
+              </div>
+              <div>
+                <p className="font-bold text-2xl text-slate-900 tracking-tight">Stay Extended</p>
+                <p className="text-slate-500 mt-2 max-w-[280px] mx-auto leading-relaxed">
+                  Please place the guest&apos;s key card on the encoder to update their check-out time.
+                </p>
               </div>
             </div>
           )}
@@ -206,7 +220,7 @@ export function FrontDeskExtendStayDialog({ open, onOpenChange, reservation }: F
               <div>
                 <p className="font-bold text-2xl text-slate-900 tracking-tight">Stay Extended!</p>
                 <p className="text-slate-500 mt-2 max-w-[280px] mx-auto leading-relaxed">
-                  The reservation has been successfully updated and charges applied to the folio.
+                  The reservation has been successfully extended and the key card updated.
                 </p>
               </div>
             </div>
@@ -246,6 +260,16 @@ export function FrontDeskExtendStayDialog({ open, onOpenChange, reservation }: F
                 <Button variant="outline" onClick={() => setPhase('SELECT')} className="rounded-xl h-12 px-6 font-semibold border-slate-200">Back</Button>
                 <Button onClick={handleConfirmExtend} className="rounded-xl h-12 px-8 font-semibold bg-emerald-600 hover:bg-emerald-700 ml-auto">
                   Confirm Extension
+                </Button>
+              </>
+            )}
+            {phase === 'PROMPT_ENCODE' && (
+              <>
+                <DialogClose render={
+                  <Button variant="outline" className="rounded-xl h-12 px-6 font-semibold border-slate-200">Skip / Do Later</Button>
+                } />
+                <Button onClick={handleEncodeCard} className="rounded-xl h-12 px-8 font-semibold bg-blue-600 hover:bg-blue-700 ml-auto">
+                  Encode Key Card
                 </Button>
               </>
             )}

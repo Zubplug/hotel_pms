@@ -596,18 +596,7 @@ public class LocalRepository
 
         await _dbContext.SaveChangesAsync();
 
-        if (res.Folio != null && additionalCharge > 0)
-        {
-            var idempotencyKey = $"EXTEND_STAY:{reservationId}:{newCheckOut.ToUniversalTime():O}";
-            var charged = await RecordChargeAsync(
-                res.Folio.Id,
-                additionalCharge,
-                $"Room Charge (Extension) - {additionalNights} night{(additionalNights == 1 ? "" : "s")}",
-                userId,
-                deviceId,
-                idempotencyKey);
-            if (!charged) throw new InvalidOperationException("Stay date was updated, but the extension charge could not be posted to the folio.");
-        }
+
 
         return true;
     }
