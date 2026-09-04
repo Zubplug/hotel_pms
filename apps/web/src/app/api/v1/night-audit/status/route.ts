@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
     const propertyId = searchParams.get('propertyId');
 
     if (!propertyId) return errorResponse('BAD_REQUEST', 'Missing propertyId', 400);
-    if (!(await requireOrganizationContext(session.user.id)).propertyIds.includes(propertyId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (!(await requireOrganizationContext(user.id)).propertyIds.includes(propertyId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const property = await prisma.property.findUnique({
       where: { id: propertyId },

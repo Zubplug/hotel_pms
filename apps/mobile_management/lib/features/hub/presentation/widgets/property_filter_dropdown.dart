@@ -21,9 +21,9 @@ class PropertyFilterDropdown extends ConsumerWidget {
     );
 
     final providerSelected = ref.watch(selectedHubPropertyProvider);
-    final activeProperty = hubState.maybeWhen(
+    final String activeProperty = hubState.maybeWhen(
       data: (data) => data.scope.property,
-      orElse: () => providerSelected == 'AUTO_SELECT_FIRST' ? '' : providerSelected,
+      orElse: () => providerSelected == 'AUTO_SELECT_FIRST' || providerSelected == null ? 'ALL_AUTHORIZED' : providerSelected,
     );
 
     String displayText = 'All Properties';
