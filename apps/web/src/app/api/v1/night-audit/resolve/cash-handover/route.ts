@@ -24,6 +24,15 @@ export async function POST(req: NextRequest) {
       return errorResponse('BAD_REQUEST', 'Missing required fields', 400);
     }
 
+    const staff = await prisma.staff.findFirst({
+      where: { userId: session.user.id },
+      select: { id: true }
+    });
+    
+    if (!staff) {
+      return errorResponse('FORBIDDEN', 'User is not a staff member', 403);
+    }
+
     if (!(await requireOrganizationContext(session.user.id)).propertyIds.includes(propertyId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     // Load and lock the handover within a transaction
@@ -65,7 +74,7 @@ export async function POST(req: NextRequest) {
           variance: variance,
           reasonCode: variance !== 0 ? reasonCode : null,
           notes: notes || null,
-          receivedById: session.user.id,
+          receivedById: staff.id,
           receivedAt: new Date(),
         }
       });
