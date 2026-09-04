@@ -39,7 +39,12 @@ export async function GET(req: NextRequest) {
     });
     if (!property) return errorResponse('NOT_FOUND', 'Property not found', 404);
 
-    const businessDate = property.businessDate ?? getPropertyBusinessDate();
+    const businessDate = property.businessDate ?? getPropertyBusinessDate(property.timezone);
+    // Normalise to a plain YYYY-MM-DD string so the mobile client always receives
+    // a predictable format regardless of whether Prisma returned a Date or string.
+    const businessDateStr = businessDate instanceof Date
+      ? businessDate.toISOString().slice(0, 10)
+      : (typeof businessDate === 'string' ? businessDate.slice(0, 10) : String(businessDate).slice(0, 10));
     const localToday = getPropertyBusinessDate(property.timezone);
     const [currentAudit, activeAudit] = await Promise.all([
       prisma.nightAudit.findUnique({ 
@@ -111,7 +116,7 @@ export async function GET(req: NextRequest) {
 
     return successResponse({
       property,
-      businessDate,
+      businessDate: businessDateStr,
       currentAudit,
       activeAudit,
       // auditState is the single canonical status field. Use this in the UI.

@@ -7,6 +7,7 @@ class AuditorDashboardData {
   final AuditExceptions auditExceptions;
   final CriticalDiscrepancies criticalDiscrepancies;
   final CashReconciliation cashReconciliation;
+  final NightAuditAnalytics analytics;
 
   AuditorDashboardData({
     required this.propertyName,
@@ -16,6 +17,7 @@ class AuditorDashboardData {
     required this.auditExceptions,
     required this.criticalDiscrepancies,
     required this.cashReconciliation,
+    required this.analytics,
   });
 
   factory AuditorDashboardData.fromJson(Map<String, dynamic> json) {
@@ -27,12 +29,13 @@ class AuditorDashboardData {
       auditExceptions: AuditExceptions.fromJson(json['auditExceptions'] ?? {}),
       criticalDiscrepancies: CriticalDiscrepancies.fromJson(json['criticalDiscrepancies'] ?? {}),
       cashReconciliation: CashReconciliation.fromJson(json['cashReconciliation'] ?? {}),
+      analytics: NightAuditAnalytics.fromJson(json['analytics'] ?? {}),
     );
   }
 }
 
 class AuditStatus {
-  final String state; // e.g. 'NOT_STARTED', 'IN_PROGRESS', 'COMPLETED'
+  final String state; // 'PENDING' | 'IN_PROGRESS' | 'POSTING' | 'COMPLETED' | 'FAILED' | 'OVERDUE'
   final DateTime? startedAt;
   final DateTime? completedAt;
   final String currentStep;
@@ -128,6 +131,45 @@ class CashReconciliation {
       unreconciledCash: (json['unreconciledCash'] ?? 0).toDouble(),
       posSessionsRequiringClosure: json['posSessionsRequiringClosure'] ?? 0,
       outstandingDeposits: json['outstandingDeposits'] ?? 0,
+    );
+  }
+}
+
+class NightAuditAnalytics {
+  final double revenue;
+  final double payments;
+  final int inHouseGuests;
+  final int latePostings;
+  final int totalRooms;
+  final int occupiedRooms;
+  final int availableRooms;
+  final int outOfOrderRooms;
+
+  NightAuditAnalytics({
+    required this.revenue,
+    required this.payments,
+    required this.inHouseGuests,
+    required this.latePostings,
+    required this.totalRooms,
+    required this.occupiedRooms,
+    required this.availableRooms,
+    required this.outOfOrderRooms,
+  });
+
+  double get occupancyPercent =>
+      totalRooms > 0 ? (occupiedRooms / totalRooms) * 100 : 0;
+
+  factory NightAuditAnalytics.fromJson(Map<String, dynamic> json) {
+    final rooms = json['rooms'] as Map<String, dynamic>? ?? {};
+    return NightAuditAnalytics(
+      revenue: (json['revenue'] ?? 0).toDouble(),
+      payments: (json['payments'] ?? 0).toDouble(),
+      inHouseGuests: json['inHouseGuests'] ?? 0,
+      latePostings: json['latePostings'] ?? 0,
+      totalRooms: rooms['total'] ?? 0,
+      occupiedRooms: rooms['occupied'] ?? 0,
+      availableRooms: rooms['available'] ?? 0,
+      outOfOrderRooms: rooms['outOfOrder'] ?? 0,
     );
   }
 }

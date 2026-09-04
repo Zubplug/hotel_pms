@@ -88,6 +88,13 @@ class LiveAuditorDashboardRepository {
         'posSessionsRequiringClosure': (system['openPosSessions'] as List?)?.length ?? 0,
         'outstandingDeposits': (cash['bankDeposits'] as List?)?.length ?? 0,
       },
+      'analytics': {
+        'revenue': (data['analytics']?['revenue'] ?? 0).toDouble(),
+        'payments': (data['analytics']?['payments'] ?? 0).toDouble(),
+        'inHouseGuests': data['analytics']?['inHouseGuests'] ?? 0,
+        'latePostings': data['analytics']?['latePostings'] ?? 0,
+        'rooms': data['analytics']?['rooms'] ?? {},
+      },
     };
   }
   

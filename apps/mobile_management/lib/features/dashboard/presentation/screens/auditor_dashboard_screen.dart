@@ -4,6 +4,8 @@ import '../providers/auditor_dashboard_provider.dart';
 import 'package:mobile_management/features/notifications/presentation/providers/notifications_provider.dart';
 import 'package:mobile_management/features/notifications/presentation/screens/notifications_screen.dart';
 import 'package:mobile_management/features/profile/presentation/screens/profile_screen.dart';
+import 'package:mobile_management/features/profile/presentation/providers/profile_provider.dart';
+import 'package:mobile_management/features/hub/providers/hub_provider.dart';
 
 import '../widgets/auditor/night_audit_status_widget.dart';
 import '../widgets/auditor/audit_exceptions_widget.dart';
@@ -23,6 +25,27 @@ class AuditorDashboardScreen extends ConsumerWidget {
 
     final dashboardState = ref.watch(auditorDashboardDataProvider);
     final unreadCount = ref.watch(unreadCountProvider);
+    final profileState = ref.watch(profileProvider);
+    final selectedPropertyId = ref.watch(selectedHubPropertyProvider);
+
+    // Resolve the property name: prefer the profile's matching property
+    // (available immediately after login), then fall back to dashboard data.
+    final String propertyName = profileState.maybeWhen(
+      data: (profile) {
+        final properties = profile.authorization.properties;
+        if (properties.isEmpty) {
+          return dashboardState.value?.propertyName ?? 'LodgeCore';
+        }
+        // If auditor manually selected a property, show that one
+        if (selectedPropertyId != null) {
+          final match = properties.where((p) => p.id == selectedPropertyId);
+          if (match.isNotEmpty) return match.first.name;
+        }
+        // Otherwise show the first assigned property
+        return properties.first.name;
+      },
+      orElse: () => dashboardState.value?.propertyName ?? 'LodgeCore',
+    );
 
     return Scaffold(
       backgroundColor: primaryNavy,
@@ -47,7 +70,7 @@ class AuditorDashboardScreen extends ConsumerWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  dashboardState.value?.propertyName ?? 'LodgeCore',
+                  propertyName,
                   style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w800,
@@ -130,6 +153,7 @@ class AuditorDashboardScreen extends ConsumerWidget {
                 NightAuditStatusWidget(
                   status: data.auditStatus,
                   businessDate: data.businessDate,
+                  analytics: data.analytics,
                 ),
                 const SizedBox(height: 24),
                 AuditExceptionsWidget(exceptions: data.auditExceptions),
