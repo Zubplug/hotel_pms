@@ -869,7 +869,7 @@ export async function POST(req: NextRequest) {
             if (payload.roomId) {
               await tx.room.update({
                 where: { id: payload.roomId },
-                data: { status: "DIRTY" },
+                data: { status: "AVAILABLE" },
               });
             }
           } else if (eventType === "ROOM_CREDIT") {
@@ -1897,6 +1897,9 @@ export async function POST(req: NextRequest) {
                   roomId: oldRoomId,
                   status: "ACTIVE",
                   reservationId: { not: aggregateId },
+                  reservation: {
+                    status: { notIn: ["CHECKED_OUT", "CANCELLED", "NO_SHOW"] },
+                  },
                 },
               });
               if (!stillOwned) {
