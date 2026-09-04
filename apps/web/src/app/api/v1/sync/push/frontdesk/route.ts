@@ -1773,6 +1773,9 @@ export async function POST(req: NextRequest) {
                 roomId: newRoomId,
                 status: "ACTIVE",
                 reservationId: { not: aggregateId },
+                reservation: {
+                  status: { notIn: ["CHECKED_OUT", "CANCELLED", "NO_SHOW"] },
+                },
               },
             });
             if (newRoomConflict)
