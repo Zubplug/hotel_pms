@@ -37,7 +37,7 @@ const formSchema = z.object({
   adults: z.coerce.number().min(1, 'At least 1 adult is required'),
   children: z.coerce.number().min(0, 'Cannot be negative'),
   // Discount fields
-  discountType: z.enum(['NONE', 'PERCENTAGE', 'FIXED_AMOUNT']).default('NONE'),
+  discountType: z.enum(['NONE', 'PERCENTAGE', 'FIXED_AMOUNT']),
   discountValue: z.coerce.number().min(0).optional(),
   discountReason: z.string().optional(),
   discountApprovingManagerId: z.string().optional(),
