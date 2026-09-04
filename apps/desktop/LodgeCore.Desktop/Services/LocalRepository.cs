@@ -1793,6 +1793,11 @@ public class LocalRepository
         }
 
         res.Status = "CHECKED_OUT";
+        res.CheckOut = DateTime.UtcNow.Date;
+        foreach (var rr in res.Rooms)
+        {
+            rr.CheckOut = DateTime.UtcNow.Date;
+        }
         res.UpdatedAt = DateTime.UtcNow;
         res.IsDirty = true;
         res.LocalSequence++;

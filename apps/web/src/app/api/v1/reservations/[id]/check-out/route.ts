@@ -100,9 +100,15 @@ export async function POST(
       }
 
       // 2. Transition reservation to CHECKED_OUT
+      const today = new Date();
+      today.setUTCHours(0, 0, 0, 0);
       await tx.reservation.update({
         where: { id },
-        data: { status: 'CHECKED_OUT' },
+        data: { status: 'CHECKED_OUT', checkOut: today },
+      });
+      await tx.reservationRoom.updateMany({
+        where: { reservationId: id },
+        data: { checkOut: today },
       });
 
       // 3. Start room cleaning and create housekeeping tasks

@@ -857,9 +857,14 @@ export async function POST(req: NextRequest) {
             if (totalBalance > 0.01) throw new Error("PAYMENT_REQUIRED");
             if (totalBalance < -0.01) throw new Error("REFUND_REQUIRED");
 
+            const today = new Date(new Date().setHours(0, 0, 0, 0));
             await tx.reservation.update({
               where: { id: aggregateId },
-              data: { status: "CHECKED_OUT" },
+              data: { status: "CHECKED_OUT", checkOut: today },
+            });
+            await tx.reservationRoom.updateMany({
+              where: { reservationId: aggregateId },
+              data: { checkOut: today },
             });
             if (payload.roomId) {
               await tx.room.update({
