@@ -37,7 +37,7 @@ export async function POST(
     if (!existingReservation) return errorResponse('NOT_FOUND', 'Reservation not found', 404);
     await assertPropertyAccess(session.user.id, existingReservation.propertyId);
     const userRole = String((session.user as any).role || 'STAFF').toUpperCase();
-    const isNightAuditor = userRole === 'NIGHT_AUDITOR' || userRole === 'MANAGER' || userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
+    const isNightAuditor = userRole === 'NIGHT_AUDITOR' || userRole === 'MANAGER' || userRole === 'ADMIN' || userRole === 'SUPER_ADMIN' || userRole === 'FRONT_DESK';
     const canCancel = await hasPermission(session.user.id, 'reservation', 'delete', existingReservation.propertyId);
     if (!canCancel && !isNightAuditor) return errorResponse('FORBIDDEN', 'Insufficient permissions to cancel reservations', 403);
     if (await isNightAuditTransactionLocked(existingReservation.propertyId)) {

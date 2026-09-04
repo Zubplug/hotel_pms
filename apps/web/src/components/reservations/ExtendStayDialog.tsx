@@ -31,7 +31,7 @@ export function ExtendStayDialog({ open, onOpenChange, reservation }: ExtendStay
   const { provider } = useLodgeCoreProvider();
 
   const currentCheckOut = new Date(reservation.checkOut);
-  const minDate = addDays(startOfDay(currentCheckOut), 1);
+  const minDate = startOfDay(currentCheckOut);
 
   // Reset state on open
   useEffect(() => {

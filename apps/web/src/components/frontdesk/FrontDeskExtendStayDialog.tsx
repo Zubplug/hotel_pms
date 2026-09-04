@@ -32,7 +32,7 @@ export function FrontDeskExtendStayDialog({ open, onOpenChange, reservation }: F
   const [extensionApplied, setExtensionApplied] = useState(false);
 
   const currentCheckOut = new Date(reservation.checkOut);
-  const minDate = addDays(startOfDay(currentCheckOut), 1);
+  const minDate = startOfDay(currentCheckOut);
 
   // Reset state on open
   useEffect(() => {
