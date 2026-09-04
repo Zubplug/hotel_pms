@@ -84,7 +84,11 @@ public class LocalRepository
         if (!string.IsNullOrEmpty(reservation.RoomId))
         {
             var roomAlreadyReserved = await _dbContext.Reservations
-                .Where(r => r.PropertyId == reservation.PropertyId && r.Id != reservation.Id && r.Status != "CANCELLED" && r.Status != "NO_SHOW")
+                .Where(r => r.PropertyId == reservation.PropertyId
+                         && r.Id != reservation.Id
+                         && r.Status != "CANCELLED"
+                         && r.Status != "NO_SHOW"
+                         && r.Status != "CHECKED_OUT")  // checked-out rooms are free to rebook
                 .AnyAsync(r => r.Rooms.Any(rr => rr.RoomId == reservation.RoomId &&
                     rr.CheckInDate < reservation.CheckOutDate &&
                     rr.CheckOutDate > reservation.CheckInDate));
@@ -2532,7 +2536,8 @@ public class LocalRepository
     public async Task<List<LocalRoom>> GetAvailableRoomsAsync(string propertyId, string roomTypeId, DateTime checkIn, DateTime checkOut)
     {
         var allRoomsQuery = _dbContext.Rooms
-            .Where(r => r.PropertyId == propertyId && r.Status == "AVAILABLE");
+            .Where(r => r.PropertyId == propertyId
+                     && (r.Status == "AVAILABLE" || r.Status == "CLEAN" || r.Status == "INSPECTED"));
 
         if (!string.IsNullOrEmpty(roomTypeId))
         {
