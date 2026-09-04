@@ -25,7 +25,6 @@ export async function GET(req: NextRequest) {
       where: {
         id: { in: eventIds },
         propertyId,
-        deviceId,
         syncConflict: { is: { status: { not: 'PENDING' } } }
       },
       include: { syncConflict: { select: { status: true, resolution: true } } }

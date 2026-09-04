@@ -2633,8 +2633,14 @@ export async function POST(req: NextRequest) {
           // We must record the HotelEvent and SyncConflict outside the failed business transaction
           try {
             await prisma.$transaction(async (tx2) => {
-              const ev = await tx2.hotelEvent.create({
-                data: {
+              const parsedPayload = JSON.parse(payloadJson || "{}");
+              const ev = await tx2.hotelEvent.upsert({
+                where: { id },
+                update: {
+                  idempotencyKey,
+                  payload: parsedPayload
+                },
+                create: {
                   id,
                   idempotencyKey,
                   propertyId,
@@ -2646,12 +2652,18 @@ export async function POST(req: NextRequest) {
                   eventType,
                   occurredAt: new Date(occurredAt || Date.now()),
                   sequence,
-                  payload: JSON.parse(payloadJson || "{}"),
+                  payload: parsedPayload,
                 },
               });
 
-              await tx2.syncConflict.create({
-                data: {
+              await tx2.syncConflict.upsert({
+                where: { hotelEventId: ev.id },
+                update: {
+                  expectedVersion: expectedVersion,
+                  receivedVersion: aggregateVersion,
+                  status: "PENDING"
+                },
+                create: {
                   propertyId,
                   hotelEventId: ev.id,
                   aggregateType,

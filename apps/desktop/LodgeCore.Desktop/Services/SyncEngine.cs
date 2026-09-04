@@ -2385,6 +2385,18 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     fullError += " -> " + inner.Message;
                     inner = inner.InnerException;
                 }
+                
+                if (ex is Microsoft.EntityFrameworkCore.DbUpdateException dbEx && dbEx.Entries.Any())
+                {
+                    var entityTypes = string.Join(", ", dbEx.Entries.Select(e => e.Entity.GetType().Name));
+                    fullError += $" [Failing Entities: {entityTypes}]";
+                }
+                else if (ex.InnerException is Microsoft.EntityFrameworkCore.DbUpdateException innerDbEx && innerDbEx.Entries.Any())
+                {
+                    var entityTypes = string.Join(", ", innerDbEx.Entries.Select(e => e.Entity.GetType().Name));
+                    fullError += $" [Failing Entities: {entityTypes}]";
+                }
+                
                 throw new Exception($"Failed to apply sync page {pageCount}: {fullError}");
             }
         }
