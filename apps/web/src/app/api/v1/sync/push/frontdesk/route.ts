@@ -914,6 +914,22 @@ export async function POST(req: NextRequest) {
                 metadata: { eventType, source: "DESKTOP" },
               },
             });
+            if (Number(folio.balance) > 0) {
+              const debitAmount = Math.min(Number(folio.balance), amount);
+              await applyAvailableFolioCredit(tx, {
+                folioId: aggregateId,
+                propertyId,
+                reservationId: folio.reservationId,
+                amount: debitAmount,
+                currency: payload.currency || folio.currency || "NGN",
+                source: "SYSTEM_AUTO_APPLY",
+                description: "Auto-applied credit to outstanding debit",
+                appliedBy: actorId,
+                deviceId: device.id,
+                operationKey: `AUTO_APPLY_${idempotencyKey}`,
+                businessDate: authoritativeBusinessDate,
+              });
+            }
           } else if (
             eventType === "ROOM_CHARGE" ||
             eventType === "POST_CHARGE"
@@ -1208,6 +1224,23 @@ export async function POST(req: NextRequest) {
                   },
                 });
               }
+            }
+
+            if (Number(folio.balance) > 0) {
+              const debitAmount = Math.min(Number(folio.balance), amount);
+              await applyAvailableFolioCredit(tx, {
+                folioId: aggregateId,
+                propertyId,
+                reservationId: folio.reservationId,
+                amount: debitAmount,
+                currency: payload.currency || folio.currency || "NGN",
+                source: "SYSTEM_AUTO_APPLY",
+                description: "Auto-applied credit to outstanding debit",
+                appliedBy: actorId,
+                deviceId: device.id,
+                operationKey: `AUTO_APPLY_${idempotencyKey}`,
+                businessDate: authoritativeBusinessDate,
+              });
             }
           } else if (eventType === "POST_PAYMENT") {
             // Folio-level payment — idempotent via posTransactionId uniqueness

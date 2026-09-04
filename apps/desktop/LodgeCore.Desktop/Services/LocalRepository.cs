@@ -919,6 +919,13 @@ public class LocalRepository
             createdAt = DateTime.UtcNow
         });
 
+        if (!requiresApproval && folio.NetBalance > 0m)
+        {
+            var debitAmount = Math.Min(folio.NetBalance, amount);
+            ApplyCreditToTransactionsJson(folio, debitAmount);
+            folio.AvailableCredit -= debitAmount;
+        }
+
         _dbContext.OutboxEvents.Add(new LocalOutboxEvent
         {
             PropertyId = folio.PropertyId,
@@ -1457,6 +1464,13 @@ public class LocalRepository
                 DestinationAccountId = frontdeskSession.CashAccountId, ReasonCode = "ADVANCE_DEPOSIT", OperationId = $"FD-DEPOSIT-{idempotencyKey}",
                 BusinessDate = frontdeskSession.BusinessDate, CreatedAt = DateTime.UtcNow
             });
+        }
+
+        if (!requiresApproval && folio.NetBalance > 0m)
+        {
+            var debitAmount = Math.Min(folio.NetBalance, amount);
+            ApplyCreditToTransactionsJson(folio, debitAmount);
+            folio.AvailableCredit -= debitAmount;
         }
 
         _dbContext.OutboxEvents.Add(new LocalOutboxEvent
