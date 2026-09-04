@@ -86,6 +86,7 @@ export default function NightAuditDashboard() {
     if (data?.operational?.departures?.some((d: any) => d.status === 'CHECKED_IN')) arr.push({ type: 'PENDING_DEPARTURES', title: 'Pending Departures', desc: 'There are still checked-in departures for today.' });
     if (data?.financial?.highBalances?.length > 0) arr.push({ type: 'HIGH_BALANCE', title: 'High Balance Folios', desc: 'Some folios have exceeded the high balance limit.' });
     if (data?.financial?.rateVariances?.length > 0) arr.push({ type: 'RATE_VARIANCE', title: 'Rate Variances', desc: 'Some active room charges deviate from their booked rate.' });
+    if (data?.financial?.pendingDiscounts?.length > 0) arr.push({ type: 'PENDING_DISCOUNT', title: 'Pending Discounts', desc: 'Some discounts require approval.' });
     return arr;
   }, [data]);
 
@@ -382,7 +383,24 @@ export default function NightAuditDashboard() {
         ))}
       </div>
     </div>}
-    {!data.financial.highBalances?.length && !data.financial.rateVariances?.length && (
+    {data.financial.pendingDiscounts?.length > 0 && <div>
+      <div className="mb-3">
+        <h4 className="font-semibold text-sm text-indigo-700">Pending Discount Approvals</h4>
+        <p className="text-xs text-indigo-600/80 mt-0.5">Discounts that must be reviewed before room charges are posted.</p>
+      </div>
+      <div className="space-y-2">
+        {data.financial.pendingDiscounts.map((pd: any) => (
+          <div key={pd.id} className="text-sm p-3 bg-white rounded-lg border border-indigo-200 flex items-center justify-between shadow-sm">
+            <div>
+              <p className="font-medium text-indigo-900">{pd.details?.discountAmount ? currency(Number(pd.details.discountAmount), data?.property?.baseCurrency) : pd.details?.discountPercent ? `${pd.details.discountPercent}%` : 'Variable Discount'} ({pd.details?.targetType || 'RESERVATION_ROOM'})</p>
+              <p className="text-xs text-indigo-700">Requested by: {pd.requestedBy}</p>
+            </div>
+            <button onClick={() => setResolutionAction({ type: 'DISCOUNT_APPROVAL', item: pd })} className="text-xs font-medium text-indigo-700 hover:text-indigo-900 bg-indigo-50 px-3 py-1.5 rounded-md transition-colors">Review</button>
+          </div>
+        ))}
+      </div>
+    </div>}
+    {!data.financial.highBalances?.length && !data.financial.rateVariances?.length && !data.financial.pendingDiscounts?.length && (
       <div className="text-sm text-emerald-600 bg-emerald-50 p-3 rounded-lg border border-emerald-100 flex items-center gap-2 shadow-sm"><CheckCircle2 className="h-4 w-4" /> No financial anomalies detected.</div>
     )}
   </div>

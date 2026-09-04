@@ -99,6 +99,7 @@ export async function GET(req: NextRequest) {
 
     // Financial blockers/warnings
     if (financial.highBalances.length > 0) warnings++;
+    if (financial.pendingDiscounts?.length > 0) warnings++;
     
     // Cash blockers/warnings
     if (cash.cashHandovers.length > 0) blockers++;

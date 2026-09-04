@@ -20,6 +20,7 @@ export type ResolutionAction =
   | { type: 'SYNC_CONFLICT'; item: any }
   | { type: 'CASH_HANDOVER'; item: any }
   | { type: 'TRANSACTION_VERIFICATION'; item: any }
+  | { type: 'DISCOUNT_APPROVAL'; item: any }
   | null;
 
 interface Props {
@@ -43,6 +44,7 @@ export function ResolutionManager({ action, onClose, onSuccess }: Props) {
         {action.type === 'SYNC_CONFLICT' && <FinancialSyncResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
         {action.type === 'CASH_HANDOVER' && <CashHandoverResolution propertyId={action.item.propertyId} baseCurrency="NGN" handover={action.item} onSuccess={onSuccess} onClose={onClose} />}
         {action.type === 'TRANSACTION_VERIFICATION' && <TransactionVerificationResolution propertyId={action.item.propertyId} transactions={action.item.unverifiedTransactions} onOpenChange={(open) => !open && onClose()} open={true} />}
+        {action.type === 'DISCOUNT_APPROVAL' && <DiscountApprovalResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
       </DialogContent>
     </Dialog>
   );
@@ -767,3 +769,89 @@ function FolioPreview({ item, onClose }: { item: any; onClose: () => void }) {
     </div>
   );
 }
+
+function DiscountApprovalResolution({ item, onSuccess, onClose }: { item: any; onSuccess: () => void; onClose: () => void }) {
+  const [loading, setLoading] = useState<'approve' | 'reject' | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleAction = async (action: 'approve' | 'reject') => {
+    setLoading(action);
+    setError(null);
+    try {
+      const res = await fetch(`/api/manager/approvals/${item.id}/${action}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error?.message || `Failed to ${action} discount`);
+      }
+      toast.success(`Discount ${action}d successfully`);
+      onSuccess();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const d = item.details || {};
+
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>Review Discount</DialogTitle>
+        <DialogDescription>
+          A discount requires approval before room charges can be posted.
+        </DialogDescription>
+      </DialogHeader>
+      
+      {error && <div className="p-3 bg-rose-50 text-rose-600 rounded-lg text-sm border border-rose-100">{error}</div>}
+      
+      <div className="py-4 space-y-4">
+        <div className="p-4 border rounded-xl bg-slate-50 space-y-2 text-sm">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Type:</span>
+            <span className="font-medium">{d.targetType || 'RESERVATION_ROOM'}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Requested By:</span>
+            <span className="font-medium">{item.requestedBy}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Reason:</span>
+            <span className="font-medium">{item.reason || d.reason || 'No reason provided'}</span>
+          </div>
+          <div className="pt-3 mt-3 border-t flex justify-between items-center text-base">
+            <span className="font-semibold text-slate-900">Discount Amount:</span>
+            <span className="font-bold text-indigo-700">
+              {d.discountAmount ? Number(d.discountAmount).toLocaleString('en-NG', { style: 'currency', currency: 'NGN' }) : d.discountPercent ? `${d.discountPercent}%` : 'Variable'}
+            </span>
+          </div>
+        </div>
+        
+        <div className="flex gap-3 pt-2">
+          <Button 
+            variant="outline" 
+            className="flex-1 border-rose-200 text-rose-700 hover:bg-rose-50 hover:text-rose-800"
+            onClick={() => handleAction('reject')} 
+            disabled={!!loading}
+          >
+            {loading === 'reject' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Reject Discount
+          </Button>
+          <Button 
+            className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white"
+            onClick={() => handleAction('approve')} 
+            disabled={!!loading}
+          >
+            {loading === 'approve' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Approve Discount
+          </Button>
+        </div>
+      </div>
+    </>
+  );
+}
+
