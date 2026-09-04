@@ -1311,6 +1311,12 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     var flattenedRoomId = el.TryGetProperty("roomId", out var rid) && rid.ValueKind != System.Text.Json.JsonValueKind.Null ? rid.GetString() : null;
                     if (!string.IsNullOrEmpty(flattenedRoomId))
                     {
+                        // Flush the parent Reservation (and any pending deletes of old ReservationRooms)
+                        // to SQLite BEFORE inserting the child ReservationRoom rows.
+                        // SQLite enforces FK constraints immediately, so inserting a child before the
+                        // parent is committed in the same batch causes "FOREIGN KEY constraint failed".
+                        await dbContext.SaveChangesAsync(stoppingToken);
+
                         var rr = new LodgeCore.Desktop.Data.Entities.LocalReservationRoom
                         {
                             Id = Guid.NewGuid().ToString(),
