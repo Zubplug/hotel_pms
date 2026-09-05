@@ -3157,7 +3157,7 @@ public class LocalRepository
             await _dbContext.SaveChangesAsync();
             await transaction.CommitAsync();
 
-            return new { success = true, complimentaryRecord = compRecord };
+            return new { success = true };
         }
         catch (Exception ex)
         {
