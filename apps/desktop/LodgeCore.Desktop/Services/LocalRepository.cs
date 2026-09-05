@@ -1653,6 +1653,18 @@ public class LocalRepository
                 {
                     expectedCost -= expectedCost * ((resRoom.DiscountPercent ?? 0m) / 100m);
                 }
+                else if (resRoom.DiscountType == "COMPLIMENTARY")
+                {
+                    if ((resRoom.DiscountAmount ?? 0m) > 0)
+                    {
+                        expectedCost -= resRoom.DiscountAmount ?? 0m;
+                    }
+                    else
+                    {
+                        expectedCost = 0m;
+                    }
+                }
+                expectedCost = Math.Max(0, expectedCost);
                 if (expectedCost < 0) expectedCost = 0;
             }
 

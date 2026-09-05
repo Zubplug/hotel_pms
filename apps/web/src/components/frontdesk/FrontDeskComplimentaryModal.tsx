@@ -73,11 +73,12 @@ export function FrontDeskComplimentaryModal({ isOpen, targetType, targetId, targ
     try {
       const payload = {
         targetType,
-        targetId,
+        reservationRoomId: targetType === 'RESERVATION_ROOM' ? targetId : undefined,
+        orderId: targetType === 'POS_ORDER' ? targetId : undefined,
         beneficiaryType,
         beneficiaryStaffId: beneficiaryType === 'STAFF' ? beneficiaryStaffId : null,
-        benefitType,
-        amount: numValue,
+        compType: benefitType,
+        compAmount: numValue,
         settlementType: beneficiaryType === 'STAFF' ? settlementType : 'PAY_NOW',
         reason,
         acknowledgedByStaffId,

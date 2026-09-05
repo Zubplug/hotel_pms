@@ -183,9 +183,20 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
               {/* Rate & Discount display */}
               {(() => {
                 let finalRate = Number(resRoom?.rateAmount || 0);
-                if (resRoom?.discountType === 'FIXED_AMOUNT' || (resRoom?.discountAmount > 0 && !resRoom?.discountPercent)) {
+                if (resRoom?.discountType === 'FIXED_AMOUNT') {
                   finalRate -= Number(resRoom?.discountAmount || 0);
-                } else if (resRoom?.discountType === 'PERCENTAGE' || resRoom?.discountPercent > 0) {
+                } else if (resRoom?.discountType === 'PERCENTAGE') {
+                  finalRate -= finalRate * (Number(resRoom?.discountPercent || 0) / 100);
+                } else if (resRoom?.discountType === 'COMPLIMENTARY') {
+                  const compAmount = Number(resRoom?.discountAmount || 0);
+                  if (compAmount > 0) {
+                    finalRate -= compAmount;
+                  } else {
+                    finalRate = 0;
+                  }
+                } else if (resRoom?.discountAmount > 0 && !resRoom?.discountPercent) {
+                  finalRate -= Number(resRoom?.discountAmount || 0);
+                } else if (resRoom?.discountPercent > 0) {
                   finalRate -= finalRate * (Number(resRoom?.discountPercent || 0) / 100);
                 }
                 finalRate = Math.max(0, finalRate);

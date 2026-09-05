@@ -212,6 +212,13 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
       expectedCost -= Number(resRoom.discountAmount || 0);
     } else if (resRoom.discountType === 'PERCENTAGE') {
       expectedCost -= expectedCost * (Number(resRoom.discountPercent || 0) / 100);
+    } else if (resRoom.discountType === 'COMPLIMENTARY') {
+      const compAmount = Number(resRoom.discountAmount || 0);
+      if (compAmount > 0) {
+        expectedCost -= compAmount;
+      } else {
+        expectedCost = 0;
+      }
     }
     if (expectedCost < 0) expectedCost = 0;
   }

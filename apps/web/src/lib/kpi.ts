@@ -128,6 +128,13 @@ export async function calculateDailyRevenue(propertyId: string, businessDate: Da
         discountDeduction = Number(activeRoom.discountAmount || 0);
       } else if (activeRoom.discountType === 'PERCENTAGE') {
         discountDeduction = originalRate * (Number(activeRoom.discountPercent || 0) / 100);
+      } else if (activeRoom.discountType === 'COMPLIMENTARY') {
+        const compAmt = Number(activeRoom.discountAmount || 0);
+        if (compAmt > 0) {
+          discountDeduction = compAmt;
+        } else {
+          discountDeduction = originalRate;
+        }
       }
     }
     const effectiveRate = Math.max(0, originalRate - discountDeduction);
