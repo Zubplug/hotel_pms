@@ -1,7 +1,7 @@
 import { Metadata } from 'next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+
 import { Users, TrendingUp, AlertTriangle } from 'lucide-react';
 
 export const metadata: Metadata = {
@@ -28,10 +28,9 @@ export default function FnbStaffPage() {
         {staffPerformance.map((staff, index) => (
           <Card key={index}>
             <CardHeader className="flex flex-row items-center gap-4 pb-2">
-              <Avatar className="h-12 w-12">
-                <AvatarImage src="" />
-                <AvatarFallback>{staff.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
-              </Avatar>
+              <div className="h-12 w-12 rounded-full bg-secondary flex items-center justify-center font-semibold text-secondary-foreground">
+                {staff.name.split(' ').map(n => n[0]).join('')}
+              </div>
               <div>
                 <CardTitle className="text-lg">{staff.name}</CardTitle>
                 <p className="text-sm text-muted-foreground">{staff.role}</p>

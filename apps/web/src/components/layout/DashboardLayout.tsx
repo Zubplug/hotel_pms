@@ -80,6 +80,24 @@ const ALL_NAV = [
   { name: 'Refunds', href: '/refunds', icon: BadgeDollarSign, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'FINANCE_MANAGER', 'ADMIN'] },
   { name: 'Sync Center', href: '/sync-center', icon: RefreshCw, restrictedTo: ['CEO', 'SUPER_ADMIN'] },
 
+  { 
+    name: 'F&B Management', 
+    href: '/fnb/dashboard', 
+    icon: Utensils,
+    restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'FNB_MANAGER', 'EVENT_MANAGER', 'RESTAURANT_MANAGER', 'BANQUET_MANAGER'],
+    children: [
+      { name: 'Dashboard', href: '/fnb/dashboard' },
+      { name: 'Live Orders', href: '/fnb/orders' },
+      { name: 'Menu', href: '/fnb/menu' },
+      { name: 'Inventory & AvT', href: '/fnb/inventory' },
+      { name: 'Requisitions', href: '/fnb/requisitions' },
+      { name: 'Staff Performance', href: '/fnb/staff' },
+      { name: 'Halls & Events', href: '/fnb/events' },
+      { name: 'Reports (DSS)', href: '/fnb/reports' },
+      { name: 'Settings', href: '/fnb/settings' },
+    ]
+  },
+
   { name: 'Settings', href: '/settings', icon: Settings, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER'] },
 ];
 
