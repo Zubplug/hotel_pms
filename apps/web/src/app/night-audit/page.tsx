@@ -487,10 +487,10 @@ export default function NightAuditDashboard() {
         {data.cash.bankDeposits.map((bd: any) => (
           <div key={bd.id} className="text-sm p-3 bg-white rounded-lg border border-amber-200 flex items-center justify-between shadow-sm">
             <div>
-              <p className="font-medium text-amber-900">Reference: {bd.reference}</p>
+              <p className="font-medium text-amber-900">Reference: {bd.depositReference}</p>
             </div>
             <div className="flex items-center gap-4">
-              <span className="font-semibold text-amber-700">{currency(Number(bd.amount), data?.property?.baseCurrency)}</span>
+              <span className="font-semibold text-amber-700">{currency(Number(bd.declaredAmount || bd.expectedAmount), data?.property?.baseCurrency)}</span>
               <a href="/finance/deposits" target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-amber-700 hover:text-amber-900 bg-amber-50 px-3 py-1.5 rounded-md transition-colors">Review</a>
             </div>
           </div>
