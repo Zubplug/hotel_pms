@@ -207,7 +207,10 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
   
   const expectedCost = Number(reservation?.ratePlanSnapshot?.total || 0);
   const folio = reservation?.folios?.[0];
-  const availableCredit = Number(folio?.availableCredit || 0);
+  const advanceDeposit = Number(folio?.availableCredit || 0);
+  const totalPayments = Number(folio?.totalPayments || 0);
+  const totalCharges = Number(folio?.totalCharges || 0);
+  const availableCredit = advanceDeposit + (totalPayments - totalCharges);
   const isDepositSufficient = availableCredit >= expectedCost;
   
   const isReady = reservation?.status === 'CONFIRMED' && room && (isDepositSufficient || isDepositOverride);

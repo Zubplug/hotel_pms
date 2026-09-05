@@ -1645,7 +1645,8 @@ public class LocalRepository
 
             decimal totalDeposits = res.Folio?.TotalPayments ?? 0m;
             decimal totalCharges = res.Folio?.TotalCharges ?? 0m;
-            decimal availableCredit = totalDeposits - totalCharges;
+            decimal advanceDeposit = res.Folio?.AvailableCredit ?? 0m;
+            decimal availableCredit = advanceDeposit + (totalDeposits - totalCharges);
 
             if (availableCredit < expectedCost)
             {
