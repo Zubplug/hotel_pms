@@ -2716,6 +2716,7 @@ model PosProduct {
   category   ProductCategory @relation(fields: [categoryId], references: [id])
 
   name              String
+  itemCode          String?            @unique
   description       String?
   price             Decimal            @db.Decimal(18, 4)
   taxRate           Decimal            @default(0) @db.Decimal(5, 2)

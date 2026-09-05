@@ -11,15 +11,24 @@ export async function GET(req: NextRequest) {
     const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
 
     const url = new URL(req.url);
-    const propertyId = url.searchParams.get('propertyId');
+    const requestedPropertyId = url.searchParams.get('propertyId');
     const outletId = url.searchParams.get('outletId');
-    if (!propertyId) return errorResponse('BAD_REQUEST', 'Property ID is required', 400);
+
+    const allowedPropertyIds = ctx.propertyIds as string[];
+
+    if (requestedPropertyId && !allowedPropertyIds.includes(requestedPropertyId) && !(session.user as any).isSuperAdmin) {
+      return errorResponse('FORBIDDEN', 'No access to this property', 403);
+    }
+
+    const propertyIdsToQuery = requestedPropertyId ? [requestedPropertyId] : allowedPropertyIds;
 
     const products = await prisma.posProduct.findMany({
       where: { 
-        propertyId: { in: ctx.propertyIds as string[] }, 
+        propertyId: { in: propertyIdsToQuery }, 
         ...(outletId ? { category: { outletId } } : {}),
-        isActive: true 
+        // include inactive if specifically requested? Usually POS wants active, but menu manager might want all.
+        // Let's pass `all=true` to include inactive.
+        ...(url.searchParams.get('all') === 'true' ? {} : { isActive: true })
       },
       include: {
         category: {
