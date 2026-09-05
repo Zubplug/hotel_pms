@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Search, Plus, Filter, MoreHorizontal, Loader2, RefreshCw } from 'lucide-react';
+import { Search, Plus, Filter, MoreHorizontal, Loader2 } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -87,9 +87,6 @@ export function FnbMenuClient() {
           <p className="text-muted-foreground mt-1">Manage POS products, categories, pricing, and availability.</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={fetchMenu} disabled={loading}>
-            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
-          </Button>
           <Button>
             <Plus className="mr-2 h-4 w-4" /> Add Item
           </Button>
