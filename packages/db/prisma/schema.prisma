@@ -159,6 +159,8 @@ model Property {
   costCenters         CostCenter[]
   CityLedgerAccount   CityLedgerAccount[]
   CheckInBypass       CheckInBypass[]
+  Hall                Hall[]
+  Event               Event[]
 }
 
 model Building {
@@ -3846,9 +3848,13 @@ model LaundryOrderStatusHistory {
 
 enum StockTransferStatus {
   DRAFT
+  SUBMITTED
   PENDING_APPROVAL
   APPROVED
-  POSTED
+  REJECTED
+  ISSUED
+  RECEIVED
+  COMPLETED
   CANCELLED
 }
 
@@ -4175,4 +4181,92 @@ model CheckInBypass {
 
   @@index([propertyId, businessDate])
   @@index([status])
+}
+
+// -----------------------------------------------------------------------------
+// EVENT & BANQUET MANAGEMENT
+// -----------------------------------------------------------------------------
+
+model Hall {
+  id           String   @id @default(uuid()) @db.Uuid
+  propertyId   String   @db.Uuid
+  property     Property @relation(fields: [propertyId], references: [id])
+  name         String
+  code         String
+  capacity     Int
+  squareMeters Decimal? @db.Decimal(8, 2)
+  amenities    String[]
+  isActive     Boolean  @default(true)
+
+  bookings EventBooking[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+}
+
+enum EventStatus {
+  INQUIRY
+  TENTATIVE
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model Event {
+  id         String   @id @default(uuid()) @db.Uuid
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id])
+
+  name         String
+  contactName  String
+  contactPhone String?
+  contactEmail String?
+
+  status    EventStatus @default(INQUIRY)
+  startDate DateTime    @db.Timestamptz
+  endDate   DateTime    @db.Timestamptz
+
+  expectedGuests Int
+  actualGuests   Int?
+
+  notes String?
+
+  bookings EventBooking[]
+  invoices EventInvoice[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+}
+
+model EventBooking {
+  id      String @id @default(uuid()) @db.Uuid
+  eventId String @db.Uuid
+  event   Event  @relation(fields: [eventId], references: [id])
+
+  hallId String @db.Uuid
+  hall   Hall   @relation(fields: [hallId], references: [id])
+
+  startTime DateTime @db.Timestamptz
+  endTime   DateTime @db.Timestamptz
+
+  setupNotes String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+}
+
+model EventInvoice {
+  id      String @id @default(uuid()) @db.Uuid
+  eventId String @db.Uuid
+  event   Event  @relation(fields: [eventId], references: [id])
+
+  totalAmount Decimal @db.Decimal(18, 4)
+  paidAmount  Decimal @db.Decimal(18, 4)
+  currency    String  @default("NGN")
+
+  status String @default("UNPAID") // UNPAID, PARTIAL, PAID
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
 }

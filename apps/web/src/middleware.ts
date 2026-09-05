@@ -41,6 +41,7 @@ const MANAGEMENT_ROLES = ['CEO', 'SUPER_ADMIN', 'MANAGER', 'ADMIN', 'ACCOUNTANT'
 const POS_ROLES = ['WAITER', 'WAITRESS', 'CASHIER', 'POS', 'POS_OPERATOR'];
 const FRONT_DESK_ROLES = ['RECEPTIONIST', 'FRONT_DESK'];
 const INVENTORY_ROLES = ['STOCK_MANAGER', 'STOCK_KEEPER', 'PROCUREMENT_MANAGER', 'OUTLET_HEAD'];
+const FNB_ROLES = ['FNB_MANAGER', 'RESTAURANT_MANAGER', 'BANQUET_MANAGER', 'EVENT_MANAGER', ...MANAGEMENT_ROLES];
 
 function hasModuleAccess(req: any, pathname: string): { allowed: boolean; redirectTo?: string } {
   const user = req.auth?.user as any;
@@ -71,6 +72,10 @@ function hasModuleAccess(req: any, pathname: string): { allowed: boolean; redire
   }
   if (pathname === '/dashboard' || pathname.startsWith('/dashboard/')) {
     return can('ACCESS_MANAGEMENT', MANAGEMENT_ROLES)
+      ? { allowed: true } : { allowed: false, redirectTo: '/hub' };
+  }
+  if (pathname === '/fnb' || pathname.startsWith('/fnb/')) {
+    return can('ACCESS_FNB', FNB_ROLES) || capabilities.some((value: string) => value.startsWith('fnb.'))
       ? { allowed: true } : { allowed: false, redirectTo: '/hub' };
   }
   if (pathname === '/admin' || pathname.startsWith('/admin/') ||
