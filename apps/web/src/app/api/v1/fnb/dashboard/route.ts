@@ -17,13 +17,12 @@ async function getKpiSummary(propertyIds: string[], outletId: string | null, sta
     where: {
       order: baseFilter,
       createdAt: { gte: startOfDay },
-      status: { notIn: ['FAILED', 'REFUNDED'] },
-      method: { not: 'COMPLIMENTARY' } // Often excluded from gross sales depending on rules, but let's just do valid payments
+      status: { notIn: ['FAILED', 'REFUNDED'] }
     },
     _sum: { amount: true }
   });
 
-  const grossSales = Number(paymentsAgg._sum.amount || 0);
+  const grossSales = Number(paymentsAgg._sum?.amount || 0);
 
   // Active Orders (Submitted or In Service)
   const activeOrders = await prisma.posOrder.count({
@@ -35,7 +34,7 @@ async function getKpiSummary(propertyIds: string[], outletId: string | null, sta
     where: {
       ...baseFilter,
       businessDate: startOfDay,
-      status: { notIn: ['CANCELLED', 'VOIDED'] }
+      status: { not: 'VOIDED' }
     },
     _sum: { guestCount: true },
   });
@@ -79,7 +78,7 @@ async function getTopSellingItems(propertyIds: string[], outletId: string | null
         propertyId: { in: propertyIds },
         ...(outletId ? { outletId } : {}),
         businessDate: startOfDay,
-        status: { notIn: ['CANCELLED', 'VOIDED'] }
+        status: { not: 'VOIDED' }
       },
       voidReason: null // exclude voided items
     },
@@ -105,8 +104,8 @@ async function getTopSellingItems(propertyIds: string[], outletId: string | null
     productId: item.productId,
     productName: item.productName,
     categoryName: item.productId ? (categoryMap.get(item.productId) || 'Uncategorized') : 'Uncategorized',
-    quantitySold: Number(item._sum.quantity || 0),
-    revenue: Number(item._sum.total || 0)
+    quantitySold: Number(item._sum?.quantity || 0),
+    revenue: Number(item._sum?.total || 0)
   }));
 }
 
@@ -222,7 +221,7 @@ export async function GET(req: NextRequest) {
       return errorResponse('FORBIDDEN', 'No access to this property', 403);
     }
 
-    const propertyIdsToQuery = requestedPropertyId ? [requestedPropertyId] : allowedPropertyIds;
+    const propertyIdsToQuery: string[] = requestedPropertyId ? [requestedPropertyId] : [...allowedPropertyIds];
     const outletId = requestedOutletId || null;
 
     const now = new Date();

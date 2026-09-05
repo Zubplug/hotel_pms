@@ -154,13 +154,13 @@ export default function FnbDashboardClient() {
                       paddingAngle={5}
                       dataKey="amount"
                       nameKey="method"
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                      label={({ name, percent }: any) => percent !== undefined ? `${name} ${(percent * 100).toFixed(0)}%` : name}
                     >
                       {salesBreakdown.map((entry: any, index: number) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
-                    <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                    <Tooltip formatter={(value: any) => formatCurrency(Number(value || 0))} />
                     <Legend />
                   </PieChart>
                 </ResponsiveContainer>
