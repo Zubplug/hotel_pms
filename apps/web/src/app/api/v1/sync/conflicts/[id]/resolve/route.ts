@@ -150,6 +150,25 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                   }
                 });
                 await tx.reservation.update({ where: { id: r.id }, data: { version: { increment: 1 } } });
+             } else if (edgeEvent.eventType === 'CHECKIN_BYPASS') {
+                 const bypassOpId = payload.operationId || edgeEvent.id;
+                 const existingBypass = await tx.checkInBypass.findUnique({
+                   where: { operationId: bypassOpId },
+                 });
+                 if (!existingBypass) {
+                   await tx.checkInBypass.create({
+                     data: {
+                       propertyId: conflict.propertyId,
+                       reservationId: r.id,
+                       acknowledgedByStaffId: payload.acknowledgedByStaffId,
+                       reason: payload.reason,
+                       overrideDeposit: payload.overrideDeposit || false,
+                       operationId: bypassOpId,
+                       createdAt: new Date(),
+                     },
+                   });
+                 }
+                 await tx.reservation.update({ where: { id: r.id }, data: { version: { increment: 1 } } });
              } else {
                  await tx.reservation.update({ where: { id: r.id }, data: { version: { increment: 1 } } });
              }
