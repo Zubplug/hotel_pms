@@ -351,6 +351,23 @@ export async function POST(req: NextRequest) {
                     );
                   }
                 }
+              } else if (updatedCount === 0 && eventType === "EXTEND_STAY") {
+                const current = await tx.reservation.findUnique({
+                  where: { id: aggregateId },
+                  select: { status: true },
+                });
+                // Only allow auto-resolving if it's an active reservation
+                if (current?.status === "CONFIRMED" || current?.status === "CHECKED_IN") {
+                  await tx.reservation.updateMany({
+                    where: { id: aggregateId },
+                    data: { version: { increment: 1 } },
+                  });
+                  updatedCount = 1;
+                  console.log(
+                    `[sync/push] EXTEND_STAY version-mismatch auto-resolved for ${aggregateId} ` +
+                    `(desktop v${aggregateVersion})`
+                  );
+                }
               }
             }
           } else if (
