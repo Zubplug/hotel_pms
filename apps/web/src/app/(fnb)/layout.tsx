@@ -1,10 +1,10 @@
 import React from 'react';
-import { DashboardLayout } from '@/components/layout/DashboardLayout';
+import { FnbLayout } from '@/components/layout/FnbLayout';
 
-export default function FnbLayout({ children }: { children: React.ReactNode }) {
+export default function FnbLayoutWrapper({ children }: { children: React.ReactNode }) {
   return (
-    <DashboardLayout>
+    <FnbLayout>
       {children}
-    </DashboardLayout>
+    </FnbLayout>
   );
 }
