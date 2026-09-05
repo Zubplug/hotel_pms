@@ -2288,6 +2288,9 @@ model Warehouse {
   isActive    Boolean    @default(true)
   posOutletId String?    @unique @db.Uuid
   posOutlet   PosOutlet? @relation(fields: [posOutletId], references: [id])
+  parentWarehouseId String? @db.Uuid
+  parentWarehouse   Warehouse?  @relation("WarehouseHierarchy", fields: [parentWarehouseId], references: [id])
+  childWarehouses   Warehouse[] @relation("WarehouseHierarchy")
 
   stockItems    StockItem[]
   transactions  StockTransaction[]
