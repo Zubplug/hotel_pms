@@ -1679,6 +1679,7 @@ public class LocalRepository
                         })
                     });
                     res.LocalSequence++;
+                    res.Version++;
                 }
                 else
                 {

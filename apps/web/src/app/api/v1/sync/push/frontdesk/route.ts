@@ -912,8 +912,7 @@ export async function POST(req: NextRequest) {
               },
             });
           } else if (eventType === "CHECKIN_BYPASS") {
-            const bypassOpId = payload.operationId;
-            if (!bypassOpId) throw new Error("Missing operationId in CHECKIN_BYPASS payload");
+            const bypassOpId = payload.operationId || randomUUID();
 
             const existingBypass = await tx.checkInBypass.findUnique({
               where: { operationId: bypassOpId }

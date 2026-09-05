@@ -126,7 +126,7 @@ export default function SyncCenterPage() {
                 <div>
                   <h4 className="font-bold text-gray-700 mb-2 pb-1 border-b">Expected Cloud State (V{conflict.expectedVersion})</h4>
                   <p className="italic text-gray-500 text-xs mb-2">The current authoritative state in the cloud database before this event occurred.</p>
-                  <pre>{JSON.stringify(conflict.edgeEvent.payload, null, 2)}</pre>
+                  <pre>{conflict.cloudState ? JSON.stringify(conflict.cloudState, null, 2) : "Cloud state snapshot not available"}</pre>
                 </div>
                 <div>
                   <h4 className="font-bold text-gray-700 mb-2 pb-1 border-b">Received Edge State (V{conflict.receivedVersion})</h4>
