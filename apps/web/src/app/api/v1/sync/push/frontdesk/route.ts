@@ -870,6 +870,37 @@ export async function POST(req: NextRequest) {
                 version: 1,
               },
             });
+          } else if (eventType === "CHECKIN_BYPASS") {
+            const bypassOpId = payload.operationId;
+            if (!bypassOpId) throw new Error("Missing operationId in CHECKIN_BYPASS payload");
+
+            const existingBypass = await tx.checkInBypass.findUnique({
+              where: { operationId: bypassOpId }
+            });
+
+            if (!existingBypass) {
+              const operatorSession = await tx.frontdeskSession.findFirst({
+                where: { propertyId, staffId: operatorId, controlStatus: 'OPEN' }
+              });
+
+              if (!operatorSession) {
+                throw new Error("No open FrontdeskSession found for operator to bypass checkin.");
+              }
+
+              await tx.checkInBypass.create({
+                data: {
+                  operationId: bypassOpId,
+                  propertyId,
+                  reservationId: aggregateId,
+                  frontdeskSessionId: operatorSession.id,
+                  operatorId: operatorId,
+                  acknowledgedByStaffId: payload.acknowledgedByStaffId,
+                  reason: payload.reason,
+                  status: 'PENDING',
+                  businessDate: operatorSession.businessDate,
+                }
+              });
+            }
           } else if (eventType === "CHECK_IN") {
             const reservation = await tx.reservation.findUnique({
               where: { id: aggregateId },

@@ -287,7 +287,15 @@ public partial class MainPage : ContentPage
                     }
                     var encodedRoomId = parameters?["encodedRoomId"]?.ToString() ?? "";
                     var encodeData = parameters?["encodeData"]?.ToString();
-                    responseData = await pmsInterop.ProcessCheckInAsync(resId, bypassKeycard, encodedRoomId, encodeData);
+                    bool overrideDeposit = false;
+                    if (parameters != null && parameters["overrideDeposit"] != null)
+                    {
+                        bool.TryParse(parameters["overrideDeposit"]?.ToString(), out overrideDeposit);
+                    }
+                    string? acknowledgedByStaffId = parameters?["acknowledgedByStaffId"]?.ToString();
+                    string? bypassReason = parameters?["reason"]?.ToString();
+                    string? bypassOpId = parameters?["operationId"]?.ToString();
+                    responseData = await pmsInterop.ProcessCheckInAsync(resId, bypassKeycard, encodedRoomId, encodeData, overrideDeposit, acknowledgedByStaffId, bypassReason, bypassOpId);
                     break;
                 case "reservations.checkOut":
                     string outResId = parameters?["id"]?.ToString() ?? "";

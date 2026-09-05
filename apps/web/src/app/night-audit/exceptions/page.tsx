@@ -57,6 +57,21 @@ export default function ExceptionsPage() {
     }
   };
 
+  const handleVerifyBypass = async (bypassId: string, action: 'VERIFY' | 'REJECT') => {
+    try {
+      const res = await fetch('/api/v1/night-audit/verify-checkin-bypass', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bypassId, action, notes: 'Reviewed during night audit', propertyId })
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const updatedData = await getExceptions(propertyId);
+      setData(updatedData);
+    } catch (err: any) {
+      alert("Failed to verify bypass: " + err.message);
+    }
+  };
+
   if (loading) return <div className="flex justify-center p-12"><Loader2 className="h-8 w-8 animate-spin text-amber-500" /></div>;
 
   return (
@@ -178,7 +193,34 @@ export default function ExceptionsPage() {
               </div>
             )}
             
-            {(!data || (data.syncConflicts === 0 && data.openPosSessions === 0 && data.highBalances === 0)) && (
+            {data?.pendingCheckInBypasses?.length > 0 && data.pendingCheckInBypasses.map((bypass: any) => (
+              <div key={bypass.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 hover:bg-muted/50 transition-colors">
+                <div className="flex items-start sm:items-center gap-4">
+                  <div className="h-10 w-10 shrink-0 rounded-full bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center">
+                    <AlertTriangle className="h-5 w-5 text-rose-600 dark:text-rose-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Check-In Deposit Bypass: {bypass.reservation.confirmationNumber}</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Guest: {bypass.reservation.primaryGuest.firstName} {bypass.reservation.primaryGuest.lastName} • 
+                      Balance: ₦{Number(bypass.reservation.folios[0]?.balance || 0).toFixed(2)}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Reason: "{bypass.reason}"
+                      <br/>
+                      Operator: {bypass.operator.firstName} {bypass.operator.lastName} • 
+                      Acknowledged by: {bypass.acknowledgedByStaff.firstName} {bypass.acknowledgedByStaff.lastName}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 mt-4 sm:mt-0">
+                  <Button variant="outline" size="sm" onClick={() => handleVerifyBypass(bypass.id, 'REJECT')} className="text-rose-600 border-rose-200 hover:bg-rose-50 dark:hover:bg-rose-900/20">Reject (Keep Blocked)</Button>
+                  <Button variant="default" size="sm" onClick={() => handleVerifyBypass(bypass.id, 'VERIFY')} className="bg-emerald-600 hover:bg-emerald-700">Verify</Button>
+                </div>
+              </div>
+            ))}
+
+            {(!data || (data.syncConflicts === 0 && data.openPosSessions === 0 && data.highBalances === 0 && (!data.pendingCheckInBypasses || data.pendingCheckInBypasses.length === 0))) && (
               <div className="p-8 text-center text-muted-foreground">
                 <CheckCircle2 className="h-8 w-8 text-emerald-500 mx-auto mb-2" />
                 No pending exceptions blocking the audit.

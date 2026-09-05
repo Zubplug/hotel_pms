@@ -4132,3 +4132,40 @@ model CityLedgerEntry {
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
 }
+
+enum CheckInBypassStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  RESOLVED
+}
+
+model CheckInBypass {
+  id                    String              @id @default(uuid()) @db.Uuid
+  operationId           String              @unique
+  propertyId            String              @db.Uuid
+  property              Property            @relation(fields: [propertyId], references: [id])
+  reservationId         String              @db.Uuid
+  reservation           Reservation         @relation(fields: [reservationId], references: [id])
+  frontdeskSessionId    String              @db.Uuid
+  frontdeskSession      FrontdeskSession    @relation(fields: [frontdeskSessionId], references: [id])
+  
+  operatorId            String              @db.Uuid
+  operator              Staff               @relation("BypassOperator", fields: [operatorId], references: [id])
+  acknowledgedByStaffId String              @db.Uuid
+  acknowledgedBy        Staff               @relation("BypassAcknowledger", fields: [acknowledgedByStaffId], references: [id])
+  
+  reason                String
+  status                CheckInBypassStatus @default(PENDING)
+  
+  reviewedByStaffId     String?             @db.Uuid
+  reviewedAt            DateTime?           @db.Timestamptz
+  reviewNotes           String?
+  
+  businessDate          DateTime            @db.Timestamptz
+  createdAt             DateTime            @default(now()) @db.Timestamptz
+  updatedAt             DateTime            @updatedAt @db.Timestamptz
+  
+  @@index([propertyId, businessDate])
+  @@index([status])
+}

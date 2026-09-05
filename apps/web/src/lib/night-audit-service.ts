@@ -228,7 +228,21 @@ export async function getFinancialAudit(ctx: TenantContext, propertyId: string) 
     }
   });
 
-  return { openFolios, highBalances, rateVariances, pendingDiscounts, unverifiedComplimentary };
+  // Fetch unverified Check-In Bypasses
+  // These represent unresolved financial exceptions where check-in occurred without deposit.
+  const pendingCheckInBypasses = await prisma.checkInBypass.findMany({
+    where: {
+      propertyId,
+      status: { in: ['PENDING', 'REJECTED'] }
+    },
+    include: {
+      operator: { select: { firstName: true, lastName: true } },
+      acknowledgedByStaff: { select: { firstName: true, lastName: true } },
+      reservation: { select: { confirmationNumber: true, primaryGuest: { select: { firstName: true, lastName: true } }, folios: { select: { balance: true } } } }
+    }
+  });
+
+  return { openFolios, highBalances, rateVariances, pendingDiscounts, unverifiedComplimentary, pendingCheckInBypasses };
 }
 
 export async function getCashReconciliation(ctx: TenantContext, propertyId: string) {

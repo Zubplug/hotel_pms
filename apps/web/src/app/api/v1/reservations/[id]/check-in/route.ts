@@ -20,9 +20,18 @@ export async function POST(
 
     const { id: reservationId } = await params;
     
+    let overrideDeposit = false;
+    let acknowledgedByStaffId: string | undefined;
+    let reason: string | undefined;
+    let operationId: string | undefined;
+
     try {
       const body = await req.json();
       let reqPropertyId = body?.propertyId;
+      overrideDeposit = body?.overrideDeposit === true;
+      acknowledgedByStaffId = body?.acknowledgedByStaffId;
+      reason = body?.reason;
+      operationId = body?.operationId;
       if (reqPropertyId && !ctx.propertyIds.includes(reqPropertyId)) return NextResponse.json({ error: 'Forbidden property' }, { status: 403 });
     } catch (e) {
       // Ignore body parsing errors
@@ -133,10 +142,52 @@ export async function POST(
         }
 
         if (totalDebt > 0 || totalCredit < expectedCost) {
-           throw new Error('PAYMENT_REQUIRED: Insufficient Deposit to cover Check-In.');
+           if (overrideDeposit) {
+             if (!acknowledgedByStaffId || !reason || !operationId) {
+               throw new Error('BAD_REQUEST: Missing required fields for deposit override');
+             }
+             
+             // Validate staff exists and belongs to property
+             const staff = await tx.staff.findFirst({ where: { id: acknowledgedByStaffId, propertyId }});
+             if (!staff) {
+               throw new Error('BAD_REQUEST: Invalid acknowledging staff ID');
+             }
+
+             // Find currently open frontdesk session for the operator
+             const operatorSession = await tx.frontdeskSession.findFirst({
+               where: { propertyId, staffId: session.user.id, controlStatus: 'OPEN' }
+             });
+             if (!operatorSession) {
+               throw new Error('BAD_REQUEST: You must have an open Front Desk shift to bypass deposit.');
+             }
+
+             // Idempotency check for bypass
+             const existingBypass = await tx.checkInBypass.findUnique({
+               where: { operationId }
+             });
+
+             if (!existingBypass) {
+               await tx.checkInBypass.create({
+                 data: {
+                   operationId,
+                   propertyId,
+                   reservationId,
+                   frontdeskSessionId: operatorSession.id,
+                   operatorId: session.user.id,
+                   acknowledgedByStaffId,
+                   reason,
+                   status: 'PENDING',
+                   businessDate: operatorSession.businessDate,
+                 }
+               });
+             }
+           } else {
+             throw new Error('PAYMENT_REQUIRED: Insufficient Deposit to cover Check-In.');
+           }
         }
       }
       // ----------------------------
+
 
       // Ensure a DoorLock entity exists for this room to satisfy the lockId constraint
       let doorLock = await tx.doorLock.findFirst({ where: { roomId: resRoom.room!.id } });

@@ -1613,7 +1613,7 @@ public class LocalRepository
         }
     }
 
-    public async Task<bool> ProcessCheckInAsync(string reservationId, string userId, string deviceId, string? encodeData = null)
+    public async Task<bool> ProcessCheckInAsync(string reservationId, string userId, string deviceId, string? encodeData = null, bool overrideDeposit = false, string? acknowledgedByStaffId = null, string? reason = null, string? operationId = null)
     {
         var res = await _dbContext.Reservations
             .Include(r => r.Folio)
@@ -1649,7 +1649,42 @@ public class LocalRepository
 
             if (availableCredit < expectedCost)
             {
-                throw new InvalidOperationException($"PAYMENT_REQUIRED: Check-in blocked. A deposit of {expectedCost:N2} is required but only {availableCredit:N2} is available in credit.");
+                if (overrideDeposit)
+                {
+                    if (string.IsNullOrEmpty(acknowledgedByStaffId) || string.IsNullOrEmpty(reason) || string.IsNullOrEmpty(operationId))
+                    {
+                        throw new InvalidOperationException("BAD_REQUEST: Missing required fields for deposit override.");
+                    }
+                    var staff = await _dbContext.Staff.FirstOrDefaultAsync(s => s.Id == acknowledgedByStaffId);
+                    if (staff == null)
+                    {
+                        throw new InvalidOperationException("BAD_REQUEST: Invalid acknowledging staff ID.");
+                    }
+
+                    _dbContext.OutboxEvents.Add(new LocalOutboxEvent
+                    {
+                        PropertyId = res.PropertyId,
+                        DeviceId = deviceId,
+                        OperatorId = userId,
+                        AggregateType = "RESERVATION",
+                        AggregateId = reservationId,
+                        AggregateVersion = res.Version,
+                        EventType = "CHECKIN_BYPASS",
+                        Sequence = res.LocalSequence + 1,
+                        PayloadJson = JsonSerializer.Serialize(new
+                        {
+                            operationId,
+                            acknowledgedByStaffId,
+                            reason,
+                            overrideDeposit = true
+                        })
+                    });
+                    res.LocalSequence++;
+                }
+                else
+                {
+                    throw new InvalidOperationException($"PAYMENT_REQUIRED: Check-in blocked. A deposit of {expectedCost:N2} is required but only {availableCredit:N2} is available in credit.");
+                }
             }
         }
         
