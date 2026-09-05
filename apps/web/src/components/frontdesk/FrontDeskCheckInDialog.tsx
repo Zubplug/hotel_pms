@@ -81,7 +81,7 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
             setExistingCardData(cardData);
             setPhase('OVERWRITE_CONFIRM');
           } else {
-            executeCheckInEncoding(overrideCreds?.acknowledgedByStaffId, overrideCreds?.reason);
+            executeCheckInEncoding();
           }
         } else if (status === 'FAILED' || status === 'ERROR') {
           setPhase('FAILED');
@@ -141,7 +141,7 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
     }
   };
 
-  const executeCheckInEncoding = async (acknowledgedByStaffId?: string, reason?: string) => {
+  const executeCheckInEncoding = async () => {
     try {
       setPhase('ENCODING');
       setErrorMsg(null);
@@ -149,8 +149,8 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
 
       const data = await provider.reservations.checkIn(reservationId!, "System", "Device1", { 
         overrideDeposit: isDepositOverride,
-        acknowledgedByStaffId,
-        reason
+        acknowledgedByStaffId: overrideCreds?.acknowledgedByStaffId,
+        reason: overrideCreds?.reason
       });
 
       if (!data || data.error) {
