@@ -251,6 +251,16 @@ export default function ShiftReportPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            {selectedShift && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push('/night-audit/shift-reviews')}
+                className="border-white/20 bg-white/10 text-white hover:bg-white/20 hover:text-white mr-2"
+              >
+                <ArrowRight className="h-4 w-4 mr-1.5 rotate-180" /> Back to List
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
@@ -294,6 +304,64 @@ export default function ShiftReportPage() {
 
         {!isLoading && !error && (
           <>
+            {/* ─── Submitted Shifts List ─── */}
+            {!selectedShift && report?.shifts && report.shifts.length > 0 && (
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-6">
+                <div className="bg-slate-50/60 border-b border-slate-100 px-6 py-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4 text-slate-500" />
+                    <h2 className="text-sm font-semibold text-slate-700">Submitted Shifts ({report.shifts.length})</h2>
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-slate-50/80 border-b border-slate-100">
+                        {['Date', 'Type', 'Cashier', 'Status', 'Expected', 'Declared', 'Variance', ''].map((h, i) => (
+                          <th key={i} className={`px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap ${i >= 4 && i <= 6 ? 'text-right' : 'text-left'}`}>
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {report.shifts.map((shift: any) => {
+                        const variance = (Number(shift.declaredCash ?? 0)) - (Number(shift.expectedCash ?? 0));
+                        return (
+                          <tr key={shift.id} className="hover:bg-slate-50/70 transition-colors">
+                            <td className="px-5 py-3.5 text-slate-700 whitespace-nowrap">{format(new Date(shift.openedAt), 'dd MMM yyyy, HH:mm')}</td>
+                            <td className="px-5 py-3.5 font-medium text-slate-700">{shift.type}</td>
+                            <td className="px-5 py-3.5 text-slate-700">{shift.operator ? `${shift.operator.firstName} ${shift.operator.lastName}` : 'Unknown'}</td>
+                            <td className="px-5 py-3.5"><StatusChip status={shift.controlStatus || shift.status} /></td>
+                            <td className="px-5 py-3.5 text-right font-medium text-slate-700">{fmt(Number(shift.expectedCash ?? 0))}</td>
+                            <td className="px-5 py-3.5 text-right font-medium text-slate-700">{shift.declaredCash != null ? fmt(Number(shift.declaredCash)) : '—'}</td>
+                            <td className={`px-5 py-3.5 text-right font-bold tabular-nums ${variance < 0 ? 'text-red-600' : variance > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                              {fmt(variance)}
+                            </td>
+                            <td className="px-5 py-3.5 text-right">
+                              <Button size="sm" variant="outline" className="text-xs h-7 border-slate-200" onClick={() => router.push(`/night-audit/shift-reviews?shiftId=${shift.id}`)}>
+                                Review
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+            
+            {!selectedShift && (!report?.shifts || report.shifts.length === 0) && (
+              <div className="flex flex-col items-center justify-center py-16 bg-white rounded-2xl border border-slate-200 shadow-sm text-center px-6 mb-6">
+                <div className="h-14 w-14 rounded-full bg-slate-100 flex items-center justify-center mb-4">
+                  <ShieldCheck className="h-7 w-7 text-slate-400" />
+                </div>
+                <p className="text-sm font-semibold text-slate-600">No shifts to review</p>
+                <p className="text-sm text-slate-400 mt-1">There are no submitted shifts for the selected date.</p>
+              </div>
+            )}
+
             {/* ─── Cash Reconciliation Panel ─── */}
             {selectedShift && (
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -630,7 +698,8 @@ export default function ShiftReportPage() {
             )}
 
             {/* ─── Transaction Details ─── */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            {selectedShift && (
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="bg-slate-50/60 border-b border-slate-100 px-6 py-4 flex items-center gap-2">
                 <FileText className="h-4 w-4 text-slate-500" />
                 <h2 className="text-sm font-semibold text-slate-700">Transaction Details</h2>
