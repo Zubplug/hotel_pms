@@ -209,7 +209,7 @@ export default function ExceptionsPage() {
                       Reason: "{bypass.reason}"
                       <br/>
                       Operator: {bypass.operator.firstName} {bypass.operator.lastName} • 
-                      Acknowledged by: {bypass.acknowledgedByStaff.firstName} {bypass.acknowledgedByStaff.lastName}
+                      Acknowledged by: {bypass.acknowledgedBy.firstName} {bypass.acknowledgedBy.lastName}
                     </p>
                   </div>
                 </div>

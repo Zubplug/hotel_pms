@@ -237,7 +237,7 @@ export async function getFinancialAudit(ctx: TenantContext, propertyId: string) 
     },
     include: {
       operator: { select: { firstName: true, lastName: true } },
-      acknowledgedByStaff: { select: { firstName: true, lastName: true } },
+      acknowledgedBy: { select: { firstName: true, lastName: true } },
       reservation: { select: { confirmationNumber: true, primaryGuest: { select: { firstName: true, lastName: true } }, folios: { select: { balance: true } } } }
     }
   });
