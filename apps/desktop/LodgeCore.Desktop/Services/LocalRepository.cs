@@ -1275,15 +1275,24 @@ public class LocalRepository
         var session = await _dbContext.FrontdeskSessions.FirstOrDefaultAsync(item => item.Id == sessionId && item.StaffId == staffId);
         if (session == null) throw new InvalidOperationException("Front desk session not found.");
         await AssertNightAuditAllowsAsync(session.PropertyId, session.BusinessDate);
-        if (session.Status != "OPEN") throw new InvalidOperationException($"Session is already {session.Status}.");
+        if (session.Status != "OPEN" && session.Status != "RETURNED") throw new InvalidOperationException($"Session is already {session.Status}.");
             var movements = await _dbContext.PosCashMovements.Where(item => item.FrontdeskSessionId == session.Id || (item.FrontdeskSessionId == null && item.PropertyId == session.PropertyId && item.CreatedAt >= session.OpenedAt && item.CreatedAt <= DateTime.UtcNow)).ToListAsync();
         var expected = session.OpeningFloat + movements.Where(item => item.Type is "PAYMENT" or "CASH_TRANSFER_IN").Sum(item => item.Amount) - movements.Where(item => item.Type is "REFUND" or "PAID_OUT" or "CASH_DROP" or "CASH_TRANSFER_OUT").Sum(item => item.Amount);
         session.Status = "CLOSED"; session.ControlStatus = "SUBMITTED"; session.VarianceStatus = Math.Abs(declaredCash - expected) > 0.01m ? "OPEN" : null;
         session.DeclaredCash = declaredCash; session.SystemExpectedCash = expected; session.Variance = declaredCash - expected; session.ClosingAt = DateTime.UtcNow; session.ClosedAt = DateTime.UtcNow;
         session.SubmittedAt = session.ClosingAt; session.SubmittedBy = staffId; session.UpdatedAt = DateTime.UtcNow;
+        
+        // Clear any previous review statuses since it's a resubmission
+        session.ReviewStartedAt = null;
+        session.ReviewStartedBy = null;
+        session.ApprovalDecision = null;
+        session.ApprovalNotes = null;
+        session.ReconciliationDecision = null;
+        session.ReconciliationNotes = null;
+        
         _dbContext.OutboxEvents.Add(new LocalOutboxEvent
         {
-            IdempotencyKey = $"frontdesk-close:{session.Id}", PropertyId = session.PropertyId, DeviceId = deviceId, OperatorId = staffId,
+            IdempotencyKey = $"frontdesk-close:{session.Id}:{DateTime.UtcNow.Ticks}", PropertyId = session.PropertyId, DeviceId = deviceId, OperatorId = staffId,
             AggregateType = "FRONTDESK_SESSION", AggregateId = session.Id, EventType = "FRONTDESK_SESSION_CLOSED", Sequence = 2,
             PayloadJson = JsonSerializer.Serialize(new { sessionId = session.Id, declaredCash, systemExpectedCash = expected, variance = session.Variance, businessDate = session.BusinessDate })
         });
