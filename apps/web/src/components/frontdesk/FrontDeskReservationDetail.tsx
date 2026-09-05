@@ -181,46 +181,42 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
               </div>
 
               {/* Rate & Discount display */}
-              <div className="pt-4 border-t border-slate-100 flex items-center justify-between mt-4">
-                <div>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Nightly Rate</p>
-                  <div className="flex items-center gap-2">
-                    <p className="font-bold text-slate-900 text-lg">{formatCurrency(Number(resRoom?.rateAmount || 0))}</p>
-                    {resRoom?.discountAmount > 0 && (
-                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
-                        -{formatCurrency(Number(resRoom?.discountAmount || 0))} discount
-                      </Badge>
-                    )}
-                    {resRoom?.discountPercent > 0 && (
-                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
-                        -{resRoom?.discountPercent}% discount
-                      </Badge>
-                    )}
+              {(() => {
+                let finalRate = Number(resRoom?.rateAmount || 0);
+                if (resRoom?.discountType === 'FIXED_AMOUNT' || (resRoom?.discountAmount > 0 && !resRoom?.discountPercent)) {
+                  finalRate -= Number(resRoom?.discountAmount || 0);
+                } else if (resRoom?.discountType === 'PERCENTAGE' || resRoom?.discountPercent > 0) {
+                  finalRate -= finalRate * (Number(resRoom?.discountPercent || 0) / 100);
+                }
+                finalRate = Math.max(0, finalRate);
+
+                return (
+                  <div className="pt-4 border-t border-slate-100 flex items-center justify-between mt-4">
+                    <div>
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Nightly Rate</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-bold text-slate-900 text-lg">{formatCurrency(finalRate)}</p>
+                        {Number(resRoom?.rateAmount || 0) > finalRate && (
+                          <span className="text-sm text-slate-400 line-through">
+                            {formatCurrency(Number(resRoom?.rateAmount || 0))}
+                          </span>
+                        )}
+                        {resRoom?.discountAmount > 0 && resRoom?.discountType !== 'PERCENTAGE' && (
+                          <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
+                            -{formatCurrency(Number(resRoom?.discountAmount || 0))} discount
+                          </Badge>
+                        )}
+                        {resRoom?.discountPercent > 0 && (
+                          <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
+                            -{resRoom?.discountPercent}% discount
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
-                {canManageReservation && resRoom && (
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 rounded-lg font-semibold text-emerald-700 border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800"
-                      onClick={() => setIsDiscountOpen(true)}
-                    >
-                      <Percent className="w-3.5 h-3.5 mr-1.5" />
-                      Apply Discount
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 rounded-lg font-semibold text-blue-700 border-blue-200 hover:bg-blue-50 hover:text-blue-800"
-                      onClick={() => setIsComplimentaryOpen(true)}
-                    >
-                      <Percent className="w-3.5 h-3.5 mr-1.5" />
-                      Complimentary
-                    </Button>
-                  </div>
-                )}
-              </div>
+                );
+              })()}
+
             </CardContent>
           </Card>
 

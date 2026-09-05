@@ -4657,23 +4657,28 @@ public class LocalRepository
         return audit;
     }
 
-    public async Task<List<LocalStaff>> GetActiveStaffAsync(string propertyId, string? roleScope = null, string? outletId = null)
+    public async Task<List<LocalStaff>> GetActiveStaffAsync(string propertyId, string? roleScope = null, string? outletId = null, bool isPosContext = false)
     {
-        // If no outletId supplied, fall back to the terminal's own registered outlet
-        if (string.IsNullOrWhiteSpace(outletId))
+        // If no outletId supplied, fall back to the terminal's own registered outlet ONLY in POS context
+        if (isPosContext && string.IsNullOrWhiteSpace(outletId))
         {
             var terminal = await _dbContext.PosTerminals.FirstOrDefaultAsync();
             outletId = terminal?.OutletId;
         }
 
-        var allStaff = await _dbContext.Staff
-            .Where(s => s.PropertyId == propertyId && s.IsActive && s.HasPosAccess)
-            .ToListAsync();
+        var allStaffQuery = _dbContext.Staff.Where(s => s.PropertyId == propertyId && s.IsActive);
+        
+        if (isPosContext)
+        {
+            allStaffQuery = allStaffQuery.Where(s => s.HasPosAccess);
+        }
+
+        var allStaff = await allStaffQuery.ToListAsync();
 
         // Filter by outlet: if staff has explicit outlet assignments, only show them
         // for their allowed outlets. An empty AllowedOutletIds means unrestricted
         // (e.g. managers, admins who can operate anywhere).
-        if (!string.IsNullOrWhiteSpace(outletId))
+        if (isPosContext && !string.IsNullOrWhiteSpace(outletId))
         {
             allStaff = allStaff.Where(s =>
             {

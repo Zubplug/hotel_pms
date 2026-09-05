@@ -2082,7 +2082,7 @@ public class OfflinePMSInterop
     {
         try
         {
-            var res = await _repo.GetActiveStaffAsync(propertyId, roleScope, outletId);
+            var res = await _repo.GetActiveStaffAsync(propertyId, roleScope, outletId, isPosContext: true);
             return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
         catch (Exception ex)
