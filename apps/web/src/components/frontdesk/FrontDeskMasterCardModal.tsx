@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Key, X, Calendar, ArrowRight } from 'lucide-react';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
-import { ManagerOverrideModal } from '../pos/ManagerOverrideModal';
 import { format, addYears } from 'date-fns';
+import { useQuery } from '@tanstack/react-query';
+import { useProperty } from '@/components/PropertyProvider';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 type FrontDeskMasterCardModalProps = {
   isOpen: boolean;
@@ -14,13 +16,27 @@ export function FrontDeskMasterCardModal({ isOpen, onClose }: FrontDeskMasterCar
   const { provider } = useLodgeCoreProvider();
   
   const [mounted, setMounted] = useState(false);
-  const [showOverride, setShowOverride] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   
   const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(addYears(new Date(), 10), 'yyyy-MM-dd'));
+  const [acknowledgedByStaffId, setAcknowledgedByStaffId] = useState('');
+  const [reason, setReason] = useState('');
+  
+  const { propertyId } = useProperty();
+  const { data: managersRes } = useQuery({
+    queryKey: ['managers-local', propertyId],
+    queryFn: async () => {
+      return provider.auth.getActiveStaff();
+    },
+    enabled: !!propertyId && isOpen,
+    staleTime: 300_000,
+  });
+  const activeStaff = (managersRes as any)?.data || [];
+
+  const quickReasons = ['Emergency Access', 'Lockout', 'Maintenance', 'Management Access', 'Security Incident', 'Other'];
 
   useEffect(() => {
     setMounted(true);
@@ -30,7 +46,8 @@ export function FrontDeskMasterCardModal({ isOpen, onClose }: FrontDeskMasterCar
     if (isOpen) {
       setStartDate(format(new Date(), 'yyyy-MM-dd'));
       setEndDate(format(addYears(new Date(), 10), 'yyyy-MM-dd'));
-      setShowOverride(false);
+      setAcknowledgedByStaffId('');
+      setReason('');
       setError('');
       setSuccess(false);
       setIsLoading(false);
@@ -39,22 +56,24 @@ export function FrontDeskMasterCardModal({ isOpen, onClose }: FrontDeskMasterCar
 
   if (!isOpen || !mounted) return null;
 
-  const handleCreateClick = () => {
-    setShowOverride(true);
-  };
-
-  const handleAuthorized = async (managerId: string, managerPin: string, reason: string) => {
-    setShowOverride(false);
+  const handleCreateClick = async () => {
+    if (!acknowledgedByStaffId) {
+      setError('Please select an acknowledging staff member.');
+      return;
+    }
+    if (!reason.trim()) {
+      setError('Please provide a reason.');
+      return;
+    }
+    
     setIsLoading(true);
     setError('');
 
     try {
-      // In a real app we'd want times too, but hardware agent parses Date.
       const res = await provider.keycards.encodeMasterCard({ 
           startDate: `${startDate}T00:00:00`,
           endDate: `${endDate}T23:59:59`,
-          managerId,
-          pin: managerPin,
+          acknowledgedByStaffId,
           reason
       });
       if (res.success) {
@@ -127,6 +146,46 @@ export function FrontDeskMasterCardModal({ isOpen, onClose }: FrontDeskMasterCar
               </div>
             </div>
 
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Acknowledged By</label>
+                <Select value={acknowledgedByStaffId} onValueChange={setAcknowledgedByStaffId}>
+                  <SelectTrigger className="w-full bg-slate-50 border-slate-200 rounded-xl">
+                    <SelectValue placeholder="Select staff member" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {activeStaff.map((staff: any) => (
+                      <SelectItem key={staff.id} value={staff.id}>
+                        {staff.firstName} {staff.lastName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Reason</label>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {quickReasons.map(qr => (
+                    <button
+                      key={qr}
+                      onClick={() => setReason(qr)}
+                      className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-medium rounded-full transition-colors"
+                    >
+                      {qr}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="text"
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  placeholder="Explain why a master card is being issued"
+                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-slate-700"
+                />
+              </div>
+            </div>
+
             {error && (
               <div className="mb-6 p-3 bg-red-50 text-red-600 text-sm font-medium rounded-xl border border-red-100">
                 {error}
@@ -135,27 +194,20 @@ export function FrontDeskMasterCardModal({ isOpen, onClose }: FrontDeskMasterCar
 
             <button
               onClick={handleCreateClick}
-              disabled={isLoading || !startDate || !endDate}
+              disabled={isLoading || !startDate || !endDate || !acknowledgedByStaffId || !reason.trim()}
               className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-all shadow-sm flex items-center justify-center disabled:opacity-50"
             >
               {isLoading ? (
                 <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
               ) : (
                 <>
-                  Require Manager Approval <ArrowRight className="w-4 h-4 ml-2" />
+                  Create Master Card <ArrowRight className="w-4 h-4 ml-2" />
                 </>
               )}
             </button>
           </>
         )}
       </div>
-
-      <ManagerOverrideModal
-        isOpen={showOverride}
-        actionName="Create Master Card"
-        onAuthorized={handleAuthorized}
-        onCancel={() => setShowOverride(false)}
-      />
     </div>
   );
 

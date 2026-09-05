@@ -427,11 +427,11 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
         body: JSON.stringify({ actualCash, operatorId, authorizerId })
       });
     },
-    confirmHandover: async (sessionId: string, managerPin: string) => {
-      return apiFetchResult(`/api/v1/pos/sessions/${sessionId}/confirm-handover`, {
-        method: 'POST',
-        body: JSON.stringify({ managerPin })
+    confirmHandover: async (sessionId: string) => {
+      const res = await apiFetch(`/api/v1/pos/sessions/${sessionId}/confirm-handover`, {
+        method: 'POST'
       });
+      return { success: !res.error, ...res };
     },
     getPendingHandovers: async (propertyId: string) => {
       const token = localStorage.getItem('lodgecore_pos_operator_token');
@@ -504,6 +504,14 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
       });
       if (res.error) return { success: false, error: res.error };
       if (res.data?.requiresApproval) return { success: true, requiresApproval: true };
+      return { success: true, approvalId: res.data?.approvalId };
+    },
+    requestComplimentary: async (payload: any) => {
+      const res = await apiFetchResult(`/api/v1/approvals/complimentary`, {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      if (res.error) return { success: false, error: res.error };
       return { success: true, approvalId: res.data?.approvalId };
     },
   },

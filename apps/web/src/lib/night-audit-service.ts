@@ -214,7 +214,21 @@ export async function getFinancialAudit(ctx: TenantContext, propertyId: string) 
     }
   });
 
-  return { openFolios, highBalances, rateVariances, pendingDiscounts };
+  // Fetch unverified Complimentary transactions for the business date
+  // These are hard blockers for the Night Audit.
+  const unverifiedComplimentary = await prisma.complimentaryRecord.findMany({
+    where: {
+      propertyId,
+      businessDate,
+      status: { in: ['PENDING_NIGHT_AUDIT', 'UNRESOLVED'] }
+    },
+    include: {
+      operator: { select: { firstName: true, lastName: true } },
+      staff: { select: { firstName: true, lastName: true } }
+    }
+  });
+
+  return { openFolios, highBalances, rateVariances, pendingDiscounts, unverifiedComplimentary };
 }
 
 export async function getCashReconciliation(ctx: TenantContext, propertyId: string) {

@@ -224,8 +224,7 @@ public partial class MainPage : ContentPage
                     responseData = await hardwareInterop.EncodeMasterCardAsync(
                         parameters?["startDate"]?.ToString(),
                         parameters?["endDate"]?.ToString(),
-                        parameters?["managerId"]?.ToString(),
-                        parameters?["pin"]?.ToString(),
+                        parameters?["acknowledgedByStaffId"]?.ToString(),
                         parameters?["reason"]?.ToString());
                     break;
                 case "hardware.cancelCard":
@@ -551,6 +550,9 @@ public partial class MainPage : ContentPage
                 case "approvals.requestDiscount":
                     responseData = await pmsInterop.RequestDiscountAsync(parameters?.ToJsonString() ?? "{}");
                     break;
+                case "approvals.requestComplimentary":
+                    responseData = await pmsInterop.RequestComplimentaryAsync(parameters?.ToJsonString() ?? "{}");
+                    break;
                 case "pos.payOrder":
                     responseData = await pmsInterop.PayOrderAsync(
                         parameters?["orderId"]?.ToString() ?? "",
@@ -636,8 +638,7 @@ public partial class MainPage : ContentPage
                     break;
                 case "pos.confirmHandover":
                     responseData = await pmsInterop.ConfirmHandoverAsync(
-                        parameters?["sessionId"]?.ToString() ?? "",
-                        parameters?["managerPin"]?.ToString() ?? ""
+                        parameters?["sessionId"]?.ToString() ?? ""
                     );
                     break;
                 case "pos.getPendingHandovers":

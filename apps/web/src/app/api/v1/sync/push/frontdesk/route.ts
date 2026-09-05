@@ -2595,6 +2595,111 @@ export async function POST(req: NextRequest) {
                 });
               }
             }
+          } else if (aggregateType === "COMPLIMENTARY_RECORD") {
+            if (eventType === "COMPLIMENTARY_CREATED") {
+              await tx.complimentaryRecord.create({
+                data: {
+                  id: aggregateId,
+                  propertyId,
+                  businessDate: payload.businessDate ? new Date(payload.businessDate) : authoritativeBusinessDate,
+                  reference: payload.reference,
+                  sourceModule: payload.sourceModule,
+                  folioItemId: payload.folioItemId || null,
+                  posOrderId: payload.posOrderId || null,
+                  guestId: payload.guestId || null,
+                  staffId: payload.staffId || null,
+                  roomId: payload.roomId || null,
+                  grossAmount: payload.grossAmount,
+                  discountAmount: payload.discountAmount || 0,
+                  complAmount: payload.complAmount,
+                  netAmount: payload.netAmount,
+                  amountPaid: payload.amountPaid || 0,
+                  staffLiability: payload.staffLiability || 0,
+                  complType: payload.complType,
+                  reason: payload.reason,
+                  notes: payload.notes || null,
+                  operatorId: payload.operatorId,
+                  approverId: payload.approverId || null,
+                  status: payload.status || "PENDING_NIGHT_AUDIT",
+                  operationId: payload.operationId || idempotencyKey,
+                  deviceId: device.id,
+                  createdAt: payload.createdAt ? new Date(payload.createdAt) : new Date(),
+                }
+              });
+            } else if (eventType === "COMPLIMENTARY_VERIFIED") {
+              await tx.complimentaryRecord.update({
+                where: { id: aggregateId },
+                data: {
+                  status: "VERIFIED",
+                  nightAuditorId: actorId,
+                  verifiedAt: new Date()
+                }
+              });
+            } else if (eventType === "COMPLIMENTARY_REJECTED") {
+              await tx.complimentaryRecord.update({
+                where: { id: aggregateId },
+                data: {
+                  status: "UNRESOLVED",
+                  nightAuditorId: actorId,
+                  rejectionReason: payload.rejectionReason
+                }
+              });
+            } else if (eventType === "COMPLIMENTARY_RESOLVED") {
+              await tx.complimentaryRecord.update({
+                where: { id: aggregateId },
+                data: {
+                  status: payload.resolutionStatus || "ACCEPTED"
+                }
+              });
+            }
+          } else if (aggregateType === "STAFF_RECEIVABLE") {
+            if (eventType === "RECEIVABLE_CREATED") {
+              await tx.staffReceivable.create({
+                data: {
+                  id: aggregateId,
+                  propertyId,
+                  staffId: payload.staffId,
+                  reference: payload.reference,
+                  originalAmount: payload.originalAmount,
+                  paidAmount: payload.paidAmount || 0,
+                  outstanding: payload.outstanding || payload.originalAmount,
+                  status: payload.status || "OUTSTANDING",
+                  sourceId: payload.sourceId || null,
+                  operationId: payload.operationId || idempotencyKey,
+                  createdAt: payload.createdAt ? new Date(payload.createdAt) : new Date(),
+                }
+              });
+            } else if (eventType === "RECEIVABLE_SETTLED") {
+              await tx.staffReceivableSettlement.create({
+                data: {
+                  id: payload.settlementId,
+                  receivableId: aggregateId,
+                  amount: payload.amount,
+                  method: payload.method,
+                  paymentId: payload.paymentId || null,
+                  payrollPeriodId: payload.payrollPeriodId || null,
+                  payrollExportDate: payload.payrollExportDate ? new Date(payload.payrollExportDate) : null,
+                  payrollReference: payload.payrollReference || null,
+                  payrollStatus: payload.payrollStatus || "NOT_EXPORTED",
+                  createdBy: actorId,
+                  operationId: payload.operationId || idempotencyKey,
+                  createdAt: payload.createdAt ? new Date(payload.createdAt) : new Date(),
+                }
+              });
+              const rec = await tx.staffReceivable.findUnique({ where: { id: aggregateId } });
+              if (rec) {
+                const newPaid = Number(rec.paidAmount) + Number(payload.amount);
+                const newOut = Number(rec.originalAmount) - newPaid;
+                await tx.staffReceivable.update({
+                  where: { id: aggregateId },
+                  data: {
+                    paidAmount: newPaid,
+                    outstanding: newOut,
+                    status: newOut <= 0 ? "PAID" : "PARTIAL"
+                  }
+                });
+              }
+            }
           } else {
             throw new Error(`Unknown eventType: ${eventType}`);
           }

@@ -2899,7 +2899,7 @@ public class LocalRepository
         var amount = root.TryGetProperty("discountAmount", out var amt) ? amt.GetDouble() : 0.0;
         var percentage = root.TryGetProperty("discountPercent", out var pct) ? pct.GetDouble() : (root.TryGetProperty("percentage", out var oldPct) ? oldPct.GetDouble() : 0.0);
         var reason = root.TryGetProperty("reason", out var rsn) ? rsn.GetString() : "";
-        var managerPin = root.TryGetProperty("managerPin", out var pin) ? pin.GetString() : "";
+        var acknowledgedByStaffId = root.TryGetProperty("acknowledgedByStaffId", out var ackId) ? ackId.GetString() : "";
 
         // Determine Property ID to fetch settings and staff
         string propertyId = "";
@@ -2915,35 +2915,9 @@ public class LocalRepository
         if (string.IsNullOrEmpty(propertyId)) throw new Exception("Property context not found");
 
         var property = await _dbContext.Properties.FirstOrDefaultAsync(p => p.Id == propertyId);
-        double autoAmount = 0;
-        double autoPercent = 0;
-        bool requiresApproval = false;
-        if (amount > autoAmount && autoAmount > 0) requiresApproval = true;
-        if (percentage > autoPercent && autoPercent > 0) requiresApproval = true;
-
-        string? approverId = null;
-        if (requiresApproval)
-        {
-            var managerId = root.TryGetProperty("managerId", out var mid) ? mid.GetString() : "";
-            if (string.IsNullOrEmpty(managerPin) || string.IsNullOrEmpty(managerId))
-                return new { requiresApproval = true };
-
-            var approver = await AuthorizeManagerOverrideAsync(managerId, managerPin, propertyId);
-            if (approver == null)
-                throw new Exception("Invalid manager PIN or insufficient permissions");
-            approverId = approver.Id;
-            
-            LogOverrideAudit(
-                propertyId: propertyId,
-                operatorStaffId: userId,
-                managerStaffId: approver.Id,
-                action: targetType == "POS_ORDER" ? "POS_DISCOUNT_OVERRIDE" : "FRONTDESK_DISCOUNT_OVERRIDE",
-                entityType: targetType ?? "Unknown",
-                entityId: targetType == "POS_ORDER" ? (root.TryGetProperty("orderId", out var ordId) ? ordId.GetString() ?? "Unknown" : "Unknown") : (root.TryGetProperty("reservationRoomId", out var rri) ? rri.GetString() ?? "Unknown" : "Unknown"),
-                reason: reason,
-                amount: (decimal)amount
-            );
-        }
+        
+        if (string.IsNullOrEmpty(acknowledgedByStaffId))
+            throw new Exception("acknowledgedByStaffId is required for discounts");
 
         using var transaction = await _dbContext.Database.BeginTransactionAsync();
         try
@@ -2975,7 +2949,7 @@ public class LocalRepository
                     EventType = "DISCOUNT_APPLIED",
                     Sequence = 1,
                     PayloadJson = JsonSerializer.Serialize(new {
-                        discountType, discountAmount = amount, discountPercent = percentage, reason, approverId
+                        discountType, discountAmount = amount, discountPercent = percentage, reason, acknowledgedByStaffId
                     })
                 };
             }
@@ -3003,6 +2977,7 @@ public class LocalRepository
                     { "baseAmount", -amount },
                     { "postedBy", userId },
                     { "discountApprovalId", approvalId },
+                    { "acknowledgedByStaffId", acknowledgedByStaffId },
                     { "targetFolioItemId", targetFolioItemId ?? "" }
                 };
 
@@ -3053,7 +3028,7 @@ public class LocalRepository
                     EventType = "DISCOUNT_APPLIED",
                     Sequence = 1,
                     PayloadJson = JsonSerializer.Serialize(new {
-                        amount = effectiveDiscount, percentage, reason, approverId
+                        amount = effectiveDiscount, percentage, reason, acknowledgedByStaffId
                     })
                 };
             }
@@ -3068,6 +3043,148 @@ public class LocalRepository
         {
             await transaction.RollbackAsync();
             throw new Exception($"Failed to apply discount: {ex.Message}");
+        }
+    }
+
+    public async Task<object> RequestComplimentaryAsync(string payloadJson, string userId, string deviceId, string sessionId)
+    {
+        using var document = JsonDocument.Parse(payloadJson);
+        var root = document.RootElement;
+        
+        var targetType = root.TryGetProperty("targetType", out var tt) ? tt.GetString() : "POS_ORDER";
+        var compType = root.TryGetProperty("compType", out var ct) ? ct.GetString() : "FULL";
+        var compAmount = root.TryGetProperty("compAmount", out var ca) ? ca.GetDouble() : 0.0;
+        var reason = root.TryGetProperty("reason", out var rsn) ? rsn.GetString() : "";
+        var acknowledgedByStaffId = root.TryGetProperty("acknowledgedByStaffId", out var ackId) ? ackId.GetString() : "";
+        
+        var beneficiaryType = root.TryGetProperty("beneficiaryType", out var bt) ? bt.GetString() : "GUEST";
+        var beneficiaryStaffId = root.TryGetProperty("beneficiaryStaffId", out var bsid) ? bsid.GetString() : null;
+        var settlementType = root.TryGetProperty("settlementType", out var st) ? st.GetString() : "PAY_NOW";
+
+        string propertyId = "";
+        PosOrder? posOrder = null;
+        ReservationRoom? resRoom = null;
+
+        if (targetType == "POS_ORDER" && root.TryGetProperty("orderId", out var orderIdProp)) {
+            posOrder = await _dbContext.PosOrders.FirstOrDefaultAsync(o => o.Id == orderIdProp.GetString());
+            if (posOrder == null) throw new Exception("Order not found");
+            propertyId = posOrder.PropertyId;
+        } else if (targetType == "RESERVATION_ROOM" && root.TryGetProperty("reservationRoomId", out var rrIdProp)) {
+            resRoom = await _dbContext.ReservationRooms.FirstOrDefaultAsync(r => r.Id == rrIdProp.GetString());
+            if (resRoom == null) throw new Exception("Reservation room not found");
+            propertyId = resRoom.PropertyId;
+        }
+
+        if (string.IsNullOrEmpty(propertyId)) throw new Exception("Property context not found");
+
+        if (string.IsNullOrEmpty(acknowledgedByStaffId))
+            throw new Exception("acknowledgedByStaffId is required for complimentary records");
+
+        using var transaction = await _dbContext.Database.BeginTransactionAsync();
+        try
+        {
+            double totalAmountToComp = 0;
+            if (targetType == "POS_ORDER" && posOrder != null) {
+                totalAmountToComp = compType == "FULL" ? (double)posOrder.Total : compAmount;
+            } else if (targetType == "RESERVATION_ROOM" && resRoom != null) {
+                var nights = (resRoom.CheckOut - resRoom.CheckIn).Days;
+                totalAmountToComp = compType == "FULL" ? resRoom.TotalAmount : (compAmount * nights);
+            }
+
+            // Create ComplimentaryRecord
+            var compRecord = new ComplimentaryRecord
+            {
+                Id = Guid.NewGuid().ToString(),
+                PropertyId = propertyId,
+                OperatorId = userId,
+                AcknowledgedById = acknowledgedByStaffId,
+                BeneficiaryType = beneficiaryType == "STAFF" ? ComplimentaryBeneficiaryType.STAFF : ComplimentaryBeneficiaryType.GUEST,
+                BeneficiaryStaffId = beneficiaryType == "STAFF" ? beneficiaryStaffId : null,
+                Type = compType == "FULL" ? ComplimentaryType.FULL : ComplimentaryType.PARTIAL,
+                Reason = reason,
+                Status = ComplimentaryStatus.PENDING_NIGHT_AUDIT,
+                Amount = totalAmountToComp,
+                TargetType = targetType,
+                TargetId = targetType == "POS_ORDER" ? posOrder!.Id : resRoom!.Id,
+                Notes = "",
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            _dbContext.ComplimentaryRecords.Add(compRecord);
+
+            // Handle Staff Receivables if needed
+            if (beneficiaryType == "STAFF" && settlementType == "STAFF_PAY_LATER" && beneficiaryStaffId != null)
+            {
+                var receivable = new StaffReceivable
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    PropertyId = propertyId,
+                    StaffId = beneficiaryStaffId,
+                    SourceType = "COMPLIMENTARY",
+                    SourceId = compRecord.Id,
+                    Amount = totalAmountToComp,
+                    Status = StaffReceivableStatus.PENDING,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+                _dbContext.StaffReceivables.Add(receivable);
+            }
+
+            // Apply financial adjustments to the target
+            if (targetType == "POS_ORDER" && posOrder != null)
+            {
+                posOrder.DiscountType = "COMPLIMENTARY";
+                posOrder.DiscountValue = (decimal)totalAmountToComp;
+                posOrder.DiscountReason = reason;
+                posOrder.ManagerOverrideId = acknowledgedByStaffId; // Mapping acknowledgedBy to ManagerOverride for schema compat
+                
+                CalculatePosOrderTotals(posOrder);
+                _dbContext.PosOrders.Update(posOrder);
+            }
+            else if (targetType == "RESERVATION_ROOM" && resRoom != null)
+            {
+                resRoom.DiscountType = "COMPLIMENTARY";
+                resRoom.DiscountAmount = (decimal)(compType == "FULL" ? resRoom.NightlyRate : compAmount); // Per night discount
+                resRoom.DiscountReason = reason;
+                resRoom.DiscountApprovalId = acknowledgedByStaffId;
+                
+                var nights = (resRoom.CheckOut - resRoom.CheckIn).Days;
+                double rate = resRoom.NightlyRate;
+                double deduct = (double)resRoom.DiscountAmount;
+                resRoom.TotalAmount = Math.Max(0, (rate - deduct) * nights);
+
+                _dbContext.ReservationRooms.Update(resRoom);
+            }
+
+            var approvalId = Guid.NewGuid().ToString();
+            var evt = new LocalOutboxEvent
+            {
+                Id = approvalId,
+                PropertyId = propertyId,
+                DeviceId = deviceId,
+                OperatorId = userId,
+                AggregateType = targetType,
+                AggregateId = targetType == "POS_ORDER" ? posOrder!.Id : resRoom!.Id,
+                AggregateVersion = 1,
+                EventType = targetType == "POS_ORDER" ? "POS_COMPLIMENTARY_APPLIED" : "COMPLIMENTARY_APPLIED",
+                Sequence = 1,
+                PayloadJson = JsonSerializer.Serialize(new {
+                    compType, compAmount, reason, acknowledgedByStaffId, beneficiaryType, beneficiaryStaffId, settlementType
+                })
+            };
+            
+            _dbContext.OutboxEvents.Add(evt);
+
+            await _dbContext.SaveChangesAsync();
+            await transaction.CommitAsync();
+
+            return new { success = true, complimentaryRecord = compRecord };
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync();
+            throw new Exception($"Failed to apply complimentary: {ex.Message}", ex);
         }
     }
 
@@ -4000,7 +4117,7 @@ public class LocalRepository
         return account;
     }
 
-    public async Task<LocalPosSettlement> ConfirmHandoverAsync(string sessionId, string managerPin, string deviceId)
+    public async Task<LocalPosSettlement> ConfirmHandoverAsync(string sessionId, string authorizerId, string deviceId)
     {
         using var transaction = await _dbContext.Database.BeginTransactionAsync();
         try
@@ -4019,9 +4136,9 @@ public class LocalRepository
             bool handoverExists = await _dbContext.PosCashMovements.AnyAsync(m => m.PosSessionId == sessionId && m.Type == "SERVER_HANDOVER");
             if (handoverExists) throw new Exception("Handover movement already exists for this session.");
 
-            // Authorize Manager
-            var authorizer = await ValidateSupervisorPinAsync(managerPin, session.PropertyId);
-            if (authorizer == null) throw new UnauthorizedAccessException("Invalid Manager PIN");
+            // Authorize Manager (no PIN check, relies on logged-in user context)
+            var authorizer = await _dbContext.Staff.FindAsync(authorizerId);
+            if (authorizer == null) throw new UnauthorizedAccessException("Invalid Authorizer");
 
             // Separation of Duties check
             if (authorizer.Id == settlement.OperatorId || authorizer.Id == session.UserId)

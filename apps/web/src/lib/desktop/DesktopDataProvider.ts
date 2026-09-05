@@ -474,8 +474,8 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
       // In offline mode, we just pass actualCash. cashPaidOut is legacy.
       return invokeDesktop('pos.closeSession', { sessionId, actualCash, cashPaidOut: 0 });
     },
-    confirmHandover: async (sessionId: string, managerPin: string) => {
-      return invokeDesktop('pos.confirmHandover', { sessionId, managerPin });
+    confirmHandover: async (sessionId: string) => {
+      return invokeDesktop('pos.confirmHandover', { sessionId });
     },
     getPendingHandovers: async (propertyId: string) => {
       return invokeDesktop('pos.getPendingHandovers', { propertyId });
@@ -515,6 +515,9 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     },
     requestDiscount: async (payload: any) => {
       return invokeDesktop('approvals.requestDiscount', payload);
+    },
+    requestComplimentary: async (payload: any) => {
+      return invokeDesktop('approvals.requestComplimentary', payload);
     },
   },
   laundry: {

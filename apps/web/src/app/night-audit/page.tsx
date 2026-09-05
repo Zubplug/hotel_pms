@@ -400,8 +400,30 @@ export default function NightAuditDashboard() {
         ))}
       </div>
     </div>}
-    {!data.financial.highBalances?.length && !data.financial.rateVariances?.length && !data.financial.pendingDiscounts?.length && (
-      <div className="text-sm text-emerald-600 bg-emerald-50 p-3 rounded-lg border border-emerald-100 flex items-center gap-2 shadow-sm"><CheckCircle2 className="h-4 w-4" /> No financial anomalies detected.</div>
+    {data.financial.unverifiedComplimentary?.length > 0 && <div>
+      <div className="mb-3">
+        <h4 className="font-semibold text-sm text-rose-700">Complimentary Control (Blocker)</h4>
+        <p className="text-xs text-rose-600/80 mt-0.5">Every complimentary transaction must be verified before the business date can be closed.</p>
+      </div>
+      <div className="space-y-2">
+        <div className="text-sm p-3 bg-white rounded-lg border border-rose-200 flex items-center justify-between shadow-sm">
+          <div>
+            <p className="font-medium text-rose-900">{data.financial.unverifiedComplimentary.length} Unverified Complimentary Transactions</p>
+            <p className="text-xs text-rose-600">Pending review</p>
+          </div>
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setResolutionAction({ type: 'COMPLIMENTARY_VERIFICATION', item: { records: data.financial.unverifiedComplimentary, propertyId } })}
+              className="text-xs font-medium text-rose-700 hover:text-rose-900 bg-rose-50 px-3 py-1.5 rounded-md transition-colors"
+            >
+              Verify Transactions
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>}
+    {!data.financial.highBalances?.length && !data.financial.rateVariances?.length && !data.financial.pendingDiscounts?.length && !data.financial.unverifiedComplimentary?.length && (
+      <div className="text-sm text-emerald-600 bg-emerald-50 p-3 rounded-lg border border-emerald-100 flex items-center gap-2 shadow-sm"><CheckCircle2 className="h-4 w-4" /> All financial controls are balanced.</div>
     )}
   </div>
 )}

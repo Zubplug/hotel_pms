@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Percent, Hash } from 'lucide-react';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
-import { ManagerOverrideModal } from './ManagerOverrideModal';
+import { useQuery } from '@tanstack/react-query';
+import { useProperty } from '@/components/PropertyProvider';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 type DiscountModalProps = {
   isOpen: boolean;
@@ -16,26 +18,45 @@ export function DiscountModal({ isOpen, orderId, orderTotal, onClose, onSuccess 
   const { provider, isDesktopMode } = useLodgeCoreProvider();
   const [type, setType] = useState<'percent' | 'amount'>('percent');
   const [value, setValue] = useState('');
-  const [reason, setReason] = useState('');
+  const [reasonCode, setReasonCode] = useState('');
+  const [reasonNote, setReasonNote] = useState('');
   
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   
-  // Supervisor Override State
-  const [showOverride, setShowOverride] = useState(false);
+  const { propertyId } = useProperty();
+  const [acknowledgedByStaffId, setAcknowledgedByStaffId] = useState('');
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
+  const { data: managersRes } = useQuery({
+    queryKey: ['managers-local', propertyId],
+    queryFn: async () => {
+      return provider.auth.getActiveStaff();
+    },
+    enabled: !!propertyId && isOpen,
+    staleTime: 300_000,
+  });
+  const activeStaff = (managersRes as any)?.data || [];
+
   if (!isOpen || !mounted) return null;
 
-  const handleSubmit = async (pin?: string) => {
+  const handleSubmit = async () => {
     if (!value || isNaN(Number(value)) || Number(value) <= 0) {
       setError('Please enter a valid discount value.');
       return;
     }
-    if (!reason.trim()) {
+    if (!reasonCode) {
       setError('A reason is required for discounts.');
+      return;
+    }
+    if (reasonCode === 'OTHER' && !reasonNote.trim()) {
+      setError('Please provide a short explanation for Other.');
+      return;
+    }
+    if (!acknowledgedByStaffId) {
+      setError('Please select the staff member who acknowledged this discount.');
       return;
     }
 
@@ -53,25 +74,13 @@ export function DiscountModal({ isOpen, orderId, orderTotal, onClose, onSuccess 
         discountType: type === 'amount' ? 'FIXED_AMOUNT' : 'PERCENTAGE',
         discountAmount: amount,
         discountPercent: percentage,
-        reason,
-        managerPin: pin
+        reason: reasonCode === 'OTHER' ? `OTHER: ${reasonNote}` : reasonCode,
+        acknowledgedByStaffId
       };
 
       const res = await provider.approvals.requestDiscount(payload);
       
-      if (res.requiresApproval) {
-        if (isDesktopMode) {
-          if (typeof window !== 'undefined' && (window as any).chrome?.webview) {
-            setShowOverride(true);
-          } else {
-            setError('Discount exceeds your limit. A request has been sent for manager approval.');
-            onSuccess();
-          }
-        } else {
-          setError('Discount exceeds your limit. A request has been sent for manager approval.');
-          onSuccess();
-        }
-      } else if (!res.success) {
+      if (!res.success) {
         setError(res.error || 'Failed to apply discount.');
       } else {
         onSuccess();
@@ -81,16 +90,6 @@ export function DiscountModal({ isOpen, orderId, orderTotal, onClose, onSuccess 
       setError(err.message || 'An unexpected error occurred.');
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const handleOverrideAuthorized = (managerId: string, managerPin: string, reasonFromModal: string) => {
-    setShowOverride(false);
-    // Retry with the PIN
-    if (managerPin) {
-      handleSubmit(managerPin);
-    } else {
-      setError('Failed to capture manager PIN.');
     }
   };
 
@@ -155,14 +154,52 @@ export function DiscountModal({ isOpen, orderId, orderTotal, onClose, onSuccess 
               <label className="block text-sm font-medium text-slate-700 mb-2">
                 Reason
               </label>
-              <input
-                type="text"
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                className="block w-full px-4 py-3 rounded-xl border-slate-200 bg-slate-50 text-slate-900 focus:border-blue-500 focus:ring-blue-500 transition-colors"
-                placeholder="e.g., Service Recovery, VIP Guest"
-                maxLength={100}
-              />
+              <Select value={reasonCode} onValueChange={setReasonCode}>
+                <SelectTrigger className="w-full h-12 rounded-xl bg-slate-50 border-slate-200">
+                  <SelectValue placeholder="Select reason" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Loyalty Member">Loyalty Member</SelectItem>
+                  <SelectItem value="Service Recovery">Service Recovery</SelectItem>
+                  <SelectItem value="Staff Discount">Staff Discount</SelectItem>
+                  <SelectItem value="Promotional">Promotional</SelectItem>
+                  <SelectItem value="OTHER">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {reasonCode === 'OTHER' && (
+              <div className="animate-in slide-in-from-top-2 duration-200">
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Explanation
+                </label>
+                <input
+                  type="text"
+                  value={reasonNote}
+                  onChange={(e) => setReasonNote(e.target.value)}
+                  className="block w-full px-4 py-3 rounded-xl border-slate-200 bg-slate-50 text-slate-900 focus:border-blue-500 focus:ring-blue-500 transition-colors"
+                  placeholder="Short explanation..."
+                  maxLength={100}
+                />
+              </div>
+            )}
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Acknowledged / Authorized By
+              </label>
+              <Select value={acknowledgedByStaffId} onValueChange={setAcknowledgedByStaffId}>
+                <SelectTrigger className="w-full h-12 rounded-xl bg-slate-50 border-slate-200">
+                  <SelectValue placeholder="Select staff member" />
+                </SelectTrigger>
+                <SelectContent>
+                  {activeStaff.map((staff: any) => (
+                    <SelectItem key={staff.id} value={staff.id}>
+                      {staff.firstName} {staff.lastName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
@@ -183,13 +220,6 @@ export function DiscountModal({ isOpen, orderId, orderTotal, onClose, onSuccess 
           </div>
         </div>
       </div>
-
-      <ManagerOverrideModal
-        isOpen={showOverride}
-        actionName="Discount Override"
-        onAuthorized={(id, pin, r) => handleOverrideAuthorized(id, pin, r)}
-        onCancel={() => setShowOverride(false)}
-      />
     </>,
     document.body
   );

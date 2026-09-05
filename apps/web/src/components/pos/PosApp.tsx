@@ -23,6 +23,7 @@ import { ProductCardStepper } from '@/components/pos/ProductCardStepper';
 // PosStaffStrip removed from header — orders accessible via sidebar
 import { ChargeModal } from '@/components/pos/ChargeModal';
 import { DiscountModal } from '@/components/pos/DiscountModal';
+import { ComplimentaryModal } from '@/components/pos/ComplimentaryModal';
 import { ActionSuccessModal } from '@/components/pos/ActionSuccessModal';
 import { WaiterTicketsModal } from '@/components/pos/WaiterTicketsModal';
 import { MySalesModal } from '@/components/pos/MySalesModal';
@@ -105,6 +106,7 @@ export default function PosApp() {
   const [showActiveOrders, setShowActiveOrders] = useState(false);
   const [showChargeModal, setShowChargeModal] = useState(false);
   const [showDiscountModal, setShowDiscountModal] = useState(false);
+  const [showComplimentaryModal, setShowComplimentaryModal] = useState(false);
   const [isPrintingCustomerReceipt, setIsPrintingCustomerReceipt] = useState(false);
   const [activeOrderType, setActiveOrderType] = useState<string>('TABLE');
   const [activeDisplayName, setActiveDisplayName] = useState<string>('');
@@ -1189,15 +1191,23 @@ export default function PosApp() {
               {currentOrderId && (
                 <div className="flex gap-2 w-full">
                   <button
-                    className={`flex-1 h-11 font-black text-sm tracking-wide rounded-xl transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 flex items-center justify-center gap-2 touch-manipulation bg-white border-2 border-slate-200 text-slate-700 hover:border-slate-300`}
+                    className={`flex-1 h-11 font-black text-sm tracking-wide rounded-xl transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 flex items-center justify-center gap-1 touch-manipulation bg-white border-2 border-slate-200 text-slate-700 hover:border-slate-300`}
                     onClick={() => setShowDiscountModal(true)}
                     disabled={isProcessing}
                   >
                     <Percent className="w-4 h-4" />
-                    DISCOUNT
+                    DISC
                   </button>
                   <button
-                    className={`flex-1 h-11 font-black text-sm tracking-wide rounded-xl transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 flex items-center justify-center gap-2 touch-manipulation ${
+                    className={`flex-1 h-11 font-black text-sm tracking-wide rounded-xl transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 flex items-center justify-center gap-1 touch-manipulation bg-white border-2 border-slate-200 text-slate-700 hover:border-slate-300`}
+                    onClick={() => setShowComplimentaryModal(true)}
+                    disabled={isProcessing}
+                  >
+                    <Percent className="w-4 h-4" />
+                    COMP
+                  </button>
+                  <button
+                    className={`flex-[1.5] h-11 font-black text-sm tracking-wide rounded-xl transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 flex items-center justify-center gap-2 touch-manipulation ${
                       cart.some(item => !item.fired) 
                         ? 'bg-white border-2 border-indigo-100 text-indigo-600 hover:border-indigo-200' 
                         : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/25'
@@ -1356,6 +1366,17 @@ export default function PosApp() {
         orderId={currentOrderId || ''}
         orderTotal={total}
         onClose={() => setShowDiscountModal(false)}
+        onSuccess={() => {
+          setTableRefreshTrigger(Date.now());
+        }}
+      />
+
+      {/* Complimentary Modal */}
+      <ComplimentaryModal
+        isOpen={showComplimentaryModal}
+        orderId={currentOrderId || ''}
+        orderTotal={total}
+        onClose={() => setShowComplimentaryModal(false)}
         onSuccess={() => {
           setTableRefreshTrigger(Date.now());
         }}

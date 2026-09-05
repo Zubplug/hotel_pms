@@ -28,6 +28,7 @@ export async function getNightAuditPreview(ctx: any, propertyId: string) {
   if (system.financialSyncConflicts.length > 0) blockers++;
 
   if (financial.highBalances.length > 0) warnings++;
+  if (financial.unverifiedComplimentary?.length > 0) blockers++;
 
   return {
     operational,
@@ -65,6 +66,9 @@ export async function executeNightAudit(
   // must be reconciled before the old business date can be closed.
   if (!isRecovery) {
     const { openPosSessions, openFrontdeskSessions, financialSyncConflicts } = await getSystemIntegrity(ctx, propertyId);
+    const { unverifiedComplimentary } = await getFinancialAudit(ctx, propertyId);
+    
+    if (unverifiedComplimentary.length > 0) throw new Error('BLOCKER:Cannot execute audit. Unverified complimentary transactions must be resolved.');
     if (openPosSessions.length > 0) throw new Error('BLOCKER:Cannot execute audit. There are open POS sessions.');
     if (openFrontdeskSessions.length > 0) throw new Error('BLOCKER:Cannot execute audit. There are open front-desk cashier shifts.');
     if (financialSyncConflicts.length > 0) throw new Error('BLOCKER:Cannot execute audit. There are unresolved financial sync conflicts.');

@@ -16,6 +16,7 @@ import { FrontDeskExtendStayDialog } from './FrontDeskExtendStayDialog';
 import { FrontDeskQuickCheckoutDialog } from './FrontDeskQuickCheckoutDialog';
 import { FrontDeskReceiptDialog } from './FrontDeskReceiptDialog';
 import { FrontDeskDiscountModal } from './FrontDeskDiscountModal';
+import { FrontDeskComplimentaryModal } from './FrontDeskComplimentaryModal';
 import { FolioSection } from '../reservations/FolioSection';
 import { FrontDeskCardInformationSection } from './FrontDeskCardInformationSection';
 import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
@@ -41,6 +42,7 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
   const [isQuickCheckoutOpen, setIsQuickCheckoutOpen] = useState(false);
   const [isDiscountOpen, setIsDiscountOpen] = useState(false);
+  const [isComplimentaryOpen, setIsComplimentaryOpen] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
 
   const resRoom = reservation.reservationRooms?.[0];
@@ -197,15 +199,26 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
                   </div>
                 </div>
                 {canManageReservation && resRoom && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-8 rounded-lg font-semibold text-emerald-700 border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800"
-                    onClick={() => setIsDiscountOpen(true)}
-                  >
-                    <Percent className="w-3.5 h-3.5 mr-1.5" />
-                    Apply Discount
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 rounded-lg font-semibold text-emerald-700 border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800"
+                      onClick={() => setIsDiscountOpen(true)}
+                    >
+                      <Percent className="w-3.5 h-3.5 mr-1.5" />
+                      Apply Discount
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 rounded-lg font-semibold text-blue-700 border-blue-200 hover:bg-blue-50 hover:text-blue-800"
+                      onClick={() => setIsComplimentaryOpen(true)}
+                    >
+                      <Percent className="w-3.5 h-3.5 mr-1.5" />
+                      Complimentary
+                    </Button>
+                  </div>
                 )}
               </div>
             </CardContent>
@@ -395,6 +408,20 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
           onSuccess={() => {
             queryClient.invalidateQueries({ queryKey: ['reservation', reservation.id] });
             setIsDiscountOpen(false);
+          }}
+        />
+      )}
+      
+      {isComplimentaryOpen && resRoom && (
+        <FrontDeskComplimentaryModal
+          isOpen={isComplimentaryOpen}
+          targetType="RESERVATION_ROOM"
+          targetId={resRoom.id}
+          targetTotal={Number(resRoom.rateAmount || 0)}
+          onClose={() => setIsComplimentaryOpen(false)}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ['reservation', reservation.id] });
+            setIsComplimentaryOpen(false);
           }}
         />
       )}

@@ -445,24 +445,18 @@ public class HardwareInterop
     private static string Fail(string message)
         => JsonSerializer.Serialize(new { success = false, error = message }, _jsonOptions);
 
-    public async Task<string> EncodeMasterCardAsync(string? startDateStr, string? endDateStr, string? managerId, string? managerPin, string? reason)
+    public async Task<string> EncodeMasterCardAsync(string? startDateStr, string? endDateStr, string? acknowledgedByStaffId, string? reason)
     {
         var session = await _authManager.GetSessionAsync();
         if (session == null) return Fail("UNAUTHORIZED: No active session.");
 
-        if (string.IsNullOrEmpty(managerId) || string.IsNullOrEmpty(managerPin) || string.IsNullOrEmpty(reason))
+        if (string.IsNullOrEmpty(acknowledgedByStaffId) || string.IsNullOrEmpty(reason))
         {
-            return Fail("Manager override required (managerId, pin, and reason).");
+            return Fail("An acknowledging staff member and reason are required.");
         }
 
         using var scope = _scopeFactory.CreateScope();
         var repo = scope.ServiceProvider.GetRequiredService<LocalRepository>();
-
-        var manager = await repo.AuthorizeManagerOverrideAsync(managerId, managerPin, session.PropertyId);
-        if (manager == null)
-        {
-            return Fail("UNAUTHORIZED: Invalid manager PIN or insufficient permissions.");
-        }
 
         try
         {
@@ -480,15 +474,15 @@ public class HardwareInterop
             {
                 await WriteAuditAsync(session, "ENCODE_MASTER_CARD", true, $"Start: {startDate}, End: {endDate}");
                 
-                // Also log to the central override audit
+                // Log to the central override audit without PIN check (repurposed for staff acknowledgment)
                 repo.LogOverrideAudit(
                     session.PropertyId,
                     session.UserId,
-                    manager.Id,
+                    acknowledgedByStaffId, // Store the acknowledging staff ID as the authorizer
                     "HARDWARE_MASTER_KEYCARD",
                     "MasterKeycard",
                     Guid.NewGuid().ToString(),
-                    reason ?? "No reason provided"
+                    reason
                 );
 
                 return JsonSerializer.Serialize(new { success = true }, _jsonOptions);

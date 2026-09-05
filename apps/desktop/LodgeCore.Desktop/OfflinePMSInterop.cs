@@ -1678,6 +1678,20 @@ public class OfflinePMSInterop
         }
     }
 
+    public async Task<string> RequestComplimentaryAsync(string payloadJson)
+    {
+        try
+        {
+            var posCtx = await _sessionManager.GetActiveContextAsync();
+            var res = await _repo.RequestComplimentaryAsync(payloadJson, posCtx.StaffId, posCtx.DeviceId, posCtx.SessionId);
+            return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
     public async Task<string> UpdateOrderStatusAsync(string orderId, string status, string reason)
     {
         try
@@ -1848,12 +1862,12 @@ public class OfflinePMSInterop
         }
     }
 
-    public async Task<string> ConfirmHandoverAsync(string sessionId, string managerPin)
+    public async Task<string> ConfirmHandoverAsync(string sessionId)
     {
         try
         {
             var ctx = await GetSecureContextAsync();
-            var res = await _repo.ConfirmHandoverAsync(sessionId, managerPin, ctx.DeviceId);
+            var res = await _repo.ConfirmHandoverAsync(sessionId, ctx.UserId, ctx.DeviceId);
             return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
         catch (Exception ex)
