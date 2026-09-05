@@ -154,7 +154,7 @@ export function DiscountModal({ isOpen, orderId, orderTotal, onClose, onSuccess 
               <label className="block text-sm font-medium text-slate-700 mb-2">
                 Reason
               </label>
-              <Select value={reasonCode} onValueChange={setReasonCode}>
+              <Select value={reasonCode} onValueChange={(val) => setReasonCode(val || "")}>
                 <SelectTrigger className="w-full h-12 rounded-xl bg-slate-50 border-slate-200">
                   <SelectValue placeholder="Select reason" />
                 </SelectTrigger>
@@ -188,7 +188,7 @@ export function DiscountModal({ isOpen, orderId, orderTotal, onClose, onSuccess 
               <label className="block text-sm font-medium text-slate-700 mb-2">
                 Acknowledged / Authorized By
               </label>
-              <Select value={acknowledgedByStaffId} onValueChange={setAcknowledgedByStaffId}>
+              <Select value={acknowledgedByStaffId} onValueChange={(val) => setAcknowledgedByStaffId(val || "")}>
                 <SelectTrigger className="w-full h-12 rounded-xl bg-slate-50 border-slate-200">
                   <SelectValue placeholder="Select staff member" />
                 </SelectTrigger>
@@ -212,7 +212,7 @@ export function DiscountModal({ isOpen, orderId, orderTotal, onClose, onSuccess 
             </button>
             <button
               onClick={() => handleSubmit()}
-              disabled={isLoading || !value || !reason.trim()}
+              disabled={isLoading || !value || (!reasonCode || (reasonCode === 'OTHER' && !reasonNote.trim()))}
               className="flex-1 py-3 px-4 rounded-xl font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 transition-colors"
             >
               {isLoading ? 'Applying...' : 'Apply Discount'}

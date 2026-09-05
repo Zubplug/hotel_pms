@@ -149,7 +149,7 @@ export function FrontDeskMasterCardModal({ isOpen, onClose }: FrontDeskMasterCar
             <div className="space-y-4 mb-6">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Acknowledged By</label>
-                <Select value={acknowledgedByStaffId} onValueChange={setAcknowledgedByStaffId}>
+                <Select value={acknowledgedByStaffId} onValueChange={(val) => setAcknowledgedByStaffId(val || "")}>
                   <SelectTrigger className="w-full bg-slate-50 border-slate-200 rounded-xl">
                     <SelectValue placeholder="Select staff member" />
                   </SelectTrigger>

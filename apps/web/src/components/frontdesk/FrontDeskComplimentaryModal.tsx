@@ -141,7 +141,7 @@ export function FrontDeskComplimentaryModal({ isOpen, targetType, targetId, targ
               <label className="block text-sm font-medium text-slate-700 mb-2">
                 Staff Beneficiary
               </label>
-              <Select value={beneficiaryStaffId} onValueChange={setBeneficiaryStaffId}>
+              <Select value={beneficiaryStaffId} onValueChange={(val) => setBeneficiaryStaffId(val || "")}>
                 <SelectTrigger className="w-full h-12 rounded-xl bg-slate-50 border-slate-200">
                   <SelectValue placeholder="Select staff member" />
                 </SelectTrigger>
@@ -228,7 +228,7 @@ export function FrontDeskComplimentaryModal({ isOpen, targetType, targetId, targ
             <label className="block text-sm font-medium text-slate-700 mb-2">
               Acknowledged / Authorized By
             </label>
-            <Select value={acknowledgedByStaffId} onValueChange={setAcknowledgedByStaffId}>
+            <Select value={acknowledgedByStaffId} onValueChange={(val) => setAcknowledgedByStaffId(val || "")}>
               <SelectTrigger className="w-full h-12 rounded-xl bg-slate-50 border-slate-200">
                 <SelectValue placeholder="Select authorizer" />
               </SelectTrigger>

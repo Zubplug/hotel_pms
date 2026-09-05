@@ -272,8 +272,7 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
   const disableCheckInDate = (date: Date) => isBefore(startOfDay(date), businessDate);
   const disableCheckoutDate = (date: Date) => isBefore(startOfDay(date), minimumCheckoutDate);
   
-  const invalidDateRange = !checkIn || !checkOut || checkOut <= checkIn;
-  const nights = !invalidDateRange ? differenceInCalendarDays(checkOut, checkIn) : 0;
+
   
   let discountDeduction = 0;
   let compDeduction = 0;
@@ -298,7 +297,7 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
     style: 'currency',
     currency: selectedRoomType.currency || 'NGN',
     maximumFractionDigits: 0
-  }) : null;
+  }) : null, [selectedRoomType]);
 
   return (
     <Form {...form}>

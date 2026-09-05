@@ -290,7 +290,7 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
   },
   
   keycards: {
-    encodeMasterCard: async (payload: { startDate?: string, endDate?: string, managerId?: string, pin?: string, reason?: string }) => {
+    encodeMasterCard: async (payload: { startDate?: string, endDate?: string, acknowledgedByStaffId?: string, reason?: string }) => {
       const res = await invokeDesktop('hardware.encodeMasterCard', payload);
       return {
         success: res.success,
