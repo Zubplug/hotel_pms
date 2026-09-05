@@ -158,6 +158,7 @@ model Property {
   expenseCategories   ExpenseCategory[]
   costCenters         CostCenter[]
   CityLedgerAccount   CityLedgerAccount[]
+  CheckInBypass       CheckInBypass[]
 }
 
 model Building {
@@ -703,6 +704,7 @@ model Reservation {
   lockCredentials   LockCredential[]
   lockOperations    LockOperation[]
   priorities        ReservationPriority[]
+  CheckInBypass     CheckInBypass[]
 
   createdAt       DateTime          @default(now()) @db.Timestamptz
   updatedAt       DateTime          @updatedAt @db.Timestamptz
@@ -1308,89 +1310,89 @@ enum PayrollStatus {
 }
 
 model ComplimentaryRecord {
-  id             String   @id @default(uuid()) @db.Uuid
-  propertyId     String   @db.Uuid
-  property       Property @relation(fields: [propertyId], references: [id])
-  businessDate   DateTime @db.Date
-  
-  reference      String   @unique
-  sourceModule   String   // 'FRONT_DESK' | 'POS'
-  
-  folioItemId    String?  @db.Uuid
-  posOrderId     String?  @db.Uuid
-  guestId        String?  @db.Uuid
-  roomId         String?  @db.Uuid
+  id           String   @id @default(uuid()) @db.Uuid
+  propertyId   String   @db.Uuid
+  property     Property @relation(fields: [propertyId], references: [id])
+  businessDate DateTime @db.Date
 
-  staffId        String?  @db.Uuid
-  staff          Staff?   @relation("ComplimentaryBeneficiary", fields: [staffId], references: [id])
+  reference    String @unique
+  sourceModule String // 'FRONT_DESK' | 'POS'
 
-  grossAmount    Decimal  @db.Decimal(18, 4)
-  discountAmount Decimal  @default(0) @db.Decimal(18, 4)
-  complAmount    Decimal  @db.Decimal(18, 4)
-  netAmount      Decimal  @db.Decimal(18, 4)
-  amountPaid     Decimal  @default(0) @db.Decimal(18, 4)
-  staffLiability Decimal  @default(0) @db.Decimal(18, 4)
-  
-  complType      ComplimentaryType
-  reason         String
-  notes          String?
-  
-  operatorId     String   @db.Uuid
-  operator       Staff    @relation("ComplimentaryOperator", fields: [operatorId], references: [id])
-  approverId     String?  @db.Uuid
-  approver       Staff?   @relation("ComplimentaryApprover", fields: [approverId], references: [id])
+  folioItemId String? @db.Uuid
+  posOrderId  String? @db.Uuid
+  guestId     String? @db.Uuid
+  roomId      String? @db.Uuid
 
-  status         ComplimentaryStatus @default(PENDING_NIGHT_AUDIT)
-  nightAuditorId String?  @db.Uuid
-  nightAuditor   Staff?   @relation("ComplimentaryAuditor", fields: [nightAuditorId], references: [id])
-  verifiedAt     DateTime? @db.Timestamptz
+  staffId String? @db.Uuid
+  staff   Staff?  @relation("ComplimentaryBeneficiary", fields: [staffId], references: [id])
+
+  grossAmount    Decimal @db.Decimal(18, 4)
+  discountAmount Decimal @default(0) @db.Decimal(18, 4)
+  complAmount    Decimal @db.Decimal(18, 4)
+  netAmount      Decimal @db.Decimal(18, 4)
+  amountPaid     Decimal @default(0) @db.Decimal(18, 4)
+  staffLiability Decimal @default(0) @db.Decimal(18, 4)
+
+  complType ComplimentaryType
+  reason    String
+  notes     String?
+
+  operatorId String  @db.Uuid
+  operator   Staff   @relation("ComplimentaryOperator", fields: [operatorId], references: [id])
+  approverId String? @db.Uuid
+  approver   Staff?  @relation("ComplimentaryApprover", fields: [approverId], references: [id])
+
+  status          ComplimentaryStatus @default(PENDING_NIGHT_AUDIT)
+  nightAuditorId  String?             @db.Uuid
+  nightAuditor    Staff?              @relation("ComplimentaryAuditor", fields: [nightAuditorId], references: [id])
+  verifiedAt      DateTime?           @db.Timestamptz
   rejectionReason String?
-  
-  operationId    String   @unique
-  deviceId       String?
-  createdAt      DateTime @default(now()) @db.Timestamptz
-  updatedAt      DateTime @updatedAt @db.Timestamptz
+
+  operationId String   @unique
+  deviceId    String?
+  createdAt   DateTime @default(now()) @db.Timestamptz
+  updatedAt   DateTime @updatedAt @db.Timestamptz
 }
 
 model StaffReceivable {
-  id             String   @id @default(uuid()) @db.Uuid
-  propertyId     String   @db.Uuid
-  property       Property @relation(fields: [propertyId], references: [id])
-  staffId        String   @db.Uuid
-  staff          Staff    @relation(fields: [staffId], references: [id])
-  
-  reference      String   @unique
-  originalAmount Decimal  @db.Decimal(18, 4)
-  paidAmount     Decimal  @default(0) @db.Decimal(18, 4)
-  outstanding    Decimal  @db.Decimal(18, 4)
-  
-  status         StaffReceivableStatus @default(OUTSTANDING)
-  sourceId       String?  @db.Uuid // Ref to ComplimentaryRecord or Folio
-  
-  operationId    String   @unique
-  createdAt      DateTime @default(now()) @db.Timestamptz
-  updatedAt      DateTime @updatedAt @db.Timestamptz
-  
-  settlements    StaffReceivableSettlement[]
+  id         String   @id @default(uuid()) @db.Uuid
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id])
+  staffId    String   @db.Uuid
+  staff      Staff    @relation(fields: [staffId], references: [id])
+
+  reference      String  @unique
+  originalAmount Decimal @db.Decimal(18, 4)
+  paidAmount     Decimal @default(0) @db.Decimal(18, 4)
+  outstanding    Decimal @db.Decimal(18, 4)
+
+  status   StaffReceivableStatus @default(OUTSTANDING)
+  sourceId String?               @db.Uuid // Ref to ComplimentaryRecord or Folio
+
+  operationId String   @unique
+  createdAt   DateTime @default(now()) @db.Timestamptz
+  updatedAt   DateTime @updatedAt @db.Timestamptz
+
+  settlements StaffReceivableSettlement[]
 }
 
 model StaffReceivableSettlement {
-  id               String   @id @default(uuid()) @db.Uuid
-  receivableId     String   @db.Uuid
-  receivable       StaffReceivable @relation(fields: [receivableId], references: [id])
-  
-  amount           Decimal  @db.Decimal(18, 4)
-  method           StaffSettlementMethod
-  paymentId        String?  @db.Uuid
-  
-  payrollPeriodId  String?
-  payrollExportDate DateTime? @db.Date
-  payrollReference String?
-  payrollStatus    PayrollStatus @default(NOT_EXPORTED)
+  id           String          @id @default(uuid()) @db.Uuid
+  receivableId String          @db.Uuid
+  receivable   StaffReceivable @relation(fields: [receivableId], references: [id])
 
-  createdBy        String   @db.Uuid
-  operationId      String   @unique
-  createdAt        DateTime @default(now()) @db.Timestamptz
+  amount    Decimal               @db.Decimal(18, 4)
+  method    StaffSettlementMethod
+  paymentId String?               @db.Uuid
+
+  payrollPeriodId   String?
+  payrollExportDate DateTime?     @db.Date
+  payrollReference  String?
+  payrollStatus     PayrollStatus @default(NOT_EXPORTED)
+
+  createdBy   String   @db.Uuid
+  operationId String   @unique
+  createdAt   DateTime @default(now()) @db.Timestamptz
 }
 
 // -----------------------------------------------------------------------------
@@ -1714,22 +1716,25 @@ model Staff {
   updatedAt DateTime  @updatedAt @db.Timestamptz
   deletedAt DateTime? @db.Timestamptz
 
-  posOrders            PosOrder[]
-  outletAccess         StaffPosOutletAccess[]
-  posProductionBatches PosProductionBatch[]
-  posOperatorSessions  PosOperatorSession[]
-  primaryPosSessions   PosSession[]            @relation("PosSessionPrimaryOperator")
-  processedPosPayments PosPayment[]            @relation("PaymentProcessedBy")
-  CashAccount          CashAccount[]
-  frontdeskSessions    FrontdeskSession[]
-  frontdeskAudits      FrontdeskSessionAudit[]
-  handoversGiven       CashHandover[]          @relation("HandoverGiver")
-  handoversReceived    CashHandover[]          @relation("HandoverReceiver")
-  complRecordsOperated ComplimentaryRecord[]   @relation("ComplimentaryOperator")
-  complRecordsApproved ComplimentaryRecord[]   @relation("ComplimentaryApprover")
-  complRecordsAudited  ComplimentaryRecord[]   @relation("ComplimentaryAuditor")
-  complRecordsBenefit  ComplimentaryRecord[]   @relation("ComplimentaryBeneficiary")
-  staffReceivables     StaffReceivable[]
+  posOrders              PosOrder[]
+  outletAccess           StaffPosOutletAccess[]
+  posProductionBatches   PosProductionBatch[]
+  posOperatorSessions    PosOperatorSession[]
+  primaryPosSessions     PosSession[]            @relation("PosSessionPrimaryOperator")
+  processedPosPayments   PosPayment[]            @relation("PaymentProcessedBy")
+  CashAccount            CashAccount[]
+  frontdeskSessions      FrontdeskSession[]
+  frontdeskAudits        FrontdeskSessionAudit[]
+  handoversGiven         CashHandover[]          @relation("HandoverGiver")
+  handoversReceived      CashHandover[]          @relation("HandoverReceiver")
+  complRecordsOperated   ComplimentaryRecord[]   @relation("ComplimentaryOperator")
+  complRecordsApproved   ComplimentaryRecord[]   @relation("ComplimentaryApprover")
+  complRecordsAudited    ComplimentaryRecord[]   @relation("ComplimentaryAuditor")
+  complRecordsBenefit    ComplimentaryRecord[]   @relation("ComplimentaryBeneficiary")
+  staffReceivables       StaffReceivable[]
+  bypassOperations       CheckInBypass[]         @relation("BypassOperator")
+  bypassAcknowledgements CheckInBypass[]         @relation("BypassAcknowledger")
+  bypassesReviewed       CheckInBypass[]         @relation("BypassReviewer")
 }
 
 model StaffPosOutletAccess {
@@ -3108,11 +3113,12 @@ model FrontdeskSession {
   handoverAt             DateTime?               @db.Timestamptz
   depositedAt            DateTime?               @db.Timestamptz
 
-  payments      Payment[]
-  cashMovements PosCashMovement[]
-  audits        FrontdeskSessionAudit[]
-  exceptions    ReconciliationException[]
-  controlAudits ShiftControlAudit[]
+  payments        Payment[]
+  cashMovements   PosCashMovement[]
+  audits          FrontdeskSessionAudit[]
+  exceptions      ReconciliationException[]
+  controlAudits   ShiftControlAudit[]
+  checkInBypasses CheckInBypass[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -4141,31 +4147,32 @@ enum CheckInBypassStatus {
 }
 
 model CheckInBypass {
-  id                    String              @id @default(uuid()) @db.Uuid
-  operationId           String              @unique
-  propertyId            String              @db.Uuid
-  property              Property            @relation(fields: [propertyId], references: [id])
-  reservationId         String              @db.Uuid
-  reservation           Reservation         @relation(fields: [reservationId], references: [id])
-  frontdeskSessionId    String              @db.Uuid
-  frontdeskSession      FrontdeskSession    @relation(fields: [frontdeskSessionId], references: [id])
-  
-  operatorId            String              @db.Uuid
-  operator              Staff               @relation("BypassOperator", fields: [operatorId], references: [id])
-  acknowledgedByStaffId String              @db.Uuid
-  acknowledgedBy        Staff               @relation("BypassAcknowledger", fields: [acknowledgedByStaffId], references: [id])
-  
-  reason                String
-  status                CheckInBypassStatus @default(PENDING)
-  
-  reviewedByStaffId     String?             @db.Uuid
-  reviewedAt            DateTime?           @db.Timestamptz
-  reviewNotes           String?
-  
-  businessDate          DateTime            @db.Timestamptz
-  createdAt             DateTime            @default(now()) @db.Timestamptz
-  updatedAt             DateTime            @updatedAt @db.Timestamptz
-  
+  id                 String           @id @default(uuid()) @db.Uuid
+  operationId        String           @unique
+  propertyId         String           @db.Uuid
+  property           Property         @relation(fields: [propertyId], references: [id])
+  reservationId      String           @db.Uuid
+  reservation        Reservation      @relation(fields: [reservationId], references: [id])
+  frontdeskSessionId String           @db.Uuid
+  frontdeskSession   FrontdeskSession @relation(fields: [frontdeskSessionId], references: [id])
+
+  operatorId            String @db.Uuid
+  operator              Staff  @relation("BypassOperator", fields: [operatorId], references: [id])
+  acknowledgedByStaffId String @db.Uuid
+  acknowledgedBy        Staff  @relation("BypassAcknowledger", fields: [acknowledgedByStaffId], references: [id])
+
+  reason String
+  status CheckInBypassStatus @default(PENDING)
+
+  reviewedByStaffId String?   @db.Uuid
+  reviewedBy        Staff?    @relation("BypassReviewer", fields: [reviewedByStaffId], references: [id])
+  reviewedAt        DateTime? @db.Timestamptz
+  reviewNotes       String?
+
+  businessDate DateTime @db.Timestamptz
+  createdAt    DateTime @default(now()) @db.Timestamptz
+  updatedAt    DateTime @updatedAt @db.Timestamptz
+
   @@index([propertyId, businessDate])
   @@index([status])
 }
