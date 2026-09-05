@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useProperty } from '@/components/PropertyProvider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-type TargetType = 'RESERVATION_ROOM' | 'FOLIO_ITEM';
+type TargetType = 'RESERVATION_ROOM' | 'FOLIO_ITEM' | 'POS_ORDER';
 
 type FrontDeskComplimentaryModalProps = {
   isOpen: boolean;
