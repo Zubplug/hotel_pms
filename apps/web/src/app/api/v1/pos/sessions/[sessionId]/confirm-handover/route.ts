@@ -27,7 +27,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: 'Shift must be approved by Finance before handover' }, { status: 409 });
     }
 
-    const managers = await prisma.staff.findMany({ where: { propertyAccess: { has: current.propertyId }, isActive: true, posPinHash: { not: null }, position: { in: ['MANAGER', 'HOTEL_MANAGER', 'GENERAL_CASHIER', 'CEO', 'SUPER_ADMIN'] } }, select: { id: true, posPinHash: true } });
+    const managers = await prisma.staff.findMany({ where: { propertyAccess: { has: current.propertyId }, isActive: true, posPinHash: { not: null }, position: { in: ['MANAGER', 'HOTEL_MANAGER', 'GENERAL_CASHIER', 'NIGHT_AUDITOR', 'CEO', 'SUPER_ADMIN'] } }, select: { id: true, posPinHash: true } });
     const manager = (await Promise.all(managers.map(async candidate => candidate.posPinHash && await compare(managerPin, candidate.posPinHash) ? candidate : null))).find(Boolean);
     if (!manager) return NextResponse.json({ error: 'Invalid manager PIN or insufficient permissions' }, { status: 403 });
     if (manager.id === settlement.operatorId || manager.id === current.openedBy) return NextResponse.json({ error: 'The manager cannot approve the shift they operated' }, { status: 403 });

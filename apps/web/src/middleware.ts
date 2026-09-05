@@ -54,7 +54,7 @@ function hasModuleAccess(req: any, pathname: string): { allowed: boolean; redire
     roles.includes(role) || capabilities.includes(moduleCapability);
 
   if (pathname === '/cash-management' || pathname.startsWith('/cash-management/')) {
-    return can('ACCESS_CASH_MANAGEMENT', [...MANAGEMENT_ROLES, 'GENERAL_CASHIER'])
+    return can('ACCESS_CASH_MANAGEMENT', [...MANAGEMENT_ROLES, 'GENERAL_CASHIER', 'NIGHT_AUDITOR'])
       ? { allowed: true } : { allowed: false, redirectTo: '/hub' };
   }
   if (pathname === '/pos' || pathname.startsWith('/pos/')) {
@@ -90,7 +90,7 @@ function hasModuleAccess(req: any, pathname: string): { allowed: boolean; redire
       ? { allowed: true } : { allowed: false, redirectTo: '/hub' };
   }
   if (pathname === '/reports' || pathname.startsWith('/reports/')) {
-    return can('ACCESS_REPORTS', [...MANAGEMENT_ROLES, 'GENERAL_CASHIER'])
+    return can('ACCESS_REPORTS', [...MANAGEMENT_ROLES, 'GENERAL_CASHIER', 'NIGHT_AUDITOR'])
       ? { allowed: true } : { allowed: false, redirectTo: '/hub' };
   }
   if (pathname === '/refunds' || pathname.startsWith('/refunds/')) {

@@ -16,7 +16,7 @@ import { ShiftControlService, ShiftControlError } from '@/lib/services/shift-con
  */
 const REVIEWER_ROLES = new Set([
   'GENERAL_CASHIER', 'FINANCE_MANAGER', 'MANAGER',
-  'HOTEL_MANAGER', 'CEO', 'SUPER_ADMIN'
+  'HOTEL_MANAGER', 'CEO', 'SUPER_ADMIN', 'NIGHT_AUDITOR'
 ]);
 export async function POST(
   req: NextRequest,

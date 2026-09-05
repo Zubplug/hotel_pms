@@ -74,7 +74,7 @@ const ALL_NAV = [
       { name: 'Room Status', href: '/reports/room-status' },
     ]
   },
-  { name: 'Cash Management', href: '/cash-management', icon: HandCoins, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'ACCOUNTANT', 'GENERAL_CASHIER'] },
+  { name: 'Cash Management', href: '/cash-management', icon: HandCoins, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'ACCOUNTANT', 'GENERAL_CASHIER', 'NIGHT_AUDITOR'] },
   { name: 'POS Menu', href: '/cashier/menu', icon: Utensils, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'ACCOUNTANT', 'GENERAL_CASHIER'] },
   { name: 'Price Requests', href: '/cashier/price-approvals', icon: BadgeDollarSign, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'ACCOUNTANT', 'GENERAL_CASHIER'] },
   { name: 'Refunds', href: '/refunds', icon: BadgeDollarSign, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'FINANCE_MANAGER', 'ADMIN'] },
