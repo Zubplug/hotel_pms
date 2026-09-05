@@ -80,11 +80,17 @@ export class CashHandoverService {
         }
       }
       
-      // Ensure primaryOperatorId is a Staff ID (POS might store User ID in openedBy)
       let handedOverByStaffId = ctx.userId;
       if (primaryOperatorId) {
         const staff = await tx.staff.findFirst({ where: { OR: [{ id: primaryOperatorId }, { userId: primaryOperatorId }] } });
         if (staff) handedOverByStaffId = staff.id;
+        else {
+          const fallbackStaff = await tx.staff.findFirst({ where: { OR: [{ id: ctx.userId }, { userId: ctx.userId }] } });
+          if (fallbackStaff) handedOverByStaffId = fallbackStaff.id;
+        }
+      } else {
+        const fallbackStaff = await tx.staff.findFirst({ where: { OR: [{ id: ctx.userId }, { userId: ctx.userId }] } });
+        if (fallbackStaff) handedOverByStaffId = fallbackStaff.id;
       }
       
       if (posSessions.length === 0 && fdSessions.length === 0) {
@@ -164,11 +170,14 @@ export class CashHandoverService {
 
       // Verify the receiver has property access (assumed to be done at controller level, but safe to double check)
       
+      const receivingStaff = await tx.staff.findFirst({ where: { OR: [{ id: ctx.userId }, { userId: ctx.userId }] } });
+      if (!receivingStaff) throw new ShiftControlError('Receiver staff profile not found.', 'NOT_FOUND', 404);
+
       const updated = await tx.cashHandover.update({
         where: { id: params.handoverId },
         data: {
           status: 'COMPLETED',
-          receivedById: ctx.userId,
+          receivedById: receivingStaff.id,
           receivedAt: new Date(),
           notes: params.notes ? `${handover.notes || ''}\n[Received]: ${params.notes}` : handover.notes
         }
