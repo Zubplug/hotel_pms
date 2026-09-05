@@ -32,7 +32,10 @@ export async function GET(req: NextRequest) {
       include: {
         table: true,
         items: true,
-        kots: true
+        kots: true,
+        serverStaff: {
+          select: { firstName: true, lastName: true }
+        }
       },
       orderBy: { createdAt: 'desc' },
       take: 50
