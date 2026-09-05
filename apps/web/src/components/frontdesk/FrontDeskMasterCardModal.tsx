@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Key, X, Calendar, ArrowRight } from 'lucide-react';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
-import { format, addYears } from 'date-fns';
+import { format, addDays } from 'date-fns';
 import { useQuery } from '@tanstack/react-query';
 import { useProperty } from '@/components/PropertyProvider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -21,7 +21,7 @@ export function FrontDeskMasterCardModal({ isOpen, onClose }: FrontDeskMasterCar
   const [success, setSuccess] = useState(false);
   
   const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
-  const [endDate, setEndDate] = useState(format(addYears(new Date(), 10), 'yyyy-MM-dd'));
+  const [endDate, setEndDate] = useState(format(addDays(new Date(), 1), 'yyyy-MM-dd'));
   const [acknowledgedByStaffId, setAcknowledgedByStaffId] = useState('');
   const [reason, setReason] = useState('');
   
@@ -45,7 +45,7 @@ export function FrontDeskMasterCardModal({ isOpen, onClose }: FrontDeskMasterCar
   useEffect(() => {
     if (isOpen) {
       setStartDate(format(new Date(), 'yyyy-MM-dd'));
-      setEndDate(format(addYears(new Date(), 10), 'yyyy-MM-dd'));
+      setEndDate(format(addDays(new Date(), 1), 'yyyy-MM-dd'));
       setAcknowledgedByStaffId('');
       setReason('');
       setError('');
@@ -56,6 +56,8 @@ export function FrontDeskMasterCardModal({ isOpen, onClose }: FrontDeskMasterCar
 
   if (!isOpen || !mounted) return null;
 
+  const maxEndDate = startDate ? format(addDays(new Date(startDate), 1), 'yyyy-MM-dd') : undefined;
+
   const handleCreateClick = async () => {
     if (!acknowledgedByStaffId) {
       setError('Please select an acknowledging staff member.');
@@ -63,6 +65,11 @@ export function FrontDeskMasterCardModal({ isOpen, onClose }: FrontDeskMasterCar
     }
     if (!reason.trim()) {
       setError('Please provide a reason.');
+      return;
+    }
+    
+    if (new Date(endDate) > new Date(maxEndDate!)) {
+      setError('Master card validity cannot exceed 24 hours.');
       return;
     }
     
@@ -139,6 +146,8 @@ export function FrontDeskMasterCardModal({ isOpen, onClose }: FrontDeskMasterCar
                   <input
                     type="date"
                     value={endDate}
+                    min={startDate}
+                    max={maxEndDate}
                     onChange={(e) => setEndDate(e.target.value)}
                     className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-slate-700"
                   />
