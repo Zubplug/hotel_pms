@@ -3062,17 +3062,17 @@ public class LocalRepository
         var settlementType = root.TryGetProperty("settlementType", out var st) ? st.GetString() : "PAY_NOW";
 
         string propertyId = "";
-        PosOrder? posOrder = null;
-        ReservationRoom? resRoom = null;
+        LocalPosOrder? posOrder = null;
+        LocalReservationRoom? resRoom = null;
 
         if (targetType == "POS_ORDER" && root.TryGetProperty("orderId", out var orderIdProp)) {
-            posOrder = await _dbContext.PosOrders.FirstOrDefaultAsync(o => o.Id == orderIdProp.GetString());
+            posOrder = await _dbContext.PosOrders.Include(o => o.Items).FirstOrDefaultAsync(o => o.Id == orderIdProp.GetString());
             if (posOrder == null) throw new Exception("Order not found");
             propertyId = posOrder.PropertyId;
         } else if (targetType == "RESERVATION_ROOM" && root.TryGetProperty("reservationRoomId", out var rrIdProp)) {
-            resRoom = await _dbContext.ReservationRooms.FirstOrDefaultAsync(r => r.Id == rrIdProp.GetString());
+            resRoom = await _dbContext.ReservationRooms.Include(r => r.Reservation).FirstOrDefaultAsync(r => r.Id == rrIdProp.GetString());
             if (resRoom == null) throw new Exception("Reservation room not found");
-            propertyId = resRoom.PropertyId;
+            propertyId = resRoom.Reservation?.PropertyId ?? "";
         }
 
         if (string.IsNullOrEmpty(propertyId)) throw new Exception("Property context not found");
@@ -3087,72 +3087,41 @@ public class LocalRepository
             if (targetType == "POS_ORDER" && posOrder != null) {
                 totalAmountToComp = compType == "FULL" ? (double)posOrder.Total : compAmount;
             } else if (targetType == "RESERVATION_ROOM" && resRoom != null) {
-                var nights = (resRoom.CheckOut - resRoom.CheckIn).Days;
-                totalAmountToComp = compType == "FULL" ? resRoom.TotalAmount : (compAmount * nights);
-            }
-
-            // Create ComplimentaryRecord
-            var compRecord = new ComplimentaryRecord
-            {
-                Id = Guid.NewGuid().ToString(),
-                PropertyId = propertyId,
-                OperatorId = userId,
-                AcknowledgedById = acknowledgedByStaffId,
-                BeneficiaryType = beneficiaryType == "STAFF" ? ComplimentaryBeneficiaryType.STAFF : ComplimentaryBeneficiaryType.GUEST,
-                BeneficiaryStaffId = beneficiaryType == "STAFF" ? beneficiaryStaffId : null,
-                Type = compType == "FULL" ? ComplimentaryType.FULL : ComplimentaryType.PARTIAL,
-                Reason = reason,
-                Status = ComplimentaryStatus.PENDING_NIGHT_AUDIT,
-                Amount = totalAmountToComp,
-                TargetType = targetType,
-                TargetId = targetType == "POS_ORDER" ? posOrder!.Id : resRoom!.Id,
-                Notes = "",
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
-
-            _dbContext.ComplimentaryRecords.Add(compRecord);
-
-            // Handle Staff Receivables if needed
-            if (beneficiaryType == "STAFF" && settlementType == "STAFF_PAY_LATER" && beneficiaryStaffId != null)
-            {
-                var receivable = new StaffReceivable
-                {
-                    Id = Guid.NewGuid().ToString(),
-                    PropertyId = propertyId,
-                    StaffId = beneficiaryStaffId,
-                    SourceType = "COMPLIMENTARY",
-                    SourceId = compRecord.Id,
-                    Amount = totalAmountToComp,
-                    Status = StaffReceivableStatus.PENDING,
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
-                };
-                _dbContext.StaffReceivables.Add(receivable);
+                var nights = (resRoom.CheckOutDate - resRoom.CheckInDate).Days;
+                if (nights < 1) nights = 1;
+                totalAmountToComp = compType == "FULL" ? 0 : (compAmount * nights); // Backend will calculate full amount for reservations
             }
 
             // Apply financial adjustments to the target
             if (targetType == "POS_ORDER" && posOrder != null)
             {
-                posOrder.DiscountType = "COMPLIMENTARY";
-                posOrder.DiscountValue = (decimal)totalAmountToComp;
-                posOrder.DiscountReason = reason;
-                posOrder.ManagerOverrideId = acknowledgedByStaffId; // Mapping acknowledgedBy to ManagerOverride for schema compat
+                var compDiscount = new LocalPosDiscount 
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    OrderId = posOrder.Id,
+                    Type = compType == "FULL" ? "PERCENTAGE" : "FLAT",
+                    Amount = compType == "FULL" ? 100 : (decimal)totalAmountToComp,
+                    AuthorizerId = acknowledgedByStaffId,
+                    OperationId = Guid.NewGuid().ToString(),
+                    BusinessDate = posOrder.BusinessDate,
+                    CreatedAt = DateTime.UtcNow
+                };
+                _dbContext.PosDiscounts.Add(compDiscount);
+
+                posOrder.Discount += (decimal)totalAmountToComp;
                 
-                CalculatePosOrderTotals(posOrder);
+                var calculatedTotal = posOrder.Items?.Sum(i => i.Total != 0m ? i.Total : i.UnitPrice * i.Quantity) ?? 0m;
+                var currentTotal = posOrder.Total != 0m ? posOrder.Total : calculatedTotal;
+                posOrder.Total = Math.Max(0, currentTotal - (decimal)totalAmountToComp);
+
                 _dbContext.PosOrders.Update(posOrder);
             }
             else if (targetType == "RESERVATION_ROOM" && resRoom != null)
             {
                 resRoom.DiscountType = "COMPLIMENTARY";
-                resRoom.DiscountAmount = (decimal)(compType == "FULL" ? resRoom.NightlyRate : compAmount); // Per night discount
+                resRoom.DiscountAmount = (decimal)compAmount;
                 resRoom.DiscountReason = reason;
                 resRoom.DiscountApprovalId = acknowledgedByStaffId;
-                
-                var nights = (resRoom.CheckOut - resRoom.CheckIn).Days;
-                double rate = resRoom.NightlyRate;
-                double deduct = (double)resRoom.DiscountAmount;
-                resRoom.TotalAmount = Math.Max(0, (rate - deduct) * nights);
 
                 _dbContext.ReservationRooms.Update(resRoom);
             }
