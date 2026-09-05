@@ -2517,7 +2517,7 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
              }
         }
 
-        var pendingEvents = eventsToPush.OrderBy(e => e.Sequence).Take(50).ToList();
+        var pendingEvents = eventsToPush.OrderBy(e => e.CreatedAt).Take(50).ToList();
 
         if (!pendingEvents.Any()) 
         {

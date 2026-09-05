@@ -257,8 +257,8 @@ export async function POST(req: NextRequest) {
           if (
             !frontdeskSession ||
             frontdeskSession.propertyId !== propertyId ||
-            frontdeskSession.status !== "OPEN" ||
-            frontdeskSession.staffId !== actorId
+            frontdeskSession.staffId !== actorId ||
+            (frontdeskSession.status !== "OPEN" && frontdeskSession.status !== "CLOSED" && frontdeskSession.status !== "RETURNED")
           ) {
             throw new Error(
               "FRONTDESK_SHIFT_CLOSED: Cashier session is missing, closed, or belongs to another receptionist.",
