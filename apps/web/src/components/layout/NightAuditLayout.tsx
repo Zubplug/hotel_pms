@@ -33,8 +33,8 @@ const NIGHT_AUDIT_NAV = [
   { name: 'Exceptions & Variances', href: '/night-audit/exceptions', icon: AlertTriangle },
   { name: 'Audit Reports', href: '/night-audit/reports', icon: FileText },
   { name: 'System & Sync', href: '/night-audit/system', icon: Server },
-  { name: 'Shift Reviews', href: '/reports/shift', icon: FileText },
-  { name: 'Cash Handovers', href: '/handovers', icon: Server },
+  { name: 'Shift Reviews', href: '/night-audit/shift-reviews', icon: FileText },
+  { name: 'Cash Handovers', href: '/night-audit/handovers', icon: Server },
 ];
 
 export function NightAuditLayout({ children }: { children: React.ReactNode }) {
