@@ -59,6 +59,11 @@ function getDirectLandingUrl(
     return '/cash-management';
   }
 
+  // F&B Roles → F&B Dashboard
+  if (['FNB_MANAGER', 'RESTAURANT_MANAGER', 'BANQUET_MANAGER', 'EVENT_MANAGER'].includes(role)) {
+    return '/fnb/dashboard';
+  }
+
   // Single-capability staff (e.g. housekeeping-only, POS-only)
   if (capabilities.length === 1) {
     const singleCapMap: Record<string, string> = {
