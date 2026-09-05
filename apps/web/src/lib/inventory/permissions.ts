@@ -8,7 +8,7 @@
  */
 export const INVENTORY_PERMISSIONS = {
   // Read access across the inventory dashboard
-  'inventory.read': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'GENERAL_CASHIER', 'INVENTORY_MANAGER', 'STOCK_MANAGER', 'PROCUREMENT_MANAGER'],
+  'inventory.read': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'GENERAL_CASHIER', 'INVENTORY_MANAGER', 'STOCK_MANAGER', 'PROCUREMENT_MANAGER', 'FNB_MANAGER', 'OUTLET_HEAD'],
 
   // Managing stock items, warehouses, and general inventory master data
   'inventory.manage': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'STOCK_MANAGER'],
@@ -52,13 +52,13 @@ export const INVENTORY_PERMISSIONS = {
   'inventory.transfer.issue': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'STOCK_KEEPER', 'STOCK_MANAGER'],
 
   // Creating/managing a stocktake worksheet
-  'inventory.stocktake': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'INVENTORY_MANAGER', 'STOCK_MANAGER', 'STOCK_KEEPER'],
+  'inventory.stocktake': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'INVENTORY_MANAGER', 'STOCK_MANAGER', 'STOCK_KEEPER', 'FNB_MANAGER', 'OUTLET_HEAD'],
 
   // Approving a completed stocktake
   'inventory.stocktake.approve': ['CEO', 'SUPER_ADMIN', 'MANAGER'],
 
   // Viewing reports
-  'inventory.report': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'STOCK_MANAGER', 'PROCUREMENT_MANAGER'],
+  'inventory.report': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'STOCK_MANAGER', 'PROCUREMENT_MANAGER', 'FNB_MANAGER', 'OUTLET_HEAD'],
 
   // Managing suppliers
   'procurement.supplier.manage': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'STOCK_MANAGER', 'STOCK_KEEPER', 'PROCUREMENT_MANAGER'],
