@@ -1613,7 +1613,7 @@ public class LocalRepository
         }
     }
 
-    public async Task<bool> ProcessCheckInAsync(string reservationId, string userId, string deviceId, string? encodeData = null, bool overrideDeposit = false, string? managerId = null, string? managerPin = null, string? reason = null)
+    public async Task<bool> ProcessCheckInAsync(string reservationId, string userId, string deviceId, string? encodeData = null)
     {
         var res = await _dbContext.Reservations
             .Include(r => r.Folio)
@@ -1623,20 +1623,10 @@ public class LocalRepository
         if (res == null || (res.Status != "PENDING" && res.Status != "CONFIRMED")) return false;
         await AssertNightAuditAllowsAsync(res.PropertyId);
         
-        bool waiveDeposit = overrideDeposit || (res.CorporateAccount != null && res.CorporateAccount.DepositPolicy == "WAIVED");
+        bool waiveDeposit = (res.CorporateAccount != null && res.CorporateAccount.DepositPolicy == "WAIVED");
         if (!waiveDeposit && res.DepositPaid < res.DepositRequired)
         {
-            throw new InvalidOperationException($"Check-in blocked: A deposit of {res.DepositRequired:N2} is required but only {res.DepositPaid:N2} has been paid.");
-        }
-        
-        if (overrideDeposit && res.DepositPaid < res.DepositRequired && !(res.CorporateAccount != null && res.CorporateAccount.DepositPolicy == "WAIVED"))
-        {
-            if (string.IsNullOrEmpty(managerId) || string.IsNullOrEmpty(managerPin))
-            {
-                throw new InvalidOperationException("Manager authorization required to override deposit.");
-            }
-            var authorizer = await AuthorizeManagerOverrideAsync(managerId, managerPin, res.PropertyId);
-            LogOverrideAudit(res.PropertyId, userId, authorizer.Id, "CHECK_IN_DEPOSIT_OVERRIDE", "Reservation", res.Id, $"Overriding {res.DepositRequired - res.DepositPaid:N2} deposit. Reason: {reason}");
+            throw new InvalidOperationException($"PAYMENT_REQUIRED: Check-in blocked. A deposit of {res.DepositRequired:N2} is required but only {res.DepositPaid:N2} has been paid.");
         }
         
         if (res.CorporateAccount != null && res.CorporateAccount.CreditLimit > 0)

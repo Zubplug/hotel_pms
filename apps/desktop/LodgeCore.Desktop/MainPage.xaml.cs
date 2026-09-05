@@ -285,17 +285,9 @@ public partial class MainPage : ContentPage
                     {
                         bool.TryParse(parameters["bypassKeycard"]?.ToString(), out bypassKeycard);
                     }
-                    bool overrideDeposit = false;
-                    if (parameters != null && parameters["overrideDeposit"] != null)
-                    {
-                        bool.TryParse(parameters["overrideDeposit"]?.ToString(), out overrideDeposit);
-                    }
                     var encodedRoomId = parameters?["encodedRoomId"]?.ToString() ?? "";
                     var encodeData = parameters?["encodeData"]?.ToString();
-                    var managerId = parameters?["managerId"]?.ToString();
-                    var managerPin = parameters?["managerPin"]?.ToString();
-                    var reason = parameters?["reason"]?.ToString();
-                    responseData = await pmsInterop.ProcessCheckInAsync(resId, bypassKeycard, encodedRoomId, encodeData, overrideDeposit, managerId, managerPin, reason);
+                    responseData = await pmsInterop.ProcessCheckInAsync(resId, bypassKeycard, encodedRoomId, encodeData);
                     break;
                 case "reservations.checkOut":
                     string outResId = parameters?["id"]?.ToString() ?? "";

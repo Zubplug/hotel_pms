@@ -210,7 +210,7 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
   const availableCredit = Number(folio?.availableCredit || 0);
   const isDepositSufficient = availableCredit >= expectedCost;
   
-  const isReady = reservation?.status === 'CONFIRMED' && room && (isDepositSufficient || isDepositOverride);
+  const isReady = reservation?.status === 'CONFIRMED' && room && isDepositSufficient;
 
   return (
     <Dialog open={open && !!reservationId} onOpenChange={onOpenChange}>
@@ -297,13 +297,6 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
                               className="bg-amber-600 hover:bg-amber-700 font-bold text-white shadow-sm"
                             >
                               Collect Deposit
-                            </Button>
-                            <Button 
-                              variant="outline" 
-                              onClick={() => setShowManagerOverride(true)}
-                              className="font-bold border-amber-300 text-amber-800 hover:bg-amber-100"
-                            >
-                              Manager Override
                             </Button>
                           </div>
                         </>
@@ -440,12 +433,6 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
         />
       )}
 
-      <ManagerOverrideModal
-        isOpen={showManagerOverride}
-        actionName="Deposit Check-In Override"
-        onAuthorized={handleOverrideAuthorized}
-        onCancel={() => setShowManagerOverride(false)}
-      />
     </Dialog>
   );
 }

@@ -736,7 +736,7 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
-    public async Task<string> ProcessCheckInAsync(string reservationId, bool bypassKeycard = false, string encodedRoomId = "", string? encodeData = null, bool overrideDeposit = false, string? managerId = null, string? managerPin = null, string? reason = null)
+    public async Task<string> ProcessCheckInAsync(string reservationId, bool bypassKeycard = false, string encodedRoomId = "", string? encodeData = null)
     {
         try
         {
@@ -773,7 +773,7 @@ public class OfflinePMSInterop
                 });
             }
 
-            var success = await _repo.ProcessCheckInAsync(reservationId, ctx.UserId, ctx.DeviceId, encodeData, overrideDeposit, managerId, managerPin, reason);
+            var success = await _repo.ProcessCheckInAsync(reservationId, ctx.UserId, ctx.DeviceId, encodeData);
             return JsonSerializer.Serialize(new { success }, _jsonOptions);
         }
         catch (Exception ex)

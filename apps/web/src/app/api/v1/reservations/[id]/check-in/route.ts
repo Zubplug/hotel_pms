@@ -20,15 +20,10 @@ export async function POST(
 
     const { id: reservationId } = await params;
     
-    // Parse body for options
-    let overrideDeposit = false;
     try {
       const body = await req.json();
-        let reqPropertyId = body?.propertyId;
-        if (reqPropertyId && !ctx.propertyIds.includes(reqPropertyId)) return NextResponse.json({ error: 'Forbidden property' }, { status: 403 });
-      if (body?.options?.overrideDeposit) {
-        overrideDeposit = true;
-      }
+      let reqPropertyId = body?.propertyId;
+      if (reqPropertyId && !ctx.propertyIds.includes(reqPropertyId)) return NextResponse.json({ error: 'Forbidden property' }, { status: 403 });
     } catch (e) {
       // Ignore body parsing errors
     }
@@ -109,15 +104,11 @@ export async function POST(
         FOR UPDATE
       `;
 
-      // 7D.6 FINANCIAL GUARD: ENFORCE DEPOSIT REQUIREMENT (INCREMENTAL MODEL)
-      // Since room charges are posted incrementally via Night Audit, the outstanding balance is $0 at check-in.
-      // We must check if the wallet's available credit covers the expected cost, UNLESS the manager has explicitly overridden it
-      // OR the corporate account policy explicitly waives it.
+      // 7D.6 FINANCIAL GUARD: ENFORCE DEPOSIT REQUIREMENT (STRICT)
+      // We must check if the wallet's available credit covers the expected cost.
       
       let requireDeposit = true;
-      if (overrideDeposit) {
-        requireDeposit = false;
-      } else if (reservation.corporateAccount && reservation.corporateAccount.depositPolicy === 'WAIVED') {
+      if (reservation.corporateAccount && reservation.corporateAccount.depositPolicy === 'WAIVED') {
         requireDeposit = false;
       }
 
@@ -256,7 +247,7 @@ export async function POST(
     const message = err instanceof Error ? err.message : String(err);
     console.error('[Check-In API Error]', err);
 
-    if (message === 'PAYMENT_REQUIRED') {
+    if (message.includes('PAYMENT_REQUIRED')) {
       return errorResponse('PAYMENT_REQUIRED', `Check-in blocked: Outstanding balance must be paid first.`, 402);
     }
 
