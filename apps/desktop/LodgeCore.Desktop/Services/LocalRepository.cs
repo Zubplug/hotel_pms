@@ -2039,8 +2039,10 @@ public class LocalRepository
 
     public async Task<List<LocalHousekeepingTask>> GetHousekeepingTasksAsync(string propertyId)
     {
+        var twoDaysAgo = DateTime.UtcNow.AddDays(-2);
         return await _dbContext.HousekeepingTasks
-            .Where(t => t.PropertyId == propertyId || t.PropertyId == "") // Also include tasks without propertyId for fallback
+            .Where(t => (t.PropertyId == propertyId || t.PropertyId == "") && t.CreatedAt >= twoDaysAgo)
+            .OrderByDescending(t => t.CreatedAt)
             .ToListAsync();
     }
 
