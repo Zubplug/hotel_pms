@@ -1379,6 +1379,7 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     res.ReinstatedBy = el.TryGetProperty("reinstatedBy", out var rib) && rib.ValueKind != System.Text.Json.JsonValueKind.Null ? rib.GetString() : null;
                     res.ReinstatementReason = el.TryGetProperty("reinstatementReason", out var rir) && rir.ValueKind != System.Text.Json.JsonValueKind.Null ? rir.GetString() : null;
                     res.CreatedBy = el.TryGetProperty("createdBy", out var cb) && cb.ValueKind != System.Text.Json.JsonValueKind.Null ? cb.GetString() : null;
+                    res.Version = el.TryGetProperty("version", out var resVer) && resVer.TryGetInt32(out var resVerInt) ? resVerInt : res.Version;
 
                     res.UpdatedAt = DateTime.UtcNow;
 
