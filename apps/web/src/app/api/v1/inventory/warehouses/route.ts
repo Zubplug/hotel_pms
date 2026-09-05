@@ -14,8 +14,14 @@ export async function GET(request: Request) {
     const ctx = await requireOrganizationContext(session.user.id);
         if (!hasInventoryPermission(role, 'inventory.read', isSuperAdmin)) return NextResponse.json({ error: 'Forbidden', data: null }, { status: 403 });
 
+        const where: any = { propertyId: { in: ctx.propertyIds as string[] } };
+        // Restrict to assigned outlets unless the user is a high-level admin/manager
+        if (!['SUPER_ADMIN', 'ADMIN', 'OWNER', 'MANAGER', 'GENERAL_CASHIER'].includes(role)) {
+            where.posOutletId = { in: ctx.outletIds as string[] };
+        }
+
         const warehouses = await prisma.warehouse.findMany({
-            where: { propertyId: { in: ctx.propertyIds as string[] } },
+            where,
             include: {
                 posOutlet: { select: { id: true, name: true, type: true } },
                 _count: {

@@ -23,12 +23,18 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Warehouse ID is required', data: null }, { status: 400 });
     }
 
+    const where: any = { 
+      id: warehouseId, 
+      propertyId: { in: ctx.propertyIds as string[] } 
+    };
+
+    if (!['SUPER_ADMIN', 'ADMIN', 'OWNER', 'MANAGER', 'GENERAL_CASHIER'].includes(role)) {
+      where.posOutletId = { in: ctx.outletIds as string[] };
+    }
+
     // 1. Authorize Warehouse
     const warehouse = await prisma.warehouse.findFirst({
-      where: { 
-        id: warehouseId, 
-        propertyId: { in: ctx.propertyIds as string[] }
-      }
+      where
     });
 
     if (!warehouse) {
