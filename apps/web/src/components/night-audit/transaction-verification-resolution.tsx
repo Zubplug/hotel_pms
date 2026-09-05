@@ -33,7 +33,8 @@ export function TransactionVerificationResolution({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [notes, setNotes] = useState('');
-  const [mode, setMode] = useState<'VIEW' | 'QUESTION'>('VIEW');
+  const [mode, setMode] = useState<'VIEW' | 'QUESTION' | 'SUCCESS'>('VIEW');
+  const [successType, setSuccessType] = useState<'VERIFIED' | 'QUESTIONED' | null>(null);
 
   // Filter transactions to only those that are UNVERIFIED
   const unverifiedTransactions = transactions?.filter(t => t.verificationStatus === 'UNVERIFIED') || [];
@@ -41,28 +42,20 @@ export function TransactionVerificationResolution({
   const handleClose = () => {
     setNotes('');
     setMode('VIEW');
+    setSuccessType(null);
     setCurrentIndex(0);
     onOpenChange(false);
   };
 
-  if (unverifiedTransactions.length === 0) {
-    return (
-      <Dialog open={open} onOpenChange={handleClose}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>All Transactions Verified</DialogTitle>
-          </DialogHeader>
-          <div className="py-6 text-center text-muted-foreground">
-            <CheckCircle className="mx-auto h-12 w-12 text-green-500 mb-4" />
-            <p>No more pending transactions to verify.</p>
-          </div>
-          <DialogFooter>
-            <Button onClick={handleClose}>Close</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    );
-  }
+  const handleContinue = () => {
+    setNotes('');
+    setSuccessType(null);
+    setMode('VIEW');
+    setCurrentIndex(0);
+    if (unverifiedTransactions.length === 0) {
+      handleClose();
+    }
+  };
 
   const transaction = unverifiedTransactions[currentIndex];
   const isPos = !!transaction.order;
@@ -117,21 +110,12 @@ export function TransactionVerificationResolution({
       // Optionally alert on success
       // alert(status === 'VERIFIED' ? 'Transaction verified successfully.' : 'Transaction marked as questioned.');
 
-      // Proceed to next or close
-      setNotes('');
-      setMode('VIEW');
+      // Instead of proceeding directly, show the success UI
+      setSuccessType(status);
+      setMode('SUCCESS');
       
-      // Need to refresh the router to get updated data
+      // Need to refresh the router to get updated data from the server
       router.refresh();
-      
-      if (currentIndex < unverifiedTransactions.length - 1) {
-        // Optimistically wait for router refresh, or we can just stay on current index and let the refresh filter it out
-        // Actually, since the component receives `transactions` via props, and `router.refresh()` will update it, 
-        // the length of unverifiedTransactions will change. So keeping currentIndex at 0 is safer if we just process them as a queue.
-        setCurrentIndex(0);
-      } else {
-        handleClose();
-      }
 
     } catch (error: any) {
       alert(error.message);
@@ -143,17 +127,32 @@ export function TransactionVerificationResolution({
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Receipt className="w-5 h-5 text-blue-500" />
-            Transaction Verification
-          </DialogTitle>
-          <DialogDescription>
-            Review the transaction details and compare them with the physical or digital receipt. ({unverifiedTransactions.length} remaining)
-          </DialogDescription>
-        </DialogHeader>
+        {unverifiedTransactions.length === 0 && mode !== 'SUCCESS' ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>All Transactions Verified</DialogTitle>
+            </DialogHeader>
+            <div className="py-6 text-center text-muted-foreground">
+              <CheckCircle className="mx-auto h-12 w-12 text-green-500 mb-4" />
+              <p>No more pending transactions to verify.</p>
+            </div>
+            <DialogFooter>
+              <Button onClick={handleClose}>Close</Button>
+            </DialogFooter>
+          </>
+        ) : (
+          <>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Receipt className="w-5 h-5 text-blue-500" />
+                Transaction Verification
+              </DialogTitle>
+              <DialogDescription>
+                {mode === 'SUCCESS' ? 'Status updated successfully.' : `Review the transaction details and compare them with the physical or digital receipt. (${unverifiedTransactions.length} remaining)`}
+              </DialogDescription>
+            </DialogHeader>
 
-        {mode === 'VIEW' ? (
+            {mode === 'VIEW' ? (
           <div className="space-y-4 py-4">
             <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg border">
               <div className="grid grid-cols-2 gap-y-3 text-sm">
@@ -209,6 +208,30 @@ export function TransactionVerificationResolution({
               </Button>
             </div>
           </div>
+        ) : mode === 'SUCCESS' ? (
+          <div className="space-y-6 py-8 text-center flex flex-col items-center justify-center">
+            <div className={`p-4 rounded-full ${successType === 'VERIFIED' ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-600'}`}>
+              <CheckCircle className="w-12 h-12" />
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-xl font-semibold">
+                {successType === 'VERIFIED' ? 'Transaction Verified' : 'Transaction Questioned'}
+              </h3>
+              <p className="text-muted-foreground text-sm max-w-sm mx-auto">
+                {successType === 'VERIFIED' 
+                  ? 'This transaction has been successfully verified and reconciled.' 
+                  : 'This transaction has been flagged for further review by the finance team.'}
+              </p>
+            </div>
+            <div className="w-full pt-4">
+              <Button 
+                className="w-full h-12 text-lg font-medium" 
+                onClick={handleContinue}
+              >
+                {unverifiedTransactions.length > 0 ? `Continue to Next (${unverifiedTransactions.length} left)` : 'Complete Verification'}
+              </Button>
+            </div>
+          </div>
         ) : (
           <div className="space-y-4 py-4">
             <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 p-3 rounded-md text-amber-800 dark:text-amber-300 text-sm">
@@ -243,6 +266,8 @@ export function TransactionVerificationResolution({
               </Button>
             </div>
           </div>
+        )}
+        </>
         )}
       </DialogContent>
     </Dialog>
