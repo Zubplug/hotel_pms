@@ -1624,9 +1624,33 @@ public class LocalRepository
         await AssertNightAuditAllowsAsync(res.PropertyId);
         
         bool waiveDeposit = (res.CorporateAccount != null && res.CorporateAccount.DepositPolicy == "WAIVED");
-        if (!waiveDeposit && res.DepositPaid < res.DepositRequired)
+        if (!waiveDeposit)
         {
-            throw new InvalidOperationException($"PAYMENT_REQUIRED: Check-in blocked. A deposit of {res.DepositRequired:N2} is required but only {res.DepositPaid:N2} has been paid.");
+            decimal expectedCost = 0;
+            if (!string.IsNullOrEmpty(res.RatePlanSnapshotJson))
+            {
+                try {
+                    using var doc = System.Text.Json.JsonDocument.Parse(res.RatePlanSnapshotJson);
+                    if (doc.RootElement.TryGetProperty("total", out var totalEl) && totalEl.TryGetDecimal(out var totalDec))
+                        expectedCost = totalDec;
+                } catch { }
+            }
+            if (expectedCost == 0 && res.Rooms.Any())
+            {
+                var roomType = await _dbContext.RoomTypes.FirstOrDefaultAsync(rt => rt.Id == res.Rooms.First().RoomTypeId);
+                if (roomType != null) {
+                    expectedCost = roomType.BasePrice * Math.Max(1, (res.CheckOutDate - res.CheckInDate).Days);
+                }
+            }
+
+            decimal totalDeposits = res.Folio?.TotalPayments ?? 0m;
+            decimal totalCharges = res.Folio?.TotalCharges ?? 0m;
+            decimal availableCredit = totalDeposits - totalCharges;
+
+            if (availableCredit < expectedCost)
+            {
+                throw new InvalidOperationException($"PAYMENT_REQUIRED: Check-in blocked. A deposit of {expectedCost:N2} is required but only {availableCredit:N2} is available in credit.");
+            }
         }
         
         if (res.CorporateAccount != null && res.CorporateAccount.CreditLimit > 0)
