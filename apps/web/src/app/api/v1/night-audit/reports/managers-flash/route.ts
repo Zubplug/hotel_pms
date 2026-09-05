@@ -58,19 +58,127 @@ export async function GET(req: NextRequest) {
     const otherRevenue = Number(otherRevenueAggr._sum.amount || 0);
     const totalRevenue = roomRevenue + fbRevenue + otherRevenue;
 
+    // Additional Occupancy metrics
+    const startOfDay = new Date(businessDate);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(businessDate);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const arrivals = await prisma.reservation.count({
+      where: { propertyId, checkIn: { gte: startOfDay, lte: endOfDay }, status: { in: ['CHECKED_IN', 'CHECKED_OUT'] } }
+    });
+    
+    const departures = await prisma.reservation.count({
+      where: { propertyId, checkOut: { gte: startOfDay, lte: endOfDay }, status: 'CHECKED_OUT' }
+    });
+
+    const noShows = await prisma.reservation.count({
+      where: { propertyId, checkIn: { gte: startOfDay, lte: endOfDay }, status: 'NO_SHOW' }
+    });
+
+    // We can assume walk-ins are those created and checked in on the same day
+    const walkIns = await prisma.reservation.count({
+      where: { propertyId, checkIn: { gte: startOfDay, lte: endOfDay }, createdAt: { gte: startOfDay, lte: endOfDay } }
+    });
+
+    // Revenue breakdown (Net, Taxes, Gross)
+    const taxesAggr = await prisma.folioItem.aggregate({
+      where: { folio: { propertyId }, businessDate, type: 'TAX' },
+      _sum: { amount: true }
+    });
+    const totalTaxes = Number(taxesAggr._sum.amount || 0);
+
+    const discountsAggr = await prisma.folioItem.aggregate({
+      where: { folio: { propertyId }, businessDate, type: 'DISCOUNT' },
+      _sum: { amount: true }
+    });
+    const totalDiscounts = Math.abs(Number(discountsAggr._sum.amount || 0));
+
+    // Assume totalRevenue calculated earlier is Net Revenue. Gross = Net + Discounts. Total (with tax) = Net + Taxes
+    const netRevenue = totalRevenue;
+    const grossRevenue = netRevenue + totalDiscounts;
+    const totalRevenueWithTax = netRevenue + totalTaxes;
+
+    // Financial breakdown from Payments
+    const paymentsAggr = await prisma.payment.groupBy({
+      by: ['method'],
+      where: { propertyId, createdAt: { gte: startOfDay, lte: endOfDay }, status: 'COMPLETED' },
+      _sum: { amount: true }
+    });
+    
+    let cash = 0, card = 0, transfer = 0, other = 0;
+    paymentsAggr.forEach(p => {
+      const amt = Number(p._sum.amount || 0);
+      if (p.method === 'CASH') cash += amt;
+      else if (p.method === 'CARD') card += amt;
+      else if (p.method === 'BANK_TRANSFER') transfer += amt;
+      else other += amt;
+    });
+
+    const depositsAggr = await prisma.payment.aggregate({
+      where: { propertyId, createdAt: { gte: startOfDay, lte: endOfDay }, status: 'COMPLETED', collectionSource: 'RECEIVABLES' },
+      _sum: { amount: true }
+    });
+    const deposits = Number(depositsAggr._sum.amount || 0);
+
+    const refundsAggr = await prisma.payment.aggregate({
+      where: { propertyId, createdAt: { gte: startOfDay, lte: endOfDay }, status: 'REFUNDED' },
+      _sum: { amount: true }
+    });
+    const refunds = Math.abs(Number(refundsAggr._sum.amount || 0));
+
+    const adjustmentsAggr = await prisma.folioItem.aggregate({
+      where: { folio: { propertyId }, businessDate, type: 'ADJUSTMENT' },
+      _sum: { amount: true }
+    });
+    const adjustments = Math.abs(Number(adjustmentsAggr._sum.amount || 0));
+
+    // Outstanding balances: sum of all folio balances for checked in guests
+    const outstandingAggr = await prisma.folio.aggregate({
+      where: { propertyId, reservation: { status: 'CHECKED_IN' } },
+      _sum: { balance: true }
+    });
+    const outstanding = Number(outstandingAggr._sum.balance || 0);
+
+    const property = await prisma.property.findUnique({ where: { id: propertyId } });
+
     const report = {
+      propertyName: property?.name || 'Property',
+      propertyCurrency: property?.baseCurrency || 'NGN',
+      businessDate: businessDateStr,
+      auditStatus: nightAudit.status,
       occupancy: {
-        roomsAvailable: totalRooms,
-        roomsSold: nightAudit.occupancy ? Math.round((Number(nightAudit.occupancy) / 100) * totalRooms) : 0,
-        occupancyPercentage: Number(nightAudit.occupancy) || 0,
+        available: totalRooms,
+        occupied: nightAudit.occupancy ? Math.round((Number(nightAudit.occupancy) / 100) * totalRooms) : 0,
+        percentage: Number(nightAudit.occupancy) || 0,
+        arrivals,
+        departures,
+        noShows,
+        walkIns
+      },
+      performance: {
         adr: Number(nightAudit.adr) || 0,
         revpar: Number(nightAudit.revpar) || 0,
       },
       revenue: {
         room: roomRevenue,
-        foodAndBeverage: fbRevenue,
+        fb: fbRevenue,
         other: otherRevenue,
-        total: totalRevenue
+        gross: grossRevenue,
+        discounts: totalDiscounts,
+        net: netRevenue,
+        taxes: totalTaxes,
+        total: totalRevenueWithTax
+      },
+      financial: {
+        cash,
+        card,
+        transfer,
+        other,
+        deposits,
+        refunds,
+        adjustments,
+        outstanding
       }
     };
 

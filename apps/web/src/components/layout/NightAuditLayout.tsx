@@ -141,7 +141,7 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
     <div className="flex h-screen overflow-hidden bg-slate-50 font-sans">
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden">
+        <div className="fixed inset-0 z-50 lg:hidden print:hidden">
           <div
             className="fixed inset-0 bg-black/60 backdrop-blur-sm"
             onClick={() => setSidebarOpen(false)}
@@ -153,14 +153,14 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
       )}
 
       {/* Desktop sidebar */}
-      <div className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-white/5 bg-[#0b1120] lg:flex">
+      <div className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-white/5 bg-[#0b1120] lg:flex print:hidden">
         <Sidebar />
       </div>
 
       {/* Main content area */}
-      <div className="flex flex-1 flex-col lg:pl-64 min-w-0">
+      <div className="flex flex-1 flex-col lg:pl-64 min-w-0 print:pl-0">
         {/* Top bar */}
-        <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 shadow-sm sm:px-6">
+        <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 shadow-sm sm:px-6 print:hidden">
             <Button
               variant="ghost"
               size="icon"
@@ -176,8 +176,8 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto bg-slate-50">
-          <div className="mx-auto max-w-screen-2xl">
+        <main className="flex-1 overflow-y-auto bg-slate-50 print:bg-white print:overflow-visible">
+          <div className="mx-auto max-w-screen-2xl print:max-w-none print:mx-0">
             {children}
           </div>
         </main>
