@@ -173,10 +173,9 @@ export default function RequisitionsClient() {
           <p className="text-muted-foreground mt-1">Manage internal stock transfers and requests.</p>
         </div>
         
+        <Button onClick={() => setIsNewOpen(true)}><Plus className="mr-2 h-4 w-4" /> New Requisition</Button>
+        
         <Dialog open={isNewOpen} onOpenChange={setIsNewOpen}>
-          <DialogTrigger asChild>
-            <Button><Plus className="mr-2 h-4 w-4" /> New Requisition</Button>
-          </DialogTrigger>
           <DialogContent className="max-w-3xl">
             <DialogHeader>
               <DialogTitle>Create Stock Requisition</DialogTitle>
@@ -184,7 +183,7 @@ export default function RequisitionsClient() {
             <div className="grid grid-cols-2 gap-4 py-4">
               <div className="space-y-2">
                 <Label>Destination (Requesting For)</Label>
-                <Select value={toWarehouseId} onValueChange={setToWarehouseId}>
+                <Select value={toWarehouseId} onValueChange={(v) => setToWarehouseId(v || '')}>
                   <SelectTrigger><SelectValue placeholder="Select your outlet..." /></SelectTrigger>
                   <SelectContent>
                     {warehouses.map(w => (
@@ -195,7 +194,7 @@ export default function RequisitionsClient() {
               </div>
               <div className="space-y-2">
                 <Label>Source (Requesting From)</Label>
-                <Select value={fromWarehouseId} onValueChange={setFromWarehouseId}>
+                <Select value={fromWarehouseId} onValueChange={(v) => setFromWarehouseId(v || '')}>
                   <SelectTrigger><SelectValue placeholder="Select source store..." /></SelectTrigger>
                   <SelectContent>
                     {warehouses.map(w => (
@@ -208,7 +207,7 @@ export default function RequisitionsClient() {
 
             <div className="space-y-4">
               <Label>Request Items</Label>
-              <Select onValueChange={addItem} value="">
+              <Select onValueChange={(v) => v && addItem(v)} value="">
                 <SelectTrigger><SelectValue placeholder="Add an item..." /></SelectTrigger>
                 <SelectContent>
                   {stockItems.map(item => (
