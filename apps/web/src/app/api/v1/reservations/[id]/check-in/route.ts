@@ -31,7 +31,7 @@ export async function POST(
       overrideDeposit = body?.overrideDeposit === true;
       acknowledgedByStaffId = body?.acknowledgedByStaffId;
       reason = body?.reason;
-      operationId = body?.operationId;
+      // operationId is generated dynamically now
       if (reqPropertyId && !ctx.propertyIds.includes(reqPropertyId)) return NextResponse.json({ error: 'Forbidden property' }, { status: 403 });
     } catch (e) {
       // Ignore body parsing errors
@@ -104,6 +104,7 @@ export async function POST(
 
     // 6. Create the Operation, Command, and Audit Log Atomically
     const newOperation = await prisma.$transaction(async (tx: any) => {
+      const generatedOpId = crypto.randomUUID();
       // --- 7D.6 FINANCIAL GUARD ---
       // Lock the folios associated with this reservation to prevent concurrent mutations
       const folios = await tx.$queryRaw<any[]>`
@@ -143,7 +144,7 @@ export async function POST(
 
         if (totalDebt > 0 || totalCredit < expectedCost) {
            if (overrideDeposit) {
-             if (!acknowledgedByStaffId || !reason || !operationId) {
+             if (!acknowledgedByStaffId || !reason) {
                throw new Error('BAD_REQUEST: Missing required fields for deposit override');
              }
              
@@ -169,7 +170,7 @@ export async function POST(
              if (!existingBypass) {
                await tx.checkInBypass.create({
                  data: {
-                   operationId,
+                   operationId: generatedOpId,
                    propertyId,
                    reservationId,
                    frontdeskSessionId: operatorSession.id,
@@ -204,6 +205,7 @@ export async function POST(
 
       const op = await tx.lockOperation.create({
         data: {
+          id: generatedOpId,
           idempotencyKey: idempotencyKey,
           propertyId,
           lockId: doorLock.id,
