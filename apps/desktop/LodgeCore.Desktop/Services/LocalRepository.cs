@@ -1642,6 +1642,19 @@ public class LocalRepository
                     expectedCost = roomType.BasePrice * Math.Max(1, (res.CheckOutDate - res.CheckInDate).Days);
                 }
             }
+            if (expectedCost > 0 && res.Rooms.Any())
+            {
+                var resRoom = res.Rooms.First();
+                if (resRoom.DiscountType == "FIXED_AMOUNT")
+                {
+                    expectedCost -= resRoom.DiscountAmount ?? 0m;
+                }
+                else if (resRoom.DiscountType == "PERCENTAGE")
+                {
+                    expectedCost -= expectedCost * ((resRoom.DiscountPercent ?? 0m) / 100m);
+                }
+                if (expectedCost < 0) expectedCost = 0;
+            }
 
             decimal totalDeposits = res.Folio?.TotalPayments ?? 0m;
             decimal totalCharges = res.Folio?.TotalCharges ?? 0m;

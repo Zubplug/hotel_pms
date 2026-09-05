@@ -202,10 +202,19 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
     }
   };
 
-  const room = reservation?.reservationRooms?.[0]?.room;
+  const resRoom = reservation?.reservationRooms?.[0];
+  const room = resRoom?.room;
   const guest = reservation?.primaryGuest;
   
-  const expectedCost = Number(reservation?.ratePlanSnapshot?.total || 0);
+  let expectedCost = Number(reservation?.ratePlanSnapshot?.total || 0);
+  if (expectedCost > 0 && resRoom) {
+    if (resRoom.discountType === 'FIXED_AMOUNT') {
+      expectedCost -= Number(resRoom.discountAmount || 0);
+    } else if (resRoom.discountType === 'PERCENTAGE') {
+      expectedCost -= expectedCost * (Number(resRoom.discountPercent || 0) / 100);
+    }
+    if (expectedCost < 0) expectedCost = 0;
+  }
   const folio = reservation?.folios?.[0];
   const advanceDeposit = Number(folio?.availableCredit || 0);
   const totalPayments = Number(folio?.totalPayments || 0);
