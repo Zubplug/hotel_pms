@@ -303,7 +303,7 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
                               onClick={() => setShowManagerOverride(true)}
                               className="font-bold border-amber-300 text-amber-700 hover:bg-amber-100"
                             >
-                              Manager Override
+                              Bypass Check-In
                             </Button>
                           </div>
                         </>
