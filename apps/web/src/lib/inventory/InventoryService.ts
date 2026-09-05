@@ -368,7 +368,7 @@ export class InventoryService {
     await assertNightAuditAllowsTransaction(guardRecord.propertyId);
     // Idempotency check
     const existingTransfer = await prisma.stockTransfer.findFirst({
-      where: { id: transferId, status: TRANSFER_STATUS.POSTED }
+      where: { id: transferId, status: TRANSFER_STATUS.COMPLETED }
     });
     if (existingTransfer) {
       return { success: true, message: 'Already posted', transferId };
@@ -486,7 +486,7 @@ export class InventoryService {
       const updatedTransfer = await tx.stockTransfer.update({
         where: { id: transfer.id },
         data: {
-          status: TRANSFER_STATUS.POSTED,
+          status: TRANSFER_STATUS.COMPLETED,
           postedBy: actorId,
           postedAt: new Date(),
           updatedAt: new Date()

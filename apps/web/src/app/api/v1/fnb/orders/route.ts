@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
       where: {
         propertyId: { in: propertyIdsToQuery as string[] },
         ...(requestedOutletId ? { outletId: requestedOutletId } : {}),
-        status: { in: ['OPEN', 'SENT'] }
+        status: { in: ['SUBMITTED', 'IN_SERVICE'] }
       },
       include: {
         table: true,

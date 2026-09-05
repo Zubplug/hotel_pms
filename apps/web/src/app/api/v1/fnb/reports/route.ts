@@ -35,14 +35,13 @@ export async function GET(req: NextRequest) {
       _sum: { amount: true }
     });
 
-    const voidsAgg = await prisma.posVoid.aggregate({
+    const voidsCount = await prisma.posVoid.count({
       where: {
         order: {
           propertyId: { in: propertyIdsToQuery as string[] },
         },
         createdAt: { gte: startOfDay }
-      },
-      _sum: { amount: true }
+      }
     });
 
     const discountsAgg = await prisma.posDiscount.aggregate({
@@ -58,7 +57,7 @@ export async function GET(req: NextRequest) {
     return successResponse({
       reports: {
         tenderBreakdown: paymentsAgg,
-        totalVoids: voidsAgg._sum.amount || 0,
+        totalVoids: voidsCount,
         totalDiscounts: discountsAgg._sum.amount || 0,
       }
     }, 200);

@@ -26,6 +26,11 @@ export async function GET(req: NextRequest) {
     const now = new Date();
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
+    const baseFilter = {
+      propertyId: { in: propertyIdsToQuery as string[] },
+      ...(requestedOutletId ? { outletId: requestedOutletId } : {}),
+    };
+
     // Gross Sales
     const paymentsAgg = await prisma.posPayment.aggregate({
       where: {
@@ -42,46 +47,32 @@ export async function GET(req: NextRequest) {
 
     // Active Orders
     const activeOrders = await prisma.posOrder.count({
-      where: {
-        propertyId: { in: propertyIdsToQuery as string[] },
-        ...(requestedOutletId ? { outletId: requestedOutletId } : {}),
-        status: { in: ['OPEN', 'SENT'] }
-      }
+      where: { ...baseFilter, status: { in: ['SUBMITTED', 'IN_SERVICE'] } }
     });
 
     // Covers
     const coversAgg = await prisma.posOrder.aggregate({
-      where: {
-        propertyId: { in: propertyIdsToQuery as string[] },
-        ...(requestedOutletId ? { outletId: requestedOutletId } : {}),
-        createdAt: { gte: startOfDay }
-      },
-      _sum: { covers: true }
+      where: baseFilter,
+      _sum: { guestCount: true },
     });
     
-    const covers = Number(coversAgg._sum.covers || 0);
+    const covers = coversAgg._sum?.guestCount ? Number(coversAgg._sum.guestCount) : 0;
 
     // Voids
-    const voidsAgg = await prisma.posVoid.aggregate({
+    const voidsCount = await prisma.posVoid.count({
       where: {
-        order: {
-          propertyId: { in: propertyIdsToQuery as string[] },
-          ...(requestedOutletId ? { outletId: requestedOutletId } : {}),
-        },
+        order: baseFilter,
         createdAt: { gte: startOfDay }
-      },
-      _sum: { amount: true }
+      }
     });
-    
-    const totalVoids = Number(voidsAgg._sum.amount || 0);
 
     return successResponse({
       kpis: {
         grossSales,
-        netSales: grossSales - totalVoids,
+        netSales: grossSales,
         activeOrders,
         covers,
-        totalVoids,
+        totalVoids: voidsCount,
         averageCheck: covers > 0 ? (grossSales / covers) : 0,
       }
     }, 200);

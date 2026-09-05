@@ -25,12 +25,12 @@ export async function GET(req: NextRequest) {
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     const staffSales = await prisma.posOrder.groupBy({
-      by: ['waiterId'],
+      by: ['serverStaffId'],
       where: {
         propertyId: { in: propertyIdsToQuery as string[] },
         createdAt: { gte: startOfDay }
       },
-      _sum: { totalAmount: true, covers: true },
+      _sum: { total: true, guestCount: true },
       _count: { id: true }
     });
 

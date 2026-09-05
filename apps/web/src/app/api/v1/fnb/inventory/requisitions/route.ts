@@ -11,9 +11,9 @@ export async function POST(req: NextRequest) {
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
 
-    const { propertyId, fromLocationId, toLocationId, items } = await req.json();
+    const { propertyId, fromWarehouseId, toWarehouseId, items } = await req.json();
 
-    if (!propertyId || !fromLocationId || !toLocationId || !items || !items.length) {
+    if (!propertyId || !fromWarehouseId || !toWarehouseId || !items || !items.length) {
       return errorResponse('BAD_REQUEST', 'Missing required fields', 400);
     }
 
@@ -27,19 +27,25 @@ export async function POST(req: NextRequest) {
     const requisition = await prisma.stockTransfer.create({
       data: {
         propertyId,
-        fromLocationId,
-        toLocationId,
+        fromWarehouseId,
+        toWarehouseId,
+        transferRef: `REQ-${Date.now()}`,
         status: 'DRAFT',
         requestedBy: session.user.id,
         items: {
           create: items.map((item: any) => ({
-            itemId: item.itemId,
+            stockItemId: item.itemId,
             quantity: item.quantity,
+            unitOfMeasure: item.unitOfMeasure || 'UNIT',
           }))
         }
       },
       include: {
-        items: true
+        items: {
+          include: {
+            stockItem: true
+          }
+        }
       }
     });
 
@@ -73,9 +79,9 @@ export async function GET(req: NextRequest) {
         propertyId: { in: propertyIdsToQuery as string[] }
       },
       include: {
-        fromLocation: true,
-        toLocation: true,
-        items: { include: { item: true } }
+        fromWarehouse: true,
+        toWarehouse: true,
+        items: { include: { stockItem: true } }
       },
       orderBy: { createdAt: 'desc' },
       take: 50

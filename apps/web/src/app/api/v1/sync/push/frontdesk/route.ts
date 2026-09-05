@@ -554,33 +554,57 @@ export async function POST(req: NextRequest) {
               nextControlStatus === "APPROVED" ||
               nextControlStatus === "APPROVED_WITH_VARIANCE"
             ) {
-              handoverId = randomUUID();
-              await tx.cashHandover.create({
-                data: {
-                  id: handoverId,
-                  propertyId: current.propertyId,
-                  handoverReference: `HO-${Date.now()}-${randomUUID().split("-")[0].toUpperCase().substring(0, 4)}`,
-                  amount: Number(current.declaredCash || 0),
-                  handedOverById: current.staffId,
-                  notes:
-                    "Automatically created upon offline shift approval sync.",
-                  status: "PENDING",
-                },
-              });
-              await tx.shiftControlAudit.create({
-                data: {
-                  id: randomUUID(),
-                  propertyId: current.propertyId,
-                  frontdeskSessionId: sessionId,
-                  action: "HANDOVER_CREATED",
-                  fromStatus: nextControlStatus,
-                  toStatus: "HANDOVER_PENDING",
-                  performedBy: actorId,
-                  idempotencyKey: `audit_ho_${randomUUID()}`,
-                },
-              });
-              nextControlStatus = "HANDOVER_PENDING";
-              nextStatus = "HANDOVER_PENDING";
+              const expectedCash = Number(current.systemExpectedCash || 0);
+              const declaredCash = Number(current.declaredCash || 0);
+              const variance = Number(current.variance || 0);
+
+              if (expectedCash === 0 && declaredCash === 0 && variance === 0) {
+                // Cashless shift: bypass handover and go straight to RECONCILED
+                nextControlStatus = "RECONCILED";
+                nextStatus = "CLOSED";
+                await tx.shiftControlAudit.create({
+                  data: {
+                    id: randomUUID(),
+                    propertyId: current.propertyId,
+                    frontdeskSessionId: sessionId,
+                    action: "SHIFT_CASHLESS_ACKNOWLEDGED",
+                    fromStatus: "APPROVED",
+                    toStatus: "RECONCILED",
+                    performedBy: actorId,
+                    idempotencyKey: `audit_cashless_${randomUUID()}`,
+                    metadata: { expectedCash: 0, declaredCash: 0, variance: 0 },
+                  },
+                });
+              } else {
+                // Shift has cash: create handover
+                handoverId = randomUUID();
+                await tx.cashHandover.create({
+                  data: {
+                    id: handoverId,
+                    propertyId: current.propertyId,
+                    handoverReference: `HO-${Date.now()}-${randomUUID().split("-")[0].toUpperCase().substring(0, 4)}`,
+                    amount: declaredCash,
+                    handedOverById: current.staffId,
+                    notes:
+                      "Automatically created upon offline shift approval sync.",
+                    status: "PENDING",
+                  },
+                });
+                await tx.shiftControlAudit.create({
+                  data: {
+                    id: randomUUID(),
+                    propertyId: current.propertyId,
+                    frontdeskSessionId: sessionId,
+                    action: "HANDOVER_CREATED",
+                    fromStatus: nextControlStatus,
+                    toStatus: "HANDOVER_PENDING",
+                    performedBy: actorId,
+                    idempotencyKey: `audit_ho_${randomUUID()}`,
+                  },
+                });
+                nextControlStatus = "HANDOVER_PENDING";
+                nextStatus = "HANDOVER_PENDING";
+              }
             }
 
             await tx.frontdeskSession.update({
