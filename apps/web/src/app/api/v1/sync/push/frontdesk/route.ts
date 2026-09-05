@@ -264,6 +264,16 @@ export async function POST(req: NextRequest) {
               "FRONTDESK_SHIFT_CLOSED: Cashier session is missing, closed, or belongs to another receptionist.",
             );
           }
+
+          if (frontdeskSession.status !== "OPEN") {
+            const lockedControlStatuses = ["HANDOVER_PENDING", "HANDED_OVER", "DEPOSITED", "RECONCILED"];
+            if (lockedControlStatuses.includes(String(frontdeskSession.controlStatus))) {
+              throw new Error(
+                "FRONTDESK_SHIFT_LOCKED: Cashier session has already progressed in the handover pipeline and cannot accept late sync events.",
+              );
+            }
+          }
+
           sessionBusinessDate = frontdeskSession.businessDate;
         }
 
