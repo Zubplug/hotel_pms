@@ -60,7 +60,7 @@ export interface LodgeCoreDataProvider {
     markLateArrival(id: string, notes: string): Promise<any>;
     assessNoShow(id: string): Promise<any>;
     reinstate(id: string, reason: string): Promise<any>;
-    checkIn(id: string, userId: string, deviceId: string, options?: { overrideDeposit?: boolean, managerId?: string, managerPin?: string, reason?: string }): Promise<any>;
+    checkIn(id: string, userId: string, deviceId: string, options?: { overrideDeposit?: boolean, acknowledgedByStaffId?: string, reason?: string }): Promise<any>;
     checkOut(id: string, userId: string, deviceId: string, options?: { managerId?: string, managerPin?: string, reason?: string }): Promise<any>;
     extendStay(id: string, newCheckOutDate: string): Promise<any>;
     previewExtendStay(id: string, newCheckOutDate: string): Promise<any>;

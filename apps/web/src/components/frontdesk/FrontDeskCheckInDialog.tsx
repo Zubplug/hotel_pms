@@ -15,7 +15,7 @@ import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { formatRoomNumber } from '@/lib/format-room';
 import { FrontDeskAddPaymentDialog } from './FrontDeskAddPaymentDialog';
 import { formatCurrency } from '@/lib/utils';
-import { ManagerOverrideModal } from '../pos/ManagerOverrideModal';
+import { BypassCheckInModal } from './BypassCheckInModal';
 
 interface FrontDeskCheckInDialogProps {
   open: boolean;
@@ -63,6 +63,8 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
     }
   }, [open, reservationId]);
 
+  const [overrideCreds, setOverrideCreds] = useState<{ acknowledgedByStaffId?: string, reason?: string } | null>(null);
+
   // Polling Effect for Reading
   useEffect(() => {
     if (phase !== 'READING' || !operationId) return;
@@ -79,7 +81,7 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
             setExistingCardData(cardData);
             setPhase('OVERWRITE_CONFIRM');
           } else {
-            executeCheckInEncoding();
+            executeCheckInEncoding(overrideCreds?.acknowledgedByStaffId, overrideCreds?.reason);
           }
         } else if (status === 'FAILED' || status === 'ERROR') {
           setPhase('FAILED');
@@ -91,7 +93,7 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
     }, 1500);
 
     return () => clearInterval(interval);
-  }, [phase, operationId]);
+  }, [phase, operationId, overrideCreds]);
 
   // Polling Effect for Encoding
   useEffect(() => {
@@ -139,7 +141,7 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
     }
   };
 
-  const executeCheckInEncoding = async (managerId?: string, managerPin?: string, reason?: string) => {
+  const executeCheckInEncoding = async (acknowledgedByStaffId?: string, reason?: string) => {
     try {
       setPhase('ENCODING');
       setErrorMsg(null);
@@ -147,8 +149,7 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
 
       const data = await provider.reservations.checkIn(reservationId!, "System", "Device1", { 
         overrideDeposit: isDepositOverride,
-        managerId,
-        managerPin,
+        acknowledgedByStaffId,
         reason
       });
 
@@ -172,11 +173,10 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
     }
   };
 
-  const handleOverrideAuthorized = (managerId: string, managerPin: string, reason: string) => {
+  const handleOverrideAuthorized = (acknowledgedByStaffId: string, reason: string) => {
     setShowManagerOverride(false);
     setIsDepositOverride(true);
-    // Proceed to check-in encoding with override credentials
-    executeCheckInEncoding(managerId, managerPin, reason);
+    setOverrideCreds({ acknowledgedByStaffId, reason });
   };
 
   const [printStatus, setPrintStatus] = useState<'IDLE' | 'PRINTING' | 'SUCCESS' | 'FAILED'>('IDLE');
@@ -210,7 +210,7 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
   const availableCredit = Number(folio?.availableCredit || 0);
   const isDepositSufficient = availableCredit >= expectedCost;
   
-  const isReady = reservation?.status === 'CONFIRMED' && room && isDepositSufficient;
+  const isReady = reservation?.status === 'CONFIRMED' && room && (isDepositSufficient || isDepositOverride);
 
   return (
     <Dialog open={open && !!reservationId} onOpenChange={onOpenChange}>
@@ -297,6 +297,13 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
                               className="bg-amber-600 hover:bg-amber-700 font-bold text-white shadow-sm"
                             >
                               Collect Deposit
+                            </Button>
+                            <Button
+                              variant="outline"
+                              onClick={() => setShowManagerOverride(true)}
+                              className="font-bold border-amber-300 text-amber-700 hover:bg-amber-100"
+                            >
+                              Manager Override
                             </Button>
                           </div>
                         </>
@@ -432,6 +439,13 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
           }}
         />
       )}
+
+      <BypassCheckInModal 
+        isOpen={showManagerOverride} 
+        propertyId={propertyId}
+        onAuthorized={handleOverrideAuthorized} 
+        onClose={() => setShowManagerOverride(false)} 
+      />
 
     </Dialog>
   );
