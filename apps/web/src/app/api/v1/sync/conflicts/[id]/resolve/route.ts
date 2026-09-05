@@ -156,14 +156,26 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                    where: { operationId: bypassOpId },
                  });
                  if (!existingBypass) {
+                   if (!edgeEvent.operatorId) throw new Error("Operator ID missing from edge event");
+                   const operatorSession = await tx.frontdeskSession.findFirst({
+                     where: { propertyId: conflict.propertyId, staffId: edgeEvent.operatorId, controlStatus: 'OPEN' }
+                   });
+
+                   if (!operatorSession) {
+                     throw new Error("No open FrontdeskSession found for operator to bypass checkin.");
+                   }
+
                    await tx.checkInBypass.create({
                      data: {
                        propertyId: conflict.propertyId,
                        reservationId: r.id,
                        acknowledgedByStaffId: payload.acknowledgedByStaffId,
                        reason: payload.reason,
-                       overrideDeposit: payload.overrideDeposit || false,
                        operationId: bypassOpId,
+                       frontdeskSessionId: operatorSession.id,
+                       operatorId: edgeEvent.operatorId,
+                       businessDate: operatorSession.businessDate,
+                       status: 'PENDING',
                        createdAt: new Date(),
                      },
                    });

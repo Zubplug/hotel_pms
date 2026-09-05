@@ -1,9 +1,5 @@
-import { PrismaClient } from '../../../packages/db/node_modules/@prisma/client';
+import prisma from '@hotel-pms/db';
 import bcrypt from 'bcryptjs';
-
-const prisma = new PrismaClient({
-  datasourceUrl: "postgresql://neondb_owner:npg_2TMUSHGXeFx8@ep-aged-thunder-ayuphsro.c-5.us-east-2.aws.neon.tech/neondb?sslmode=require"
-});
 
 async function main() {
   const email = 'oyibejoeochuko@gmail.com';
