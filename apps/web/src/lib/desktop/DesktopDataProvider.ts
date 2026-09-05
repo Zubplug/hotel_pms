@@ -159,7 +159,7 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     markLateArrival: async (id: string, notes: string) => invokeDesktop('reservations.lateArrival', { id, notes }),
     assessNoShow: async (id: string) => invokeDesktop('reservations.noShow', { id }),
     reinstate: async (id: string, reason: string) => invokeDesktop('reservations.reinstate', { id, reason }),
-    checkIn: async (id: string, userId: string, deviceId: string, options?: { bypassKeycard?: boolean, overrideDeposit?: boolean, managerId?: string, managerPin?: string, reason?: string }) => {
+    checkIn: async (id: string, userId: string, deviceId: string, options?: { bypassKeycard?: boolean, overrideDeposit?: boolean, acknowledgedByStaffId?: string, reason?: string }) => {
       const bypass = options?.bypassKeycard === true;
       let encodedRoomId = '';
       let encodeRes: any = { success: true, data: { status: 'SUCCESS' } };
@@ -195,8 +195,7 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
         deviceId, 
         bypassKeycard: bypass, 
         overrideDeposit: options?.overrideDeposit,
-        managerId: options?.managerId,
-        managerPin: options?.managerPin,
+        acknowledgedByStaffId: options?.acknowledgedByStaffId,
         reason: options?.reason,
         encodedRoomId, 
         encodeData: encodeRes.data ? JSON.stringify(encodeRes.data) : undefined 

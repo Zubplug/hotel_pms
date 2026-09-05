@@ -1651,7 +1651,7 @@ public class LocalRepository
             {
                 if (overrideDeposit)
                 {
-                    if (string.IsNullOrEmpty(acknowledgedByStaffId) || string.IsNullOrEmpty(reason) || string.IsNullOrEmpty(operationId))
+                    if (string.IsNullOrEmpty(acknowledgedByStaffId) || string.IsNullOrEmpty(reason))
                     {
                         throw new InvalidOperationException("BAD_REQUEST: Missing required fields for deposit override.");
                     }
@@ -1673,7 +1673,6 @@ public class LocalRepository
                         Sequence = res.LocalSequence + 1,
                         PayloadJson = JsonSerializer.Serialize(new
                         {
-                            operationId,
                             acknowledgedByStaffId,
                             reason,
                             overrideDeposit = true
