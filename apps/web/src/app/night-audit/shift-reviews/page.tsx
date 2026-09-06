@@ -237,26 +237,32 @@ export default function ShiftReportPage() {
   return (
     <div className="min-h-screen bg-slate-50">
       {/* ─── Hero Header ─── */}
-      <div className="bg-gradient-to-r from-[#0b1120] via-[#0e1829] to-[#0b1120] px-8 py-7 print:hidden">
-        <div className="max-w-[800px] mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <p className="text-emerald-400 text-xs font-semibold uppercase tracking-widest mb-1">
+      {/* ─── Hero Header ─── */}
+      <div className="relative overflow-hidden bg-slate-950 px-8 py-10 print:hidden">
+        {/* Animated Background Glows */}
+        <div className="absolute top-0 left-1/4 h-96 w-96 -translate-y-1/2 translate-x-1/2 rounded-full bg-indigo-500/20 blur-[120px] pointer-events-none" />
+        <div className="absolute bottom-0 right-1/4 h-64 w-64 translate-y-1/2 -translate-x-1/2 rounded-full bg-emerald-500/20 blur-[100px] pointer-events-none" />
+        
+        <div className="relative z-10 max-w-[800px] mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
+          <div className="space-y-1.5">
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-indigo-500/30 bg-indigo-500/10 px-2.5 py-0.5 text-xs font-medium text-indigo-300 backdrop-blur-md">
+              <ShieldCheck className="h-3.5 w-3.5" />
               Financial Reports
-            </p>
-            <h1 className="text-2xl font-bold text-white tracking-tight">
+            </div>
+            <h1 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white via-indigo-100 to-slate-400 tracking-tight">
               Shift Report &amp; Review
             </h1>
-            <p className="text-slate-400 text-sm mt-1">
-              Financial investigation workspace for shift reconciliation.
+            <p className="text-slate-400 text-sm font-medium">
+              Advanced financial investigation workspace for shift reconciliation.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             {selectedShift && (
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => router.push('/night-audit/shift-reviews')}
-                className="border-white/20 bg-white/10 text-white hover:bg-white/20 hover:text-white mr-2"
+                className="rounded-xl border-white/10 bg-white/5 text-white backdrop-blur-md hover:bg-white/10 hover:border-white/20 transition-all shadow-lg"
               >
                 <ArrowRight className="h-4 w-4 mr-1.5 rotate-180" /> Back to List
               </Button>
@@ -265,7 +271,7 @@ export default function ShiftReportPage() {
               variant="outline"
               size="sm"
               onClick={() => window.print()}
-              className="border-white/20 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+              className="rounded-xl border-white/10 bg-white/5 text-white backdrop-blur-md hover:bg-white/10 hover:border-white/20 transition-all shadow-lg"
             >
               <Printer className="h-4 w-4 mr-1.5" /> Print
             </Button>
@@ -274,7 +280,7 @@ export default function ShiftReportPage() {
               size="sm"
               onClick={exportReport}
               disabled={!report?.shifts?.length}
-              className="border-white/20 bg-white/10 text-white hover:bg-white/20 hover:text-white disabled:opacity-40"
+              className="rounded-xl border-indigo-500/30 bg-indigo-600 text-white backdrop-blur-md hover:bg-indigo-500 hover:border-indigo-400 transition-all shadow-[0_0_20px_rgba(79,70,229,0.3)] disabled:opacity-40"
             >
               <Download className="h-4 w-4 mr-1.5" /> Export CSV
             </Button>
@@ -306,48 +312,60 @@ export default function ShiftReportPage() {
           <>
             {/* ─── Submitted Shifts List ─── */}
             {!selectedShift && report?.shifts && report.shifts.length > 0 && (
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-6">
-                <div className="bg-slate-50/60 border-b border-slate-100 px-6 py-4 flex items-center justify-between">
+              <div className="space-y-4 mb-6">
+                <div className="flex items-center justify-between px-2">
                   <div className="flex items-center gap-2">
-                    <ShieldCheck className="h-4 w-4 text-slate-500" />
-                    <h2 className="text-sm font-semibold text-slate-700">Submitted Shifts ({report.shifts.length})</h2>
+                    <ShieldCheck className="h-5 w-5 text-indigo-600" />
+                    <h2 className="text-lg font-bold text-slate-800 tracking-tight">Submitted Shifts</h2>
                   </div>
+                  <Badge variant="outline" className="bg-white border-slate-200 text-slate-500 font-semibold shadow-sm rounded-lg px-2.5 py-0.5">
+                    {report.shifts.length} total
+                  </Badge>
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="bg-slate-50/80 border-b border-slate-100">
-                        {['Date', 'Type', 'Cashier', 'Status', 'Expected', 'Declared', 'Variance', ''].map((h, i) => (
-                          <th key={i} className={`px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap ${i >= 4 && i <= 6 ? 'text-right' : 'text-left'}`}>
-                            {h}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {report.shifts.map((shift: any) => {
-                        const variance = (Number(shift.declaredCash ?? 0)) - (Number(shift.expectedCash ?? 0));
-                        return (
-                          <tr key={shift.id} className="hover:bg-slate-50/70 transition-colors">
-                            <td className="px-5 py-3.5 text-slate-700 whitespace-nowrap">{format(new Date(shift.openedAt), 'dd MMM yyyy, HH:mm')}</td>
-                            <td className="px-5 py-3.5 font-medium text-slate-700">{shift.type}</td>
-                            <td className="px-5 py-3.5 text-slate-700">{shift.operator ? `${shift.operator.firstName} ${shift.operator.lastName}` : 'Unknown'}</td>
-                            <td className="px-5 py-3.5"><StatusChip status={shift.controlStatus || shift.status} /></td>
-                            <td className="px-5 py-3.5 text-right font-medium text-slate-700">{fmt(Number(shift.expectedCash ?? 0))}</td>
-                            <td className="px-5 py-3.5 text-right font-medium text-slate-700">{shift.declaredCash != null ? fmt(Number(shift.declaredCash)) : '—'}</td>
-                            <td className={`px-5 py-3.5 text-right font-bold tabular-nums ${variance < 0 ? 'text-red-600' : variance > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {report.shifts.map((shift: any) => {
+                    const variance = (Number(shift.declaredCash ?? 0)) - (Number(shift.expectedCash ?? 0));
+                    const isBalanced = variance === 0;
+                    return (
+                      <div key={shift.id} className="group relative bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col">
+                        {/* Decorative top border glow based on variance */}
+                        <div className={`absolute top-0 left-0 w-full h-1 rounded-t-2xl opacity-40 transition-opacity group-hover:opacity-100 ${isBalanced ? 'bg-gradient-to-r from-emerald-400 to-emerald-500' : 'bg-gradient-to-r from-amber-400 to-rose-500'}`} />
+                        
+                        <div className="flex justify-between items-start mb-4">
+                          <div>
+                            <h3 className="font-bold text-slate-800 text-base">{shift.type.replace(/_/g, ' ')}</h3>
+                            <p className="text-xs text-slate-500 flex items-center gap-1 mt-1">
+                              <User className="h-3.5 w-3.5 text-slate-400" /> {shift.operator ? `${shift.operator.firstName} ${shift.operator.lastName}` : 'Unknown Cashier'}
+                            </p>
+                          </div>
+                          <StatusChip status={shift.controlStatus || shift.status} />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 mb-5 mt-auto">
+                          <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Expected</p>
+                            <p className="text-sm font-semibold text-slate-700">{fmt(Number(shift.expectedCash ?? 0))}</p>
+                          </div>
+                          <div className={`rounded-xl p-3 border transition-colors ${isBalanced ? 'bg-emerald-50/50 border-emerald-100 group-hover:bg-emerald-50' : 'bg-rose-50/50 border-rose-100 group-hover:bg-rose-50'}`}>
+                            <p className={`text-[10px] font-bold uppercase tracking-wider mb-1 ${isBalanced ? 'text-emerald-600/70' : 'text-rose-600/70'}`}>Variance</p>
+                            <p className={`text-sm font-bold ${isBalanced ? 'text-emerald-700' : 'text-rose-700'}`}>
                               {fmt(variance)}
-                            </td>
-                            <td className="px-5 py-3.5 text-right">
-                              <Button size="sm" variant="outline" className="text-xs h-7 border-slate-200" onClick={() => router.push(`/night-audit/shift-reviews?shiftId=${shift.id}`)}>
-                                Review
-                              </Button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+                          <span className="text-xs font-medium text-slate-400 flex items-center gap-1.5">
+                            <Clock className="h-3.5 w-3.5" />
+                            {format(new Date(shift.openedAt), 'dd MMM yyyy, HH:mm')}
+                          </span>
+                          <Button size="sm" className="rounded-xl bg-slate-900 text-white hover:bg-indigo-600 hover:shadow-lg hover:shadow-indigo-500/20 transition-all h-8 text-xs px-4" onClick={() => router.push(`/night-audit/shift-reviews?shiftId=${shift.id}`)}>
+                            Review Shift
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -364,112 +382,150 @@ export default function ShiftReportPage() {
 
             {/* ─── Cash Reconciliation Panel ─── */}
             {selectedShift && (
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="bg-white rounded-3xl border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden mb-8 relative">
+                {/* Subtle gradient background inside the card */}
+                <div className="absolute inset-0 bg-gradient-to-br from-slate-50/50 via-white to-slate-50/30 pointer-events-none" />
+                
                 {/* Panel header */}
-                <div className="bg-slate-50/60 border-b border-slate-100 px-6 py-4 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Banknote className="h-4 w-4 text-slate-500" />
-                    <h2 className="text-sm font-semibold text-slate-700">Payment Handover &amp; Reconciliation</h2>
+                <div className="relative border-b border-slate-100 px-8 py-5 flex items-center justify-between bg-white/40 backdrop-blur-md">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
+                      <Banknote className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-bold text-slate-800 tracking-tight">Payment Handover &amp; Reconciliation</h2>
+                      <p className="text-xs text-slate-500 font-medium mt-0.5">Shift reference: {selectedShift.shiftReference || selectedShift.id?.slice(0, 12).toUpperCase()}</p>
+                    </div>
                   </div>
                   <StatusChip status={selectedShift.controlStatus || selectedShift.status} />
                 </div>
 
-                <div className="p-6 grid grid-cols-2 md:grid-cols-4 gap-5">
-                  {/* Type / location */}
-                  <div className="space-y-1">
-                    <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Type / Location</p>
-                    <p className="text-sm font-bold text-slate-800">
-                      {selectedShift.type}
-                    </p>
-                    <p className="text-xs text-slate-500">
-                      {selectedShift.outlet?.name || selectedShift.till?.name || 'Till'}
-                    </p>
-                  </div>
-
-                  {/* Cashier */}
-                  <div className="space-y-1">
-                    <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Cashier</p>
-                    <div className="flex items-center gap-2">
-                      <div className="h-7 w-7 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 text-xs font-bold">
-                        {selectedShift.operator
-                          ? `${selectedShift.operator.firstName?.[0] ?? ''}${selectedShift.operator.lastName?.[0] ?? ''}`
-                          : '?'}
-                      </div>
-                      <p className="text-sm font-semibold text-slate-800">
-                        {selectedShift.operator
-                          ? `${selectedShift.operator.firstName} ${selectedShift.operator.lastName}`
-                          : 'Unknown'}
+                <div className="relative p-8">
+                  {/* Info grid */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
+                    {/* Type / location */}
+                    <div className="space-y-1.5">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Type / Location</p>
+                      <p className="text-sm font-bold text-slate-800">
+                        {selectedShift.type.replace(/_/g, ' ')}
+                      </p>
+                      <p className="text-xs text-slate-500 font-medium">
+                        {selectedShift.outlet?.name || selectedShift.till?.name || 'Main Till'}
                       </p>
                     </div>
-                  </div>
 
-                  {/* Opened */}
-                  <div className="space-y-1">
-                    <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Opened</p>
-                    <p className="text-sm font-semibold text-slate-800">
-                      {format(new Date(selectedShift.openedAt), 'dd MMM yyyy')}
-                    </p>
-                    <p className="text-xs text-slate-500">
-                      {format(new Date(selectedShift.openedAt), 'HH:mm')}
-                    </p>
-                  </div>
-
-                  {/* Shift Reference */}
-                  <div className="space-y-1">
-                    <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Reference</p>
-                    <p className="text-xs font-mono font-semibold text-slate-700">
-                      {selectedShift.shiftReference || selectedShift.id?.slice(0, 12).toUpperCase()}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Financial strip */}
-                <div className="border-t border-slate-100 grid grid-cols-2 md:grid-cols-4 divide-x divide-slate-100">
-                  {[
-                    { label: 'Opening Float', value: fmt(Number(selectedShift.openingFloat ?? 0)), icon: Banknote, color: 'text-slate-700' },
-                    { label: 'Expected Cash Handover', value: fmt(Number(selectedShift.expectedCash ?? 0)), icon: TrendingUp, color: 'text-blue-700', sub: 'Physical cash only' },
-                    { label: 'Declared Cash', value: selectedShift.declaredCash == null ? 'Not declared' : fmt(Number(selectedShift.declaredCash)), icon: ShieldCheck, color: 'text-slate-700' },
-                    {
-                      label: 'Variance',
-                      value: fmt(shiftVariance) + (shiftVariance !== 0 ? (shiftVariance > 0 ? ' OVER' : ' SHORT') : ''),
-                      icon: shiftVariance === 0 ? Minus : shiftVariance > 0 ? TrendingUp : TrendingDown,
-                      color: shiftVariance < 0 ? 'text-red-600' : shiftVariance > 0 ? 'text-amber-600' : 'text-emerald-600',
-                      bg: shiftVariance < 0 ? 'bg-red-50' : shiftVariance > 0 ? 'bg-amber-50' : 'bg-emerald-50',
-                    },
-                  ].map((stat) => {
-                    const Icon = stat.icon;
-                    return (
-                      <div key={stat.label} className={`p-5 ${stat.bg ?? ''}`}>
-                        <div className="flex items-center gap-1.5 mb-1.5">
-                          <Icon className={`h-3.5 w-3.5 ${stat.color}`} />
-                          <p className="text-xs font-medium text-slate-400">{stat.label}</p>
+                    {/* Cashier */}
+                    <div className="space-y-1.5">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cashier</p>
+                      <div className="flex items-center gap-2.5">
+                        <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white text-xs font-bold shadow-sm">
+                          {selectedShift.operator
+                            ? `${selectedShift.operator.firstName?.[0] ?? ''}${selectedShift.operator.lastName?.[0] ?? ''}`
+                            : '?'}
                         </div>
-                        <p className={`text-lg font-black tracking-tight ${stat.color}`}>
-                          {stat.value}
+                        <p className="text-sm font-bold text-slate-800">
+                          {selectedShift.operator
+                            ? `${selectedShift.operator.firstName} ${selectedShift.operator.lastName}`
+                            : 'Unknown Cashier'}
                         </p>
-                        {stat.sub && <p className="text-[10px] text-slate-400 mt-0.5">{stat.sub}</p>}
                       </div>
-                    );
-                  })}
-                </div>
-                <div className="border-t border-slate-100 px-6 py-5">
-                  <div className="flex items-center justify-between gap-3 mb-3">
-                    <div>
-                      <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Receipts to hand over</h3>
-                      <p className="text-xs text-slate-400 mt-1">Completed collections grouped by payment method.</p>
                     </div>
-                    <span className="text-xs font-semibold text-slate-500">
-                      {fmt(Object.values(selectedShift.paymentTotals ?? {}).reduce((sum: number, value: any) => sum + Number(value || 0), 0))}
-                    </span>
+
+                    {/* Opened */}
+                    <div className="space-y-1.5">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Opened At</p>
+                      <p className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                        <Clock className="h-4 w-4 text-slate-400" />
+                        {format(new Date(selectedShift.openedAt), 'dd MMM yyyy')}
+                      </p>
+                      <p className="text-xs text-slate-500 font-medium">
+                        {format(new Date(selectedShift.openedAt), 'HH:mm')}
+                      </p>
+                    </div>
+
+                    {/* Closed */}
+                    <div className="space-y-1.5">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Closed At</p>
+                      {selectedShift.closedAt ? (
+                        <>
+                          <p className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                            <Clock className="h-4 w-4 text-slate-400" />
+                            {format(new Date(selectedShift.closedAt), 'dd MMM yyyy')}
+                          </p>
+                          <p className="text-xs text-slate-500 font-medium">
+                            {format(new Date(selectedShift.closedAt), 'HH:mm')}
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-sm font-medium text-slate-400 italic">Still Open</p>
+                      )}
+                    </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+
+                  {/* Financial Bento Box */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {[
+                      { label: 'Opening Float', value: fmt(Number(selectedShift.openingFloat ?? 0)), icon: Banknote, color: 'text-slate-700', bg: 'bg-slate-50 border-slate-200/60' },
+                      { label: 'Expected Cash', value: fmt(Number(selectedShift.expectedCash ?? 0)), icon: TrendingUp, color: 'text-indigo-700', sub: 'Physical cash only', bg: 'bg-indigo-50/50 border-indigo-100' },
+                      { label: 'Declared Cash', value: selectedShift.declaredCash == null ? 'Not declared' : fmt(Number(selectedShift.declaredCash)), icon: ShieldCheck, color: 'text-slate-800', bg: 'bg-white border-slate-200/80 shadow-sm' },
+                      {
+                        label: 'Variance',
+                        value: fmt(Math.abs(shiftVariance)),
+                        icon: shiftVariance === 0 ? CheckCircle2 : shiftVariance > 0 ? TrendingUp : TrendingDown,
+                        color: shiftVariance < 0 ? 'text-rose-600' : shiftVariance > 0 ? 'text-amber-600' : 'text-emerald-600',
+                        bg: shiftVariance < 0 ? 'bg-rose-50/80 border-rose-200 ring-1 ring-rose-500/20' : shiftVariance > 0 ? 'bg-amber-50/80 border-amber-200 ring-1 ring-amber-500/20' : 'bg-emerald-50/80 border-emerald-200 ring-1 ring-emerald-500/20',
+                        sub: shiftVariance === 0 ? 'Perfectly balanced' : shiftVariance > 0 ? 'Overage detected' : 'Shortage detected'
+                      },
+                    ].map((stat) => {
+                      const Icon = stat.icon;
+                      return (
+                        <div key={stat.label} className={`p-5 rounded-2xl border ${stat.bg} flex flex-col justify-between`}>
+                          <div className="flex items-center gap-2 mb-3">
+                            <div className="p-1.5 rounded-lg bg-white/60 shadow-sm">
+                              <Icon className={`h-4 w-4 ${stat.color}`} />
+                            </div>
+                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{stat.label}</p>
+                          </div>
+                          <div>
+                            <p className={`text-xl font-black tracking-tight ${stat.color}`}>
+                              {stat.label === 'Variance' && shiftVariance < 0 ? '-' : ''}{stat.value}
+                            </p>
+                            {stat.sub && <p className="text-[10px] font-medium text-slate-500 mt-1">{stat.sub}</p>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="relative border-t border-slate-100 bg-slate-50/50 px-8 py-6">
+                  <div className="flex items-center justify-between gap-3 mb-4">
+                    <div>
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600">Receipts to hand over</h3>
+                      <p className="text-xs text-slate-400 font-medium mt-0.5">Completed collections grouped by payment method.</p>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Total Receipts</span>
+                      <span className="text-sm font-bold text-slate-700">
+                        {fmt(Object.values(selectedShift.paymentTotals ?? {}).reduce((sum: number, value: any) => sum + Number(value || 0), 0))}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-3">
                     {Object.entries(selectedShift.paymentTotals ?? {}).map(([method, amount]: [string, any]) => (
-                      <div key={method} className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{method.replace(/_/g, ' ')}</p>
-                        <p className="mt-1 text-sm font-bold text-slate-800">{fmt(Number(amount || 0))}</p>
+                      <div key={method} className="flex items-center gap-4 rounded-xl border border-slate-200/60 bg-white px-5 py-3 shadow-sm flex-1 min-w-[200px]">
+                        <div className="h-10 w-10 rounded-full bg-slate-50 flex items-center justify-center border border-slate-100">
+                          <CreditCard className="h-5 w-5 text-slate-400" />
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{method.replace(/_/g, ' ')}</p>
+                          <p className="text-base font-black text-slate-800">{fmt(Number(amount || 0))}</p>
+                        </div>
                       </div>
                     ))}
-                    {Object.keys(selectedShift.paymentTotals ?? {}).length === 0 && <p className="text-sm text-slate-400">No completed payment receipts recorded.</p>}
+                    {Object.keys(selectedShift.paymentTotals ?? {}).length === 0 && (
+                      <p className="text-sm text-slate-400 italic">No completed payment receipts recorded.</p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -477,30 +533,33 @@ export default function ShiftReportPage() {
 
             {/* ─── General Cashier Review Panel ─── */}
             {needsApproval && (
-              <div className="bg-white rounded-2xl border border-indigo-200 shadow-sm overflow-hidden">
-                <div className="bg-indigo-50/60 border-b border-indigo-100 px-6 py-4 flex items-center gap-2">
-                  <ShieldCheck className="h-4 w-4 text-indigo-600" />
-                  <h2 className="text-sm font-semibold text-indigo-800">General Cashier Review</h2>
-                  <span className="ml-auto text-xs text-indigo-500 font-medium">Action required</span>
+              <div className="bg-white rounded-3xl border border-indigo-200/60 shadow-lg shadow-indigo-500/5 overflow-hidden mb-8">
+                <div className="bg-indigo-50/80 backdrop-blur-sm border-b border-indigo-100/80 px-8 py-5 flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center">
+                    <ShieldCheck className="h-4 w-4 text-indigo-700" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-indigo-900">General Cashier Review</h2>
+                    <p className="text-xs font-medium text-indigo-600/80 mt-0.5">Please record your official review decision.</p>
+                  </div>
+                  <span className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-indigo-600 px-3 py-1 text-[10px] font-bold tracking-wider text-white uppercase shadow-sm">
+                    <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
+                    Action required
+                  </span>
                 </div>
 
-                <div className="p-6 space-y-5">
+                <div className="p-8 space-y-6">
                   <div>
-                    <div className="flex items-start justify-between gap-4 mb-3">
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                          Review decision
-                        </label>
-                        <p className="text-xs text-slate-400 mt-1">
-                          Select the outcome to record in the shift audit trail.
-                        </p>
-                      </div>
-                      <span className="hidden sm:inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500">
-                        {shiftVariance === 0 ? 'Balanced shift' : 'Variance detected'}
+                    <div className="flex items-center justify-between gap-4 mb-4">
+                      <label className="block text-sm font-bold text-slate-800">
+                        Review decision
+                      </label>
+                      <span className={`inline-flex items-center rounded-lg px-3 py-1 text-[11px] font-bold uppercase tracking-wider ${shiftVariance === 0 ? 'bg-emerald-100/50 text-emerald-700 border border-emerald-200' : 'bg-rose-100/50 text-rose-700 border border-rose-200'}`}>
+                        {shiftVariance === 0 ? 'Perfectly Balanced' : 'Variance Detected'}
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3" role="group" aria-label="Review decision">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4" role="group" aria-label="Review decision">
                       {[
                         {
                           value: 'APPROVED',
@@ -508,8 +567,8 @@ export default function ShiftReportPage() {
                           description: 'Balanced shift with no variance.',
                           icon: CheckCircle2,
                           disabled: shiftVariance !== 0,
-                          selected: 'border-emerald-300 bg-emerald-50/80 ring-2 ring-emerald-100',
-                          iconColor: 'text-emerald-600',
+                          selected: 'border-emerald-400 bg-emerald-50/40 ring-4 ring-emerald-500/20 shadow-md transform scale-[1.02]',
+                          iconColor: 'text-emerald-500 bg-emerald-100/50',
                         },
                         {
                           value: 'APPROVED_WITH_VARIANCE',
@@ -517,17 +576,17 @@ export default function ShiftReportPage() {
                           description: 'Accept and document a shortage or overage.',
                           icon: AlertTriangle,
                           disabled: shiftVariance === 0,
-                          selected: 'border-amber-300 bg-amber-50/80 ring-2 ring-amber-100',
-                          iconColor: 'text-amber-600',
+                          selected: 'border-amber-400 bg-amber-50/40 ring-4 ring-amber-500/20 shadow-md transform scale-[1.02]',
+                          iconColor: 'text-amber-500 bg-amber-100/50',
                         },
                         {
                           value: 'CASHLESS_ACKNOWLEDGED',
-                          title: 'Acknowledge non-cash handover',
+                          title: 'Acknowledge non-cash',
                           description: 'Physical documents received (no cash).',
                           icon: CheckCircle2,
                           disabled: (selectedShift?.expectedCash != null ? Number(selectedShift.expectedCash) : 0) !== 0 || shiftVariance !== 0,
-                          selected: 'border-blue-300 bg-blue-50/80 ring-2 ring-blue-100',
-                          iconColor: 'text-blue-600',
+                          selected: 'border-blue-400 bg-blue-50/40 ring-4 ring-blue-500/20 shadow-md transform scale-[1.02]',
+                          iconColor: 'text-blue-500 bg-blue-100/50',
                         },
                         {
                           value: 'REJECTED',
@@ -535,8 +594,8 @@ export default function ShiftReportPage() {
                           description: 'Send the shift back to the operator.',
                           icon: RotateCcw,
                           disabled: false,
-                          selected: 'border-rose-300 bg-rose-50/80 ring-2 ring-rose-100',
-                          iconColor: 'text-rose-600',
+                          selected: 'border-rose-400 bg-rose-50/40 ring-4 ring-rose-500/20 shadow-md transform scale-[1.02]',
+                          iconColor: 'text-rose-500 bg-rose-100/50',
                         },
                       ].map((option) => {
                         const Icon = option.icon;
@@ -549,25 +608,27 @@ export default function ShiftReportPage() {
                             aria-pressed={isSelected}
                             onClick={() => setDecision(option.value)}
                             className={cn(
-                              'group relative flex min-h-[88px] items-start gap-3 rounded-xl border p-3.5 text-left transition-all',
+                              'group relative flex items-center gap-4 rounded-2xl border p-4 text-left transition-all duration-300',
                               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2',
-                              isSelected ? option.selected : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50',
-                              option.disabled && 'cursor-not-allowed opacity-45 hover:border-slate-200 hover:bg-white'
+                              isSelected ? option.selected : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-lg hover:shadow-slate-200/50 hover:-translate-y-0.5',
+                              option.disabled && 'cursor-not-allowed opacity-40 hover:border-slate-200 hover:shadow-none hover:translate-y-0 hover:bg-slate-50/50'
                             )}
                           >
-                            <span className={cn('mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white shadow-sm', option.iconColor)}>
-                              <Icon className="h-4 w-4" />
+                            <span className={cn('flex h-12 w-12 shrink-0 items-center justify-center rounded-xl transition-colors', isSelected ? option.iconColor : 'bg-slate-100 text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-500')}>
+                              <Icon className="h-5 w-5" />
                             </span>
-                            <span className="min-w-0">
-                              <span className="block text-sm font-semibold text-slate-800">{option.title}</span>
-                              <span className="mt-1 block text-xs leading-4 text-slate-500">{option.description}</span>
+                            <div className="min-w-0 flex-1">
+                              <span className="block text-sm font-bold text-slate-800">{option.title}</span>
+                              <span className="mt-0.5 block text-xs font-medium text-slate-500">{option.description}</span>
                               {option.disabled && (
-                                <span className="mt-1.5 block text-[10px] font-medium text-slate-400">
-                                  {shiftVariance === 0 ? 'Only available with a variance' : 'Unavailable while variance exists'}
+                                <span className="mt-2 block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                  {shiftVariance === 0 ? 'Requires variance' : 'Disabled (Variance exists)'}
                                 </span>
                               )}
-                            </span>
-                            {isSelected && <span className="absolute right-3 top-3 h-2 w-2 rounded-full bg-indigo-500" />}
+                            </div>
+                            {isSelected && (
+                              <div className="absolute top-4 right-4 h-2.5 w-2.5 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.8)]" />
+                            )}
                           </button>
                         );
                       })}
@@ -644,49 +705,60 @@ export default function ShiftReportPage() {
 
             {/* ─── Audit Timeline ─── */}
             {selectedShift?.shiftControlAudits?.length > 0 && (
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="bg-slate-50/60 border-b border-slate-100 px-6 py-4 flex items-center gap-2">
-                  <History className="h-4 w-4 text-slate-500" />
-                  <h2 className="text-sm font-semibold text-slate-700">Audit Timeline</h2>
-                  <span className="ml-1 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-slate-200 text-slate-600 text-xs font-bold">
+              <div className="bg-white rounded-3xl border border-slate-200/60 shadow-lg shadow-slate-200/20 overflow-hidden mb-8">
+                <div className="bg-slate-50/80 backdrop-blur-sm border-b border-slate-100 px-8 py-5 flex items-center gap-3">
+                  <div className="p-2 bg-slate-200/50 text-slate-600 rounded-xl">
+                    <History className="h-5 w-5" />
+                  </div>
+                  <h2 className="text-base font-bold text-slate-800 tracking-tight">Audit Timeline</h2>
+                  <span className="ml-2 inline-flex items-center justify-center min-w-[24px] h-6 px-2 rounded-full bg-slate-200/80 text-slate-700 text-xs font-bold border border-slate-300/50">
                     {selectedShift.shiftControlAudits.length}
                   </span>
                 </div>
-                <div className="p-6">
-                  <div className="relative pl-6 border-l-2 border-slate-100 space-y-6">
+                <div className="p-8">
+                  <div className="relative pl-8 border-l-[3px] border-slate-100 space-y-8">
                     {selectedShift.shiftControlAudits.map((audit: any, i: number) => (
-                      <div key={audit.id} className="relative">
+                      <div key={audit.id} className="relative group">
                         {/* Timeline dot */}
-                        <span className="absolute -left-[25px] top-1 flex h-4 w-4 items-center justify-center rounded-full bg-indigo-600 ring-4 ring-white" />
-                        <div className="space-y-1.5">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-sm font-bold text-slate-800">
+                        <div className="absolute -left-[41px] top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-white ring-4 ring-slate-100 group-hover:ring-indigo-100 transition-all">
+                          <div className="h-2 w-2 rounded-full bg-indigo-500 group-hover:scale-125 transition-transform" />
+                        </div>
+                        <div className="bg-slate-50/50 rounded-2xl p-5 border border-slate-100 shadow-sm hover:shadow-md hover:border-slate-200 transition-all">
+                          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                            <span className="text-sm font-black text-slate-800 uppercase tracking-wide">
                               {audit.action.replace(/_/g, ' ')}
                             </span>
-                            <span className="text-xs text-slate-400 flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
+                            <span className="text-[11px] font-bold tracking-wider text-slate-400 flex items-center gap-1.5 uppercase">
+                              <Clock className="h-3.5 w-3.5" />
                               {format(new Date(audit.createdAt), 'dd MMM yyyy, HH:mm')}
                             </span>
                           </div>
-                          <p className="text-xs text-slate-500 flex items-center gap-1">
-                            <User className="h-3 w-3" />
-                            Staff: <span className="font-mono">{audit.performedBy.substring(0, 8).toUpperCase()}</span>
-                          </p>
-                          {audit.fromStatus && audit.toStatus && (
-                            <div className="flex items-center gap-2 mt-1">
-                              <StatusChip status={audit.fromStatus} />
-                              <ArrowRight className="h-3 w-3 text-slate-400" />
-                              <StatusChip status={audit.toStatus} />
+                          
+                          <div className="flex items-center gap-4 text-sm mb-3">
+                            <div className="flex items-center gap-1.5 text-slate-600 bg-white px-3 py-1.5 rounded-lg border border-slate-200/60 shadow-sm">
+                              <User className="h-4 w-4 text-slate-400" />
+                              <span className="font-semibold text-xs tracking-wider uppercase">{audit.performedBy.substring(0, 8)}</span>
+                            </div>
+                            
+                            {audit.fromStatus && audit.toStatus && (
+                              <div className="flex items-center gap-3 bg-white px-3 py-1.5 rounded-lg border border-slate-200/60 shadow-sm">
+                                <StatusChip status={audit.fromStatus} />
+                                <ArrowRight className="h-4 w-4 text-slate-300" />
+                                <StatusChip status={audit.toStatus} />
+                              </div>
+                            )}
+                          </div>
+
+                          {audit.reason && (
+                            <div className="inline-flex items-center gap-2 mt-1 px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-100 text-amber-800 text-xs font-semibold">
+                              <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                              {audit.reason}
                             </div>
                           )}
-                          {audit.reason && (
-                            <Badge variant="outline" className="mt-1 text-xs">
-                              {audit.reason}
-                            </Badge>
-                          )}
                           {audit.metadata?.notes && (
-                            <div className="mt-2 bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 text-sm text-slate-600 italic">
-                              "{audit.metadata.notes}"
+                            <div className="mt-4 relative rounded-xl bg-white border border-slate-200/60 p-4 text-sm text-slate-600 shadow-sm">
+                              <div className="absolute top-0 left-4 -translate-y-1/2 bg-white px-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">Notes</div>
+                              <p className="italic">{audit.metadata.notes}</p>
                             </div>
                           )}
                         </div>
@@ -699,35 +771,41 @@ export default function ShiftReportPage() {
 
             {/* ─── Transaction Details ─── */}
             {selectedShift && (
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="bg-slate-50/60 border-b border-slate-100 px-6 py-4 flex items-center gap-2">
-                <FileText className="h-4 w-4 text-slate-500" />
-                <h2 className="text-sm font-semibold text-slate-700">Transaction Details</h2>
+              <div className="bg-white rounded-3xl border border-slate-200/60 shadow-lg shadow-slate-200/20 overflow-hidden mb-8">
+              <div className="bg-slate-50/80 backdrop-blur-sm border-b border-slate-100 px-8 py-5 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-slate-200/50 text-slate-600 rounded-xl">
+                    <FileText className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-slate-800 tracking-tight">Transaction Details</h2>
+                  </div>
+                </div>
                 {transactions.length > 0 && (
-                  <span className="ml-1 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-slate-200 text-slate-600 text-xs font-bold">
-                    {transactions.length}
+                  <span className="inline-flex items-center justify-center min-w-[24px] h-6 px-2 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold shadow-sm">
+                    {transactions.length} items
                   </span>
                 )}
               </div>
 
               {transactions.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-center px-6">
-                  <div className="h-14 w-14 rounded-full bg-slate-100 flex items-center justify-center mb-4">
-                    <FileText className="h-7 w-7 text-slate-400" />
+                <div className="flex flex-col items-center justify-center py-20 text-center px-6">
+                  <div className="h-20 w-20 rounded-full bg-slate-50 flex items-center justify-center mb-6 shadow-sm border border-slate-100">
+                    <FileText className="h-10 w-10 text-slate-300" />
                   </div>
-                  <p className="text-sm font-semibold text-slate-600">No transactions found</p>
-                  <p className="text-sm text-slate-400 mt-1">No payments or refunds for this shift/period.</p>
+                  <p className="text-lg font-bold text-slate-700">No transactions found</p>
+                  <p className="text-sm font-medium text-slate-500 mt-1">No payments or refunds were recorded during this shift.</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="bg-slate-50/80 border-b border-slate-100">
-                        {['Time', 'Type', 'Method', 'Guest / Order', 'Receipt / Reference', 'Staff', 'Status', 'Amount'].map(
+                      <tr className="bg-slate-50/50 border-b border-slate-100">
+                        {['Time', 'Type', 'Method', 'Guest / Order', 'Reference', 'Staff', 'Status', 'Amount'].map(
                           (h, i) => (
                             <th
                               key={i}
-                              className={`px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap ${i === 7 ? 'text-right' : 'text-left'}`}
+                              className={`px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap ${i === 7 ? 'text-right' : 'text-left'}`}
                             >
                               {h}
                             </th>
@@ -735,82 +813,73 @@ export default function ShiftReportPage() {
                         )}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {transactions.map((t) => (
-                        <tr key={`${t.type}-${t.id}`} className="hover:bg-slate-50/70 transition-colors">
-                          {/* Time */}
-                          <td className="px-5 py-3.5 font-mono text-xs text-slate-500 whitespace-nowrap">
+                    <tbody className="divide-y divide-slate-100/80">
+                      {transactions.map((t, index) => (
+                        <tr key={`${t.type}-${t.id}`} className={`${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'} hover:bg-slate-50 transition-colors`}>
+                          <td className="px-6 py-4 font-mono text-xs text-slate-400 whitespace-nowrap font-medium">
                             {format(new Date(t.date), 'HH:mm:ss')}
                           </td>
-                          {/* Type */}
-                          <td className="px-5 py-3.5">
+                          <td className="px-6 py-4">
                             <span
-                              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-bold border ${
+                              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] uppercase tracking-wider font-bold border shadow-sm ${
                                 t.type === 'PAYMENT' || t.type === 'POS PAYMENT'
-                                  ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                  ? 'bg-blue-50/80 text-blue-700 border-blue-200/60'
                                   : t.type === 'POS CASH MOVEMENT'
-                                    ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                    : 'bg-red-50 text-red-700 border-red-200'
+                                    ? 'bg-amber-50/80 text-amber-700 border-amber-200/60'
+                                    : 'bg-rose-50/80 text-rose-700 border-rose-200/60'
                               }`}
                             >
                               {t.type === 'PAYMENT' || t.type === 'POS PAYMENT' ? (
-                                <CreditCard className="h-3 w-3" />
+                                <CreditCard className="h-3.5 w-3.5" />
                               ) : t.type === 'POS CASH MOVEMENT' ? (
-                                <Banknote className="h-3 w-3" />
+                                <Banknote className="h-3.5 w-3.5" />
                               ) : (
-                                <XCircle className="h-3 w-3" />
+                                <XCircle className="h-3.5 w-3.5" />
                               )}
                               {t.type}
                             </span>
                           </td>
-                          {/* Method */}
-                          <td className="px-5 py-3.5 text-slate-600 uppercase text-xs font-semibold tracking-wide">
+                          <td className="px-6 py-4 text-slate-600 text-xs font-bold tracking-wider uppercase">
                             {t.method || '—'}
                           </td>
-                          {/* Guest / order */}
-                          <td className="px-5 py-3.5 text-slate-700">
+                          <td className="px-6 py-4">
                             {t.orderNumber ? (
-                              <span className="font-mono text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md">
+                              <span className="font-mono text-xs font-semibold bg-slate-100/80 text-slate-600 border border-slate-200/60 px-2.5 py-1 rounded-lg shadow-sm">
                                 Order {t.orderNumber}
                               </span>
                             ) : t.guest?.firstName
-                              ? `${t.guest.firstName} ${t.guest.lastName}`
-                              : <span className="text-slate-400">—</span>}
+                              ? <span className="font-semibold text-slate-700">{`${t.guest.firstName} ${t.guest.lastName}`}</span>
+                              : <span className="text-slate-300">—</span>}
                           </td>
-                          {/* Receipt / reference */}
-                          <td className="px-5 py-3.5">
+                          <td className="px-6 py-4">
                             {t.reference ? (
-                              <span className="font-mono text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md" title={t.reference}>
+                              <span className="font-mono text-[11px] font-semibold bg-slate-100/80 text-slate-500 border border-slate-200/60 px-2 py-1 rounded-lg shadow-sm" title={t.reference}>
                                 {t.reference.length > 18 ? `${t.reference.slice(0, 18)}…` : t.reference}
                               </span>
-                            ) : <span className="text-slate-400">—</span>}
+                            ) : <span className="text-slate-300">—</span>}
                           </td>
-                          {/* Staff */}
-                          <td className="px-5 py-3.5">
+                          <td className="px-6 py-4">
                             {t.staffId ? (
-                              <span className="font-mono text-xs text-slate-500" title={t.staffId}>
+                              <span className="font-mono text-[11px] font-bold tracking-widest text-slate-400" title={t.staffId}>
                                 {t.staffId.slice(0, 8).toUpperCase()}
                               </span>
-                            ) : <span className="text-slate-400">—</span>}
+                            ) : <span className="text-slate-300">—</span>}
                           </td>
-                          {/* Status */}
-                          <td className="px-5 py-3.5">
+                          <td className="px-6 py-4">
                             <StatusChip status={t.status} />
                           </td>
-                          {/* Amount */}
-                          <td className={`px-5 py-3.5 text-right font-bold tabular-nums ${t.amount < 0 ? 'text-red-600' : 'text-slate-900'}`}>
+                          <td className={`px-6 py-4 text-right font-black tabular-nums tracking-tight ${t.amount < 0 ? 'text-rose-600' : 'text-slate-800'}`}>
                             {fmt(t.amount)}
                           </td>
                         </tr>
                       ))}
                     </tbody>
-                    {/* Totals footer */}
-                    <tfoot className="bg-slate-50 border-t border-slate-200">
+                    <tfoot className="bg-slate-50/80 border-t-2 border-slate-100">
                       <tr>
-                        <td colSpan={7} className="px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                          Net Total ({transactions.length} items)
+                        <td colSpan={7} className="px-6 py-5 text-xs font-bold text-slate-500 uppercase tracking-widest text-right">
+                          Net Total
                         </td>
-                        <td className="px-5 py-3.5 text-right font-black text-slate-900 text-sm tabular-nums">
+                        <td className="px-6 py-5 text-right font-black text-slate-900 text-base tabular-nums bg-white shadow-sm border-l border-slate-100">
                           {fmt(transactions.reduce((s, t) => s + t.amount, 0))}
                         </td>
                       </tr>
@@ -823,26 +892,28 @@ export default function ShiftReportPage() {
 
             {/* ─── POS Receipt & Authorization Evidence ─── */}
             {((report?.items?.posReceiptAudits?.length ?? 0) > 0 || (report?.items?.posAuthorizationAudits?.length ?? 0) > 0) && (
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="bg-slate-50/60 border-b border-slate-100 px-6 py-4 flex items-center gap-2">
-                  <ShieldCheck className="h-4 w-4 text-slate-500" />
+              <div className="bg-white rounded-3xl border border-slate-200/60 shadow-lg shadow-slate-200/20 overflow-hidden mb-8">
+                <div className="bg-slate-50/80 backdrop-blur-sm border-b border-slate-100 px-8 py-5 flex items-center gap-3">
+                  <div className="p-2 bg-slate-200/50 text-slate-600 rounded-xl">
+                    <ShieldCheck className="h-5 w-5" />
+                  </div>
                   <div>
-                    <h2 className="text-sm font-semibold text-slate-700">POS Audit Evidence</h2>
-                    <p className="text-xs text-slate-400 mt-0.5">Receipt printing and authorization activity attached to this shift.</p>
+                    <h2 className="text-base font-bold text-slate-800 tracking-tight">POS Audit Evidence</h2>
+                    <p className="text-xs font-medium text-slate-500 mt-0.5">Receipt printing and authorization activity attached to this shift.</p>
                   </div>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="bg-slate-50/80 border-b border-slate-100">
+                      <tr className="bg-slate-50/50 border-b border-slate-100">
                         {['Time', 'Evidence', 'Reference', 'Device / Staff', 'Reason'].map((heading) => (
-                          <th key={heading} className="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap">
+                          <th key={heading} className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap text-left">
                             {heading}
                           </th>
                         ))}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y divide-slate-100/80">
                       {[
                         ...(report?.items?.posReceiptAudits || []).map((audit: any) => ({
                           id: `receipt-${audit.id}`,
@@ -860,13 +931,23 @@ export default function ShiftReportPage() {
                           deviceStaff: `${audit.deviceId || '—'} / ${audit.authorizedBy || audit.requestedBy || '—'}`,
                           reason: audit.reason || '—',
                         })),
-                      ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((evidence) => (
-                        <tr key={evidence.id} className="hover:bg-slate-50/70 transition-colors">
-                          <td className="px-5 py-3.5 font-mono text-xs text-slate-500 whitespace-nowrap">{format(new Date(evidence.date), 'dd MMM yyyy HH:mm:ss')}</td>
-                          <td className="px-5 py-3.5 font-semibold text-slate-700">{evidence.evidence}</td>
-                          <td className="px-5 py-3.5"><span className="font-mono text-xs text-slate-500" title={evidence.reference}>{evidence.reference.slice(0, 18)}{evidence.reference.length > 18 ? '…' : ''}</span></td>
-                          <td className="px-5 py-3.5"><span className="font-mono text-xs text-slate-500" title={evidence.deviceStaff}>{evidence.deviceStaff.slice(0, 24)}{evidence.deviceStaff.length > 24 ? '…' : ''}</span></td>
-                          <td className="px-5 py-3.5 text-slate-600">{evidence.reason}</td>
+                      ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((evidence, index) => (
+                        <tr key={evidence.id} className={`${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'} hover:bg-slate-50 transition-colors`}>
+                          <td className="px-6 py-4 font-mono text-[11px] font-medium text-slate-400 whitespace-nowrap">
+                            {format(new Date(evidence.date), 'dd MMM yyyy HH:mm:ss')}
+                          </td>
+                          <td className="px-6 py-4 font-bold text-slate-700">{evidence.evidence}</td>
+                          <td className="px-6 py-4">
+                            <span className="font-mono text-[11px] font-semibold bg-slate-100/80 text-slate-500 border border-slate-200/60 px-2 py-1 rounded-lg shadow-sm" title={evidence.reference}>
+                              {evidence.reference.slice(0, 18)}{evidence.reference.length > 18 ? '…' : ''}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="font-mono text-[11px] font-bold tracking-widest text-slate-400 uppercase" title={evidence.deviceStaff}>
+                              {evidence.deviceStaff.slice(0, 24)}{evidence.deviceStaff.length > 24 ? '…' : ''}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-slate-600 text-sm font-medium">{evidence.reason}</td>
                         </tr>
                       ))}
                     </tbody>
