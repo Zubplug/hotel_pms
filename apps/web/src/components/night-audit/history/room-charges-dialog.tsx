@@ -46,7 +46,7 @@ export function RoomChargesDialog({ businessDate, auditId }: RoomChargesDialogPr
           View Analysis
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
+      <DialogContent className="max-w-6xl w-[95vw] max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Room Charges Billed</DialogTitle>
           <p className="text-sm text-slate-500">
