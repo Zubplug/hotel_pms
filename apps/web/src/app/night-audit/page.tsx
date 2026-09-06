@@ -429,20 +429,22 @@ export default function NightAuditDashboard() {
         <p className="text-xs text-rose-600/80 mt-0.5">All Check-In bypasses without payment must be resolved or verified before the business date can be closed.</p>
       </div>
       <div className="space-y-2">
-        <div className="text-sm p-3 bg-white rounded-lg border border-rose-200 flex items-center justify-between shadow-sm">
-          <div>
-            <p className="font-medium text-rose-900">{data.financial.pendingCheckInBypasses.length} Pending Check-In Bypasses</p>
-            <p className="text-xs text-rose-600">Pending review</p>
+        {data.financial.pendingCheckInBypasses.map((bypass: any) => (
+          <div key={bypass.id} className="text-sm p-3 bg-white rounded-lg border border-rose-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+            <div>
+              <p className="font-medium text-rose-900">Bypass: {bypass.reservation?.confirmationNumber}</p>
+              <p className="text-xs text-rose-600">Guest: {bypass.reservation?.primaryGuest?.firstName} {bypass.reservation?.primaryGuest?.lastName}</p>
+            </div>
+            <div className="flex items-center gap-4">
+              <button 
+                onClick={() => setResolutionAction({ type: 'CHECKIN_BYPASS', item: { ...bypass, propertyId } })}
+                className="shrink-0 text-xs font-medium text-rose-700 hover:text-rose-900 bg-rose-50 px-3 py-1.5 rounded-md transition-colors"
+              >
+                Resolve
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-4">
-            <button 
-              onClick={() => window.location.href = '/night-audit/exceptions'}
-              className="text-xs font-medium text-rose-700 hover:text-rose-900 bg-rose-50 px-3 py-1.5 rounded-md transition-colors"
-            >
-              Go to Exceptions
-            </button>
-          </div>
-        </div>
+        ))}
       </div>
     </div>}
     {!data.financial.highBalances?.length && !data.financial.rateVariances?.length && !data.financial.pendingDiscounts?.length && !data.financial.unverifiedComplimentary?.length && !data.financial.pendingCheckInBypasses?.length && (

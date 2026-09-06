@@ -819,6 +819,7 @@ export default function ShiftReportPage() {
                 </div>
               )}
             </div>
+            )}
 
             {/* ─── POS Receipt & Authorization Evidence ─── */}
             {((report?.items?.posReceiptAudits?.length ?? 0) > 0 || (report?.items?.posAuthorizationAudits?.length ?? 0) > 0) && (

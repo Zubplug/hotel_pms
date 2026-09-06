@@ -23,6 +23,7 @@ export type ResolutionAction =
   | { type: 'TRANSACTION_VERIFICATION'; item: any }
   | { type: 'DISCOUNT_APPROVAL'; item: any }
   | { type: 'COMPLIMENTARY_VERIFICATION'; item: any }
+  | { type: 'CHECKIN_BYPASS'; item: any }
   | null;
 
 interface Props {
@@ -48,6 +49,7 @@ export function ResolutionManager({ action, onClose, onSuccess }: Props) {
         {action.type === 'TRANSACTION_VERIFICATION' && <TransactionVerificationResolution propertyId={action.item.propertyId} transactions={action.item.unverifiedTransactions} onOpenChange={(open) => !open && onClose()} open={true} />}
         {action.type === 'DISCOUNT_APPROVAL' && <DiscountApprovalResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
         {action.type === 'COMPLIMENTARY_VERIFICATION' && <ComplimentaryVerificationResolution propertyId={action.item.propertyId} records={action.item.records} onOpenChange={(open) => !open && onClose()} open={true} onSuccess={onSuccess} />}
+        {action.type === 'CHECKIN_BYPASS' && <CheckinBypassResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
       </DialogContent>
     </Dialog>
   );
@@ -798,6 +800,123 @@ function DiscountApprovalResolution({ item, onSuccess, onClose }: { item: any; o
       setLoading(null);
     }
   };
+
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>Review Discount</DialogTitle>
+        <DialogDescription>
+          Discount requested by {item.requestedBy}
+        </DialogDescription>
+      </DialogHeader>
+      {error && <div className="p-3 bg-rose-50 text-rose-600 rounded-lg text-sm border border-rose-100">{error}</div>}
+      <div className="py-4 space-y-4">
+        <div className="p-4 border rounded-xl bg-slate-50 space-y-2 text-sm">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Amount:</span>
+            <span className="font-medium">{item.details?.discountAmount ? Number(item.details.discountAmount).toFixed(2) : item.details?.discountPercent ? `${item.details.discountPercent}%` : 'Variable'}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Reason:</span>
+            <span className="font-medium">{item.details?.reason || 'No reason provided'}</span>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" className="flex-1 text-rose-600 hover:text-rose-700 hover:bg-rose-50" onClick={() => handleAction('reject')} disabled={!!loading}>
+            {loading === 'reject' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Reject
+          </Button>
+          <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={() => handleAction('approve')} disabled={!!loading}>
+            {loading === 'approve' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Approve
+          </Button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function CheckinBypassResolution({ item, onSuccess, onClose }: { item: any; onSuccess: () => void; onClose: () => void }) {
+  const [loading, setLoading] = useState<'VERIFY' | 'REJECT' | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [notes, setNotes] = useState('Reviewed during night audit');
+
+  const handleAction = async (action: 'VERIFY' | 'REJECT') => {
+    setLoading(action);
+    setError(null);
+    try {
+      const res = await fetch('/api/v1/night-audit/verify-checkin-bypass', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bypassId: item.id, action, notes, propertyId: item.propertyId })
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error?.message || `Failed to ${action.toLowerCase()} bypass`);
+      }
+      toast.success(`Check-in bypass ${action === 'VERIFY' ? 'verified' : 'rejected'} successfully`);
+      onSuccess();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>Check-In Bypass Review</DialogTitle>
+        <DialogDescription>
+          Conf: {item.reservation?.confirmationNumber} - {item.reservation?.primaryGuest?.firstName} {item.reservation?.primaryGuest?.lastName}
+        </DialogDescription>
+      </DialogHeader>
+      {error && <div className="p-3 bg-rose-50 text-rose-600 rounded-lg text-sm border border-rose-100">{error}</div>}
+      <div className="py-4 space-y-4">
+        <div className="p-4 border rounded-xl bg-slate-50 space-y-2 text-sm">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Reason:</span>
+            <span className="font-medium text-right max-w-[200px]">{item.reason}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Operator:</span>
+            <span className="font-medium">{item.operator?.firstName} {item.operator?.lastName}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Acknowledged by:</span>
+            <span className="font-medium">{item.acknowledgedBy?.firstName} {item.acknowledgedBy?.lastName}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Balance:</span>
+            <span className="font-medium text-rose-600">
+              {Number(item.reservation?.folios?.[0]?.balance || 0).toLocaleString('en-NG', { style: 'currency', currency: 'NGN' })}
+            </span>
+          </div>
+        </div>
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Review Notes</label>
+          <input 
+            type="text" 
+            className="w-full border rounded-md px-3 py-2 text-sm" 
+            value={notes} 
+            onChange={e => setNotes(e.target.value)} 
+            placeholder="Add notes..." 
+          />
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" className="flex-1 text-rose-600 hover:text-rose-700 hover:bg-rose-50" onClick={() => handleAction('REJECT')} disabled={!!loading}>
+            {loading === 'REJECT' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Reject
+          </Button>
+          <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={() => handleAction('VERIFY')} disabled={!!loading}>
+            {loading === 'VERIFY' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Verify
+          </Button>
+        </div>
+      </div>
+    </>
+  );
+}
 
   const d = item.details || {};
 
