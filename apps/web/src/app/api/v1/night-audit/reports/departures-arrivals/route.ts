@@ -49,14 +49,15 @@ export async function GET(req: NextRequest) {
     const expectedArrivals = arrivals.map(res => {
       if (res.status === 'NO_SHOW') noShows++;
       return {
-        reservationRef: res.id.slice(-6).toUpperCase(),
+        reservationId: res.id.slice(-6).toUpperCase(),
         guestName: `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}`,
-        room: res.reservationRooms[0]?.room?.number || 'Unassigned',
+        roomNumber: res.reservationRooms[0]?.room?.number || 'Unassigned',
         roomType: 'Assigned',
-        eta: '14:00', // Mocked ETA
+        eta: '14:00',
         nights: Math.max(1, differenceInDays(res.checkOut, res.checkIn)),
         rate: Number(res.reservationRooms[0]?.rateAmount || 0),
-        paymentStatus: Number(res.folios[0]?.balance || 0) <= 0 ? 'PAID' : 'UNPAID',
+        balance: Number(res.folios[0]?.balance || 0),
+        status: Number(res.folios[0]?.balance || 0) <= 0 ? 'PAID' : 'UNPAID',
         notes: res.specialRequests || ''
       };
     });
@@ -64,12 +65,14 @@ export async function GET(req: NextRequest) {
     const expectedDepartures = departures.map(res => {
       if (res.status !== 'CHECKED_OUT') unconfirmedDepartures++;
       return {
-        room: res.reservationRooms[0]?.room?.number || 'Unassigned',
+        reservationId: res.id.slice(-6).toUpperCase(),
         guestName: `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}`,
-        reservationRef: res.id.slice(-6).toUpperCase(),
+        roomNumber: res.reservationRooms[0]?.room?.number || 'Unassigned',
+        roomType: 'Assigned',
         departureTime: '11:00',
-        folioBalance: Number(res.folios[0]?.balance || 0),
-        paymentStatus: Number(res.folios[0]?.balance || 0) <= 0 ? 'PAID' : 'UNPAID',
+        rate: Number(res.reservationRooms[0]?.rateAmount || 0),
+        balance: Number(res.folios[0]?.balance || 0),
+        status: Number(res.folios[0]?.balance || 0) <= 0 ? 'PAID' : 'UNPAID',
         roomStatus: res.status === 'CHECKED_OUT' ? 'DEPARTED' : 'IN_HOUSE'
       };
     });
