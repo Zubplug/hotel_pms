@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
 
     // Verify access
     await assertPropertyAccess(session.user.id, propertyId);
-    if (!await hasPermission(session.user.id, 'property', 'manage', propertyId)) {
+    if (!await hasPermission(session.user.id, 'night_audit', 'execute', propertyId)) {
       return errorResponse('FORBIDDEN', 'Insufficient permissions', 403);
     }
 
