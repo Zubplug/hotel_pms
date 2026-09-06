@@ -28,10 +28,15 @@ export default function ReportsGeneratorPage() {
             const lastAudit = trend[trend.length - 1];
             setBusinessDate(String(lastAudit.businessDate).slice(0, 10));
           } else if (res.data?.businessDate) {
-            setBusinessDate(res.data.businessDate);
+            setBusinessDate(String(res.data.businessDate).slice(0, 10));
+          } else {
+            setBusinessDate(new Date().toISOString().slice(0, 10));
           }
         })
-        .catch(console.error);
+        .catch(err => {
+          console.error('Failed to fetch business date:', err);
+          setBusinessDate(new Date().toISOString().slice(0, 10));
+        });
     }
   }, [propertyId]);
 
