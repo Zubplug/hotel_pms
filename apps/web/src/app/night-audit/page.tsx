@@ -160,10 +160,12 @@ export default function NightAuditDashboard() {
       <MetricCards data={data} />
 
       {/* Readiness & Attention Queue Layout */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <AuditReadiness data={data} />
-        <AttentionQueue data={data} onResolveItem={handleQueueResolve} />
-      </div>
+      {data.auditState !== 'COMPLETED' && (
+        <div className="grid gap-6 lg:grid-cols-2">
+          <AuditReadiness data={data} />
+          <AttentionQueue data={data} onResolveItem={handleQueueResolve} />
+        </div>
+      )}
 
       {/* Charts Layout */}
       <div className="grid gap-6 lg:grid-cols-[1fr_2fr]">

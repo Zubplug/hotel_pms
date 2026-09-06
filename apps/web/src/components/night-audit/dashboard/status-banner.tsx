@@ -79,16 +79,6 @@ export function StatusBanner({ data, isAuditInProgress, onRefresh, onOpenWizard,
           
           <div className="flex w-full sm:w-auto gap-3">
             <Button 
-              variant="outline" 
-              size="lg"
-              className="flex-1 sm:flex-none border-white/20 bg-white/5 text-white hover:bg-white/20 hover:text-white backdrop-blur-sm transition-all"
-              onClick={onRefresh} 
-              disabled={refreshing}
-            >
-              <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
-            <Button 
               size="lg"
               className="flex-1 sm:flex-none bg-indigo-500 hover:bg-indigo-400 text-white shadow-lg hover:shadow-indigo-500/25 transition-all font-semibold border border-indigo-400/50"
               onClick={onOpenWizard}

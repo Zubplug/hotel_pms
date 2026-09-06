@@ -100,14 +100,24 @@ export function MetricCards({ data }: { data: NightAuditData }) {
     if (yRevpar > 0) revparTrend = ((revpar - yRevpar) / yRevpar) * 100;
   }
 
+  const lastAuditRevenue = data.analytics.trend && data.analytics.trend.length > 0 
+    ? Number(data.analytics.trend[data.analytics.trend.length - 1].totalRevenue) || 0
+    : 0;
+
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
       <Metric 
-        label="Revenue" 
+        label="Current Revenue" 
         value={currency(revenue, baseCurrency)} 
         trend={revTrend}
         icon={TrendingUp} 
         tone="emerald" 
+      />
+      <Metric 
+        label="Last Audit Revenue" 
+        value={currency(lastAuditRevenue, baseCurrency)} 
+        icon={TrendingUp} 
+        tone="default" 
       />
       <Metric 
         label="Payments" 
@@ -134,12 +144,6 @@ export function MetricCards({ data }: { data: NightAuditData }) {
         value={inHouseGuests} 
         icon={Users} 
         tone="indigo" 
-      />
-      <Metric 
-        label="Open Sessions" 
-        value={openSessions} 
-        icon={ClipboardCheck} 
-        tone={openSessions > 0 ? 'rose' : 'emerald'} 
       />
     </div>
   );
