@@ -355,7 +355,7 @@ export default function AuditHistoryPage() {
                       <div className="flex items-end justify-between border-b border-slate-100 pb-6">
                         <div>
                           <div className="text-3xl font-black text-slate-900 tracking-tight">
-                            {formatCurrency(selectedAudit.financialSnapshot?.totalRevenue || selectedAudit.revenuePosted || 0)}
+                            {formatCurrency(Number(selectedAudit.totalRevenue) || 0)}
                           </div>
                           <div className="text-sm font-medium text-slate-500 mt-1">Total Daily Revenue</div>
                         </div>
@@ -376,7 +376,7 @@ export default function AuditHistoryPage() {
                             <span className="text-xs font-bold uppercase tracking-wider">Rooms</span>
                           </div>
                           <div className="font-black text-slate-900 text-lg">
-                            {formatCurrency(selectedAudit.financialSnapshot?.roomRevenue ?? selectedAudit.revenuePosted ?? 0)}
+                            {formatCurrency(Number(selectedAudit.financialSnapshot?.roomRevenue ?? selectedAudit.totalRoomRevenue ?? selectedAudit.totalRevenue ?? 0))}
                           </div>
                         </div>
 
@@ -389,7 +389,7 @@ export default function AuditHistoryPage() {
                             <span className="text-xs font-bold uppercase tracking-wider">F&B</span>
                           </div>
                           <div className="font-black text-slate-900 text-lg">
-                            {formatCurrency(selectedAudit.financialSnapshot?.fnbRevenue ?? 0)}
+                            {formatCurrency(Number(selectedAudit.financialSnapshot?.fnbRevenue ?? 0))}
                           </div>
                         </div>
 
@@ -402,7 +402,7 @@ export default function AuditHistoryPage() {
                             <span className="text-xs font-bold uppercase tracking-wider">Other</span>
                           </div>
                           <div className="font-black text-slate-900 text-lg">
-                            {formatCurrency(selectedAudit.financialSnapshot?.otherRevenue ?? 0)}
+                            {formatCurrency(Number(selectedAudit.financialSnapshot?.otherRevenue ?? 0))}
                           </div>
                         </div>
 
