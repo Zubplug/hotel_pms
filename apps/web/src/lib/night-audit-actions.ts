@@ -66,15 +66,42 @@ export async function getExceptions(propertyId: string) {
   // Calculate overages and shortages
   let overage = 0;
   let shortage = 0;
-  // Simplification for UI display
+  
+  if (cash && cash.cashHandovers) {
+    cash.cashHandovers.forEach((handover: any) => {
+      if (handover.actualAmount !== null && handover.amount !== null) {
+         const diff = Number(handover.actualAmount) - Number(handover.amount);
+         if (diff > 0) overage += diff;
+         if (diff < 0) shortage += Math.abs(diff);
+      }
+    });
+  }
+
+  const pendingCheckInBypasses = await prisma.checkInBypass.findMany({
+    where: {
+      reservation: { propertyId },
+      status: 'PENDING'
+    },
+    include: {
+      reservation: {
+        include: {
+          primaryGuest: true,
+          folios: true
+        }
+      },
+      operator: true,
+      acknowledgedBy: true
+    }
+  });
   
   return {
     openPosSessions: sys.openPosSessions.length,
     syncConflicts: sys.financialSyncConflicts.length,
     highBalances: fin.highBalances.length,
     rateVariances: fin.rateVariances.length,
-    cashOverages: overage, // Not fully calculated in this scope
-    cashShortages: shortage, // Not fully calculated in this scope
+    cashOverages: overage,
+    cashShortages: shortage,
+    pendingCheckInBypasses,
   };
 }
 
