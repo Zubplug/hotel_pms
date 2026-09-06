@@ -142,6 +142,35 @@ export async function GET(req: NextRequest) {
 
     const property = await prisma.property.findUnique({ where: { id: propertyId } });
 
+    // Fetch historical occupancy snapshot to avoid discrepancies if rooms were deleted/added later
+    const occupancySnapshot = await prisma.occupancySnapshot.findUnique({
+      where: { propertyId_businessDate: { propertyId, businessDate } }
+    });
+
+    let historicalAvailable = totalRooms;
+    let historicalOccupied = nightAudit.occupancy ? Math.round((Number(nightAudit.occupancy) / 100) * totalRooms) : 0;
+
+    if (occupancySnapshot) {
+      historicalAvailable = occupancySnapshot.availableRooms;
+      historicalOccupied = occupancySnapshot.occupiedRooms;
+    } else {
+      // Fallback: Reverse calculate from ADR and RevPAR to get exact historical numbers
+      const rRev = Number(nightAudit.totalRoomRevenue);
+      const rp = Number(nightAudit.revpar);
+      const ad = Number(nightAudit.adr);
+      const occPct = Number(nightAudit.occupancy);
+      
+      if (rp > 0 && rRev > 0) {
+        historicalAvailable = Math.round(rRev / rp);
+      }
+      
+      if (ad > 0 && rRev > 0) {
+        historicalOccupied = Math.round(rRev / ad);
+      } else if (occPct > 0) {
+        historicalOccupied = Math.round((occPct / 100) * historicalAvailable);
+      }
+    }
+
     const report = {
       propertyName: property?.name || 'Property',
       propertyEmail: property?.email || '',
@@ -151,8 +180,8 @@ export async function GET(req: NextRequest) {
       businessDate: businessDateStr,
       auditStatus: nightAudit.status,
       occupancy: {
-        available: totalRooms,
-        occupied: nightAudit.occupancy ? Math.round((Number(nightAudit.occupancy) / 100) * totalRooms) : 0,
+        available: historicalAvailable,
+        occupied: historicalOccupied,
         percentage: Number(nightAudit.occupancy) || 0,
         arrivals,
         departures,
