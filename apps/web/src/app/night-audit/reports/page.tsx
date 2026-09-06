@@ -20,7 +20,7 @@ export default function ReportsGeneratorPage() {
       fetch(`/api/v1/night-audit/status?propertyId=${propertyId}`)
         .then(res => res.json())
         .then(res => {
-          if (res.data?.currentBusinessDate) setBusinessDate(res.data.currentBusinessDate);
+          if (res.data?.businessDate) setBusinessDate(res.data.businessDate);
         })
         .catch(console.error);
     }
