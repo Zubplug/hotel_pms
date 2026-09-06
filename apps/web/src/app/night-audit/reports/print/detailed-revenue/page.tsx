@@ -77,18 +77,18 @@ export default function DetailedRevenueReportPage() {
         </div>
       ) : (
         <div className="w-full">
-          <table className="w-full text-xs">
+          <table className="w-full text-[9px] leading-tight">
             <thead>
               <tr className="border-b-2 border-slate-800 text-left">
-                <th className="py-1.5 px-2 font-bold uppercase tracking-wide">Department</th>
-                <th className="py-1.5 px-2 font-bold uppercase tracking-wide">Revenue Code</th>
-                <th className="py-1.5 px-2 font-bold uppercase tracking-wide">Description</th>
-                <th className="py-1.5 px-2 font-bold uppercase tracking-wide text-right">Gross Revenue</th>
-                <th className="py-1.5 px-2 font-bold uppercase tracking-wide text-right">Discounts</th>
-                <th className="py-1.5 px-2 font-bold uppercase tracking-wide text-right">Adjustments</th>
-                <th className="py-1.5 px-2 font-bold uppercase tracking-wide text-right">Net Revenue</th>
-                <th className="py-1.5 px-2 font-bold uppercase tracking-wide text-right">Tax</th>
-                <th className="py-1.5 px-2 font-bold uppercase tracking-wide text-right">Total</th>
+                <th className="py-1.5 px-1 font-bold uppercase tracking-wide">Dept</th>
+                <th className="py-1.5 px-1 font-bold uppercase tracking-wide">Code</th>
+                <th className="py-1.5 px-1 font-bold uppercase tracking-wide">Description</th>
+                <th className="py-1.5 px-1 font-bold uppercase tracking-wide text-right">Gross</th>
+                <th className="py-1.5 px-1 font-bold uppercase tracking-wide text-right">Disc</th>
+                <th className="py-1.5 px-1 font-bold uppercase tracking-wide text-right">Adjs</th>
+                <th className="py-1.5 px-1 font-bold uppercase tracking-wide text-right">Net</th>
+                <th className="py-1.5 px-1 font-bold uppercase tracking-wide text-right">Tax</th>
+                <th className="py-1.5 px-1 font-bold uppercase tracking-wide text-right">Total</th>
               </tr>
             </thead>
             <tbody>
@@ -96,28 +96,28 @@ export default function DetailedRevenueReportPage() {
                 <React.Fragment key={deptIdx}>
                   {dept.revenues.map((rev: any, revIdx: number) => (
                     <tr key={`${deptIdx}-${revIdx}`} className="border-b border-slate-200">
-                      <td className="py-1.5 px-2 font-medium">{revIdx === 0 ? dept.department : ''}</td>
-                      <td className="py-1.5 px-2">{rev.code}</td>
-                      <td className="py-1.5 px-2">{rev.description}</td>
-                      <td className="py-1.5 px-2 text-right">{formatCurrency(rev.gross, currencyCode)}</td>
-                      <td className="py-1.5 px-2 text-right">{formatCurrency(rev.discounts, currencyCode)}</td>
-                      <td className="py-1.5 px-2 text-right">{formatCurrency(rev.adjustments, currencyCode)}</td>
-                      <td className="py-1.5 px-2 text-right">{formatCurrency(rev.net, currencyCode)}</td>
-                      <td className="py-1.5 px-2 text-right">{formatCurrency(rev.tax, currencyCode)}</td>
-                      <td className="py-1.5 px-2 text-right font-semibold">{formatCurrency(rev.total, currencyCode)}</td>
+                      <td className="py-1.5 px-1 font-medium">{revIdx === 0 ? dept.department : ''}</td>
+                      <td className="py-1.5 px-1">{rev.code}</td>
+                      <td className="py-1.5 px-1 truncate max-w-[120px]">{rev.description}</td>
+                      <td className="py-1.5 px-1 text-right">{formatCurrency(rev.gross, currencyCode)}</td>
+                      <td className="py-1.5 px-1 text-right">{formatCurrency(rev.discounts, currencyCode)}</td>
+                      <td className="py-1.5 px-1 text-right">{formatCurrency(rev.adjustments, currencyCode)}</td>
+                      <td className="py-1.5 px-1 text-right">{formatCurrency(rev.net, currencyCode)}</td>
+                      <td className="py-1.5 px-1 text-right">{formatCurrency(rev.tax, currencyCode)}</td>
+                      <td className="py-1.5 px-1 text-right font-semibold">{formatCurrency(rev.total, currencyCode)}</td>
                     </tr>
                   ))}
                 </React.Fragment>
               ))}
               
               <tr className="border-t-2 border-slate-800 bg-slate-50 font-bold">
-                <td colSpan={3} className="py-2 px-2 uppercase tracking-wider text-right">Grand Total</td>
-                <td className="py-2 px-2 text-right">{formatCurrency(totals.gross, currencyCode)}</td>
-                <td className="py-2 px-2 text-right">{formatCurrency(totals.discounts, currencyCode)}</td>
-                <td className="py-2 px-2 text-right">{formatCurrency(totals.adjustments, currencyCode)}</td>
-                <td className="py-2 px-2 text-right">{formatCurrency(totals.net, currencyCode)}</td>
-                <td className="py-2 px-2 text-right">{formatCurrency(totals.tax, currencyCode)}</td>
-                <td className="py-2 px-2 text-right">{formatCurrency(totals.total, currencyCode)}</td>
+                <td colSpan={3} className="py-2 px-1 uppercase tracking-wider text-right">Grand Total</td>
+                <td className="py-2 px-1 text-right">{formatCurrency(totals.gross, currencyCode)}</td>
+                <td className="py-2 px-1 text-right">{formatCurrency(totals.discounts, currencyCode)}</td>
+                <td className="py-2 px-1 text-right">{formatCurrency(totals.adjustments, currencyCode)}</td>
+                <td className="py-2 px-1 text-right">{formatCurrency(totals.net, currencyCode)}</td>
+                <td className="py-2 px-1 text-right">{formatCurrency(totals.tax, currencyCode)}</td>
+                <td className="py-2 px-1 text-right">{formatCurrency(totals.total, currencyCode)}</td>
               </tr>
             </tbody>
           </table>
