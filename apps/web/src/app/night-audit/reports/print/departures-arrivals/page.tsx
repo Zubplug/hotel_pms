@@ -64,6 +64,9 @@ export default function DeparturesArrivalsReportPage() {
     <A4ReportWrapper
       title="Departures & Arrivals Report"
       propertyName={data.propertyName || 'LodgeCore Hotel'}
+      propertyEmail={data.propertyEmail}
+      propertyPhone={data.propertyPhone}
+      propertyAddress={data.propertyAddress}
       businessDate={businessDate || ''}
       reportId={`ARRDEP-${Date.now().toString().slice(-6)}`}
       status={data.auditStatus || 'CLOSED'}

@@ -51,6 +51,9 @@ export default function TrialBalanceReportPage() {
     <A4ReportWrapper
       title="Trial Balance Report"
       propertyName={data.propertyName || 'LodgeCore Hotel'}
+      propertyEmail={data.propertyEmail}
+      propertyPhone={data.propertyPhone}
+      propertyAddress={data.propertyAddress}
       businessDate={businessDate || ''}
       reportId={`TB-${Date.now().toString().slice(-6)}`}
       status={data.auditStatus || 'CLOSED'}

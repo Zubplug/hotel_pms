@@ -64,6 +64,9 @@ export default function DetailedRevenueReportPage() {
     <A4ReportWrapper
       title="Detailed Revenue Report"
       propertyName={data.propertyName || 'LodgeCore Hotel'}
+      propertyEmail={data.propertyEmail}
+      propertyPhone={data.propertyPhone}
+      propertyAddress={data.propertyAddress}
       businessDate={businessDate || ''}
       reportId={`REV-${Date.now().toString().slice(-6)}`}
       status={data.auditStatus || 'CLOSED'}

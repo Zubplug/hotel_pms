@@ -144,6 +144,9 @@ export async function GET(req: NextRequest) {
 
     const report = {
       propertyName: property?.name || 'Property',
+      propertyEmail: property?.email || '',
+      propertyPhone: property?.phone || '',
+      propertyAddress: [property?.address, property?.city, property?.state].filter(Boolean).join(', '),
       propertyCurrency: property?.baseCurrency || 'NGN',
       businessDate: businessDateStr,
       auditStatus: nightAudit.status,
