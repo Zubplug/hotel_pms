@@ -113,6 +113,7 @@ export default function ReportsGeneratorPage() {
             <p>Scheduled reports coming soon</p>
           </div>
         </TabsContent>
+      </Tabs>
     </div>
   );
 }
