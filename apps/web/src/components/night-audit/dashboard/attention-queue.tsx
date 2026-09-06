@@ -1,65 +1,92 @@
 import React, { useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertTriangle, CheckCircle2, ChevronRight, XCircle, Info } from 'lucide-react';
 import { NightAuditData } from '@/types/night-audit';
 
-export function AttentionQueue({ data, onResolveItem }: { data: NightAuditData, onResolveItem?: (action: string, item: any) => void }) {
+type QueueItem = {
+  id: string;
+  label: string;
+  description: string;
+  type: 'blocker' | 'warning' | 'info';
+  actionType: string;
+  payload: Record<string, unknown> | null;
+};
+
+const getStableQueueId = (prefix: string, item: Record<string, unknown>) => {
+  const directId =
+    item.id ??
+    item.folioId ??
+    item.roomId ??
+    item.reservationId ??
+    item.drawerName ??
+    item.shiftReference ??
+    item.outlet;
+
+  if (directId !== undefined && directId !== null) {
+    return `${prefix}-${String(directId)}`;
+  }
+
+  return `${prefix}-${JSON.stringify(item).slice(0, 80)}`;
+};
+
+export function AttentionQueue({ data, onResolveItem }: { data: NightAuditData; onResolveItem?: (action: string, item: Record<string, unknown> | null) => void }) {
+  const router = useRouter();
+
   const queue = useMemo(() => {
-    const items: Array<{ id: string; label: string; description: string; type: 'blocker' | 'warning' | 'info'; actionType: string; payload: any }> = [];
+    const items: QueueItem[] = [];
 
-    // System Blockers
-    (data.system.openPosSessions || []).forEach((item: any) => {
-      items.push({ id: `pos-${item.id}`, label: 'Open POS Session', description: item.outlet?.name || 'Register', type: 'blocker', actionType: 'POS_SESSION', payload: item });
+    (data.system.openPosSessions || []).forEach((item: Record<string, unknown>) => {
+      items.push({ id: getStableQueueId('pos', item), label: 'Open POS Session', description: String((item.outlet as Record<string, unknown> | undefined)?.name ?? 'Register'), type: 'blocker', actionType: 'POS_SESSION', payload: item });
     });
-    (data.system.openFrontdeskSessions || []).forEach((item: any) => {
-      items.push({ id: `fd-${item.id}`, label: 'Open Cashier Shift', description: item.shiftReference || 'Front desk', type: 'blocker', actionType: 'FRONTDESK_SHIFT', payload: item });
+    (data.system.openFrontdeskSessions || []).forEach((item: Record<string, unknown>) => {
+      items.push({ id: getStableQueueId('fd', item), label: 'Open Cashier Shift', description: String((item.shiftReference as string | undefined) ?? 'Front desk'), type: 'blocker', actionType: 'FRONTDESK_SHIFT', payload: item });
     });
-    (data.system.financialSyncConflicts || []).forEach((item: any) => {
-      items.push({ id: `sync-${item.id}`, label: 'Financial Sync Conflict', description: `Event: ${item.hotelEvent?.eventType}`, type: 'blocker', actionType: 'SYNC_CONFLICT', payload: item });
-    });
-
-    // Financial Blockers
-    (data.financial.unverifiedComplimentary || []).forEach((item: any) => {
-      items.push({ id: `comp-${item.id}`, label: 'Unverified Complimentary', description: 'Pending complimentary transaction verification', type: 'blocker', actionType: 'GOTO_EXCEPTIONS', payload: null });
-    });
-    (data.financial.pendingCheckInBypasses || []).forEach((item: any) => {
-      items.push({ id: `bypass-${item.id}`, label: 'Check-In Bypass', description: `Reservation: ${item.reservation?.confirmationNumber}`, type: 'blocker', actionType: 'CHECKIN_BYPASS', payload: { ...item, propertyId: data.property.id } });
+    (data.system.financialSyncConflicts || []).forEach((item: Record<string, unknown>) => {
+      items.push({ id: getStableQueueId('sync', item), label: 'Financial Sync Conflict', description: `Event: ${String((item.hotelEvent as Record<string, unknown> | undefined)?.eventType ?? '')}`, type: 'blocker', actionType: 'SYNC_CONFLICT', payload: item });
     });
 
-    // Cash Blockers
-    (data.cash.cashHandovers || []).forEach((item: any) => {
-      items.push({ id: `handover-${item.id}`, label: 'Pending Cash Handover', description: item.drawerName || 'Drawer', type: 'blocker', actionType: 'CASH_HANDOVER', payload: { ...item, propertyId: data.property.id } });
+    (data.financial.unverifiedComplimentary || []).forEach((item: Record<string, unknown>) => {
+      items.push({ id: getStableQueueId('comp', item), label: 'Unverified Complimentary', description: 'Pending complimentary verification', type: 'blocker', actionType: 'GOTO_EXCEPTIONS', payload: null });
     });
-    (data.cash.unverifiedTransactions || []).forEach((item: any) => {
-      items.push({ id: `trans-${item.id}`, label: 'Unverified Transaction', description: `${item.method === 'BANK_TRANSFER' ? 'Transfer' : 'POS'} - ${item.amount}`, type: 'blocker', actionType: 'TRANSACTION_VERIFICATION', payload: { unverifiedTransactions: [item], propertyId: data.property.id } });
-    });
-
-    // Warnings - Operational
-    (data.operational.arrivals || []).forEach((item: any) => {
-      items.push({ id: `arr-${item.id}`, label: 'Pending Arrival', description: `${item.primaryGuest?.firstName || 'Guest'} ${item.primaryGuest?.lastName || ''}`, type: 'warning', actionType: 'ARRIVALS', payload: item });
-    });
-    (data.operational.departures || []).forEach((item: any) => {
-      items.push({ id: `dep-${item.id}`, label: 'Pending Departure', description: `${item.primaryGuest?.firstName || 'Guest'} ${item.primaryGuest?.lastName || ''}`, type: 'warning', actionType: 'DEPARTURES', payload: item });
-    });
-    (data.operational.roomReconciliation?.filter(r => r.issue) || []).forEach((item: any) => {
-      items.push({ id: `room-${item.roomId}`, label: 'Room Discrepancy', description: `Room ${item.roomNumber}`, type: 'warning', actionType: 'ROOM_DISCREPANCY', payload: item });
+    (data.financial.pendingCheckInBypasses || []).forEach((item: Record<string, unknown>) => {
+      items.push({ id: getStableQueueId('bypass', item), label: 'Check-In Bypass', description: `Reservation: ${String((item.reservation as Record<string, unknown> | undefined)?.confirmationNumber ?? '')}`, type: 'blocker', actionType: 'CHECKIN_BYPASS', payload: { ...item, propertyId: data.property.id } as Record<string, unknown> });
     });
 
-    // Warnings - Financial
-    (data.financial.highBalances || []).forEach((item: any) => {
-      items.push({ id: `hb-${item.id}`, label: 'High Balance', description: `Folio #${item.folioNumber || item.id.split('-')[0].toUpperCase()}`, type: 'warning', actionType: 'FOLIO_PREVIEW', payload: item });
+    (data.cash.cashHandovers || []).forEach((item: Record<string, unknown>) => {
+      items.push({ id: getStableQueueId('handover', item), label: 'Pending Cash Handover', description: String((item.drawerName as string | undefined) ?? 'Drawer'), type: 'blocker', actionType: 'CASH_HANDOVER', payload: { ...item, propertyId: data.property.id } as Record<string, unknown> });
     });
-    (data.financial.rateVariances || []).forEach((item: any) => {
-      items.push({ id: `rv-${item.id}`, label: 'Rate Variance', description: `Res #${item.folio?.reservationId?.slice(0, 8)}`, type: 'warning', actionType: 'FOLIO_PREVIEW', payload: { id: item.folioId, folioNumber: item.folioNumber, balance: item.varianceAmount } });
+    (data.cash.unverifiedTransactions || []).forEach((item: Record<string, unknown>) => {
+      items.push({ id: getStableQueueId('trans', item), label: 'Unverified Transaction', description: `${String((item.method as string | undefined) === 'BANK_TRANSFER' ? 'Transfer' : 'POS')} - ${String(item.amount ?? '')}`, type: 'blocker', actionType: 'TRANSACTION_VERIFICATION', payload: { unverifiedTransactions: [item], propertyId: data.property.id } as Record<string, unknown> });
     });
-    (data.financial.pendingDiscounts || []).forEach((item: any) => {
-      items.push({ id: `disc-${item.id}`, label: 'Pending Discount', description: `Requested by ${item.requestedBy}`, type: 'warning', actionType: 'DISCOUNT_APPROVAL', payload: item });
+
+    (data.operational.arrivals || []).forEach((item: Record<string, unknown>) => {
+      const guest = item.primaryGuest as Record<string, unknown> | undefined;
+      const guestName = `${String(guest?.firstName ?? 'Guest')} ${String(guest?.lastName ?? '')}`.trim() || 'Guest';
+      items.push({ id: getStableQueueId('arr', item), label: 'Pending Arrival', description: guestName, type: 'warning', actionType: 'ARRIVALS', payload: item });
+    });
+    (data.operational.departures || []).forEach((item: Record<string, unknown>) => {
+      const guest = item.primaryGuest as Record<string, unknown> | undefined;
+      const guestName = `${String(guest?.firstName ?? 'Guest')} ${String(guest?.lastName ?? '')}`.trim() || 'Guest';
+      items.push({ id: getStableQueueId('dep', item), label: 'Pending Departure', description: guestName, type: 'warning', actionType: 'DEPARTURES', payload: item });
+    });
+    (data.operational.roomReconciliation?.filter((r) => r.issue) || []).forEach((item: Record<string, unknown>) => {
+      items.push({ id: getStableQueueId('room', item), label: 'Room Discrepancy', description: `Room ${String(item.roomNumber ?? '')}`, type: 'warning', actionType: 'ROOM_DISCREPANCY', payload: item });
+    });
+
+    (data.financial.highBalances || []).forEach((item: Record<string, unknown>) => {
+      items.push({ id: getStableQueueId('hb', item), label: 'High Balance', description: `Folio #${String(item.folioNumber ?? (String(item.id ?? '').split('-')[0] || '').toUpperCase())}`, type: 'warning', actionType: 'FOLIO_PREVIEW', payload: item });
+    });
+    (data.financial.rateVariances || []).forEach((item: Record<string, unknown>) => {
+      items.push({ id: getStableQueueId('rv', item), label: 'Rate Variance', description: `Res #${String((item.folio as Record<string, unknown> | undefined)?.reservationId?.slice(0, 8) ?? '')}`, type: 'warning', actionType: 'FOLIO_PREVIEW', payload: { id: item.folioId, folioNumber: item.folioNumber, balance: item.varianceAmount } as Record<string, unknown> });
+    });
+    (data.financial.pendingDiscounts || []).forEach((item: Record<string, unknown>) => {
+      items.push({ id: getStableQueueId('disc', item), label: 'Pending Discount', description: `Requested by ${String(item.requestedBy ?? '')}`, type: 'warning', actionType: 'DISCOUNT_APPROVAL', payload: item });
     });
 
     return items;
   }, [data]);
 
-  // Sort: Blockers first, then warnings
   const sortedQueue = [...queue].sort((a, b) => {
     if (a.type === 'blocker' && b.type !== 'blocker') return -1;
     if (a.type !== 'blocker' && b.type === 'blocker') return 1;
@@ -67,68 +94,84 @@ export function AttentionQueue({ data, onResolveItem }: { data: NightAuditData, 
   });
 
   return (
-    <Card className="h-full border-slate-200/60 dark:border-slate-800/60 bg-white/50 dark:bg-slate-950/50 backdrop-blur-xl flex flex-col">
-      <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800">
-        <CardTitle className="text-lg font-semibold flex items-center justify-between">
+    <Card className="flex h-full flex-col border border-slate-200/70 bg-white/80 shadow-[0_12px_30px_rgba(15,23,42,0.04)] backdrop-blur-sm">
+      <CardHeader className="border-b border-slate-100 pb-3">
+        <CardTitle className="flex items-center justify-between text-lg font-semibold text-slate-900">
           <span>Attention Queue</span>
-          <span className="text-xs font-medium bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-full text-slate-500">
-            {sortedQueue.length} Items
-          </span>
+          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-600">{sortedQueue.length} items</span>
         </CardTitle>
       </CardHeader>
-      <CardContent className="p-0 flex-1 overflow-y-auto max-h-[400px]">
+
+      <CardContent className="flex-1 overflow-y-auto p-0">
         {sortedQueue.length > 0 ? (
-          <div className="divide-y divide-slate-100 dark:divide-slate-800">
+          <div className="divide-y divide-slate-100">
             {sortedQueue.map((item) => (
-              <div key={item.id} className="p-4 hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors flex items-start justify-between gap-4 group">
-                <div className="flex items-start gap-3 min-w-0">
+              <div key={item.id} className="flex items-start justify-between gap-3 p-4 transition hover:bg-slate-50/80">
+                <div className="flex min-w-0 items-start gap-3">
                   <div className="mt-0.5 shrink-0">
                     {item.type === 'blocker' ? (
-                      <XCircle className="h-5 w-5 text-rose-500" />
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-rose-100 text-rose-600">
+                        <XCircle className="h-4 w-4" />
+                      </div>
                     ) : item.type === 'warning' ? (
-                      <AlertTriangle className="h-5 w-5 text-amber-500" />
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+                        <AlertTriangle className="h-4 w-4" />
+                      </div>
                     ) : (
-                      <Info className="h-5 w-5 text-indigo-500" />
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-indigo-600">
+                        <Info className="h-4 w-4" />
+                      </div>
                     )}
                   </div>
-                  <div className="min-w-0">
-                    <p className={`text-sm font-medium truncate ${item.type === 'blocker' ? 'text-slate-900 dark:text-slate-100' : 'text-slate-700 dark:text-slate-300'}`}>
-                      {item.label}
-                    </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
-                      {item.description}
-                    </p>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-sm font-semibold text-slate-800">{item.label}</p>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] ${
+                          item.type === 'blocker'
+                            ? 'bg-rose-100 text-rose-700'
+                            : item.type === 'warning'
+                              ? 'bg-amber-100 text-amber-700'
+                              : 'bg-indigo-100 text-indigo-700'
+                        }`}
+                      >
+                        {item.type}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">{item.description}</p>
                   </div>
                 </div>
+
                 {onResolveItem && (
-                  <button 
+                  <button
                     onClick={() => {
                       if (item.actionType === 'GOTO_EXCEPTIONS') {
-                        window.location.href = '/night-audit/exceptions';
+                        router.push('/night-audit/exceptions');
                       } else {
                         onResolveItem(item.actionType, item.payload);
                       }
                     }}
-                    className="shrink-0 flex items-center gap-1 text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm px-2.5 py-1.5 rounded-md hover:bg-slate-50 dark:hover:bg-slate-700 text-indigo-600 dark:text-indigo-400"
+                    className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-indigo-700 transition hover:border-indigo-200 hover:bg-indigo-50"
                   >
-                    Action <ChevronRight className="h-3 w-3" />
+                    Action
+                    <ChevronRight className="h-3.5 w-3.5" />
                   </button>
                 )}
               </div>
             ))}
           </div>
         ) : (
-          <div className="py-12 text-center px-4">
-            <div className="h-12 w-12 rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 mx-auto flex items-center justify-center mb-3">
+          <div className="flex min-h-[220px] flex-col items-center justify-center px-6 py-10 text-center">
+            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
               <CheckCircle2 className="h-6 w-6" />
             </div>
-            <p className="text-sm font-medium text-slate-900 dark:text-slate-100">Inbox Zero</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-[200px] mx-auto">
-              No pending exceptions or blockers require your attention.
-            </p>
+            <p className="text-sm font-semibold text-slate-900">Inbox zero</p>
+            <p className="mt-1 max-w-[210px] text-xs text-slate-500">No pending exceptions or blockers require your attention.</p>
           </div>
         )}
       </CardContent>
     </Card>
   );
 }
+
