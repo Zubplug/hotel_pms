@@ -9,7 +9,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
 import { Loader2, ListTree } from 'lucide-react';
 import { getNightAuditRoomCharges } from '@/lib/night-audit-actions';
 import { formatCurrency } from '@/lib/utils';
@@ -36,6 +36,8 @@ export function RoomChargesDialog({ businessDate, auditId }: RoomChargesDialogPr
     }
   }, [open, propertyId, auditId]);
 
+  const totalAmount = charges.reduce((sum, charge) => sum + (charge.amount || 0), 0);
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger>
@@ -44,7 +46,7 @@ export function RoomChargesDialog({ businessDate, auditId }: RoomChargesDialogPr
           View Analysis
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+      <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Room Charges Billed</DialogTitle>
           <p className="text-sm text-slate-500">
@@ -88,6 +90,18 @@ export function RoomChargesDialog({ businessDate, auditId }: RoomChargesDialogPr
                 ))
               )}
             </TableBody>
+            {!loading && charges.length > 0 && (
+              <TableFooter className="bg-slate-50 border-t sticky bottom-0">
+                <TableRow>
+                  <TableCell colSpan={3} className="text-right font-black text-slate-700 uppercase tracking-wider text-xs">
+                    Total Billed
+                  </TableCell>
+                  <TableCell className="text-right font-black text-slate-900 text-base">
+                    {formatCurrency(totalAmount)}
+                  </TableCell>
+                </TableRow>
+              </TableFooter>
+            )}
           </Table>
         </div>
       </DialogContent>
