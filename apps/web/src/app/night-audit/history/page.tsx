@@ -65,7 +65,7 @@ export default function AuditHistoryPage() {
     return history.filter(audit => {
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
-        const auditor = (audit.runReference || 'SYSTEM').toLowerCase();
+        const auditor = (audit.auditorName || 'SYSTEM').toLowerCase();
         const date = new Date(audit.businessDate).toLocaleDateString().toLowerCase();
         if (!auditor.includes(query) && !date.includes(query)) return false;
       }
@@ -79,11 +79,11 @@ export default function AuditHistoryPage() {
     const header = ['Date', 'Auditor', 'Status', 'Duration', 'Rooms Charged', 'Total Revenue'];
     const rows = filteredHistory.map(audit => [
       new Date(audit.businessDate).toLocaleDateString(),
-      audit.runReference || 'SYSTEM',
+      audit.auditorName,
       audit.status,
       formatDuration(audit.startedAt, audit.completedAt),
       audit.roomChargesPosted || 0,
-      audit.revenuePosted || 0
+      audit.totalRevenue || 0
     ]);
     const csvContent = [header, ...rows].map(e => e.join(",")).join("\n");
     const blob = new Blob([csvContent], { type: 'text/csv' });
@@ -257,16 +257,16 @@ export default function AuditHistoryPage() {
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <div className="h-7 w-7 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 text-xs font-bold">
-                          {(audit.runReference || 'SYS').substring(0, 2).toUpperCase()}
+                          {(audit.auditorName || 'SYS').substring(0, 2).toUpperCase()}
                         </div>
-                        <span className="font-medium text-slate-700">{audit.runReference || 'SYSTEM'}</span>
+                        <span className="font-medium text-slate-700">{audit.auditorName}</span>
                       </div>
                     </TableCell>
                     <TableCell className="font-medium text-slate-600">
                       {formatDuration(audit.startedAt, audit.completedAt)}
                     </TableCell>
                     <TableCell className="font-bold text-slate-900 text-right">
-                      {formatCurrency(audit.revenuePosted || 0)}
+                      {formatCurrency(audit.totalRevenue || 0)}
                     </TableCell>
                     <TableCell>
                       {getStatusBadge(audit.status)}
@@ -320,8 +320,8 @@ export default function AuditHistoryPage() {
                     <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
                       <User className="h-4 w-4" /> Auditor
                     </div>
-                    <div className="font-black text-slate-900 text-lg truncate" title={selectedAudit.runReference || 'SYSTEM'}>
-                      {selectedAudit.runReference || 'SYSTEM'}
+                    <div className="font-black text-slate-900 text-lg truncate" title={selectedAudit.auditorName || 'SYSTEM'}>
+                      {selectedAudit.auditorName || 'SYSTEM'}
                     </div>
                   </div>
                   <div className="rounded-2xl border border-slate-200/60 bg-white/80 backdrop-blur-sm p-4 shadow-sm hover:shadow-md transition-shadow">
