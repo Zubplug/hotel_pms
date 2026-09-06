@@ -324,12 +324,14 @@ export default function ShiftReportPage() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {report.shifts.map((shift: any) => {
-                    const variance = (Number(shift.declaredCash ?? 0)) - (Number(shift.expectedCash ?? 0));
+                    const variance = shift.declaredCash != null ? (Number(shift.declaredCash)) - (Number(shift.expectedCash ?? 0)) : null;
                     const isBalanced = variance === 0;
+                    const isPending = variance === null;
+                    
                     return (
                       <div key={shift.id} className="group relative bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col">
                         {/* Decorative top border glow based on variance */}
-                        <div className={`absolute top-0 left-0 w-full h-1 rounded-t-2xl opacity-40 transition-opacity group-hover:opacity-100 ${isBalanced ? 'bg-gradient-to-r from-emerald-400 to-emerald-500' : 'bg-gradient-to-r from-amber-400 to-rose-500'}`} />
+                        <div className={`absolute top-0 left-0 w-full h-1 rounded-t-2xl opacity-40 transition-opacity group-hover:opacity-100 ${isPending ? 'bg-gradient-to-r from-slate-300 to-slate-400' : isBalanced ? 'bg-gradient-to-r from-emerald-400 to-emerald-500' : 'bg-gradient-to-r from-amber-400 to-rose-500'}`} />
                         
                         <div className="flex justify-between items-start mb-4">
                           <div>
@@ -346,10 +348,10 @@ export default function ShiftReportPage() {
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Expected</p>
                             <p className="text-sm font-semibold text-slate-700">{fmt(Number(shift.expectedCash ?? 0))}</p>
                           </div>
-                          <div className={`rounded-xl p-3 border transition-colors ${isBalanced ? 'bg-emerald-50/50 border-emerald-100 group-hover:bg-emerald-50' : 'bg-rose-50/50 border-rose-100 group-hover:bg-rose-50'}`}>
-                            <p className={`text-[10px] font-bold uppercase tracking-wider mb-1 ${isBalanced ? 'text-emerald-600/70' : 'text-rose-600/70'}`}>Variance</p>
-                            <p className={`text-sm font-bold ${isBalanced ? 'text-emerald-700' : 'text-rose-700'}`}>
-                              {fmt(variance)}
+                          <div className={`rounded-xl p-3 border transition-colors ${isPending ? 'bg-slate-50/50 border-slate-100 group-hover:bg-slate-50' : isBalanced ? 'bg-emerald-50/50 border-emerald-100 group-hover:bg-emerald-50' : 'bg-rose-50/50 border-rose-100 group-hover:bg-rose-50'}`}>
+                            <p className={`text-[10px] font-bold uppercase tracking-wider mb-1 ${isPending ? 'text-slate-500/70' : isBalanced ? 'text-emerald-600/70' : 'text-rose-600/70'}`}>Variance</p>
+                            <p className={`text-sm font-bold ${isPending ? 'text-slate-600' : isBalanced ? 'text-emerald-700' : 'text-rose-700'}`}>
+                              {isPending ? 'Pending' : fmt(variance)}
                             </p>
                           </div>
                         </div>
@@ -359,7 +361,10 @@ export default function ShiftReportPage() {
                             <Clock className="h-3.5 w-3.5" />
                             {format(new Date(shift.openedAt), 'dd MMM yyyy, HH:mm')}
                           </span>
-                          <Button size="sm" className="rounded-xl bg-slate-900 text-white hover:bg-indigo-600 hover:shadow-lg hover:shadow-indigo-500/20 transition-all h-8 text-xs px-4" onClick={() => router.push(`/night-audit/shift-reviews?shiftId=${shift.id}`)}>
+                          <Button size="sm" className="rounded-xl bg-slate-900 text-white hover:bg-indigo-600 hover:shadow-lg hover:shadow-indigo-500/20 transition-all h-8 text-xs px-4" onClick={() => {
+                            setShiftId(shift.id);
+                            router.push(`/night-audit/shift-reviews?shiftId=${shift.id}`, { scroll: false });
+                          }}>
                             Review Shift
                           </Button>
                         </div>
