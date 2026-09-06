@@ -11,6 +11,7 @@ import { MetricCards } from '@/components/night-audit/dashboard/metric-cards';
 import { AuditReadiness } from '@/components/night-audit/dashboard/audit-readiness';
 import { OccupancyChart } from '@/components/night-audit/dashboard/occupancy-chart';
 import { RevenueTrendChart } from '@/components/night-audit/dashboard/revenue-trend-chart';
+import { ActivityFeed } from '@/components/night-audit/dashboard/activity-feed';
 import { AttentionQueue } from '@/components/night-audit/dashboard/attention-queue';
 import { AuditWizard } from '@/components/night-audit/audit-wizard';
 import { ResolutionManager, ResolutionAction } from '@/components/night-audit/resolution-manager';
@@ -171,6 +172,11 @@ export default function NightAuditDashboard() {
       <div className="grid gap-6 lg:grid-cols-[1fr_2fr]">
         <OccupancyChart rooms={data.analytics.rooms} />
         <RevenueTrendChart trend={data.analytics.trend} baseCurrency={data.property.baseCurrency} />
+      </div>
+
+      {/* Activity Feed */}
+      <div className="mt-8">
+        <ActivityFeed data={data} />
       </div>
 
       {/* Audit Wizard Modal */}

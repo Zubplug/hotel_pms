@@ -1,8 +1,8 @@
 import React from 'react';
 import { NightAuditData } from '@/types/night-audit';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TrendingUp, Banknote, Users, ArrowUpRight, ArrowDownRight, Minus, BedDouble } from 'lucide-react';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
 
 const currency = (value: number, code = 'NGN') =>
   new Intl.NumberFormat('en-NG', { style: 'currency', currency: code, maximumFractionDigits: 0 }).format(value);
@@ -115,21 +115,58 @@ export function MetricCards({ data }: { data: NightAuditData }) {
     } catch (e) {
       // ignore
     }
+    
+    // Default to putting all revenue in "Rooms" if financialSnapshot is missing (legacy audits)
+    const roomRevenue = t.financialSnapshot ? Number(t.financialSnapshot.roomRevenue) : Number(t.totalRevenue);
+    const fnbRevenue = t.financialSnapshot ? Number(t.financialSnapshot.fnbRevenue) : 0;
+    const otherRevenue = t.financialSnapshot ? Number(t.financialSnapshot.otherRevenue) : 0;
+    
     return {
       date: dateStr,
       revenue: Number(t.totalRevenue) || 0,
-      occupancy: Number(t.occupancy) || 0,
+      roomRevenue,
+      fnbRevenue,
+      otherRevenue,
     };
   });
 
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="rounded-xl border border-white/20 bg-white/95 p-4 shadow-xl backdrop-blur-md">
+          <p className="mb-3 font-semibold text-slate-800">{label}</p>
+          <div className="space-y-2">
+            {payload.map((entry: any, index: number) => (
+              <div key={index} className="flex items-center justify-between gap-6">
+                <div className="flex items-center gap-2">
+                  <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: entry.color }} />
+                  <span className="text-sm font-medium text-slate-600">{entry.name}</span>
+                </div>
+                <span className="text-sm font-bold text-slate-900">
+                  {currency(entry.value, baseCurrency)}
+                </span>
+              </div>
+            ))}
+            <div className="mt-2 flex items-center justify-between gap-6 border-t border-slate-100 pt-2">
+              <span className="text-sm font-semibold text-slate-800">Total</span>
+              <span className="text-sm font-bold text-indigo-600">
+                {currency(payload.reduce((sum: number, entry: any) => sum + entry.value, 0), baseCurrency)}
+              </span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
   return (
     <div className="space-y-6">
-      {/* Main Revenue Chart Card */}
       <Card className="relative overflow-hidden border border-slate-200/70 bg-white/80 shadow-[0_12px_30px_rgba(15,23,42,0.04)] backdrop-blur-sm">
         <CardContent className="p-6 sm:p-8">
           <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Total Revenue</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Gross Revenue Breakdown</p>
               <h2 className="mt-2 text-4xl font-bold tracking-tight text-slate-900">
                 {currency(revenue, baseCurrency)}
               </h2>
@@ -163,66 +200,34 @@ export function MetricCards({ data }: { data: NightAuditData }) {
                 </div>
               )}
             </div>
-            
-            <div className="hidden items-center gap-4 text-sm font-medium text-slate-500 sm:flex">
-              <div className="flex items-center gap-2">
-                <div className="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/50"></div>
-                Revenue Trend
-              </div>
-            </div>
           </div>
 
-          <div className="h-[260px] w-full">
+          <div className="h-[280px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#e2e8f0" />
+              <BarChart data={chartData} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" opacity={0.5} />
                 <XAxis 
                   dataKey="date" 
                   axisLine={false} 
                   tickLine={false} 
                   tick={{ fontSize: 12, fill: '#64748b' }} 
                   dy={10} 
-                  minTickGap={20}
                 />
                 <YAxis 
                   hide 
-                  domain={['dataMin - (dataMin * 0.1)', 'dataMax + (dataMax * 0.1)']} 
+                  domain={[0, 'dataMax + (dataMax * 0.1)']} 
                 />
-                <Tooltip
-                  contentStyle={{
-                    borderRadius: '12px',
-                    border: '1px solid rgba(226, 232, 240, 0.8)',
-                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
-                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                    backdropFilter: 'blur(8px)',
-                    padding: '12px 16px',
-                  }}
-                  itemStyle={{ color: '#0f172a', fontWeight: 600 }}
-                  formatter={(value: any) => [currency(Number(value), baseCurrency), 'Revenue']}
-                  labelStyle={{ color: '#64748b', marginBottom: '4px', fontSize: '13px' }}
-                />
-                <Area 
-                  type="monotone" 
-                  dataKey="revenue" 
-                  stroke="#10b981" 
-                  strokeWidth={3} 
-                  fillOpacity={1} 
-                  fill="url(#colorRevenue)" 
-                  activeDot={{ r: 6, fill: '#10b981', stroke: '#fff', strokeWidth: 2 }}
-                />
-              </AreaChart>
+                <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(241, 245, 249, 0.4)' }} />
+                <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px', fontSize: '13px' }} />
+                <Bar dataKey="roomRevenue" name="Rooms" stackId="a" fill="#4f46e5" radius={[0, 0, 4, 4]} />
+                <Bar dataKey="fnbRevenue" name="F&B" stackId="a" fill="#f59e0b" />
+                <Bar dataKey="otherRevenue" name="Other" stackId="a" fill="#10b981" radius={[4, 4, 0, 0]} />
+              </BarChart>
             </ResponsiveContainer>
           </div>
         </CardContent>
       </Card>
 
-      {/* Grid of other metrics */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <Metric
           label="Last Audit"

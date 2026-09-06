@@ -148,6 +148,7 @@ model Property {
   deletedAt           DateTime?           @db.Timestamptz
   PosSession          PosSession[]
   HotelEvent          HotelEvent[]
+  HotelActivityEvent  HotelActivityEvent[]
   laundryItems        LaundryItem[]
   laundryOrders       LaundryOrder[]
   StockTransfer       StockTransfer[]
@@ -990,15 +991,24 @@ enum FolioItemSource {
   OTHER
 }
 
+enum RevenueCategory {
+  ROOM
+  FNB
+  OTHER
+  TAX
+}
+
 model FolioItem {
   id      String @id @default(uuid()) @db.Uuid
   folioId String @db.Uuid
   folio   Folio  @relation(fields: [folioId], references: [id])
 
-  businessDate DateTime        @db.Date
-  type         String // 'CHARGE' | 'PAYMENT' | 'REFUND' | 'DISCOUNT' | 'ADJUSTMENT' | 'TAX'
-  source       FolioItemSource
-  description  String
+  businessDate    DateTime        @db.Date
+  type            String // 'CHARGE' | 'PAYMENT' | 'REFUND' | 'DISCOUNT' | 'ADJUSTMENT' | 'TAX'
+  source          FolioItemSource
+  revenueCategory RevenueCategory @default(OTHER)
+
+  description String
 
   quantity   Decimal @default(1) @db.Decimal(10, 4)
   unitAmount Decimal @db.Decimal(18, 4)
@@ -1436,8 +1446,26 @@ model NightAudit {
 
   folioItems       FolioItem[]
   acknowledgements NightAuditAcknowledgement[]
+  financialSnapshot NightAuditFinancialSnapshot?
 
   @@unique([propertyId, businessDate])
+}
+
+model NightAuditFinancialSnapshot {
+  id           String   @id @default(uuid()) @db.Uuid
+  nightAuditId String   @unique @db.Uuid
+  nightAudit   NightAudit @relation(fields: [nightAuditId], references: [id])
+  
+  roomRevenue   Decimal @default(0) @db.Decimal(18, 4)
+  fnbRevenue    Decimal @default(0) @db.Decimal(18, 4)
+  otherRevenue  Decimal @default(0) @db.Decimal(18, 4)
+  taxes         Decimal @default(0) @db.Decimal(18, 4)
+  discounts     Decimal @default(0) @db.Decimal(18, 4)
+  refunds       Decimal @default(0) @db.Decimal(18, 4)
+  grossRevenue  Decimal @default(0) @db.Decimal(18, 4)
+  netRevenue    Decimal @default(0) @db.Decimal(18, 4)
+
+  createdAt DateTime @default(now()) @db.Timestamptz
 }
 
 model NightAuditAcknowledgement {
@@ -1652,6 +1680,54 @@ model SyncConflict {
   resolution String?
 
   createdAt DateTime @default(now()) @db.Timestamptz
+}
+
+enum HotelActivityCategory {
+  FRONT_DESK
+  FINANCIAL
+  POS
+  NIGHT_AUDIT
+  SECURITY
+  SYSTEM
+}
+
+enum HotelActivitySeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+model HotelActivityEvent {
+  id           String   @id @default(uuid()) @db.Uuid
+  propertyId   String   @db.Uuid
+  property     Property @relation(fields: [propertyId], references: [id])
+  
+  businessDate DateTime @db.Date
+  occurredAt   DateTime @db.Timestamptz
+  
+  category     HotelActivityCategory
+  eventType    String
+  
+  actorId      String?  @db.Uuid
+  actorName    String?
+  
+  entityType   String?
+  entityId     String?  @db.Uuid
+  
+  title        String
+  description  String?
+  
+  amount       Decimal? @db.Decimal(18, 4)
+  currency     String?
+  
+  severity     HotelActivitySeverity @default(INFO)
+  
+  metadata     Json?
+  
+  createdAt DateTime @default(now()) @db.Timestamptz
+
+  @@index([propertyId, businessDate])
+  @@index([propertyId, category])
 }
 
 // -----------------------------------------------------------------------------

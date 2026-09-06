@@ -375,14 +375,43 @@ export async function executeNightAudit(
 
   // The date was already rolled during cutover. Finish the previous date's
   // posting work and publish a final, immutable audit result.
-    const [roomRevenue, totalRevenue, roomCount, occupiedCount] = await Promise.all([
-    prisma.folioItem.aggregate({ where: { folio: { propertyId }, businessDate, type: 'CHARGE', source: 'ROOM_CHARGE', voidedAt: null }, _sum: { amount: true } }),
-    prisma.folioItem.aggregate({ where: { folio: { propertyId }, businessDate, type: 'CHARGE', voidedAt: null }, _sum: { amount: true } }),
-    prisma.room.count({ where: { propertyId, isActive: true } }),
-    prisma.room.count({ where: { propertyId, isActive: true, status: 'OCCUPIED' } })
+    const [revenueByCategory, otherItemsByType, roomCount, occupiedCount] = await Promise.all([
+      prisma.folioItem.groupBy({
+        by: ['revenueCategory'],
+        where: { folio: { propertyId }, businessDate, type: 'CHARGE', voidedAt: null },
+        _sum: { amount: true }
+      }),
+      prisma.folioItem.groupBy({
+        by: ['type'],
+        where: { folio: { propertyId }, businessDate, type: { in: ['TAX', 'DISCOUNT', 'REFUND'] }, voidedAt: null },
+        _sum: { amount: true }
+      }),
+      prisma.room.count({ where: { propertyId, isActive: true } }),
+      prisma.room.count({ where: { propertyId, isActive: true, status: 'OCCUPIED' } })
     ]);
-    const totalRoomRevenue = Number(roomRevenue._sum?.amount || 0);
-    const totalRevenueValue = Number(totalRevenue._sum?.amount || 0);
+
+    let roomRevenueVal = 0, fnbRevenueVal = 0, otherRevenueVal = 0, taxesVal = 0, discountsVal = 0, refundsVal = 0;
+
+    for (const group of revenueByCategory) {
+      const amt = Number(group._sum?.amount || 0);
+      if (group.revenueCategory === 'ROOM') roomRevenueVal += amt;
+      else if (group.revenueCategory === 'FNB') fnbRevenueVal += amt;
+      else if (group.revenueCategory === 'OTHER') otherRevenueVal += amt;
+      else if (group.revenueCategory === 'TAX') taxesVal += amt;
+    }
+
+    for (const group of otherItemsByType) {
+      const amt = Number(group._sum?.amount || 0);
+      if (group.type === 'TAX') taxesVal += amt;
+      else if (group.type === 'DISCOUNT') discountsVal += amt;
+      else if (group.type === 'REFUND') refundsVal += amt;
+    }
+
+    const grossRevenueVal = roomRevenueVal + fnbRevenueVal + otherRevenueVal;
+    const netRevenueVal = grossRevenueVal - discountsVal - refundsVal;
+
+    const totalRoomRevenue = roomRevenueVal;
+    const totalRevenueValue = grossRevenueVal;
     const occupancy = roomCount ? (occupiedCount / roomCount) * 100 : 0;
     const adr = occupiedCount ? totalRoomRevenue / occupiedCount : 0;
     const revpar = roomCount ? totalRoomRevenue / roomCount : 0;
@@ -416,7 +445,21 @@ export async function executeNightAudit(
         revpar,
       }
     }),
-    // 2. Update property audit status
+    // 2. Create NightAuditFinancialSnapshot
+    prisma.nightAuditFinancialSnapshot.create({
+      data: {
+        nightAuditId: auditRun.id,
+        roomRevenue: roomRevenueVal,
+        fnbRevenue: fnbRevenueVal,
+        otherRevenue: otherRevenueVal,
+        taxes: taxesVal,
+        discounts: discountsVal,
+        refunds: refundsVal,
+        grossRevenue: grossRevenueVal,
+        netRevenue: netRevenueVal
+      }
+    }),
+    // 3. Update property audit status
     prisma.property.update({
       where: { id: propertyId },
       data: {
@@ -424,7 +467,7 @@ export async function executeNightAudit(
         auditStatus: errors > 0 ? 'COMPLETED_WITH_EXCEPTIONS' : 'COMPLETED'
       }
     }),
-    // 3. Snapshot occupancy — atomic with audit completion for KPI reporting consistency.
+    // 4. Snapshot occupancy — atomic with audit completion for KPI reporting consistency.
     //    If this fails, the audit is NOT marked COMPLETED, preventing a phantom 'done' state.
     prisma.occupancySnapshot.upsert({
       where: { propertyId_businessDate: { propertyId, businessDate } },
@@ -443,7 +486,7 @@ export async function executeNightAudit(
       },
       update: { occupancyPct: occupancy, adr, revpar, totalRooms: roomCount, occupiedRooms: occupiedCount, outOfOrderRooms, blockedRooms }
     }),
-    // 4. Audit log — atomic so it cannot say 'COMPLETED' if the update rolled back
+    // 5. Audit log — atomic so it cannot say 'COMPLETED' if the update rolled back
     prisma.auditLog.create({
       data: {
         organizationId: property.organizationId,
@@ -466,6 +509,26 @@ export async function executeNightAudit(
         ipAddress: reqIp,
         userAgent: reqUserAgent,
         requestId: crypto.randomUUID(),
+      }
+    }),
+    // 6. Publish Hotel Activity Event for Night Audit Completion
+    prisma.hotelActivityEvent.create({
+      data: {
+        propertyId,
+        businessDate,
+        occurredAt: new Date(),
+        category: 'NIGHT_AUDIT',
+        eventType: 'NIGHT_AUDIT_COMPLETED',
+        actorId,
+        actorName: 'SYSTEM',
+        title: `Night Audit Completed for ${businessDate.toISOString().split('T')[0]}`,
+        description: `Successfully closed business date. Gross Revenue: ${grossRevenueVal.toLocaleString()}.`,
+        severity: 'INFO',
+        metadata: {
+          auditId: auditRun.id,
+          tasksCreated: totalTasksCreated,
+          errors
+        }
       }
     })
   ]);

@@ -68,14 +68,28 @@ export async function GET(req: NextRequest) {
 
     const trendStart = new Date(businessDate);
     trendStart.setUTCDate(trendStart.getUTCDate() - 6);
-    const [rooms, inHouseGuests, charges, payments, latePostings, sessions, trend] = await Promise.all([
+    const [rooms, inHouseGuests, charges, payments, latePostings, sessions, trend, activityFeed, financialSnapshot] = await Promise.all([
       prisma.room.findMany({ where: { propertyId, isActive: true }, select: { status: true } }),
       prisma.reservation.count({ where: { propertyId, status: 'CHECKED_IN' } }),
       prisma.folioItem.aggregate({ where: { folio: { propertyId }, businessDate, type: 'CHARGE', voidedAt: null }, _sum: { amount: true } }),
       prisma.folioItem.aggregate({ where: { folio: { propertyId }, businessDate, type: { in: ['PAYMENT', 'REFUND'] }, voidedAt: null }, _sum: { amount: true } }),
       prisma.folioItem.count({ where: { folio: { propertyId }, businessDate, isLatePosting: true, voidedAt: null } }),
       prisma.posSession.aggregate({ where: { propertyId, businessDate }, _sum: { variance: true } }),
-      prisma.nightAudit.findMany({ where: { propertyId, status: 'COMPLETED', businessDate: { gte: trendStart, lte: businessDate } }, orderBy: { businessDate: 'asc' }, take: 7, select: { businessDate: true, totalRevenue: true, occupancy: true, adr: true, revpar: true } })
+      prisma.nightAudit.findMany({ 
+        where: { propertyId, status: 'COMPLETED', businessDate: { gte: trendStart, lte: businessDate } }, 
+        orderBy: { businessDate: 'asc' }, 
+        take: 7, 
+        select: { 
+          businessDate: true, 
+          totalRevenue: true, 
+          occupancy: true, 
+          adr: true, 
+          revpar: true,
+          financialSnapshot: true 
+        } 
+      }),
+      prisma.hotelActivityEvent.findMany({ where: { propertyId, businessDate: bDate instanceof Date ? bDate : new Date(businessDate) }, orderBy: { occurredAt: 'desc' }, take: 100 }),
+      currentAudit ? prisma.nightAuditFinancialSnapshot.findUnique({ where: { nightAuditId: currentAudit.id } }) : Promise.resolve(null)
     ]);
 
     const roomAnalysis = rooms.reduce((result: Record<string, number>, room) => {
@@ -139,6 +153,8 @@ export async function GET(req: NextRequest) {
         rooms: { total: rooms.length, occupied: roomAnalysis.OCCUPIED || 0, available: roomAnalysis.AVAILABLE || 0, outOfOrder: roomAnalysis.OUT_OF_ORDER || 0 },
         trend,
       },
+      activityFeed,
+      financialSnapshot,
       operational,
       system,
       financial,

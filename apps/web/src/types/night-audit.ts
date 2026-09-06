@@ -24,6 +24,7 @@ export interface TrendData {
   occupancy: number | string;
   adr: number | string;
   revpar: number | string;
+  financialSnapshot?: any;
 }
 
 export interface AnalyticsData {
@@ -83,4 +84,6 @@ export interface NightAuditData {
   financial: FinancialData;
   cash: CashData;
   summary: SummaryData;
+  activityFeed?: any[];
+  financialSnapshot?: any;
 }
