@@ -94,11 +94,11 @@ export function RevenueTrendChart({ trend, baseCurrency }: { trend: TrendData[] 
                 return `${val}`;
               }}
             />
-            {showRevenue && (
+            {(showRevenue || showAdr || showRevpar) && (
               <Tooltip
                 cursor={{ fill: 'rgba(0,0,0,0.05)' }}
                 contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontSize: '12px' }}
-                formatter={(value: number | string, name: string | number) => [currency(Number(value), baseCurrency), name === 'revenue' ? 'Revenue' : String(name).toUpperCase()]}
+                formatter={(value: any, name: any) => [currency(Number(value), baseCurrency), name === 'revenue' ? 'Revenue' : String(name).toUpperCase()]}
                 labelStyle={{ fontWeight: 'bold', color: '#0f172a', marginBottom: '4px' }}
               />
             )}

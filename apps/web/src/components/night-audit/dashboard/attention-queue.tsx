@@ -78,7 +78,7 @@ export function AttentionQueue({ data, onResolveItem }: { data: NightAuditData; 
       items.push({ id: getStableQueueId('hb', item), label: 'High Balance', description: `Folio #${String(item.folioNumber ?? (String(item.id ?? '').split('-')[0] || '').toUpperCase())}`, type: 'warning', actionType: 'FOLIO_PREVIEW', payload: item });
     });
     (data.financial.rateVariances || []).forEach((item: Record<string, unknown>) => {
-      items.push({ id: getStableQueueId('rv', item), label: 'Rate Variance', description: `Res #${String((item.folio as Record<string, unknown> | undefined)?.reservationId?.slice(0, 8) ?? '')}`, type: 'warning', actionType: 'FOLIO_PREVIEW', payload: { id: item.folioId, folioNumber: item.folioNumber, balance: item.varianceAmount } as Record<string, unknown> });
+      items.push({ id: getStableQueueId('rv', item), label: 'Rate Variance', description: `Res #${String((item.folio as Record<string, unknown> | undefined)?.reservationId ?? '').slice(0, 8)}`, type: 'warning', actionType: 'FOLIO_PREVIEW', payload: { id: item.folioId, folioNumber: item.folioNumber, balance: item.varianceAmount } as Record<string, unknown> });
     });
     (data.financial.pendingDiscounts || []).forEach((item: Record<string, unknown>) => {
       items.push({ id: getStableQueueId('disc', item), label: 'Pending Discount', description: `Requested by ${String(item.requestedBy ?? '')}`, type: 'warning', actionType: 'DISCOUNT_APPROVAL', payload: item });

@@ -45,7 +45,7 @@ export function OccupancyChart({ rooms }: { rooms: RoomAnalytics | undefined }) 
                   ))}
                 </Pie>
                 <Tooltip
-                  formatter={(value: number | string) => [`${value} Rooms`, 'Count']}
+                  formatter={(value: any) => [`${value} Rooms`, 'Count']}
                   contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                 />
                 <Legend verticalAlign="bottom" height={36} iconType="circle" />
