@@ -160,6 +160,12 @@ export default function NightAuditDashboard() {
       {/* Primary Metrics */}
       <MetricCards data={data} />
 
+      {/* Charts Layout */}
+      <div className="grid gap-6 lg:grid-cols-[1fr_2fr]">
+        <OccupancyChart rooms={data.analytics.rooms} />
+        <RevenueTrendChart trend={data.analytics.trend} baseCurrency={data.property.baseCurrency} />
+      </div>
+
       {/* Readiness & Attention Queue Layout */}
       {data.auditState !== 'COMPLETED' && (
         <div className="grid gap-6 lg:grid-cols-2">
@@ -167,12 +173,6 @@ export default function NightAuditDashboard() {
           <AttentionQueue data={data} onResolveItem={handleQueueResolve} />
         </div>
       )}
-
-      {/* Charts Layout */}
-      <div className="grid gap-6 lg:grid-cols-[1fr_2fr]">
-        <OccupancyChart rooms={data.analytics.rooms} />
-        <RevenueTrendChart trend={data.analytics.trend} baseCurrency={data.property.baseCurrency} />
-      </div>
 
       {/* Activity Feed */}
       <div className="mt-8">
