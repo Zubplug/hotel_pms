@@ -23,7 +23,7 @@ export default function InHouseGuestsReportPage() {
           return res.json();
         })
         .then(res => {
-          setData(res);
+          setData(res.data || res);
           setLoading(false);
         })
         .catch(err => {
