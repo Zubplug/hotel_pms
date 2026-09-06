@@ -31,22 +31,71 @@ export async function GET(req: NextRequest) {
       include: { staff: true }
     });
 
-    const cashiers = sessions.map(session => {
+    const cashiers = await Promise.all(sessions.map(async (session) => {
       const openingFloat = Number(session.openingFloat || 0);
       const expectedCash = Number(session.systemExpectedCash || 0);
       const actualCash = Number(session.declaredCash || 0);
       const variance = Number(session.variance || (actualCash - expectedCash));
+
+      // Aggregate payments linked to this session
+      const paymentsAggr = await prisma.payment.groupBy({
+        by: ['method'],
+        where: { 
+          propertyId, 
+          status: 'COMPLETED',
+          OR: [
+            { frontdeskSessionId: session.id },
+            { 
+              receivedBy: session.staffId, 
+              createdAt: { 
+                gte: session.openedAt, 
+                lte: session.closedAt || new Date(businessDate.getTime() + 24*60*60*1000) 
+              } 
+            }
+          ]
+        },
+        _sum: { amount: true }
+      });
+
+      let cashSales = 0, cardSales = 0, bankTransfer = 0, other = 0;
+      paymentsAggr.forEach(p => {
+        const amt = Number(p._sum.amount || 0);
+        if (p.method === 'CASH') cashSales += amt;
+        else if (p.method === 'CARD') cardSales += amt;
+        else if (p.method === 'BANK_TRANSFER') bankTransfer += amt;
+        else other += amt;
+      });
+
+      // Refunds
+      const refundsAggr = await prisma.payment.aggregate({
+        where: { 
+          propertyId, 
+          status: 'REFUNDED',
+          OR: [
+            { frontdeskSessionId: session.id },
+            { 
+              receivedBy: session.staffId, 
+              createdAt: { 
+                gte: session.openedAt, 
+                lte: session.closedAt || new Date(businessDate.getTime() + 24*60*60*1000) 
+              } 
+            }
+          ]
+        },
+        _sum: { amount: true }
+      });
+      const cashRefunds = Math.abs(Number(refundsAggr._sum.amount || 0));
 
       return {
         cashierName: `${session.staff?.firstName || 'Unknown'} ${session.staff?.lastName || ''}`.trim(),
         shiftReference: session.shiftReference || session.id.slice(-6).toUpperCase(),
         status: session.status,
         openingFloat,
-        cashSales: expectedCash - openingFloat, // Simplified mockup for sales
-        cardSales: 0,
-        bankTransfer: 0,
-        other: 0,
-        cashRefunds: 0,
+        cashSales,
+        cardSales,
+        bankTransfer,
+        other,
+        cashRefunds,
         paidOuts: 0,
         cashDrops: actualCash,
         expectedCash,
@@ -54,7 +103,7 @@ export async function GET(req: NextRequest) {
         variance,
         supervisorApproval: variance === 0 ? 'APPROVED' : 'PENDING'
       };
-    });
+    }));
 
     return successResponse({
       propertyName: property?.name || 'Property',
