@@ -15,9 +15,6 @@ export default function ReportsGeneratorPage() {
   const [flashReport, setFlashReport] = useState<any>(null);
   const [showFlashReport, setShowFlashReport] = useState(false);
 
-  const [selectedReportUrl, setSelectedReportUrl] = useState<string | null>(null);
-  const [selectedReportTitle, setSelectedReportTitle] = useState<string | null>(null);
-
   useEffect(() => {
     if (propertyId) {
       fetch(`/api/v1/night-audit/status?propertyId=${propertyId}`)
@@ -92,8 +89,7 @@ export default function ReportsGeneratorPage() {
                 <CardFooter className="pt-2 flex gap-2 border-t mt-4 bg-muted/10 rounded-b-xl">
                   <Button variant="ghost" size="sm" className="flex-1 text-muted-foreground hover:text-foreground" onClick={() => {
                     if (businessDate) {
-                      setSelectedReportTitle(report.title);
-                      setSelectedReportUrl(`/night-audit/reports/print/${report.slug}?propertyId=${propertyId}&businessDate=${businessDate}`);
+                      window.location.href = `/night-audit/reports/print/${report.slug}?propertyId=${propertyId}&businessDate=${businessDate}`;
                     } else {
                       alert('Business date is required to view reports.');
                     }
@@ -117,34 +113,6 @@ export default function ReportsGeneratorPage() {
             <p>Scheduled reports coming soon</p>
           </div>
         </TabsContent>
-      </Tabs>
-
-      <Dialog open={!!selectedReportUrl} onOpenChange={(open) => !open && setSelectedReportUrl(null)}>
-        <DialogContent className="max-w-5xl h-[90vh] flex flex-col p-0 overflow-hidden bg-muted/20 border-none">
-          <DialogHeader className="p-4 bg-background border-b flex-shrink-0 flex flex-row items-center justify-between">
-            <DialogTitle>{selectedReportTitle}</DialogTitle>
-            <Button onClick={() => {
-              const iframe = document.getElementById('report-iframe') as HTMLIFrameElement;
-              iframe?.contentWindow?.print();
-            }} className="gap-2" size="sm">
-              <Printer className="h-4 w-4" />
-              Print Report
-            </Button>
-          </DialogHeader>
-          <div className="flex-1 overflow-auto p-4 md:p-8 flex justify-center bg-slate-100 dark:bg-slate-900">
-            <div className="w-full max-w-[210mm] min-h-[297mm] bg-white text-black shadow-2xl overflow-hidden relative border border-slate-200">
-              {selectedReportUrl && (
-                <iframe
-                  id="report-iframe"
-                  src={selectedReportUrl}
-                  className="absolute inset-0 w-full h-full border-0 bg-white"
-                  title="Report Viewer"
-                />
-              )}
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
