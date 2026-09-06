@@ -90,8 +90,8 @@ export async function getSystemHealth(propertyId: string) {
   return { hardware, syncConflicts };
 }
 
-export async function getNightAuditRoomCharges(propertyId: string, businessDate: string) {
-  if (!propertyId || !businessDate) return [];
+export async function getNightAuditRoomCharges(propertyId: string, auditId: string) {
+  if (!propertyId || !auditId) return [];
   const session = await auth();
   if (!session?.user?.id) throw new Error('UNAUTHORIZED');
   const { requireOrganizationContext } = await import('@/lib/organization-access');
@@ -101,8 +101,7 @@ export async function getNightAuditRoomCharges(propertyId: string, businessDate:
   const charges = await prisma.folioItem.findMany({
     where: {
       folio: { propertyId },
-      businessDate: new Date(businessDate),
-      source: 'ROOM_CHARGE'
+      nightAuditRunId: auditId,
     },
     include: {
       folio: {

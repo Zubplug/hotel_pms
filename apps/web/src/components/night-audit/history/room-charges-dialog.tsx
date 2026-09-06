@@ -17,23 +17,24 @@ import { useProperty } from '@/components/PropertyProvider';
 
 interface RoomChargesDialogProps {
   businessDate: string | Date;
+  auditId: string;
 }
 
-export function RoomChargesDialog({ businessDate }: RoomChargesDialogProps) {
+export function RoomChargesDialog({ businessDate, auditId }: RoomChargesDialogProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [charges, setCharges] = useState<any[]>([]);
   const { propertyId } = useProperty();
 
   useEffect(() => {
-    if (open && propertyId) {
+    if (open && propertyId && auditId) {
       setLoading(true);
-      getNightAuditRoomCharges(propertyId, new Date(businessDate).toISOString())
+      getNightAuditRoomCharges(propertyId, auditId)
         .then(setCharges)
         .catch(console.error)
         .finally(() => setLoading(false));
     }
-  }, [open, propertyId, businessDate]);
+  }, [open, propertyId, auditId]);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>

@@ -339,7 +339,7 @@ export default function AuditHistoryPage() {
                     </div>
                     <div className="font-black text-slate-900 text-lg flex items-center justify-between">
                       <span>{selectedAudit.roomChargesPosted || 0}</span>
-                      <RoomChargesDialog businessDate={selectedAudit.businessDate} />
+                      <RoomChargesDialog businessDate={selectedAudit.businessDate} auditId={selectedAudit.id} />
                     </div>
                   </div>
                 </div>
