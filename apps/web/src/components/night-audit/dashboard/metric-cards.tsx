@@ -1,7 +1,7 @@
 import React from 'react';
 import { NightAuditData } from '@/types/night-audit';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { TrendingUp, Banknote, Users, ArrowUpRight, ArrowDownRight, Minus, BedDouble } from 'lucide-react';
+import { TrendingUp, Banknote, Users, ArrowUpRight, ArrowDownRight, Minus, BedDouble, CalendarDays } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
 
 const currency = (value: number, code = 'NGN') =>
@@ -47,7 +47,7 @@ function Metric({ label, value, subtext, trend, icon: Icon, tone = 'default' }: 
                   <ArrowUpRight className="h-3.5 w-3.5" />
                   {trend.toFixed(1)}%
                 </span>
-                <span className="text-slate-400">vs yesterday</span>
+                <span className="text-slate-400">vs prior day</span>
               </>
             ) : trend < 0 ? (
               <>
@@ -55,7 +55,7 @@ function Metric({ label, value, subtext, trend, icon: Icon, tone = 'default' }: 
                   <ArrowDownRight className="h-3.5 w-3.5" />
                   {Math.abs(trend).toFixed(1)}%
                 </span>
-                <span className="text-slate-400">vs yesterday</span>
+                <span className="text-slate-400">vs prior day</span>
               </>
             ) : (
               <>
@@ -76,36 +76,43 @@ function Metric({ label, value, subtext, trend, icon: Icon, tone = 'default' }: 
 export function MetricCards({ data }: { data: NightAuditData }) {
   const baseCurrency = data.property.baseCurrency;
 
-  const revenue = data.analytics.revenue || 0;
+  const trendData = data.analytics.trend || [];
+  const lastAudit = trendData.length > 0 ? trendData[trendData.length - 1] : null;
+  const previousAudit = trendData.length > 1 ? trendData[trendData.length - 2] : null;
+
+  // Use last completed audit for primary revenue/performance metrics since today has no finalized data
+  const revenue = lastAudit ? Number(lastAudit.totalRevenue) : (data.analytics.revenue || 0);
+  const adr = lastAudit ? Number(lastAudit.adr) : 0;
+  const revpar = lastAudit ? Number(lastAudit.revpar) : 0;
+  
+  const totalRooms = data.analytics.rooms?.total || 0;
+  const occupied = lastAudit 
+    ? Math.round((Number(lastAudit.occupancy) / 100) * totalRooms) 
+    : (data.analytics.rooms?.occupied || 0);
+
+  // Keep live operational data for today
   const payments = data.analytics.payments || 0;
   const inHouseGuests = data.analytics.inHouseGuests || 0;
-  const occupied = data.analytics.rooms?.occupied || 0;
-  const totalRooms = data.analytics.rooms?.total || 0;
   const openSessions = (data.system.openPosSessions?.length || 0) + (data.system.openFrontdeskSessions?.length || 0);
-
-  const adr = occupied > 0 ? revenue / occupied : 0;
-  const revpar = totalRooms > 0 ? revenue / totalRooms : 0;
 
   let revTrend: number | undefined;
   let adrTrend: number | undefined;
   let revparTrend: number | undefined;
 
-  if (data.analytics.trend && data.analytics.trend.length >= 2) {
-    const previous = data.analytics.trend[data.analytics.trend.length - 1];
-    const yRev = Number(previous.totalRevenue) || 0;
-    const yAdr = Number(previous.adr) || 0;
-    const yRevpar = Number(previous.revpar) || 0;
+  // Trend comparison is between Last Audit vs Previous Audit
+  if (lastAudit && previousAudit) {
+    const prevRev = Number(previousAudit.totalRevenue) || 0;
+    const prevAdr = Number(previousAudit.adr) || 0;
+    const prevRevpar = Number(previousAudit.revpar) || 0;
 
-    if (yRev > 0) revTrend = ((revenue - yRev) / yRev) * 100;
-    if (yAdr > 0) adrTrend = ((adr - yAdr) / yAdr) * 100;
-    if (yRevpar > 0) revparTrend = ((revpar - yRevpar) / yRevpar) * 100;
+    if (prevRev > 0) revTrend = ((revenue - prevRev) / prevRev) * 100;
+    if (prevAdr > 0) adrTrend = ((adr - prevAdr) / prevAdr) * 100;
+    if (prevRevpar > 0) revparTrend = ((revpar - prevRevpar) / prevRevpar) * 100;
   }
 
-  const lastAuditRevenue = data.analytics.trend && data.analytics.trend.length > 0
-    ? Number(data.analytics.trend[data.analytics.trend.length - 1].totalRevenue) || 0
-    : 0;
+  const previousAuditRevenue = previousAudit ? Number(previousAudit.totalRevenue) : 0;
 
-  const chartData = (data.analytics.trend || []).map((t) => {
+  const chartData = trendData.map((t) => {
     let dateStr = 'N/A';
     try {
       const d = new Date(t.businessDate);
@@ -116,7 +123,6 @@ export function MetricCards({ data }: { data: NightAuditData }) {
       // ignore
     }
     
-    // Default to putting all revenue in "Rooms" if financialSnapshot is missing (legacy audits)
     const roomRevenue = t.financialSnapshot ? Number(t.financialSnapshot.roomRevenue) : Number(t.totalRevenue);
     const fnbRevenue = t.financialSnapshot ? Number(t.financialSnapshot.fnbRevenue) : 0;
     const otherRevenue = t.financialSnapshot ? Number(t.financialSnapshot.otherRevenue) : 0;
@@ -166,7 +172,7 @@ export function MetricCards({ data }: { data: NightAuditData }) {
         <CardContent className="p-6 sm:p-8">
           <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Gross Revenue Breakdown</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Gross Revenue Breakdown (Last Audit)</p>
               <h2 className="mt-2 text-4xl font-bold tracking-tight text-slate-900">
                 {currency(revenue, baseCurrency)}
               </h2>
@@ -178,7 +184,7 @@ export function MetricCards({ data }: { data: NightAuditData }) {
                         <ArrowUpRight className="h-4 w-4" />
                         {revTrend.toFixed(1)}%
                       </span>
-                      <span className="text-slate-400">vs yesterday</span>
+                      <span className="text-slate-400">vs prior audit</span>
                     </>
                   ) : revTrend < 0 ? (
                     <>
@@ -186,7 +192,7 @@ export function MetricCards({ data }: { data: NightAuditData }) {
                         <ArrowDownRight className="h-4 w-4" />
                         {Math.abs(revTrend).toFixed(1)}%
                       </span>
-                      <span className="text-slate-400">vs yesterday</span>
+                      <span className="text-slate-400">vs prior audit</span>
                     </>
                   ) : (
                     <>
@@ -230,10 +236,10 @@ export function MetricCards({ data }: { data: NightAuditData }) {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <Metric
-          label="Last Audit"
-          value={currency(lastAuditRevenue, baseCurrency)}
-          subtext="Previous close"
-          icon={TrendingUp}
+          label="Prior Audit"
+          value={currency(previousAuditRevenue, baseCurrency)}
+          subtext="Day before last"
+          icon={CalendarDays}
           tone="default"
         />
         <Metric
@@ -244,7 +250,7 @@ export function MetricCards({ data }: { data: NightAuditData }) {
           tone="indigo"
         />
         <Metric
-          label="ADR"
+          label="ADR (Last)"
           value={currency(adr, baseCurrency)}
           subtext={`${occupied} occupied rooms`}
           trend={adrTrend}
@@ -252,7 +258,7 @@ export function MetricCards({ data }: { data: NightAuditData }) {
           tone="amber"
         />
         <Metric
-          label="RevPAR"
+          label="RevPAR (Last)"
           value={currency(revpar, baseCurrency)}
           subtext={`${totalRooms} total rooms`}
           trend={revparTrend}
