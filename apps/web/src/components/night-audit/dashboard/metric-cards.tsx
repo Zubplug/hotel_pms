@@ -1,7 +1,8 @@
 import React from 'react';
 import { NightAuditData } from '@/types/night-audit';
 import { Card, CardContent } from '@/components/ui/card';
-import { TrendingUp, Banknote, Users, ArrowUpRight, ArrowDownRight, Minus, CircleDollarSign, BedDouble } from 'lucide-react';
+import { TrendingUp, Banknote, Users, ArrowUpRight, ArrowDownRight, Minus, BedDouble } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 const currency = (value: number, code = 'NGN') =>
   new Intl.NumberFormat('en-NG', { style: 'currency', currency: code, maximumFractionDigits: 0 }).format(value);
@@ -104,53 +105,163 @@ export function MetricCards({ data }: { data: NightAuditData }) {
     ? Number(data.analytics.trend[data.analytics.trend.length - 1].totalRevenue) || 0
     : 0;
 
+  const chartData = (data.analytics.trend || []).map((t) => {
+    let dateStr = 'N/A';
+    try {
+      const d = new Date(t.businessDate);
+      if (!isNaN(d.getTime())) {
+        dateStr = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+      }
+    } catch (e) {
+      // ignore
+    }
+    return {
+      date: dateStr,
+      revenue: Number(t.totalRevenue) || 0,
+      occupancy: Number(t.occupancy) || 0,
+    };
+  });
+
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-6">
-      <Metric
-        label="Revenue"
-        value={currency(revenue, baseCurrency)}
-        subtext="Current business day"
-        trend={revTrend}
-        icon={CircleDollarSign}
-        tone="emerald"
-      />
-      <Metric
-        label="Last Audit"
-        value={currency(lastAuditRevenue, baseCurrency)}
-        subtext="Previous close"
-        icon={TrendingUp}
-        tone="default"
-      />
-      <Metric
-        label="Payments"
-        value={currency(payments, baseCurrency)}
-        subtext="Captured today"
-        icon={Banknote}
-        tone="indigo"
-      />
-      <Metric
-        label="ADR"
-        value={currency(adr, baseCurrency)}
-        subtext={`${occupied} occupied rooms`}
-        trend={adrTrend}
-        icon={TrendingUp}
-        tone="amber"
-      />
-      <Metric
-        label="RevPAR"
-        value={currency(revpar, baseCurrency)}
-        subtext={`${totalRooms} total rooms`}
-        trend={revparTrend}
-        icon={BedDouble}
-        tone="default"
-      />
-      <Metric
-        label="In-house"
-        value={inHouseGuests}
-        subtext={`${openSessions} open sessions`}
-        icon={Users}
-        tone="indigo"
-      />
+    <div className="space-y-6">
+      {/* Main Revenue Chart Card */}
+      <Card className="relative overflow-hidden border border-slate-200/70 bg-white/80 shadow-[0_12px_30px_rgba(15,23,42,0.04)] backdrop-blur-sm">
+        <CardContent className="p-6 sm:p-8">
+          <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Total Revenue</p>
+              <h2 className="mt-2 text-4xl font-bold tracking-tight text-slate-900">
+                {currency(revenue, baseCurrency)}
+              </h2>
+              {revTrend !== undefined && (
+                <div className="mt-3 flex items-center gap-2 text-sm font-medium">
+                  {revTrend > 0 ? (
+                    <>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-emerald-700">
+                        <ArrowUpRight className="h-4 w-4" />
+                        {revTrend.toFixed(1)}%
+                      </span>
+                      <span className="text-slate-400">vs yesterday</span>
+                    </>
+                  ) : revTrend < 0 ? (
+                    <>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-1 text-rose-700">
+                        <ArrowDownRight className="h-4 w-4" />
+                        {Math.abs(revTrend).toFixed(1)}%
+                      </span>
+                      <span className="text-slate-400">vs yesterday</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-slate-600">
+                        <Minus className="h-4 w-4" />
+                        0.0%
+                      </span>
+                      <span className="text-slate-400">no change</span>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+            
+            <div className="hidden items-center gap-4 text-sm font-medium text-slate-500 sm:flex">
+              <div className="flex items-center gap-2">
+                <div className="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/50"></div>
+                Revenue Trend
+              </div>
+            </div>
+          </div>
+
+          <div className="h-[260px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#e2e8f0" />
+                <XAxis 
+                  dataKey="date" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fontSize: 12, fill: '#64748b' }} 
+                  dy={10} 
+                  minTickGap={20}
+                />
+                <YAxis 
+                  hide 
+                  domain={['dataMin - (dataMin * 0.1)', 'dataMax + (dataMax * 0.1)']} 
+                />
+                <Tooltip
+                  contentStyle={{
+                    borderRadius: '12px',
+                    border: '1px solid rgba(226, 232, 240, 0.8)',
+                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                    backdropFilter: 'blur(8px)',
+                    padding: '12px 16px',
+                  }}
+                  itemStyle={{ color: '#0f172a', fontWeight: 600 }}
+                  formatter={(value: number) => [currency(value, baseCurrency), 'Revenue']}
+                  labelStyle={{ color: '#64748b', marginBottom: '4px', fontSize: '13px' }}
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="revenue" 
+                  stroke="#10b981" 
+                  strokeWidth={3} 
+                  fillOpacity={1} 
+                  fill="url(#colorRevenue)" 
+                  activeDot={{ r: 6, fill: '#10b981', stroke: '#fff', strokeWidth: 2 }}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Grid of other metrics */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <Metric
+          label="Last Audit"
+          value={currency(lastAuditRevenue, baseCurrency)}
+          subtext="Previous close"
+          icon={TrendingUp}
+          tone="default"
+        />
+        <Metric
+          label="Payments"
+          value={currency(payments, baseCurrency)}
+          subtext="Captured today"
+          icon={Banknote}
+          tone="indigo"
+        />
+        <Metric
+          label="ADR"
+          value={currency(adr, baseCurrency)}
+          subtext={`${occupied} occupied rooms`}
+          trend={adrTrend}
+          icon={TrendingUp}
+          tone="amber"
+        />
+        <Metric
+          label="RevPAR"
+          value={currency(revpar, baseCurrency)}
+          subtext={`${totalRooms} total rooms`}
+          trend={revparTrend}
+          icon={BedDouble}
+          tone="default"
+        />
+        <Metric
+          label="In-house"
+          value={inHouseGuests}
+          subtext={`${openSessions} open sessions`}
+          icon={Users}
+          tone="indigo"
+        />
+      </div>
     </div>
   );
 }

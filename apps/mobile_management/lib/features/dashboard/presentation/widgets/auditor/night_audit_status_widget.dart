@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:fl_chart/fl_chart.dart';
 import '../../models/auditor_dashboard_data.dart';
 
 class NightAuditStatusWidget extends StatelessWidget {
@@ -163,39 +164,79 @@ class NightAuditStatusWidget extends StatelessWidget {
             ),
           ),
 
-          // ── Room Stats Row ───────────────────────────────────────
+          // ── Room Stats (Donut Chart) ────────────────────────────
           if (analytics.totalRooms > 0) ...[
             Divider(height: 1, color: Colors.white.withValues(alpha: 0.06)),
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
               child: Row(
                 children: [
-                  _RoomStat(
-                    count: analytics.occupiedRooms,
-                    label: 'Occupied',
-                    color: goldAccent,
-                    surfaceDeep: surfaceDeep,
+                  SizedBox(
+                    height: 100,
+                    width: 100,
+                    child: Stack(
+                      children: [
+                        PieChart(
+                          PieChartData(
+                            sectionsSpace: 4,
+                            centerSpaceRadius: 32,
+                            startDegreeOffset: -90,
+                            sections: _buildPieSections(analytics, goldAccent),
+                          ),
+                          swapAnimationDuration: const Duration(milliseconds: 800),
+                          swapAnimationCurve: Curves.easeInOut,
+                        ),
+                        Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                analytics.totalRooms.toString(),
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                  color: textPrimary,
+                                ),
+                              ),
+                              Text(
+                                'Total',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(width: 8),
-                  _RoomStat(
-                    count: analytics.availableRooms,
-                    label: 'Available',
-                    color: Colors.greenAccent,
-                    surfaceDeep: surfaceDeep,
-                  ),
-                  const SizedBox(width: 8),
-                  _RoomStat(
-                    count: analytics.outOfOrderRooms,
-                    label: 'Out of Order',
-                    color: Colors.redAccent,
-                    surfaceDeep: surfaceDeep,
-                  ),
-                  const SizedBox(width: 8),
-                  _RoomStat(
-                    count: analytics.totalRooms,
-                    label: 'Total',
-                    color: textSecondary,
-                    surfaceDeep: surfaceDeep,
+                  const SizedBox(width: 24),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _ChartLegendRow(
+                          color: goldAccent,
+                          label: 'Occupied',
+                          value: analytics.occupiedRooms.toString(),
+                        ),
+                        const SizedBox(height: 10),
+                        _ChartLegendRow(
+                          color: Colors.greenAccent,
+                          label: 'Available',
+                          value: analytics.availableRooms.toString(),
+                        ),
+                        const SizedBox(height: 10),
+                        _ChartLegendRow(
+                          color: Colors.redAccent,
+                          label: 'Out of Order',
+                          value: analytics.outOfOrderRooms.toString(),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -240,6 +281,29 @@ class NightAuditStatusWidget extends StatelessWidget {
         .split('_')
         .map((s) => s.isEmpty ? '' : '${s[0].toUpperCase()}${s.substring(1).toLowerCase()}')
         .join(' ');
+  }
+
+  List<PieChartSectionData> _buildPieSections(NightAuditAnalytics analytics, Color goldAccent) {
+    return [
+      PieChartSectionData(
+        value: analytics.occupiedRooms > 0 ? analytics.occupiedRooms.toDouble() : 0.01,
+        color: goldAccent,
+        title: '',
+        radius: 12,
+      ),
+      PieChartSectionData(
+        value: analytics.availableRooms > 0 ? analytics.availableRooms.toDouble() : 0.01,
+        color: Colors.greenAccent,
+        title: '',
+        radius: 12,
+      ),
+      PieChartSectionData(
+        value: analytics.outOfOrderRooms > 0 ? analytics.outOfOrderRooms.toDouble() : 0.01,
+        color: Colors.redAccent,
+        title: '',
+        radius: 12,
+      ),
+    ];
   }
 
   _StatusConfig _getStatusConfig(String state) {
@@ -383,47 +447,59 @@ class _KpiTile extends StatelessWidget {
   }
 }
 
-class _RoomStat extends StatelessWidget {
-  final int count;
-  final String label;
+class _ChartLegendRow extends StatelessWidget {
   final Color color;
-  final Color surfaceDeep;
-  const _RoomStat({required this.count, required this.label, required this.color, required this.surfaceDeep});
+  final String label;
+  final String value;
+
+  const _ChartLegendRow({
+    required this.color,
+    required this.label,
+    required this.value,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.07),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color.withValues(alpha: 0.15)),
-        ),
-        child: Column(
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Row(
           children: [
-            Text(
-              count.toString(),
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w800,
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
                 color: color,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: color.withValues(alpha: 0.4),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 2),
+            const SizedBox(width: 8),
             Text(
               label,
               style: TextStyle(
-                fontSize: 9,
-                color: color.withValues(alpha: 0.7),
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.2,
+                fontSize: 12,
+                color: Colors.white.withValues(alpha: 0.8),
+                fontWeight: FontWeight.w500,
               ),
-              textAlign: TextAlign.center,
             ),
           ],
         ),
-      ),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w800,
+            color: Colors.white,
+          ),
+        ),
+      ],
     );
   }
 }
