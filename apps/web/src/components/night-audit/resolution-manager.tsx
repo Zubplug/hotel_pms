@@ -801,34 +801,58 @@ function DiscountApprovalResolution({ item, onSuccess, onClose }: { item: any; o
     }
   };
 
+  const d = item.details || {};
+
   return (
     <>
       <DialogHeader>
         <DialogTitle>Review Discount</DialogTitle>
         <DialogDescription>
-          Discount requested by {item.requestedBy}
+          A discount requires approval before room charges can be posted.
         </DialogDescription>
       </DialogHeader>
+      
       {error && <div className="p-3 bg-rose-50 text-rose-600 rounded-lg text-sm border border-rose-100">{error}</div>}
+      
       <div className="py-4 space-y-4">
         <div className="p-4 border rounded-xl bg-slate-50 space-y-2 text-sm">
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Amount:</span>
-            <span className="font-medium">{item.details?.discountAmount ? Number(item.details.discountAmount).toFixed(2) : item.details?.discountPercent ? `${item.details.discountPercent}%` : 'Variable'}</span>
+            <span className="text-muted-foreground">Type:</span>
+            <span className="font-medium">{d.targetType || 'RESERVATION_ROOM'}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Requested By:</span>
+            <span className="font-medium">{item.requestedBy}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Reason:</span>
-            <span className="font-medium">{item.details?.reason || 'No reason provided'}</span>
+            <span className="font-medium">{item.reason || d.reason || 'No reason provided'}</span>
+          </div>
+          <div className="pt-3 mt-3 border-t flex justify-between items-center text-base">
+            <span className="font-semibold text-slate-900">Discount Amount:</span>
+            <span className="font-bold text-indigo-700">
+              {d.discountAmount ? Number(d.discountAmount).toLocaleString('en-NG', { style: 'currency', currency: 'NGN' }) : d.discountPercent ? `${d.discountPercent}%` : 'Variable'}
+            </span>
           </div>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" className="flex-1 text-rose-600 hover:text-rose-700 hover:bg-rose-50" onClick={() => handleAction('reject')} disabled={!!loading}>
-            {loading === 'reject' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Reject
+        
+        <div className="flex gap-3 pt-2">
+          <Button 
+            variant="outline" 
+            className="flex-1 border-rose-200 text-rose-700 hover:bg-rose-50 hover:text-rose-800"
+            onClick={() => handleAction('reject')} 
+            disabled={!!loading}
+          >
+            {loading === 'reject' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Reject Discount
           </Button>
-          <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={() => handleAction('approve')} disabled={!!loading}>
-            {loading === 'approve' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Approve
+          <Button 
+            className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white"
+            onClick={() => handleAction('approve')} 
+            disabled={!!loading}
+          >
+            {loading === 'approve' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Approve Discount
           </Button>
         </div>
       </div>
@@ -836,7 +860,7 @@ function DiscountApprovalResolution({ item, onSuccess, onClose }: { item: any; o
   );
 }
 
-function CheckinBypassResolution({ item, onSuccess, onClose }: { item: any; onSuccess: () => void; onClose: () => void }) {
+export function CheckinBypassResolution({ item, onSuccess, onClose }: { item: any; onSuccess: () => void; onClose: () => void }) {
   const [loading, setLoading] = useState<'VERIFY' | 'REJECT' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notes, setNotes] = useState('Reviewed during night audit');
@@ -911,65 +935,6 @@ function CheckinBypassResolution({ item, onSuccess, onClose }: { item: any; onSu
           <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={() => handleAction('VERIFY')} disabled={!!loading}>
             {loading === 'VERIFY' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Verify
-          </Button>
-        </div>
-      </div>
-    </>
-  );
-}
-
-  const d = item.details || {};
-
-  return (
-    <>
-      <DialogHeader>
-        <DialogTitle>Review Discount</DialogTitle>
-        <DialogDescription>
-          A discount requires approval before room charges can be posted.
-        </DialogDescription>
-      </DialogHeader>
-      
-      {error && <div className="p-3 bg-rose-50 text-rose-600 rounded-lg text-sm border border-rose-100">{error}</div>}
-      
-      <div className="py-4 space-y-4">
-        <div className="p-4 border rounded-xl bg-slate-50 space-y-2 text-sm">
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Type:</span>
-            <span className="font-medium">{d.targetType || 'RESERVATION_ROOM'}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Requested By:</span>
-            <span className="font-medium">{item.requestedBy}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Reason:</span>
-            <span className="font-medium">{item.reason || d.reason || 'No reason provided'}</span>
-          </div>
-          <div className="pt-3 mt-3 border-t flex justify-between items-center text-base">
-            <span className="font-semibold text-slate-900">Discount Amount:</span>
-            <span className="font-bold text-indigo-700">
-              {d.discountAmount ? Number(d.discountAmount).toLocaleString('en-NG', { style: 'currency', currency: 'NGN' }) : d.discountPercent ? `${d.discountPercent}%` : 'Variable'}
-            </span>
-          </div>
-        </div>
-        
-        <div className="flex gap-3 pt-2">
-          <Button 
-            variant="outline" 
-            className="flex-1 border-rose-200 text-rose-700 hover:bg-rose-50 hover:text-rose-800"
-            onClick={() => handleAction('reject')} 
-            disabled={!!loading}
-          >
-            {loading === 'reject' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Reject Discount
-          </Button>
-          <Button 
-            className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white"
-            onClick={() => handleAction('approve')} 
-            disabled={!!loading}
-          >
-            {loading === 'approve' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Approve Discount
           </Button>
         </div>
       </div>
