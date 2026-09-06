@@ -14,7 +14,8 @@ export async function getNightAuditHistory(propertyId: string) {
   const audits = await prisma.nightAudit.findMany({
     where: { propertyId },
     orderBy: { createdAt: 'desc' },
-    take: 50
+    take: 50,
+    include: { financialSnapshot: true }
   });
   return audits;
 }
