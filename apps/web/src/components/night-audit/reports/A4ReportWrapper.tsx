@@ -40,10 +40,10 @@ export function A4ReportWrapper({
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 py-8 print:bg-white print:py-0">
+    <div className="min-h-screen bg-slate-100 py-8 print:bg-white print:py-0 overflow-x-auto">
       
       {/* Floating Action Bar (Hidden in Print) */}
-      <div className="max-w-[210mm] mx-auto mb-6 flex items-center justify-between print:hidden">
+      <div className="w-[210mm] mx-auto mb-6 flex items-center justify-between print:hidden">
         <Button variant="outline" onClick={() => router.back()} className="bg-white">
           <ArrowLeft className="w-4 h-4 mr-2" /> Back to Reports
         </Button>
@@ -58,21 +58,21 @@ export function A4ReportWrapper({
       </div>
 
       {/* A4 Paper Container */}
-      <div className="max-w-[210mm] mx-auto bg-white shadow-xl rounded-sm overflow-hidden print:shadow-none print:rounded-none">
+      <div className="w-[210mm] mx-auto bg-white shadow-xl rounded-sm print:shadow-none print:rounded-none">
         
         {/* Report Content Wrapper */}
-        <div className="p-10 text-slate-900 font-sans text-[11px] leading-relaxed">
+        <div className="p-8 md:p-10 text-slate-900 font-sans text-[11px] leading-relaxed">
           
           {/* Header */}
-          <div className="border-b-[3px] border-slate-900 pb-6 mb-6 flex justify-between items-start">
+          <div className="border-b-[3px] border-slate-900 pb-5 mb-6 flex justify-between items-start gap-4">
             
             {/* Left: Property Info (Letterhead style) */}
-            <div className="flex-1 pr-6">
-              <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 uppercase mb-2">{propertyName}</h1>
+            <div className="flex-1">
+              <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 uppercase mb-2 leading-none">{propertyName}</h1>
               {(propertyAddress || propertyEmail || propertyPhone) && (
-                <div className="text-[11px] font-medium text-slate-600 space-y-1.5">
-                  {propertyAddress && <div className="max-w-sm leading-snug">{propertyAddress}</div>}
-                  <div className="flex items-center gap-3 pt-1">
+                <div className="text-[10px] font-medium text-slate-600 space-y-1.5">
+                  {propertyAddress && <div className="max-w-[250px] leading-snug">{propertyAddress}</div>}
+                  <div className="flex items-center gap-2 pt-0.5 flex-wrap">
                     {propertyPhone && (
                       <span className="flex items-center gap-1">
                         <span className="text-slate-400 font-bold uppercase">Tel:</span> {propertyPhone}
@@ -90,11 +90,11 @@ export function A4ReportWrapper({
             </div>
 
             {/* Right: Report Info */}
-            <div className="text-right flex flex-col items-end shrink-0">
-              <h2 className="text-lg font-bold text-slate-900 uppercase tracking-widest bg-slate-100 px-4 py-2 rounded shadow-sm border border-slate-200">{title}</h2>
-              <div className="mt-4 text-right">
-                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Business Date</div>
-                <div className="text-xl font-bold text-indigo-700">
+            <div className="text-right flex flex-col items-end shrink-0 max-w-[250px]">
+              <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider bg-slate-100 px-3 py-1.5 rounded shadow-sm border border-slate-200 text-right">{title}</h2>
+              <div className="mt-3 text-right">
+                <div className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">Business Date</div>
+                <div className="text-lg font-bold text-indigo-700 whitespace-nowrap">
                   {new Date(businessDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}
                 </div>
               </div>
