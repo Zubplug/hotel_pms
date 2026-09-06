@@ -32,6 +32,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { useProperty } from '@/components/PropertyProvider';
 import { getNightAuditHistory } from '@/lib/night-audit-actions';
+import { RoomChargesDialog } from '@/components/night-audit/history/room-charges-dialog';
 
 export default function AuditHistoryPage() {
   const { propertyId } = useProperty();
@@ -336,8 +337,9 @@ export default function AuditHistoryPage() {
                     <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
                       <BedDouble className="h-4 w-4" /> Rooms Billed
                     </div>
-                    <div className="font-black text-slate-900 text-lg">
-                      {selectedAudit.roomChargesPosted || 0}
+                    <div className="font-black text-slate-900 text-lg flex items-center justify-between">
+                      <span>{selectedAudit.roomChargesPosted || 0}</span>
+                      <RoomChargesDialog businessDate={selectedAudit.businessDate} />
                     </div>
                   </div>
                 </div>

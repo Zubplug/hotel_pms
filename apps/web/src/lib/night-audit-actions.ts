@@ -89,3 +89,52 @@ export async function getSystemHealth(propertyId: string) {
   
   return { hardware, syncConflicts };
 }
+
+export async function getNightAuditRoomCharges(propertyId: string, businessDate: string) {
+  if (!propertyId || !businessDate) return [];
+  const session = await auth();
+  if (!session?.user?.id) throw new Error('UNAUTHORIZED');
+  const { requireOrganizationContext } = await import('@/lib/organization-access');
+  const ctx = await requireOrganizationContext(session.user.id);
+  if (!ctx.propertyIds.includes(propertyId)) throw new Error('FORBIDDEN');
+
+  const charges = await prisma.folioItem.findMany({
+    where: {
+      folio: { propertyId },
+      businessDate: new Date(businessDate),
+      source: 'ROOM_CHARGE'
+    },
+    include: {
+      folio: {
+        include: {
+          reservation: {
+            include: {
+              reservationRooms: {
+                include: { room: true }
+              },
+              primaryGuest: true
+            }
+          }
+        }
+      }
+    },
+    orderBy: {
+      createdAt: 'desc'
+    }
+  });
+
+  return charges.map(charge => {
+    const res = charge.folio?.reservation;
+    const roomNumber = res?.reservationRooms?.[0]?.room?.number || 'Unassigned';
+    const guestName = res?.primaryGuest ? `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}` : 'Unknown Guest';
+    
+    return {
+      id: charge.id,
+      amount: Number(charge.amount),
+      description: charge.description,
+      roomNumber,
+      guestName,
+      reservationId: res?.id,
+    };
+  });
+}
