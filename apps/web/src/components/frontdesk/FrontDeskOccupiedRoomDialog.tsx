@@ -22,11 +22,12 @@ interface FrontDeskOccupiedRoomDialogProps {
   room: { id: string; number: string; status: string } | null;
   isOpen: boolean;
   onClose: () => void;
+  isAuditorMode?: boolean;
 }
 
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
-export function FrontDeskOccupiedRoomDialog({ room, isOpen, onClose }: FrontDeskOccupiedRoomDialogProps) {
+export function FrontDeskOccupiedRoomDialog({ room, isOpen, onClose, isAuditorMode = false }: FrontDeskOccupiedRoomDialogProps) {
   const router = useRouter();
   const { propertyId } = useProperty();
   const { provider } = useLodgeCoreProvider();
@@ -152,27 +153,29 @@ export function FrontDeskOccupiedRoomDialog({ room, isOpen, onClose }: FrontDesk
                   </div>
                 )}
 
-                <div className="pt-2 flex flex-col gap-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <Button 
-                      className="rounded-xl h-12 bg-blue-600 hover:bg-blue-700 font-bold shadow-sm"
-                      onClick={() => setShowExtendStay(true)}
-                    >
-                      <CalendarClock className="w-4 h-4 mr-2" /> Extend Stay
-                    </Button>
-                    <Button 
-                      className="rounded-xl h-12 bg-slate-900 hover:bg-slate-800 font-bold shadow-sm"
-                      onClick={() => setShowCheckOut(true)}
-                    >
-                      <LogOut className="w-4 h-4 mr-2" /> Checkout
-                    </Button>
+                {!isAuditorMode && (
+                  <div className="pt-2 flex flex-col gap-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <Button 
+                        className="rounded-xl h-12 bg-blue-600 hover:bg-blue-700 font-bold shadow-sm"
+                        onClick={() => setShowExtendStay(true)}
+                      >
+                        <CalendarClock className="w-4 h-4 mr-2" /> Extend Stay
+                      </Button>
+                      <Button 
+                        className="rounded-xl h-12 bg-slate-900 hover:bg-slate-800 font-bold shadow-sm"
+                        onClick={() => setShowCheckOut(true)}
+                      >
+                        <LogOut className="w-4 h-4 mr-2" /> Checkout
+                      </Button>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             )}
           </div>
           
-          {resData && (
+          {resData && !isAuditorMode && (
             <div className="bg-white p-4 border-t border-slate-100 shrink-0">
               <Button 
                 variant="ghost" 

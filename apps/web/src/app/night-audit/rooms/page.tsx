@@ -200,19 +200,11 @@ export default function FrontDeskRoomsPage() {
         </div>
       )}
 
-      <FrontDeskRoomStatusDialog
-        room={selectedRoom}
-        isOpen={!!selectedRoom && selectedRoom.status !== 'OCCUPIED'}
-        onClose={() => setSelectedRoom(null)}
-        onSuccess={() => {
-          queryClient.invalidateQueries({ queryKey: ['frontdesk', 'rooms'] });
-        }}
-      />
-
       <FrontDeskOccupiedRoomDialog
         room={selectedRoom}
         isOpen={!!selectedRoom && selectedRoom.status === 'OCCUPIED'}
         onClose={() => setSelectedRoom(null)}
+        isAuditorMode={true}
       />
     </div>
   );
