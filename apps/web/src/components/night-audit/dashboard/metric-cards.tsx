@@ -204,7 +204,7 @@ export function MetricCards({ data }: { data: NightAuditData }) {
                     padding: '12px 16px',
                   }}
                   itemStyle={{ color: '#0f172a', fontWeight: 600 }}
-                  formatter={(value: number) => [currency(value, baseCurrency), 'Revenue']}
+                  formatter={(value: any) => [currency(Number(value), baseCurrency), 'Revenue']}
                   labelStyle={{ color: '#64748b', marginBottom: '4px', fontSize: '13px' }}
                 />
                 <Area 
