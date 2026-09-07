@@ -38,12 +38,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null;
         }
 
-        let staff = null;
-        if (user.staffId) {
-          staff = await prisma.staff.findUnique({
-            where: { id: user.staffId },
-            select: { firstName: true, lastName: true, organizationId: true }
-          });
+        let staff = await prisma.staff.findFirst({
+          where: {
+            OR: [
+              ...(user.staffId ? [{ id: user.staffId }] : []),
+              { userId: user.id }
+            ]
+          },
+          select: { id: true, firstName: true, lastName: true, organizationId: true }
+        });
+        
+        // Ensure staffId is populated on user if we found the staff via userId
+        if (staff && !user.staffId) {
+          user.staffId = staff.id;
         }
 
         const isPasswordValid = await bcrypt.compare(

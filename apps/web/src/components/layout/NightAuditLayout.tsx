@@ -50,11 +50,11 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
     }
   }, [status, router]);
 
-  const userDisplay = session?.user?.name || 'Staff member';
+  const userDisplay = session?.user?.name || session?.user?.email || 'Staff member';
   
   const userInitials = session?.user?.name
     ? session.user.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
-    : '??';
+    : (session?.user?.email ? session.user.email.substring(0, 2).toUpperCase() : '??');
   
   const role = (session?.user as any)?.role || 'STAFF';
 
