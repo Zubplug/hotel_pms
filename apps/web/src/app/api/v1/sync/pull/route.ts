@@ -457,7 +457,7 @@ export async function GET(req: NextRequest) {
 
           hasPosAccess = permissions.some(p =>
             p === 'ACCESS_POS' || p === 'ACCESS_FRONT_DESK' || p.startsWith('ACCESS_KEYCARD')
-          ) || ['RECEPTIONIST', 'MANAGER', 'ADMIN', 'WAITER'].includes(staff.position?.toUpperCase() ?? '');
+          ) || ['RECEPTIONIST', 'MANAGER', 'ADMIN', 'WAITER', 'FNB_MANAGER', 'HOTEL_MANAGER', 'SUPER_ADMIN'].includes(staff.position?.toUpperCase() ?? '');
         }
 
         // Fetch which outlets this staff member can operate in

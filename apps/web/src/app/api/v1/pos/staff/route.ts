@@ -21,7 +21,8 @@ export async function GET(req: NextRequest) {
 
     let staff;
 
-    if (outletId) {
+      const allowedPositions = ['WAITER', 'WAITRESS', 'CASHIER', 'FNB_MANAGER', 'HOTEL_MANAGER', 'ADMIN', 'SUPER_ADMIN'];
+      if (outletId) {
       // Outlet-scoped: only return staff explicitly assigned to this outlet.
       // Prisma to-one includes don't support `where`, so we filter in JS.
       const outletAccess = await prisma.staffPosOutletAccess.findMany({
@@ -30,7 +31,7 @@ export async function GET(req: NextRequest) {
       });
       staff = outletAccess
         .map(a => a.staff)
-        .filter(s => s && s.isActive && ['WAITER', 'WAITRESS', 'CASHIER'].includes(s.position))
+        .filter(s => s && s.isActive && allowedPositions.includes(s.position))
         .map(s => ({
           id: s!.id,
           firstName: s!.firstName,
@@ -45,7 +46,7 @@ export async function GET(req: NextRequest) {
         where: {
           propertyAccess: { has: propertyId },
           isActive: true,
-          position: { in: ['WAITER', 'WAITRESS', 'CASHIER'] },
+          position: { in: allowedPositions },
         },
         select: {
           id: true,
