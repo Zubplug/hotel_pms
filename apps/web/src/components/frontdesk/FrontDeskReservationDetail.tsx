@@ -204,7 +204,10 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
                 return (
                   <div className="pt-4 border-t border-slate-100 flex items-center justify-between mt-4">
                     <div>
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Nightly Rate</p>
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                        {resRoom?.discountType === 'COMPLIMENTARY' ? 'Complimentary Rate' : 
+                         resRoom?.discountType ? 'Discounted Rate' : 'Nightly Rate'}
+                      </p>
                       <div className="flex items-center gap-2">
                         <p className="font-bold text-slate-900 text-lg">{formatCurrency(finalRate)}</p>
                         {Number(resRoom?.rateAmount || 0) > finalRate && (
@@ -212,15 +215,23 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
                             {formatCurrency(Number(resRoom?.rateAmount || 0))}
                           </span>
                         )}
-                        {resRoom?.discountAmount > 0 && resRoom?.discountType !== 'PERCENTAGE' && (
-                          <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
-                            -{formatCurrency(Number(resRoom?.discountAmount || 0))} discount
+                        {resRoom?.discountType === 'COMPLIMENTARY' ? (
+                          <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 font-bold tracking-widest text-[10px] uppercase">
+                            Complimentary
                           </Badge>
-                        )}
-                        {resRoom?.discountPercent > 0 && (
-                          <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
-                            -{resRoom?.discountPercent}% discount
-                          </Badge>
+                        ) : (
+                          <>
+                            {(resRoom?.discountType === 'FIXED_AMOUNT' || (!resRoom?.discountType && resRoom?.discountAmount > 0)) && (
+                              <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
+                                -{formatCurrency(Number(resRoom?.discountAmount || 0))} discount
+                              </Badge>
+                            )}
+                            {(resRoom?.discountType === 'PERCENTAGE' || (!resRoom?.discountType && resRoom?.discountPercent > 0)) && (
+                              <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
+                                -{resRoom?.discountPercent}% discount
+                              </Badge>
+                            )}
+                          </>
                         )}
                       </div>
                     </div>
