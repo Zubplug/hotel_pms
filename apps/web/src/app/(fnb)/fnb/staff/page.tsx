@@ -91,8 +91,8 @@ export default async function FnbStaffPage() {
     where: {
       propertyId: { in: propertyIds },
       businessDate: businessDate,
-      status: 'CLOSED'
-    },
+      status: { in: ['COMPLETED', 'SETTLED', 'CLOSED'] } 
+    } as any,
     _count: {
       id: true
     },
