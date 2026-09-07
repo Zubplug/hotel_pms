@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { RefreshCw, Activity, CheckCircle2, AlertCircle, Loader2, ServerCrash, ArrowRight, ShieldAlert } from 'lucide-react';
+import { RefreshCw, Activity, CheckCircle2, AlertCircle, Loader2, ServerCrash, ArrowRight, ShieldAlert, Server } from 'lucide-react';
 import { useProperty } from '@/components/PropertyProvider';
 import { getSystemHealth } from '@/lib/night-audit-actions';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
