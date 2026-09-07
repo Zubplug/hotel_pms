@@ -243,7 +243,7 @@ export default function ShiftReportPage() {
         <div className="absolute top-0 left-1/4 h-96 w-96 -translate-y-1/2 translate-x-1/2 rounded-full bg-indigo-500/20 blur-[120px] pointer-events-none" />
         <div className="absolute bottom-0 right-1/4 h-64 w-64 translate-y-1/2 -translate-x-1/2 rounded-full bg-emerald-500/20 blur-[100px] pointer-events-none" />
         
-        <div className="relative z-10 max-w-[800px] mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
+        <div className="relative z-10 max-w-[1400px] mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
           <div className="space-y-1.5">
             <div className="inline-flex items-center gap-1.5 rounded-full border border-indigo-500/30 bg-indigo-500/10 px-2.5 py-0.5 text-xs font-medium text-indigo-300 backdrop-blur-md">
               <ShieldCheck className="h-3.5 w-3.5" />
@@ -288,7 +288,7 @@ export default function ShiftReportPage() {
         </div>
       </div>
 
-      <div className="max-w-[800px] mx-auto px-6 py-7 space-y-6">
+      <div className="max-w-[1400px] mx-auto px-6 py-7 space-y-6">
         {/* Loading */}
         {isLoading && (
           <div className="flex flex-col items-center justify-center py-24">
