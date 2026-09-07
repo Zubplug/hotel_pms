@@ -50,12 +50,13 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
     }
   }, [status, router]);
 
-  const userInitials = session?.user?.email
-    ? session.user.email.slice(0, 2).toUpperCase()
+  const userDisplay = session?.user?.name || 'Staff member';
+  
+  const userInitials = session?.user?.name
+    ? session.user.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
     : '??';
   
   const role = (session?.user as any)?.role || 'STAFF';
-  const userDisplay = session?.user?.name || session?.user?.email || 'Staff member';
 
   // Block render while session is resolving
   if (status === 'loading') {
