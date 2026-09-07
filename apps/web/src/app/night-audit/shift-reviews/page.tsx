@@ -475,11 +475,11 @@ export default function ShiftReportPage() {
                       { label: 'Declared Cash', value: selectedShift.declaredCash == null ? 'Not declared' : fmt(Number(selectedShift.declaredCash)), icon: ShieldCheck, color: 'text-slate-800', bg: 'bg-white border-slate-200/80 shadow-sm' },
                       {
                         label: 'Variance',
-                        value: fmt(Math.abs(shiftVariance)),
-                        icon: shiftVariance === 0 ? CheckCircle2 : shiftVariance > 0 ? TrendingUp : TrendingDown,
-                        color: shiftVariance < 0 ? 'text-rose-600' : shiftVariance > 0 ? 'text-amber-600' : 'text-emerald-600',
-                        bg: shiftVariance < 0 ? 'bg-rose-50/80 border-rose-200 ring-1 ring-rose-500/20' : shiftVariance > 0 ? 'bg-amber-50/80 border-amber-200 ring-1 ring-amber-500/20' : 'bg-emerald-50/80 border-emerald-200 ring-1 ring-emerald-500/20',
-                        sub: shiftVariance === 0 ? 'Perfectly balanced' : shiftVariance > 0 ? 'Overage detected' : 'Shortage detected'
+                        value: selectedShift.declaredCash == null ? 'Pending' : fmt(Math.abs(shiftVariance)),
+                        icon: selectedShift.declaredCash == null ? Minus : shiftVariance === 0 ? CheckCircle2 : shiftVariance > 0 ? TrendingUp : TrendingDown,
+                        color: selectedShift.declaredCash == null ? 'text-slate-500' : shiftVariance < 0 ? 'text-rose-600' : shiftVariance > 0 ? 'text-amber-600' : 'text-emerald-600',
+                        bg: selectedShift.declaredCash == null ? 'bg-slate-50 border-slate-200/60' : shiftVariance < 0 ? 'bg-rose-50/80 border-rose-200 ring-1 ring-rose-500/20' : shiftVariance > 0 ? 'bg-amber-50/80 border-amber-200 ring-1 ring-amber-500/20' : 'bg-emerald-50/80 border-emerald-200 ring-1 ring-emerald-500/20',
+                        sub: selectedShift.declaredCash == null ? 'Awaiting handover' : shiftVariance === 0 ? 'Perfectly balanced' : shiftVariance > 0 ? 'Overage detected' : 'Shortage detected'
                       },
                     ].map((stat) => {
                       const Icon = stat.icon;
@@ -493,7 +493,7 @@ export default function ShiftReportPage() {
                           </div>
                           <div>
                             <p className={`text-xl font-black tracking-tight ${stat.color}`}>
-                              {stat.label === 'Variance' && shiftVariance < 0 ? '-' : ''}{stat.value}
+                              {stat.label === 'Variance' && selectedShift.declaredCash != null && shiftVariance < 0 ? '-' : ''}{stat.value}
                             </p>
                             {stat.sub && <p className="text-[10px] font-medium text-slate-500 mt-1">{stat.sub}</p>}
                           </div>
@@ -775,8 +775,7 @@ export default function ShiftReportPage() {
             )}
 
             {/* ─── Transaction Details ─── */}
-            {selectedShift && (
-              <div className="bg-white rounded-3xl border border-slate-200/60 shadow-lg shadow-slate-200/20 overflow-hidden mb-8">
+            <div className="bg-white rounded-3xl border border-slate-200/60 shadow-lg shadow-slate-200/20 overflow-hidden mb-8">
               <div className="bg-slate-50/80 backdrop-blur-sm border-b border-slate-100 px-8 py-5 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-slate-200/50 text-slate-600 rounded-xl">
@@ -893,7 +892,6 @@ export default function ShiftReportPage() {
                 </div>
               )}
             </div>
-            )}
 
             {/* ─── POS Receipt & Authorization Evidence ─── */}
             {((report?.items?.posReceiptAudits?.length ?? 0) > 0 || (report?.items?.posAuthorizationAudits?.length ?? 0) > 0) && (
