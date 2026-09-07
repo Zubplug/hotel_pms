@@ -18,6 +18,7 @@ const dirsToHide = [
 const buildTimeImportBridges = [
   path.join(process.cwd(), 'src/app/(cash-management)/cashier/menu/page.tsx'),
   path.join(process.cwd(), 'src/app/(cash-management)/cashier/price-approvals/page.tsx'),
+  path.join(process.cwd(), 'src/app/night-audit/handovers/page.tsx')
 ];
 const originalBridgeContents = new Map();
 
@@ -34,8 +35,13 @@ try {
   }
 
   for (const [file, contents] of originalBridgeContents) {
-    const bridgedContents = contents.replaceAll("@/app/(admin)/admin/pos/", "@/app/_admin_group/admin/pos/");
-    const buildFile = file.replace(`${path.sep}(cash-management)${path.sep}`, `${path.sep}_cash-management${path.sep}`);
+    let bridgedContents = contents.replaceAll("@/app/(admin)/admin/pos/", "@/app/_admin_group/admin/pos/");
+    bridgedContents = bridgedContents.replaceAll("@/app/(cash-management)/", "@/app/_cash-management/");
+    
+    let buildFile = file;
+    buildFile = buildFile.replace(`${path.sep}(cash-management)${path.sep}`, `${path.sep}_cash-management${path.sep}`);
+    buildFile = buildFile.replace(`${path.sep}night-audit${path.sep}`, `${path.sep}_night-audit${path.sep}`);
+    
     if (bridgedContents !== contents) fs.writeFileSync(buildFile, bridgedContents);
   }
 
