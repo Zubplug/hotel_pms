@@ -2235,7 +2235,11 @@ public class LocalRepository
     {
         if (string.IsNullOrWhiteSpace(query))
         {
-            return await _dbContext.Guests.Where(g => g.DeletedAt == null).Take(50).ToListAsync();
+            return await _dbContext.Guests
+                .Where(g => g.DeletedAt == null)
+                .OrderByDescending(g => g.UpdatedAt)
+                .Take(50)
+                .ToListAsync();
         }
 
         query = query.ToLower();
@@ -2245,6 +2249,7 @@ public class LocalRepository
                          g.LastName.ToLower().Contains(query) || 
                          (g.Email != null && g.Email.ToLower().Contains(query)) || 
                          (g.Phone != null && g.Phone.Contains(query))))
+            .OrderByDescending(g => g.UpdatedAt)
             .Take(50)
             .ToListAsync();
     }
