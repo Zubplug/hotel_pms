@@ -97,7 +97,7 @@ export async function getSystemIntegrity(ctx: TenantContext, propertyId: string)
       openingFloat: true,
       systemExpectedCash: true,
       staff: { select: { firstName: true, lastName: true } },
-      transactions: {
+      payments: {
         where: { method: 'CASH', status: { in: ['COMPLETED', 'POSTED', 'SETTLED'] } },
         select: { amount: true }
       }
@@ -105,9 +105,9 @@ export async function getSystemIntegrity(ctx: TenantContext, propertyId: string)
   });
 
   const openFrontdeskSessions = rawFrontdeskSessions.map(session => {
-    const cashReceipts = session.transactions.reduce((sum, t) => sum + Number(t.amount || 0), 0);
+    const cashReceipts = session.payments.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
     const expectedCash = Number(session.openingFloat || 0) + cashReceipts;
-    const { transactions, ...rest } = session;
+    const { payments, ...rest } = session;
     return {
       ...rest,
       expectedCash // Inject dynamically calculated expected cash
