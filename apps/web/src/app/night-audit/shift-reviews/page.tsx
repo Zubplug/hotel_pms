@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { format, startOfDay, endOfDay } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -70,6 +70,7 @@ function StatusChip({ status }: { status: string }) {
 
 export default function ShiftReportPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { propertyId } = useProperty();
   const { data: session } = useLodgeCoreSession();
 
@@ -85,8 +86,8 @@ export default function ShiftReportPage() {
   const [approving, setApproving] = useState(false);
 
   useEffect(() => {
-    setShiftId(new URLSearchParams(window.location.search).get('shiftId'));
-  }, []);
+    setShiftId(searchParams.get('shiftId'));
+  }, [searchParams]);
 
   const fetchShiftReport = async () => {
     if (!propertyId) return null;
@@ -261,7 +262,10 @@ export default function ShiftReportPage() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => router.push('/night-audit/shift-reviews')}
+                onClick={() => {
+                  setShiftId(null);
+                  router.push('/night-audit/shift-reviews', { scroll: false });
+                }}
                 className="rounded-xl border-white/10 bg-white/5 text-white backdrop-blur-md hover:bg-white/10 hover:border-white/20 transition-all shadow-lg"
               >
                 <ArrowRight className="h-4 w-4 mr-1.5 rotate-180" /> Back to List
