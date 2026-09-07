@@ -54,7 +54,16 @@ export default function FrontdeskCashierPage() {
         fetch(`/api/v1/frontdesk/sessions?propertyId=${propertyId}`).then(response => response.json()),
       ]);
     const nextAccounts = accountData.data || [];
-    const nextSession = sessionData.data?.sessions?.[0] || sessionData.data?.session || null;
+    const rawNextSession = sessionData.data?.sessions?.[0] || sessionData.data?.session || null;
+    
+    // Treat shifts that are fully reconciled, handed over, or deposited as concluded.
+    // Also treat HANDOVER_PENDING as concluded for the cashier, so they can open a new shift.
+    const isConcluded = rawNextSession && (
+      rawNextSession.status === 'RECONCILED' || 
+      ['HANDED_OVER', 'HANDOVER_PENDING', 'DEPOSIT_PENDING', 'DEPOSITED', 'RECONCILED'].includes(rawNextSession.controlStatus || '')
+    );
+    const nextSession = isConcluded ? null : rawNextSession;
+
     setAccounts(nextAccounts);
     setAccountId(value => value || nextAccounts[0]?.id || '');
     setCurrent(nextSession);
