@@ -7,6 +7,7 @@ const dirsToHide = [
   { src: path.join(process.cwd(), 'src/app/(dashboard)'), dest: path.join(process.cwd(), 'src/app/_dashboard') },
   { src: path.join(process.cwd(), 'src/app/(cash-management)'), dest: path.join(process.cwd(), 'src/app/_cash-management') },
   { src: path.join(process.cwd(), 'src/app/(inventory)'), dest: path.join(process.cwd(), 'src/app/_inventory') },
+  { src: path.join(process.cwd(), 'src/app/(fnb)'), dest: path.join(process.cwd(), 'src/app/_fnb') },
   { src: path.join(process.cwd(), 'src/app/hub'), dest: path.join(process.cwd(), 'src/app/_hub') },
   { src: path.join(process.cwd(), 'src/app/admin'), dest: path.join(process.cwd(), 'src/app/_admin') },
   { src: path.join(process.cwd(), 'src/app/night-audit'), dest: path.join(process.cwd(), 'src/app/_night-audit') }
