@@ -64,7 +64,7 @@ export default async function FnbStaffPage() {
       isActive: true,
       OR: [
         {
-          StaffPosOutletAccess: {
+          outletAccess: {
             some: {
               outlet: { propertyId: { in: propertyIds } }
             }
