@@ -19,6 +19,7 @@ export async function POST(req: NextRequest) {
     const user = await prisma.user.findUnique({
       where: { email },
       include: { 
+        membership: true,
         roles: { 
           include: { 
             role: { include: { permissions: { include: { permission: true } } } } 
@@ -53,7 +54,7 @@ export async function POST(req: NextRequest) {
     }
     
     capabilities = Array.from(new Set(capabilities));
-    const primaryRole = user.roles?.[0]?.role?.name || 'STAFF';
+    const primaryRole = user.roles?.[0]?.role?.name || user.membership?.role || 'STAFF';
     const allowedProperties = (await requireOrganizationContext(user.id)).propertyIds;
 
     if (primaryRole !== 'MANAGER' && primaryRole !== 'ADMIN' && primaryRole !== 'SUPER_ADMIN' && primaryRole !== 'DIRECTOR' && primaryRole !== 'EXECUTIVE' && primaryRole !== 'NIGHT_AUDITOR' && !user.isSuperAdmin) {
