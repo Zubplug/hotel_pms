@@ -12,7 +12,6 @@ export default function ExceptionsPage() {
   const { propertyId } = useProperty();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [acking, setAcking] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -34,28 +33,7 @@ export default function ExceptionsPage() {
   }, [propertyId]);
 
   
-  const handleAckAll = async () => {
-    setAcking(true);
-    try {
-      const statusRes = await fetch(`/api/v1/night-audit/status?propertyId=${propertyId}`);
-      const statusData = await statusRes.json();
-      const nightAuditId = statusData.data?.pendingRun?.id;
-      
-      const promises = [];
-      if (data?.syncConflicts > 0) promises.push(fetch('/api/v1/night-audit/acknowledge', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ propertyId, nightAuditId, warningType: 'HARDWARE_OFFLINE', reason: 'Bulk ack', comment: '' }) }));
-      if (data?.openPosSessions > 0) promises.push(fetch('/api/v1/night-audit/acknowledge', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ propertyId, nightAuditId, warningType: 'OPEN_POS', reason: 'Bulk ack', comment: '' }) }));
-      if (data?.highBalances > 0) promises.push(fetch('/api/v1/night-audit/acknowledge', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ propertyId, nightAuditId, warningType: 'HIGH_BALANCE', reason: 'Bulk ack', comment: '' }) }));
-      
-      await Promise.all(promises);
-      
-      const res = await getExceptions(propertyId);
-      setData(res);
-    } catch (err: any) {
-      alert("Failed to acknowledge all: " + err.message);
-    } finally {
-      setAcking(false);
-    }
-  };
+
 
   const handleVerifyBypass = async (bypassId: string, action: 'VERIFY' | 'REJECT') => {
     try {
@@ -85,10 +63,7 @@ export default function ExceptionsPage() {
             Resolve unposted charges, room discrepancies, and cashier variances.
           </p>
         </div>
-        <Button className="bg-amber-600 hover:bg-amber-700" onClick={handleAckAll} disabled={acking}>
-          {acking ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-          Acknowledge All
-        </Button>
+
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
