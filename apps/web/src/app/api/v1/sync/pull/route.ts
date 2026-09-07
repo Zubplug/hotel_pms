@@ -65,6 +65,14 @@ export async function GET(req: NextRequest) {
       };
     };
 
+    let terminalOutletId: string | undefined = undefined;
+    if (authResult.success && authResult.isDevice && authResult.deviceId) {
+      const terminal = await prisma.posTerminal.findUnique({ where: { id: authResult.deviceId } });
+      if (terminal) {
+        terminalOutletId = terminal.outletId;
+      }
+    }
+
     // ---- Load property config -------------------------------------------
     const property = await prisma.property.findUnique({
       where: { id: propertyId },
@@ -188,8 +196,13 @@ export async function GET(req: NextRequest) {
     });
 
     // POS Configuration
+    const posOutletsWhere: any = { propertyId, isActive: true };
+    if (terminalOutletId) {
+      posOutletsWhere.id = terminalOutletId;
+    }
+
     const posOutlets = await prisma.posOutlet.findMany({
-      where: buildWhere({ propertyId, isActive: true }),
+      where: buildWhere(posOutletsWhere),
       take: limit,
       orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     });
@@ -201,8 +214,14 @@ export async function GET(req: NextRequest) {
       orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     });
     
+    const categoryIds = posCategories.map(c => c.id);
+    const posProductsWhere: any = { propertyId, isActive: true };
+    if (terminalOutletId) {
+      posProductsWhere.categoryId = { in: categoryIds };
+    }
+
     const posProducts = await prisma.posProduct.findMany({
-      where: buildWhere({ propertyId, isActive: true }),
+      where: buildWhere(posProductsWhere),
       include: { modifiers: true, stockItems: { where: { isActive: true } } },
       take: limit,
       orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
