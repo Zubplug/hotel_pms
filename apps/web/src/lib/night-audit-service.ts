@@ -41,11 +41,11 @@ export async function getOperationalReview(ctx: TenantContext, propertyId: strin
     const expected = room.status === 'OUT_OF_ORDER'
       ? 'OOO'
       : reservationStatus === 'CHECKED_IN' ? 'OCCUPIED' : reservationStatus === 'CONFIRMED' ? 'RESERVED' : 'AVAILABLE';
+    
+    // We only care about PMS status mismatch vs Reservation status for discrepancies.
+    // Housekeeping status (e.g. INSPECTED while OCCUPIED) is operationally valid and shouldn't block audit.
     const pmsMismatch = expected !== 'OOO' && room.status !== expected && !(expected === 'AVAILABLE' && room.status === 'RESERVED');
-    const housekeepingMismatch = expected === 'OCCUPIED'
-      ? room.housekeepingStatus === 'INSPECTED'
-      : expected === 'AVAILABLE' && room.housekeepingStatus === 'CLEANING';
-    const issue = pmsMismatch || housekeepingMismatch;
+    const issue = pmsMismatch;
 
     return {
       roomId: room.id,
