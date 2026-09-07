@@ -39,69 +39,6 @@ export async function GET(req: NextRequest) {
       gte: new Date(startDate),
       lte: new Date(endDate)
     };
-    const selectedFrontdeskSession = shiftId
-      ? await prisma.frontdeskSession.findFirst({ where: { id: shiftId, propertyId }, select: { id: true } })
-      : null;
-    const paymentWhere: any = {
-      propertyId,
-      status: { in: ['COMPLETED', 'PARTIALLY_REFUNDED', 'REFUNDED'] }
-    };
-    if (selectedFrontdeskSession) {
-      paymentWhere.frontdeskSessionId = shiftId;
-    } else if (!shiftId) {
-      paymentWhere.createdAt = dateFilter;
-    } else {
-      // POS payments live in PosPayment; prevent unrelated front-desk
-      // payments from appearing in a POS shift report.
-      paymentWhere.id = { in: [] };
-    }
-    if (targetUserId) {
-      paymentWhere.receivedBy = targetUserId;
-    }
-    // 1. Fetch Front Desk gross payments
-    const payments = await prisma.payment.findMany({
-      where: paymentWhere,
-      include: {
-        folio: {
-          include: {
-            reservation: {
-              include: { primaryGuest: true }
-            }
-          }
-        }
-      }
-    });
-    // 2. Fetch Front Desk refunds
-    const refundWhere: any = {
-      propertyId,
-      status: 'COMPLETED'
-    };
-    if (selectedFrontdeskSession) {
-      refundWhere.payment = { frontdeskSessionId: shiftId };
-    } else if (!shiftId) {
-      refundWhere.createdAt = dateFilter;
-    } else {
-      refundWhere.id = { in: [] };
-    }
-    if (targetUserId) {
-      refundWhere.authorizedBy = targetUserId;
-    }
-    const refunds = await prisma.refund.findMany({
-      where: refundWhere,
-      include: {
-        payment: { 
-          include: {
-            folio: {
-              include: {
-                reservation: {
-                  include: { primaryGuest: true }
-                }
-              }
-            }
-          }
-        }
-      }
-    });
     // POS sessions are part of the cashier's accountability packet as well.
     // Keep them in this report instead of forcing General Cashier to reconcile
     // POS and Front Desk through separate, incomplete screens.
@@ -124,10 +61,12 @@ export async function GET(req: NextRequest) {
         controlAudits: { orderBy: { createdAt: 'desc' } },
       },
     });
+
     const frontdeskSessions = await prisma.frontdeskSession.findMany({
       where: {
         propertyId,
         ...(shiftId ? { id: shiftId } : { businessDate: dateFilter }),
+        ...(targetUserId ? { staffId: targetUserId } : {}),
       },
       orderBy: { openedAt: 'desc' },
       include: {
@@ -137,6 +76,77 @@ export async function GET(req: NextRequest) {
         cashMovements: true,
         controlAudits: { orderBy: { createdAt: 'desc' } },
       },
+    });
+
+    const isFrontdeskShift = shiftId && frontdeskSessions.length > 0;
+
+    const paymentWhere: any = {
+      propertyId,
+      status: { in: ['COMPLETED', 'PARTIALLY_REFUNDED', 'REFUNDED'] }
+    };
+    if (isFrontdeskShift) {
+      paymentWhere.frontdeskSessionId = shiftId;
+    } else if (!shiftId) {
+      paymentWhere.OR = [
+        { createdAt: dateFilter },
+        { frontdeskSessionId: { in: frontdeskSessions.map((s: any) => s.id) } }
+      ];
+    } else {
+      // POS payments live in PosPayment; prevent unrelated front-desk
+      // payments from appearing in a POS shift report.
+      paymentWhere.id = { in: [] };
+    }
+    if (targetUserId) {
+      paymentWhere.receivedBy = targetUserId;
+    }
+
+    // 1. Fetch Front Desk gross payments
+    const payments = await prisma.payment.findMany({
+      where: paymentWhere,
+      include: {
+        folio: {
+          include: {
+            reservation: {
+              include: { primaryGuest: true }
+            }
+          }
+        }
+      }
+    });
+
+    // 2. Fetch Front Desk refunds
+    const refundWhere: any = {
+      propertyId,
+      status: 'COMPLETED'
+    };
+    if (isFrontdeskShift) {
+      refundWhere.payment = { frontdeskSessionId: shiftId };
+    } else if (!shiftId) {
+      refundWhere.OR = [
+        { createdAt: dateFilter },
+        { payment: { frontdeskSessionId: { in: frontdeskSessions.map((s: any) => s.id) } } }
+      ];
+    } else {
+      refundWhere.id = { in: [] };
+    }
+    if (targetUserId) {
+      refundWhere.authorizedBy = targetUserId;
+    }
+    const refunds = await prisma.refund.findMany({
+      where: refundWhere,
+      include: {
+        payment: { 
+          include: {
+            folio: {
+              include: {
+                reservation: {
+                  include: { primaryGuest: true }
+                }
+              }
+            }
+          }
+        }
+      }
     });
     const syncConflicts = await prisma.syncConflict.count({
       where: { propertyId, createdAt: dateFilter, status: 'PENDING' },
