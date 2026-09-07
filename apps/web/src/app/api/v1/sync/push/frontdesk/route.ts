@@ -1174,6 +1174,69 @@ export async function POST(req: NextRequest) {
                 remainingToApply -= applied;
               }
             }
+          } else if (eventType === "FOLIO_DISCOUNT_APPLIED") {
+            const existingDiscount = await tx.folioItem.findFirst({
+              where: { posTransactionId: idempotencyKey },
+            });
+            if (existingDiscount) {
+              const e = new Error("IDEMPOTENCY_DUPLICATE");
+              throw e;
+            }
+
+            const amount = Number(payload.amount || Math.abs(payload.unitAmount || 0));
+            if (!Number.isFinite(amount) || amount <= 0)
+              throw new Error("Discount amount must be positive");
+
+            const folio = await tx.folio.findUnique({
+              where: { id: aggregateId, propertyId },
+            });
+            if (!folio) throw new Error("Folio not found or unauthorized");
+
+            await tx.folioItem.create({
+              data: {
+                folioId: aggregateId,
+                businessDate: authoritativeBusinessDate,
+                type: "DISCOUNT",
+                source: payload.source || "MANUAL",
+                description: payload.description || payload.reason || "Discount Applied Offline",
+                quantity: 1,
+                unitAmount: -amount,
+                amount: -amount,
+                currency: folio.currency || "NGN",
+                baseAmount: -amount,
+                postedBy: actorId,
+                deviceId: device.id,
+                isLatePosting: true,
+                posTransactionId: idempotencyKey,
+              },
+            });
+
+            await tx.folio.update({
+              where: { id: aggregateId },
+              data: {
+                totalCharges: { decrement: amount },
+                balance: { decrement: amount },
+              },
+            });
+
+            const approvalKey = `approval:${idempotencyKey}`;
+            await tx.approvalRequest.create({
+              data: {
+                propertyId,
+                type: "DISCOUNT",
+                status: "APPROVED",
+                executionStatus: "APPLIED",
+                requestedBy: actorId,
+                reviewedBy: payload.acknowledgedByStaffId || actorId,
+                reviewedAt: new Date(),
+                amount: amount,
+                currency: folio.currency || "NGN",
+                reason: payload.description || payload.reason || "Offline Folio Discount",
+                idempotencyKey: approvalKey,
+                details: payload,
+              }
+            });
+
           } else if (
             eventType === "ADVANCE_DEPOSIT_REQUEST" ||
             eventType === "CREDIT_ADJUSTMENT_REQUEST"
@@ -2777,6 +2840,135 @@ export async function POST(req: NextRequest) {
                     paidAmount: newPaid,
                     outstanding: newOut,
                     status: newOut <= 0 ? "PAID" : "PARTIAL"
+                  }
+                });
+              }
+            }
+          } else if (aggregateType === "RESERVATION_ROOM") {
+            if (eventType === "DISCOUNT_APPLIED") {
+              const resRoom = await tx.reservationRoom.findUnique({
+                where: { id: aggregateId },
+                include: { reservation: true }
+              });
+              if (resRoom) {
+                await tx.reservationRoom.update({
+                  where: { id: aggregateId },
+                  data: {
+                    discountType: payload.discountType,
+                    discountAmount: payload.discountAmount || payload.amount,
+                    discountPercent: payload.discountPercent || payload.percentage,
+                    discountReason: payload.reason,
+                  }
+                });
+                
+                // Create an ApprovalRequest so it appears in Night Audit Variances
+                await tx.approvalRequest.create({
+                  data: {
+                    propertyId,
+                    type: "DISCOUNT",
+                    status: "APPROVED",
+                    executionStatus: "APPLIED",
+                    requestedBy: actorId,
+                    reviewedBy: payload.acknowledgedByStaffId || actorId,
+                    reviewedAt: new Date(),
+                    amount: payload.discountAmount || payload.amount,
+                    currency: resRoom.currency || "NGN",
+                    reason: payload.reason || "Offline Room Discount",
+                    details: payload,
+                    idempotencyKey: `disc_req_${aggregateId}_${Date.now()}`
+                  }
+                });
+              }
+            } else if (eventType === "COMPLIMENTARY_APPLIED") {
+              const resRoom = await tx.reservationRoom.findUnique({
+                where: { id: aggregateId },
+                include: { reservation: true }
+              });
+              if (resRoom) {
+                await tx.reservationRoom.update({
+                  where: { id: aggregateId },
+                  data: {
+                    discountType: "COMPLIMENTARY",
+                    discountAmount: payload.compAmount,
+                    discountReason: payload.reason,
+                  }
+                });
+
+                await tx.complimentaryRecord.create({
+                  data: {
+                    propertyId,
+                    businessDate: authoritativeBusinessDate,
+                    reference: `COMP_RES_${aggregateId}_${Date.now()}`,
+                    sourceModule: "FRONT_DESK",
+                    roomId: resRoom.roomId,
+                    guestId: resRoom.reservation?.primaryGuestId,
+                    staffId: payload.beneficiaryStaffId || null,
+                    operatorId: actorId,
+                    operationId: idempotencyKey,
+                    grossAmount: payload.compAmount,
+                    complAmount: payload.compAmount,
+                    netAmount: 0,
+                    complType: payload.compType === "FULL" ? "FULL" : "PARTIAL",
+                    reason: payload.reason || "Complimentary Applied Offline"
+                  }
+                });
+              }
+            }
+          } else if (aggregateType === "POS_ORDER") {
+            if (eventType === "DISCOUNT_APPLIED") {
+              // Usually handled in POS sync, but Front Desk sync might receive it occasionally.
+              const order = await tx.posOrder.findUnique({ where: { id: aggregateId } });
+              if (order) {
+                await tx.posOrder.update({
+                  where: { id: aggregateId },
+                  data: {
+                    discount: payload.amount,
+                    total: Math.max(0, Number(order.subtotal || 0) + Number(order.serviceCharge || 0) + Number(order.taxAmount || 0) - Number(payload.amount))
+                  }
+                });
+                await tx.approvalRequest.create({
+                  data: {
+                    propertyId,
+                    outletId: order.outletId,
+                    type: "DISCOUNT",
+                    status: "APPROVED",
+                    executionStatus: "APPLIED",
+                    requestedBy: actorId,
+                    reviewedBy: payload.acknowledgedByStaffId || actorId,
+                    reviewedAt: new Date(),
+                    amount: payload.amount,
+                    currency: "NGN",
+                    reason: payload.reason || "Offline POS Discount",
+                    details: payload,
+                    idempotencyKey: `pos_disc_${aggregateId}_${Date.now()}`
+                  }
+                });
+              }
+            } else if (eventType === "POS_COMPLIMENTARY_APPLIED") {
+              const order = await tx.posOrder.findUnique({ where: { id: aggregateId } });
+              if (order) {
+                await tx.posOrder.update({
+                  where: { id: aggregateId },
+                  data: {
+                    discount: { increment: payload.compAmount },
+                    total: Math.max(0, Number(order.total || 0) - Number(payload.compAmount))
+                  }
+                });
+                await tx.complimentaryRecord.create({
+                  data: {
+                    propertyId,
+                    businessDate: order.businessDate || authoritativeBusinessDate,
+                    reference: `COMP_POS_${aggregateId}_${Date.now()}`,
+                    sourceModule: "POS",
+                    posOrderId: aggregateId,
+                    staffId: payload.beneficiaryStaffId || null,
+                    operatorId: actorId,
+                    operationId: idempotencyKey,
+                    grossAmount: payload.compAmount,
+                    complAmount: payload.compAmount,
+                    netAmount: 0,
+                    complType: payload.compType === "FULL" ? "FULL" : "PARTIAL",
+                    reason: payload.reason || "POS Complimentary Offline"
                   }
                 });
               }
