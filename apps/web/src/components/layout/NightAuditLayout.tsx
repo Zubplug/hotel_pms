@@ -74,20 +74,22 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
   const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => (
     <>
       {/* Logo */}
-      <div className="flex h-16 shrink-0 items-center gap-3 border-b border-white/5 px-5">
-        <Link href="/night-audit" className="group flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-900/40 transition-transform group-hover:scale-105">
-            <Hotel className="h-4 w-4 text-white" />
+      <div className="flex h-24 shrink-0 items-center gap-3 px-6 pt-4">
+        <Link href="/night-audit" className="group relative flex w-full items-center gap-3 rounded-2xl bg-white/5 p-2.5 ring-1 ring-white/10 transition-all hover:bg-white/10 hover:shadow-xl hover:shadow-black/20 hover:ring-white/20">
+          <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-indigo-500/10 to-purple-500/10 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+          <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-blue-600 shadow-inner ring-1 ring-white/20 transition-all duration-300 group-hover:rotate-3 group-hover:scale-105">
+            <Hotel className="h-5 w-5 text-white drop-shadow-md" />
           </div>
-          <div className="flex flex-col leading-tight">
-            <span className="text-sm font-bold tracking-tight text-white">LodgeCore PMS</span>
-            <span className="text-[10px] font-medium uppercase tracking-widest text-indigo-400">Night Audit</span>
+          <div className="relative flex min-w-0 flex-col leading-tight">
+            <span className="truncate text-sm font-bold tracking-tight text-white drop-shadow-sm">LodgeCore PMS</span>
+            <span className="truncate text-[10px] font-bold uppercase tracking-[0.2em] text-indigo-300/90">Night Audit</span>
           </div>
         </Link>
       </div>
 
       {/* Nav */}
-      <div className="flex flex-1 flex-col gap-1 overflow-y-auto bg-[#0b1120] px-3 py-5">
+      <div className="flex flex-1 flex-col gap-1.5 overflow-y-auto px-4 py-6">
+        <div className="px-3 pb-2 text-[10px] font-bold uppercase tracking-widest text-slate-500">Menu</div>
         {NIGHT_AUDIT_NAV.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
           
@@ -97,40 +99,51 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
               href={item.href}
               onClick={onNavigate}
               className={cn(
-                'group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150',
+                'group relative flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-all duration-300 overflow-hidden',
                 isActive
-                  ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-900/50'
-                  : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+                  ? 'text-white'
+                  : 'text-slate-400 hover:text-white'
               )}
             >
+              {isActive && (
+                <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/20 to-purple-500/10 opacity-100" />
+              )}
+              {isActive && (
+                <div className="absolute left-0 top-0 h-full w-1 bg-gradient-to-b from-indigo-400 to-purple-400 rounded-r-full shadow-[0_0_12px_rgba(129,140,248,0.8)]" />
+              )}
+              {!isActive && (
+                <div className="absolute inset-0 bg-white/0 transition-colors group-hover:bg-white/5" />
+              )}
               <item.icon
                 className={cn(
-                  'h-4 w-4 shrink-0 transition-colors',
-                  isActive ? 'text-white' : 'text-slate-500 group-hover:text-slate-300'
+                  'relative z-10 h-[18px] w-[18px] shrink-0 transition-all duration-300',
+                  isActive ? 'text-indigo-300' : 'text-slate-500 group-hover:text-slate-300 group-hover:scale-110'
                 )}
               />
-              {item.name}
+              <span className="relative z-10">{item.name}</span>
             </Link>
           );
         })}
       </div>
 
       {/* User footer */}
-      <div className="shrink-0 border-t border-white/5 bg-[#0b1120] p-3">
+      <div className="shrink-0 p-4">
         <DropdownMenu>
-          <DropdownMenuTrigger className="group flex w-full cursor-pointer items-center gap-3 rounded-lg px-2 py-2 outline-none transition-colors hover:bg-white/5">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-xs font-semibold text-white ring-2 ring-indigo-500/30">
+          <DropdownMenuTrigger className="group relative flex w-full cursor-pointer items-center gap-3 rounded-2xl bg-white/5 p-3 outline-none ring-1 ring-white/10 transition-all hover:bg-white/10 hover:ring-white/20 shadow-lg overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 text-sm font-bold text-slate-200 ring-1 ring-white/10 shadow-inner transition-colors duration-300 group-hover:from-indigo-600 group-hover:to-purple-700 group-hover:text-white">
                 {userInitials}
             </div>
-            <div className="flex min-w-0 flex-1 flex-col items-start overflow-hidden">
-              <span className="w-full truncate text-left text-sm font-medium text-slate-200">{userDisplay}</span>
-              <span className="w-full truncate text-left text-xs capitalize text-slate-500">{role === 'MANAGER' ? 'Night manager' : role === 'GENERAL_CASHIER' ? 'General Cashier' : 'Auditor'}</span>
+            <div className="relative flex min-w-0 flex-1 flex-col items-start overflow-hidden">
+              <span className="w-full truncate text-left text-sm font-semibold text-slate-200 transition-colors group-hover:text-white">{userDisplay}</span>
+              <span className="w-full truncate text-left text-[11px] font-medium text-slate-500 transition-colors group-hover:text-indigo-300">
+                {role === 'MANAGER' ? 'Night Manager' : role === 'GENERAL_CASHIER' ? 'General Cashier' : 'Auditor'}
+              </span>
             </div>
-            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-500 transition-colors group-hover:text-slate-300" />
+            <ChevronDown className="relative h-4 w-4 shrink-0 text-slate-500 transition-transform duration-300 group-hover:text-slate-300 group-hover:-translate-y-0.5" />
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" side="top" className="w-56">
-            <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => logout()} className="text-destructive cursor-pointer">
+          <DropdownMenuContent align="start" side="top" className="w-[248px] rounded-xl border-slate-200 p-2 shadow-xl mb-2 ml-4">
+              <DropdownMenuItem onClick={() => logout()} className="text-red-600 focus:bg-red-50 focus:text-red-700 cursor-pointer rounded-lg font-medium p-2.5">
                 <LogOut className="mr-2 h-4 w-4" /> Sign out
               </DropdownMenuItem>
           </DropdownMenuContent>
@@ -145,31 +158,31 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
       {sidebarOpen && (
         <div className="fixed inset-0 z-50 lg:hidden print:hidden">
           <div
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
             onClick={() => setSidebarOpen(false)}
           />
-          <div className="fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-white/5 bg-[#0b1120] shadow-xl">
+          <div className="fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col bg-[#020617] shadow-2xl transition-transform">
             <Sidebar onNavigate={() => setSidebarOpen(false)} />
           </div>
         </div>
       )}
 
       {/* Desktop sidebar */}
-      <div className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-white/5 bg-[#0b1120] lg:flex print:hidden">
+      <div className="fixed inset-y-0 left-0 z-40 hidden w-[280px] flex-col border-r border-slate-800/60 bg-[#020617] shadow-xl lg:flex print:hidden">
         <Sidebar />
       </div>
 
       {/* Main content area */}
-      <div className="flex flex-1 flex-col lg:pl-64 min-w-0 print:pl-0">
+      <div className="flex flex-1 flex-col lg:pl-[280px] min-w-0 print:pl-0 transition-all duration-300">
         {/* Top bar */}
-        <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 shadow-sm sm:px-6 print:hidden">
+        <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between border-b border-slate-200/60 bg-white/80 backdrop-blur-md px-4 shadow-sm sm:px-6 print:hidden">
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 lg:hidden"
+              className="h-9 w-9 rounded-full hover:bg-slate-100 lg:hidden"
             onClick={() => setSidebarOpen(true)}
           >
-            <Menu className="h-5 w-5" />
+            <Menu className="h-5 w-5 text-slate-600" />
           </Button>
 
           <div className="flex items-center gap-3">
