@@ -836,6 +836,24 @@ export async function POST(req: NextRequest) {
                       updatedAt: new Date(event.occurredAt || Date.now())
                     }
                   });
+
+                  // Queue for Night Audit reconciliation
+                  await tx.approvalRequest.create({
+                    data: {
+                      propertyId: propertyId,
+                      type: 'SHIFT_RECONCILIATION',
+                      targetType: 'POS_SESSION',
+                      targetId: session.id,
+                      status: 'PENDING',
+                      requestedBy: isUuid(payload.OperatorId || payload.operatorId) ? (payload.OperatorId || payload.operatorId) : operatorId,
+                      metadata: {
+                        variance: calculatedVariance,
+                        expectedCash: expectedCash,
+                        actualCash: declaredCash,
+                        businessDate: payload.BusinessDate ? new Date(payload.BusinessDate).toISOString() : session.startedAt.toISOString()
+                      }
+                    }
+                  });
               }
           }
           else if (event.eventType === 'POS_SESSION_UPDATED') {
