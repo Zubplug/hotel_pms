@@ -12,6 +12,13 @@ import { applyAvailableFolioCredit } from "@/lib/finance/apply-folio-credit";
 import { isNightAuditCutoverActive } from "@/lib/night-audit-guard";
 import { getPropertyBusinessDate } from "@/lib/date-utils";
 
+const parseLocalDateString = (dateString: string | Date | undefined): Date | undefined => {
+  if (!dateString) return undefined;
+  if (dateString instanceof Date) return dateString;
+  const datePart = String(dateString).split('T')[0];
+  return new Date(datePart + 'T00:00:00.000Z');
+};
+
 const isUuid = (value: unknown): value is string =>
   typeof value === "string" &&
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -734,12 +741,12 @@ export async function POST(req: NextRequest) {
                 throw new Error("No room types available for property");
             }
 
-            const checkInDate = new Date(
+            const checkInDate = parseLocalDateString(
               payload.CheckInDate || payload.checkInDate || payload.checkIn,
-            );
-            const checkOutDate = new Date(
+            )!;
+            const checkOutDate = parseLocalDateString(
               payload.CheckOutDate || payload.checkOutDate || payload.checkOut,
-            );
+            )!;
             if (
               isNaN(checkInDate.getTime()) ||
               isNaN(checkOutDate.getTime()) ||
@@ -2105,8 +2112,8 @@ export async function POST(req: NextRequest) {
               data: { status: newStatus as any },
             });
           } else if (eventType === "EXTEND_STAY") {
-            const newCheckOut = new Date(payload.newCheckOutDate);
-            if (isNaN(newCheckOut.getTime()))
+            const newCheckOut = parseLocalDateString(payload.newCheckOutDate);
+            if (!newCheckOut || isNaN(newCheckOut.getTime()))
               throw new Error("Invalid newCheckOutDate");
 
             const res = await tx.reservation.findUnique({
@@ -2245,9 +2252,9 @@ export async function POST(req: NextRequest) {
               throw new Error("Cannot edit a CHECKED_IN reservation");
 
             const p = payload;
-            const newCheckIn = p.checkIn ? new Date(p.checkIn) : res.checkIn;
+            const newCheckIn = p.checkIn ? parseLocalDateString(p.checkIn)! : res.checkIn;
             const newCheckOut = p.checkOut
-              ? new Date(p.checkOut)
+              ? parseLocalDateString(p.checkOut)!
               : res.checkOut;
 
             if (newCheckOut <= newCheckIn)
