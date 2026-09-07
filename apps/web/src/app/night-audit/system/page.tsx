@@ -98,8 +98,8 @@ export default function SystemSyncPage() {
         </Button>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-3">
-        <Card className="border-cyan-200 dark:border-cyan-900/50 shadow-sm col-span-2">
+      <div className="grid gap-6">
+        <Card className="border-cyan-200 dark:border-cyan-900/50 shadow-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Activity className="h-5 w-5 text-cyan-500" />
@@ -169,47 +169,6 @@ export default function SystemSyncPage() {
             </div>
           </CardContent>
         </Card>
-
-        <div className="space-y-6">
-          <Card className="border-blue-200 dark:border-blue-900/50 shadow-sm">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Database className="h-5 w-5 text-blue-500" />
-                Database Backup
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-3 mt-2">
-                <div className="h-10 w-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-                  <AlertCircle className="h-5 w-5 text-slate-500" />
-                </div>
-                <div>
-                  <p className="font-medium">Not configured</p>
-                  <p className="text-sm text-muted-foreground">Managed by your provider</p>
-                </div>
-              </div>
-            </CardContent>
-            <CardFooter>
-              <Button variant="outline" className="w-full text-sm" onClick={() => {
-                toast('Information', { description: 'Database backups are managed by your Supabase provider' });
-              }}>View Backup Logs</Button>
-            </CardFooter>
-          </Card>
-
-          <Card className="shadow-sm">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Server className="h-5 w-5 text-slate-500" />
-                Server Health
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4 mt-2">
-                <p className="text-sm text-muted-foreground">Server metrics available in your infrastructure dashboard.</p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
       </div>
 
       {/* Sync Conflicts Section */}
