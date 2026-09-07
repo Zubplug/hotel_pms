@@ -930,7 +930,7 @@ public class OfflinePMSInterop
                         discountApprovalId = room.DiscountApprovalId,
                         rateAmount = reservationRoomType?.BasePrice ?? 0,
                         room = new {
-                            number = room.Room?.RoomNumber ?? r.RoomNumber ?? "Unassigned",
+                            number = room.Room?.Number ?? r.RoomNumber ?? "Unassigned",
                             roomType = reservationRoomType == null
                                 ? new { name = "Unknown", baseRate = 0m, currency = r.Currency ?? "NGN" }
                                 : new { name = reservationRoomType.Name, baseRate = reservationRoomType.BasePrice, currency = reservationRoomType.Currency }

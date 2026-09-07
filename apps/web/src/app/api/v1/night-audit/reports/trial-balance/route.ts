@@ -62,7 +62,7 @@ export async function GET(req: NextRequest) {
       if (item.type === 'CHARGE') {
         addEntry(`REV-${item.source}`, `${item.source} Revenue`, 'Revenue', 'Folio', amt, true); // Credit Revenue
         addEntry('LED-GUEST', 'Guest Ledger', 'Front Desk', 'Folio', amt, false); // Debit Guest Ledger
-      } else if (item.type === 'DISCOUNT') {
+      } else if (item.type === 'DISCOUNT' || item.type === 'COMPLIMENTARY') {
         addEntry(`REV-${item.source}`, `${item.source} Revenue`, 'Revenue', 'Folio', Math.abs(amt), false); // Debit Revenue (reduce credit)
         addEntry('LED-GUEST', 'Guest Ledger', 'Front Desk', 'Folio', Math.abs(amt), true); // Credit Guest Ledger
       } else if (item.type === 'TAX') {

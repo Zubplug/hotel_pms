@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
         row.net += amt;
         row.total += amt;
         row.transactionCount++;
-      } else if (item.type === 'DISCOUNT') {
+      } else if (item.type === 'DISCOUNT' || item.type === 'COMPLIMENTARY') {
         row.discounts += Math.abs(amt);
         row.net -= Math.abs(amt);
         row.total -= Math.abs(amt);

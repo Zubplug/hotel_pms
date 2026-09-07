@@ -383,7 +383,7 @@ export async function executeNightAudit(
       }),
       prisma.folioItem.groupBy({
         by: ['type'],
-        where: { folio: { propertyId }, businessDate, type: { in: ['TAX', 'DISCOUNT', 'REFUND'] }, voidedAt: null },
+        where: { folio: { propertyId }, businessDate, type: { in: ['TAX', 'DISCOUNT', 'REFUND', 'COMPLIMENTARY'] }, voidedAt: null },
         _sum: { amount: true }
       }),
       prisma.room.count({ where: { propertyId, isActive: true } }),
@@ -403,7 +403,7 @@ export async function executeNightAudit(
     for (const group of otherItemsByType) {
       const amt = Number(group._sum?.amount || 0);
       if (group.type === 'TAX') taxesVal += amt;
-      else if (group.type === 'DISCOUNT') discountsVal += amt;
+      else if (group.type === 'DISCOUNT' || group.type === 'COMPLIMENTARY') discountsVal += amt;
       else if (group.type === 'REFUND') refundsVal += amt;
     }
 

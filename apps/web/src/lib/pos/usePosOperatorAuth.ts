@@ -48,7 +48,7 @@ export function usePosOperatorAuth({
   isOpen,
   outletId,
   onAuthenticated,
-  allowedRoles = ['WAITER', 'WAITRESS', 'CASHIER', 'POS_CASHIER'],
+  allowedRoles = ['WAITER', 'WAITRESS', 'CASHIER', 'POS_CASHIER', 'FNB_MANAGER'],
 }: {
   isOpen: boolean;
   outletId?: string;

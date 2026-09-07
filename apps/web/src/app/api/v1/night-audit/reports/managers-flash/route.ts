@@ -89,7 +89,7 @@ export async function GET(req: NextRequest) {
     const totalTaxes = Number(taxesAggr._sum.amount || 0);
 
     const discountsAggr = await prisma.folioItem.aggregate({
-      where: { folio: { propertyId }, businessDate, type: 'DISCOUNT' },
+      where: { folio: { propertyId }, businessDate, type: { in: ['DISCOUNT', 'COMPLIMENTARY'] } },
       _sum: { amount: true }
     });
     const totalDiscounts = Math.abs(Number(discountsAggr._sum.amount || 0));

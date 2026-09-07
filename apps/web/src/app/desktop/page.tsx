@@ -130,7 +130,7 @@ export default function DesktopEntryPage() {
         authMode="GLOBAL"
         isOpen={true}
         cancellable={false}
-        allowedRoles={terminalState.desktopMode === 'FRONT_DESK' ? ['RECEPTIONIST', 'FRONT_DESK'] : ['WAITER', 'WAITRESS', 'CASHIER']}
+        allowedRoles={terminalState.desktopMode === 'FRONT_DESK' ? ['RECEPTIONIST', 'FRONT_DESK'] : ['WAITER', 'WAITRESS', 'CASHIER', 'FNB_MANAGER']}
         onAuthenticated={(desktopMode) => {
           if (desktopMode === 'FRONT_DESK') {
             router.push('/frontdesk');
