@@ -1188,6 +1188,36 @@ public class OfflinePMSInterop
             var validStatuses = new[] { "PENDING", "CONFIRMED", "CHECKED_IN", "CHECKED_OUT", "CANCELLED", "NO_SHOW" };
             res.Status = validStatuses.Contains(reqStatus) ? (reqStatus ?? "CONFIRMED") : "CONFIRMED";
             
+            var room = new LodgeCore.Desktop.Data.Entities.LocalReservationRoom {
+                Id = Guid.NewGuid().ToString(),
+                ReservationId = res.Id,
+                RoomId = res.RoomId,
+                RoomTypeId = res.RoomTypeId,
+                CheckInDate = res.CheckInDate,
+                CheckOutDate = res.CheckOutDate
+            };
+
+            if (root.TryGetProperty("adjustmentType", out var adjTypeProp) && adjTypeProp.ValueKind != System.Text.Json.JsonValueKind.Null) {
+                var adjType = adjTypeProp.GetString();
+                if (!string.IsNullOrEmpty(adjType) && adjType != "NONE") {
+                    if (adjType == "DISCOUNT_PERCENTAGE") {
+                        room.DiscountType = "PERCENTAGE";
+                        room.DiscountPercent = root.TryGetProperty("adjustmentValue", out var v) && v.ValueKind == System.Text.Json.JsonValueKind.Number ? v.GetDecimal() : 0;
+                    } else if (adjType == "DISCOUNT_FIXED") {
+                        room.DiscountType = "FIXED_AMOUNT";
+                        room.DiscountAmount = root.TryGetProperty("adjustmentValue", out var v) && v.ValueKind == System.Text.Json.JsonValueKind.Number ? v.GetDecimal() : 0;
+                    } else if (adjType == "COMP_FULL" || adjType == "COMP_PARTIAL") {
+                        room.DiscountType = "COMPLIMENTARY";
+                        room.DiscountAmount = root.TryGetProperty("adjustmentValue", out var v) && v.ValueKind == System.Text.Json.JsonValueKind.Number ? v.GetDecimal() : 0;
+                    }
+                    
+                    room.DiscountReason = root.TryGetProperty("adjustmentReason", out var reason) ? reason.GetString() : null;
+                    room.DiscountApprovingManagerId = root.TryGetProperty("acknowledgedByStaffId", out var ack) ? ack.GetString() : null;
+                }
+            }
+            res.Rooms.Add(room);
+
+            
             var created = await _repo.CreateReservationAsync(res, "System", "Device1");
             return JsonSerializer.Serialize(new { success = true, data = new { id = created.Id } }, _jsonOptions);
         }
@@ -2045,15 +2075,30 @@ public class OfflinePMSInterop
                         posSessionId = openSession.Id;
                     }
                 }
-                else if (!string.IsNullOrEmpty(outletId))
+                else
                 {
-                    var openSession = await _repo.GetActiveCentralBankAsync(propertyId, outletId);
+                    // CENTRAL_CASHIER — look up by outletId when available, else fall back to device
+                    LodgeCore.Desktop.Data.Entities.LocalPosSession? openSession = null;
+                    if (!string.IsNullOrEmpty(outletId))
+                    {
+                        openSession = await _repo.GetActiveCentralBankAsync(propertyId, outletId);
+                    }
+                    // If outletId was empty or no session found by outlet, try the device-scoped session
+                    if (openSession == null && !string.IsNullOrEmpty(deviceId))
+                    {
+                        openSession = await _repo.GetActiveSessionForDeviceAsync(deviceId);
+                    }
+
                     if (openSession != null)
                     {
                         posSessionId = openSession.Id;
+                        // Back-fill outletId from the session so the rest of the method has it
+                        if (string.IsNullOrEmpty(outletId))
+                            outletId = openSession.OutletId;
                     }
-                    else
+                    else if (!string.IsNullOrEmpty(outletId))
                     {
+                        // Only ask for a new bank when we definitely have an outlet but no open session
                         requiresBank = true;
                         bankOwner = "POS_CASHIER";
                     }

@@ -59,6 +59,22 @@ export function ReceiptVerificationModal({ isOpen, onClose, order }: ReceiptVeri
       : `RCP-${String(paymentReference).replace(/[^a-zA-Z0-9]/g, '').slice(0, 12).toUpperCase()}`
     : `RCP-${orderReference.replace(/[^a-zA-Z0-9]/g, '').slice(-12).toUpperCase() || 'UNKNOWN'}`;
 
+  // Resolve audit chain — desktop receipt wraps identity in auditChain object
+  const auditChain = order.auditChain ?? {};
+  const serverName =
+    (order.serverStaff ? `${order.serverStaff.firstName ?? ''} ${order.serverStaff.lastName ?? ''}`.trim() : '') ||
+    auditChain.serverName ||
+    'Unknown';
+  const sessionOwnerName = order.sessionOwnerName || auditChain.sessionOwnerName || 'Unknown';
+
+  // Safely coerce amounts — some list-order fallbacks lack subtotal/taxAmount
+  const items: any[] = order.items ?? [];
+  const calculatedItemTotal = items.reduce((s: number, i: any) => s + Number(i.total ?? (Number(i.unitPrice ?? 0) * Number(i.quantity ?? 1))), 0);
+  const safeTotal = Number(order.total ?? 0) || calculatedItemTotal;
+  const safeSubtotal = Number(order.subtotal ?? 0) || safeTotal;
+  const safeTaxAmount = Number(order.taxAmount ?? 0);
+  const orderDate = order.businessDate ?? order.createdAt ?? order.updatedAt;
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto bg-slate-50 p-0 border-0 shadow-2xl">
@@ -92,11 +108,11 @@ export function ReceiptVerificationModal({ isOpen, onClose, order }: ReceiptVeri
               </div>
               <div className="col-span-2 flex justify-between">
                 <span>Date:</span>
-                <span>{new Date(order.createdAt).toLocaleString()}</span>
+                <span>{orderDate ? new Date(orderDate).toLocaleString() : '—'}</span>
               </div>
               <div className="col-span-2 flex justify-between">
                 <span>Table:</span>
-                <span>{order.tableNumber || '-'}</span>
+                <span>{order.tableNumber || order.tableName || '-'}</span>
               </div>
             </div>
 
@@ -107,15 +123,15 @@ export function ReceiptVerificationModal({ isOpen, onClose, order }: ReceiptVeri
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Server:</span>
-                <span className="font-medium">{order.serverStaff?.firstName} {order.serverStaff?.lastName}</span>
+                <span className="font-medium">{serverName}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Drawer:</span>
-                <span className="font-medium">{order.sessionOwnerName}</span>
+                <span className="font-medium">{sessionOwnerName}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Payment:</span>
-                <span className="font-medium">{payment?.method || 'NONE'}</span>
+                <span className="font-medium">{payment?.method ?? payment?.Method ?? 'NONE'}</span>
               </div>
             </div>
 
@@ -136,13 +152,21 @@ export function ReceiptVerificationModal({ isOpen, onClose, order }: ReceiptVeri
             <div className="space-y-1 mb-6 text-sm">
               <div className="flex justify-between text-slate-500">
                 <span>Subtotal</span>
-                <span>{formatCurrency(order.subtotal)}</span>
+                <span>{formatCurrency(safeSubtotal)}</span>
               </div>
-              <div className="flex justify-between text-slate-500">
-                <span>Tax</span>
-                <span>{formatCurrency(order.taxAmount)}</span>
-              </div>
-              {Number(order.discount) > 0 && (
+              {safeTaxAmount > 0 && (
+                <div className="flex justify-between text-slate-500">
+                  <span>Tax</span>
+                  <span>{formatCurrency(safeTaxAmount)}</span>
+                </div>
+              )}
+              {Number(order.serviceCharge ?? 0) > 0 && (
+                <div className="flex justify-between text-slate-500">
+                  <span>Service Charge</span>
+                  <span>{formatCurrency(order.serviceCharge)}</span>
+                </div>
+              )}
+              {Number(order.discount ?? 0) > 0 && (
                 <div className="flex justify-between text-slate-500">
                   <span>Discount</span>
                   <span>-{formatCurrency(order.discount)}</span>
@@ -150,7 +174,7 @@ export function ReceiptVerificationModal({ isOpen, onClose, order }: ReceiptVeri
               )}
               <div className="flex justify-between font-bold text-lg text-slate-900 pt-2 mt-2 border-t border-slate-200">
                 <span>Total</span>
-                <span>{formatCurrency(order.total)}</span>
+                <span>{formatCurrency(safeTotal)}</span>
               </div>
             </div>
 

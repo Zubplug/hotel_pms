@@ -33,7 +33,7 @@ export function DiscountModal({ isOpen, orderId, orderTotal, onClose, onSuccess 
   const { data: managersRes } = useQuery({
     queryKey: ['managers-local', propertyId],
     queryFn: async () => {
-      return provider.auth.getActiveStaff();
+      return provider.pos.getActiveStaff(propertyId);
     },
     enabled: !!propertyId && isOpen,
     staleTime: 300_000,

@@ -3572,10 +3572,16 @@ public class LocalRepository
 
     public async Task<List<object>> GetWaiterTicketsAsync(string outletId, string staffId, string sessionId)
     {
+        // Start with the staff filter; only add outletId constraint when we actually have one
+        // so a missing/empty outletId never silently hides all KOTs.
         var query = _dbContext.PosKots
-            .Where(k => k.OutletId == outletId
-                && k.CreatedBy == staffId
+            .Where(k => k.CreatedBy == staffId
                 && k.ProductionStation == "KITCHEN");
+
+        if (!string.IsNullOrWhiteSpace(outletId))
+        {
+            query = query.Where(k => k.OutletId == outletId);
+        }
 
         // Session ownership is authoritative. Date-only matching is unreliable
         // around timezone boundaries and when local/cloud records are merged.
@@ -3762,16 +3768,32 @@ public class LocalRepository
             orderNumber = order.OrderNumber,
             status = order.Status,
             businessDate = order.BusinessDate,
+            createdAt = order.CreatedAt == default ? order.UpdatedAt : order.CreatedAt,
             tableNumber = order.TableNumber,
+            displayName = order.DisplayName,
             guestCount = order.GuestCount,
             notes = order.Notes,
 
-            // Financials
-            subtotal = order.Subtotal,
-            taxAmount = order.TaxAmount,
+            // Financials — compute from items as fallback when order-level totals were not persisted
+            subtotal = order.Subtotal != 0m ? order.Subtotal
+                : order.Items.Sum(i => i.UnitPrice * i.Quantity),
+            taxAmount = order.TaxAmount != 0m ? order.TaxAmount
+                : order.Items.Sum(i => i.TaxAmount),
             serviceCharge = order.ServiceCharge,
             tipAmount = order.TipAmount,
-            total = order.Total,
+            discount = order.Discount,
+            total = order.Total != 0m ? order.Total
+                : order.Items.Sum(i => i.Total != 0m ? i.Total : i.UnitPrice * i.Quantity),
+
+            // Server / session identity — flat fields for ReceiptVerificationModal
+            serverStaff = serverStaff == null ? null : new
+            {
+                id = serverStaff.Id,
+                firstName = serverStaff.FirstName,
+                lastName = serverStaff.LastName,
+                role = serverStaff.Role
+            },
+            sessionOwnerName = sessionOwner != null ? $"{sessionOwner.FirstName} {sessionOwner.LastName}" : "Unknown",
 
             // Items with modifiers
             items = order.Items.Select(i => new
@@ -3781,7 +3803,7 @@ public class LocalRepository
                 quantity = i.Quantity,
                 unitPrice = i.UnitPrice,
                 taxAmount = i.TaxAmount,
-                total = i.Total,
+                total = i.Total != 0m ? i.Total : i.UnitPrice * i.Quantity,
                 kitchenStatus = i.KitchenStatus,
                 course = i.Course,
                 voidReason = i.VoidReason,
@@ -5218,13 +5240,14 @@ public class LocalRepository
         var staffDict = await _dbContext.Staff.Where(s => staffIds.Contains(s.Id)).ToDictionaryAsync(s => s.Id, s => s.FirstName + " " + s.LastName);
 
         var result = new List<object>();
-        var random = new Random();
         foreach(var o in orders)
         {
             var sessionOwnerId = !string.IsNullOrEmpty(o.SessionId) && sessions.ContainsKey(o.SessionId) ? sessions[o.SessionId] : null;
             var sessionOwnerName = !string.IsNullOrEmpty(sessionOwnerId) && staffDict.ContainsKey(sessionOwnerId) ? staffDict[sessionOwnerId] : "Unknown";
             var itemCount = o.Items?.Sum(i => i.Quantity) ?? 0m;
             var calculatedTotal = o.Items?.Sum(i => i.Total != 0m ? i.Total : i.UnitPrice * i.Quantity) ?? 0m;
+            var calculatedSubtotal = o.Items?.Sum(i => i.UnitPrice * i.Quantity) ?? 0m;
+            var calculatedTax = o.Items?.Sum(i => i.TaxAmount) ?? 0m;
 
             result.Add(new {
                 id = o.Id,
@@ -5247,6 +5270,10 @@ public class LocalRepository
                     reference = p.Reference
                 }).ToList(),
                 displayName = o.DisplayName,
+                subtotal = o.Subtotal != 0m ? o.Subtotal : calculatedSubtotal,
+                taxAmount = o.TaxAmount != 0m ? o.TaxAmount : calculatedTax,
+                serviceCharge = o.ServiceCharge,
+                discount = o.Discount,
                 total = o.Total != 0m ? o.Total : calculatedTotal,
                 itemCount,
                 createdAt = o.CreatedAt == default ? o.UpdatedAt : o.CreatedAt,

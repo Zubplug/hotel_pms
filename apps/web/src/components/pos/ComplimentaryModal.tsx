@@ -36,7 +36,7 @@ export function ComplimentaryModal({ isOpen, orderId, orderTotal, onClose, onSuc
   const { data: managersRes } = useQuery({
     queryKey: ['managers-local', propertyId],
     queryFn: async () => {
-      return provider.auth.getActiveStaff();
+      return provider.pos.getActiveStaff(propertyId);
     },
     enabled: !!propertyId && isOpen,
     staleTime: 300_000,

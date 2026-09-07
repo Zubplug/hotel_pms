@@ -26,9 +26,10 @@ export function WaiterTicketsModal({
   const fetchTickets = async () => {
     setIsLoading(true);
     setError(null);
-    if (!outletId || !operatorToken || !sessionId) {
+    // Only operatorToken is required — the C# side resolves outlet + session from context
+    if (!operatorToken) {
       setTickets([]);
-      setError('Open a POS shift and sign in as an operator to view kitchen tickets.');
+      setError('Sign in as an operator to view kitchen tickets.');
       setIsLoading(false);
       return;
     }
