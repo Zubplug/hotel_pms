@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -134,16 +136,6 @@ export default function SystemSyncPage() {
             Monitor real-time hardware bridges, resolve edge synchronization conflicts, and maintain data integrity.
           </p>
         </div>
-        <Button 
-          variant="secondary" 
-          className="gap-2 rounded-xl bg-white/10 text-white backdrop-blur-md hover:bg-white/20 hover:text-white hover:shadow-lg border-0 ring-1 ring-white/20 transition-all duration-300" 
-          onClick={() => {
-            toast.info('Sync is fully automatic. Offline devices will push their payload when a connection is restored.');
-          }}
-        >
-          <RefreshCw className="h-4 w-4" />
-          Force Sync All
-        </Button>
       </div>
 
       <div className="grid gap-6">
