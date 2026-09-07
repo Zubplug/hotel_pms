@@ -959,9 +959,16 @@ export async function POST(req: NextRequest) {
               where: { id: aggregateId },
               data: { status: "CHECKED_IN" },
             });
-            if (payload.roomId) {
+            let roomIdToOccupy = payload.roomId;
+            if (!roomIdToOccupy) {
+              const activeResRoom = await tx.reservationRoom.findFirst({ where: { reservationId: aggregateId, status: "ACTIVE" } });
+              if (activeResRoom && activeResRoom.roomId) {
+                roomIdToOccupy = activeResRoom.roomId;
+              }
+            }
+            if (roomIdToOccupy) {
               await tx.room.update({
-                where: { id: payload.roomId },
+                where: { id: roomIdToOccupy },
                 data: { status: "OCCUPIED" },
               });
             }

@@ -122,10 +122,18 @@ public class DelunsLockProvider : ILockProvider
         // Use provided dates or default to now -> +10 years
         string checkinStr = (startDate ?? DateTime.UtcNow).ToString(DateFormat);
         string checkoutStr = (endDate ?? DateTime.UtcNow.AddYears(10)).ToString(DateFormat);
-        
+
+        // Deluns SDK master card encoding:
+        //   - roomNo must be "*" (wildcard) so the card is authorised to open ALL rooms.
+        //     An empty string ("") causes the SDK to skip the room-code field entirely,
+        //     which makes TP_MakeGuestCardEx2 return OPR_OK without writing a valid card.
+        //   - flags = 1  →  master card (not a guest card)
+        //   - waitMs = 10_000  →  give the operator 10 s to place the card on the encoder.
+        //     waitMs=0 meant the SDK polled once and returned immediately, producing a
+        //     false-success when no card was physically present.
         int flags = 1; // 1 = master card
 
-        int result = NativeSdkBridge.TP_MakeGuestCardEx2(cardSnr, "", checkinStr, checkoutStr, flags, 0);
+        int result = NativeSdkBridge.TP_MakeGuestCardEx2(cardSnr, "*", checkinStr, checkoutStr, flags, 10_000);
 
         if (result == (int)LockSdkError.OPR_OK)
         {
