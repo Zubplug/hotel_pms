@@ -164,10 +164,6 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
       let encodedRoomId = '';
       let encodeRes: any = { success: true, data: { status: 'SUCCESS' } };
 
-      if (!bypass) {
-        // 1. Fetch reservation to get Room ID for encoder
-        const resDetailsRaw = await invokeDesktop('reservations.get', { id });
-        const resDetails = typeof resDetailsRaw === 'string' ? JSON.parse(resDetailsRaw) : resDetailsRaw;
       // 1. Fetch reservation to get Room ID
       const resDetailsRaw = await invokeDesktop('reservations.get', { id });
       const resDetails = typeof resDetailsRaw === 'string' ? JSON.parse(resDetailsRaw) : resDetailsRaw;
