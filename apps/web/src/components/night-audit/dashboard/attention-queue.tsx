@@ -1,7 +1,8 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { AlertTriangle, CheckCircle2, ChevronRight, XCircle, Info } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { AlertTriangle, CheckCircle2, ChevronRight, ChevronDown, ChevronUp, XCircle, Info } from 'lucide-react';
 import { NightAuditData } from '@/types/night-audit';
 
 type QueueItem = {
@@ -32,6 +33,7 @@ const getStableQueueId = (prefix: string, item: Record<string, unknown>) => {
 
 export function AttentionQueue({ data, onResolveItem }: { data: NightAuditData; onResolveItem?: (action: string, item: Record<string, unknown> | null) => void }) {
   const router = useRouter();
+  const [isExpanded, setIsExpanded] = useState(false);
 
   const queue = useMemo(() => {
     const items: QueueItem[] = [];
@@ -93,6 +95,9 @@ export function AttentionQueue({ data, onResolveItem }: { data: NightAuditData; 
     return 0;
   });
 
+  const displayQueue = isExpanded ? sortedQueue : sortedQueue.slice(0, 6);
+  const hasMore = sortedQueue.length > 6;
+
   return (
     <Card className="flex h-full flex-col border border-slate-200/70 bg-white/80 shadow-[0_12px_30px_rgba(15,23,42,0.04)] backdrop-blur-sm">
       <CardHeader className="border-b border-slate-100 pb-3">
@@ -102,67 +107,85 @@ export function AttentionQueue({ data, onResolveItem }: { data: NightAuditData; 
         </CardTitle>
       </CardHeader>
 
-      <CardContent className="flex-1 overflow-y-auto p-0">
+      <CardContent className="flex-1 overflow-y-auto p-0 flex flex-col">
         {sortedQueue.length > 0 ? (
-          <div className="divide-y divide-slate-100">
-            {sortedQueue.map((item) => (
-              <div key={item.id} className="flex items-start justify-between gap-3 p-4 transition hover:bg-slate-50/80">
-                <div className="flex min-w-0 items-start gap-3">
-                  <div className="mt-0.5 shrink-0">
-                    {item.type === 'blocker' ? (
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-rose-100 text-rose-600">
-                        <XCircle className="h-4 w-4" />
-                      </div>
-                    ) : item.type === 'warning' ? (
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 text-amber-600">
-                        <AlertTriangle className="h-4 w-4" />
-                      </div>
-                    ) : (
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-indigo-600">
-                        <Info className="h-4 w-4" />
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <p className="truncate text-sm font-semibold text-slate-800">{item.label}</p>
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] ${
-                          item.type === 'blocker'
-                            ? 'bg-rose-100 text-rose-700'
-                            : item.type === 'warning'
-                              ? 'bg-amber-100 text-amber-700'
-                              : 'bg-indigo-100 text-indigo-700'
-                        }`}
-                      >
-                        {item.type}
-                      </span>
+          <>
+            <div className="divide-y divide-slate-100 flex-1">
+              {displayQueue.map((item) => (
+                <div key={item.id} className="flex items-start justify-between gap-3 p-4 transition hover:bg-slate-50/80">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <div className="mt-0.5 shrink-0">
+                      {item.type === 'blocker' ? (
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-rose-100 text-rose-600">
+                          <XCircle className="h-4 w-4" />
+                        </div>
+                      ) : item.type === 'warning' ? (
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+                          <AlertTriangle className="h-4 w-4" />
+                        </div>
+                      ) : (
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-indigo-600">
+                          <Info className="h-4 w-4" />
+                        </div>
+                      )}
                     </div>
-                    <p className="mt-1 text-xs text-slate-500">{item.description}</p>
-                  </div>
-                </div>
 
-                {onResolveItem && (
-                  <button
-                    onClick={() => {
-                      if (item.actionType === 'GOTO_EXCEPTIONS') {
-                        router.push('/night-audit/exceptions');
-                      } else {
-                        onResolveItem(item.actionType, item.payload);
-                      }
-                    }}
-                    className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-indigo-700 transition hover:border-indigo-200 hover:bg-indigo-50"
-                  >
-                    Action
-                    <ChevronRight className="h-3.5 w-3.5" />
-                  </button>
-                )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="truncate text-sm font-semibold text-slate-800">{item.label}</p>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] ${
+                            item.type === 'blocker'
+                              ? 'bg-rose-100 text-rose-700'
+                              : item.type === 'warning'
+                                ? 'bg-amber-100 text-amber-700'
+                                : 'bg-indigo-100 text-indigo-700'
+                          }`}
+                        >
+                          {item.type}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-slate-500">{item.description}</p>
+                    </div>
+                  </div>
+
+                  {onResolveItem && (
+                    <button
+                      onClick={() => {
+                        if (item.actionType === 'GOTO_EXCEPTIONS') {
+                          router.push('/night-audit/exceptions');
+                        } else {
+                          onResolveItem(item.actionType, item.payload);
+                        }
+                      }}
+                      className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-indigo-700 transition hover:border-indigo-200 hover:bg-indigo-50"
+                    >
+                      Action
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            {hasMore && (
+              <div className="p-3 border-t border-slate-100 bg-slate-50/50 flex justify-center mt-auto">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="w-full text-slate-500 hover:text-slate-900 hover:bg-slate-200/50"
+                  onClick={() => setIsExpanded(!isExpanded)}
+                >
+                  {isExpanded ? (
+                    <>Show less <ChevronUp className="ml-1 h-4 w-4" /></>
+                  ) : (
+                    <>View all {sortedQueue.length} items <ChevronDown className="ml-1 h-4 w-4" /></>
+                  )}
+                </Button>
               </div>
-            ))}
-          </div>
+            )}
+          </>
         ) : (
-          <div className="flex min-h-[220px] flex-col items-center justify-center px-6 py-10 text-center">
+          <div className="flex min-h-[220px] flex-col items-center justify-center px-6 py-10 text-center flex-1">
             <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
               <CheckCircle2 className="h-6 w-6" />
             </div>
