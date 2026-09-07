@@ -86,7 +86,7 @@ export async function getSystemIntegrity(ctx: TenantContext, propertyId: string)
     s.status === 'OPEN' || (s.status === 'RECONCILIATION_REQUIRED' && Number(s.expectedCash ?? 0) !== 0)
   );
 
-  const openFrontdeskSessions = await prisma.frontdeskSession.findMany({
+  const rawFrontdeskSessions = await prisma.frontdeskSession.findMany({
     where: { propertyId, businessDate, status: { in: ['OPEN', 'CLOSING'] }, controlStatus: 'OPEN' },
     select: {
       id: true,
@@ -94,8 +94,24 @@ export async function getSystemIntegrity(ctx: TenantContext, propertyId: string)
       status: true,
       controlStatus: true,
       openedAt: true,
+      openingFloat: true,
+      systemExpectedCash: true,
       staff: { select: { firstName: true, lastName: true } },
+      transactions: {
+        where: { method: 'CASH', status: { in: ['COMPLETED', 'POSTED', 'SETTLED'] } },
+        select: { amount: true }
+      }
     },
+  });
+
+  const openFrontdeskSessions = rawFrontdeskSessions.map(session => {
+    const cashReceipts = session.transactions.reduce((sum, t) => sum + Number(t.amount || 0), 0);
+    const expectedCash = Number(session.openingFloat || 0) + cashReceipts;
+    const { transactions, ...rest } = session;
+    return {
+      ...rest,
+      expectedCash // Inject dynamically calculated expected cash
+    };
   });
 
   const syncConflicts = await prisma.syncConflict.findMany({
