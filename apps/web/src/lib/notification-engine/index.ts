@@ -136,7 +136,7 @@ async function resolveRecipients(
     prisma.organizationMembership.findMany({
       where: {
         organizationId,
-        role: { in: ["OWNER", "ADMIN", "SUPER_ADMIN"] },
+        role: { in: ["OWNER", "ADMIN", "SUPER_ADMIN", "DIRECTOR", "EXECUTIVE"] },
         status: "ACTIVE",
       },
       select: { userId: true },
