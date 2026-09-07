@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     const session = await auth();
     if (!session?.user?.id) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
 
-    const { roomId, reservationId } = await req.json();
+    const { roomId, reservationId, isCheckInFlow } = await req.json();
     if (!roomId || !reservationId) return errorResponse('BAD_REQUEST', 'Room and reservation are required', 400);
 
     const reservation = await prisma.reservation.findUnique({
@@ -27,8 +27,9 @@ export async function POST(req: NextRequest) {
 
     const assignedRoom = reservation.reservationRooms.find(item => item.roomId === roomId)?.room;
     if (!assignedRoom) return errorResponse('BAD_REQUEST', 'Reservation is not assigned to this room', 400);
-    if (!['CHECKED_IN', 'PENDING', 'CONFIRMED'].includes(reservation.status)) {
-      return errorResponse('BAD_REQUEST', `Reservation is not eligible for keycard encoding (${reservation.status})`, 400);
+    
+    if (reservation.status !== 'CHECKED_IN' && !isCheckInFlow) {
+      return errorResponse('BAD_REQUEST', `Reservation must be checked in before encoding keycards (Current: ${reservation.status})`, 400);
     }
 
     const doorLock = assignedRoom.doorLocks[0] || await prisma.doorLock.create({

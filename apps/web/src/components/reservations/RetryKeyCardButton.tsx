@@ -10,6 +10,7 @@ import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 interface RetryKeyCardButtonProps {
   reservation: {
     id: string;
+    status?: string;
     roomId?: string;
     reservationRooms?: Array<{ roomId?: string; room?: { id?: string } }>;
   };
@@ -23,6 +24,11 @@ export function RetryKeyCardButton({ reservation, label = 'Retry Card', classNam
   const [busy, setBusy] = useState(false);
 
   const retryEncoding = async () => {
+    if (reservation.status && reservation.status !== 'CHECKED_IN') {
+      toast.error(`Keycard encoding is only available for checked-in reservations (Current status: ${reservation.status}).`);
+      return;
+    }
+
     const roomId = reservation?.reservationRooms?.[0]?.room?.id
       || reservation?.reservationRooms?.[0]?.roomId
       || reservation?.roomId;

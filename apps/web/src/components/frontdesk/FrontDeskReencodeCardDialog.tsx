@@ -98,6 +98,12 @@ export function FrontDeskReencodeCardDialog({ open, onOpenChange, propertyId }: 
       setHardwareStatus('STARTING');
       setErrorMsg(null);
 
+      if (selectedReservation?.status !== 'CHECKED_IN') {
+        setPhase('FAILED');
+        setErrorMsg('Cards can only be encoded for checked-in reservations.');
+        return;
+      }
+
       const roomId = selectedReservation?.reservationRooms?.[0]?.room?.id || selectedReservation?.reservationRooms?.[0]?.roomId;
       if (!roomId) {
         setPhase('FAILED');

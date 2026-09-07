@@ -22,7 +22,7 @@ import { FrontDeskCardInformationSection } from './FrontDeskCardInformationSecti
 import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
 import { toast } from 'sonner';
 import { formatRoomNumber } from '@/lib/format-room';
-import { LogIn, User, MapPin, CalendarClock, CreditCard, Receipt, LogOut, ChevronDown, Edit3, XCircle, Loader2, Percent } from 'lucide-react';
+import { LogIn, User, MapPin, CalendarClock, CreditCard, Receipt, LogOut, ChevronDown, Edit3, XCircle, Loader2, Percent, Gift } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -194,9 +194,9 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
                   } else {
                     finalRate = 0;
                   }
-                } else if (resRoom?.discountAmount > 0 && !resRoom?.discountPercent) {
+                } else if (Number(resRoom?.discountAmount || 0) > 0 && !resRoom?.discountPercent) {
                   finalRate -= Number(resRoom?.discountAmount || 0);
-                } else if (resRoom?.discountPercent > 0) {
+                } else if (Number(resRoom?.discountPercent || 0) > 0) {
                   finalRate -= finalRate * (Number(resRoom?.discountPercent || 0) / 100);
                 }
                 finalRate = Math.max(0, finalRate);
@@ -221,12 +221,12 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
                           </Badge>
                         ) : (
                           <>
-                            {(resRoom?.discountType === 'FIXED_AMOUNT' || (!resRoom?.discountType && resRoom?.discountAmount > 0)) && (
+                            {(resRoom?.discountType === 'FIXED_AMOUNT' || (!resRoom?.discountType && Number(resRoom?.discountAmount || 0) > 0)) && (
                               <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
                                 -{formatCurrency(Number(resRoom?.discountAmount || 0))} discount
                               </Badge>
                             )}
-                            {(resRoom?.discountType === 'PERCENTAGE' || (!resRoom?.discountType && resRoom?.discountPercent > 0)) && (
+                            {(resRoom?.discountType === 'PERCENTAGE' || (!resRoom?.discountType && Number(resRoom?.discountPercent || 0) > 0)) && (
                               <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
                                 -{resRoom?.discountPercent}% discount
                               </Badge>
@@ -234,6 +234,26 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
                           </>
                         )}
                       </div>
+                    </div>
+                    
+                    {/* Discount/Comp Triggers */}
+                    <div className="flex items-center gap-2 mt-2 md:mt-0">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="rounded-lg font-semibold text-xs border-slate-200"
+                        onClick={() => setIsDiscountOpen(true)}
+                      >
+                        <Percent className="w-3.5 h-3.5 mr-1" /> Discount
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="rounded-lg font-semibold text-xs border-slate-200 text-emerald-700 hover:bg-emerald-50"
+                        onClick={() => setIsComplimentaryOpen(true)}
+                      >
+                        <Gift className="w-3.5 h-3.5 mr-1" /> Comp
+                      </Button>
                     </div>
                   </div>
                 );
@@ -288,6 +308,12 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
                     {canEditReservation && <DropdownMenuItem className="rounded-lg p-3 cursor-pointer font-medium" onClick={() => setIsEditDialogOpen(true)}>
                       <Edit3 className="w-4 h-4 mr-2 text-slate-500" /> Edit Details
                     </DropdownMenuItem>}
+                    <DropdownMenuItem className="rounded-lg p-3 cursor-pointer font-medium" onClick={() => setIsDiscountOpen(true)}>
+                      <Percent className="w-4 h-4 mr-2 text-slate-500" /> Apply Discount
+                    </DropdownMenuItem>
+                    <DropdownMenuItem className="rounded-lg p-3 cursor-pointer font-medium" onClick={() => setIsComplimentaryOpen(true)}>
+                      <Gift className="w-4 h-4 mr-2 text-emerald-600" /> Set as Complimentary
+                    </DropdownMenuItem>
                     {canReassignRoom && <DropdownMenuItem className="rounded-lg p-3 cursor-pointer font-medium" onClick={() => setIsReassignDialogOpen(true)}>
                       <MapPin className="w-4 h-4 mr-2 text-slate-500" /> Reassign Room
                     </DropdownMenuItem>}

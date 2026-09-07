@@ -748,10 +748,8 @@ public class OfflinePMSInterop
 
             if (!bypassKeycard)
             {
-                if (string.IsNullOrEmpty(encodedRoomId) || encodedRoomId != roomId)
-                {
-                    throw new Exception("HARDWARE_ENFORCEMENT: Keycard must be encoded before check-in can proceed.");
-                }
+                // HARDWARE_ENFORCEMENT removed to allow encoding to be the LAST flow.
+                // The desktop provider will perform the DB check-in first, and then call keycards.encode.
             }
             else
             {
@@ -918,22 +916,47 @@ public class OfflinePMSInterop
                     email = r.Guest.Email,
                     phone = r.Guest.Phone
                 } : null,
-                reservationRooms = new[] {
-                    new {
-                        id = r.Id,
-                        roomId = r.RoomId,
-                        roomTypeId = r.RoomTypeId,
-                        checkIn = r.CheckInDate,
-                        checkOut = r.CheckOutDate,
+                reservationRooms = r.Rooms.Any() 
+                    ? r.Rooms.Select(room => new {
+                        id = room.Id,
+                        roomId = room.RoomId,
+                        roomTypeId = room.RoomTypeId,
+                        checkIn = room.CheckInDate,
+                        checkOut = room.CheckOutDate,
+                        discountType = room.DiscountType,
+                        discountAmount = room.DiscountAmount,
+                        discountPercent = room.DiscountPercent,
+                        discountReason = room.DiscountReason,
+                        discountApprovalId = room.DiscountApprovalId,
                         rateAmount = reservationRoomType?.BasePrice ?? 0,
                         room = new {
-                            number = r.RoomNumber ?? "Unassigned",
+                            number = room.Room?.RoomNumber ?? r.RoomNumber ?? "Unassigned",
                             roomType = reservationRoomType == null
                                 ? new { name = "Unknown", baseRate = 0m, currency = r.Currency ?? "NGN" }
                                 : new { name = reservationRoomType.Name, baseRate = reservationRoomType.BasePrice, currency = reservationRoomType.Currency }
                         }
-                    }
-                },
+                    }).ToArray()
+                    : new[] {
+                        new {
+                            id = r.Id,
+                            roomId = r.RoomId,
+                            roomTypeId = r.RoomTypeId,
+                            checkIn = r.CheckInDate,
+                            checkOut = r.CheckOutDate,
+                            discountType = (string?)null,
+                            discountAmount = (decimal?)null,
+                            discountPercent = (decimal?)null,
+                            discountReason = (string?)null,
+                            discountApprovalId = (string?)null,
+                            rateAmount = reservationRoomType?.BasePrice ?? 0,
+                            room = new {
+                                number = r.RoomNumber ?? "Unassigned",
+                                roomType = reservationRoomType == null
+                                    ? new { name = "Unknown", baseRate = 0m, currency = r.Currency ?? "NGN" }
+                                    : new { name = reservationRoomType.Name, baseRate = reservationRoomType.BasePrice, currency = reservationRoomType.Currency }
+                            }
+                        }
+                    },
                 folios = new[] {
                     new {
                         id = f?.Id,

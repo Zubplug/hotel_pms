@@ -168,27 +168,21 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
         // 1. Fetch reservation to get Room ID for encoder
         const resDetailsRaw = await invokeDesktop('reservations.get', { id });
         const resDetails = typeof resDetailsRaw === 'string' ? JSON.parse(resDetailsRaw) : resDetailsRaw;
-        const reservation = resDetails?.data?.reservation || resDetails?.data || resDetails?.reservation || resDetails;
-        const roomId = reservation?.reservationRooms?.find((room: any) => room?.status === 'ACTIVE')?.roomId
-          || reservation?.reservationRooms?.[0]?.roomId
-          || reservation?.roomId
-          || reservation?.rooms?.find((room: any) => room?.status === 'ACTIVE')?.roomId
-          || reservation?.rooms?.[0]?.roomId;
-        
-        if (!roomId) {
-            return { success: false, error: 'No room assigned for check-in encoding.' };
-        }
-        
-        // 2. Trigger Hardware Encode FIRST
-        encodeRes = await invokeDesktop('keycards.encode', { roomId, lockCode: '', reservationId: id });
-        if (!encodeRes.success) {
-            const errorMessage = typeof encodeRes.error === 'string' ? encodeRes.error : encodeRes.error?.message;
-            return { success: false, error: 'Hardware Error: ' + (errorMessage || encodeRes.data?.errorMessage || 'Failed to encode keycard.') };
-        }
-        encodedRoomId = roomId;
+      // 1. Fetch reservation to get Room ID
+      const resDetailsRaw = await invokeDesktop('reservations.get', { id });
+      const resDetails = typeof resDetailsRaw === 'string' ? JSON.parse(resDetailsRaw) : resDetailsRaw;
+      const reservation = resDetails?.data?.reservation || resDetails?.data || resDetails?.reservation || resDetails;
+      const roomId = reservation?.reservationRooms?.find((room: any) => room?.status === 'ACTIVE')?.roomId
+        || reservation?.reservationRooms?.[0]?.roomId
+        || reservation?.roomId
+        || reservation?.rooms?.find((room: any) => room?.status === 'ACTIVE')?.roomId
+        || reservation?.rooms?.[0]?.roomId;
+
+      if (!bypass && !roomId) {
+          return { success: false, error: 'No room assigned for check-in encoding.' };
       }
       
-      // 3. Process Check-In in Local DB
+      // 2. Process Check-In in Local DB
       const res = await invokeDesktop('reservations.checkIn', { 
         id, 
         userId, 
@@ -197,12 +191,20 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
         overrideDeposit: options?.overrideDeposit,
         acknowledgedByStaffId: options?.acknowledgedByStaffId,
         reason: options?.reason,
-        encodedRoomId, 
-        encodeData: encodeRes.data ? JSON.stringify(encodeRes.data) : undefined 
+        encodedRoomId: bypass ? '' : roomId, 
+        encodeData: undefined 
       });
       
       if (!res.success) {
          return { success: false, error: res.error || 'Check-in database update failed.' };
+      }
+
+      // 3. Trigger Hardware Encode AFTER Database Check-In
+      if (!bypass) {
+        encodeRes = await invokeDesktop('keycards.encode', { roomId, lockCode: '', reservationId: id });
+        if (!encodeRes.success) {
+            return { success: false, error: 'Check-in succeeded, but Hardware Error: ' + (encodeRes.error || 'Failed to encode keycard. You may need to create a duplicate key from the dashboard.') };
+        }
       }
       
       const opId = 'sync_encode_' + Date.now();

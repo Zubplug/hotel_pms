@@ -80,6 +80,9 @@ export default function FrontDeskReservationsPage() {
 
   // Client-side filtering for complex filters that the API might not natively support yet
   const filteredReservations = reservations.filter(res => {
+    if (res.status === 'CHECKED_OUT') {
+      return false;
+    }
     if (activeFilter === 'DEPARTURES') {
       const today = new Date().toISOString().split('T')[0];
       return res.status === 'CHECKED_IN' && res.checkOut.startsWith(today);
