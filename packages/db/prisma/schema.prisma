@@ -469,8 +469,6 @@ model CancellationPolicy {
 
   ratePlans    RatePlan[]
   reservations Reservation[]
-  folios       Folio[]
-  folios       Folio[]
 }
 
 model DepositPolicy {
@@ -628,6 +626,7 @@ model CorporateAccount {
   cityLedgerAccount CityLedgerAccount? @relation(fields: [cityLedgerAccountId], references: [id])
 
   reservations Reservation[]
+  folios       Folio[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
