@@ -141,6 +141,7 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
   const checkIn = form.watch('checkIn');
   const checkOut = form.watch('checkOut');
   const roomTypeId = form.watch('roomTypeId');
+  const corporateAccountId = form.watch('corporateAccountId');
   const adjustmentType = form.watch('adjustmentType');
   const adjustmentValue = form.watch('adjustmentValue') || 0;
   const compBeneficiaryType = form.watch('compBeneficiaryType');
@@ -263,6 +264,8 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
 
   // Pricing Calculation
   const selectedRoomType = roomTypes?.find((rt: any) => rt.id === roomTypeId);
+  const selectedCorporateAccount = corporateAccounts?.find((account: any) => account.id === corporateAccountId && corporateAccountId !== 'none');
+  const corporateRate = selectedCorporateAccount?.ratePlan?.rates?.find((rate: any) => rate.roomTypeId === roomTypeId);
   const nights = (checkIn && checkOut && checkOut > checkIn)
     ? differenceInCalendarDays(checkOut, checkIn)
     : 0;
@@ -276,7 +279,8 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
   
   let discountDeduction = 0;
   let compDeduction = 0;
-  const nightlyRate = selectedRoomType ? selectedRoomType.baseRate : 0;
+  const nightlyRate = corporateRate ? Number(corporateRate.amount ?? corporateRate.baseAmount ?? 0) : (selectedRoomType ? selectedRoomType.baseRate : 0);
+  const isCorporateRate = Boolean(corporateRate);
 
   if (selectedRoomType && adjustmentType !== 'NONE') {
     if (adjustmentType === 'DISCOUNT_PERCENTAGE') {
@@ -849,7 +853,7 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
                     <>
                       <div className="flex items-center justify-between text-sm text-blue-100">
                         <span>{nights} × {formatter.format(nightlyRate)} per night</span>
-                        <span className="font-semibold">Room rate</span>
+                        <span className="font-semibold">{isCorporateRate ? 'Corporate rate' : 'Room rate'}</span>
                       </div>
                       {adjustmentType !== 'NONE' && (discountDeduction > 0 || compDeduction > 0) && (
                         <div className="flex items-center justify-between text-sm text-amber-300">
@@ -876,6 +880,9 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
                         <span>Average nightly total</span>
                         <span className="font-semibold">{formatter.format((adjustmentType !== 'NONE' && (discountDeduction > 0 || compDeduction > 0) ? effectiveTotal : estimatedTotal) / nights)}</span>
                       </div>
+                      {corporateAccountId && corporateAccountId !== 'none' && !corporateRate && (
+                        <div className="mt-2 text-xs font-medium text-amber-300">No corporate rate is configured for this room type; the standard room rate is being shown.</div>
+                      )}
                     </>
                   ) : (
                     <div className="text-2xl font-bold text-white tracking-tight">Select a room type and dates</div>

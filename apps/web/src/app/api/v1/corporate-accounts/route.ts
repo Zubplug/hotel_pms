@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
     const accounts = await prisma.corporateAccount.findMany({ 
         where, 
         orderBy: { name: 'asc' },
-        include: { ratePlan: true, cityLedgerAccount: true }
+        include: { ratePlan: { include: { rates: true } }, cityLedgerAccount: true }
     });
     
     return successResponse(accounts);

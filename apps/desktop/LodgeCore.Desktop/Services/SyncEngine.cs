@@ -1065,13 +1065,19 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     r.RatePlanId = el.TryGetProperty("ratePlanId", out var rpid) && rpid.ValueKind != System.Text.Json.JsonValueKind.Null ? rpid.GetString() ?? "" : "";
                     r.RoomTypeId = el.TryGetProperty("roomTypeId", out var rtid) && rtid.ValueKind != System.Text.Json.JsonValueKind.Null ? rtid.GetString() ?? "" : "";
                     
-                    if (el.TryGetProperty("amount", out var amnt) && amnt.ValueKind != System.Text.Json.JsonValueKind.Null && decimal.TryParse(amnt.GetString(), out var amtD))
+                    if (el.TryGetProperty("amount", out var amnt) && amnt.ValueKind != System.Text.Json.JsonValueKind.Null)
                     {
-                        r.Amount = amtD;
+                        if (amnt.ValueKind == System.Text.Json.JsonValueKind.Number && amnt.TryGetDecimal(out var numericAmount))
+                            r.Amount = numericAmount;
+                        else if (amnt.ValueKind == System.Text.Json.JsonValueKind.String && decimal.TryParse(amnt.GetString(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var textAmount))
+                            r.Amount = textAmount;
                     }
-                    else if (el.TryGetProperty("baseAmount", out var baseAmnt) && baseAmnt.ValueKind != System.Text.Json.JsonValueKind.Null && decimal.TryParse(baseAmnt.GetString(), out var bamtD))
+                    else if (el.TryGetProperty("baseAmount", out var baseAmnt) && baseAmnt.ValueKind != System.Text.Json.JsonValueKind.Null)
                     {
-                        r.Amount = bamtD;
+                        if (baseAmnt.ValueKind == System.Text.Json.JsonValueKind.Number && baseAmnt.TryGetDecimal(out var numericBaseAmount))
+                            r.Amount = numericBaseAmount;
+                        else if (baseAmnt.ValueKind == System.Text.Json.JsonValueKind.String && decimal.TryParse(baseAmnt.GetString(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var textBaseAmount))
+                            r.Amount = textBaseAmount;
                     }
 
                     r.Currency = el.TryGetProperty("currency", out var curr) && curr.ValueKind != System.Text.Json.JsonValueKind.Null ? curr.GetString() ?? "NGN" : "NGN";

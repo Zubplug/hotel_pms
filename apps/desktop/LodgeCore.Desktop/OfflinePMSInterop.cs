@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using LodgeCore.Desktop.Data.Entities;
 using LodgeCore.Desktop.Services;
 using LodgeCore.Desktop.Security;
 using Microsoft.EntityFrameworkCore;
@@ -1098,7 +1099,33 @@ public class OfflinePMSInterop
     {
         try
         {
-            var data = (await _repo.GetCorporateAccountsAsync(propertyId)).Select(ca => new { id = ca.Id, name = ca.Name, code = ca.Code, contactPerson = ca.ContactPerson, contactEmail = ca.ContactEmail, contactPhone = ca.ContactPhone, ratePlanId = ca.RatePlanId, cityLedgerAccountId = ca.CityLedgerAccountId, creditLimit = ca.CreditLimit, exemptFromHighBalance = ca.ExemptFromHighBalance, depositPolicy = ca.DepositPolicy });
+            var accounts = await _repo.GetCorporateAccountsAsync(propertyId);
+            var data = new List<object>();
+            foreach (var ca in accounts)
+            {
+                var rates = string.IsNullOrWhiteSpace(ca.RatePlanId)
+                    ? new List<LocalRate>()
+                    : await _repo.GetRatesForRatePlanAsync(ca.RatePlanId);
+                data.Add(new
+                {
+                    id = ca.Id,
+                    name = ca.Name,
+                    code = ca.Code,
+                    contactPerson = ca.ContactPerson,
+                    contactEmail = ca.ContactEmail,
+                    contactPhone = ca.ContactPhone,
+                    ratePlanId = ca.RatePlanId,
+                    ratePlan = string.IsNullOrWhiteSpace(ca.RatePlanId) ? null : new
+                    {
+                        id = ca.RatePlanId,
+                        rates = rates.Select(rate => new { id = rate.Id, ratePlanId = rate.RatePlanId, roomTypeId = rate.RoomTypeId, amount = rate.Amount, currency = rate.Currency }).ToList()
+                    },
+                    cityLedgerAccountId = ca.CityLedgerAccountId,
+                    creditLimit = ca.CreditLimit,
+                    exemptFromHighBalance = ca.ExemptFromHighBalance,
+                    depositPolicy = ca.DepositPolicy
+                });
+            }
             return JsonSerializer.Serialize(new { success = true, data }, _jsonOptions);
         }
         catch (Exception ex)

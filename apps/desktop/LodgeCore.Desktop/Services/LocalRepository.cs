@@ -2376,6 +2376,13 @@ public class LocalRepository
             .ToListAsync();
     }
 
+    public async Task<List<LocalRate>> GetRatesForRatePlanAsync(string ratePlanId)
+    {
+        return await _dbContext.Rates
+            .Where(rate => rate.RatePlanId == ratePlanId)
+            .ToListAsync();
+    }
+
     public async Task<object> GetRoomsAsync(string propertyId)
     {
         var rooms = await _dbContext.Rooms.Where(r => r.PropertyId == propertyId).ToListAsync();
