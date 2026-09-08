@@ -3833,18 +3833,62 @@ public class LocalRepository
     private async Task CommitLocalSaleAsync(LocalPosOrder order, string userId, string deviceId, string? authorizerId)
     {
         if (await _dbContext.StockTransactions.AnyAsync(t => t.ReferenceId == order.Id && t.Source == "SALE")) return;
+        var outletWarehouseId = await _dbContext.PosOutlets
+            .Where(o => o.Id == order.OutletId)
+            .Select(o => o.WarehouseId)
+            .FirstOrDefaultAsync();
+        if (string.IsNullOrWhiteSpace(outletWarehouseId))
+            throw new Exception("POS outlet has no stock warehouse configured. Sync the outlet setup before completing this sale.");
+
         var productIds = order.Items.Where(i => !string.IsNullOrWhiteSpace(i.ProductId)).Select(i => i.ProductId!).Distinct().ToList();
         var stockProducts = await _dbContext.PosProducts.Where(p => productIds.Contains(p.Id) && p.InventoryMode == "STOCK").ToListAsync();
         var requirements = new Dictionary<string, decimal>();
-        foreach (var product in stockProducts)
+        foreach (var orderItem in order.Items)
         {
-            var quantity = order.Items.Where(i => i.ProductId == product.Id).Sum(i => i.Quantity);
-            var ingredients = await _dbContext.RecipeIngredients.Where(i => i.ProductId == product.Id).ToListAsync();
-            if (ingredients.Count == 0) throw new Exception($"Inventory mapping is missing for {product.Name}");
-            foreach (var ingredient in ingredients)
-                requirements[ingredient.StockItemId] = requirements.GetValueOrDefault(ingredient.StockItemId) + ingredient.Quantity * quantity;
+            var product = stockProducts.FirstOrDefault(p => p.Id == orderItem.ProductId);
+            if (product != null)
+            {
+                var ingredients = await _dbContext.RecipeIngredients.Where(i => i.ProductId == product.Id).ToListAsync();
+                if (ingredients.Count == 0)
+                {
+                    var directStock = await _dbContext.StockItems.FirstOrDefaultAsync(s => s.PosProductId == product.Id && s.IsActive);
+                    if (directStock == null) throw new Exception($"Inventory mapping is missing for {product.Name}");
+                    requirements[directStock.Id] = requirements.GetValueOrDefault(directStock.Id) + orderItem.Quantity;
+                }
+                else
+                {
+                    foreach (var ingredient in ingredients)
+                        requirements[ingredient.StockItemId] = requirements.GetValueOrDefault(ingredient.StockItemId) + ingredient.Quantity * orderItem.Quantity;
+                }
+            }
+            foreach (var modifier in orderItem.Modifiers)
+            {
+                if (!string.IsNullOrWhiteSpace(modifier.StockItemId) && modifier.Quantity > 0)
+                    requirements[modifier.StockItemId] = requirements.GetValueOrDefault(modifier.StockItemId) + modifier.Quantity * orderItem.Quantity;
+            }
         }
+
+        var templateItems = await _dbContext.StockItems
+            .Where(s => requirements.Keys.Contains(s.Id) && s.PropertyId == order.PropertyId)
+            .ToListAsync();
+        var outletItems = await _dbContext.StockItems
+            .Where(s => s.PropertyId == order.PropertyId && s.WarehouseId == outletWarehouseId && s.IsActive)
+            .ToListAsync();
+        var resolvedRequirements = new Dictionary<string, decimal>();
         foreach (var entry in requirements)
+        {
+            var template = templateItems.FirstOrDefault(item => item.Id == entry.Key);
+            if (template == null) throw new Exception($"Inventory mapping is missing for stock item {entry.Key}");
+            var target = outletItems.FirstOrDefault(item =>
+                (!string.IsNullOrWhiteSpace(template.PosProductId) && item.PosProductId == template.PosProductId)
+                || (!string.IsNullOrWhiteSpace(template.Barcode) && item.Barcode == template.Barcode)
+                || (!string.IsNullOrWhiteSpace(template.Sku) && item.Sku == template.Sku)
+                || string.Equals(item.Name.Trim(), template.Name.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (target == null)
+                throw new Exception($"{template.Name} is not provisioned in the outlet stock warehouse.");
+            resolvedRequirements[target.Id] = resolvedRequirements.GetValueOrDefault(target.Id) + entry.Value;
+        }
+        foreach (var entry in resolvedRequirements)
         {
             var stock = await _dbContext.StockItems.FindAsync(entry.Key);
             if (stock == null || !stock.IsActive) throw new Exception("Inventory item is unavailable");

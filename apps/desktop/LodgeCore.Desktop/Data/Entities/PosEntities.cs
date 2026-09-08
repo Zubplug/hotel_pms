@@ -13,6 +13,7 @@ public class LocalPosOutlet
     public bool IsActive { get; set; }
     public string InventoryMode { get; set; } = "NON_STOCK";
     public int? AutoLockSeconds { get; set; }
+    public string? WarehouseId { get; set; }
 }
 
 public class LocalProductCategory
@@ -60,7 +61,10 @@ public class LocalStockItem
     [Key] public string Id { get; set; } = string.Empty;
     public string PropertyId { get; set; } = string.Empty;
     public string? PosProductId { get; set; }
+    public string? WarehouseId { get; set; }
     public string Name { get; set; } = string.Empty;
+    public string? Sku { get; set; }
+    public string? Barcode { get; set; }
     public string BaseUnit { get; set; } = string.Empty;
     public decimal CostPrice { get; set; }
     public decimal QuantityOnHand { get; set; }

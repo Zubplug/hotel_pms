@@ -50,7 +50,7 @@ export class InventoryService {
                       where: { isActive: true },
                       include: {
                         ingredients: {
-                          include: { stockItem: { select: { baseUnit: true, stockUnits: true } } },
+                          include: { stockItem: { select: { id: true, baseUnit: true, stockUnits: true } } },
                         },
                       },
                     },
@@ -94,9 +94,40 @@ export class InventoryService {
       }
     }
 
+    const outletWarehouse = await tx.warehouse.findUnique({
+      where: { posOutletId: order.outletId },
+      select: { id: true, name: true },
+    });
+    if (!outletWarehouse) throw new Error(`POS outlet has no stock warehouse configured: ${order.outletId}`);
+
+    // Recipe and modifier mappings can point to a template stock item in the
+    // main warehouse. Resolve every requirement to the matching item in the
+    // selling outlet warehouse before changing quantity.
+    const templateItems = await tx.stockItem.findMany({
+      where: { id: { in: [...requirements.keys()] }, propertyId: order.propertyId },
+      select: { id: true, name: true, sku: true, barcode: true, posProductId: true },
+    });
+    const outletItems = await tx.stockItem.findMany({
+      where: { propertyId: order.propertyId, warehouseId: outletWarehouse.id, isActive: true },
+      select: { id: true, name: true, sku: true, barcode: true, posProductId: true },
+    });
+    const resolvedRequirements = new Map<string, number>();
+    for (const [templateId, required] of requirements) {
+      const template = templateItems.find((item: any) => item.id === templateId);
+      if (!template) throw new Error(`Inventory mapping is missing for stock item ${templateId}`);
+      const target = outletItems.find((item: any) =>
+        (template.posProductId && item.posProductId === template.posProductId) ||
+        (template.barcode && item.barcode === template.barcode) ||
+        (template.sku && item.sku === template.sku) ||
+        item.name.trim().toLowerCase() === template.name.trim().toLowerCase()
+      );
+      if (!target) throw new Error(`${template.name} is not provisioned in outlet warehouse ${outletWarehouse.name}`);
+      resolvedRequirements.set(target.id, (resolvedRequirements.get(target.id) || 0) + required);
+    }
+
     const property = await tx.property.findUnique({ where: { id: order.propertyId } });
     const currency = property?.baseCurrency || 'NGN';
-    for (const [stockItemId, required] of requirements) {
+    for (const [stockItemId, required] of resolvedRequirements) {
       const stock = await tx.stockItem.findUnique({ where: { id: stockItemId } });
       if (!stock || !stock.isActive) throw new Error('Inventory item is unavailable');
       const updated = await tx.stockItem.updateMany({

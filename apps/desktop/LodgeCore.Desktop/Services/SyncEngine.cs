@@ -1544,6 +1544,7 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     outlet.Type = el.TryGetProperty("type", out var t) && t.ValueKind != System.Text.Json.JsonValueKind.Null ? t.GetString() ?? "" : "";
                     outlet.IsActive = el.TryGetProperty("isActive", out var ia) && ia.GetBoolean();
                     outlet.AutoLockSeconds = el.TryGetProperty("autoLockSeconds", out var als) && als.ValueKind == System.Text.Json.JsonValueKind.Number ? als.GetInt32() : null;
+                    outlet.WarehouseId = el.TryGetProperty("warehouse", out var warehouse) && warehouse.ValueKind == System.Text.Json.JsonValueKind.Object && warehouse.TryGetProperty("id", out var warehouseId) ? warehouseId.GetString() : null;
                 }
                 
                 if (posOutletsArray.GetArrayLength() > 0)
@@ -1693,12 +1694,15 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                         dbContext.StockItems.Add(item);
                     }
                     item.Name = el.TryGetProperty("name", out var nameEl) ? nameEl.GetString() ?? "" : "";
+                    item.Sku = el.TryGetProperty("sku", out var skuEl) && skuEl.ValueKind != JsonValueKind.Null ? skuEl.GetString() : null;
+                    item.Barcode = el.TryGetProperty("barcode", out var barcodeEl) && barcodeEl.ValueKind != JsonValueKind.Null ? barcodeEl.GetString() : null;
                     item.BaseUnit = el.TryGetProperty("baseUnit", out var unitEl) ? unitEl.GetString() ?? "" : "";
                     item.CostPrice = ReadDecimal(el, "costPrice");
                     item.QuantityOnHand = ReadDecimal(el, "quantityOnHand");
                     item.ReorderLevel = el.TryGetProperty("reorderLevel", out var reorderEl) && reorderEl.ValueKind != JsonValueKind.Null ? ReadDecimal(reorderEl) : null;
                     item.IsActive = !el.TryGetProperty("isActive", out var activeEl) || activeEl.ValueKind == JsonValueKind.True;
                     item.PosProductId = el.TryGetProperty("posProductId", out var ppi) && ppi.ValueKind != JsonValueKind.Null ? ppi.GetString() : null;
+                    item.WarehouseId = el.TryGetProperty("warehouseId", out var whi) && whi.ValueKind != JsonValueKind.Null ? whi.GetString() : null;
                     item.UpdatedAt = el.TryGetProperty("updatedAt", out var updatedEl) && DateTime.TryParse(updatedEl.GetString(), out var updatedAt) ? updatedAt : DateTime.UtcNow;
                 }
             }

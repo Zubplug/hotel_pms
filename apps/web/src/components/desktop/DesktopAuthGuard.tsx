@@ -13,6 +13,15 @@ export default function DesktopAuthGuard({ children }: { children: React.ReactNo
   useEffect(() => {
     async function checkAuth() {
       try {
+        // POS terminals authenticate the waiter inside the POS shell. They do
+        // not require the separate global/front-desk session; requiring it
+        // here creates a redirect loop after /desktop auto-opens POS.
+        const terminalStatus = await provider.system?.getTerminalStatus?.();
+        if ((terminalStatus as any)?.registrationState === 'ACTIVE' && (terminalStatus as any)?.desktopMode === 'POS') {
+          setIsAuthenticated(true);
+          return;
+        }
+
         // C# is authoritative over whether the session is valid
         const responseString = await provider.auth.getSession();
         if (typeof responseString === 'string') {

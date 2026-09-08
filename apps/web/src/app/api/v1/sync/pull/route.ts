@@ -203,11 +203,17 @@ export async function GET(req: NextRequest) {
 
     const posOutlets = await prisma.posOutlet.findMany({
       where: buildWhere(posOutletsWhere),
+      include: { warehouse: { select: { id: true } } },
       take: limit,
       orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     });
     
     const outletIds = posOutlets.map(o => o.id);
+    const outletWarehouses = await prisma.warehouse.findMany({
+      where: { propertyId, posOutletId: { in: outletIds }, isActive: true },
+      select: { id: true },
+    });
+    const outletWarehouseIds = outletWarehouses.map((warehouse) => warehouse.id);
     const posCategories = await prisma.productCategory.findMany({
       where: buildOutletWhere({ outletId: { in: outletIds }, isActive: true }),
       take: limit,
@@ -256,8 +262,8 @@ export async function GET(req: NextRequest) {
     // incremental pull, returning the mapped set also covers a newly-created
     // recipe link whose stock item itself has an older updatedAt timestamp.
     const stockWhere = since
-      ? { propertyId, id: { in: posMappedStockItemIds } }
-      : { ...buildWhere({ propertyId }), id: { in: posMappedStockItemIds } };
+      ? { propertyId, OR: [{ id: { in: posMappedStockItemIds } }, { warehouseId: { in: outletWarehouseIds } }] }
+      : { ...buildWhere({ propertyId }), OR: [{ id: { in: posMappedStockItemIds } }, { warehouseId: { in: outletWarehouseIds } }] };
     const stockItems = await prisma.stockItem.findMany({
       where: stockWhere,
       take: limit,
