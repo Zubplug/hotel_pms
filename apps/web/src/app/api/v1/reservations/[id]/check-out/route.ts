@@ -63,7 +63,7 @@ export async function POST(
           FOR UPDATE
         `;
         for (const sharedFolio of sharedCorporateFolios) {
-          if (!folios.some((folio) => folio.id === sharedFolio.id)) folios.push(sharedFolio);
+          if (!folios.some((folio: { id: string }) => folio.id === sharedFolio.id)) folios.push(sharedFolio);
         }
       }
 
