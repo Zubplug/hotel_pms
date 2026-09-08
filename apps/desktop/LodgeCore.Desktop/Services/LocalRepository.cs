@@ -3185,6 +3185,8 @@ public class LocalRepository
                 totalAmountToComp = compType == "FULL" ? 0 : (compAmount * nights); // Backend will calculate full amount for reservations
             }
 
+            var approvalId = Guid.NewGuid().ToString();
+
             // Apply financial adjustments to the target
             if (targetType == "POS_ORDER" && posOrder != null)
             {
@@ -3220,7 +3222,6 @@ public class LocalRepository
                 _dbContext.ReservationRooms.Update(resRoom);
             }
 
-            var approvalId = Guid.NewGuid().ToString();
             var evt = new LocalOutboxEvent
             {
                 Id = approvalId,

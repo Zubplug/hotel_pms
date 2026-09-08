@@ -1192,14 +1192,6 @@ export default function PosApp() {
                 <div className="flex gap-2 w-full">
                   <button
                     className={`flex-1 h-11 font-black text-sm tracking-wide rounded-xl transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 flex items-center justify-center gap-1 touch-manipulation bg-white border-2 border-slate-200 text-slate-700 hover:border-slate-300`}
-                    onClick={() => setShowDiscountModal(true)}
-                    disabled={isProcessing}
-                  >
-                    <Percent className="w-4 h-4" />
-                    DISC
-                  </button>
-                  <button
-                    className={`flex-1 h-11 font-black text-sm tracking-wide rounded-xl transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 flex items-center justify-center gap-1 touch-manipulation bg-white border-2 border-slate-200 text-slate-700 hover:border-slate-300`}
                     onClick={() => setShowComplimentaryModal(true)}
                     disabled={isProcessing}
                   >
