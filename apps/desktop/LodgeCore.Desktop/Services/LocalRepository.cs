@@ -1916,15 +1916,35 @@ public class LocalRepository
                 room.UpdatedAt = DateTime.UtcNow;
             }
 
-            var cleaningTask = new LocalHousekeepingTask
+            var cleaningTask = await _dbContext.HousekeepingTasks
+                .Where(task => task.PropertyId == res.PropertyId
+                    && task.RoomId == checkoutRoomId
+                    && (task.TaskType == "STAYOVER" || task.TaskType == "CHECKOUT" || task.TaskType == "CLEANING")
+                    && task.Status != "INSPECTED"
+                    && task.Status != "CANCELLED")
+                .OrderByDescending(task => task.CreatedAt)
+                .FirstOrDefaultAsync();
+
+            if (cleaningTask == null)
             {
-                PropertyId = res.PropertyId,
-                RoomId = checkoutRoomId,
-                RoomNumber = room?.Number ?? res.RoomNumber ?? "",
-                TaskType = "CLEANING",
-                Status = "CLEANING"
-            };
-            _dbContext.HousekeepingTasks.Add(cleaningTask);
+                cleaningTask = new LocalHousekeepingTask
+                {
+                    PropertyId = res.PropertyId,
+                    RoomId = checkoutRoomId,
+                    RoomNumber = room?.Number ?? res.RoomNumber ?? "",
+                    TaskType = "CHECKOUT",
+                    Status = "CLEANING"
+                };
+                _dbContext.HousekeepingTasks.Add(cleaningTask);
+            }
+            else
+            {
+                cleaningTask.TaskType = "CHECKOUT";
+                cleaningTask.Status = "CLEANING";
+                cleaningTask.RoomNumber = room?.Number ?? cleaningTask.RoomNumber;
+                cleaningTask.IsDirty = true;
+                cleaningTask.UpdatedAt = DateTime.UtcNow;
+            }
 
             _dbContext.OutboxEvents.Add(new LocalOutboxEvent
             {
@@ -1934,9 +1954,11 @@ public class LocalRepository
                 AggregateType = "HOUSEKEEPING_TASK",
                 AggregateId = cleaningTask.Id,
                 AggregateVersion = 1,
-                EventType = "CREATE",
+                EventType = cleaningTask.IsDirty ? "UPDATE_STATUS" : "CREATE",
                 Sequence = 1,
-                PayloadJson = JsonSerializer.Serialize(cleaningTask)
+                PayloadJson = cleaningTask.IsDirty
+                    ? JsonSerializer.Serialize(new { status = "CLEANING", taskType = "CHECKOUT", roomId = checkoutRoomId })
+                    : JsonSerializer.Serialize(cleaningTask)
             });
         }
 

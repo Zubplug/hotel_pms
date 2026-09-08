@@ -6,6 +6,8 @@ import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { hasPermission } from '@/lib/rbac';
 import { assertPropertyAccess } from '@/lib/property-access';
+import { getPropertyBusinessDate } from '@/lib/kpi';
+import { activeOccupancyWhere } from '@/lib/room-occupancy';
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
   'CLEANING': ['INSPECTED', 'MAINTENANCE_REQUIRED'],
@@ -46,6 +48,13 @@ export async function PATCH(
     const canManage = isReceptionist || capabilities.includes('ACCESS_MANAGEMENT') || await hasPermission(session.user.id, 'housekeeping', 'update', task.propertyId);
     if (!canManage) return errorResponse('FORBIDDEN', 'Only reception or management can update housekeeping tasks', 403);
 
+    const businessDate = await getPropertyBusinessDate(task.propertyId);
+    const occupiedAssignment = await prisma.reservationRoom.findFirst({
+      where: { ...activeOccupancyWhere(task.propertyId), roomId: task.roomId },
+      select: { id: true },
+    });
+    const roomIsOccupied = Boolean(occupiedAssignment);
+
     // Determine target status
     const requestedStatus = status ? String(status).toUpperCase() : undefined;
     let targetStatus = requestedStatus || task.status;
@@ -74,8 +83,13 @@ export async function PATCH(
       let roomHskUpdate = targetStatus;
 
       // Sync Room status based on Task status
-      if (targetStatus === 'CLEANING' && task.room.status !== 'OCCUPIED') roomStatusUpdate = 'CLEANING';
-      if (targetStatus === 'INSPECTED' && task.room.status !== 'OCCUPIED') roomStatusUpdate = 'AVAILABLE';
+      if (roomIsOccupied) {
+        roomStatusUpdate = 'OCCUPIED';
+      } else if (targetStatus === 'CLEANING') {
+        roomStatusUpdate = 'CLEANING';
+      } else if (targetStatus === 'INSPECTED') {
+        roomStatusUpdate = 'AVAILABLE';
+      }
       if (targetStatus === 'MAINTENANCE_REQUIRED') roomStatusUpdate = 'MAINTENANCE';
 
       const updateData: any = {

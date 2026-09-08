@@ -5,6 +5,8 @@ import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { hasPermission } from '@/lib/rbac';
+import { getPropertyBusinessDate } from '@/lib/kpi';
+import { activeOccupancyWhere } from '@/lib/room-occupancy';
 export async function GET(req: NextRequest) {
   try {
     const session = await auth();
@@ -89,8 +91,11 @@ export async function POST(req: NextRequest) {
     }
     const canManage = await hasPermission(session.user.id, 'housekeeping', 'create', propertyId);
     if (!canManage) return errorResponse('FORBIDDEN', 'Insufficient permissions', 403);
-    const businessDate = new Date();
-    businessDate.setUTCHours(0, 0, 0, 0);
+    const businessDate = await getPropertyBusinessDate(propertyId);
+    const occupiedAssignment = await prisma.reservationRoom.findFirst({
+      where: { ...activeOccupancyWhere(propertyId), roomId },
+      select: { id: true },
+    });
     const task = await prisma.housekeepingTask.create({
       data: {
         propertyId,
@@ -107,7 +112,11 @@ export async function POST(req: NextRequest) {
     // Sync room housekeeping status
     await prisma.room.update({
       where: { id: roomId },
-      data: { housekeepingStatus: 'CLEANING', status: 'CLEANING' }
+      data: {
+        housekeepingStatus: 'CLEANING',
+        // Stayover housekeeping never makes an occupied room vacant.
+        status: occupiedAssignment ? 'OCCUPIED' : 'CLEANING',
+      }
     });
     return successResponse(task, 201);
   } catch (err) {

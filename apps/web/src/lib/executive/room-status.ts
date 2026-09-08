@@ -51,9 +51,8 @@ export async function calculateRoomStatuses(propertyId: string, businessDate: Da
   const activeReservations = await prisma.reservationRoom.findMany({
     where: {
       room: { propertyId },
-      status: { notIn: ['CANCELLED', 'NO_SHOW'] },
-      checkIn: { lt: endOfDay },
-      checkOut: { gt: startOfDay }
+      status: 'ACTIVE',
+      reservation: { status: 'CHECKED_IN' },
     },
     select: { roomId: true, status: true, checkIn: true }
   });
@@ -252,9 +251,8 @@ export async function getRoomIntelligenceView(
   const activeOccupancy = await prisma.reservationRoom.findFirst({
     where: {
       roomId,
-      status: { notIn: ['CANCELLED', 'NO_SHOW'] },
-      checkIn: { lt: endOfDay },
-      checkOut: { gt: startOfDay }
+      status: 'ACTIVE',
+      reservation: { status: 'CHECKED_IN' },
     },
     select: { id: true }
   });
@@ -306,9 +304,8 @@ export async function getRoomIntelligenceView(
   const currentRes = await prisma.reservationRoom.findFirst({
     where: {
       roomId,
-      status: { notIn: ['CANCELLED', 'NO_SHOW'] },
-      checkIn: { lt: endOfDay },
-      checkOut: { gt: startOfDay }
+      status: 'ACTIVE',
+      reservation: { status: 'CHECKED_IN' },
     },
     include: {
       reservation: { 

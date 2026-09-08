@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { requireOrganizationContext } from "@/lib/organization-access";
+import { reconcileRoomOccupancy } from '@/lib/room-occupancy';
 
 export async function GET(req: NextRequest) {
   try {
@@ -13,6 +14,9 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url);
     const propertyId = url.searchParams.get('propertyId');
     if (!propertyId) return errorResponse('BAD_REQUEST', 'Property ID is required', 400);
+    if (!(ctx.propertyIds as string[]).includes(propertyId) && !(session.user as any).isSuperAdmin) {
+      return errorResponse('FORBIDDEN', 'No access to this property', 403);
+    }
 
     const property = await prisma.property.findUnique({
       where: { id: propertyId }
@@ -32,6 +36,9 @@ export async function GET(req: NextRequest) {
     const businessDate = property.businessDate
       ? new Date(property.businessDate)
       : new Date(`${todayString}T00:00:00.000Z`);
+    // Keep the physical room table aligned with the authoritative reservation
+    // occupancy before returning dashboard and room-status figures.
+    await reconcileRoomOccupancy(propertyId, businessDate);
     
     // For Arrivals and Departures, we always use the physical calendar date 
     // so staff can see real-world today's activity even if Night Audit hasn't run.
@@ -61,13 +68,13 @@ export async function GET(req: NextRequest) {
       }),
       // Room stats
       prisma.room.findMany({
-        where: { propertyId: { in: ctx.propertyIds as string[] }, isActive: true },
+        where: { propertyId, isActive: true },
         select: { status: true }
       })
     ]);
 
     const totalRooms = rooms.length;
-    const availableRooms = rooms.filter((r: any) => r.status === 'AVAILABLE' || r.status === 'CLEAN').length;
+    const availableRooms = rooms.filter((r: any) => ['AVAILABLE', 'CLEAN', 'INSPECTED'].includes(r.status)).length;
 
     let encoderStatus = 'OFFLINE';
     let encoderMessage = 'Check the front-desk hardware connection.';

@@ -2412,24 +2412,44 @@ export async function POST(req: NextRequest) {
                   "Housekeeping task room not found or unauthorized",
                 );
               const taskType = payload.TaskType || payload.taskType || "CLEANING";
-              await tx.housekeepingTask.create({
-                data: {
-                  id: aggregateId,
+              const taskStatus = String(
+                payload.Status || payload.status || "CLEANING",
+              ).replace(/^(PENDING|ASSIGNED|CLEAN)$/i, "CLEANING") as any;
+              const openTask = await tx.housekeepingTask.findFirst({
+                where: {
                   propertyId,
                   roomId,
-                  type: taskType,
-                  priority: payload.Priority || payload.priority || "NORMAL",
-                  status: String(
-                    payload.Status || payload.status || "CLEANING",
-                  ).replace(/^(PENDING|ASSIGNED|CLEAN)$/i, "CLEANING") as any,
-                  businessDate: authoritativeBusinessDate,
-                  assignedTo: isUuid(
-                    payload.AssignedToUserId || payload.assignedToUserId,
-                  )
-                    ? payload.AssignedToUserId || payload.assignedToUserId
-                    : null,
+                  type: { in: ["STAYOVER", "CHECKOUT", "CLEANING"] },
+                  status: { notIn: ["INSPECTED", "CANCELLED"] },
                 },
+                orderBy: { createdAt: "desc" },
               });
+              await (openTask
+                ? tx.housekeepingTask.update({
+                    where: { id: openTask.id },
+                    data: {
+                      ...(String(taskType).toUpperCase() === "CHECKOUT" ? { type: "CHECKOUT" } : {}),
+                      priority: payload.Priority || payload.priority || openTask.priority,
+                      status: taskStatus,
+                      businessDate: authoritativeBusinessDate,
+                    },
+                  })
+                : tx.housekeepingTask.create({
+                    data: {
+                      id: aggregateId,
+                      propertyId,
+                      roomId,
+                      type: taskType,
+                      priority: payload.Priority || payload.priority || "NORMAL",
+                      status: taskStatus,
+                      businessDate: authoritativeBusinessDate,
+                      assignedTo: isUuid(
+                        payload.AssignedToUserId || payload.assignedToUserId,
+                      )
+                        ? payload.AssignedToUserId || payload.assignedToUserId
+                        : null,
+                    },
+                  }));
 
               // When a CLEANING or STAYOVER task is created the room must
               // immediately become DIRTY so it never shows as AVAILABLE while
@@ -2437,12 +2457,16 @@ export async function POST(req: NextRequest) {
               // OCCUPIED (checked-in guest with a stayover task) — in that case
               // keep OCCUPIED but still record the housekeepingStatus.
               if (taskType === "CLEANING" || taskType === "STAYOVER") {
-                const currentRoom = await tx.room.findUnique({
-                  where: { id: roomId },
-                  select: { status: true },
+                const checkedInAssignment = await tx.reservationRoom.findFirst({
+                  where: {
+                    roomId,
+                    status: "ACTIVE",
+                    reservation: { propertyId, status: "CHECKED_IN" },
+                  },
+                  select: { id: true },
                 });
                 const newRoomStatus =
-                  currentRoom?.status === "OCCUPIED" ? "OCCUPIED" : "DIRTY";
+                  checkedInAssignment ? "OCCUPIED" : "DIRTY";
                 await tx.room.update({
                   where: { id: roomId },
                   data: {
@@ -2456,6 +2480,8 @@ export async function POST(req: NextRequest) {
                 payload.Status || payload.status || "CLEANING",
               ).replace(/^(PENDING|ASSIGNED|CLEAN)$/i, "CLEANING");
               const updateData: any = { status: currentStatus as any };
+              const taskType = payload.TaskType || payload.taskType;
+              if (taskType) updateData.type = String(taskType).toUpperCase();
               if (currentStatus === "IN_PROGRESS") {
                 updateData.startedAt = new Date();
               } else if (currentStatus === "COMPLETED") {
@@ -2481,7 +2507,15 @@ export async function POST(req: NextRequest) {
                           ? "MAINTENANCE"
                           : undefined;
 
-                if (task.room?.status === "OCCUPIED" && (roomStatus === "CLEANING" || roomStatus === "AVAILABLE")) {
+                const checkedInReservation = await tx.reservationRoom.findFirst({
+                  where: {
+                    roomId: task.roomId,
+                    status: "ACTIVE",
+                    reservation: { propertyId, status: "CHECKED_IN" },
+                  },
+                  select: { id: true },
+                });
+                if (checkedInReservation && (roomStatus === "CLEANING" || roomStatus === "AVAILABLE")) {
                   roomStatus = "OCCUPIED"; // Or undefined, to not change it
                 }
 

@@ -200,7 +200,6 @@ export async function executeNightAudit(
     where: {
       propertyId,
       status: 'CHECKED_IN',
-      checkOut: { gt: businessDate }
     },
     include: {
       priorities: true,
@@ -331,8 +330,14 @@ export async function executeNightAudit(
 
             const hkIdempotencyKey = `STAYOVER_${reservation.id}_${room.id}_${nextBusinessDate.toISOString().split('T')[0]}`;
             
-            const existingTask = await tx.housekeepingTask.findUnique({
-              where: { idempotencyKey: hkIdempotencyKey }
+            const existingTask = await tx.housekeepingTask.findFirst({
+              where: {
+                propertyId,
+                roomId: room.id,
+                type: { in: ['STAYOVER', 'CHECKOUT'] },
+                status: { notIn: ['INSPECTED', 'CANCELLED'] },
+              },
+              orderBy: { createdAt: 'desc' },
             });
 
             if (existingTask) {
@@ -360,7 +365,12 @@ export async function executeNightAudit(
 
             await tx.room.update({
               where: { id: room.id },
-              data: { housekeepingStatus: 'CLEANING' }
+              data: {
+                housekeepingStatus: 'CLEANING',
+                ...(!['OUT_OF_ORDER', 'OUT_OF_SERVICE', 'MAINTENANCE', 'BLOCKED'].includes(room.status)
+                  ? { status: 'OCCUPIED' }
+                  : {})
+              }
             });
             
             totalTasksCreated++;

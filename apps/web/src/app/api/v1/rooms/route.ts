@@ -7,6 +7,8 @@ import { hasPermission } from '@/lib/rbac';
 import { assertPropertyAccess, ForbiddenError, } from '@/lib/property-access';
 import { requireOrganizationContext } from '@/lib/organization-access';
 import { createRoomSchema, roomQuerySchema } from '@hotel-pms/types';
+import { getPropertyBusinessDate } from '@/lib/kpi';
+import { reconcileRoomOccupancy } from '@/lib/room-occupancy';
 
 export async function GET(req: NextRequest) {
   try {
@@ -50,6 +52,10 @@ export async function GET(req: NextRequest) {
       } : {}),
       deletedAt: null,
     };
+
+    if (query.propertyId) {
+      await reconcileRoomOccupancy(query.propertyId, await getPropertyBusinessDate(query.propertyId));
+    }
 
     const sortField: Record<string, unknown> = {
       number: { number: query.sortOrder },

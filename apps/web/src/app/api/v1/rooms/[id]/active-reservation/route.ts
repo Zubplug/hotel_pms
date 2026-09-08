@@ -4,6 +4,8 @@ import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { assertPropertyAccess, ForbiddenError } from '@/lib/property-access';
 import { requireOrganizationContext } from "@/lib/organization-access";
+import { getPropertyBusinessDate } from '@/lib/kpi';
+import { activeOccupancyWhere } from '@/lib/room-occupancy';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -20,6 +22,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
     });
 
     if (!room) return errorResponse('NOT_FOUND', 'Room not found', 404);
+    const businessDate = await getPropertyBusinessDate(room.propertyId);
 
     // Enforce property/organization authorization server-side
     await assertPropertyAccess(session.user.id, room.propertyId);
@@ -28,11 +31,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
     // where the parent reservation is currently CHECKED_IN
     const activeAssignment = await prisma.reservationRoom.findFirst({
       where: {
+        ...activeOccupancyWhere(room.propertyId),
         roomId: id,
-        status: 'ACTIVE',
-        reservation: {
-          status: 'CHECKED_IN',
-        }
       },
       include: {
         reservation: {

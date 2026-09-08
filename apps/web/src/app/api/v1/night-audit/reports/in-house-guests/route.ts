@@ -5,6 +5,7 @@ import { auth } from '@/lib/auth';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import prisma from '@hotel-pms/db';
 import { format } from 'date-fns';
+import { activeOccupancyWhere } from '@/lib/room-occupancy';
 
 export async function GET(req: NextRequest) {
   try {
@@ -27,7 +28,11 @@ export async function GET(req: NextRequest) {
     const property = await prisma.property.findUnique({ where: { id: propertyId } });
 
     const reservations = await prisma.reservation.findMany({
-      where: { propertyId, status: 'CHECKED_IN' },
+      where: {
+        propertyId,
+        status: 'CHECKED_IN',
+        reservationRooms: { some: activeOccupancyWhere(propertyId) },
+      },
       include: {
         primaryGuest: true,
         reservationRooms: { include: { room: true } },

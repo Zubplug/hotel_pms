@@ -1108,19 +1108,18 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     var incomingRoomStatus = el.TryGetProperty("status", out var st) && st.ValueKind != System.Text.Json.JsonValueKind.Null
                         ? st.GetString() ?? ""
                         : "";
-                    var hasOpenCleaningTask = await dbContext.HousekeepingTasks.AnyAsync(
-                        task => task.RoomId == id
-                            && task.TaskType == "CLEANING"
-                            && task.Status != "INSPECTED"
-                            && task.Status != "CANCELLED",
-                        stoppingToken);
-                    var hasCheckedOutReservation = await dbContext.Reservations
-                        .AnyAsync(reservation => reservation.Status == "CHECKED_OUT"
-                            && reservation.Rooms.Any(reservationRoom => reservationRoom.RoomId == id), stoppingToken);
+                    var hasCheckedInReservation = await dbContext.Reservations
+                        .AnyAsync(reservation => reservation.Status == "CHECKED_IN"
+                            && reservation.Rooms.Any(reservationRoom => reservationRoom.RoomId == id && reservationRoom.Status == "ACTIVE"), stoppingToken);
 
-                    var preserveDirtyState = incomingRoomStatus == "OCCUPIED"
-                        && (hasOpenCleaningTask || hasCheckedOutReservation);
-                    if (!preserveDirtyState)
+                    if (hasCheckedInReservation)
+                    {
+                        room.Status = "OCCUPIED";
+                        room.HousekeepingStatus = el.TryGetProperty("housekeepingStatus", out var occupiedHs) && occupiedHs.ValueKind != JsonValueKind.Null
+                            ? occupiedHs.GetString() ?? room.HousekeepingStatus
+                            : room.HousekeepingStatus;
+                    }
+                    else
                     {
                         room.Status = incomingRoomStatus;
                         room.HousekeepingStatus = el.TryGetProperty("housekeepingStatus", out var hs) && hs.ValueKind != System.Text.Json.JsonValueKind.Null

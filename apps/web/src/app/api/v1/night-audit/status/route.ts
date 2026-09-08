@@ -8,6 +8,7 @@ import { assertPropertyAccess } from '@/lib/property-access';
 import prisma from '@hotel-pms/db';
 import { getPropertyBusinessDate } from '@/lib/date-utils';
 import { getOperationalReview, getSystemIntegrity, getFinancialAudit, getCashReconciliation } from '@/lib/night-audit-service';
+import { activeOccupancyWhere, reconcileRoomOccupancy } from '@/lib/room-occupancy';
 
 export async function GET(req: NextRequest) {
   try {
@@ -47,6 +48,7 @@ export async function GET(req: NextRequest) {
       ? bDate.toISOString().slice(0, 10)
       : (typeof bDate === 'string' ? bDate.slice(0, 10) : String(bDate).slice(0, 10));
     const localToday = getPropertyBusinessDate(property.timezone);
+    await reconcileRoomOccupancy(propertyId, businessDate);
     const [currentAudit, activeAudit] = await Promise.all([
       prisma.nightAudit.findUnique({ 
         where: { propertyId_businessDate: { propertyId, businessDate } },
@@ -70,7 +72,13 @@ export async function GET(req: NextRequest) {
     trendStart.setUTCDate(trendStart.getUTCDate() - 6);
     const [rooms, inHouseGuests, charges, payments, latePostings, sessions, trend, activityFeed, financialSnapshot] = await Promise.all([
       prisma.room.findMany({ where: { propertyId, isActive: true }, select: { status: true } }),
-      prisma.reservation.count({ where: { propertyId, status: 'CHECKED_IN' } }),
+      prisma.reservation.count({
+        where: {
+          propertyId,
+          status: 'CHECKED_IN',
+          reservationRooms: { some: activeOccupancyWhere(propertyId) },
+        }
+      }),
       prisma.folioItem.aggregate({ where: { folio: { propertyId }, businessDate, type: 'CHARGE', voidedAt: null }, _sum: { amount: true } }),
       prisma.folioItem.aggregate({ where: { folio: { propertyId }, businessDate, type: { in: ['PAYMENT', 'REFUND'] }, voidedAt: null }, _sum: { amount: true } }),
       prisma.folioItem.count({ where: { folio: { propertyId }, businessDate, isLatePosting: true, voidedAt: null } }),

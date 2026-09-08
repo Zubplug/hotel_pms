@@ -92,7 +92,6 @@ export async function calculateDailyRevenue(propertyId: string, businessDate: Da
     where: {
       propertyId,
       status: 'CHECKED_IN',
-      checkOut: { gt: businessDate }
     },
     include: {
       reservationRooms: { where: { status: 'ACTIVE' } },
@@ -182,8 +181,6 @@ export async function calculateRoomStats(propertyId: string, businessDate: Date)
   const occupiedRooms = await prisma.reservationRoom.count({
     where: {
       reservation: { propertyId },
-      checkIn: { lte: businessDate },
-      checkOut: { gt: businessDate }, // gt because checkout day is not occupied
       status: { notIn: ['CANCELLED', 'NO_SHOW'] },
     }
   });
@@ -351,9 +348,7 @@ export async function getRoomSummary(propertyId: string) {
   const occupied = await prisma.reservationRoom.count({
     where: {
       reservation: { propertyId, status: 'CHECKED_IN' },
-      checkIn: { lte: businessDate },
-      checkOut: { gt: businessDate },
-      status: { notIn: ['CANCELLED', 'NO_SHOW'] },
+      status: 'ACTIVE',
       roomId: { not: null },
     }
   });
@@ -392,4 +387,3 @@ export async function getSyncSummary(propertyId: string) {
 
   return { online: onlineCount, offline: offlineCount, total: terminals.length };
 }
-

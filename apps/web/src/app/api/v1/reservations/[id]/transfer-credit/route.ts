@@ -9,6 +9,7 @@ import { lockOrchestrator } from '@/lib/locks/orchestrator';
 import crypto from 'crypto';
 import { NotificationEngine } from '@/lib/notification-engine';
 import { requireOrganizationContext } from "@/lib/organization-access";
+import { upsertCheckoutHousekeepingTask } from '@/lib/housekeeping-task';
 
 export async function POST(
   req: NextRequest,
@@ -183,21 +184,13 @@ export async function POST(
             data: { status: 'CLEANING', housekeepingStatus: 'CLEANING' },
           });
 
-          const hskKey = `CHECKOUT_${id}_${rr.room.id}`;
-          const hskTask = await tx.housekeepingTask.upsert({
-            where: { idempotencyKey: hskKey },
-            update: { status: 'CLEANING', startedAt: new Date() },
-            create: {
-              idempotencyKey: hskKey,
-              propertyId: reservation.propertyId,
-              roomId: rr.room.id,
-              type: 'CHECKOUT',
-              priority,
-              status: 'CLEANING',
-              startedAt: new Date(),
-              businessDate,
-              notes: priority === 'HIGH' ? 'Back-to-back arrival expected today.' : null
-            }
+          const { task: hskTask } = await upsertCheckoutHousekeepingTask(tx, {
+            reservationId: id,
+            propertyId: reservation.propertyId,
+            roomId: rr.room.id,
+            priority,
+            businessDate,
+            notes: priority === 'HIGH' ? 'Back-to-back arrival expected today.' : null,
           });
           if (hskTask.createdAt >= businessDate) { tasksCreated++; }
         }

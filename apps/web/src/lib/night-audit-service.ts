@@ -29,8 +29,6 @@ export async function getOperationalReview(ctx: TenantContext, propertyId: strin
       reservation: { propertyId, status: { in: ['CONFIRMED', 'CHECKED_IN'] } },
       status: 'ACTIVE',
       roomId: { not: null },
-      checkIn: { lte: businessDate },
-      checkOut: { gt: businessDate },
     },
     select: { roomId: true, reservation: { select: { status: true } } },
   });
