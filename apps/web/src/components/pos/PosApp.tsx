@@ -218,10 +218,12 @@ export default function PosApp() {
               setSessionContext(contextRes.data);
               if (contextRes.data.bankingModel) setBankingModel(contextRes.data.bankingModel);
             } else {
-              // The cash bank doesn't exist anymore, but we don't kick them out of the POS.
-              // Just clear the cash bank ID.
-              localStorage.removeItem('lodgecore_pos_session_id');
-              setPosSessionId('');
+              // Keep the trusted session ID during offline/transient context
+              // failures. The desktop bridge can recover the authoritative
+              // session from SQLite after operator authentication. Clearing
+              // this value here makes an active waiter shift look like a new
+              // shift after the app is closed and reopened offline.
+              console.warn('POS session context unavailable; preserving saved session for offline recovery');
             }
           } catch {
             console.error('Failed to load POS cash bank context');

@@ -193,11 +193,15 @@ export function FolioSection({ reservation }: { reservation: any }) {
               <Receipt className="h-5 w-5" />
             </div>
             <div className="min-w-0">
-              <CardTitle className="text-lg font-bold sm:text-xl">Folio Ledger</CardTitle>
-              <p className="mt-0.5 truncate text-xs text-slate-300">Charges, payments and credits for this stay</p>
+              <CardTitle className="text-lg font-bold sm:text-xl">
+                {folio.type === 'CITY_LEDGER' ? 'Corporate Shared Folio' : 'Folio Ledger'}
+              </CardTitle>
+              <p className="mt-0.5 truncate text-xs text-slate-300">
+                {folio.type === 'CITY_LEDGER' ? 'Shared charges, payments and credits for this corporate account' : 'Charges, payments and credits for this stay'}
+              </p>
             </div>
             <Badge className="shrink-0 border-white/20 bg-white/10 text-white uppercase" variant="outline">
-              {folio.status}
+              {folio.type === 'CITY_LEDGER' ? 'CORPORATE SHARED' : folio.status}
             </Badge>
           </div>
           <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto lg:justify-end">

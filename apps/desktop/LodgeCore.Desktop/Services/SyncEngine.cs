@@ -1522,7 +1522,11 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                         folio = new LodgeCore.Desktop.Data.Entities.LocalFolio { Id = id, PropertyId = propertyId, CreatedAt = DateTime.UtcNow };
                         dbContext.Folios.Add(folio);
                     }
-                    folio.ReservationId = el.TryGetProperty("reservationId", out var ri) && ri.ValueKind != System.Text.Json.JsonValueKind.Null ? ri.GetString() ?? "" : "";
+                    folio.CorporateAccountId = el.TryGetProperty("corporateAccountId", out var cai) && cai.ValueKind != System.Text.Json.JsonValueKind.Null ? cai.GetString() : null;
+                    folio.ReservationId = el.TryGetProperty("reservationId", out var ri) && ri.ValueKind != System.Text.Json.JsonValueKind.Null
+                        ? ri.GetString()
+                        : (string.IsNullOrEmpty(folio.CorporateAccountId) ? null : string.Empty);
+                    folio.Type = el.TryGetProperty("type", out var folioType) && folioType.ValueKind != System.Text.Json.JsonValueKind.Null ? folioType.GetString() ?? "ROOM" : "ROOM";
                     folio.Status = el.TryGetProperty("status", out var st) && st.ValueKind != System.Text.Json.JsonValueKind.Null ? st.GetString() ?? "" : "";
                     folio.TotalCharges = el.TryGetProperty("totalCharges", out var tc) && tc.ValueKind != System.Text.Json.JsonValueKind.Null && decimal.TryParse(tc.GetString(), out var tcd) ? tcd : 0m;
                     folio.TotalPayments = el.TryGetProperty("totalPayments", out var tp) && tp.ValueKind != System.Text.Json.JsonValueKind.Null && decimal.TryParse(tp.GetString(), out var tpd) ? tpd : 0m;
@@ -2008,7 +2012,17 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     posSession.PropertyId = propertyId;
                     posSession.OutletId = el.TryGetProperty("outletId", out var oid) && oid.ValueKind != System.Text.Json.JsonValueKind.Null ? oid.GetString() ?? "" : "";
                     posSession.DeviceId = el.TryGetProperty("deviceId", out var did) && did.ValueKind != System.Text.Json.JsonValueKind.Null ? did.GetString() : null;
-                    posSession.UserId = el.TryGetProperty("userId", out var uid) && uid.ValueKind != System.Text.Json.JsonValueKind.Null ? uid.GetString() ?? "" : "";
+                    var incomingUserId = el.TryGetProperty("userId", out var uid) && uid.ValueKind != System.Text.Json.JsonValueKind.Null
+                        ? uid.GetString()
+                        : null;
+                    var incomingPrimaryOperatorId = el.TryGetProperty("primaryOperatorId", out var primaryOperator) && primaryOperator.ValueKind != System.Text.Json.JsonValueKind.Null
+                        ? primaryOperator.GetString()
+                        : null;
+                    // Waiter/server sessions are owned by primaryOperatorId.
+                    // The server PosSession does not always have a userId, so
+                    // project the owner into the legacy local fields as a
+                    // fallback to survive offline restarts.
+                    posSession.UserId = incomingUserId ?? incomingPrimaryOperatorId ?? posSession.UserId;
                     posSession.Status = el.TryGetProperty("status", out var st) && st.ValueKind != System.Text.Json.JsonValueKind.Null ? st.GetString() ?? "" : "";
                     posSession.ControlStatus = el.TryGetProperty("controlStatus", out var csStatus) && csStatus.ValueKind != System.Text.Json.JsonValueKind.Null
                         ? csStatus.GetString() ?? posSession.ControlStatus
@@ -2021,7 +2035,8 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     posSession.VarianceStatus = el.TryGetProperty("varianceStatus", out var vsStatus) && vsStatus.ValueKind != System.Text.Json.JsonValueKind.Null ? vsStatus.GetString() : posSession.VarianceStatus;
                     posSession.BankingModel = el.TryGetProperty("bankingModel", out var bm) && bm.ValueKind != System.Text.Json.JsonValueKind.Null ? bm.GetString() ?? "CENTRAL_CASHIER" : "CENTRAL_CASHIER";
                     posSession.BankType = el.TryGetProperty("bankType", out var bt) && bt.ValueKind != System.Text.Json.JsonValueKind.Null ? bt.GetString() ?? "CENTRAL" : "CENTRAL";
-                    posSession.PrimaryOperatorId = el.TryGetProperty("primaryOperatorId", out var poi) && poi.ValueKind != System.Text.Json.JsonValueKind.Null ? poi.GetString() : null;
+                    posSession.PrimaryOperatorId = incomingPrimaryOperatorId ?? posSession.PrimaryOperatorId;
+                    posSession.StaffId = incomingPrimaryOperatorId ?? posSession.StaffId;
                     posSession.AuthorizedBy = el.TryGetProperty("authorizedBy", out var auth) && auth.ValueKind != System.Text.Json.JsonValueKind.Null ? auth.GetString() : null;
                     posSession.Reason = el.TryGetProperty("reason", out var rs) && rs.ValueKind != System.Text.Json.JsonValueKind.Null ? rs.GetString() : null;
                     

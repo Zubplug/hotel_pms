@@ -204,7 +204,7 @@ export async function executeNightAudit(
     include: {
       priorities: true,
       reservationRooms: { where: { status: 'ACTIVE' }, include: { room: true } },
-      folios: { where: { type: { in: ['MAIN', 'ROOM'] }, status: 'OPEN' } },
+      folios: { where: { type: { in: ['MAIN', 'ROOM', 'CITY_LEDGER'] }, status: 'OPEN' } },
       ratePlan: true
     }
     });
@@ -222,8 +222,26 @@ export async function executeNightAudit(
         await prisma.$transaction(async (tx: any) => {
           
           // Post Room Charge Idempotently
-          if (reservation.folios && reservation.folios.length > 0) {
-            const mainFolio = reservation.folios[0];
+          if (reservation.folios && reservation.folios.length > 0 || reservation.corporateAccountId) {
+            const sharedCorporateFolio = reservation.corporateAccountId
+              ? await tx.folio.findFirst({
+                  where: {
+                    propertyId,
+                    corporateAccountId: reservation.corporateAccountId,
+                    type: 'CITY_LEDGER',
+                    status: 'OPEN',
+                  },
+                })
+              : null;
+            const mainFolio = reservation.corporateAccountId
+              ? sharedCorporateFolio
+              : reservation.folios[0];
+            if (!mainFolio) {
+              if (reservation.corporateAccountId) {
+                throw new Error(`Shared corporate CITY_LEDGER folio missing for reservation ${reservation.id}`);
+              }
+              return;
+            }
             const roomChargeKey = `ROOM_CHARGE_${reservation.id}_${businessDate.toISOString().split('T')[0]}`;
             
             // Check if we already posted it in this run

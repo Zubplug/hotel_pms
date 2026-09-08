@@ -205,8 +205,28 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
   const resRoom = reservation?.reservationRooms?.[0];
   const room = resRoom?.room;
   const guest = reservation?.primaryGuest;
+  const corporateAccount = reservation?.corporateAccount;
+  const isCorporateDepositWaived = corporateAccount?.depositPolicy === 'WAIVED';
   
-  let expectedCost = Number(reservation?.ratePlanSnapshot?.total || 0);
+  const snapshotTotal = reservation?.ratePlanSnapshot?.total;
+  let expectedCost = Number(snapshotTotal ?? 0);
+  // Offline reservations created before a rate snapshot was saved may not have
+  // `total`. Match the desktop repository's fallback calculation so a normal
+  // reservation with no credit is still blocked and can use the override.
+  if (snapshotTotal == null && resRoom) {
+    const baseRate = Number(
+      reservation?.ratePlanSnapshot?.baseRate
+      ?? resRoom?.rateAmount
+      ?? room?.roomType?.baseRate
+      ?? 0
+    );
+    const checkIn = reservation?.checkIn || resRoom?.checkIn;
+    const checkOut = reservation?.checkOut || resRoom?.checkOut;
+    const nights = checkIn && checkOut
+      ? Math.max(1, Math.ceil((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86400000))
+      : 1;
+    expectedCost = baseRate * nights;
+  }
   if (expectedCost > 0 && resRoom) {
     if (resRoom.discountType === 'FIXED_AMOUNT') {
       expectedCost -= Number(resRoom.discountAmount || 0);
@@ -229,7 +249,7 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
   const availableCredit = advanceDeposit + (totalPayments - totalCharges);
   const isDepositSufficient = availableCredit >= expectedCost;
   
-  const isReady = reservation?.status === 'CONFIRMED' && room && (isDepositSufficient || isDepositOverride);
+  const isReady = reservation?.status === 'CONFIRMED' && room && (isCorporateDepositWaived || isDepositSufficient || isDepositOverride);
 
   return (
     <Dialog open={open && !!reservationId} onOpenChange={onOpenChange}>
@@ -278,7 +298,7 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
                       </div>
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100">
+                      <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100">
                       <div>
                         <p className="text-sm font-bold text-slate-400 uppercase">Room</p>
                         <p className="font-bold text-slate-800">{room?.number ? formatRoomNumber(room.number) : 'Unassigned'}</p>
@@ -289,8 +309,16 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
                           {reservation.checkOut ? format(new Date(reservation.checkOut), 'MMM d') : 'N/A'}
                         </p>
                       </div>
+                      </div>
+                      {corporateAccount && (
+                        <div className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50 p-3 text-sm">
+                          <p className="font-bold text-indigo-900">Corporate: {corporateAccount.name}</p>
+                          <p className="text-indigo-700">
+                            Deposit policy: {isCorporateDepositWaived ? 'Waived' : 'Required'}
+                          </p>
+                        </div>
+                      )}
                     </div>
-                  </div>
 
                   {!isReady ? (
                     <div className="bg-amber-50 text-amber-800 p-4 rounded-xl text-sm border border-amber-200 mb-6 flex flex-col gap-3">
@@ -303,7 +331,7 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
                         <>
                           <div className="flex items-start gap-2 font-bold">
                             <Wallet className="w-5 h-5 shrink-0" />
-                            <p>Advance Deposit Required for Check-In</p>
+                            <p>{corporateAccount ? 'Corporate Deposit Required for Check-In' : 'Advance Deposit Required for Check-In'}</p>
                           </div>
                           <div className="pl-7 space-y-1">
                             <p>Expected Stay Cost: <strong>{formatCurrency(expectedCost)}</strong></p>
@@ -317,13 +345,15 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
                             >
                               Collect Deposit
                             </Button>
-                            <Button
-                              variant="outline"
-                              onClick={() => setShowManagerOverride(true)}
-                              className="font-bold border-amber-300 text-amber-700 hover:bg-amber-100"
-                            >
-                              Bypass Check-In
-                            </Button>
+                            {!corporateAccount && (
+                              <Button
+                                variant="outline"
+                                onClick={() => setShowManagerOverride(true)}
+                                className="font-bold border-amber-300 text-amber-700 hover:bg-amber-100"
+                              >
+                                Bypass Check-In
+                              </Button>
+                            )}
                           </div>
                         </>
                       )}

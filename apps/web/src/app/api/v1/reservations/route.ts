@@ -243,16 +243,22 @@ export async function POST(req: NextRequest) {
       }
 
       // 7D.1: Create Folio
-      const folioNumber = 'FOL-' + Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
-      const newFolio = await tx.folio.create({
+      const folioPropertyId = typeof reqPropertyId !== "undefined" ? reqPropertyId : ctx.propertyIds[0];
+      const existingCorporateFolio = corporateAccountId
+        ? await tx.folio.findFirst({
+            where: { propertyId: folioPropertyId, corporateAccountId, type: 'CITY_LEDGER', status: 'OPEN' },
+          })
+        : null;
+      const newFolio = existingCorporateFolio ?? await tx.folio.create({
         data: {
-          reservationId: newReservation.id,
-          propertyId: (typeof reqPropertyId !== "undefined" ? reqPropertyId : ctx.propertyIds[0]),
-          guestId: finalGuestId,
-          folioNumber,
-          type: 'ROOM',
+          reservationId: corporateAccountId ? null : newReservation.id,
+          corporateAccountId: corporateAccountId || null,
+          propertyId: folioPropertyId,
+          guestId: corporateAccountId ? null : finalGuestId,
+          folioNumber: 'FOL-' + Math.floor(Math.random() * 1000000).toString().padStart(6, '0'),
+          type: corporateAccountId ? 'CITY_LEDGER' : 'ROOM',
           status: 'OPEN',
-          currency: currency,
+          currency,
           totalCharges: 0,
           totalPayments: 0,
           balance: 0,

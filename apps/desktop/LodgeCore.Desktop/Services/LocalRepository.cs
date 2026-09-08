@@ -110,12 +110,17 @@ public class LocalRepository
 
         // Create Folio
         var folioId = Guid.NewGuid().ToString();
-        var folio = new LocalFolio
+        var folio = !string.IsNullOrEmpty(reservation.CorporateAccountId)
+            ? await _dbContext.Folios.FirstOrDefaultAsync(f => f.CorporateAccountId == reservation.CorporateAccountId && f.Type == "CITY_LEDGER" && f.Status == "OPEN")
+            : null;
+        folio ??= new LocalFolio
         {
             Id = folioId,
             PropertyId = reservation.PropertyId,
-            ReservationId = reservation.Id,
-            Reservation = reservation,
+            ReservationId = string.IsNullOrEmpty(reservation.CorporateAccountId) ? reservation.Id : string.Empty,
+            Reservation = string.IsNullOrEmpty(reservation.CorporateAccountId) ? reservation : null,
+            CorporateAccountId = reservation.CorporateAccountId,
+            Type = string.IsNullOrEmpty(reservation.CorporateAccountId) ? "ROOM" : "CITY_LEDGER",
             Status = "OPEN",
             TotalCharges = 0,
             TotalPayments = 0,
@@ -126,8 +131,8 @@ public class LocalRepository
         // Initialize empty Transactions JSON since we no longer post upfront room charges
         folio.TransactionsJson = JsonSerializer.Serialize(new { items = new List<object>(), payments = new List<object>() });
         
-        _dbContext.Folios.Add(folio);
-        reservation.Folio = folio;
+        if (folio.Id == folioId) _dbContext.Folios.Add(folio);
+        if (string.IsNullOrEmpty(reservation.CorporateAccountId)) reservation.Folio = folio;
         
         // Bundle the mutation with an immutable OutboxEvent
         var outboxEvent = new LocalOutboxEvent
@@ -238,6 +243,7 @@ public class LocalRepository
     {
         return await _dbContext.Reservations
             .Include(r => r.Guest)
+            .Include(r => r.CorporateAccount).ThenInclude(c => c.CorporateFolio)
             .Include(r => r.Folio)
             .Include(r => r.Rooms).ThenInclude(rr => rr.Room)
             .Where(r => r.Status != "CANCELLED")
@@ -248,6 +254,7 @@ public class LocalRepository
     {
         return await _dbContext.Reservations
             .Include(r => r.Guest)
+            .Include(r => r.CorporateAccount).ThenInclude(c => c.CorporateFolio)
             .Include(r => r.Folio)
             .Include(r => r.LockCredentials)
             .Include(r => r.LockOperations)

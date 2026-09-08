@@ -85,6 +85,28 @@ export async function GET(
 
     if (!reservation) return errorResponse('NOT_FOUND', 'Reservation not found', 404);
 
+    // Corporate reservations share one account-level CITY_LEDGER folio. It is
+    // not linked by reservationId, so load it explicitly for this reservation.
+    const sharedCorporateFolio = reservation.corporateAccountId
+      ? await prisma.folio.findFirst({
+          where: {
+            propertyId: reservation.propertyId,
+            corporateAccountId: reservation.corporateAccountId,
+            type: 'CITY_LEDGER',
+            status: 'OPEN',
+          },
+          include: {
+            items: { orderBy: { createdAt: 'asc' } },
+            payments: {
+              orderBy: { createdAt: 'desc' },
+              include: { refunds: { orderBy: { createdAt: 'desc' } } },
+            },
+            credits: { orderBy: { createdAt: 'asc' } },
+            creditApplications: { orderBy: { createdAt: 'asc' }, select: { amount: true } },
+          },
+        })
+      : null;
+
     // Fetch the Audit Log explicitly because Prisma relations to a generic resourceId can be messy
     const auditLogs = await prisma.auditLog.findMany({
       where: {
@@ -105,7 +127,10 @@ export async function GET(
       return true;
     });
 
-    const folios = reservation.folios.map((folio) => ({
+    const loadedFolios = reservation.corporateAccountId
+      ? (sharedCorporateFolio ? [sharedCorporateFolio] : [])
+      : reservation.folios;
+    const folios = loadedFolios.map((folio) => ({
       ...folio,
       availableCredit: folio.credits.reduce((sum, credit) => sum + Number(credit.remainingAmount), 0),
       appliedCreditAmount: folio.creditApplications.reduce((sum, application) => sum + Number(application.amount), 0),

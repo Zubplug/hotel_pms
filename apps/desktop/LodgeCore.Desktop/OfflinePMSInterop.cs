@@ -508,6 +508,16 @@ public class OfflinePMSInterop
                     confirmationNumber = !string.IsNullOrEmpty(r.ConfirmationNumber) ? r.ConfirmationNumber : (r.Id.Length >= 8 ? r.Id.Substring(0, 8).ToUpper() : r.Id.ToUpper()),
                     status = r.Status,
                     propertyId = r.PropertyId,
+                    corporateAccountId = r.CorporateAccountId,
+                    corporateAccount = r.CorporateAccount == null ? null : new {
+                        id = r.CorporateAccount.Id,
+                        name = r.CorporateAccount.Name,
+                        code = r.CorporateAccount.Code,
+                        depositPolicy = r.CorporateAccount.DepositPolicy,
+                        creditLimit = r.CorporateAccount.CreditLimit,
+                        exemptFromHighBalance = r.CorporateAccount.ExemptFromHighBalance,
+                        cityLedgerAccountId = r.CorporateAccount.CityLedgerAccountId
+                    },
                     primaryGuestId = guestId,
                     checkIn = r.CheckInDate,
                     checkOut = r.CheckOutDate,
@@ -518,7 +528,7 @@ public class OfflinePMSInterop
                         ? new { id = r.Guest.Id, firstName = r.Guest.FirstName, lastName = r.Guest.LastName, phone = r.Guest.Phone } 
                         : new { id = "unknown", firstName = "Unknown", lastName = "Guest", phone = (string?)"" },
                     reservationRooms = new[] { new { roomId = roomId, room = new { id = roomId, number = roomNumber, status = assignedRoom?.Room?.Status ?? "AVAILABLE" }, roomType = new { name = roomTypeName }, checkIn = r.CheckInDate, checkOut = r.CheckOutDate } },
-                    folio = new { balance = r.Folio?.OutstandingBalance ?? 0, netBalance = r.Folio?.NetBalance ?? 0, currency = r.Folio?.Currency ?? r.Currency ?? "NGN" },
+                    folio = new { balance = (r.CorporateAccount?.CorporateFolio ?? r.Folio)?.OutstandingBalance ?? 0, netBalance = (r.CorporateAccount?.CorporateFolio ?? r.Folio)?.NetBalance ?? 0, currency = (r.CorporateAccount?.CorporateFolio ?? r.Folio)?.Currency ?? r.Currency ?? "NGN" },
                     isDirty = r.IsDirty
                 };
             });
@@ -850,7 +860,7 @@ public class OfflinePMSInterop
                 ? null
                 : (await _repo.GetRoomTypesAsync(r.PropertyId)).FirstOrDefault(rt => rt.Id == r.RoomTypeId);
 
-            var f = r.Folio;
+            var f = r.CorporateAccount?.CorporateFolio ?? r.Folio;
             var folioJson = f != null && !string.IsNullOrEmpty(f.TransactionsJson) 
                 ? JsonSerializer.Deserialize<System.Text.Json.JsonElement>(f.TransactionsJson, _jsonOptions)
                 : default;
@@ -903,6 +913,18 @@ public class OfflinePMSInterop
                 confirmationNumber = r.Id.Length >= 8 ? r.Id.Substring(0, 8).ToUpper() : r.Id.ToUpper(),
                 status = r.Status,
                 propertyId = r.PropertyId,
+                corporateAccountId = r.CorporateAccountId,
+                corporateAccount = r.CorporateAccount == null ? null : new {
+                    id = r.CorporateAccount.Id,
+                    name = r.CorporateAccount.Name,
+                    code = r.CorporateAccount.Code,
+                    depositPolicy = r.CorporateAccount.DepositPolicy,
+                    creditLimit = r.CorporateAccount.CreditLimit,
+                    exemptFromHighBalance = r.CorporateAccount.ExemptFromHighBalance,
+                    cityLedgerAccountId = r.CorporateAccount.CityLedgerAccountId
+                },
+                depositRequired = r.DepositRequired,
+                depositPaid = r.DepositPaid,
                 checkIn = r.CheckInDate,
                 checkOut = r.CheckOutDate,
                 createdAt = r.CreatedAt,
@@ -961,6 +983,7 @@ public class OfflinePMSInterop
                 folios = new[] {
                     new {
                         id = f?.Id,
+                        type = f?.Type ?? "ROOM",
                         status = f?.Status ?? "OPEN",
                         balance = f?.OutstandingBalance ?? 0,
                         netBalance = f?.NetBalance ?? 0,
@@ -1429,6 +1452,7 @@ public class OfflinePMSInterop
                 { "propertyId", data.PropertyId },
                 { "reservationId", data.ReservationId },
                 { "reservation", data.Reservation! },
+                { "type", data.Type },
                 { "status", data.Status },
                 { "totalCharges", data.TotalCharges },
                 { "totalPayments", data.TotalPayments },
@@ -2266,10 +2290,14 @@ public class OfflinePMSInterop
             var outlet = terminal != null ? await _repo.GetOutletAsync(terminal.OutletId) : null;
             var posSession = string.IsNullOrWhiteSpace(sessionId) ? null : await _repo.GetSessionContextAsync(sessionId);
 
-            // In Server Banking, ensure we don't load another waiter's session 
-            // if React sent a stale sessionId from a previous user.
+            // In Server Banking, ensure we don't load another waiter's session
+            // if React sent a stale sessionId from a previous user. Server
+            // sessions are owned by PrimaryOperatorId; UserId is optional for
+            // waiters and is often blank in the local projection.
             if (posSession != null 
                 && string.Equals(property?.BankingModel, "SERVER_BANKING", StringComparison.OrdinalIgnoreCase)
+                && posSession.PrimaryOperatorId != operatorContext.StaffId
+                && posSession.StaffId != operatorContext.StaffId
                 && posSession.UserId != operatorContext.StaffId)
             {
                 posSession = null;
@@ -2281,10 +2309,14 @@ public class OfflinePMSInterop
             {
                 posSession = await _repo.GetSessionContextAsync(operatorContext.SessionId);
                 
-                // Also ensure that the session we load from operatorContext actually belongs to them 
-                // in case it's a stale reference.
+                // Also ensure that the session we load from operatorContext
+                // actually belongs to them in case it's a stale reference.
+                // PrimaryOperatorId is the authoritative owner for server
+                // banking; UserId is not populated for every waiter.
                 if (posSession != null 
                     && string.Equals(property?.BankingModel, "SERVER_BANKING", StringComparison.OrdinalIgnoreCase)
+                    && posSession.PrimaryOperatorId != operatorContext.StaffId
+                    && posSession.StaffId != operatorContext.StaffId
                     && posSession.UserId != operatorContext.StaffId)
                 {
                     posSession = null;

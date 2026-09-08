@@ -22,7 +22,7 @@ import { FrontDeskCardInformationSection } from './FrontDeskCardInformationSecti
 import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
 import { toast } from 'sonner';
 import { formatRoomNumber } from '@/lib/format-room';
-import { LogIn, User, MapPin, CalendarClock, CreditCard, Receipt, LogOut, ChevronDown, Edit3, XCircle, Loader2, Percent, Gift } from 'lucide-react';
+import { LogIn, User, MapPin, CalendarClock, CreditCard, Receipt, LogOut, ChevronDown, Edit3, XCircle, Loader2, Percent, Gift, Building2 } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -48,6 +48,7 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
   const resRoom = reservation.reservationRooms?.[0];
   const room = resRoom?.room;
   const guest = reservation.primaryGuest;
+  const corporateAccount = reservation.corporateAccount;
   const folio = reservation.folio || reservation.folios?.[0];
 
   const balance = folio?.balance || 0;
@@ -166,6 +167,41 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
               </div>
             </CardContent>
           </Card>
+
+          {corporateAccount ? (
+            <Card className="rounded-3xl border-indigo-200 shadow-sm bg-indigo-50/60">
+              <CardContent className="p-6 space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-xl bg-indigo-100 p-2 text-indigo-700">
+                    <Building2 className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-indigo-500">Corporate Reservation</p>
+                    <p className="font-bold text-indigo-950">{corporateAccount.name}</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-indigo-400">Account Code</p>
+                    <p className="font-semibold text-indigo-900">{corporateAccount.code || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-indigo-400">Deposit Policy</p>
+                    <p className="font-semibold text-indigo-900">
+                      {corporateAccount.depositPolicy === 'WAIVED' ? 'Waived' : 'Required'}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ) : reservation.corporateAccountId ? (
+            <Card className="rounded-3xl border-amber-200 shadow-sm bg-amber-50">
+              <CardContent className="p-6">
+                <p className="text-xs font-bold uppercase tracking-wider text-amber-600">Corporate Link Missing Offline</p>
+                <p className="mt-1 text-sm font-medium text-amber-900">Sync corporate accounts before checking in this reservation.</p>
+              </CardContent>
+            </Card>
+          ) : null}
 
           {/* Stay Info Card */}
           <Card className="rounded-3xl border-slate-200 shadow-sm bg-white">

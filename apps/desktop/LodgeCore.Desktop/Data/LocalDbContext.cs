@@ -239,6 +239,14 @@ public class LocalDbContext : DbContext
         }
     }
 
+    public async Task ApplyCorporateFolioSchemaAsync()
+    {
+        try { await Database.ExecuteSqlRawAsync("ALTER TABLE Folios ADD COLUMN Type TEXT NOT NULL DEFAULT 'ROOM'"); }
+        catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
+        try { await Database.ExecuteSqlRawAsync("ALTER TABLE Folios ADD COLUMN CorporateAccountId TEXT NULL"); }
+        catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
+    }
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
         if (!optionsBuilder.IsConfigured)
@@ -282,7 +290,14 @@ public class LocalDbContext : DbContext
         modelBuilder.Entity<LocalFolio>()
             .HasOne(f => f.Reservation)
             .WithOne(r => r.Folio)
-            .HasForeignKey<LocalFolio>(f => f.ReservationId);
+            .HasForeignKey<LocalFolio>(f => f.ReservationId)
+            .IsRequired(false);
+
+        modelBuilder.Entity<LocalFolio>()
+            .HasOne(f => f.CorporateAccount)
+            .WithOne(c => c.CorporateFolio)
+            .HasForeignKey<LocalFolio>(f => f.CorporateAccountId)
+            .IsRequired(false);
 
         modelBuilder.Entity<LocalLockCredential>()
             .HasOne(c => c.Reservation)

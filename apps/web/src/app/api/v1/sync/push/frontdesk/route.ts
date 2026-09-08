@@ -904,21 +904,26 @@ export async function POST(req: NextRequest) {
             });
 
             // 7D.1: Create Folio
-            const folioNumber =
-              "FOL-" +
-              Math.floor(Math.random() * 1000000)
-                .toString()
-                .padStart(6, "0");
-            const newFolio = await tx.folio.create({
+            const sharedCorporateFolio = corporateAccountId
+              ? await tx.folio.findFirst({
+                  where: { propertyId, corporateAccountId, type: "CITY_LEDGER", status: "OPEN" },
+                })
+              : null;
+            const newFolio = sharedCorporateFolio ?? await tx.folio.create({
               data: {
-                id: isUuid(payload.FolioId || payload.folioId)
+                id: isUuid(payload.FolioId || payload.folioId) && !corporateAccountId
                   ? payload.FolioId || payload.folioId
                   : undefined,
-                reservationId: aggregateId,
+                reservationId: corporateAccountId ? null : aggregateId,
+                corporateAccountId: corporateAccountId || null,
                 propertyId,
-                guestId: finalGuestId,
-                folioNumber,
-                type: "ROOM",
+                guestId: corporateAccountId ? null : finalGuestId,
+                folioNumber:
+                  "FOL-" +
+                  Math.floor(Math.random() * 1000000)
+                    .toString()
+                    .padStart(6, "0"),
+                type: corporateAccountId ? "CITY_LEDGER" : "ROOM",
                 status: "OPEN",
                 currency: currency,
                 totalCharges: 0,
@@ -1200,8 +1205,9 @@ export async function POST(req: NextRequest) {
           } else if (eventType === "DISCOUNT_REQUESTED") {
             const folio = await tx.folio.findUnique({ where: { id: aggregateId, propertyId } });
             if (folio) {
-              await tx.approvalRequest.create({
-                data: {
+              await tx.approvalRequest.upsert({
+                where: { idempotencyKey: `offline_discount:${idempotencyKey}` },
+                create: {
                   propertyId,
                   type: "DISCOUNT",
                   status: "PENDING",
@@ -1214,28 +1220,25 @@ export async function POST(req: NextRequest) {
                   snapshot: { ...payload, targetType: "FOLIO_ITEM", folioId: aggregateId },
                   idempotencyKey: `offline_discount:${idempotencyKey}`,
                 },
+                update: {},
               });
             }
           } else if (eventType === "FOLIO_DISCOUNT_APPLIED") {
             const existingDiscount = await tx.folioItem.findFirst({
               where: { posTransactionId: idempotencyKey },
             });
-            if (existingDiscount) {
-              const e = new Error("IDEMPOTENCY_DUPLICATE");
-              throw e;
-            }
+            if (!existingDiscount) {
+              const amount = Number(payload.amount || Math.abs(payload.unitAmount || 0));
+              if (!Number.isFinite(amount) || amount <= 0)
+                throw new Error("Discount amount must be positive");
 
-            const amount = Number(payload.amount || Math.abs(payload.unitAmount || 0));
-            if (!Number.isFinite(amount) || amount <= 0)
-              throw new Error("Discount amount must be positive");
+              const folio = await tx.folio.findUnique({
+                where: { id: aggregateId, propertyId },
+              });
+              if (!folio) throw new Error("Folio not found or unauthorized");
 
-            const folio = await tx.folio.findUnique({
-              where: { id: aggregateId, propertyId },
-            });
-            if (!folio) throw new Error("Folio not found or unauthorized");
-
-            await tx.folioItem.create({
-              data: {
+              await tx.folioItem.create({
+                data: {
                 folioId: aggregateId,
                 businessDate: authoritativeBusinessDate,
                 type: "DISCOUNT",
@@ -1250,20 +1253,21 @@ export async function POST(req: NextRequest) {
                 deviceId: device.id,
                 isLatePosting: true,
                 posTransactionId: idempotencyKey,
-              },
-            });
+                },
+              });
 
-            await tx.folio.update({
-              where: { id: aggregateId },
-              data: {
-                totalCharges: { decrement: amount },
-                balance: { decrement: amount },
-              },
-            });
+              await tx.folio.update({
+                where: { id: aggregateId },
+                data: {
+                  totalCharges: { decrement: amount },
+                  balance: { decrement: amount },
+                },
+              });
 
-            const approvalKey = `approval:${idempotencyKey}`;
-            await tx.approvalRequest.create({
-              data: {
+              const approvalKey = `approval:${idempotencyKey}`;
+              await tx.approvalRequest.upsert({
+                where: { idempotencyKey: approvalKey },
+                create: {
                 propertyId,
                 type: "DISCOUNT",
                 status: "APPROVED",
@@ -1276,8 +1280,10 @@ export async function POST(req: NextRequest) {
                 reason: payload.description || payload.reason || "Offline Folio Discount",
                 idempotencyKey: approvalKey,
                 details: payload,
-              }
-            });
+                },
+                update: {},
+              });
+            }
 
           } else if (
             eventType === "ADVANCE_DEPOSIT_REQUEST" ||
@@ -2926,8 +2932,9 @@ export async function POST(req: NextRequest) {
               if (!resRoom) {
                 throw new Error(`DEPENDENCY_NOT_READY: Reservation room ${aggregateId} has not been created yet`);
               }
-              await tx.approvalRequest.create({
-                  data: {
+              await tx.approvalRequest.upsert({
+                where: { idempotencyKey: `offline_discount:${idempotencyKey}` },
+                create: {
                     propertyId,
                     type: "DISCOUNT",
                     status: "PENDING",
@@ -2942,7 +2949,8 @@ export async function POST(req: NextRequest) {
                       originalRate: Number(resRoom.rateAmount),
                     },
                     idempotencyKey: `offline_discount:${idempotencyKey}`,
-                  }
+                  },
+                  update: {},
               });
             } else if (eventType === "COMPLIMENTARY_REQUESTED") {
               const resRoom = await tx.reservationRoom.findUnique({ where: { id: aggregateId }, include: { reservation: true } });
@@ -2982,20 +2990,10 @@ export async function POST(req: NextRequest) {
                 );
               }
 
-              await tx.reservationRoom.update({
-                where: { id: aggregateId },
-                data: {
-                  discountType: payload.discountType,
-                  discountAmount: payload.discountAmount || payload.amount,
-                  discountPercent: payload.discountPercent || payload.percentage,
-                  discountReason: payload.reason,
-                }
-              });
-
               // Create an ApprovalRequest so it appears in Night Audit
               // Variances. Use the event key, never Date.now(), so retries
               // cannot create duplicate approvals.
-              await tx.approvalRequest.upsert({
+              const discountApproval = await tx.approvalRequest.upsert({
                 where: { idempotencyKey: `disc_req_${idempotencyKey}` },
                 create: {
                   propertyId,
@@ -3018,6 +3016,20 @@ export async function POST(req: NextRequest) {
                   executionStatus: "APPLIED",
                   reviewedAt: new Date(),
                 },
+              });
+
+              // Night Audit only applies reservation-room discounts linked to
+              // an approved request. Keep the approval link on the room so a
+              // synced discount is actually used for the room charge.
+              await tx.reservationRoom.update({
+                where: { id: aggregateId },
+                data: {
+                  discountType: payload.discountType,
+                  discountAmount: payload.discountAmount || payload.amount,
+                  discountPercent: payload.discountPercent || payload.percentage,
+                  discountReason: payload.reason,
+                  discountApprovalId: discountApproval.id,
+                }
               });
             } else if (eventType === "COMPLIMENTARY_APPLIED") {
               const resRoom = await tx.reservationRoom.findUnique({
@@ -3058,8 +3070,9 @@ export async function POST(req: NextRequest) {
             if (eventType === "DISCOUNT_REQUESTED") {
               const order = await tx.posOrder.findUnique({ where: { id: aggregateId } });
               if (order) {
-                await tx.approvalRequest.create({
-                  data: {
+                await tx.approvalRequest.upsert({
+                  where: { idempotencyKey: `offline_discount:${idempotencyKey}` },
+                  create: {
                     propertyId,
                     outletId: order.outletId,
                     type: "DISCOUNT",
@@ -3072,7 +3085,8 @@ export async function POST(req: NextRequest) {
                     details: payload,
                     snapshot: { ...payload, targetType: "POS_ORDER", orderId: aggregateId },
                     idempotencyKey: `offline_discount:${idempotencyKey}`
-                  }
+                  },
+                  update: {},
                 });
               }
             } else if (eventType === "POS_COMPLIMENTARY_REQUESTED") {
@@ -3100,15 +3114,21 @@ export async function POST(req: NextRequest) {
               // Usually handled in POS sync, but Front Desk sync might receive it occasionally.
               const order = await tx.posOrder.findUnique({ where: { id: aggregateId } });
               if (order) {
+                const amount = Number(payload.amount || payload.discountAmount || 0);
+                const percentage = Number(payload.discountPercent || payload.percentage || 0);
+                const effectiveDiscount = amount > 0
+                  ? amount
+                  : Number(order.subtotal || 0) * (percentage / 100);
                 await tx.posOrder.update({
                   where: { id: aggregateId },
                   data: {
-                    discount: payload.amount,
-                    total: Math.max(0, Number(order.subtotal || 0) + Number(order.serviceCharge || 0) + Number(order.taxAmount || 0) - Number(payload.amount))
+                    discount: effectiveDiscount,
+                    total: Math.max(0, Number(order.subtotal || 0) + Number(order.serviceCharge || 0) + Number(order.taxAmount || 0) - effectiveDiscount)
                   }
                 });
-                await tx.approvalRequest.create({
-                  data: {
+                await tx.approvalRequest.upsert({
+                  where: { idempotencyKey: `pos_disc_${aggregateId}_${idempotencyKey}` },
+                  create: {
                     propertyId,
                     outletId: order.outletId,
                     type: "DISCOUNT",
@@ -3117,12 +3137,17 @@ export async function POST(req: NextRequest) {
                     requestedBy: actorId,
                     reviewedBy: payload.acknowledgedByStaffId || actorId,
                     reviewedAt: new Date(),
-                    amount: payload.amount,
+                    amount: effectiveDiscount,
                     currency: "NGN",
                     reason: payload.reason || "Offline POS Discount",
                     details: payload,
-                    idempotencyKey: `pos_disc_${aggregateId}_${Date.now()}`
-                  }
+                    idempotencyKey: `pos_disc_${aggregateId}_${idempotencyKey}`
+                  },
+                  update: {
+                    status: "APPROVED",
+                    executionStatus: "APPLIED",
+                    amount: effectiveDiscount,
+                  },
                 });
               }
             } else if (eventType === "POS_COMPLIMENTARY_APPLIED") {

@@ -468,6 +468,24 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    const corporateAccountIds = [...new Set(
+      finalReservations.map((reservation: any) => reservation.corporateAccountId).filter(Boolean),
+    )];
+    const sharedCorporateFolios = corporateAccountIds.length > 0
+      ? await prisma.folio.findMany({
+          where: {
+            propertyId,
+            corporateAccountId: { in: corporateAccountIds },
+            type: 'CITY_LEDGER',
+            status: 'OPEN',
+          },
+          include: { items: true, payments: true, credits: true },
+        })
+      : [];
+    const sharedCorporateFolioByAccount = new Map(
+      sharedCorporateFolios.map((folio: any) => [folio.corporateAccountId, folio]),
+    );
+
     // Flatten Guests and Folios from the resulting reservations
     const guestMap = new Map<string, any>();
     finalGuests.forEach(g => guestMap.set(g.id, g));
@@ -476,6 +494,12 @@ export async function GET(req: NextRequest) {
       if (r.primaryGuest) guestMap.set(r.primaryGuest.id, r.primaryGuest);
       r.reservationGuests.forEach((rg: any) => { if (rg.guest) guestMap.set(rg.guest.id, rg.guest); });
       r.folios.forEach((f: any) => folios.push(f));
+      const sharedCorporateFolio = r.corporateAccountId
+        ? sharedCorporateFolioByAccount.get(r.corporateAccountId)
+        : null;
+      if (sharedCorporateFolio && !r.folios.some((f: any) => f.id === sharedCorporateFolio.id)) {
+        folios.push(sharedCorporateFolio);
+      }
 
       const roomId = r.reservationRooms?.[0]?.roomId || null;
       const roomNumber = r.reservationRooms?.[0]?.room?.number || null;

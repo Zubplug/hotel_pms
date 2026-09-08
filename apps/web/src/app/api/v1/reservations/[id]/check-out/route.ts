@@ -52,6 +52,21 @@ export async function POST(
         FOR UPDATE
       `;
 
+      if (reservation.corporateAccountId) {
+        const sharedCorporateFolios = await tx.$queryRaw<any[]>`
+          SELECT id, balance, version
+          FROM "Folio"
+          WHERE "corporateAccountId" = ${reservation.corporateAccountId}::uuid
+            AND "propertyId" = ${reservation.propertyId}::uuid
+            AND "type" = 'CITY_LEDGER'
+            AND "status" = 'OPEN'
+          FOR UPDATE
+        `;
+        for (const sharedFolio of sharedCorporateFolios) {
+          if (!folios.some((folio) => folio.id === sharedFolio.id)) folios.push(sharedFolio);
+        }
+      }
+
       let totalBalance = 0;
       for (const folio of folios) {
         totalBalance += Number(folio.balance);

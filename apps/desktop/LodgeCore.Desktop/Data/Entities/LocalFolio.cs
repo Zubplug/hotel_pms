@@ -6,8 +6,11 @@ public class LocalFolio
 {
     public string Id { get; set; } = Guid.NewGuid().ToString();
     public string PropertyId { get; set; } = string.Empty;
-    public string ReservationId { get; set; } = string.Empty;
+    public string? ReservationId { get; set; }
     public LocalReservation? Reservation { get; set; }
+    public string? CorporateAccountId { get; set; }
+    public LocalCorporateAccount? CorporateAccount { get; set; }
+    public string Type { get; set; } = "ROOM";
     
     public string Status { get; set; } = "OPEN";
     public decimal TotalCharges { get; set; }

@@ -19,6 +19,7 @@ public class LocalCorporateAccount
     public bool ExemptFromHighBalance { get; set; }
     public string DepositPolicy { get; set; } = "STANDARD";
     public bool IsActive { get; set; } = true;
+    public LocalFolio? CorporateFolio { get; set; }
     public DateTime UpdatedAt { get; set; }
     public int SyncVersion { get; set; }
 }

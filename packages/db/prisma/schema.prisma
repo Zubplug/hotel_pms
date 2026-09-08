@@ -469,6 +469,8 @@ model CancellationPolicy {
 
   ratePlans    RatePlan[]
   reservations Reservation[]
+  folios       Folio[]
+  folios       Folio[]
 }
 
 model DepositPolicy {
@@ -834,6 +836,8 @@ model Folio {
   id            String       @id @default(uuid()) @db.Uuid
   reservationId String?      @db.Uuid // null for master/city ledgers
   reservation   Reservation? @relation(fields: [reservationId], references: [id])
+  corporateAccountId String?          @db.Uuid
+  corporateAccount   CorporateAccount? @relation(fields: [corporateAccountId], references: [id])
   propertyId    String       @db.Uuid
   property      Property     @relation(fields: [propertyId], references: [id])
   guestId       String?      @db.Uuid
@@ -864,6 +868,8 @@ model Folio {
   createdAt       DateTime          @default(now()) @db.Timestamptz
   updatedAt       DateTime          @updatedAt @db.Timestamptz
   CityLedgerEntry CityLedgerEntry[]
+
+  @@index([propertyId, corporateAccountId, type])
 }
 
 model FolioCredit {
