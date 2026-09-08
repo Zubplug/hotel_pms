@@ -799,6 +799,8 @@ export async function POST(req: NextRequest) {
             }
 
             const amount = baseRate * nights;
+            const requestedReservationRoomId =
+              payload.ReservationRoomId || payload.reservationRoomId;
 
             await tx.reservation.create({
               data: {
@@ -825,6 +827,12 @@ export async function POST(req: NextRequest) {
 
             await tx.reservationRoom.create({
               data: {
+                // Keep the edge ReservationRoom identity stable. Follow-up
+                // offline events (discounts, comps, extensions) reference
+                // this ID, so generating a new cloud ID breaks reconciliation.
+                ...(isUuid(requestedReservationRoomId)
+                  ? { id: requestedReservationRoomId }
+                  : {}),
                 reservationId: aggregateId,
                 roomTypeId: roomType.id,
                 roomId: room ? room.id : null,
@@ -2965,35 +2973,52 @@ export async function POST(req: NextRequest) {
                 where: { id: aggregateId },
                 include: { reservation: true }
               });
-              if (resRoom) {
-                await tx.reservationRoom.update({
-                  where: { id: aggregateId },
-                  data: {
-                    discountType: payload.discountType,
-                    discountAmount: payload.discountAmount || payload.amount,
-                    discountPercent: payload.discountPercent || payload.percentage,
-                    discountReason: payload.reason,
-                  }
-                });
-                
-                // Create an ApprovalRequest so it appears in Night Audit Variances
-                await tx.approvalRequest.create({
-                  data: {
-                    propertyId,
-                    type: "DISCOUNT",
-                    status: "APPROVED",
-                    executionStatus: "APPLIED",
-                    requestedBy: actorId,
-                    reviewedBy: payload.acknowledgedByStaffId || actorId,
-                    reviewedAt: new Date(),
-                    amount: payload.discountAmount || payload.amount,
-                    currency: resRoom.currency || "NGN",
-                    reason: payload.reason || "Offline Room Discount",
-                    details: payload,
-                    idempotencyKey: `disc_req_${aggregateId}_${Date.now()}`
-                  }
-                });
+              if (!resRoom) {
+                // Never acknowledge a discount that was not applied. The
+                // reservation-create event may still be in the queue; the
+                // desktop must retry this event after that dependency lands.
+                throw new Error(
+                  `DEPENDENCY_NOT_READY: Reservation room ${aggregateId} has not been created yet`,
+                );
               }
+
+              await tx.reservationRoom.update({
+                where: { id: aggregateId },
+                data: {
+                  discountType: payload.discountType,
+                  discountAmount: payload.discountAmount || payload.amount,
+                  discountPercent: payload.discountPercent || payload.percentage,
+                  discountReason: payload.reason,
+                }
+              });
+
+              // Create an ApprovalRequest so it appears in Night Audit
+              // Variances. Use the event key, never Date.now(), so retries
+              // cannot create duplicate approvals.
+              await tx.approvalRequest.upsert({
+                where: { idempotencyKey: `disc_req_${idempotencyKey}` },
+                create: {
+                  propertyId,
+                  type: "DISCOUNT",
+                  status: "APPROVED",
+                  executionStatus: "APPLIED",
+                  requestedBy: actorId,
+                  reviewedBy: isUuid(payload.acknowledgedByStaffId)
+                    ? payload.acknowledgedByStaffId
+                    : actorId,
+                  reviewedAt: new Date(),
+                  amount: payload.discountAmount || payload.amount,
+                  currency: resRoom.currency || "NGN",
+                  reason: payload.reason || "Offline Room Discount",
+                  details: payload,
+                  idempotencyKey: `disc_req_${idempotencyKey}`
+                },
+                update: {
+                  status: "APPROVED",
+                  executionStatus: "APPLIED",
+                  reviewedAt: new Date(),
+                },
+              });
             } else if (eventType === "COMPLIMENTARY_APPLIED") {
               const resRoom = await tx.reservationRoom.findUnique({
                 where: { id: aggregateId },

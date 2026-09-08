@@ -156,6 +156,9 @@ public class LocalRepository
                 RoomId = reservation.RoomId,
                 RoomNumber = reservation.RoomNumber,
                 RoomTypeId = reservation.RoomTypeId,
+                // The server must preserve this identity because subsequent
+                // offline discount events target the ReservationRoom ID.
+                ReservationRoomId = reservation.Rooms.FirstOrDefault()?.Id,
                 CheckInDate = reservation.CheckInDate,
                 CheckOutDate = reservation.CheckOutDate,
                 Adults = reservation.Adults,
