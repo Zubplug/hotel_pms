@@ -18,6 +18,9 @@ export const INVENTORY_PERMISSIONS = {
   // Creating a stock adjustment (creates an ApprovalRequest)
   'inventory.adjust': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'STOCK_MANAGER'],
 
+  // One-time opening balances for legacy stock migration into the main store.
+  'inventory.opening.balance': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'GENERAL_CASHIER', 'INVENTORY_MANAGER', 'STOCK_MANAGER'],
+
   // Approving a stock adjustment
   'inventory.adjust.approve': ['CEO', 'SUPER_ADMIN', 'MANAGER'],
 
