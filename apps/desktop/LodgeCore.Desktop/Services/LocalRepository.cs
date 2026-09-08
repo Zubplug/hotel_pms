@@ -3014,16 +3014,17 @@ public class LocalRepository
         var reason = root.TryGetProperty("reason", out var rsn) ? rsn.GetString() : "";
         string propertyId = "";
         string aggregateId = "";
+        LocalReservationRoom? reservationRoom = null;
         if (targetType == "POS_ORDER" && root.TryGetProperty("orderId", out var orderIdProp)) {
             var order = await _dbContext.PosOrders.FirstOrDefaultAsync(o => o.Id == orderIdProp.GetString());
             if (order == null) throw new Exception("Order not found");
             propertyId = order.PropertyId;
             aggregateId = order.Id;
         } else if (targetType == "RESERVATION_ROOM" && root.TryGetProperty("reservationRoomId", out var roomIdProp)) {
-            var room = await _dbContext.ReservationRooms.Include(r => r.Reservation).FirstOrDefaultAsync(r => r.Id == roomIdProp.GetString());
-            if (room == null) throw new Exception("Reservation Room not found");
-            propertyId = room.Reservation?.PropertyId ?? "";
-            aggregateId = room.Id;
+            reservationRoom = await _dbContext.ReservationRooms.Include(r => r.Reservation).FirstOrDefaultAsync(r => r.Id == roomIdProp.GetString());
+            if (reservationRoom == null) throw new Exception("Reservation Room not found");
+            propertyId = reservationRoom.Reservation?.PropertyId ?? "";
+            aggregateId = reservationRoom.Id;
         } else if (targetType == "FOLIO_ITEM" && root.TryGetProperty("folioId", out var folioIdProp)) {
             var folio = await _dbContext.Folios.FirstOrDefaultAsync(f => f.Id == folioIdProp.GetString());
             if (folio == null) throw new Exception("Folio not found");
@@ -3033,6 +3034,19 @@ public class LocalRepository
 
         if (string.IsNullOrEmpty(propertyId)) throw new Exception("Property context not found");
         var approvalId = Guid.NewGuid().ToString();
+
+        // Keep the request visible offline immediately, but mark it explicitly
+        // as pending so the reservation detail never reduces the effective rate
+        // before the night auditor approves it.
+        if (reservationRoom != null)
+        {
+            reservationRoom.DiscountType = discountType;
+            reservationRoom.DiscountAmount = (decimal)amount;
+            reservationRoom.DiscountPercent = (decimal)percentage;
+            reservationRoom.DiscountReason = reason;
+            reservationRoom.DiscountApprovalId = "PENDING:" + approvalId;
+        }
+
         _dbContext.OutboxEvents.Add(new LocalOutboxEvent
         {
             Id = approvalId,

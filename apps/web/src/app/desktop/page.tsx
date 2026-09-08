@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useLodgeCoreProvider as useLodgeCore } from '@/lib/desktop/DataProviderContext';
 import { Button } from '@/components/ui/button';
 import { TerminalAuthScreen } from '@/components/pos/TerminalAuthScreen';
+import PosApp from '@/components/pos/PosApp';
 import { AlertTriangle, ServerOff, ShieldAlert, Loader2 } from 'lucide-react';
 
 type TerminalState = {
@@ -36,15 +37,6 @@ export default function DesktopEntryPage() {
     }
     checkTerminal();
   }, [provider]);
-
-  // POS terminals open directly into the offline POS shell. The POS shell
-  // owns waiter/operator authentication, so the global terminal panel should
-  // not become the active waiter session.
-  useEffect(() => {
-    if (terminalState?.registrationState === 'ACTIVE' && terminalState.desktopMode === 'POS') {
-      router.replace('/pos');
-    }
-  }, [router, terminalState]);
 
   // ── Loading ──────────────────────────────────────────────────────────────
   if (!terminalState) {
@@ -133,12 +125,12 @@ export default function DesktopEntryPage() {
   }
 
   if (terminalState.desktopMode === 'POS') {
-    return (
-      <div className="flex h-screen flex-col items-center justify-center gap-4 bg-slate-900 text-white">
-        <Loader2 className="h-10 w-10 animate-spin text-indigo-400" />
-        <p className="text-sm font-medium text-slate-300">Opening offline POS…</p>
-      </div>
-    );
+    // Render the POS shell in place. Navigating from this bootstrap page to
+    // /pos can leave WebView2 waiting on a client-side route transition,
+    // which presents as an endless "Opening offline POS" screen. PosApp owns
+    // waiter authentication and local session restoration, so no global auth
+    // screen is needed here.
+    return <PosApp />;
   }
 
   // ── Active & configured → unified GLOBAL auth screen ────────────────────

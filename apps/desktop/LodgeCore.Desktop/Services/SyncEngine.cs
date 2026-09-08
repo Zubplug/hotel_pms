@@ -1319,10 +1319,29 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                         rr.Adults = el.TryGetProperty("adults", out var radl) ? radl.GetInt32() : 1;
                         rr.Children = el.TryGetProperty("children", out var rchl) ? rchl.GetInt32() : 0;
                         rr.DiscountType = el.TryGetProperty("discountType", out var dt) && dt.ValueKind != System.Text.Json.JsonValueKind.Null ? dt.GetString() : null;
-                        if (el.TryGetProperty("discountAmount", out var da) && da.ValueKind != System.Text.Json.JsonValueKind.Null && decimal.TryParse(da.GetString() ?? da.GetRawText(), out var dav)) rr.DiscountAmount = dav;
-                        if (el.TryGetProperty("discountPercent", out var dp) && dp.ValueKind != System.Text.Json.JsonValueKind.Null && decimal.TryParse(dp.GetString() ?? dp.GetRawText(), out var dpv)) rr.DiscountPercent = dpv;
+                        if (el.TryGetProperty("discountAmount", out var da) && da.ValueKind != System.Text.Json.JsonValueKind.Null)
+                        {
+                            if (da.ValueKind == System.Text.Json.JsonValueKind.Number && da.TryGetDecimal(out var dav)) rr.DiscountAmount = dav;
+                            else if (decimal.TryParse(da.GetString(), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var davText)) rr.DiscountAmount = davText;
+                        }
+                        if (el.TryGetProperty("discountPercent", out var dp) && dp.ValueKind != System.Text.Json.JsonValueKind.Null)
+                        {
+                            if (dp.ValueKind == System.Text.Json.JsonValueKind.Number && dp.TryGetDecimal(out var dpv)) rr.DiscountPercent = dpv;
+                            else if (decimal.TryParse(dp.GetString(), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var dpvText)) rr.DiscountPercent = dpvText;
+                        }
                         rr.DiscountReason = el.TryGetProperty("discountReason", out var drea) && drea.ValueKind != System.Text.Json.JsonValueKind.Null ? drea.GetString() : null;
                         rr.DiscountApprovalId = el.TryGetProperty("discountApprovalId", out var dai) && dai.ValueKind != System.Text.Json.JsonValueKind.Null ? dai.GetString() : null;
+                        // Reuse the existing local fields for a pending request,
+                        // but mark its approval id so the UI never applies it to
+                        // the effective rate before auditor approval.
+                        if (el.TryGetProperty("pendingDiscountType", out var pdt) && pdt.ValueKind != System.Text.Json.JsonValueKind.Null)
+                        {
+                            rr.DiscountType = pdt.GetString();
+                            if (el.TryGetProperty("pendingDiscountAmount", out var pda) && pda.ValueKind == System.Text.Json.JsonValueKind.Number && pda.TryGetDecimal(out var pendingAmount)) rr.DiscountAmount = pendingAmount;
+                            if (el.TryGetProperty("pendingDiscountPercent", out var pdp) && pdp.ValueKind == System.Text.Json.JsonValueKind.Number && pdp.TryGetDecimal(out var pendingPercent)) rr.DiscountPercent = pendingPercent;
+                            rr.DiscountReason = el.TryGetProperty("pendingDiscountReason", out var pdr) && pdr.ValueKind != System.Text.Json.JsonValueKind.Null ? pdr.GetString() : rr.DiscountReason;
+                            rr.DiscountApprovalId = "PENDING:" + (el.TryGetProperty("pendingDiscountApprovalId", out var pdi) ? pdi.GetString() : "");
+                        }
                         
                         dbContext.ReservationRooms.Add(rr);
                     }

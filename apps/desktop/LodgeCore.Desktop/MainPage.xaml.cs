@@ -211,6 +211,10 @@ public partial class MainPage : ContentPage
                 case "properties.list":
                     responseData = await pmsInterop.GetPropertiesAsync();
                     break;
+                case "corporateAccounts.list":
+                    responseData = await pmsInterop.GetCorporateAccountsAsync(
+                        parameters?["propertyId"]?.ToString() ?? "");
+                    break;
                 case "hardware.readCard":
                     responseData = await hardwareInterop.ReadCardAsync();
                     break;

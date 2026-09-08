@@ -193,12 +193,22 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
               {/* Rate & Discount display */}
               {(() => {
                 const baseRate = Number(resRoom?.rateAmount || 0);
+                const isPendingDiscount = typeof resRoom?.discountApprovalId === 'string' && resRoom.discountApprovalId.startsWith('PENDING:');
                 let finalRate = baseRate;
                 let deductionAmount = 0;
                 let deductionLabel = '';
                 let isComplimentary = false;
 
-                if (resRoom?.discountType === 'COMPLIMENTARY') {
+                if (isPendingDiscount && resRoom?.discountType === 'FIXED_AMOUNT') {
+                  deductionAmount = Number(resRoom?.discountAmount || 0);
+                  deductionLabel = 'Pending Fixed Discount';
+                } else if (isPendingDiscount && resRoom?.discountType === 'PERCENTAGE') {
+                  const pct = Number(resRoom?.discountPercent || 0);
+                  deductionAmount = baseRate * (pct / 100);
+                  deductionLabel = `Pending ${pct}% Discount`;
+                } else if (isPendingDiscount) {
+                  deductionLabel = 'Discount Pending Approval';
+                } else if (resRoom?.discountType === 'COMPLIMENTARY') {
                   isComplimentary = true;
                   const compAmount = Number(resRoom?.discountAmount || 0);
                   if (compAmount > 0) {
@@ -268,6 +278,12 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
                           <span className={`font-bold ${isComplimentary ? 'text-emerald-600' : 'text-blue-600'}`}>
                             -{formatCurrency(deductionAmount)}
                           </span>
+                        </div>
+                      )}
+
+                      {isPendingDiscount && (
+                        <div className="text-xs font-semibold text-amber-600">
+                          Pending night-audit approval — provisional rate shown
                         </div>
                       )}
 

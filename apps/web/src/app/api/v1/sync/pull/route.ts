@@ -445,6 +445,29 @@ export async function GET(req: NextRequest) {
     const finalLaundryOrders = allEntities.filter(e => e.type === 'LaundryOrder').map(e => e.data);
     const finalGuests = allEntities.filter(e => e.type === 'Guest').map(e => e.data);
 
+    // Pending discount requests are not written to ReservationRoom until the
+    // night auditor approves them. Include their immutable request snapshot so
+    // offline front desk can show the request status without treating it as an
+    // approved price change.
+    const pendingDiscounts = await prisma.approvalRequest.findMany({
+      where: { propertyId, type: 'DISCOUNT', status: 'PENDING' },
+      select: { id: true, reason: true, snapshot: true, details: true },
+    });
+    const pendingDiscountByRoom = new Map<string, any>();
+    for (const approval of pendingDiscounts) {
+      const snapshot: any = approval.snapshot || approval.details || {};
+      const roomId = snapshot.reservationRoomId;
+      if (snapshot.targetType === 'RESERVATION_ROOM' && roomId) {
+        pendingDiscountByRoom.set(roomId, {
+          id: approval.id,
+          type: snapshot.discountType,
+          amount: Number(snapshot.discountAmount || 0),
+          percent: Number(snapshot.discountPercent || 0),
+          reason: snapshot.reason || approval.reason,
+        });
+      }
+    }
+
     // Flatten Guests and Folios from the resulting reservations
     const guestMap = new Map<string, any>();
     finalGuests.forEach(g => guestMap.set(g.id, g));
@@ -457,9 +480,30 @@ export async function GET(req: NextRequest) {
       const roomId = r.reservationRooms?.[0]?.roomId || null;
       const roomNumber = r.reservationRooms?.[0]?.room?.number || null;
       const roomTypeId = r.reservationRooms?.[0]?.room?.roomTypeId || null;
+      const reservationRoom = r.reservationRooms?.[0] || null;
+      const pendingDiscount = reservationRoom?.id ? pendingDiscountByRoom.get(reservationRoom.id) : null;
 
       const { primaryGuest, reservationGuests, folios: rFolios, reservationRooms, ...rest } = r;
-      return { ...rest, roomId, roomNumber, roomTypeId };
+      // Reservation rooms are flattened for the desktop cache. Keep the
+      // approved pricing adjustment fields in that flattened record too;
+      // otherwise offline detail pages can only display the room type's full
+      // base rate after a discount has been approved in the cloud.
+      return {
+        ...rest,
+        roomId,
+        roomNumber,
+        roomTypeId,
+        discountType: reservationRoom?.discountType ?? null,
+        discountAmount: reservationRoom?.discountAmount ?? null,
+        discountPercent: reservationRoom?.discountPercent ?? null,
+        discountReason: reservationRoom?.discountReason ?? null,
+        discountApprovalId: reservationRoom?.discountApprovalId ?? null,
+        pendingDiscountType: pendingDiscount?.type ?? null,
+        pendingDiscountAmount: pendingDiscount?.amount ?? null,
+        pendingDiscountPercent: pendingDiscount?.percent ?? null,
+        pendingDiscountReason: pendingDiscount?.reason ?? null,
+        pendingDiscountApprovalId: pendingDiscount?.id ?? null,
+      };
     });
     
     // Resolve permissions for staff
