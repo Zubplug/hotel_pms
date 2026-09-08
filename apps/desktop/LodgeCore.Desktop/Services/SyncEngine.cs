@@ -1514,7 +1514,16 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     
                     incomingFolioIds.Add(id);
                     
-                    var folio = await dbContext.Folios.FirstOrDefaultAsync(x => x.Id == id, stoppingToken);
+                    // Querying the database does not see entities that were
+                    // added earlier in this same sync page (or already
+                    // tracked by the reservation cache). Prefer the change
+                    // tracker first so duplicate payload rows never create a
+                    // second LocalFolio instance with the same key.
+                    var folio = dbContext.Folios.Local.FirstOrDefault(x => x.Id == id);
+                    if (folio == null)
+                    {
+                        folio = await dbContext.Folios.FirstOrDefaultAsync(x => x.Id == id, stoppingToken);
+                    }
                     if (folio != null && folio.IsDirty) continue;
 
                     if (folio == null)
