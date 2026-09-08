@@ -428,7 +428,12 @@ export async function GET(req: NextRequest) {
     const finalStaff = allEntities.filter(e => e.type === 'Staff').map(e => e.data);
     const finalRooms = allEntities.filter(e => e.type === 'Room').map(e => e.data);
     const finalRoomTypes = allEntities.filter(e => e.type === 'RoomType').map(e => e.data);
-    const finalCorporateAccounts = allEntities.filter(e => e.type === 'CorporateAccount').map(e => e.data);
+    // A reservation carries a corporateAccountId foreign key, so the account
+    // must travel with the reservation even when global pagination splits the
+    // account and reservation into different pages. Without this dependency
+    // closure, desktop stores the ID but cannot hydrate CorporateAccount and
+    // incorrectly reports "Corporate Link Missing Offline".
+    let finalCorporateAccounts = allEntities.filter(e => e.type === 'CorporateAccount').map(e => e.data);
     const finalRatePlans = allEntities.filter(e => e.type === 'RatePlan').map(e => e.data);
     const finalRates = allEntities.filter(e => e.type === 'Rate').map(e => e.data);
     const finalReservations = allEntities.filter(e => e.type === 'Reservation').map(e => e.data);
@@ -444,6 +449,43 @@ export async function GET(req: NextRequest) {
     const finalLaundryItems = allEntities.filter(e => e.type === 'LaundryItem').map(e => e.data);
     const finalLaundryOrders = allEntities.filter(e => e.type === 'LaundryOrder').map(e => e.data);
     const finalGuests = allEntities.filter(e => e.type === 'Guest').map(e => e.data);
+
+    const referencedCorporateAccountIds = [...new Set(
+      finalReservations
+        .map((reservation: any) => reservation.corporateAccountId)
+        .filter(Boolean),
+    )];
+    if (referencedCorporateAccountIds.length > 0) {
+      const includedCorporateAccountIds = new Set(
+        finalCorporateAccounts.map((account: any) => account.id),
+      );
+      const missingCorporateAccounts = await prisma.corporateAccount.findMany({
+        where: {
+          propertyId,
+          id: { in: referencedCorporateAccountIds },
+          updatedAt: { lte: watermark },
+        },
+      });
+      finalCorporateAccounts = [
+        ...finalCorporateAccounts,
+        ...missingCorporateAccounts.filter((account) => !includedCorporateAccountIds.has(account.id)),
+      ];
+    }
+
+    // Existing desktop reservations may already be cached locally, so they
+    // may not appear in an incremental reservation page after a corporate link
+    // is added. Always include active accounts as small reference data so the
+    // local CorporateAccount navigation can be hydrated before offline check-in.
+    const activeCorporateAccounts = await prisma.corporateAccount.findMany({
+      where: { propertyId, isActive: true },
+    });
+    const corporateAccountIds = new Set(
+      finalCorporateAccounts.map((account: any) => account.id),
+    );
+    finalCorporateAccounts = [
+      ...finalCorporateAccounts,
+      ...activeCorporateAccounts.filter((account) => !corporateAccountIds.has(account.id)),
+    ];
 
     // Pending discount requests are not written to ReservationRoom until the
     // night auditor approves them. Include their immutable request snapshot so

@@ -284,6 +284,12 @@ export async function POST(req: NextRequest) {
           sessionBusinessDate = frontdeskSession.businessDate;
         }
 
+        // A validated cashier session owns the accounting date for all
+        // session-bound financial events. This preserves a still-open
+        // yesterday shift when the event is synced after midnight instead of
+        // silently re-dating the credit/payment/charge to today.
+        const postingBusinessDate = sessionBusinessDate ?? authoritativeBusinessDate;
+
         // 1 & 2. Atomic Concurrency Control & Execution within a Single Transaction
         await prisma.$transaction(async (tx) => {
           // 1. Idempotency Check (inside transaction lock)
@@ -1039,7 +1045,7 @@ export async function POST(req: NextRequest) {
                 deviceId: device.id,
                 operationId: payload.operationId || id,
                 idempotencyKey,
-                businessDate: authoritativeBusinessDate,
+                businessDate: postingBusinessDate,
               },
             });
             await tx.financialAuditLog.create({
@@ -1054,7 +1060,7 @@ export async function POST(req: NextRequest) {
                 currency: payload.currency || folio.currency || "NGN",
                 operatorId: actorId,
                 deviceId: device.id,
-                businessDate: authoritativeBusinessDate,
+                businessDate: postingBusinessDate,
                 reason: payload.description || "Room downgrade credit",
                 balanceBefore: folio.balance,
                 balanceAfter: folio.balance,
@@ -1076,7 +1082,7 @@ export async function POST(req: NextRequest) {
                 appliedBy: actorId,
                 deviceId: device.id,
                 operationKey: `AUTO_APPLY_${idempotencyKey}`,
-                businessDate: authoritativeBusinessDate,
+                businessDate: postingBusinessDate,
               });
             }
           } else if (
@@ -1101,7 +1107,7 @@ export async function POST(req: NextRequest) {
             await tx.folioItem.create({
               data: {
                 folioId: aggregateId,
-                businessDate: authoritativeBusinessDate,
+                businessDate: postingBusinessDate,
                 type: "CHARGE",
                 source: payload.source || "ROOM_CHARGE",
                 description: payload.description,
@@ -1167,7 +1173,7 @@ export async function POST(req: NextRequest) {
                     idempotencyKey: `${payload.creditApplicationKey || `CREDIT_APPLICATION:${idempotencyKey}`}:${credit.id}`,
                     appliedBy: actorId,
                     deviceId: device.id,
-                    businessDate: authoritativeBusinessDate,
+                    businessDate: postingBusinessDate,
                   },
                 });
                 await tx.folio.update({
@@ -1190,7 +1196,7 @@ export async function POST(req: NextRequest) {
                     currency: payload.currency || folio.currency || "NGN",
                     operatorId: actorId,
                     deviceId: device.id,
-                    businessDate: authoritativeBusinessDate,
+                    businessDate: postingBusinessDate,
                     reason: payload.description || "Applied guest credit",
                     balanceBefore: credit.remainingAmount,
                     balanceAfter: Number(credit.remainingAmount) - applied,
@@ -1240,7 +1246,7 @@ export async function POST(req: NextRequest) {
               await tx.folioItem.create({
                 data: {
                 folioId: aggregateId,
-                businessDate: authoritativeBusinessDate,
+                businessDate: postingBusinessDate,
                 type: "DISCOUNT",
                 source: payload.source || "MANUAL",
                 description: payload.description || payload.reason || "Discount Applied Offline",
@@ -1351,7 +1357,7 @@ export async function POST(req: NextRequest) {
                 currency: payload.currency || folio.currency || "NGN",
                 operatorId: actorId,
                 deviceId: device.id,
-                businessDate: authoritativeBusinessDate,
+                businessDate: postingBusinessDate,
                 reason:
                   payload.description ||
                   payload.notes ||
@@ -1407,7 +1413,7 @@ export async function POST(req: NextRequest) {
                 deviceId: device.id,
                 operationId: payload.operationId || id,
                 idempotencyKey,
-                businessDate: authoritativeBusinessDate,
+                businessDate: postingBusinessDate,
               },
             });
 
@@ -1471,7 +1477,7 @@ export async function POST(req: NextRequest) {
                 appliedBy: actorId,
                 deviceId: device.id,
                 operationKey: `AUTO_APPLY_${idempotencyKey}`,
-                businessDate: authoritativeBusinessDate,
+                businessDate: postingBusinessDate,
               });
             }
           } else if (eventType === "POST_PAYMENT") {
@@ -1495,7 +1501,7 @@ export async function POST(req: NextRequest) {
               await tx.folioItem.create({
                 data: {
                   folioId: aggregateId,
-                  businessDate: authoritativeBusinessDate,
+                  businessDate: postingBusinessDate,
                   type: "PAYMENT",
                   source: "MANUAL",
                   description:
@@ -2092,7 +2098,7 @@ export async function POST(req: NextRequest) {
                 await tx.folioItem.create({
                   data: {
                     folioId: res.folios[0].id,
-                    businessDate: authoritativeBusinessDate,
+                    businessDate: postingBusinessDate,
                     type: "PAYMENT",
                     source: "ROOM_DOWNGRADE_CREDIT",
                     description: `Room downgrade credit - ${nights} night${nights === 1 ? "" : "s"}`,
@@ -2465,7 +2471,7 @@ export async function POST(req: NextRequest) {
                       ...(String(taskType).toUpperCase() === "CHECKOUT" ? { type: "CHECKOUT" } : {}),
                       priority: payload.Priority || payload.priority || openTask.priority,
                       status: taskStatus,
-                      businessDate: authoritativeBusinessDate,
+                      businessDate: postingBusinessDate,
                     },
                   })
                 : tx.housekeepingTask.create({
@@ -2476,7 +2482,7 @@ export async function POST(req: NextRequest) {
                       type: taskType,
                       priority: payload.Priority || payload.priority || "NORMAL",
                       status: taskStatus,
-                      businessDate: authoritativeBusinessDate,
+                      businessDate: postingBusinessDate,
                       assignedTo: isUuid(
                         payload.AssignedToUserId || payload.assignedToUserId,
                       )
@@ -2763,7 +2769,7 @@ export async function POST(req: NextRequest) {
                         folioItem = await tx.folioItem.create({
                           data: {
                             folioId: activeFolio.id,
-                            businessDate: authoritativeBusinessDate,
+                            businessDate: postingBusinessDate,
                             type: "CHARGE",
                             source: "LAUNDRY",
                             description: `Laundry Service - ${order.serviceType}`,
@@ -2795,7 +2801,7 @@ export async function POST(req: NextRequest) {
                           description: `Applied guest credit to Laundry Service - ${order.serviceType}`,
                           appliedBy: actorId,
                           operationKey: idempotencyKey,
-                          businessDate: authoritativeBusinessDate,
+                            businessDate: postingBusinessDate,
                         });
                       } else {
                         folioItem = existingCharge;
@@ -2960,7 +2966,7 @@ export async function POST(req: NextRequest) {
               await tx.complimentaryRecord.create({
                   data: {
                     propertyId,
-                    businessDate: authoritativeBusinessDate,
+                    businessDate: postingBusinessDate,
                     reference: `COMP_RES_${aggregateId}_${id}`,
                     sourceModule: "FRONT_DESK",
                     roomId: resRoom.roomId,
@@ -3049,7 +3055,7 @@ export async function POST(req: NextRequest) {
                 await tx.complimentaryRecord.create({
                   data: {
                     propertyId,
-                    businessDate: authoritativeBusinessDate,
+                    businessDate: postingBusinessDate,
                     reference: `COMP_RES_${aggregateId}_${Date.now()}`,
                     sourceModule: "FRONT_DESK",
                     roomId: resRoom.roomId,

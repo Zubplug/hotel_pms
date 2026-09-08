@@ -710,7 +710,20 @@ public class EscPosService
         try { list.AddRange(System.IO.Ports.SerialPort.GetPortNames()); } catch { }
         if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows))
         {
-            try { foreach (string p in System.Drawing.Printing.PrinterSettings.InstalledPrinters) { if (!list.Contains(p)) list.Add(p); } } catch { }
+            try
+            {
+                foreach (var p in RawPrinterHelper.GetInstalledPrinterNames())
+                    if (!list.Contains(p, StringComparer.OrdinalIgnoreCase)) list.Add(p);
+            }
+            catch { }
+
+            // Keep the legacy provider as a fallback for older printer drivers.
+            try
+            {
+                foreach (string p in System.Drawing.Printing.PrinterSettings.InstalledPrinters)
+                    if (!list.Contains(p, StringComparer.OrdinalIgnoreCase)) list.Add(p);
+            }
+            catch { }
         }
         return Task.FromResult(list);
     }

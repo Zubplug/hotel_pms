@@ -1,10 +1,72 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.InteropServices;
 
 namespace LodgeCore.Desktop.Services
 {
     public static class RawPrinterHelper
     {
+        private const int PRINTER_ENUM_LOCAL = 0x00000002;
+        private const int PRINTER_ENUM_CONNECTIONS = 0x00000004;
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        private struct PRINTER_INFO_4
+        {
+            public IntPtr pPrinterName;
+            public IntPtr pServerName;
+            public uint Attributes;
+        }
+
+        [DllImport("winspool.drv", EntryPoint = "EnumPrintersW", SetLastError = true, CharSet = CharSet.Unicode)]
+        private static extern bool EnumPrinters(
+            int flags,
+            string? name,
+            uint level,
+            IntPtr printerInfo,
+            uint printerInfoSize,
+            out uint bytesNeeded,
+            out uint printersReturned);
+
+        /// <summary>
+        /// Lists printers registered with the Windows Print Spooler, including
+        /// USB printers installed through a vendor driver and shared printers.
+        /// This is more reliable in a packaged desktop app than
+        /// System.Drawing.Printing.PrinterSettings.InstalledPrinters.
+        /// </summary>
+        public static IReadOnlyList<string> GetInstalledPrinterNames()
+        {
+            var printers = new List<string>();
+            if (!OperatingSystem.IsWindows()) return printers;
+
+            const uint level = 4;
+            var flags = PRINTER_ENUM_LOCAL | PRINTER_ENUM_CONNECTIONS;
+            EnumPrinters(flags, null, level, IntPtr.Zero, 0, out var bytesNeeded, out _);
+            if (bytesNeeded == 0) return printers;
+
+            var buffer = Marshal.AllocHGlobal((int)bytesNeeded);
+            try
+            {
+                if (!EnumPrinters(flags, null, level, buffer, bytesNeeded, out _, out var returned))
+                    return printers;
+
+                var itemSize = Marshal.SizeOf<PRINTER_INFO_4>();
+                for (var index = 0; index < returned; index++)
+                {
+                    var item = Marshal.PtrToStructure<PRINTER_INFO_4>(buffer + (index * itemSize));
+                    var name = Marshal.PtrToStringUni(item.pPrinterName);
+                    if (!string.IsNullOrWhiteSpace(name) && !printers.Contains(name, StringComparer.OrdinalIgnoreCase))
+                        printers.Add(name);
+                }
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(buffer);
+            }
+
+            return printers;
+        }
+
 #pragma warning disable CS8618
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
         public class DOCINFOA
