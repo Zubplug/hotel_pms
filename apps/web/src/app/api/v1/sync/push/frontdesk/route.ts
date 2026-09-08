@@ -837,7 +837,7 @@ export async function POST(req: NextRequest) {
                 status: "ACTIVE",
                 // Discount fields from front desk
                 discountType: payload.discountType || payload.DiscountType || null,
-                discountAmount: (payload.discountType === 'FIXED_AMOUNT' || payload.DiscountType === 'FIXED_AMOUNT')
+                discountAmount: (payload.discountType === 'FIXED_AMOUNT' || payload.DiscountType === 'FIXED_AMOUNT' || payload.discountType === 'COMPLIMENTARY' || payload.DiscountType === 'COMPLIMENTARY')
                   ? Number(payload.discountValue || payload.DiscountValue || 0) : null,
                 discountPercent: (payload.discountType === 'PERCENTAGE' || payload.DiscountType === 'PERCENTAGE')
                   ? Number(payload.discountValue || payload.DiscountValue || 0) : null,
@@ -1187,6 +1187,25 @@ export async function POST(req: NextRequest) {
                 });
                 remainingToApply -= applied;
               }
+            }
+          } else if (eventType === "DISCOUNT_REQUESTED") {
+            const folio = await tx.folio.findUnique({ where: { id: aggregateId, propertyId } });
+            if (folio) {
+              await tx.approvalRequest.create({
+                data: {
+                  propertyId,
+                  type: "DISCOUNT",
+                  status: "PENDING",
+                  executionStatus: "NOT_APPLIED",
+                  requestedBy: actorId,
+                  amount: Number(payload.discountAmount || 0),
+                  currency: folio.currency || "NGN",
+                  reason: payload.reason || "Offline folio discount request",
+                  details: payload,
+                  snapshot: { ...payload, targetType: "FOLIO_ITEM", folioId: aggregateId },
+                  idempotencyKey: `offline_discount:${idempotencyKey}`,
+                },
+              });
             }
           } else if (eventType === "FOLIO_DISCOUNT_APPLIED") {
             const existingDiscount = await tx.folioItem.findFirst({
@@ -2893,7 +2912,51 @@ export async function POST(req: NextRequest) {
               }
             }
           } else if (aggregateType === "RESERVATION_ROOM") {
-            if (eventType === "DISCOUNT_APPLIED") {
+            if (eventType === "DISCOUNT_REQUESTED") {
+              const resRoom = await tx.reservationRoom.findUnique({ where: { id: aggregateId }, include: { reservation: true } });
+              if (resRoom) {
+                await tx.approvalRequest.create({
+                  data: {
+                    propertyId,
+                    type: "DISCOUNT",
+                    status: "PENDING",
+                    executionStatus: "NOT_APPLIED",
+                    requestedBy: actorId,
+                    reason: payload.reason || "Offline room discount request",
+                    details: payload,
+                    snapshot: {
+                      ...payload,
+                      targetType: "RESERVATION_ROOM",
+                      reservationRoomId: aggregateId,
+                      originalRate: Number(resRoom.rateAmount),
+                    },
+                    idempotencyKey: `offline_discount:${idempotencyKey}`,
+                  }
+                });
+              }
+            } else if (eventType === "COMPLIMENTARY_REQUESTED") {
+              const resRoom = await tx.reservationRoom.findUnique({ where: { id: aggregateId }, include: { reservation: true } });
+              if (resRoom) {
+                await tx.complimentaryRecord.create({
+                  data: {
+                    propertyId,
+                    businessDate: authoritativeBusinessDate,
+                    reference: `COMP_RES_${aggregateId}_${id}`,
+                    sourceModule: "FRONT_DESK",
+                    roomId: resRoom.roomId,
+                    guestId: resRoom.reservation?.primaryGuestId,
+                    staffId: payload.beneficiaryStaffId || null,
+                    operatorId: actorId,
+                    operationId: idempotencyKey,
+                    grossAmount: payload.compAmount || 0,
+                    complAmount: payload.compAmount || 0,
+                    netAmount: 0,
+                    complType: payload.compType === "FULL" ? "FULL" : "PARTIAL",
+                    reason: payload.reason || "Offline complimentary request"
+                  }
+                });
+              }
+            } else if (eventType === "DISCOUNT_APPLIED") {
               const resRoom = await tx.reservationRoom.findUnique({
                 where: { id: aggregateId },
                 include: { reservation: true }
@@ -2963,7 +3026,48 @@ export async function POST(req: NextRequest) {
               }
             }
           } else if (aggregateType === "POS_ORDER") {
-            if (eventType === "DISCOUNT_APPLIED") {
+            if (eventType === "DISCOUNT_REQUESTED") {
+              const order = await tx.posOrder.findUnique({ where: { id: aggregateId } });
+              if (order) {
+                await tx.approvalRequest.create({
+                  data: {
+                    propertyId,
+                    outletId: order.outletId,
+                    type: "DISCOUNT",
+                    status: "PENDING",
+                    executionStatus: "NOT_APPLIED",
+                    requestedBy: actorId,
+                    amount: payload.amount || payload.discountAmount || 0,
+                    currency: "NGN",
+                    reason: payload.reason || "Offline POS discount request",
+                    details: payload,
+                    snapshot: { ...payload, targetType: "POS_ORDER", orderId: aggregateId },
+                    idempotencyKey: `offline_discount:${idempotencyKey}`
+                  }
+                });
+              }
+            } else if (eventType === "POS_COMPLIMENTARY_REQUESTED") {
+              const order = await tx.posOrder.findUnique({ where: { id: aggregateId } });
+              if (order) {
+                await tx.complimentaryRecord.create({
+                  data: {
+                    propertyId,
+                    businessDate: order.businessDate || authoritativeBusinessDate,
+                    reference: `COMP_POS_${aggregateId}_${id}`,
+                    sourceModule: "POS",
+                    posOrderId: aggregateId,
+                    staffId: payload.beneficiaryStaffId || null,
+                    operatorId: actorId,
+                    operationId: idempotencyKey,
+                    grossAmount: payload.compAmount || 0,
+                    complAmount: payload.compAmount || 0,
+                    netAmount: 0,
+                    complType: payload.compType === "FULL" ? "FULL" : "PARTIAL",
+                    reason: payload.reason || "Offline POS complimentary request"
+                  }
+                });
+              }
+            } else if (eventType === "DISCOUNT_APPLIED") {
               // Usually handled in POS sync, but Front Desk sync might receive it occasionally.
               const order = await tx.posOrder.findUnique({ where: { id: aggregateId } });
               if (order) {

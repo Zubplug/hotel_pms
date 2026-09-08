@@ -182,78 +182,93 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
 
               {/* Rate & Discount display */}
               {(() => {
-                let finalRate = Number(resRoom?.rateAmount || 0);
-                if (resRoom?.discountType === 'FIXED_AMOUNT') {
-                  finalRate -= Number(resRoom?.discountAmount || 0);
-                } else if (resRoom?.discountType === 'PERCENTAGE') {
-                  finalRate -= finalRate * (Number(resRoom?.discountPercent || 0) / 100);
-                } else if (resRoom?.discountType === 'COMPLIMENTARY') {
+                const baseRate = Number(resRoom?.rateAmount || 0);
+                let finalRate = baseRate;
+                let deductionAmount = 0;
+                let deductionLabel = '';
+                let isComplimentary = false;
+
+                if (resRoom?.discountType === 'COMPLIMENTARY') {
+                  isComplimentary = true;
                   const compAmount = Number(resRoom?.discountAmount || 0);
                   if (compAmount > 0) {
-                    finalRate -= compAmount;
+                    deductionAmount = compAmount;
+                    deductionLabel = 'Partial Comp';
                   } else {
-                    finalRate = 0;
+                    deductionAmount = baseRate;
+                    deductionLabel = 'Full Comp';
                   }
-                } else if (Number(resRoom?.discountAmount || 0) > 0 && !resRoom?.discountPercent) {
-                  finalRate -= Number(resRoom?.discountAmount || 0);
-                } else if (Number(resRoom?.discountPercent || 0) > 0) {
-                  finalRate -= finalRate * (Number(resRoom?.discountPercent || 0) / 100);
+                } else if (resRoom?.discountType === 'FIXED_AMOUNT' || (!resRoom?.discountType && Number(resRoom?.discountAmount || 0) > 0)) {
+                  deductionAmount = Number(resRoom?.discountAmount || 0);
+                  deductionLabel = 'Fixed Discount';
+                } else if (resRoom?.discountType === 'PERCENTAGE' || (!resRoom?.discountType && Number(resRoom?.discountPercent || 0) > 0)) {
+                  const pct = Number(resRoom?.discountPercent || 0);
+                  deductionAmount = baseRate * (pct / 100);
+                  deductionLabel = `${pct}% Discount`;
                 }
-                finalRate = Math.max(0, finalRate);
+
+                finalRate = Math.max(0, baseRate - deductionAmount);
+                const hasDeduction = deductionAmount > 0;
 
                 return (
-                  <div className="pt-4 border-t border-slate-100 flex items-center justify-between mt-4">
-                    <div>
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                        {resRoom?.discountType === 'COMPLIMENTARY' ? 'Complimentary Rate' : 
-                         resRoom?.discountType ? 'Discounted Rate' : 'Nightly Rate'}
-                      </p>
+                  <div className="pt-5 border-t border-slate-100 mt-5">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Rate Details</p>
+
+                      {/* Discount/Comp Triggers */}
                       <div className="flex items-center gap-2">
-                        <p className="font-bold text-slate-900 text-lg">{formatCurrency(finalRate)}</p>
-                        {Number(resRoom?.rateAmount || 0) > finalRate && (
-                          <span className="text-sm text-slate-400 line-through">
-                            {formatCurrency(Number(resRoom?.rateAmount || 0))}
-                          </span>
-                        )}
-                        {resRoom?.discountType === 'COMPLIMENTARY' ? (
-                          <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 font-bold tracking-widest text-[10px] uppercase">
-                            Complimentary
-                          </Badge>
-                        ) : (
-                          <>
-                            {(resRoom?.discountType === 'FIXED_AMOUNT' || (!resRoom?.discountType && Number(resRoom?.discountAmount || 0) > 0)) && (
-                              <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
-                                -{formatCurrency(Number(resRoom?.discountAmount || 0))} discount
-                              </Badge>
-                            )}
-                            {(resRoom?.discountType === 'PERCENTAGE' || (!resRoom?.discountType && Number(resRoom?.discountPercent || 0) > 0)) && (
-                              <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
-                                -{resRoom?.discountPercent}% discount
-                              </Badge>
-                            )}
-                          </>
-                        )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 rounded-lg font-bold text-xs border-slate-200 hover:bg-slate-50 transition-colors"
+                          onClick={() => setIsDiscountOpen(true)}
+                        >
+                          <Percent className="w-3.5 h-3.5 mr-1 text-slate-500" /> Discount
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 rounded-lg font-bold text-xs border-emerald-200 text-emerald-700 hover:bg-emerald-50 transition-colors"
+                          onClick={() => setIsComplimentaryOpen(true)}
+                        >
+                          <Gift className="w-3.5 h-3.5 mr-1" /> Comp
+                        </Button>
                       </div>
                     </div>
-                    
-                    {/* Discount/Comp Triggers */}
-                    <div className="flex items-center gap-2 mt-2 md:mt-0">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="rounded-lg font-semibold text-xs border-slate-200"
-                        onClick={() => setIsDiscountOpen(true)}
-                      >
-                        <Percent className="w-3.5 h-3.5 mr-1" /> Discount
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="rounded-lg font-semibold text-xs border-slate-200 text-emerald-700 hover:bg-emerald-50"
-                        onClick={() => setIsComplimentaryOpen(true)}
-                      >
-                        <Gift className="w-3.5 h-3.5 mr-1" /> Comp
-                      </Button>
+
+                    <div className="bg-slate-50/50 rounded-2xl p-4 border border-slate-100/60 space-y-3">
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="font-medium text-slate-500">Base Nightly Rate</span>
+                        <span className="font-bold text-slate-700">{formatCurrency(baseRate)}</span>
+                      </div>
+
+                      {hasDeduction && (
+                        <div className="flex justify-between items-center text-sm">
+                          <div className="flex items-center gap-2">
+                            <span className={`font-bold ${isComplimentary ? 'text-emerald-600' : 'text-blue-600'}`}>
+                              {deductionLabel}
+                            </span>
+                            {resRoom?.discountReason && (
+                              <span className="text-xs text-slate-400 truncate max-w-[120px]" title={resRoom.discountReason}>
+                                ({resRoom.discountReason})
+                              </span>
+                            )}
+                          </div>
+                          <span className={`font-bold ${isComplimentary ? 'text-emerald-600' : 'text-blue-600'}`}>
+                            -{formatCurrency(deductionAmount)}
+                          </span>
+                        </div>
+                      )}
+
+                      <div className="pt-3 border-t border-slate-200/60 flex justify-between items-center">
+                        <span className="font-bold text-slate-900">Effective Rate</span>
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-2xl font-black text-slate-900 tracking-tight">
+                            {formatCurrency(finalRate)}
+                          </span>
+                          <span className="text-xs font-bold text-slate-400 uppercase">/ night</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 );

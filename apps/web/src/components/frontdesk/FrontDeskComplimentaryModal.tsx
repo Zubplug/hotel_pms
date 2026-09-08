@@ -26,7 +26,6 @@ export function FrontDeskComplimentaryModal({ isOpen, targetType, targetId, targ
   const [benefitType, setBenefitType] = useState<'FULL' | 'PARTIAL'>('FULL');
   const [amount, setAmount] = useState('');
   const [settlementType, setSettlementType] = useState<'PAY_NOW' | 'STAFF_PAY_LATER'>('STAFF_PAY_LATER');
-  const [acknowledgedByStaffId, setAcknowledgedByStaffId] = useState('');
   const [reason, setReason] = useState('');
   
   const [error, setError] = useState('');
@@ -56,10 +55,6 @@ export function FrontDeskComplimentaryModal({ isOpen, targetType, targetId, targ
       setError('Please select the staff member receiving the benefit.');
       return;
     }
-    if (!acknowledgedByStaffId) {
-      setError('Please select the staff member who authorized this.');
-      return;
-    }
     if (!reason.trim()) {
       setError('A reason is required.');
       return;
@@ -81,7 +76,6 @@ export function FrontDeskComplimentaryModal({ isOpen, targetType, targetId, targ
         compAmount: numValue,
         settlementType: beneficiaryType === 'STAFF' ? settlementType : 'PAY_NOW',
         reason,
-        acknowledgedByStaffId,
       };
 
       const res = await provider.approvals.requestComplimentary(payload);
@@ -103,7 +97,7 @@ export function FrontDeskComplimentaryModal({ isOpen, targetType, targetId, targ
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-md p-0 overflow-hidden rounded-3xl border-0 shadow-2xl flex flex-col max-h-[90vh]">
         <div className="flex items-center justify-between p-6 border-b border-slate-100 shrink-0">
-          <h2 className="text-xl font-bold text-slate-800">Apply Complimentary</h2>
+          <h2 className="text-xl font-bold text-slate-800">Request Complimentary</h2>
         </div>
 
         <div className="p-6 space-y-6 overflow-y-auto">
@@ -225,23 +219,6 @@ export function FrontDeskComplimentaryModal({ isOpen, targetType, targetId, targ
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
-              Acknowledged / Authorized By
-            </label>
-            <Select value={acknowledgedByStaffId} onValueChange={(val) => setAcknowledgedByStaffId(val || "")}>
-              <SelectTrigger className="w-full h-12 rounded-xl bg-slate-50 border-slate-200">
-                <SelectValue placeholder="Select authorizer" />
-              </SelectTrigger>
-              <SelectContent>
-                {activeStaff.map((staff: any) => (
-                  <SelectItem key={staff.id} value={staff.id}>
-                    {staff.firstName} {staff.lastName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
         </div>
 
         <div className="p-6 bg-slate-50 border-t border-slate-100 flex gap-3 shrink-0">
@@ -253,10 +230,10 @@ export function FrontDeskComplimentaryModal({ isOpen, targetType, targetId, targ
           </button>
           <button
             onClick={handleSubmit}
-            disabled={isLoading || !reason.trim() || !acknowledgedByStaffId}
+            disabled={isLoading || !reason.trim()}
             className="flex-1 py-3 px-4 rounded-xl font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 transition-colors"
           >
-            {isLoading ? 'Applying...' : 'Apply Complimentary'}
+            {isLoading ? 'Submitting...' : 'Submit for Night Audit'}
           </button>
         </div>
       </DialogContent>

@@ -46,7 +46,7 @@ export async function POST(
       }
 
       // 3. Verify Capability / Limit (Assume simple role check for now as we don't have limit logic yet)
-      if (!['MANAGER', 'ADMIN', 'SUPER_ADMIN', 'DIRECTOR', 'EXECUTIVE'].includes(user.role) && !user.isSuperAdmin) {
+      if (!['NIGHT_AUDITOR', 'MANAGER', 'ADMIN', 'SUPER_ADMIN', 'DIRECTOR', 'EXECUTIVE'].includes(user.role) && !user.isSuperAdmin) {
         throw new Error('FORBIDDEN:Executive access required');
       }
 

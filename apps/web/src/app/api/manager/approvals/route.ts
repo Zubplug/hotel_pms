@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
   try {
     const user = await resolveUser(req);
     if (!user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
-    if (!['MANAGER', 'ADMIN', 'SUPER_ADMIN'].includes(user.role) && !user.isSuperAdmin) {
+    if (!['NIGHT_AUDITOR', 'MANAGER', 'ADMIN', 'SUPER_ADMIN'].includes(user.role) && !user.isSuperAdmin) {
       return errorResponse('FORBIDDEN', 'Manager access required', 403);
     }
 

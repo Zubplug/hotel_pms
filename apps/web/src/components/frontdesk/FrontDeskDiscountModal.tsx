@@ -2,9 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { X, Percent, Hash } from 'lucide-react';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
-import { useQuery } from '@tanstack/react-query';
-import { useProperty } from '@/components/PropertyProvider';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 type TargetType = 'RESERVATION_ROOM' | 'FOLIO_ITEM';
 
 type FrontDeskDiscountModalProps = {
@@ -25,22 +22,8 @@ export function FrontDeskDiscountModal({ isOpen, targetType, targetId, targetTot
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   
-  const { propertyId } = useProperty();
-  const [acknowledgedByStaffId, setAcknowledgedByStaffId] = useState('');
-
-  
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
-
-  const { data: managersRes } = useQuery({
-    queryKey: ['managers-local', propertyId],
-    queryFn: async () => {
-      return provider.auth.getActiveStaff();
-    },
-    enabled: !!propertyId && isOpen,
-    staleTime: 300_000,
-  });
-  const activeStaff = (managersRes as any)?.data || [];
 
   if (!isOpen || !mounted) return null;
 
@@ -53,11 +36,6 @@ export function FrontDeskDiscountModal({ isOpen, targetType, targetId, targetTot
       setError('A reason is required for discounts.');
       return;
     }
-    if (!acknowledgedByStaffId) {
-      setError('Please select the staff member who acknowledged this discount.');
-      return;
-    }
-
     const numValue = Number(value);
     const amount = type === 'amount' ? numValue : 0;
     const percentage = type === 'percent' ? numValue : 0;
@@ -71,8 +49,7 @@ export function FrontDeskDiscountModal({ isOpen, targetType, targetId, targetTot
         discountType: type === 'amount' ? 'FIXED_AMOUNT' : 'PERCENTAGE',
         discountAmount: amount,
         discountPercent: percentage,
-        reason,
-        acknowledgedByStaffId
+        reason
       };
       // Map targetId to the field name the backend expects per targetType
       if (targetType === 'RESERVATION_ROOM') payload.reservationRoomId = targetId;
@@ -99,7 +76,7 @@ export function FrontDeskDiscountModal({ isOpen, targetType, targetId, targetTot
       <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
         <DialogContent className="sm:max-w-md p-0 overflow-hidden rounded-3xl border-0 shadow-2xl flex flex-col max-h-[90vh]">
           <div className="flex items-center justify-between p-6 border-b border-slate-100 shrink-0">
-            <h2 className="text-xl font-bold text-slate-800">Apply Discount</h2>
+            <h2 className="text-xl font-bold text-slate-800">Request Discount</h2>
           </div>
 
           <div className="p-6 space-y-6 overflow-y-auto">
@@ -162,23 +139,6 @@ export function FrontDeskDiscountModal({ isOpen, targetType, targetId, targetTot
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
-                Acknowledged / Authorized By
-              </label>
-              <Select value={acknowledgedByStaffId} onValueChange={(val) => setAcknowledgedByStaffId(val || "")}>
-                <SelectTrigger className="w-full h-12 rounded-xl bg-slate-50 border-slate-200">
-                  <SelectValue placeholder="Select staff member" />
-                </SelectTrigger>
-                <SelectContent>
-                  {activeStaff.map((staff: any) => (
-                    <SelectItem key={staff.id} value={staff.id}>
-                      {staff.firstName} {staff.lastName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
           </div>
 
           <div className="p-6 bg-slate-50 border-t border-slate-100 flex gap-3 shrink-0">
@@ -193,7 +153,7 @@ export function FrontDeskDiscountModal({ isOpen, targetType, targetId, targetTot
               disabled={isLoading || !value || !reason.trim()}
               className="flex-1 py-3 px-4 rounded-xl font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 transition-colors"
             >
-              {isLoading ? 'Applying...' : 'Apply Discount'}
+              {isLoading ? 'Submitting...' : 'Submit for Night Audit'}
             </button>
           </div>
         </DialogContent>

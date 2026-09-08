@@ -168,7 +168,7 @@ public class LocalRepository
                 DepositPaid = reservation.DepositPaid,
                 // Discount fields — only included when a discount is being applied
                 DiscountType = reservation.Rooms.FirstOrDefault()?.DiscountType,
-                DiscountValue = reservation.Rooms.FirstOrDefault()?.DiscountType == "FIXED_AMOUNT"
+                DiscountValue = (reservation.Rooms.FirstOrDefault()?.DiscountType == "FIXED_AMOUNT" || reservation.Rooms.FirstOrDefault()?.DiscountType == "COMPLIMENTARY")
                     ? reservation.Rooms.FirstOrDefault()?.DiscountAmount
                     : reservation.Rooms.FirstOrDefault()?.DiscountPercent,
                 DiscountReason = reservation.Rooms.FirstOrDefault()?.DiscountReason,
@@ -3012,153 +3012,48 @@ public class LocalRepository
         var amount = root.TryGetProperty("discountAmount", out var amt) ? amt.GetDouble() : 0.0;
         var percentage = root.TryGetProperty("discountPercent", out var pct) ? pct.GetDouble() : (root.TryGetProperty("percentage", out var oldPct) ? oldPct.GetDouble() : 0.0);
         var reason = root.TryGetProperty("reason", out var rsn) ? rsn.GetString() : "";
-        var acknowledgedByStaffId = root.TryGetProperty("acknowledgedByStaffId", out var ackId) ? ackId.GetString() : "";
-
-        // Determine Property ID to fetch settings and staff
         string propertyId = "";
+        string aggregateId = "";
         if (targetType == "POS_ORDER" && root.TryGetProperty("orderId", out var orderIdProp)) {
             var order = await _dbContext.PosOrders.FirstOrDefaultAsync(o => o.Id == orderIdProp.GetString());
             if (order == null) throw new Exception("Order not found");
             propertyId = order.PropertyId;
-        } else {
-            var props = await _dbContext.Properties.ToListAsync();
-            propertyId = props.FirstOrDefault()?.Id ?? "";
+            aggregateId = order.Id;
+        } else if (targetType == "RESERVATION_ROOM" && root.TryGetProperty("reservationRoomId", out var roomIdProp)) {
+            var room = await _dbContext.ReservationRooms.Include(r => r.Reservation).FirstOrDefaultAsync(r => r.Id == roomIdProp.GetString());
+            if (room == null) throw new Exception("Reservation Room not found");
+            propertyId = room.Reservation?.PropertyId ?? "";
+            aggregateId = room.Id;
+        } else if (targetType == "FOLIO_ITEM" && root.TryGetProperty("folioId", out var folioIdProp)) {
+            var folio = await _dbContext.Folios.FirstOrDefaultAsync(f => f.Id == folioIdProp.GetString());
+            if (folio == null) throw new Exception("Folio not found");
+            propertyId = folio.PropertyId;
+            aggregateId = folio.Id;
         }
 
         if (string.IsNullOrEmpty(propertyId)) throw new Exception("Property context not found");
-
-        var property = await _dbContext.Properties.FirstOrDefaultAsync(p => p.Id == propertyId);
-        
-        if (string.IsNullOrEmpty(acknowledgedByStaffId))
-            throw new Exception("acknowledgedByStaffId is required for discounts");
-
-        using var transaction = await _dbContext.Database.BeginTransactionAsync();
-        try
+        var approvalId = Guid.NewGuid().ToString();
+        _dbContext.OutboxEvents.Add(new LocalOutboxEvent
         {
-            var approvalId = Guid.NewGuid().ToString();
-            LocalOutboxEvent? evt = null;
-
-            if (targetType == "RESERVATION_ROOM")
-            {
-                var resRoomId = root.GetProperty("reservationRoomId").GetString();
-                var resRoom = await _dbContext.ReservationRooms.FirstOrDefaultAsync(r => r.Id == resRoomId);
-                if (resRoom == null) throw new Exception("Reservation Room not found");
-
-                resRoom.DiscountType = discountType;
-                resRoom.DiscountAmount = (decimal)amount;
-                resRoom.DiscountPercent = (decimal)percentage;
-                resRoom.DiscountReason = reason;
-                resRoom.DiscountApprovalId = approvalId;
-                resRoom.DiscountApprovingManagerId = acknowledgedByStaffId;
-
-                evt = new LocalOutboxEvent
-                {
-                    Id = approvalId,
-                    PropertyId = propertyId,
-                    DeviceId = deviceId,
-                    OperatorId = userId,
-                    AggregateType = "RESERVATION_ROOM",
-                    AggregateId = resRoomId ?? "",
-                    AggregateVersion = 1,
-                    EventType = "DISCOUNT_APPLIED",
-                    Sequence = 1,
-                    PayloadJson = JsonSerializer.Serialize(new {
-                        discountType, discountAmount = amount, discountPercent = percentage, reason, acknowledgedByStaffId
-                    })
-                };
-            }
-
-            else if (targetType == "FOLIO_ITEM")
-            {
-                var folioId = root.GetProperty("folioId").GetString();
-                var targetFolioItemId = root.GetProperty("targetFolioItemId").GetString();
-                var folio = await _dbContext.Folios.FirstOrDefaultAsync(f => f.Id == folioId);
-                if (folio == null) throw new Exception("Folio not found");
-
-                // Inject discount transaction directly into TransactionsJson
-                var transactions = string.IsNullOrEmpty(folio.TransactionsJson) ? new List<JsonElement>() : JsonSerializer.Deserialize<List<JsonElement>>(folio.TransactionsJson) ?? new List<JsonElement>();
-                
-                var discountItem = new Dictionary<string, object>
-                {
-                    { "id", Guid.NewGuid().ToString() },
-                    { "folioId", folio.Id },
-                    { "businessDate", DateTime.UtcNow.ToString("yyyy-MM-dd") },
-                    { "type", "DISCOUNT" },
-                    { "source", "MANUAL" },
-                    { "description", reason ?? "Discount Approved (Offline)" },
-                    { "quantity", 1 },
-                    { "unitAmount", -amount },
-                    { "amount", -amount },
-                    { "baseAmount", -amount },
-                    { "postedBy", userId },
-                    { "discountApprovalId", approvalId },
-                    { "acknowledgedByStaffId", acknowledgedByStaffId },
-                    { "targetFolioItemId", targetFolioItemId ?? "" }
-                };
-
-                transactions.Add(JsonSerializer.SerializeToElement(discountItem));
-                folio.TransactionsJson = JsonSerializer.Serialize(transactions);
-                
-                folio.TotalCharges -= (decimal)amount;
-                folio.IsDirty = true;
-                folio.UpdatedAt = DateTime.UtcNow;
-
-                evt = new LocalOutboxEvent
-                {
-                    Id = approvalId,
-                    PropertyId = propertyId,
-                    DeviceId = deviceId,
-                    OperatorId = userId,
-                    AggregateType = "FOLIO",
-                    AggregateId = folio.Id,
-                    AggregateVersion = folio.Version,
-                    EventType = "FOLIO_DISCOUNT_APPLIED",
-                    Sequence = folio.LocalSequence++,
-                    PayloadJson = JsonSerializer.Serialize(discountItem)
-                };
-            }
-            else // POS_ORDER
-            {
-                var orderId = root.GetProperty("orderId").GetString();
-                var order = await _dbContext.PosOrders.Include(o => o.Items).FirstOrDefaultAsync(o => o.Id == orderId);
-                if (order == null) throw new Exception("Order not found");
-                await AssertNightAuditAllowsAsync(order.PropertyId, order.BusinessDate);
-
-                double subtotal = (double)order.Items.Sum(i => i.Quantity * i.UnitPrice);
-                double effectiveDiscount = amount > 0 ? amount : subtotal * (percentage / 100);
-
-                order.Discount = (decimal)effectiveDiscount;
-                order.Total = (decimal)subtotal + order.ServiceCharge - order.Discount;
-                order.UpdatedAt = DateTime.UtcNow;
-
-                evt = new LocalOutboxEvent
-                {
-                    Id = approvalId,
-                    PropertyId = propertyId,
-                    DeviceId = deviceId,
-                    OperatorId = userId,
-                    AggregateType = "POS_ORDER",
-                    AggregateId = order.Id,
-                    AggregateVersion = 1,
-                    EventType = "DISCOUNT_APPLIED",
-                    Sequence = 1,
-                    PayloadJson = JsonSerializer.Serialize(new {
-                        amount = effectiveDiscount, percentage, reason, acknowledgedByStaffId
-                    })
-                };
-            }
-
-            if (evt != null) _dbContext.OutboxEvents.Add(evt);
-            await _dbContext.SaveChangesAsync();
-            await transaction.CommitAsync();
-
-            return new { success = true, approvalId };
-        }
-        catch (Exception ex)
-        {
-            await transaction.RollbackAsync();
-            throw new Exception($"Failed to apply discount: {ex.Message}");
-        }
+            Id = approvalId,
+            PropertyId = propertyId,
+            DeviceId = deviceId,
+            OperatorId = userId,
+            AggregateType = targetType == "FOLIO_ITEM" ? "FOLIO" : targetType,
+            AggregateId = aggregateId,
+            AggregateVersion = 1,
+            EventType = "DISCOUNT_REQUESTED",
+            Sequence = 1,
+            PayloadJson = JsonSerializer.Serialize(new {
+                targetType, reservationRoomId = root.TryGetProperty("reservationRoomId", out var rr) ? rr.GetString() : null,
+                folioId = root.TryGetProperty("folioId", out var fi) ? fi.GetString() : null,
+                targetFolioItemId = root.TryGetProperty("targetFolioItemId", out var tf) ? tf.GetString() : null,
+                orderId = root.TryGetProperty("orderId", out var oi) ? oi.GetString() : null,
+                discountType, discountAmount = amount, discountPercent = percentage, reason
+            })
+        });
+        await _dbContext.SaveChangesAsync();
+        return new { success = true, approvalId, status = "PENDING_NIGHT_AUDIT_APPROVAL" };
     }
 
     public async Task<object> RequestComplimentaryAsync(string payloadJson, string userId, string deviceId, string sessionId)
@@ -3192,9 +3087,6 @@ public class LocalRepository
 
         if (string.IsNullOrEmpty(propertyId)) throw new Exception("Property context not found");
 
-        if (string.IsNullOrEmpty(acknowledgedByStaffId))
-            throw new Exception("acknowledgedByStaffId is required for complimentary records");
-
         using var transaction = await _dbContext.Database.BeginTransactionAsync();
         try
         {
@@ -3210,7 +3102,7 @@ public class LocalRepository
             var approvalId = Guid.NewGuid().ToString();
 
             // Apply financial adjustments to the target
-            if (targetType == "POS_ORDER" && posOrder != null)
+            if (false && targetType == "POS_ORDER" && posOrder != null)
             {
                 var compDiscount = new LocalPosDiscount 
                 {
@@ -3233,7 +3125,7 @@ public class LocalRepository
 
                 _dbContext.PosOrders.Update(posOrder);
             }
-            else if (targetType == "RESERVATION_ROOM" && resRoom != null)
+            else if (false && targetType == "RESERVATION_ROOM" && resRoom != null)
             {
                 resRoom.DiscountType = "COMPLIMENTARY";
                 resRoom.DiscountAmount = (decimal)compAmount;
@@ -3253,10 +3145,10 @@ public class LocalRepository
                 AggregateType = targetType,
                 AggregateId = targetType == "POS_ORDER" ? posOrder!.Id : resRoom!.Id,
                 AggregateVersion = 1,
-                EventType = targetType == "POS_ORDER" ? "POS_COMPLIMENTARY_APPLIED" : "COMPLIMENTARY_APPLIED",
+                EventType = targetType == "POS_ORDER" ? "POS_COMPLIMENTARY_REQUESTED" : "COMPLIMENTARY_REQUESTED",
                 Sequence = 1,
                 PayloadJson = JsonSerializer.Serialize(new {
-                    compType, compAmount, reason, acknowledgedByStaffId, beneficiaryType, beneficiaryStaffId, settlementType
+                    targetType, compType, compAmount, reason, beneficiaryType, beneficiaryStaffId, settlementType
                 })
             };
             
@@ -3265,7 +3157,7 @@ public class LocalRepository
             await _dbContext.SaveChangesAsync();
             await transaction.CommitAsync();
 
-            return new { success = true };
+            return new { success = true, approvalId, status = "PENDING_NIGHT_AUDIT_VERIFICATION" };
         }
         catch (Exception ex)
         {

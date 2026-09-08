@@ -245,7 +245,28 @@ export async function executeNightAudit(
               let discountApprovalId = activeRoom?.discountApprovalId || null;
               let discountNote = '';
 
-              if (activeRoom?.discountType && discountApprovalId) {
+              // Complimentary room requests are verified by the Night Auditor
+              // through ComplimentaryRecord rather than ApprovalRequest.
+              const verifiedComplimentary = activeRoom?.roomId
+                ? await tx.complimentaryRecord.findFirst({
+                    where: {
+                      propertyId,
+                      businessDate,
+                      roomId: activeRoom.roomId,
+                      guestId: reservation.primaryGuestId,
+                      sourceModule: 'FRONT_DESK',
+                      status: 'VERIFIED',
+                    },
+                    select: { complAmount: true },
+                  })
+                : null;
+
+              if (verifiedComplimentary) {
+                discountDeduction = Math.min(originalRate, Number(verifiedComplimentary.complAmount || 0));
+                discountNote = ' (complimentary approved by Night Auditor)';
+              }
+
+              if (!verifiedComplimentary && activeRoom?.discountType && discountApprovalId) {
                 // Check approval status
                 const approval = await tx.approvalRequest.findUnique({
                   where: { id: discountApprovalId },

@@ -8,7 +8,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   try {
     const user = await resolveUser(req);
     if (!user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
-    if (!['FRONT_DESK_MANAGER', 'MANAGER', 'FINANCE_MANAGER', 'ADMIN', 'SUPER_ADMIN'].includes(user.role) && !user.isSuperAdmin) {
+    if (!['NIGHT_AUDITOR', 'FRONT_DESK_MANAGER', 'MANAGER', 'FINANCE_MANAGER', 'ADMIN', 'SUPER_ADMIN'].includes(user.role) && !user.isSuperAdmin) {
       return errorResponse('FORBIDDEN', 'Approval access required', 403);
     }
     const { id } = await params;
