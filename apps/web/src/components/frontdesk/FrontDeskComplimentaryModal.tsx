@@ -27,6 +27,7 @@ export function FrontDeskComplimentaryModal({ isOpen, targetType, targetId, targ
   const [amount, setAmount] = useState('');
   const [settlementType, setSettlementType] = useState<'PAY_NOW' | 'STAFF_PAY_LATER'>('STAFF_PAY_LATER');
   const [reason, setReason] = useState('');
+  const [acknowledgedByStaffId, setAcknowledgedByStaffId] = useState('');
   
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -59,6 +60,10 @@ export function FrontDeskComplimentaryModal({ isOpen, targetType, targetId, targ
       setError('A reason is required.');
       return;
     }
+    if (!acknowledgedByStaffId) {
+      setError('Please select the staff member who acknowledged this complimentary request.');
+      return;
+    }
 
     const numValue = benefitType === 'PARTIAL' ? Number(amount) : (targetTotal || 0);
 
@@ -76,6 +81,7 @@ export function FrontDeskComplimentaryModal({ isOpen, targetType, targetId, targ
         compAmount: numValue,
         settlementType: beneficiaryType === 'STAFF' ? settlementType : 'PAY_NOW',
         reason,
+        acknowledgedByStaffId,
       };
 
       const res = await provider.approvals.requestComplimentary(payload);
@@ -129,6 +135,24 @@ export function FrontDeskComplimentaryModal({ isOpen, targetType, targetId, targ
                 <Users className="w-4 h-4" /> Staff
               </button>
             </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              Acknowledged By
+            </label>
+            <Select value={acknowledgedByStaffId} onValueChange={(val) => setAcknowledgedByStaffId(val || '')}>
+              <SelectTrigger className="w-full h-12 rounded-xl bg-slate-50 border-slate-200">
+                <SelectValue placeholder="Select acknowledging staff" />
+              </SelectTrigger>
+              <SelectContent>
+                {activeStaff.map((staff: any) => (
+                  <SelectItem key={staff.id} value={staff.id}>
+                    {staff.firstName} {staff.lastName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {beneficiaryType === 'STAFF' && (
@@ -230,7 +254,7 @@ export function FrontDeskComplimentaryModal({ isOpen, targetType, targetId, targ
           </button>
           <button
             onClick={handleSubmit}
-            disabled={isLoading || !reason.trim()}
+            disabled={isLoading || !reason.trim() || !acknowledgedByStaffId}
             className="flex-1 py-3 px-4 rounded-xl font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 transition-colors"
           >
             {isLoading ? 'Submitting...' : 'Submit for Night Audit'}

@@ -51,6 +51,13 @@ public class TerminalBootstrapService
 
         string? outletType = null;
         string desktopMode = "UNKNOWN";
+        string bankingModel = "CENTRAL_CASHIER";
+
+        var property = await context.Properties.FirstOrDefaultAsync(p => p.Id == terminal.PropertyId);
+        if (property != null && !string.IsNullOrWhiteSpace(property.BankingModel))
+        {
+            bankingModel = property.BankingModel;
+        }
 
         if (!string.IsNullOrEmpty(terminal.OutletId))
         {
@@ -76,6 +83,7 @@ public class TerminalBootstrapService
             name = terminal.Name,
             propertyId = terminal.PropertyId,
             licenseState = terminal.LicenseState,
+            bankingModel = bankingModel,
             outletId = terminal.OutletId,
             outletType = outletType,
             desktopMode = desktopMode

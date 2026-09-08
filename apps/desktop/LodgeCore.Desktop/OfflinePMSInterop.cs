@@ -2038,6 +2038,14 @@ public class OfflinePMSInterop
             var ctx = await _sessionManager.AuthenticateOperatorAsync(staffId, pin);
             var staff = await _repo.GetStaffByIdAsync(staffId);
             if (staff == null) throw new Exception("Staff not found");
+
+            var localTerminal = await _repo.GetLocalTerminalAsync();
+            if (localTerminal != null)
+            {
+                propertyId = localTerminal.PropertyId;
+                deviceId ??= localTerminal.Id;
+                outletId ??= localTerminal.OutletId;
+            }
             
             var property = await _repo.GetPropertyAsync(propertyId);
             var actualBankingModel = property?.BankingModel ?? "CENTRAL_CASHIER";

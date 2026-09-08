@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ChefHat, X, RefreshCw, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { formatCurrency } from '@/lib/utils';
 
 interface WaiterTicketsModalProps {
   isOpen: boolean;
@@ -130,6 +131,9 @@ export function WaiterTicketsModal({
                         <span className="flex items-center gap-1">
                           <Clock className="h-3 w-3" />
                           {formatTicketTime(ticket.createdAt || ticket.firedAt)}
+                        </span>
+                        <span className="font-bold text-slate-700">
+                          {formatCurrency(Number(ticket.order?.total ?? 0))}
                         </span>
                       </div>
                     </div>

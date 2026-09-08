@@ -37,6 +37,15 @@ export default function DesktopEntryPage() {
     checkTerminal();
   }, [provider]);
 
+  // POS terminals open directly into the offline POS shell. The POS shell
+  // owns waiter/operator authentication, so the global terminal panel should
+  // not become the active waiter session.
+  useEffect(() => {
+    if (terminalState?.registrationState === 'ACTIVE' && terminalState.desktopMode === 'POS') {
+      router.replace('/pos');
+    }
+  }, [router, terminalState]);
+
   // ── Loading ──────────────────────────────────────────────────────────────
   if (!terminalState) {
     return (
@@ -119,6 +128,15 @@ export default function DesktopEntryPage() {
         <Button variant="outline" onClick={() => router.push('/desktop/provision')} size="lg">
           Re-Provision
         </Button>
+      </div>
+    );
+  }
+
+  if (terminalState.desktopMode === 'POS') {
+    return (
+      <div className="flex h-screen flex-col items-center justify-center gap-4 bg-slate-900 text-white">
+        <Loader2 className="h-10 w-10 animate-spin text-indigo-400" />
+        <p className="text-sm font-medium text-slate-300">Opening offline POS…</p>
       </div>
     );
   }

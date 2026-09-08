@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using LodgeCore.HardwareAgent.Native;
 
 namespace LodgeCore.HardwareAgent;
 
@@ -25,37 +24,13 @@ public class DiagnosticsWorker : BackgroundService
             return;
         }
 
-        // 2. Validate DLL Loading
-        try
-        {
-            _logger.LogInformation("Testing LockSDK.dll load...");
-            var result = new HomeLockResult(LodgeCore.HardwareAgent.Locks.HsLockSdkNative.TP_Configuration(4));
-            
-            if (result.Code == HomeLockError.NO_RW_MACHINE)
-            {
-                _logger.LogWarning("SDK Loaded Successfully, but NO ENCODER WAS DETECTED.");
-            }
-            else if (result.Success)
-            {
-                _logger.LogInformation("SDK Loaded Successfully and Encoder IS DETECTED!");
-            }
-            else
-            {
-                _logger.LogWarning("SDK Loaded Successfully, but returned: {Status}", result.Message);
-            }
-        }
-        catch (DllNotFoundException)
-        {
-            _logger.LogCritical("CRITICAL ERROR: LockSDK.dll was not found in the application directory.");
-            Environment.Exit(1);
-            return;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogCritical(ex, "CRITICAL ERROR: Exception while calling LockSDK.dll");
-            Environment.Exit(1);
-            return;
-        }
+        // Do not call TP_Configuration from the background diagnostics worker.
+        // The Deluns SDK owns the encoder COM port process-wide. Opening it here
+        // (using the legacy HS binding) prevents the actual Deluns card operation
+        // in the desktop app from acquiring the port and returns SDK error -11.
+        // The configured lock provider performs the hardware initialization only
+        // when a real card operation is requested.
+        _logger.LogInformation("Skipping startup SDK probe; encoder initialization is owned by the configured lock provider.");
 
         _logger.LogInformation("--- Diagnostics Complete ---");
     }

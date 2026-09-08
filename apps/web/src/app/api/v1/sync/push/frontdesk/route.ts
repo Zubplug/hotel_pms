@@ -382,7 +382,8 @@ export async function POST(req: NextRequest) {
             aggregateType === "MAINTENANCE_TICKET" ||
             aggregateType === "GUEST" ||
             aggregateType === "ROOM" ||
-            aggregateType === "LAUNDRY_ORDER"
+            aggregateType === "LAUNDRY_ORDER" ||
+            aggregateType === "RESERVATION_ROOM"
           ) {
             updatedCount = 1; // No version field on cloud for these yet
           }
@@ -2914,8 +2915,10 @@ export async function POST(req: NextRequest) {
           } else if (aggregateType === "RESERVATION_ROOM") {
             if (eventType === "DISCOUNT_REQUESTED") {
               const resRoom = await tx.reservationRoom.findUnique({ where: { id: aggregateId }, include: { reservation: true } });
-              if (resRoom) {
-                await tx.approvalRequest.create({
+              if (!resRoom) {
+                throw new Error(`DEPENDENCY_NOT_READY: Reservation room ${aggregateId} has not been created yet`);
+              }
+              await tx.approvalRequest.create({
                   data: {
                     propertyId,
                     type: "DISCOUNT",
@@ -2932,12 +2935,13 @@ export async function POST(req: NextRequest) {
                     },
                     idempotencyKey: `offline_discount:${idempotencyKey}`,
                   }
-                });
-              }
+              });
             } else if (eventType === "COMPLIMENTARY_REQUESTED") {
               const resRoom = await tx.reservationRoom.findUnique({ where: { id: aggregateId }, include: { reservation: true } });
-              if (resRoom) {
-                await tx.complimentaryRecord.create({
+              if (!resRoom) {
+                throw new Error(`DEPENDENCY_NOT_READY: Reservation room ${aggregateId} has not been created yet`);
+              }
+              await tx.complimentaryRecord.create({
                   data: {
                     propertyId,
                     businessDate: authoritativeBusinessDate,
@@ -2952,10 +2956,10 @@ export async function POST(req: NextRequest) {
                     complAmount: payload.compAmount || 0,
                     netAmount: 0,
                     complType: payload.compType === "FULL" ? "FULL" : "PARTIAL",
-                    reason: payload.reason || "Offline complimentary request"
+                    reason: payload.reason || "Offline complimentary request",
+                    notes: payload.acknowledgedByStaffId ? JSON.stringify({ acknowledgedByStaffId: payload.acknowledgedByStaffId }) : null
                   }
-                });
-              }
+              });
             } else if (eventType === "DISCOUNT_APPLIED") {
               const resRoom = await tx.reservationRoom.findUnique({
                 where: { id: aggregateId },

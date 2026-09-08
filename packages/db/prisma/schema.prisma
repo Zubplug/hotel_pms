@@ -2827,6 +2827,9 @@ model PosProductModifier {
   stockItem     StockItem?     @relation("ModifierStockItem", fields: [stockItemId], references: [id])
   quantity      Decimal        @default(1) @db.Decimal(18, 4)
   unitOfMeasure UnitOfMeasure?
+  groupName     String?
+  groupRequired Boolean        @default(false)
+  groupMaxSelect Int?
 
   createdAt DateTime @default(now()) @db.Timestamptz
 }

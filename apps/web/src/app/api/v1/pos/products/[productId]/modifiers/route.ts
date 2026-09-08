@@ -45,8 +45,14 @@ export async function POST(
         stockItemId: body.stockItemId || null,
         quantity,
         unitOfMeasure: body.unitOfMeasure || null,
+        groupName: body.groupName ? String(body.groupName).trim() : null,
+        groupRequired: body.groupRequired === true,
+        groupMaxSelect: body.groupMaxSelect == null ? null : Number(body.groupMaxSelect),
       },
     });
+    // Desktop incremental sync watches the parent product watermark because
+    // modifiers do not have their own updatedAt column.
+    await prisma.posProduct.update({ where: { id: productId }, data: { updatedAt: new Date() } });
 
     return NextResponse.json({ data: modifier, error: null }, { status: 201 });
   } catch (err: any) {

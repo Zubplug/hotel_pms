@@ -1,0 +1,4 @@
+ALTER TABLE "PosProductModifier"
+  ADD COLUMN IF NOT EXISTS "groupName" TEXT,
+  ADD COLUMN IF NOT EXISTS "groupRequired" BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS "groupMaxSelect" INTEGER;

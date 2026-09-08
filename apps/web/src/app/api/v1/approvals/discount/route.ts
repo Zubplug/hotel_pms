@@ -20,10 +20,14 @@ export async function POST(req: NextRequest) {
       discountAmount,
       discountPercent,
       reason,
+      acknowledgedByStaffId,
     } = body;
 
     if (!targetType || !reason) {
       return errorResponse('BAD_REQUEST', 'targetType and reason are required', 400);
+    }
+    if (!acknowledgedByStaffId) {
+      return errorResponse('BAD_REQUEST', 'acknowledgedByStaffId is required', 400);
     }
 
     const idempotencyKey = body.idempotencyKey || `disc_${targetType}_${reservationRoomId || folioId || orderId}_${Date.now()}`;
@@ -43,6 +47,8 @@ export async function POST(req: NextRequest) {
 
         propertyId = resRoom.reservation?.propertyId ?? '';
         if (!user.allowedProperties.includes(propertyId)) throw new Error('FORBIDDEN');
+        const acknowledgingStaff = await tx.staff.findFirst({ where: { id: acknowledgedByStaffId, propertyAccess: { has: propertyId }, isActive: true }, select: { id: true } });
+        if (!acknowledgingStaff) throw new Error('INVALID_ACKNOWLEDGING_STAFF');
         currency = resRoom.currency ?? 'NGN';
 
         if (!['PERCENTAGE', 'FIXED_AMOUNT'].includes(discountType)) throw new Error('INVALID_DISCOUNT_TYPE');
@@ -90,6 +96,8 @@ export async function POST(req: NextRequest) {
         if (!folio) throw new Error('Folio not found');
         propertyId = folio.propertyId;
         if (!user.allowedProperties.includes(propertyId)) throw new Error('FORBIDDEN');
+        const acknowledgingStaff = await tx.staff.findFirst({ where: { id: acknowledgedByStaffId, propertyAccess: { has: propertyId }, isActive: true }, select: { id: true } });
+        if (!acknowledgingStaff) throw new Error('INVALID_ACKNOWLEDGING_STAFF');
         currency = folio.currency ?? 'NGN';
 
         const approval = await tx.approvalRequest.create({
@@ -121,6 +129,9 @@ export async function POST(req: NextRequest) {
     if (err.message === 'FORBIDDEN') return errorResponse('FORBIDDEN', 'No access to this property', 403);
     if (['INVALID_DISCOUNT_TYPE', 'INVALID_DISCOUNT_AMOUNT', 'INVALID_DISCOUNT_PERCENT'].includes(err.message)) {
       return errorResponse('BAD_REQUEST', err.message, 400);
+    }
+    if (err.message === 'INVALID_ACKNOWLEDGING_STAFF') {
+      return errorResponse('BAD_REQUEST', 'Acknowledging staff member is not active for this property', 400);
     }
     return errorResponse('INTERNAL_ERROR', err.message || 'Failed to apply discount', 500);
   }

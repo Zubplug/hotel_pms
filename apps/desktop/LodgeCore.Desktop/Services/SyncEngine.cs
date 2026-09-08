@@ -1652,6 +1652,9 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                             localMod.StockItemId = m.TryGetProperty("stockItemId", out var msi) && msi.ValueKind != System.Text.Json.JsonValueKind.Null ? msi.GetString() : null;
                             localMod.Quantity = m.TryGetProperty("quantity", out var mq) ? ReadDecimal(m, "quantity") : 1m;
                             localMod.UnitOfMeasure = m.TryGetProperty("unitOfMeasure", out var mu) && mu.ValueKind != System.Text.Json.JsonValueKind.Null ? mu.GetString() : null;
+                            localMod.GroupName = m.TryGetProperty("groupName", out var mgn) && mgn.ValueKind != System.Text.Json.JsonValueKind.Null ? mgn.GetString() : null;
+                            localMod.GroupRequired = m.TryGetProperty("groupRequired", out var mgr) && mgr.ValueKind == System.Text.Json.JsonValueKind.True;
+                            localMod.GroupMaxSelect = m.TryGetProperty("groupMaxSelect", out var mgm) && mgm.ValueKind != System.Text.Json.JsonValueKind.Null && mgm.TryGetInt32(out var maxSelect) ? maxSelect : null;
                         }
 
                         // Remove stale modifiers for THIS product
@@ -2060,20 +2063,20 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     order.OrderNumber = el.TryGetProperty("orderNumber", out var on) && on.ValueKind != System.Text.Json.JsonValueKind.Null ? on.GetString() ?? "" : "";
                     order.Status = el.TryGetProperty("status", out var st) && st.ValueKind != System.Text.Json.JsonValueKind.Null ? st.GetString() ?? "" : "";
                     if (el.TryGetProperty("businessDate", out var bd) && bd.ValueKind != System.Text.Json.JsonValueKind.Null) order.BusinessDate = bd.GetDateTime();
-                    order.Subtotal = el.TryGetProperty("subtotal", out var sub) && sub.ValueKind == System.Text.Json.JsonValueKind.Number ? sub.GetDecimal() : 0m;
-                    order.TaxAmount = el.TryGetProperty("taxAmount", out var tax) && tax.ValueKind == System.Text.Json.JsonValueKind.Number ? tax.GetDecimal() : 0m;
-                    order.Total = el.TryGetProperty("total", out var tot) && tot.ValueKind == System.Text.Json.JsonValueKind.Number ? tot.GetDecimal() : 0m;
+                    order.Subtotal = ReadDecimal(el, "subtotal");
+                    order.TaxAmount = ReadDecimal(el, "taxAmount");
+                    order.Total = ReadDecimal(el, "total");
                     order.Notes = el.TryGetProperty("notes", out var no) && no.ValueKind != System.Text.Json.JsonValueKind.Null ? no.GetString() : null;
                     order.TableNumber = el.TryGetProperty("tableNumber", out var tn) && tn.ValueKind != System.Text.Json.JsonValueKind.Null ? tn.GetString() : null;
                     order.TableId = el.TryGetProperty("tableId", out var ti) && ti.ValueKind != System.Text.Json.JsonValueKind.Null ? ti.GetString() : null;
                     order.GuestCount = el.TryGetProperty("guestCount", out var gc) && gc.ValueKind == System.Text.Json.JsonValueKind.Number ? gc.GetInt32() : 1;
-                    order.ServiceCharge = el.TryGetProperty("serviceCharge", out var sc) && sc.ValueKind == System.Text.Json.JsonValueKind.Number ? sc.GetDecimal() : 0m;
-                    order.TipAmount = el.TryGetProperty("tipAmount", out var tip) && tip.ValueKind == System.Text.Json.JsonValueKind.Number ? tip.GetDecimal() : 0m;
+                    order.ServiceCharge = ReadDecimal(el, "serviceCharge");
+                    order.TipAmount = ReadDecimal(el, "tipAmount");
                     order.ServerStaffId = el.TryGetProperty("serverStaffId", out var ssi) && ssi.ValueKind != System.Text.Json.JsonValueKind.Null ? ssi.GetString() : null;
                     order.Version = el.TryGetProperty("version", out var v) && v.ValueKind == System.Text.Json.JsonValueKind.Number ? v.GetInt32() : 1;
                     order.OrderType = el.TryGetProperty("orderType", out var ot) && ot.ValueKind != System.Text.Json.JsonValueKind.Null ? ot.GetString() ?? "TABLE" : "TABLE";
                     order.PaymentStatus = el.TryGetProperty("paymentStatus", out var ps) && ps.ValueKind != System.Text.Json.JsonValueKind.Null ? ps.GetString() ?? "UNPAID" : "UNPAID";
-                    order.Discount = el.TryGetProperty("discount", out var dis) && dis.ValueKind == System.Text.Json.JsonValueKind.Number ? dis.GetDecimal() : 0m;
+                    order.Discount = ReadDecimal(el, "discount");
                     order.DisplayName = el.TryGetProperty("displayName", out var dn) && dn.ValueKind != System.Text.Json.JsonValueKind.Null ? dn.GetString() ?? "" : "";
                     if (el.TryGetProperty("closedAt", out var ca) && ca.ValueKind != System.Text.Json.JsonValueKind.Null) order.ClosedAt = ca.GetDateTime();
                     if (el.TryGetProperty("createdAt", out var crt) && crt.ValueKind != System.Text.Json.JsonValueKind.Null) order.CreatedAt = crt.GetDateTime();
@@ -2097,13 +2100,13 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                             }
                             item.ProductId = itemEl.TryGetProperty("productId", out var pid) && pid.ValueKind != System.Text.Json.JsonValueKind.Null ? pid.GetString() : null;
                             item.ProductName = itemEl.TryGetProperty("productName", out var pn) && pn.ValueKind != System.Text.Json.JsonValueKind.Null ? pn.GetString() ?? "" : "";
-                            item.Quantity = itemEl.TryGetProperty("quantity", out var iq) && iq.ValueKind == System.Text.Json.JsonValueKind.Number ? iq.GetDecimal() : 1m;
-                            item.UnitPrice = itemEl.TryGetProperty("unitPrice", out var up) && up.ValueKind == System.Text.Json.JsonValueKind.Number ? up.GetDecimal() : 0m;
-                            item.TaxRate = itemEl.TryGetProperty("taxRate", out var itr) && itr.ValueKind == System.Text.Json.JsonValueKind.Number ? itr.GetDecimal() : 0m;
-                            item.TaxAmount = itemEl.TryGetProperty("taxAmount", out var ita) && ita.ValueKind == System.Text.Json.JsonValueKind.Number ? ita.GetDecimal() : 0m;
-                            item.Total = itemEl.TryGetProperty("total", out var itot) && itot.ValueKind == System.Text.Json.JsonValueKind.Number ? itot.GetDecimal() : 0m;
-                            item.Subtotal = itemEl.TryGetProperty("subtotal", out var isub) && isub.ValueKind == System.Text.Json.JsonValueKind.Number ? isub.GetDecimal() : 0m;
-                            item.Discount = itemEl.TryGetProperty("discount", out var idis) && idis.ValueKind == System.Text.Json.JsonValueKind.Number ? idis.GetDecimal() : 0m;
+                            item.Quantity = itemEl.TryGetProperty("quantity", out _) ? ReadDecimal(itemEl, "quantity") : 1m;
+                            item.UnitPrice = ReadDecimal(itemEl, "unitPrice");
+                            item.TaxRate = ReadDecimal(itemEl, "taxRate");
+                            item.TaxAmount = ReadDecimal(itemEl, "taxAmount");
+                            item.Total = ReadDecimal(itemEl, "total");
+                            item.Subtotal = ReadDecimal(itemEl, "subtotal");
+                            item.Discount = ReadDecimal(itemEl, "discount");
                             item.Course = itemEl.TryGetProperty("course", out var ico) && ico.ValueKind == System.Text.Json.JsonValueKind.Number ? ico.GetInt32() : null;
                             item.KitchenStatus = itemEl.TryGetProperty("kitchenStatus", out var iks) && iks.ValueKind != System.Text.Json.JsonValueKind.Null ? iks.GetString() : null;
                             if (itemEl.TryGetProperty("sentToKitchenAt", out var iska) && iska.ValueKind != System.Text.Json.JsonValueKind.Null) item.SentToKitchenAt = iska.GetDateTime();
@@ -2128,9 +2131,9 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                                         item.Modifiers.Add(mod);
                                     }
                                     mod.Name = mEl.TryGetProperty("name", out var mmn) && mmn.ValueKind != System.Text.Json.JsonValueKind.Null ? mmn.GetString() ?? "" : "";
-                                    mod.Price = mEl.TryGetProperty("price", out var mmpr) && mmpr.ValueKind == System.Text.Json.JsonValueKind.Number ? mmpr.GetDecimal() : 0m;
+                                    mod.Price = ReadDecimal(mEl, "price");
                                     mod.StockItemId = mEl.TryGetProperty("stockItemId", out var msi) && msi.ValueKind != System.Text.Json.JsonValueKind.Null ? msi.GetString() : null;
-                                    mod.Quantity = mEl.TryGetProperty("quantity", out var mq) ? ReadDecimal(mEl, "quantity") : 0m;
+                                    mod.Quantity = mEl.TryGetProperty("quantity", out _) ? ReadDecimal(mEl, "quantity") : 0m;
                                     mod.UnitOfMeasure = mEl.TryGetProperty("unitOfMeasure", out var mu) && mu.ValueKind != System.Text.Json.JsonValueKind.Null ? mu.GetString() : null;
                                 }
                                 var modsToRemove = item.Modifiers.Where(m => !incomingModIds.Contains(m.Id)).ToList();
@@ -2193,7 +2196,7 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                                     }
                                     payment.Method = payEl.TryGetProperty("method", out var pm) && pm.ValueKind != System.Text.Json.JsonValueKind.Null ? pm.GetString() ?? "" : "";
                                     payment.Status = payEl.TryGetProperty("status", out var pst) && pst.ValueKind != System.Text.Json.JsonValueKind.Null ? pst.GetString() ?? "" : "";
-                                    payment.Amount = payEl.TryGetProperty("amount", out var pa) && pa.ValueKind == System.Text.Json.JsonValueKind.Number ? pa.GetDecimal() : 0m;
+                                    payment.Amount = ReadDecimal(payEl, "amount");
                                     payment.Currency = payEl.TryGetProperty("currency", out var pcu) && pcu.ValueKind != System.Text.Json.JsonValueKind.Null ? pcu.GetString() ?? "NGN" : "NGN";
                                     payment.CheckId = payEl.TryGetProperty("checkId", out var pci) && pci.ValueKind != System.Text.Json.JsonValueKind.Null ? pci.GetString() : null;
                                     payment.SessionId = payEl.TryGetProperty("sessionId", out var psi) && psi.ValueKind != System.Text.Json.JsonValueKind.Null ? psi.GetString() : null;
@@ -2222,7 +2225,7 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                             }
                             payment.Method = payEl.TryGetProperty("method", out var pm) && pm.ValueKind != JsonValueKind.Null ? pm.GetString() ?? "" : payment.Method;
                             payment.Status = payEl.TryGetProperty("status", out var pst) && pst.ValueKind != JsonValueKind.Null ? pst.GetString() ?? "" : payment.Status;
-                            if (payEl.TryGetProperty("amount", out var pa) && pa.ValueKind == JsonValueKind.Number) payment.Amount = pa.GetDecimal();
+                            if (payEl.TryGetProperty("amount", out _)) payment.Amount = ReadDecimal(payEl, "amount");
                             payment.Currency = payEl.TryGetProperty("currency", out var pcu) && pcu.ValueKind != JsonValueKind.Null ? pcu.GetString() ?? "NGN" : payment.Currency;
                             payment.CheckId = payEl.TryGetProperty("checkId", out var pci) && pci.ValueKind != JsonValueKind.Null ? pci.GetString() : payment.CheckId;
                             payment.SessionId = payEl.TryGetProperty("sessionId", out var psi) && psi.ValueKind != JsonValueKind.Null ? psi.GetString() : payment.SessionId;

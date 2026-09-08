@@ -100,7 +100,15 @@ export function MyOrdersModal({ isOpen, onClose, operatorToken, staffName }: MyO
         const status = String(order.status ?? order.Status ?? '').toUpperCase();
         const payments = order.payments ?? order.Payments ?? [];
         const paymentStatus = String(order.paymentStatus ?? order.PaymentStatus ?? '').toUpperCase();
-        const total = Number(order.total ?? order.Total ?? 0);
+        const lineTotal = Array.isArray(order.items)
+          ? order.items.reduce((sum: number, item: any) => {
+              const explicit = Number(item.total ?? item.Total ?? 0);
+              const quantity = Number(item.quantity ?? item.Quantity ?? 0);
+              const unitPrice = Number(item.unitPrice ?? item.UnitPrice ?? 0);
+              return sum + (explicit || unitPrice * quantity);
+            }, 0)
+          : 0;
+        const total = Number(order.total ?? order.Total ?? 0) || lineTotal;
         const confirmedPayments = payments.filter((payment: any) =>
           ['CONFIRMED', 'PAID', 'COMPLETED', 'SETTLED'].includes(String(payment.status ?? payment.Status ?? '').toUpperCase())
         );

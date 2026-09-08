@@ -9,7 +9,6 @@ import {
   Sparkles, Star, Package2, PanelRightClose, PanelRightOpen, RefreshCcw, Percent
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { AppSwitcher } from '@/components/layout/AppSwitcher';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { HardwareBridge, toReceiptPrintData } from '@/lib/desktop/HardwareBridge';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
@@ -67,7 +66,9 @@ type ViewMode = 'menu' | 'tables';
 export default function PosApp() {
   const { provider, isDesktopMode } = useLodgeCoreProvider();
   const { data: session, status: sessionStatus } = useLodgeCoreSession();
-  const propertyId = (session?.user as any)?.propertyId || '';
+  const [terminalPropertyId, setTerminalPropertyId] = useState('');
+  const sessionPropertyId = (session?.user as any)?.propertyId || '';
+  const propertyId = isDesktopMode ? (terminalPropertyId || sessionPropertyId) : sessionPropertyId;
   const router = useRouter();
 
   // ── Core state ────────────────────────────────────────────────────
@@ -139,6 +140,20 @@ export default function PosApp() {
   const { isOnline, syncPending } = usePosOnlineStatus({ onBackOnline: refreshActiveOrders });
   const { isExpired, isRevoked, restrictedMode } = useLicenseGuard({ sessionContext });
 
+  useEffect(() => {
+    if (!isDesktopMode || terminalPropertyId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const status = await provider.system?.getTerminalStatus?.();
+        if (!cancelled && (status as any)?.propertyId) setTerminalPropertyId((status as any).propertyId);
+      } catch {
+        // The POS operator screen will remain available once terminal context is ready.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isDesktopMode, provider, terminalPropertyId]);
+
 
   useEffect(() => {
     refreshActiveOrders();
@@ -162,6 +177,11 @@ export default function PosApp() {
       try {
         const configuredBankingModel = (session as any)?.user?.bankingModel;
         if (configuredBankingModel) setBankingModel(configuredBankingModel);
+        if (isDesktopMode) {
+          const terminalStatus = await provider.system?.getTerminalStatus?.();
+          if (terminalStatus?.bankingModel) setBankingModel(terminalStatus.bankingModel);
+          if (terminalStatus?.propertyId && !terminalPropertyId) setTerminalPropertyId(terminalStatus.propertyId);
+        }
         // Read the active outlet from localStorage — set when the operator selects their outlet at session start
         const activeOutletId = localStorage.getItem('lodgecore_pos_outlet_id') || undefined;
         const [prodRes, catRes] = await Promise.all([
@@ -186,12 +206,12 @@ export default function PosApp() {
           })));
         }
 
-        const activeSessionId =
-          (session as any)?.sessionId ||
-          localStorage.getItem('lodgecore_pos_session_id');
+        const activeSessionId = !isDesktopMode
+          ? ((session as any)?.sessionId || localStorage.getItem('lodgecore_pos_session_id'))
+          : (activeOperator ? localStorage.getItem('lodgecore_pos_session_id') : '');
         if (activeSessionId) setPosSessionId(activeSessionId);
 
-        if (activeSessionId) {
+        if (activeSessionId && (!isDesktopMode || activeOperator)) {
           try {
             const contextRes = await provider.pos.getSessionContext(activeSessionId);
             if (!contextRes.error && contextRes.data) {
@@ -208,18 +228,6 @@ export default function PosApp() {
           }
         }
 
-        if (isDesktopMode && session?.user && !operatorSwitchOverride.current) {
-          const desktopUser = session.user as any;
-          setActiveOperator({
-            id: desktopUser.staffId || desktopUser.id,
-            firstName: desktopUser.name || 'Staff',
-            lastName: '',
-            role: desktopUser.role || 'WAITER'
-          });
-          setOperatorToken('desktop-session');
-          return;
-        }
-        
         const savedToken = localStorage.getItem('lodgecore_pos_operator_token');
         if (savedToken) {
            try {
@@ -1252,7 +1260,7 @@ export default function PosApp() {
           
           // Ensure session ID is up to date in state
           const newSessionId = authData?.posSessionId || authData?.sessionId || localStorage.getItem('lodgecore_pos_session_id');
-          if (newSessionId && newSessionId !== posSessionId) {
+          if (newSessionId) {
             setPosSessionId(newSessionId);
             provider.pos.getSessionContext(newSessionId).then(res => {
               if (res.data) setSessionContext(res.data);

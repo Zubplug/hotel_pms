@@ -57,7 +57,9 @@ export function usePosOperatorAuth({
 }): UsePosOperatorAuthResult {
   const { provider, isDesktopMode } = useLodgeCoreProvider();
   const { data: session } = useLodgeCoreSession();
-  const propertyId = (session?.user as any)?.propertyId || '';
+  const [terminalPropertyId, setTerminalPropertyId] = useState('');
+  const sessionPropertyId = (session?.user as any)?.propertyId || '';
+  const propertyId = isDesktopMode ? (terminalPropertyId || sessionPropertyId) : sessionPropertyId;
 
   const [staff, setStaff] = useState<StaffProfile[]>([]);
   const [staffLoading, setStaffLoading] = useState(false);
@@ -94,7 +96,21 @@ export function usePosOperatorAuth({
   };
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isDesktopMode || terminalPropertyId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const status = await provider.system?.getTerminalStatus?.();
+        if (!cancelled && (status as any)?.propertyId) setTerminalPropertyId((status as any).propertyId);
+      } catch {
+        // Keep the selector available while the terminal bridge is starting.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isDesktopMode, provider, terminalPropertyId]);
+
+  useEffect(() => {
+    if (!isOpen || !propertyId) return;
     // Reset state every time the auth screen opens (lock or switch)
     setSelectedStaff(null);
     setPin('');
@@ -104,8 +120,7 @@ export function usePosOperatorAuth({
     setVerifiedOperator(null);
     setPendingToken('');
     loadStaff();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]);
+  }, [isOpen, propertyId, outletId]);
 
   const selectStaff = (s: StaffProfile) => {
     setSelectedStaff(s);

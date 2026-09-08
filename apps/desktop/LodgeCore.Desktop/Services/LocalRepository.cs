@@ -3049,7 +3049,11 @@ public class LocalRepository
                 folioId = root.TryGetProperty("folioId", out var fi) ? fi.GetString() : null,
                 targetFolioItemId = root.TryGetProperty("targetFolioItemId", out var tf) ? tf.GetString() : null,
                 orderId = root.TryGetProperty("orderId", out var oi) ? oi.GetString() : null,
-                discountType, discountAmount = amount, discountPercent = percentage, reason
+                discountType,
+                discountAmount = amount,
+                discountPercent = percentage,
+                reason,
+                acknowledgedByStaffId = root.TryGetProperty("acknowledgedByStaffId", out var discountAck) ? discountAck.GetString() : null
             })
         });
         await _dbContext.SaveChangesAsync();
@@ -3107,7 +3111,8 @@ public class LocalRepository
                 reason,
                 beneficiaryType,
                 beneficiaryStaffId,
-                settlementType
+                settlementType,
+                acknowledgedByStaffId = root.TryGetProperty("acknowledgedByStaffId", out var complimentaryAck) ? complimentaryAck.GetString() : null
             })
         };
 
@@ -3476,6 +3481,14 @@ public class LocalRepository
                 .Include(i => i.Modifiers)
                 .Where(i => itemIds.Contains(i.Id))
                 .ToListAsync();
+            var order = await _dbContext.PosOrders
+                .AsNoTracking()
+                .Include(o => o.Items)
+                .FirstOrDefaultAsync(o => o.Id == kot.OrderId);
+            var ticketTotal = items.Sum(i => i.Total != 0m ? i.Total : i.UnitPrice * i.Quantity);
+            var orderTotal = order != null && order.Total != 0m
+                ? order.Total
+                : order?.Items.Sum(i => i.Total != 0m ? i.Total : i.UnitPrice * i.Quantity) ?? 0m;
 
             result.Add(new {
                 id = kot.Id,
@@ -3486,12 +3499,16 @@ public class LocalRepository
                 order = new {
                     tableNumber = kot.TableNumber,
                     orderNumber = kot.OrderNumber,
-                    orderType = "DINE_IN"
+                    orderType = order?.OrderType ?? "DINE_IN",
+                    total = ticketTotal,
+                    orderTotal
                 },
                 items = items.Select(i => new {
                     id = i.Id,
                     productName = i.ProductName,
                     quantity = i.Quantity,
+                    unitPrice = i.UnitPrice,
+                    total = i.Total != 0m ? i.Total : i.UnitPrice * i.Quantity,
                     modifiers = i.Modifiers.Select(m => new { name = m.Name })
                 })
             });
@@ -5318,7 +5335,11 @@ public class LocalRepository
     public async Task<LodgeCore.Desktop.Data.Entities.LocalPosSession?> GetActiveServerBankAsync(string staffId, string propertyId, string outletId)
     {
         return await _dbContext.PosSessions
-            .FirstOrDefaultAsync(s => s.PrimaryOperatorId == staffId && (string.IsNullOrEmpty(outletId) || s.OutletId == outletId) && s.Status == "OPEN" && s.BankType == "SERVER");
+            .FirstOrDefaultAsync(s => s.PropertyId == propertyId
+                && s.PrimaryOperatorId == staffId
+                && (string.IsNullOrEmpty(outletId) || s.OutletId == outletId)
+                && s.Status == "OPEN"
+                && s.BankType == "SERVER");
     }
 
     /// <summary>

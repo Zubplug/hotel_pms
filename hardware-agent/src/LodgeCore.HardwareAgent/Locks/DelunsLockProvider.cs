@@ -58,7 +58,10 @@ public class DelunsLockProvider : ILockProvider
         }
         else
         {
-            _logger.LogWarning("Deluns SDK TP_Configuration failed with code {Code}", res);
+            var detail = res == (int)LockSdkError.PORT_IN_USED
+                ? "The encoder COM port is already in use. Close the Deluns hotel software and any other card-agent process, then retry."
+                : $"Deluns SDK TP_Configuration failed with code {res}";
+            _logger.LogWarning("{Detail}", detail);
             _initialized = false;
             _lastInitError = res;
         }
@@ -108,7 +111,7 @@ public class DelunsLockProvider : ILockProvider
         else
         {
             _logger.LogError("Failed to encode Deluns card. SDK returned: {Error}", result);
-            return LockResult.Fail(result.ToString(), $"Deluns SDK error code: {result}", VendorName);
+            return LockResult.Fail(result.ToString(), DescribeError(result), VendorName);
         }
     }
 
@@ -144,7 +147,7 @@ public class DelunsLockProvider : ILockProvider
         else
         {
             _logger.LogError("Failed to encode Deluns MASTER card. SDK returned: {Error}", result);
-            return LockResult.Fail(result.ToString(), $"Deluns SDK error code: {result}", VendorName);
+            return LockResult.Fail(result.ToString(), DescribeError(result), VendorName);
         }
     }
 
@@ -238,4 +241,14 @@ public class DelunsLockProvider : ILockProvider
             return LockResult.Fail(result.ToString(), $"SDK cancel error: {result}", VendorName);
         }
     }
+
+    private static string DescribeError(int code) => code switch
+    {
+        (int)LockSdkError.PORT_IN_USED => "Deluns encoder COM port is already in use. Close the Deluns hotel software and any other card-agent process, then retry.",
+        (int)LockSdkError.NO_RW_MACHINE => "Deluns encoder was not detected. Check the USB connection and driver.",
+        (int)LockSdkError.NO_CARD => "No card detected on the Deluns encoder.",
+        (int)LockSdkError.INVALID_PARAMETER => "Deluns rejected the card parameters.",
+        (int)LockSdkError.ERR_NOT_REGISTERED => "Deluns SDK is not registered. Check the LockSDK license files.",
+        _ => $"Deluns SDK error code: {code}"
+    };
 }

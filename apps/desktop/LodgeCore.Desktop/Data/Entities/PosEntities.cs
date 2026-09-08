@@ -485,6 +485,9 @@ public class LocalPosProductModifier
     public string? StockItemId { get; set; }
     public decimal Quantity { get; set; } = 1m;
     public string? UnitOfMeasure { get; set; }
+    public string? GroupName { get; set; }
+    public bool GroupRequired { get; set; }
+    public int? GroupMaxSelect { get; set; }
     public DateTime CreatedAt { get; set; }
 }
 

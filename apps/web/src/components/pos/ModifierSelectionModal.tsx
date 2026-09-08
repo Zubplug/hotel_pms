@@ -56,18 +56,46 @@ export function ModifierSelectionModal({ isOpen, onClose, product, onConfirm }: 
   if (!isOpen || !product) return null;
 
   const toggleModifier = (modId: string) => {
+    const modifier = modifiers.find((mod) => mod.id === modId);
     setSelectedModifiers((prev) => {
       const next = new Set(prev);
+      if (!modifier?.groupName) {
+        if (next.has(modId)) next.delete(modId);
+        else next.add(modId);
+        return next;
+      }
+
+      const groupMembers = modifiers.filter((mod) => mod.groupName === modifier.groupName);
+      const maxSelect = Number(modifier.groupMaxSelect || 0);
       if (next.has(modId)) {
         next.delete(modId);
       } else {
+        if (maxSelect === 1) {
+          groupMembers.forEach((mod) => next.delete(mod.id));
+        } else if (maxSelect > 0 && groupMembers.filter((mod) => next.has(mod.id)).length >= maxSelect) {
+          toast.error(`Choose up to ${maxSelect} option${maxSelect === 1 ? '' : 's'} in ${modifier.groupName}.`);
+          return next;
+        }
         next.add(modId);
       }
       return next;
     });
   };
 
+  const modifierGroups = Array.from(new Set(modifiers.map((mod) => mod.groupName || '__ungrouped__'))).map((key) => ({
+    key,
+    name: key === '__ungrouped__' ? 'Additional options' : key,
+    modifiers: modifiers.filter((mod) => (mod.groupName || '__ungrouped__') === key),
+  }));
+  const missingRequiredGroups = modifierGroups.filter((group) =>
+    group.modifiers.some((mod) => mod.groupRequired) && !group.modifiers.some((mod) => selectedModifiers.has(mod.id))
+  );
+
   const handleConfirm = () => {
+    if (missingRequiredGroups.length > 0) {
+      toast.error(`Select an option in ${missingRequiredGroups[0].name}.`);
+      return;
+    }
     const selectedMods = modifiers.filter((m) => selectedModifiers.has(m.id));
     onConfirm(product, selectedMods);
     onClose();
@@ -105,34 +133,45 @@ export function ModifierSelectionModal({ isOpen, onClose, product, onConfirm }: 
               <span className="text-slate-300 text-sm">The item will be added as-is.</span>
             </div>
           ) : (
-            <div className="space-y-2">
-              {modifiers.map((mod) => (
-                <button
-                  key={mod.id}
-                  onClick={() => toggleModifier(mod.id)}
-                  className={
-                    'w-full flex items-center justify-between p-4 rounded-xl border-2 transition-all touch-manipulation ' +
-                    (selectedModifiers.has(mod.id)
-                      ? 'border-indigo-600 bg-indigo-50 text-indigo-900'
-                      : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700')
-                  }
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={
-                        'w-5 h-5 rounded-md flex items-center justify-center ' +
-                        (selectedModifiers.has(mod.id) ? 'bg-indigo-600 text-white' : 'border-2 border-slate-300')
-                      }
-                    >
-                      {selectedModifiers.has(mod.id) && <Check className="w-3 h-3" />}
+            <div className="space-y-5">
+              {modifierGroups.map((group) => {
+                const required = group.modifiers.some((mod) => mod.groupRequired);
+                const maxSelect = group.modifiers.find((mod) => mod.groupMaxSelect)?.groupMaxSelect;
+                return (
+                  <section key={group.key} className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <h4 className="font-bold text-slate-800">{group.name}</h4>
+                        <p className="text-xs text-slate-500">{required ? 'Required' : 'Optional'}{maxSelect ? ` · Pick up to ${maxSelect}` : ''}</p>
+                      </div>
+                      {required && <span className="text-xs font-semibold text-rose-600">Required</span>}
                     </div>
-                    <span className="font-medium">{mod.name}</span>
-                  </div>
-                  {Number(mod.price) > 0 && (
-                    <span className="font-semibold">+{formatCurrency(Number(mod.price))}</span>
-                  )}
-                </button>
-              ))}
+                    {group.modifiers.map((mod) => {
+                      const selected = selectedModifiers.has(mod.id);
+                      const singleChoice = Number(mod.groupMaxSelect) === 1;
+                      return (
+                        <button
+                          key={mod.id}
+                          onClick={() => toggleModifier(mod.id)}
+                          className={'w-full flex items-center justify-between p-4 rounded-xl border-2 transition-all touch-manipulation ' +
+                            (selected ? 'border-indigo-600 bg-indigo-50 text-indigo-900' : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700')}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={'w-5 h-5 flex items-center justify-center ' +
+                              (singleChoice ? 'rounded-full' : 'rounded-md') + ' ' +
+                              (selected ? 'bg-indigo-600 text-white' : 'border-2 border-slate-300')}
+                            >
+                              {selected && <Check className="w-3 h-3" />}
+                            </div>
+                            <span className="font-medium">{mod.name}</span>
+                          </div>
+                          {Number(mod.price) > 0 && <span className="font-semibold">+{formatCurrency(Number(mod.price))}</span>}
+                        </button>
+                      );
+                    })}
+                  </section>
+                );
+              })}
             </div>
           )}
         </div>
@@ -147,7 +186,7 @@ export function ModifierSelectionModal({ isOpen, onClose, product, onConfirm }: 
           </Button>
           <Button
             onClick={handleConfirm}
-            disabled={isLoading}
+            disabled={isLoading || missingRequiredGroups.length > 0}
             className="flex-1 h-12 text-lg font-bold bg-indigo-600 hover:bg-indigo-700 text-white touch-manipulation"
           >
             {selectedModifiers.size > 0

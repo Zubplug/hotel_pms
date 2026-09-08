@@ -76,6 +76,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         const modifier = details.modifierId
           ? await tx.posProductModifier.update({ where: { id: details.modifierId }, data: { name: details.name, price: Number(details.price), stockItemId: details.stockItemId || null, quantity: Number(details.quantity || 1), unitOfMeasure: details.unitOfMeasure || null } })
           : await tx.posProductModifier.create({ data: { productId: product.id, name: details.name, price: Number(details.price), isActive: true, stockItemId: details.stockItemId || null, quantity: Number(details.quantity || 1), unitOfMeasure: details.unitOfMeasure || null } });
+        // Modifier changes are delivered through the parent product projection
+        // during desktop incremental sync. Touch the product so offline tills
+        // receive newly approved/edited modifiers without a full resync.
+        await tx.posProduct.update({ where: { id: product.id }, data: { updatedAt: new Date() } });
         const updated = await tx.approvalRequest.update({ where: { id: approval.id }, data: { status: 'APPROVED', reviewedBy: user.id, reviewedAt: new Date(), details: { ...details, stage: 'LIVE', managerApprovedBy: user.id, managerApprovedAt: new Date().toISOString(), modifierId: modifier.id } } });
         return { status: 'EXECUTED', approval: updated, modifierId: modifier.id };
       }

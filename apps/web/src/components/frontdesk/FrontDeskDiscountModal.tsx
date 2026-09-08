@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { X, Percent, Hash } from 'lucide-react';
+import { Percent, Hash } from 'lucide-react';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
+import { useProperty } from '@/components/PropertyProvider';
+import { useQuery } from '@tanstack/react-query';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 type TargetType = 'RESERVATION_ROOM' | 'FOLIO_ITEM';
 
 type FrontDeskDiscountModalProps = {
@@ -14,16 +17,26 @@ type FrontDeskDiscountModalProps = {
 };
 
 export function FrontDeskDiscountModal({ isOpen, targetType, targetId, targetTotal, onClose, onSuccess }: FrontDeskDiscountModalProps) {
-  const { provider, isDesktopMode } = useLodgeCoreProvider();
+  const { provider } = useLodgeCoreProvider();
+  const { propertyId } = useProperty();
   const [type, setType] = useState<'percent' | 'amount'>('percent');
   const [value, setValue] = useState('');
   const [reason, setReason] = useState('');
+  const [acknowledgedByStaffId, setAcknowledgedByStaffId] = useState('');
   
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+
+  const { data: staffResponse } = useQuery({
+    queryKey: ['frontdesk-acknowledging-staff', propertyId],
+    queryFn: () => provider.auth.getActiveStaff(),
+    enabled: !!propertyId && isOpen,
+    staleTime: 300_000,
+  });
+  const activeStaff = (staffResponse as any)?.data || staffResponse || [];
 
   if (!isOpen || !mounted) return null;
 
@@ -34,6 +47,10 @@ export function FrontDeskDiscountModal({ isOpen, targetType, targetId, targetTot
     }
     if (!reason.trim()) {
       setError('A reason is required for discounts.');
+      return;
+    }
+    if (!acknowledgedByStaffId) {
+      setError('Please select the staff member who acknowledged this discount.');
       return;
     }
     const numValue = Number(value);
@@ -49,7 +66,8 @@ export function FrontDeskDiscountModal({ isOpen, targetType, targetId, targetTot
         discountType: type === 'amount' ? 'FIXED_AMOUNT' : 'PERCENTAGE',
         discountAmount: amount,
         discountPercent: percentage,
-        reason
+        reason,
+        acknowledgedByStaffId,
       };
       // Map targetId to the field name the backend expects per targetType
       if (targetType === 'RESERVATION_ROOM') payload.reservationRoomId = targetId;
@@ -127,6 +145,24 @@ export function FrontDeskDiscountModal({ isOpen, targetType, targetId, targetTot
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">
+                Acknowledged By
+              </label>
+              <Select value={acknowledgedByStaffId} onValueChange={(val) => setAcknowledgedByStaffId(val || '')}>
+                <SelectTrigger className="w-full h-12 rounded-xl bg-slate-50 border-slate-200">
+                  <SelectValue placeholder="Select acknowledging staff" />
+                </SelectTrigger>
+                <SelectContent>
+                  {activeStaff.map((staff: any) => (
+                    <SelectItem key={staff.id} value={staff.id}>
+                      {staff.firstName} {staff.lastName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
                 Reason
               </label>
               <input
@@ -150,7 +186,7 @@ export function FrontDeskDiscountModal({ isOpen, targetType, targetId, targetTot
             </button>
             <button
               onClick={() => handleSubmit()}
-              disabled={isLoading || !value || !reason.trim()}
+              disabled={isLoading || !value || !reason.trim() || !acknowledgedByStaffId}
               className="flex-1 py-3 px-4 rounded-xl font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 transition-colors"
             >
               {isLoading ? 'Submitting...' : 'Submit for Night Audit'}
