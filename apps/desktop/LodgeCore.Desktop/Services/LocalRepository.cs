@@ -3065,7 +3065,6 @@ public class LocalRepository
         var compType = root.TryGetProperty("compType", out var ct) ? ct.GetString() : "FULL";
         var compAmount = root.TryGetProperty("compAmount", out var ca) ? ca.GetDouble() : 0.0;
         var reason = root.TryGetProperty("reason", out var rsn) ? rsn.GetString() : "";
-        var acknowledgedByStaffId = root.TryGetProperty("acknowledgedByStaffId", out var ackId) ? ackId.GetString() : "";
         
         var beneficiaryType = root.TryGetProperty("beneficiaryType", out var bt) ? bt.GetString() : "GUEST";
         var beneficiaryStaffId = root.TryGetProperty("beneficiaryStaffId", out var bsid) ? bsid.GetString() : null;
@@ -3087,83 +3086,35 @@ public class LocalRepository
 
         if (string.IsNullOrEmpty(propertyId)) throw new Exception("Property context not found");
 
-        using var transaction = await _dbContext.Database.BeginTransactionAsync();
-        try
+        var approvalId = Guid.NewGuid().ToString();
+        var evt = new LocalOutboxEvent
         {
-            double totalAmountToComp = 0;
-            if (targetType == "POS_ORDER" && posOrder != null) {
-                totalAmountToComp = compType == "FULL" ? (double)posOrder.Total : compAmount;
-            } else if (targetType == "RESERVATION_ROOM" && resRoom != null) {
-                var nights = (resRoom.CheckOutDate - resRoom.CheckInDate).Days;
-                if (nights < 1) nights = 1;
-                totalAmountToComp = compType == "FULL" ? 0 : (compAmount * nights); // Backend will calculate full amount for reservations
-            }
+            Id = approvalId,
+            PropertyId = propertyId,
+            DeviceId = deviceId,
+            OperatorId = userId,
+            AggregateType = targetType,
+            AggregateId = targetType == "POS_ORDER" ? posOrder!.Id : resRoom!.Id,
+            AggregateVersion = 1,
+            EventType = targetType == "POS_ORDER" ? "POS_COMPLIMENTARY_REQUESTED" : "COMPLIMENTARY_REQUESTED",
+            Sequence = 1,
+            PayloadJson = JsonSerializer.Serialize(new {
+                targetType,
+                orderId = posOrder?.Id,
+                reservationRoomId = resRoom?.Id,
+                compType,
+                compAmount,
+                reason,
+                beneficiaryType,
+                beneficiaryStaffId,
+                settlementType
+            })
+        };
 
-            var approvalId = Guid.NewGuid().ToString();
+        _dbContext.OutboxEvents.Add(evt);
+        await _dbContext.SaveChangesAsync();
 
-            // Apply financial adjustments to the target
-            if (false && targetType == "POS_ORDER" && posOrder != null)
-            {
-                var compDiscount = new LocalPosDiscount 
-                {
-                    Id = Guid.NewGuid().ToString(),
-                    OrderId = posOrder.Id,
-                    Type = compType == "FULL" ? "PERCENTAGE" : "FLAT",
-                    Amount = compType == "FULL" ? 100 : (decimal)totalAmountToComp,
-                    AuthorizerId = acknowledgedByStaffId,
-                    OperationId = Guid.NewGuid().ToString(),
-                    BusinessDate = posOrder.BusinessDate,
-                    CreatedAt = DateTime.UtcNow
-                };
-                _dbContext.PosDiscounts.Add(compDiscount);
-
-                posOrder.Discount += (decimal)totalAmountToComp;
-                
-                var calculatedTotal = posOrder.Items?.Sum(i => i.Total != 0m ? i.Total : i.UnitPrice * i.Quantity) ?? 0m;
-                var currentTotal = posOrder.Total != 0m ? posOrder.Total : calculatedTotal;
-                posOrder.Total = Math.Max(0, currentTotal - (decimal)totalAmountToComp);
-
-                _dbContext.PosOrders.Update(posOrder);
-            }
-            else if (false && targetType == "RESERVATION_ROOM" && resRoom != null)
-            {
-                resRoom.DiscountType = "COMPLIMENTARY";
-                resRoom.DiscountAmount = (decimal)compAmount;
-                resRoom.DiscountReason = reason;
-                resRoom.DiscountApprovalId = approvalId;
-                resRoom.DiscountApprovingManagerId = acknowledgedByStaffId;
-
-                _dbContext.ReservationRooms.Update(resRoom);
-            }
-
-            var evt = new LocalOutboxEvent
-            {
-                Id = approvalId,
-                PropertyId = propertyId,
-                DeviceId = deviceId,
-                OperatorId = userId,
-                AggregateType = targetType,
-                AggregateId = targetType == "POS_ORDER" ? posOrder!.Id : resRoom!.Id,
-                AggregateVersion = 1,
-                EventType = targetType == "POS_ORDER" ? "POS_COMPLIMENTARY_REQUESTED" : "COMPLIMENTARY_REQUESTED",
-                Sequence = 1,
-                PayloadJson = JsonSerializer.Serialize(new {
-                    targetType, compType, compAmount, reason, beneficiaryType, beneficiaryStaffId, settlementType
-                })
-            };
-            
-            _dbContext.OutboxEvents.Add(evt);
-
-            await _dbContext.SaveChangesAsync();
-            await transaction.CommitAsync();
-
-            return new { success = true, approvalId, status = "PENDING_NIGHT_AUDIT_VERIFICATION" };
-        }
-        catch (Exception ex)
-        {
-            await transaction.RollbackAsync();
-            throw new Exception($"Failed to apply complimentary: {ex.Message}", ex);
-        }
+        return new { success = true, approvalId, status = "PENDING_NIGHT_AUDIT_VERIFICATION" };
     }
 
     public async Task<LocalPosOrder> UpdateOrderStatusAsync(string orderId, string status, string reason, string userId, string deviceId)

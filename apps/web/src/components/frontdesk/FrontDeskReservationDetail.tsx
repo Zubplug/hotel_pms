@@ -60,6 +60,16 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
   const canEditReservation = reservation.status === 'CONFIRMED';
   const canCancelReservation = reservation.status === 'CONFIRMED';
   const canManageReservation = canEditReservation || canReassignRoom || canCancelReservation;
+  const hasRoomAdjustment = Boolean(
+    resRoom && (
+      resRoom.discountType === 'COMPLIMENTARY' ||
+      resRoom.discountType === 'FIXED_AMOUNT' ||
+      resRoom.discountType === 'PERCENTAGE' ||
+      Number(resRoom.discountAmount || 0) > 0 ||
+      Number(resRoom.discountPercent || 0) > 0
+    )
+  );
+  const canAddRoomAdjustment = Boolean(resRoom) && !hasRoomAdjustment;
   
   const latestPayment = folio?.payments?.filter((p: any) => p.status === 'COMPLETED' || p.status === 'REFUNDED').sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
 
@@ -215,25 +225,26 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
                     <div className="flex items-center justify-between mb-3">
                       <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Rate Details</p>
 
-                      {/* Discount/Comp Triggers */}
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-8 rounded-lg font-bold text-xs border-slate-200 hover:bg-slate-50 transition-colors"
-                          onClick={() => setIsDiscountOpen(true)}
-                        >
-                          <Percent className="w-3.5 h-3.5 mr-1 text-slate-500" /> Discount
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-8 rounded-lg font-bold text-xs border-emerald-200 text-emerald-700 hover:bg-emerald-50 transition-colors"
-                          onClick={() => setIsComplimentaryOpen(true)}
-                        >
-                          <Gift className="w-3.5 h-3.5 mr-1" /> Comp
-                        </Button>
-                      </div>
+                      {canAddRoomAdjustment && (
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 rounded-lg font-bold text-xs border-slate-200 hover:bg-slate-50 transition-colors"
+                            onClick={() => setIsDiscountOpen(true)}
+                          >
+                            <Percent className="w-3.5 h-3.5 mr-1 text-slate-500" /> Discount
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 rounded-lg font-bold text-xs border-emerald-200 text-emerald-700 hover:bg-emerald-50 transition-colors"
+                            onClick={() => setIsComplimentaryOpen(true)}
+                          >
+                            <Gift className="w-3.5 h-3.5 mr-1" /> Comp
+                          </Button>
+                        </div>
+                      )}
                     </div>
 
                     <div className="bg-slate-50/50 rounded-2xl p-4 border border-slate-100/60 space-y-3">
@@ -323,12 +334,14 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
                     {canEditReservation && <DropdownMenuItem className="rounded-lg p-3 cursor-pointer font-medium" onClick={() => setIsEditDialogOpen(true)}>
                       <Edit3 className="w-4 h-4 mr-2 text-slate-500" /> Edit Details
                     </DropdownMenuItem>}
-                    <DropdownMenuItem className="rounded-lg p-3 cursor-pointer font-medium" onClick={() => setIsDiscountOpen(true)}>
-                      <Percent className="w-4 h-4 mr-2 text-slate-500" /> Apply Discount
-                    </DropdownMenuItem>
-                    <DropdownMenuItem className="rounded-lg p-3 cursor-pointer font-medium" onClick={() => setIsComplimentaryOpen(true)}>
-                      <Gift className="w-4 h-4 mr-2 text-emerald-600" /> Set as Complimentary
-                    </DropdownMenuItem>
+                    {canAddRoomAdjustment && <>
+                      <DropdownMenuItem className="rounded-lg p-3 cursor-pointer font-medium" onClick={() => setIsDiscountOpen(true)}>
+                        <Percent className="w-4 h-4 mr-2 text-slate-500" /> Apply Discount
+                      </DropdownMenuItem>
+                      <DropdownMenuItem className="rounded-lg p-3 cursor-pointer font-medium" onClick={() => setIsComplimentaryOpen(true)}>
+                        <Gift className="w-4 h-4 mr-2 text-emerald-600" /> Set as Complimentary
+                      </DropdownMenuItem>
+                    </>}
                     {canReassignRoom && <DropdownMenuItem className="rounded-lg p-3 cursor-pointer font-medium" onClick={() => setIsReassignDialogOpen(true)}>
                       <MapPin className="w-4 h-4 mr-2 text-slate-500" /> Reassign Room
                     </DropdownMenuItem>}
