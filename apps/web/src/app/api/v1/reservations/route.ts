@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
         let reqPropertyId = body?.propertyId;
         if (reqPropertyId && !ctx.propertyIds.includes(reqPropertyId)) return NextResponse.json({ error: 'Forbidden property' }, { status: 403 });
-    const { propertyId, guestId, guestDetails, checkIn, checkOut, roomTypeId, roomId, adults, children, corporateAccountId, adjustmentType, adjustmentValue, adjustmentReason } = body;
+    const { propertyId, guestId, guestDetails, checkIn, checkOut, roomTypeId, roomId, adults, children, corporateAccountId, adjustmentType, adjustmentValue, adjustmentReason, acknowledgedByStaffId } = body;
 
     if (!propertyId || (!guestId && !guestDetails) || !checkIn || !checkOut || !roomTypeId || !roomId) {
       return errorResponse('BAD_REQUEST', 'Missing required fields', 400);
@@ -219,13 +219,14 @@ export async function POST(req: NextRequest) {
           ratePlanId: newReservation.ratePlanId,
           rateAmount: baseRate,
           currency: currency,
-          discountType: adjustmentType === 'COMPLIMENTARY' ? 'COMPLIMENTARY'
-                      : adjustmentType === 'DISCOUNT_PERCENT' ? 'PERCENTAGE'
+          // Normalize adjustmentType: form sends DISCOUNT_PERCENTAGE/DISCOUNT_FIXED/COMP_FULL/COMP_PARTIAL
+          discountType: (adjustmentType === 'COMP_FULL' || adjustmentType === 'COMP_PARTIAL') ? 'COMPLIMENTARY'
+                      : adjustmentType === 'DISCOUNT_PERCENTAGE' ? 'PERCENTAGE'
                       : adjustmentType === 'DISCOUNT_FIXED' ? 'FIXED_AMOUNT'
                       : null,
-          discountPercent: adjustmentType === 'DISCOUNT_PERCENT' ? Number(adjustmentValue) : null,
+          discountPercent: adjustmentType === 'DISCOUNT_PERCENTAGE' ? Number(adjustmentValue) : null,
           discountAmount: adjustmentType === 'DISCOUNT_FIXED' ? Number(adjustmentValue)
-                        : adjustmentType === 'COMPLIMENTARY' ? baseRate
+                        : (adjustmentType === 'COMP_FULL' || adjustmentType === 'COMP_PARTIAL') ? (adjustmentType === 'COMP_FULL' ? baseRate : Number(adjustmentValue))
                         : null,
           discountReason: adjustmentReason || null,
         },

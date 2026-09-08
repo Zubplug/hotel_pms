@@ -496,14 +496,11 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
       return res.json();
     },
     requestDiscount: async (payload: any) => {
-      // NOTE: managerPin is intentionally ignored online for security. 
-      // The backend will create a PENDING request if it requires approval.
-      const res = await apiFetchResult(`/api/v1/approvals/request`, {
+      const res = await apiFetchResult(`/api/v1/approvals/discount`, {
         method: 'POST',
         body: JSON.stringify(payload)
       });
       if (res.error) return { success: false, error: res.error };
-      if (res.data?.requiresApproval) return { success: true, requiresApproval: true };
       return { success: true, approvalId: res.data?.approvalId };
     },
     requestComplimentary: async (payload: any) => {

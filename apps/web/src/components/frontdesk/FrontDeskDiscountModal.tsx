@@ -66,15 +66,18 @@ export function FrontDeskDiscountModal({ isOpen, targetType, targetId, targetTot
     setError('');
 
     try {
-      const payload = {
+      const payload: Record<string, any> = {
         targetType,
-        targetId,
         discountType: type === 'amount' ? 'FIXED_AMOUNT' : 'PERCENTAGE',
         discountAmount: amount,
         discountPercent: percentage,
         reason,
         acknowledgedByStaffId
       };
+      // Map targetId to the field name the backend expects per targetType
+      if (targetType === 'RESERVATION_ROOM') payload.reservationRoomId = targetId;
+      else if (targetType === 'FOLIO_ITEM') { payload.folioId = targetId; payload.targetFolioItemId = targetId; }
+      else if (targetType === 'POS_ORDER') payload.orderId = targetId;
 
       const res = await provider.approvals.requestDiscount(payload);
       

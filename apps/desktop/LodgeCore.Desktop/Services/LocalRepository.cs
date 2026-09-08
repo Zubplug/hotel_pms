@@ -3027,6 +3027,7 @@ public class LocalRepository
                 resRoom.DiscountPercent = (decimal)percentage;
                 resRoom.DiscountReason = reason;
                 resRoom.DiscountApprovalId = approvalId;
+                resRoom.DiscountApprovingManagerId = acknowledgedByStaffId;
 
                 evt = new LocalOutboxEvent
                 {
@@ -3044,6 +3045,7 @@ public class LocalRepository
                     })
                 };
             }
+
             else if (targetType == "FOLIO_ITEM")
             {
                 var folioId = root.GetProperty("folioId").GetString();
@@ -3212,7 +3214,8 @@ public class LocalRepository
                 resRoom.DiscountType = "COMPLIMENTARY";
                 resRoom.DiscountAmount = (decimal)compAmount;
                 resRoom.DiscountReason = reason;
-                resRoom.DiscountApprovalId = acknowledgedByStaffId;
+                resRoom.DiscountApprovalId = approvalId;
+                resRoom.DiscountApprovingManagerId = acknowledgedByStaffId;
 
                 _dbContext.ReservationRooms.Update(resRoom);
             }
