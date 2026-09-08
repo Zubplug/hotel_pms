@@ -1,4 +1,5 @@
 using System.Text;
+using System.Globalization;
 using LodgeCore.HardwareAgent.Native;
 using Microsoft.Extensions.Logging;
 
@@ -120,20 +121,20 @@ public class DelunsLockProvider : ILockProvider
         var cardSnr = new StringBuilder(20);
         
         // Use provided dates or default to now -> +10 years
-        string checkinStr = (startDate ?? DateTime.UtcNow).ToString(DateFormat);
-        string checkoutStr = (endDate ?? DateTime.UtcNow.AddYears(10)).ToString(DateFormat);
+        string checkinStr = (startDate ?? DateTime.UtcNow)
+            .ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+        string checkoutStr = (endDate ?? DateTime.UtcNow.AddYears(10))
+            .ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
 
-        // Deluns SDK master card encoding:
-        //   - roomNo must be "*" (wildcard) so the card is authorised to open ALL rooms.
-        //     An empty string ("") causes the SDK to skip the room-code field entirely,
-        //     which makes TP_MakeGuestCardEx2 return OPR_OK without writing a valid card.
-        //   - flags = 1  →  master card (not a guest card)
-        //   - waitMs = 10_000  →  give the operator 10 s to place the card on the encoder.
-        //     waitMs=0 meant the SDK polled once and returned immediately, producing a
-        //     false-success when no card was physically present.
-        int flags = 1; // 1 = master card
-
-        int result = NativeSdkBridge.TP_MakeGuestCardEx2(cardSnr, "*", checkinStr, checkoutStr, flags, 10_000);
+        // LS_MakeChiefCard is Deluns' dedicated all-doors master-control card
+        // operation. Do not use TP_MakeGuestCardEx2 here: that API always writes
+        // a guest card, and its flag 1 only enables privacy/deadbolt override.
+        int result = NativeSdkBridge.LS_MakeChiefCard(
+            cardSnr,
+            checkinStr,
+            checkoutStr,
+            flags: 0,
+            replaceNumber: 0);
 
         if (result == (int)LockSdkError.OPR_OK)
         {

@@ -32,7 +32,7 @@ internal static class NativeSdkBridge
     /// <param name="iFlags">
     ///   0 = normal guest card (overwrites prior card);
     ///   8 = re-issue (explicitly invalidates all prior cards for room);
-    ///   1 = master card; 32 = one-time card; 128 = extend-stay card.
+    ///   1 = privacy/deadbolt override; 32 = one-time card; 128 = extend-stay card.
     ///   Values can be combined.
     /// </param>
     /// <param name="waitMs">Milliseconds to wait for card on encoder (e.g. 10000)</param>
@@ -45,6 +45,18 @@ internal static class NativeSdkBridge
         string checkoutTime,
         int iFlags,
         int waitMs);
+
+    /// <summary>
+    /// Encode a Deluns chief/master card. This is deliberately separate from
+    /// TP_MakeGuestCardEx2: the latter always creates a guest card.
+    /// </summary>
+    [DllImport(DllName, CallingConvention = CallingConvention.StdCall, CharSet = CharSet.Ansi)]
+    public static extern int LS_MakeChiefCard(
+        StringBuilder cardSnr,
+        string startDateTime,
+        string endDateTime,
+        int flags,
+        int replaceNumber);
 
     /// <summary>
     /// Read guest card data from a card on the encoder.

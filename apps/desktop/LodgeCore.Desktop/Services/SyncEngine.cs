@@ -1126,11 +1126,6 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                             ? hs.GetString() ?? ""
                             : "";
                     }
-                    else
-                    {
-                        room.Status = "DIRTY";
-                        room.HousekeepingStatus = "CLEANING";
-                    }
                     room.IsOccupied = room.Status == "OCCUPIED";
                     room.MaintenanceStatus = el.TryGetProperty("maintenanceStatus", out var ms) && ms.ValueKind != System.Text.Json.JsonValueKind.Null ? ms.GetString() ?? "" : "";
                     room.RoomTypeId = el.TryGetProperty("roomTypeId", out var rti) && rti.ValueKind != System.Text.Json.JsonValueKind.Null ? rti.GetString() ?? "" : "";
