@@ -479,12 +479,12 @@ export async function GET(req: NextRequest) {
     const activeCorporateAccounts = await prisma.corporateAccount.findMany({
       where: { propertyId, isActive: true },
     });
-    const corporateAccountIds = new Set(
+    const mergedCorporateAccountIds = new Set(
       finalCorporateAccounts.map((account: any) => account.id),
     );
     finalCorporateAccounts = [
       ...finalCorporateAccounts,
-      ...activeCorporateAccounts.filter((account) => !corporateAccountIds.has(account.id)),
+      ...activeCorporateAccounts.filter((account) => !mergedCorporateAccountIds.has(account.id)),
     ];
 
     // Pending discount requests are not written to ReservationRoom until the
