@@ -12,7 +12,10 @@ async function getContext(id: string, permission: 'inventory.read' | 'inventory.
   const { role, isSuperAdmin } = session.user as any;
     const ctx = await requireOrganizationContext(session.user.id);
   if (!hasInventoryPermission(role, permission, isSuperAdmin)) return { error: NextResponse.json({ error: 'Forbidden', data: null }, { status: 403 }) };
-  const item = await prisma.stockItem.findFirst({ where: { id, propertyId: ctx.propertyIds[0] }, select: { id: true, baseUnit: true } });
+  const item = await prisma.stockItem.findFirst({
+    where: { id, propertyId: ctx.propertyIds[0] },
+    select: { id: true, propertyId: true, warehouseId: true, baseUnit: true, name: true, sku: true, posProductId: true },
+  });
   if (!item) return { error: NextResponse.json({ error: 'Stock item not found', data: null }, { status: 404 }) };
   return { item };
 }
@@ -43,12 +46,44 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     if (unit === context.item.baseUnit) {
       return NextResponse.json({ error: 'The base unit is implicit and does not need a conversion row', data: null }, { status: 400 });
     }
-    const saved = await prisma.stockItemUnit.upsert({
-      where: { stockItemId_unit: { stockItemId: context.item.id, unit } },
-      create: { stockItemId: context.item.id, unit, unitsInBase, barcode: body.barcode || null, isPurchaseUnit: Boolean(body.isPurchaseUnit), isIssueUnit: Boolean(body.isIssueUnit) },
-      update: { unitsInBase, barcode: body.barcode || null, isPurchaseUnit: Boolean(body.isPurchaseUnit), isIssueUnit: Boolean(body.isIssueUnit) },
+    const isPurchaseUnit = Boolean(body.isPurchaseUnit);
+    const isIssueUnit = Boolean(body.isIssueUnit);
+
+    const itemIdentity = context.item.posProductId
+      ? { posProductId: context.item.posProductId }
+      : context.item.sku
+        ? { sku: context.item.sku }
+        : { name: { equals: context.item.name, mode: 'insensitive' as const } };
+
+    const saved = await prisma.$transaction(async (tx) => {
+      const relatedItems = await tx.stockItem.findMany({
+        where: { propertyId: context.item.propertyId, isActive: true, ...itemIdentity },
+        select: { id: true },
+      });
+      const relatedIds = relatedItems.map((related) => related.id);
+
+      // A stock item can have many conversion rows, but only one purchase unit.
+      // Clear the previous flag everywhere before applying the corrected unit.
+      if (isPurchaseUnit) {
+        await tx.stockItemUnit.updateMany({
+          where: { stockItemId: { in: relatedIds }, isPurchaseUnit: true, unit: { not: unit } },
+          data: { isPurchaseUnit: false },
+        });
+      }
+
+      let firstSaved: any = null;
+      for (const relatedId of relatedIds) {
+        const related = await tx.stockItemUnit.upsert({
+          where: { stockItemId_unit: { stockItemId: relatedId, unit } },
+          create: { stockItemId: relatedId, unit, unitsInBase, barcode: body.barcode || null, isPurchaseUnit, isIssueUnit },
+          update: { unitsInBase, barcode: body.barcode || null, isPurchaseUnit, isIssueUnit },
+        });
+        if (relatedId === context.item.id) firstSaved = related;
+      }
+      return firstSaved;
     });
-    return NextResponse.json({ data: saved, error: null }, { status: 201 });
+
+    return NextResponse.json({ data: saved, propagated: true, error: null }, { status: 201 });
   } catch (error: any) {
     return NextResponse.json({ error: error.message, data: null }, { status: 500 });
   }
