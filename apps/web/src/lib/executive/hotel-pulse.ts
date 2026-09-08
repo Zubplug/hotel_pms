@@ -31,7 +31,18 @@ export async function fetchHotelPulse(propertyId: string) {
   let arrivalsToday = 0;
   let departuresToday = 0;
   let vipArrivals = 0;
-  let inHouseGuests = 0; 
+  // CHECKED_IN is authoritative for in-house occupancy. Do not restrict this
+  // count to today's planned arrival/departure window; overdue stayovers remain
+  // in-house until the checkout workflow changes their reservation status.
+  const inHouseGuests = await prisma.reservation.count({
+    where: {
+      propertyId,
+      status: 'CHECKED_IN',
+      reservationRooms: {
+        some: { status: 'ACTIVE', roomId: { not: null } },
+      },
+    },
+  });
 
   for (const res of reservationsToday) {
     const isCheckInToday = res.checkIn >= today && res.checkIn < tomorrow;
@@ -48,9 +59,6 @@ export async function fetchHotelPulse(propertyId: string) {
       departuresToday++;
     }
 
-    if (res.status === 'CHECKED_IN') {
-      inHouseGuests++; 
-    }
   }
 
   return {

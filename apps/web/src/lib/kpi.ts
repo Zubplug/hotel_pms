@@ -1,6 +1,7 @@
 import { prisma } from '@hotel-pms/db';
 import { startOfDay, endOfDay, format } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
+import { calculateRoomStatuses } from './executive/room-status';
 
 export type RevenueSnapshot = {
   totalRevenue: number;
@@ -156,34 +157,12 @@ export async function calculateDailyRevenue(propertyId: string, businessDate: Da
  * Accounts for OUT_OF_ORDER blocks reducing available inventory.
  */
 export async function calculateRoomStats(propertyId: string, businessDate: Date) {
-  // 1. Total active physical rooms
-  const totalRooms = await prisma.room.count({
-    where: {
-      propertyId,
-      isActive: true,
-    }
-  });
-
-  // 2. Rooms Out Of Order (reduces available inventory)
-  const outOfOrderRooms = await prisma.roomBlock.count({
-    where: {
-      propertyId,
-      type: 'OUT_OF_ORDER',
-      status: 'ACTIVE',
-      startDate: { lte: businessDate },
-      endDate: { gte: businessDate },
-    }
-  });
-
-  const availableRooms = Math.max(0, totalRooms - outOfOrderRooms);
-
-  // 3. Occupied Rooms (Reservations crossing this date that are not cancelled/no-show)
-  const occupiedRooms = await prisma.reservationRoom.count({
-    where: {
-      reservation: { propertyId },
-      status: { notIn: ['CANCELLED', 'NO_SHOW'] },
-    }
-  });
+  // Keep executive KPIs aligned with the room screen: occupancy is the number
+  // of distinct physical rooms assigned to active CHECKED_IN reservations.
+  const { overview } = await calculateRoomStatuses(propertyId, businessDate);
+  const availableRooms = overview.vacant;
+  const occupiedRooms = overview.occupied;
+  const outOfOrderRooms = overview.outOfOrder + overview.outOfService;
 
   const occupancyPercent = availableRooms > 0 ? (occupiedRooms / availableRooms) * 100 : 0;
 
@@ -327,36 +306,14 @@ export async function getExecutiveOverview(propertyId: string, businessDate: Dat
 
 export async function getRoomSummary(propertyId: string) {
   const businessDate = await getPropertyBusinessDate(propertyId);
+  const { overview } = await calculateRoomStatuses(propertyId, businessDate);
 
-  const rooms = await prisma.room.findMany({
-    where: { propertyId, isActive: true },
-    select: { id: true, status: true, housekeepingStatus: true }
-  });
-
-  const totalRooms = rooms.length;
-
-  // OOO = rooms with status OUT_OF_ORDER or BLOCKED (not available for sale)
-  const ooo = rooms.filter(r =>
-    r.status === 'OUT_OF_ORDER' || r.status === 'BLOCKED'
-  ).length;
-
-  // Dirty = rooms with DIRTY status (they cannot also be OUT_OF_ORDER or BLOCKED)
-  const dirty = rooms.filter(r => r.status === 'DIRTY').length;
-
-  // Occupied = rooms with an active CHECKED_IN reservation on today's business date
-  // This is the same source as the occupancy KPI — they will always be consistent.
-  const occupied = await prisma.reservationRoom.count({
-    where: {
-      reservation: { propertyId, status: 'CHECKED_IN' },
-      status: 'ACTIVE',
-      roomId: { not: null },
-    }
-  });
-
-  // Vacant = everything that is not occupied, dirty, or OOO
-  const vacant = Math.max(0, totalRooms - occupied - dirty - ooo);
-
-  return { occupied, vacant, dirty, ooo };
+  return {
+    occupied: overview.occupied,
+    vacant: overview.vacant,
+    dirty: overview.dirty,
+    ooo: overview.outOfOrder + overview.outOfService,
+  };
 }
 
 
