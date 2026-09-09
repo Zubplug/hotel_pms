@@ -39,8 +39,9 @@ export default function OpeningStockPage() {
     unitsInBase: item.stockUnits?.find((configured) => configured.unit === unit)?.unitsInBase || '',
   }))] : [];
   const selectedConversion = inputUnit === item?.baseUnit ? 1 : Number(unitsInBase || 0);
-  const baseQuantity = nextQty * selectedConversion;
-  const baseUnitCost = selectedConversion > 0 ? nextCost / selectedConversion : 0;
+  const stockUnit = inputUnit || item?.baseUnit || '';
+  const baseQuantity = nextQty;
+  const baseUnitCost = nextCost;
   const total = useMemo(() => nextQty * nextCost, [nextQty, nextCost]);
 
   async function submit(event: React.FormEvent) {
@@ -50,13 +51,13 @@ export default function OpeningStockPage() {
     try {
       const res = await fetch('/api/v1/inventory/opening-stock', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ warehouseId, stockItemId, quantity: nextQty, inputUnit, unitsInBase: selectedConversion, unitCost: nextCost, notes, operationId: crypto.randomUUID() }),
+        body: JSON.stringify({ warehouseId, stockItemId, quantity: nextQty, inputUnit, unitsInBase: selectedConversion, overrideBaseUnit: true, unitCost: nextCost, notes, operationId: crypto.randomUUID() }),
       });
       const json = await res.json();
       if (!res.ok || json.error) throw new Error(json.error || 'Opening stock could not be posted');
-      setMessage({ ok: `${item.name}: ${baseQuantity} ${item.baseUnit} added to ${warehouse.name}.` });
+      setMessage({ ok: `${item.name}: ${baseQuantity} ${stockUnit} added to ${warehouse.name}.` });
       setQuantity(''); setUnitCost(''); setNotes('');
-      setWarehouses((current) => current.map((store) => store.id !== warehouseId ? store : ({ ...store, stockItems: store.stockItems.map((stock) => stock.id !== stockItemId ? stock : { ...stock, quantityOnHand: Number(stock.quantityOnHand) + baseQuantity, costPrice: baseUnitCost }) })));
+      setWarehouses((current) => current.map((store) => store.id !== warehouseId ? store : ({ ...store, stockItems: store.stockItems.map((stock) => stock.id !== stockItemId ? stock : { ...stock, baseUnit: stockUnit, quantityOnHand: Number(stock.quantityOnHand) + baseQuantity, costPrice: baseUnitCost }) })));
     } catch (error: any) { setMessage({ error: error.message }); }
     finally { setSaving(false); }
   }
@@ -74,7 +75,7 @@ export default function OpeningStockPage() {
           <label className="block text-sm font-semibold text-slate-700">Main warehouse<select value={warehouseId} onChange={(e) => { setWarehouseId(e.target.value); setStockItemId(''); setInputUnit(''); setUnitsInBase(''); }} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5" required>{warehouses.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select></label>
           <label className="block text-sm font-semibold text-slate-700">Stock item<select value={stockItemId} onChange={(e) => { setStockItemId(e.target.value); const selected = items.find((stock) => stock.id === e.target.value); const purchaseUnit = selected?.stockUnits?.find((unit) => unit.isPurchaseUnit); const nextUnit = purchaseUnit?.unit || selected?.baseUnit || ''; setInputUnit(nextUnit); setUnitsInBase(nextUnit === selected?.baseUnit ? '1' : String(purchaseUnit?.unitsInBase || '')); }} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5" required><option value="">Choose an item…</option>{items.map((stock) => <option key={stock.id} value={stock.id}>{stock.name}{stock.sku ? ` (${stock.sku})` : ''} · Current {Number(stock.quantityOnHand).toFixed(2)} {formatUnit(stock.baseUnit)}</option>)}</select></label>
           <div className="grid gap-4 sm:grid-cols-4"><label className="block text-sm font-semibold text-slate-700">Purchase quantity<input type="number" min="0.0001" step="0.0001" value={quantity} onChange={(e) => setQuantity(e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5" required /></label><label className="block text-sm font-semibold text-slate-700">Purchase unit<select value={inputUnit} onChange={(e) => { const nextUnit = e.target.value; setInputUnit(nextUnit); setUnitsInBase(nextUnit === item?.baseUnit ? '1' : String(item?.stockUnits?.find((unit) => unit.unit === nextUnit)?.unitsInBase || '')); }} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5" required disabled={!item}><option value="">Choose unit…</option>{unitOptions.map((unit) => <option key={unit.unit} value={unit.unit}>{formatUnit(unit.unit)}{Number(unit.unitsInBase) > 1 ? ` · ${unit.unitsInBase} ${formatUnit(item?.baseUnit || '')}` : ''}</option>)}</select></label><label className="block text-sm font-semibold text-slate-700">Units in base<input type="number" min="0.000001" step="0.000001" value={unitsInBase} onChange={(e) => setUnitsInBase(e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5" required disabled={!item || inputUnit === item.baseUnit} placeholder={`1 ${formatUnit(item?.baseUnit || '')}`} /></label><label className="block text-sm font-semibold text-slate-700">Cost per purchase unit (₦)<input type="number" min="0" step="0.01" value={unitCost} onChange={(e) => setUnitCost(e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5" required /></label></div>
-          {item && selectedConversion > 0 && <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">This will add <strong>{baseQuantity.toFixed(2)} {item.baseUnit}</strong> at <strong>₦{baseUnitCost.toFixed(2)} per {item.baseUnit}</strong>.</div>}
+          {item && selectedConversion > 0 && <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">This will add <strong>{baseQuantity.toFixed(2)} {formatUnit(stockUnit)}</strong> at <strong>₦{baseUnitCost.toFixed(2)} per {formatUnit(stockUnit)}</strong>. This unit will become the stock unit everywhere for this item.</div>}
           <label className="block text-sm font-semibold text-slate-700">Reason / note<textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. Opening stock count from legacy system" className="mt-1.5 min-h-24 w-full rounded-xl border border-slate-200 px-3 py-2.5" /></label>
           <div className="flex items-center justify-between border-t border-slate-100 pt-4"><span className="text-sm text-slate-500">Opening value <strong className="text-slate-800">₦{total.toLocaleString('en-NG', { minimumFractionDigits: 2 })}</strong></span><button disabled={saving || !item || nextQty <= 0} className="rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">{saving ? 'Posting…' : 'Add Opening Stock'}</button></div>
         </>}

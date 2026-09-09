@@ -45,6 +45,7 @@ export async function POST(request: Request) {
     const unitCost = Number(body.unitCost ?? 0);
     const inputUnit = String(body.inputUnit || '');
     const unitsInBase = body.unitsInBase == null || body.unitsInBase === '' ? null : Number(body.unitsInBase);
+    const overrideBaseUnit = body.overrideBaseUnit !== false;
     const notes = String(body.notes || '').trim();
     const operationId = String(body.operationId || '').trim();
     if (!warehouseId || !stockItemId || !operationId || !Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(unitCost) || unitCost < 0) {
@@ -68,16 +69,57 @@ export async function POST(request: Request) {
       if (inputUnit !== item.baseUnit && unitsInBase != null && (!Number.isFinite(unitsInBase) || unitsInBase <= 0)) {
         throw new Error(`Enter a valid conversion for 1 ${inputUnit} in ${item.baseUnit}.`);
       }
-      if (inputUnit !== item.baseUnit && unitsInBase != null) {
-        const itemIdentity = item.posProductId
-          ? { posProductId: item.posProductId }
-          : item.sku
-            ? { sku: item.sku }
-            : { name: { equals: item.name, mode: 'insensitive' as const } };
-        const relatedItems = await tx.stockItem.findMany({
-          where: { propertyId, isActive: true, ...itemIdentity },
-          select: { id: true },
-        });
+
+      const itemIdentity = item.posProductId
+        ? { posProductId: item.posProductId }
+        : item.sku
+          ? { sku: item.sku }
+          : { name: { equals: item.name, mode: 'insensitive' as const } };
+      const relatedItems = await tx.stockItem.findMany({
+        where: { propertyId, isActive: true, ...itemIdentity },
+        include: { stockUnits: true },
+      });
+
+      if (overrideBaseUnit && inputUnit !== item.baseUnit) {
+        const baseConversion = unitsInBase ?? 0;
+        if (!Number.isFinite(baseConversion) || baseConversion <= 0) {
+          throw new Error(`Enter how many ${item.baseUnit} make 1 ${inputUnit}.`);
+        }
+        for (const related of relatedItems) {
+          const relatedTransactions = await tx.stockTransaction.findMany({ where: { stockItemId: related.id } });
+          for (const transaction of relatedTransactions) {
+            await tx.stockTransaction.update({
+              where: { id: transaction.id },
+              data: {
+                quantity: Number(transaction.quantity) / baseConversion,
+                quantityBefore: Number(transaction.quantityBefore) / baseConversion,
+                quantityAfter: Number(transaction.quantityAfter) / baseConversion,
+                unitCost: Number(transaction.unitCost) * baseConversion,
+              },
+            });
+          }
+          for (const unit of related.stockUnits) {
+            if (unit.unit === inputUnit) {
+              await tx.stockItemUnit.delete({ where: { id: unit.id } });
+            } else {
+              await tx.stockItemUnit.update({
+                where: { id: unit.id },
+                data: { unitsInBase: Number(unit.unitsInBase) / baseConversion },
+              });
+            }
+          }
+          await tx.stockItem.update({
+            where: { id: related.id },
+            data: {
+              baseUnit: inputUnit as UnitOfMeasure,
+              quantityOnHand: Number(related.quantityOnHand) / baseConversion,
+              costPrice: Number(related.costPrice) * baseConversion,
+            },
+          });
+        }
+      }
+
+      if (inputUnit !== item.baseUnit && unitsInBase != null && !overrideBaseUnit) {
         const relatedIds = relatedItems.map((related) => related.id);
         await tx.stockItemUnit.updateMany({
           where: { stockItemId: { in: relatedIds }, isPurchaseUnit: true, unit: { not: inputUnit as UnitOfMeasure } },
@@ -91,7 +133,9 @@ export async function POST(request: Request) {
           });
         }
       }
-      const conversion = inputUnit === item.baseUnit
+      const conversion = overrideBaseUnit && inputUnit !== item.baseUnit
+        ? 1
+        : inputUnit === item.baseUnit
         ? 1
         : unitsInBase != null
           ? unitsInBase
@@ -100,8 +144,12 @@ export async function POST(request: Request) {
       const baseQuantity = quantity * conversion;
       const baseUnitCost = unitCost / conversion;
 
-      const before = Number(item.quantityOnHand);
-      const existingValue = before * Number(item.costPrice);
+      const before = overrideBaseUnit && inputUnit !== item.baseUnit
+        ? Number(item.quantityOnHand) / Number(unitsInBase)
+        : Number(item.quantityOnHand);
+      const existingValue = before * (overrideBaseUnit && inputUnit !== item.baseUnit
+        ? Number(item.costPrice) * Number(unitsInBase)
+        : Number(item.costPrice));
       const incomingValue = baseQuantity * baseUnitCost;
       const after = before + baseQuantity;
       const weightedCost = after > 0 ? (existingValue + incomingValue) / after : baseUnitCost;
