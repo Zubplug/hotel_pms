@@ -2,7 +2,7 @@ export const INVENTORY_UNITS = [
   'UNIT', 'EACH', 'PIECE', 'PAIR', 'SET',
   'KG', 'GRAM', 'TONNE', 'LITRE', 'ML', 'GALLON',
   'BOTTLE', 'CAN', 'JAR', 'TIN', 'SACHET',
-  'BOX', 'PACK', 'CARTON', 'CASE', 'PALLET',
+  'BOX', 'PACK', 'CART', 'CARTON', 'CASE', 'PALLET',
   'BAG', 'BUNDLE', 'ROLL', 'DOZEN',
 ] as const;
 

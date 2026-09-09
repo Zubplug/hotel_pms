@@ -2310,6 +2310,7 @@ enum UnitOfMeasure {
   TIN
   SACHET
   PACK
+  CART
   CARTON
   CASE
   PALLET
