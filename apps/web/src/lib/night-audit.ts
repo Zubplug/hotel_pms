@@ -205,7 +205,8 @@ export async function executeNightAudit(
       priorities: true,
       reservationRooms: { where: { status: 'ACTIVE' }, include: { room: true } },
       folios: { where: { type: { in: ['MAIN', 'ROOM', 'CITY_LEDGER'] }, status: 'OPEN' } },
-      ratePlan: true
+      ratePlan: true,
+      corporateAccount: { include: { ratePlan: true } },
     }
     });
 
@@ -244,19 +245,49 @@ export async function executeNightAudit(
             }
             const roomChargeKey = `ROOM_CHARGE_${reservation.id}_${businessDate.toISOString().split('T')[0]}`;
             
-            // Check if we already posted it in this run
+            const isCorporateCharge = Boolean(reservation.corporateAccountId);
+
+            // Corporate rooms share one CITY_LEDGER folio. Their idempotency
+            // must therefore be reservation-specific; checking only the folio
+            // would make the first room suppress every later room.
             const existingCharge = await tx.folioItem.findFirst({
-              where: {
-                folioId: mainFolio.id,
-                source: 'ROOM_CHARGE',
-                businessDate,
-                nightAuditRunId: auditRun.id
-              }
+              where: isCorporateCharge
+                ? { operationId: roomChargeKey }
+                : {
+                    folioId: mainFolio.id,
+                    source: 'ROOM_CHARGE',
+                    businessDate,
+                    nightAuditRunId: auditRun.id,
+                  },
             });
 
             if (!existingCharge) {
               const activeRoom = reservation.reservationRooms[0];
-              const originalRate = activeRoom ? Number(activeRoom.rateAmount || 0) : Number(reservation.ratePlan?.baseRate || 0);
+              let originalRate = activeRoom
+                ? Number(activeRoom.rateAmount || 0)
+                : Number(reservation.ratePlan?.baseRate || 0);
+              let chargeCurrency = activeRoom?.currency || property.supportedCurrencies[0] || 'NGN';
+
+              // Corporate reservations keep the originally selected rate on
+              // ReservationRoom. Resolve the negotiated corporate rate for
+              // the room type and audit date before posting the charge.
+              if (isCorporateCharge && activeRoom && reservation.corporateAccount?.ratePlanId) {
+                const corporateRate = await tx.rate.findFirst({
+                  where: {
+                    propertyId,
+                    ratePlanId: reservation.corporateAccount.ratePlanId,
+                    roomTypeId: activeRoom.roomTypeId,
+                    effectiveFrom: { lte: businessDate },
+                    OR: [{ effectiveTo: null }, { effectiveTo: { gte: businessDate } }],
+                    dayOfWeek: { has: businessDate.getUTCDay() },
+                  },
+                  orderBy: { effectiveFrom: 'desc' },
+                });
+                if (corporateRate) {
+                  originalRate = Number(corporateRate.amount);
+                  chargeCurrency = corporateRate.currency || chargeCurrency;
+                }
+              }
               
               // Calculate discount only if Night Auditor has APPROVED it
               let discountDeduction = 0;
@@ -327,9 +358,10 @@ export async function executeNightAudit(
                   unitAmount: effectiveRate,
                   amount: effectiveRate,
                   baseAmount: effectiveRate,
-                  currency: property.supportedCurrencies[0] || 'NGN',
+                  currency: chargeCurrency,
                   postedBy: actorId!,
                   nightAuditRunId: auditRun.id,
+                  operationId: roomChargeKey,
                   discountApprovalId: discountApprovalId
                 }
               });
@@ -350,7 +382,7 @@ export async function executeNightAudit(
                   guestId: reservation.primaryGuestId,
                   reservationId: reservation.id,
                   amount: effectiveRate,
-                  currency: property.supportedCurrencies[0] || 'NGN',
+                  currency: chargeCurrency,
                   source: 'NIGHT_AUDIT_ROOM_CHARGE',
                   description: `Applied guest credit to room charge - ${businessDate.toISOString().split('T')[0]}`,
                   appliedBy: actorId!,
