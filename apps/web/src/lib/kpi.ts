@@ -93,6 +93,8 @@ export async function calculateDailyRevenue(propertyId: string, businessDate: Da
     where: {
       propertyId,
       status: 'CHECKED_IN',
+      checkIn: { lte: businessDate },
+      checkOut: { gt: businessDate },
     },
     include: {
       reservationRooms: { where: { status: 'ACTIVE' } },
@@ -280,9 +282,18 @@ export async function getExecutiveOverview(propertyId: string, businessDate: Dat
   const yesterday = new Date(businessDate);
   yesterday.setDate(yesterday.getDate() - 1);
 
-  const [todayKpi, yesterdayKpi] = await Promise.all([
+  const [todayKpi, yesterdayKpi, lastAudit] = await Promise.all([
     getExecutiveKPISnapshot(propertyId, businessDate),
-    getExecutiveKPISnapshot(propertyId, yesterday)
+    getExecutiveKPISnapshot(propertyId, yesterday),
+    prisma.nightAudit.findFirst({
+      where: {
+        propertyId,
+        status: 'COMPLETED',
+        businessDate: { lte: businessDate },
+      },
+      orderBy: { businessDate: 'desc' },
+      select: { businessDate: true, totalRevenue: true },
+    }),
   ]);
 
   const calcTrend = (todayVal: number, yesterdayVal: number) => {
@@ -292,8 +303,8 @@ export async function getExecutiveOverview(propertyId: string, businessDate: Dat
 
   return {
     ...todayKpi,
-    lastAuditedDate: yesterday.toISOString().split('T')[0],
-    lastAuditedRevenue: yesterdayKpi.revenue.totalRevenue,
+    lastAuditedDate: lastAudit ? format(lastAudit.businessDate, 'yyyy-MM-dd') : '',
+    lastAuditedRevenue: lastAudit ? Number(lastAudit.totalRevenue) : 0,
     liveRevenue: todayKpi.revenue.totalRevenue,
     occupancyTrend: calcTrend(todayKpi.occupancyPercent, yesterdayKpi.occupancyPercent),
     adrTrend: calcTrend(todayKpi.adr, yesterdayKpi.adr),
