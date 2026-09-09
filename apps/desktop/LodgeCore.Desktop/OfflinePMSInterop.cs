@@ -542,7 +542,44 @@ public class OfflinePMSInterop
     private async Task<(string UserId, string DeviceId, string? OutletId)> GetSecureContextAsync(params string[] requiredPermissions)
     {
         var session = await _authManager.GetSessionAsync();
-        if (session == null) throw new UnauthorizedAccessException("No active desktop session.");
+        if (session == null)
+        {
+            // POS operators (especially waiters) authenticate through the
+            // operator PIN flow, which creates a trusted SessionManager
+            // context but not the separate desktop web-login session.
+            var posContext = await _sessionManager.GetActiveContextAsync();
+            var posStaff = await _repo.GetStaffByIdAsync(posContext.StaffId);
+            if (posStaff == null)
+                throw new UnauthorizedAccessException("No active POS operator session.");
+
+            string[] posPermissions = Array.Empty<string>();
+            if (!string.IsNullOrWhiteSpace(posStaff.PermissionsJson))
+            {
+                try
+                {
+                    posPermissions = JsonSerializer.Deserialize<string[]>(posStaff.PermissionsJson) ?? Array.Empty<string>();
+                }
+                catch
+                {
+                    posPermissions = Array.Empty<string>();
+                }
+            }
+
+            if (requiredPermissions != null && requiredPermissions.Length > 0 &&
+                !string.Equals(posStaff.Role, "ADMIN", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(posStaff.Role, "MANAGER", StringComparison.OrdinalIgnoreCase))
+            {
+                var hasPermission = requiredPermissions.Any(permission =>
+                    posPermissions.Contains(permission, StringComparer.OrdinalIgnoreCase) ||
+                    posPermissions.Contains("pos:all", StringComparer.OrdinalIgnoreCase) ||
+                    posPermissions.Contains("frontdesk:all", StringComparer.OrdinalIgnoreCase));
+                if (!hasPermission)
+                    throw new UnauthorizedAccessException($"Missing required permission: {string.Join(" or ", requiredPermissions)}");
+            }
+
+            var posTerminal = await _repo.GetTerminalAsync(posContext.DeviceId);
+            return (posContext.StaffId, posContext.DeviceId, posContext.OutletId ?? posTerminal?.OutletId);
+        }
         
         if (requiredPermissions != null && requiredPermissions.Length > 0 && session.Role != "ADMIN" && session.Role != "MANAGER")
         {
