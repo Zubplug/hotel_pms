@@ -301,9 +301,10 @@ public class EscPosService
         }
 
         var customerCopy = await SendToPrinterAsync(printer, BuildCopy("CUSTOMER COPY", printer.OpenCashDrawer));
-        if (!customerCopy.success)
-            return customerCopy;
-        return await SendToPrinterAsync(printer, BuildCopy("STAFF COPY", false));
+        // A POS customer-receipt request represents one physical receipt.
+        // Staff copies, when required, must be requested through a separate
+        // reprint/operations flow rather than being printed automatically.
+        return customerCopy;
     }
 
     public async Task<(bool success, string? error)> PrintShiftReportAsync(ShiftReportData report, string? outletId = null)
