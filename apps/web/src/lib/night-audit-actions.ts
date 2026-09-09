@@ -129,6 +129,7 @@ export async function getNightAuditRoomCharges(propertyId: string, auditId: stri
     where: {
       folio: { propertyId },
       nightAuditRunId: auditId,
+      voidedAt: null,
     },
     include: {
       folio: {
