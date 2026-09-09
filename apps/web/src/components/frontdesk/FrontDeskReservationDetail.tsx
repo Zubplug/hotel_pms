@@ -228,7 +228,9 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
 
               {/* Rate & Discount display */}
               {(() => {
-                const baseRate = Number(resRoom?.rateAmount || 0);
+                const hasCorporateRate = resRoom?.corporateRateAmount !== null && resRoom?.corporateRateAmount !== undefined;
+                const baseRate = Number(hasCorporateRate ? resRoom.corporateRateAmount : resRoom?.rateAmount || 0);
+                const rateCurrency = resRoom?.corporateRateCurrency || resRoom?.currency || reservation.currency || 'NGN';
                 const isPendingDiscount = typeof resRoom?.discountApprovalId === 'string' && resRoom.discountApprovalId.startsWith('PENDING:');
                 let finalRate = baseRate;
                 let deductionAmount = 0;
@@ -295,8 +297,8 @@ export function FrontDeskReservationDetail({ reservation }: { reservation: any }
 
                     <div className="bg-slate-50/50 rounded-2xl p-4 border border-slate-100/60 space-y-3">
                       <div className="flex justify-between items-center text-sm">
-                        <span className="font-medium text-slate-500">Base Nightly Rate</span>
-                        <span className="font-bold text-slate-700">{formatCurrency(baseRate)}</span>
+                        <span className="font-medium text-slate-500">{hasCorporateRate ? 'Corporate Nightly Rate' : 'Base Nightly Rate'}</span>
+                        <span className="font-bold text-slate-700">{formatCurrency(baseRate, rateCurrency)}</span>
                       </div>
 
                       {hasDeduction && (

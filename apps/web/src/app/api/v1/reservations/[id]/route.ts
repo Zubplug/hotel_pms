@@ -37,6 +37,22 @@ export async function GET(
           }
         },
         property: { select: { id: true, name: true, city: true } },
+        corporateAccount: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            depositPolicy: true,
+            ratePlan: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+                rates: { select: { roomTypeId: true, amount: true, currency: true } },
+              },
+            },
+          },
+        },
         reservationRooms: {
           include: {
             room: {
@@ -136,7 +152,22 @@ export async function GET(
       appliedCreditAmount: folio.creditApplications.reduce((sum, application) => sum + Number(application.amount), 0),
       balance: Number(folio.totalCharges) - Number(folio.totalPayments) - folio.creditApplications.reduce((sum, application) => sum + Number(application.amount), 0),
     }));
-    return successResponse({ ...reservation, folios, lockCredentials, auditLogs });
+    const corporateRates = new Map(
+      (reservation.corporateAccount?.ratePlan?.rates || []).map((rate) => [rate.roomTypeId, rate]),
+    );
+    const reservationRooms = reservation.reservationRooms.map((room) => {
+      const corporateRate = reservation.corporateAccount
+        ? corporateRates.get(room.roomTypeId)
+        : undefined;
+      return {
+        ...room,
+        corporateRateAmount: corporateRate?.amount ?? null,
+        corporateRateCurrency: corporateRate?.currency ?? null,
+        corporateRatePlanName: reservation.corporateAccount?.ratePlan?.name ?? null,
+      };
+    });
+
+    return successResponse({ ...reservation, reservationRooms, folios, lockCredentials, auditLogs });
   } catch (err: any) {
     if (err?.code === 'FORBIDDEN') return errorResponse('FORBIDDEN', err.message, 403);
     return errorResponse('INTERNAL_ERROR', err instanceof Error ? err.message : String(err), 500, err instanceof Error ? { stack: err.stack } : undefined);

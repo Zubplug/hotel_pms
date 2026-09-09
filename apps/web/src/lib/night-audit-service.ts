@@ -223,9 +223,84 @@ export async function getFinancialAudit(ctx: TenantContext, propertyId: string) 
       id: true,
       reason: true,
       createdAt: true,
+      requestedAt: true,
       details: true,
+      snapshot: true,
+      amount: true,
+      currency: true,
       requestedBy: true,
+      reviewedBy: true,
+      reviewedAt: true,
     }
+  });
+
+  // ApprovalRequest intentionally stores staff IDs and an immutable JSON
+  // snapshot rather than hard relations. Resolve those IDs here so the audit
+  // screen shows accountable names and the actual reservation context.
+  const approvalSnapshot = (approval: typeof pendingDiscounts[number]) => {
+    const details = (approval.details && typeof approval.details === 'object' ? approval.details : {}) as Record<string, any>;
+    const snapshot = (approval.snapshot && typeof approval.snapshot === 'object' ? approval.snapshot : {}) as Record<string, any>;
+    return { details, snapshot };
+  };
+  const isUuid = (value: unknown): value is string => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  const reservationRoomIds = pendingDiscounts
+    .map((approval) => {
+      const { details, snapshot } = approvalSnapshot(approval);
+      return snapshot.reservationRoomId || details.reservationRoomId;
+    })
+    .filter(isUuid);
+  const approvalRooms = await prisma.reservationRoom.findMany({
+    where: { id: { in: reservationRoomIds }, reservation: { propertyId } },
+    select: {
+      id: true,
+      checkIn: true,
+      checkOut: true,
+      rateAmount: true,
+      currency: true,
+      discountType: true,
+      discountAmount: true,
+      discountPercent: true,
+      discountReason: true,
+      room: { select: { number: true, roomType: { select: { name: true } } } },
+      reservation: {
+        select: {
+          confirmationNumber: true,
+          primaryGuest: { select: { firstName: true, lastName: true } },
+          corporateAccount: { select: { name: true, code: true } },
+        },
+      },
+    },
+  });
+  const approvalRoomById = new Map(approvalRooms.map((room) => [room.id, room]));
+  const staffIds = Array.from(new Set(pendingDiscounts.flatMap((approval) => {
+    const { details, snapshot } = approvalSnapshot(approval);
+    return [approval.requestedBy, approval.reviewedBy, details.acknowledgedBy, details.acknowledgedById, details.acknowledgedByStaffId, snapshot.acknowledgedBy, snapshot.acknowledgedById, snapshot.acknowledgedByStaffId]
+      .filter(isUuid);
+  })));
+  const approvalStaff = await prisma.staff.findMany({
+    where: { id: { in: staffIds } },
+    select: { id: true, firstName: true, lastName: true, email: true },
+  });
+  const staffById = new Map(approvalStaff.map((staff) => [staff.id, staff]));
+  const staffName = (id: string | null | undefined) => {
+    if (!id) return null;
+    const staff = staffById.get(id);
+    return staff ? `${staff.firstName} ${staff.lastName}`.trim() : null;
+  };
+  const enrichedPendingDiscounts = pendingDiscounts.map((approval) => {
+    const { details, snapshot } = approvalSnapshot(approval);
+    const reservationRoomId = snapshot.reservationRoomId || details.reservationRoomId;
+    const room = typeof reservationRoomId === 'string' ? approvalRoomById.get(reservationRoomId) : undefined;
+    const acknowledgedById = details.acknowledgedBy || details.acknowledgedById || details.acknowledgedByStaffId || snapshot.acknowledgedBy || snapshot.acknowledgedById || snapshot.acknowledgedByStaffId;
+    return {
+      ...approval,
+      requester: staffById.get(approval.requestedBy) || null,
+      requestedByName: staffName(approval.requestedBy) || approval.requestedBy,
+      acknowledgedByName: staffName(acknowledgedById) || (typeof acknowledgedById === 'string' ? acknowledgedById : null),
+      reservationRoomId,
+      reservationRoom: room || null,
+      roomStatus: room ? 'READY' : 'WAITING_FOR_RESERVATION_ROOM',
+    };
   });
 
   // Fetch unverified Complimentary transactions for the business date
@@ -256,7 +331,7 @@ export async function getFinancialAudit(ctx: TenantContext, propertyId: string) 
     }
   });
 
-  return { openFolios, highBalances, rateVariances, pendingDiscounts, unverifiedComplimentary, pendingCheckInBypasses };
+  return { openFolios, highBalances, rateVariances, pendingDiscounts: enrichedPendingDiscounts, unverifiedComplimentary, pendingCheckInBypasses };
 }
 
 export async function getCashReconciliation(ctx: TenantContext, propertyId: string) {

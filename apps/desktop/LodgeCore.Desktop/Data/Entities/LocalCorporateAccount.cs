@@ -17,7 +17,7 @@ public class LocalCorporateAccount
     public string? CityLedgerAccountId { get; set; }
     public decimal CreditLimit { get; set; }
     public bool ExemptFromHighBalance { get; set; }
-    public string DepositPolicy { get; set; } = "STANDARD";
+    public string DepositPolicy { get; set; } = "WAIVED";
     public bool IsActive { get; set; } = true;
     public LocalFolio? CorporateFolio { get; set; }
     public DateTime UpdatedAt { get; set; }

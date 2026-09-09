@@ -615,7 +615,7 @@ model CorporateAccount {
   contactPhone          String?
   creditLimit           Decimal @default(0) @db.Decimal(18, 4)
   exemptFromHighBalance Boolean @default(false)
-  depositPolicy         String  @default("STANDARD") // 'WAIVED', 'STANDARD'
+  depositPolicy         String  @default("WAIVED") // 'WAIVED', 'STANDARD'
   isActive              Boolean @default(true)
   ratePlanId            String? @db.Uuid
   cityLedgerAccountId   String? @db.Uuid

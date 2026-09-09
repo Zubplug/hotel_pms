@@ -831,7 +831,7 @@ export async function POST(req: NextRequest) {
               },
             });
 
-            await tx.reservationRoom.create({
+            const createdReservationRoom = await tx.reservationRoom.create({
               data: {
                 // Keep the edge ReservationRoom identity stable. Follow-up
                 // offline events (discounts, comps, extensions) reference
@@ -860,31 +860,79 @@ export async function POST(req: NextRequest) {
               },
             });
 
-            // Create a PENDING ApprovalRequest if a discount was applied
+            // Link a discount request that arrived before its reservation
+            // create event. This makes out-of-order offline batches recoverable
+            // without requiring the front desk to submit the discount again.
+            const waitingDiscounts = await tx.approvalRequest.findMany({
+              where: {
+                propertyId,
+                type: "DISCOUNT",
+                status: "PENDING",
+                executionStatus: "NOT_APPLIED",
+              },
+            });
+            for (const waitingDiscount of waitingDiscounts) {
+              const waitingSnapshot = (waitingDiscount.snapshot || {}) as Record<string, unknown>;
+              const waitingDetails = (waitingDiscount.details || {}) as Record<string, unknown>;
+              const waitingRoomId = waitingSnapshot.reservationRoomId || waitingDetails.reservationRoomId;
+              if (waitingRoomId !== createdReservationRoom.id) continue;
+
+              await tx.reservationRoom.update({
+                where: { id: createdReservationRoom.id },
+                data: { discountApprovalId: `PENDING:${waitingDiscount.id}` },
+              });
+              await tx.approvalRequest.update({
+                where: { id: waitingDiscount.id },
+                data: {
+                  details: { ...waitingDetails, dependencyStatus: "READY" },
+                  snapshot: { ...waitingSnapshot, originalRate: Number(createdReservationRoom.rateAmount) },
+                },
+              });
+            }
+
+            // Create a PENDING ApprovalRequest if a discount was included on
+            // the reservation-create event itself.
             const hasDiscount = !!(payload.discountType || payload.DiscountType);
             if (hasDiscount) {
               const managerId = payload.discountApprovingManagerId || payload.DiscountApprovingManagerId || null;
-              const discountApproval = await tx.approvalRequest.create({
-                data: {
+              const discountType = payload.discountType || payload.DiscountType;
+              const discountValue = Number(payload.discountValue || payload.DiscountValue || 0);
+              const discountApproval = await tx.approvalRequest.upsert({
+                where: { idempotencyKey: `DISCOUNT:${aggregateId}` },
+                create: {
                   propertyId,
                   type: 'DISCOUNT',
                   status: 'PENDING',
+                  executionStatus: 'NOT_APPLIED',
                   requestedBy: actorId!,
+                  amount: discountType === 'FIXED_AMOUNT' || discountType === 'COMPLIMENTARY' ? discountValue : 0,
+                  currency,
                   reason: payload.discountReason || payload.DiscountReason || 'Front-desk discount',
                   details: {
                     reservationId: aggregateId,
-                    discountType: payload.discountType || payload.DiscountType,
-                    discountValue: payload.discountValue || payload.DiscountValue,
+                    reservationRoomId: createdReservationRoom.id,
+                    discountType,
+                    discountValue,
                     acknowledgedByManagerId: managerId,
                     requestedByStaffId: actorId,
                   },
+                  snapshot: {
+                    targetType: 'RESERVATION_ROOM',
+                    reservationRoomId: createdReservationRoom.id,
+                    originalRate: Number(createdReservationRoom.rateAmount),
+                    discountType,
+                    discountAmount: discountType === 'FIXED_AMOUNT' || discountType === 'COMPLIMENTARY' ? discountValue : 0,
+                    discountPercent: discountType === 'PERCENTAGE' ? discountValue : 0,
+                    reason: payload.discountReason || payload.DiscountReason || 'Front-desk discount',
+                  },
                   idempotencyKey: `DISCOUNT:${aggregateId}`,
                 },
+                update: {},
               });
               // Link the approval back to the reservationRoom
-              await tx.reservationRoom.updateMany({
-                where: { reservationId: aggregateId },
-                data: { discountApprovalId: discountApproval.id },
+              await tx.reservationRoom.update({
+                where: { id: createdReservationRoom.id },
+                data: { discountApprovalId: `PENDING:${discountApproval.id}` },
               });
             }
 
@@ -2935,10 +2983,12 @@ export async function POST(req: NextRequest) {
           } else if (aggregateType === "RESERVATION_ROOM") {
             if (eventType === "DISCOUNT_REQUESTED") {
               const resRoom = await tx.reservationRoom.findUnique({ where: { id: aggregateId }, include: { reservation: true } });
-              if (!resRoom) {
-                throw new Error(`DEPENDENCY_NOT_READY: Reservation room ${aggregateId} has not been created yet`);
-              }
-              await tx.approvalRequest.upsert({
+              // Preserve the approval even when the reservation-room event is
+              // arriving before its parent reservation. The auditor must be
+              // able to see the request, and the room link can be repaired as
+              // soon as the dependency is available.
+              const reservationRoomId = payload.reservationRoomId || aggregateId;
+              const discountApproval = await tx.approvalRequest.upsert({
                 where: { idempotencyKey: `offline_discount:${idempotencyKey}` },
                 create: {
                     propertyId,
@@ -2946,18 +2996,36 @@ export async function POST(req: NextRequest) {
                     status: "PENDING",
                     executionStatus: "NOT_APPLIED",
                     requestedBy: actorId,
+                    amount: Number(payload.discountAmount || payload.amount || 0),
+                    currency: resRoom?.currency || payload.currency || "NGN",
                     reason: payload.reason || "Offline room discount request",
-                    details: payload,
+                    details: {
+                      ...payload,
+                      reservationRoomId,
+                      dependencyStatus: resRoom ? "READY" : "WAITING_FOR_RESERVATION_ROOM",
+                    },
                     snapshot: {
                       ...payload,
                       targetType: "RESERVATION_ROOM",
-                      reservationRoomId: aggregateId,
-                      originalRate: Number(resRoom.rateAmount),
+                      reservationRoomId,
+                      originalRate: resRoom ? Number(resRoom.rateAmount) : null,
                     },
                     idempotencyKey: `offline_discount:${idempotencyKey}`,
                   },
-                  update: {},
+                  update: {
+                    details: {
+                      ...payload,
+                      reservationRoomId,
+                      dependencyStatus: resRoom ? "READY" : "WAITING_FOR_RESERVATION_ROOM",
+                    },
+                  },
               });
+              if (resRoom && !resRoom.discountApprovalId) {
+                await tx.reservationRoom.update({
+                  where: { id: resRoom.id },
+                  data: { discountApprovalId: `PENDING:${discountApproval.id}` },
+                });
+              }
             } else if (eventType === "COMPLIMENTARY_REQUESTED") {
               const resRoom = await tx.reservationRoom.findUnique({ where: { id: aggregateId }, include: { reservation: true } });
               if (!resRoom) {

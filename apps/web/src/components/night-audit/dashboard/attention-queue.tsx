@@ -83,7 +83,12 @@ export function AttentionQueue({ data, onResolveItem }: { data: NightAuditData; 
       items.push({ id: getStableQueueId('rv', item), label: 'Rate Variance', description: `Res #${String((item.folio as Record<string, unknown> | undefined)?.reservationId ?? '').slice(0, 8)}`, type: 'warning', actionType: 'FOLIO_PREVIEW', payload: { id: item.folioId, folioNumber: item.folioNumber, balance: item.varianceAmount } as Record<string, unknown> });
     });
     (data.financial.pendingDiscounts || []).forEach((item: Record<string, unknown>) => {
-      items.push({ id: getStableQueueId('disc', item), label: 'Pending Discount', description: `Requested by ${String(item.requestedBy ?? '')}`, type: 'warning', actionType: 'DISCOUNT_APPROVAL', payload: item });
+      const room = item.reservationRoom as Record<string, unknown> | undefined;
+      const reservation = room?.reservation as Record<string, unknown> | undefined;
+      const guest = reservation?.primaryGuest as Record<string, unknown> | undefined;
+      const guestName = `${String(guest?.firstName ?? '')} ${String(guest?.lastName ?? '')}`.trim();
+      const roomNumber = String((room?.room as Record<string, unknown> | undefined)?.number ?? 'room pending');
+      items.push({ id: getStableQueueId('disc', item), label: 'Pending Discount', description: `${guestName || 'Guest'} · Room ${roomNumber} · Requested by ${String(item.requestedByName ?? item.requestedBy ?? '')}`, type: 'warning', actionType: 'DISCOUNT_APPROVAL', payload: item });
     });
 
     return items;
@@ -197,4 +202,3 @@ export function AttentionQueue({ data, onResolveItem }: { data: NightAuditData; 
     </Card>
   );
 }
-

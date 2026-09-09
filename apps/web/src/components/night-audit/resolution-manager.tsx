@@ -822,7 +822,19 @@ function DiscountApprovalResolution({ item, onSuccess, onClose }: { item: any; o
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Requested By:</span>
-            <span className="font-medium">{item.requestedBy}</span>
+            <span className="font-medium">{item.requestedByName || item.requestedBy}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Acknowledged By:</span>
+            <span className="font-medium">{item.acknowledgedByName || 'Not acknowledged'}</span>
+          </div>
+          <div className="pt-2 border-t">
+            <p className="font-semibold text-slate-800">Reservation details</p>
+            <p>Guest: {item.reservationRoom?.reservation?.primaryGuest ? `${item.reservationRoom.reservation.primaryGuest.firstName} ${item.reservationRoom.reservation.primaryGuest.lastName}` : 'Unavailable'}</p>
+            <p>Confirmation: {item.reservationRoom?.reservation?.confirmationNumber || 'Unavailable'}</p>
+            <p>Room: {item.reservationRoom?.room?.number || 'Waiting for room sync'}{item.reservationRoom?.room?.roomType?.name ? ` (${item.reservationRoom.room.roomType.name})` : ''}</p>
+            {item.reservationRoom?.reservation?.corporateAccount && <p>Corporate: {item.reservationRoom.reservation.corporateAccount.name} ({item.reservationRoom.reservation.corporateAccount.code})</p>}
+            {item.reservationRoom && <p>Stay: {format(new Date(item.reservationRoom.checkIn), 'MMM d, yyyy')} – {format(new Date(item.reservationRoom.checkOut), 'MMM d, yyyy')}</p>}
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Reason:</span>
@@ -849,7 +861,7 @@ function DiscountApprovalResolution({ item, onSuccess, onClose }: { item: any; o
           <Button 
             className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white"
             onClick={() => handleAction('approve')} 
-            disabled={!!loading}
+            disabled={!!loading || item.roomStatus !== 'READY'}
           >
             {loading === 'approve' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             Approve Discount
@@ -941,4 +953,3 @@ export function CheckinBypassResolution({ item, onSuccess, onClose }: { item: an
     </>
   );
 }
-

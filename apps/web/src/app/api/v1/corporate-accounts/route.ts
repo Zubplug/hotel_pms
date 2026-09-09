@@ -57,7 +57,9 @@ export async function POST(req: NextRequest) {
             contactPhone: body.contactPhone,
             creditLimit: body.creditLimit || 0,
             exemptFromHighBalance: body.exemptFromHighBalance || false,
-            depositPolicy: body.depositPolicy || "STANDARD",
+            // Corporate reservations are billed to the city ledger and do not
+            // require an individual guest deposit.
+            depositPolicy: "WAIVED",
             ratePlanId: body.ratePlanId,
             cityLedgerAccountId: body.cityLedgerAccountId
         } 

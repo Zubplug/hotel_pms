@@ -1013,7 +1013,7 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     ca.CityLedgerAccountId = el.TryGetProperty("cityLedgerAccountId", out var cla) && cla.ValueKind != System.Text.Json.JsonValueKind.Null ? cla.GetString() : null;
                     ca.CreditLimit = el.TryGetProperty("creditLimit", out var cl) && cl.ValueKind != System.Text.Json.JsonValueKind.Null ? (cl.ValueKind == System.Text.Json.JsonValueKind.Number ? cl.GetDecimal() : (decimal.TryParse(cl.GetString(), out var cld) ? cld : 0m)) : 0m;
                     ca.ExemptFromHighBalance = el.TryGetProperty("exemptFromHighBalance", out var ef) && ef.ValueKind == System.Text.Json.JsonValueKind.True;
-                    ca.DepositPolicy = el.TryGetProperty("depositPolicy", out var dp) && dp.ValueKind != System.Text.Json.JsonValueKind.Null ? dp.GetString() ?? "STANDARD" : "STANDARD";
+                    ca.DepositPolicy = el.TryGetProperty("depositPolicy", out var dp) && dp.ValueKind != System.Text.Json.JsonValueKind.Null ? dp.GetString() ?? "WAIVED" : "WAIVED";
                     ca.IsActive = el.TryGetProperty("isActive", out var ia) && (ia.ValueKind == System.Text.Json.JsonValueKind.True || ia.ValueKind == System.Text.Json.JsonValueKind.False) ? ia.GetBoolean() : true;
                     ca.UpdatedAt = DateTime.UtcNow;
                 }

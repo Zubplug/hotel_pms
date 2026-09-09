@@ -111,9 +111,24 @@ export function FinancialReview({ data, onResolve, baseCurrency }: FinancialRevi
           <div className="space-y-2">
             {pendingDiscounts.map((pd: any) => (
               <div key={pd.id} className="text-sm p-3 bg-white dark:bg-slate-900 rounded-lg border border-indigo-200 dark:border-indigo-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm transition-colors hover:border-indigo-300 dark:hover:border-indigo-500/50">
-                <div>
-                  <p className="font-medium text-indigo-900 dark:text-indigo-300">{pd.details?.discountAmount ? currency(Number(pd.details.discountAmount), baseCurrency) : pd.details?.discountPercent ? `${pd.details.discountPercent}%` : 'Variable Discount'} ({pd.details?.targetType || 'RESERVATION_ROOM'})</p>
-                  <p className="text-xs text-indigo-700 dark:text-indigo-400 mt-0.5">Requested by: {pd.requestedBy}</p>
+                <div className="min-w-0 space-y-1">
+                  <p className="font-semibold text-indigo-900 dark:text-indigo-300">
+                    {pd.reservationRoom?.reservation?.primaryGuest
+                      ? `${pd.reservationRoom.reservation.primaryGuest.firstName} ${pd.reservationRoom.reservation.primaryGuest.lastName}`
+                      : 'Guest unavailable'}
+                    {' · '}{pd.reservationRoom?.room?.number ? `Room ${pd.reservationRoom.room.number}` : 'Room pending'}
+                    {pd.reservationRoom?.reservation?.confirmationNumber ? ` · ${pd.reservationRoom.reservation.confirmationNumber}` : ''}
+                  </p>
+                  <p className="text-xs text-indigo-700 dark:text-indigo-400">
+                    {pd.reservationRoom?.room?.roomType?.name || 'Room type unavailable'} · {' '}
+                    {pd.details?.discountAmount ? currency(Number(pd.details.discountAmount), pd.currency || baseCurrency) : pd.details?.discountPercent ? `${pd.details.discountPercent}%` : 'Variable discount'}
+                    {' · '}Requested by {pd.requestedByName || pd.requestedBy}
+                    {pd.acknowledgedByName ? ` · Acknowledged by ${pd.acknowledgedByName}` : ''}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {pd.reason || pd.details?.reason || 'No reason provided'}
+                    {pd.roomStatus !== 'READY' ? ' · Waiting for the reservation room to sync before approval can be applied.' : ''}
+                  </p>
                 </div>
                 <button 
                   onClick={() => onResolve('DISCOUNT_APPROVAL', pd)} 
