@@ -195,6 +195,19 @@ export async function GET(req: NextRequest) {
       orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     });
 
+    // A folio can change without its reservation.updatedAt changing (for
+    // example, a payment, room charge, or credit application). Pull folios as
+    // first-class sync data so individual guest folios are not missed by an
+    // incremental desktop pull.
+    const foliosChangedSinceCursor = await prisma.folio.findMany({
+      where: since
+        ? { propertyId, updatedAt: { gt: since, lte: watermark } }
+        : { propertyId, status: 'OPEN', updatedAt: { lte: watermark } },
+      include: { items: true, payments: true, credits: true },
+      take: limit,
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+    });
+
     // POS Configuration
     const posOutletsWhere: any = { propertyId, isActive: true };
     if (terminalOutletId) {
@@ -578,6 +591,7 @@ export async function GET(req: NextRequest) {
     });
 
     sharedCorporateFolios.forEach(addFolio);
+    foliosChangedSinceCursor.forEach(addFolio);
     const folios = Array.from(folioById.values());
     
     // Resolve permissions for staff
