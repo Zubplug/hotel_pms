@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
       getExecutiveRevenueTrend(primaryPropertyId, businessDate, 7),
       getSyncSummary(primaryPropertyId),
       evaluatePropertyAlerts(primaryPropertyId),
-      fetchHotelPulse(primaryPropertyId)
+      fetchHotelPulse(primaryPropertyId, businessDate)
     ]);
 
     const now = new Date();

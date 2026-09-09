@@ -122,25 +122,19 @@ export async function calculateDailyRevenue(propertyId: string, businessDate: Da
     const hasPostedChargeToday = res.folios.some((f: any) => f.items && f.items.length > 0);
     if (hasPostedChargeToday) continue;
 
-    const activeRoom = res.reservationRooms[0];
-    const originalRate = activeRoom ? Number(activeRoom.rateAmount || 0) : 0;
-    let discountDeduction = 0;
-    if (activeRoom && activeRoom.discountType) {
+    for (const activeRoom of res.reservationRooms) {
+      const originalRate = Number(activeRoom.rateAmount || 0);
+      let discountDeduction = 0;
       if (activeRoom.discountType === 'FIXED_AMOUNT') {
         discountDeduction = Number(activeRoom.discountAmount || 0);
       } else if (activeRoom.discountType === 'PERCENTAGE') {
         discountDeduction = originalRate * (Number(activeRoom.discountPercent || 0) / 100);
       } else if (activeRoom.discountType === 'COMPLIMENTARY') {
         const compAmt = Number(activeRoom.discountAmount || 0);
-        if (compAmt > 0) {
-          discountDeduction = compAmt;
-        } else {
-          discountDeduction = originalRate;
-        }
+        discountDeduction = compAmt > 0 ? compAmt : originalRate;
       }
+      expectedRoomRevenue += Math.max(0, originalRate - discountDeduction);
     }
-    const effectiveRate = Math.max(0, originalRate - discountDeduction);
-    expectedRoomRevenue += effectiveRate;
   }
 
   roomRevenue += expectedRoomRevenue;
@@ -162,7 +156,10 @@ export async function calculateRoomStats(propertyId: string, businessDate: Date)
   // Keep executive KPIs aligned with the room screen: occupancy is the number
   // of distinct physical rooms assigned to active CHECKED_IN reservations.
   const { overview } = await calculateRoomStatuses(propertyId, businessDate);
-  const availableRooms = overview.vacant;
+  // Available inventory is sellable inventory, not only currently vacant
+  // rooms. Occupied rooms remain part of the denominator for occupancy and
+  // RevPAR; out-of-order and out-of-service rooms do not.
+  const availableRooms = Math.max(0, overview.total - overview.outOfOrder - overview.outOfService);
   const occupiedRooms = overview.occupied;
   const outOfOrderRooms = overview.outOfOrder + overview.outOfService;
 
@@ -210,7 +207,7 @@ export async function getExecutiveKPISnapshot(propertyId: string, targetDate?: D
  */
 export async function getExecutiveRevenueTrend(propertyId: string, endBusinessDate: Date, days: number = 7) {
   const startBusinessDate = new Date(endBusinessDate);
-  startBusinessDate.setDate(startBusinessDate.getDate() - days);
+  startBusinessDate.setDate(startBusinessDate.getDate() - days * 2);
 
   const folioItems = await prisma.folioItem.findMany({
     where: {
@@ -259,10 +256,21 @@ export async function getExecutiveRevenueTrend(propertyId: string, endBusinessDa
     totalRevenue += dayRev;
   }
 
+  let previousTotal = 0;
+  for (let i = days * 2 - 1; i >= days; i--) {
+    const d = new Date(endBusinessDate);
+    d.setDate(d.getDate() - i);
+    previousTotal += dailyTotals.get(format(d, 'yyyy-MM-dd')) || 0;
+  }
+
+  const changePercent = previousTotal === 0
+    ? totalRevenue > 0 ? 100 : 0
+    : Number((((totalRevenue - previousTotal) / previousTotal) * 100).toFixed(1));
+
   return {
     days: trendDays,
     total: totalRevenue,
-    changePercent: 0 // Placeholder until period-over-period is requested
+    changePercent
   };
 }
 
@@ -292,7 +300,15 @@ export async function getExecutiveOverview(propertyId: string, businessDate: Dat
         businessDate: { lte: businessDate },
       },
       orderBy: { businessDate: 'desc' },
-      select: { businessDate: true, totalRevenue: true },
+      select: {
+        businessDate: true,
+        totalRevenue: true,
+        totalRoomRevenue: true,
+        occupancy: true,
+        adr: true,
+        revpar: true,
+        financialSnapshot: { select: { fnbRevenue: true } },
+      },
     }),
   ]);
 
@@ -301,17 +317,35 @@ export async function getExecutiveOverview(propertyId: string, businessDate: Dat
     return Number((((todayVal - yesterdayVal) / yesterdayVal) * 100).toFixed(1));
   };
 
+  const baseline = lastAudit
+    ? {
+        occupancy: Number(lastAudit.occupancy),
+        adr: Number(lastAudit.adr),
+        revpar: Number(lastAudit.revpar),
+        totalRevenue: Number(lastAudit.totalRevenue),
+        roomRevenue: Number(lastAudit.totalRoomRevenue),
+        fbRevenue: Number(lastAudit.financialSnapshot?.fnbRevenue || 0),
+      }
+    : {
+        occupancy: yesterdayKpi.occupancyPercent,
+        adr: yesterdayKpi.adr,
+        revpar: yesterdayKpi.revpar,
+        totalRevenue: yesterdayKpi.revenue.totalRevenue,
+        roomRevenue: yesterdayKpi.revenue.roomRevenue,
+        fbRevenue: yesterdayKpi.revenue.fbRevenue,
+      };
+
   return {
     ...todayKpi,
     lastAuditedDate: lastAudit ? format(lastAudit.businessDate, 'yyyy-MM-dd') : '',
     lastAuditedRevenue: lastAudit ? Number(lastAudit.totalRevenue) : 0,
     liveRevenue: todayKpi.revenue.totalRevenue,
-    occupancyTrend: calcTrend(todayKpi.occupancyPercent, yesterdayKpi.occupancyPercent),
-    adrTrend: calcTrend(todayKpi.adr, yesterdayKpi.adr),
-    revparTrend: calcTrend(todayKpi.revpar, yesterdayKpi.revpar),
-    totalRevenueTrend: calcTrend(todayKpi.revenue.totalRevenue, yesterdayKpi.revenue.totalRevenue),
-    roomRevenueTrend: calcTrend(todayKpi.revenue.roomRevenue, yesterdayKpi.revenue.roomRevenue),
-    fbRevenueTrend: calcTrend(todayKpi.revenue.fbRevenue, yesterdayKpi.revenue.fbRevenue)
+    occupancyTrend: calcTrend(todayKpi.occupancyPercent, baseline.occupancy),
+    adrTrend: calcTrend(todayKpi.adr, baseline.adr),
+    revparTrend: calcTrend(todayKpi.revpar, baseline.revpar),
+    totalRevenueTrend: calcTrend(todayKpi.revenue.totalRevenue, baseline.totalRevenue),
+    roomRevenueTrend: calcTrend(todayKpi.revenue.roomRevenue, baseline.roomRevenue),
+    fbRevenueTrend: calcTrend(todayKpi.revenue.fbRevenue, baseline.fbRevenue)
   };
 }
 

@@ -1,11 +1,13 @@
 import prisma from '@hotel-pms/db';
 import { calculateRoomStatuses } from './room-status';
 
-export async function fetchHotelPulse(propertyId: string) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+export async function fetchHotelPulse(propertyId: string, businessDate: Date) {
+  // Dashboard dates must follow the property's business date, not the API
+  // server's local clock (which can be a different timezone).
+  const today = new Date(businessDate);
+  today.setUTCHours(0, 0, 0, 0);
   const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
 
   // 1. Get authoritative room statuses
   const { overview } = await calculateRoomStatuses(propertyId, today);

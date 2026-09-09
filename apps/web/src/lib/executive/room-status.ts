@@ -52,9 +52,11 @@ export async function calculateRoomStatuses(propertyId: string, businessDate: Da
     where: {
       room: { propertyId },
       status: 'ACTIVE',
+      checkIn: { lte: businessDate },
+      checkOut: { gt: businessDate },
       reservation: { status: 'CHECKED_IN' },
     },
-    select: { roomId: true, status: true, checkIn: true }
+    select: { roomId: true, status: true, checkIn: true, checkOut: true }
   });
 
   // Fetch current active blocks
@@ -74,7 +76,9 @@ export async function calculateRoomStatuses(propertyId: string, businessDate: Da
   
   const occupiedRoomIds = new Set(activeReservations.map((r: any) => r.roomId));
   const oooRoomIds = new Set(activeBlocks.filter((b: any) => b.type === 'OUT_OF_ORDER').map((b: any) => b.roomId));
-  const oosRoomIds = new Set(activeBlocks.filter((b: any) => b.type === 'OUT_OF_SERVICE').map((b: any) => b.roomId));
+  const oosRoomIds = new Set(activeBlocks.filter((b: any) =>
+    ['OUT_OF_SERVICE', 'MAINTENANCE', 'HOUSE_USE', 'OWNER_USE', 'INVENTORY_BLOCK'].includes(b.type)
+  ).map((b: any) => b.roomId));
 
   const overview = {
     total: allRooms.length,
@@ -90,8 +94,8 @@ export async function calculateRoomStatuses(propertyId: string, businessDate: Da
 
   for (const room of allRooms) {
     const isOccupied = occupiedRoomIds.has(room.id);
-    const isOOO = oooRoomIds.has(room.id);
-    const isOOS = oosRoomIds.has(room.id);
+    const isOOO = oooRoomIds.has(room.id) || room.status === 'OUT_OF_ORDER';
+    const isOOS = oosRoomIds.has(room.id) || ['OUT_OF_SERVICE', 'MAINTENANCE', 'BLOCKED'].includes(room.status);
     
     // Determine Availability Status
     let availabilityStatus: RoomAvailabilityStatus = 'VACANT';
