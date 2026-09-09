@@ -301,7 +301,7 @@ export async function getFinancialAudit(ctx: TenantContext, propertyId: string) 
       reservationRoom: room || null,
       roomStatus: room ? 'READY' : 'WAITING_FOR_RESERVATION_ROOM',
     };
-  });
+  }).filter((approval) => approval.roomStatus === 'READY');
 
   // Fetch unverified Complimentary transactions for the business date
   // These are hard blockers for the Night Audit.
@@ -313,8 +313,62 @@ export async function getFinancialAudit(ctx: TenantContext, propertyId: string) 
     },
     include: {
       operator: { select: { firstName: true, lastName: true } },
+      approver: { select: { firstName: true, lastName: true } },
       staff: { select: { firstName: true, lastName: true } }
     }
+  });
+
+  const complimentaryRoomIds = unverifiedComplimentary
+    .map((record) => record.roomId)
+    .filter((id): id is string => Boolean(id));
+  const complimentaryRooms = await prisma.reservationRoom.findMany({
+    where: { roomId: { in: complimentaryRoomIds }, reservation: { propertyId } },
+    orderBy: { createdAt: 'desc' },
+    select: {
+      roomId: true,
+      checkIn: true,
+      checkOut: true,
+      room: { select: { number: true, roomType: { select: { name: true } } } },
+      reservation: {
+        select: {
+          confirmationNumber: true,
+          primaryGuest: { select: { firstName: true, lastName: true } },
+          corporateAccount: { select: { name: true, code: true } },
+        },
+      },
+    },
+  });
+  const complimentaryRoomById = new Map<string, typeof complimentaryRooms[number]>();
+  for (const room of complimentaryRooms) {
+    if (room.roomId && !complimentaryRoomById.has(room.roomId)) complimentaryRoomById.set(room.roomId, room);
+  }
+  const complimentaryAcknowledgers = await prisma.staff.findMany({
+    where: {
+      id: {
+        in: unverifiedComplimentary.flatMap((record) => {
+          if (!record.notes) return [];
+          try {
+            const notes = JSON.parse(record.notes) as Record<string, unknown>;
+            return typeof notes.acknowledgedByStaffId === 'string' ? [notes.acknowledgedByStaffId] : [];
+          } catch { return []; }
+        }),
+      },
+    },
+    select: { id: true, firstName: true, lastName: true },
+  });
+  const complimentaryAcknowledgersById = new Map(complimentaryAcknowledgers.map((staff) => [staff.id, staff]));
+  const enrichedComplimentary = unverifiedComplimentary.map((record) => {
+    let acknowledgedByStaffId: string | null = null;
+    if (record.notes) {
+      try { acknowledgedByStaffId = (JSON.parse(record.notes) as Record<string, unknown>).acknowledgedByStaffId as string || null; } catch { /* legacy notes */ }
+    }
+    const acknowledgedBy = record.approver || (acknowledgedByStaffId ? complimentaryAcknowledgersById.get(acknowledgedByStaffId) : null);
+    return {
+      ...record,
+      reservationRoom: record.roomId ? complimentaryRoomById.get(record.roomId) || null : null,
+      requestedByName: record.operator ? `${record.operator.firstName} ${record.operator.lastName}`.trim() : record.operatorId,
+      acknowledgedByName: acknowledgedBy ? `${acknowledgedBy.firstName} ${acknowledgedBy.lastName}`.trim() : acknowledgedByStaffId,
+    };
   });
 
   // Fetch unverified Check-In Bypasses
@@ -331,7 +385,7 @@ export async function getFinancialAudit(ctx: TenantContext, propertyId: string) 
     }
   });
 
-  return { openFolios, highBalances, rateVariances, pendingDiscounts: enrichedPendingDiscounts, unverifiedComplimentary, pendingCheckInBypasses };
+  return { openFolios, highBalances, rateVariances, pendingDiscounts: enrichedPendingDiscounts, unverifiedComplimentary: enrichedComplimentary, pendingCheckInBypasses };
 }
 
 export async function getCashReconciliation(ctx: TenantContext, propertyId: string) {

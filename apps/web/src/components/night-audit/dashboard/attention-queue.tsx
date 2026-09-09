@@ -49,7 +49,11 @@ export function AttentionQueue({ data, onResolveItem }: { data: NightAuditData; 
     });
 
     (data.financial.unverifiedComplimentary || []).forEach((item: Record<string, unknown>) => {
-      items.push({ id: getStableQueueId('comp', item), label: 'Unverified Complimentary', description: 'Pending complimentary verification', type: 'blocker', actionType: 'GOTO_EXCEPTIONS', payload: null });
+      const room = item.reservationRoom as Record<string, unknown> | undefined;
+      const reservation = room?.reservation as Record<string, unknown> | undefined;
+      const guest = reservation?.primaryGuest as Record<string, unknown> | undefined;
+      const guestName = `${String(guest?.firstName ?? '')} ${String(guest?.lastName ?? '')}`.trim();
+      items.push({ id: getStableQueueId('comp', item), label: 'Unverified Complimentary', description: `${guestName || 'Guest'} · Room ${String((room?.room as Record<string, unknown> | undefined)?.number ?? 'unavailable')} · Requested by ${String(item.requestedByName ?? 'Unknown')}`, type: 'blocker', actionType: 'COMPLIMENTARY_VERIFICATION', payload: { propertyId: data.property.id, records: data.financial.unverifiedComplimentary } as Record<string, unknown> });
     });
     (data.financial.pendingCheckInBypasses || []).forEach((item: Record<string, unknown>) => {
       items.push({ id: getStableQueueId('bypass', item), label: 'Check-In Bypass', description: `Reservation: ${String((item.reservation as Record<string, unknown> | undefined)?.confirmationNumber ?? '')}`, type: 'blocker', actionType: 'CHECKIN_BYPASS', payload: { ...item, propertyId: data.property.id } as Record<string, unknown> });

@@ -3038,7 +3038,13 @@ public class LocalRepository
             propertyId = order.PropertyId;
             aggregateId = order.Id;
         } else if (targetType == "RESERVATION_ROOM" && root.TryGetProperty("reservationRoomId", out var roomIdProp)) {
-            reservationRoom = await _dbContext.ReservationRooms.Include(r => r.Reservation).FirstOrDefaultAsync(r => r.Id == roomIdProp.GetString());
+            reservationRoom = await _dbContext.ReservationRooms
+                .Include(r => r.Reservation)
+                    .ThenInclude(r => r!.Guest)
+                .Include(r => r.Reservation)
+                    .ThenInclude(r => r!.CorporateAccount)
+                .Include(r => r.Room)
+                .FirstOrDefaultAsync(r => r.Id == roomIdProp.GetString());
             if (reservationRoom == null) throw new Exception("Reservation Room not found");
             propertyId = reservationRoom.Reservation?.PropertyId ?? "";
             aggregateId = reservationRoom.Id;
@@ -3064,6 +3070,44 @@ public class LocalRepository
             reservationRoom.DiscountApprovalId = "PENDING:" + approvalId;
         }
 
+        // The queued event is a complete replay package. The server still
+        // validates the stable reservation-room ID before applying anything,
+        // but these details make the request auditable while the desktop is
+        // offline and allow operators to diagnose an out-of-order sync.
+        var reservationSnapshot = reservationRoom == null ? null : new
+        {
+            id = reservationRoom.Id,
+            reservationId = reservationRoom.ReservationId,
+            propertyId = reservationRoom.Reservation?.PropertyId,
+            confirmationNumber = reservationRoom.Reservation?.ConfirmationNumber,
+            checkIn = reservationRoom.CheckInDate,
+            checkOut = reservationRoom.CheckOutDate,
+            roomId = reservationRoom.RoomId,
+            roomNumber = reservationRoom.Room?.Number,
+            roomTypeId = reservationRoom.RoomTypeId,
+            ratePlanSnapshot = reservationRoom.Reservation?.RatePlanSnapshotJson,
+            currency = reservationRoom.Reservation?.Currency,
+            discountType,
+            discountAmount = amount,
+            discountPercent = percentage,
+            discountReason = reason,
+            guest = reservationRoom.Reservation?.Guest == null ? null : new
+            {
+                id = reservationRoom.Reservation.Guest.Id,
+                firstName = reservationRoom.Reservation.Guest.FirstName,
+                lastName = reservationRoom.Reservation.Guest.LastName,
+                email = reservationRoom.Reservation.Guest.Email,
+                phone = reservationRoom.Reservation.Guest.Phone,
+            },
+            corporateAccountId = reservationRoom.Reservation?.CorporateAccountId,
+            corporateAccount = reservationRoom.Reservation?.CorporateAccount == null ? null : new
+            {
+                id = reservationRoom.Reservation.CorporateAccount.Id,
+                name = reservationRoom.Reservation.CorporateAccount.Name,
+                code = reservationRoom.Reservation.CorporateAccount.Code,
+            },
+        };
+
         _dbContext.OutboxEvents.Add(new LocalOutboxEvent
         {
             Id = approvalId,
@@ -3084,7 +3128,8 @@ public class LocalRepository
                 discountAmount = amount,
                 discountPercent = percentage,
                 reason,
-                acknowledgedByStaffId = root.TryGetProperty("acknowledgedByStaffId", out var discountAck) ? discountAck.GetString() : null
+                acknowledgedByStaffId = root.TryGetProperty("acknowledgedByStaffId", out var discountAck) ? discountAck.GetString() : null,
+                reservation = reservationSnapshot
             })
         });
         await _dbContext.SaveChangesAsync();
@@ -3114,7 +3159,13 @@ public class LocalRepository
             if (posOrder == null) throw new Exception("Order not found");
             propertyId = posOrder.PropertyId;
         } else if (targetType == "RESERVATION_ROOM" && root.TryGetProperty("reservationRoomId", out var rrIdProp)) {
-            resRoom = await _dbContext.ReservationRooms.Include(r => r.Reservation).FirstOrDefaultAsync(r => r.Id == rrIdProp.GetString());
+            resRoom = await _dbContext.ReservationRooms
+                .Include(r => r.Reservation)
+                    .ThenInclude(r => r!.Guest)
+                .Include(r => r.Reservation)
+                    .ThenInclude(r => r!.CorporateAccount)
+                .Include(r => r.Room)
+                .FirstOrDefaultAsync(r => r.Id == rrIdProp.GetString());
             if (resRoom == null) throw new Exception("Reservation room not found");
             propertyId = resRoom.Reservation?.PropertyId ?? "";
         }
@@ -3122,6 +3173,34 @@ public class LocalRepository
         if (string.IsNullOrEmpty(propertyId)) throw new Exception("Property context not found");
 
         var approvalId = Guid.NewGuid().ToString();
+        var reservationSnapshot = resRoom == null ? null : new
+        {
+            id = resRoom.Id,
+            reservationId = resRoom.ReservationId,
+            propertyId = resRoom.Reservation?.PropertyId,
+            confirmationNumber = resRoom.Reservation?.ConfirmationNumber,
+            checkIn = resRoom.CheckInDate,
+            checkOut = resRoom.CheckOutDate,
+            roomId = resRoom.RoomId,
+            roomNumber = resRoom.Room?.Number,
+            roomTypeId = resRoom.RoomTypeId,
+            currency = resRoom.Reservation?.Currency,
+            guest = resRoom.Reservation?.Guest == null ? null : new
+            {
+                id = resRoom.Reservation.Guest.Id,
+                firstName = resRoom.Reservation.Guest.FirstName,
+                lastName = resRoom.Reservation.Guest.LastName,
+                email = resRoom.Reservation.Guest.Email,
+                phone = resRoom.Reservation.Guest.Phone,
+            },
+            corporateAccountId = resRoom.Reservation?.CorporateAccountId,
+            corporateAccount = resRoom.Reservation?.CorporateAccount == null ? null : new
+            {
+                id = resRoom.Reservation.CorporateAccount.Id,
+                name = resRoom.Reservation.CorporateAccount.Name,
+                code = resRoom.Reservation.CorporateAccount.Code,
+            },
+        };
         var evt = new LocalOutboxEvent
         {
             Id = approvalId,
@@ -3143,7 +3222,8 @@ public class LocalRepository
                 beneficiaryType,
                 beneficiaryStaffId,
                 settlementType,
-                acknowledgedByStaffId = root.TryGetProperty("acknowledgedByStaffId", out var complimentaryAck) ? complimentaryAck.GetString() : null
+                acknowledgedByStaffId = root.TryGetProperty("acknowledgedByStaffId", out var complimentaryAck) ? complimentaryAck.GetString() : null,
+                reservation = reservationSnapshot
             })
         };
 

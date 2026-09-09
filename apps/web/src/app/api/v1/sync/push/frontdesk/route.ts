@@ -2982,12 +2982,17 @@ export async function POST(req: NextRequest) {
             }
           } else if (aggregateType === "RESERVATION_ROOM") {
             if (eventType === "DISCOUNT_REQUESTED") {
-              const resRoom = await tx.reservationRoom.findUnique({ where: { id: aggregateId }, include: { reservation: true } });
-              // Preserve the approval even when the reservation-room event is
-              // arriving before its parent reservation. The auditor must be
-              // able to see the request, and the room link can be repaired as
-              // soon as the dependency is available.
               const reservationRoomId = payload.reservationRoomId || aggregateId;
+              const resRoom = await tx.reservationRoom.findUnique({ where: { id: reservationRoomId }, include: { reservation: true } });
+              // A Front Desk discount is not auditable without its reservation
+              // context. Do not create an orphan approval when offline events
+              // arrive out of order; the sync queue will retry this event once
+              // the reservation-room has been created.
+              if (!resRoom || resRoom.reservation.propertyId !== propertyId) {
+                throw new Error(
+                  `DEPENDENCY_NOT_READY: Reservation room ${reservationRoomId} has not been created for this property yet`,
+                );
+              }
               const discountApproval = await tx.approvalRequest.upsert({
                 where: { idempotencyKey: `offline_discount:${idempotencyKey}` },
                 create: {
@@ -3002,13 +3007,13 @@ export async function POST(req: NextRequest) {
                     details: {
                       ...payload,
                       reservationRoomId,
-                      dependencyStatus: resRoom ? "READY" : "WAITING_FOR_RESERVATION_ROOM",
+                      dependencyStatus: "READY",
                     },
                     snapshot: {
                       ...payload,
                       targetType: "RESERVATION_ROOM",
                       reservationRoomId,
-                      originalRate: resRoom ? Number(resRoom.rateAmount) : null,
+                      originalRate: Number(resRoom.rateAmount),
                     },
                     idempotencyKey: `offline_discount:${idempotencyKey}`,
                   },
@@ -3016,7 +3021,7 @@ export async function POST(req: NextRequest) {
                     details: {
                       ...payload,
                       reservationRoomId,
-                      dependencyStatus: resRoom ? "READY" : "WAITING_FOR_RESERVATION_ROOM",
+                      dependencyStatus: "READY",
                     },
                   },
               });
@@ -3027,15 +3032,24 @@ export async function POST(req: NextRequest) {
                 });
               }
             } else if (eventType === "COMPLIMENTARY_REQUESTED") {
-              const resRoom = await tx.reservationRoom.findUnique({ where: { id: aggregateId }, include: { reservation: true } });
-              if (!resRoom) {
-                throw new Error(`DEPENDENCY_NOT_READY: Reservation room ${aggregateId} has not been created yet`);
+              const reservationRoomId = payload.reservationRoomId || aggregateId;
+              const resRoom = await tx.reservationRoom.findUnique({ where: { id: reservationRoomId }, include: { reservation: true } });
+              if (!resRoom || resRoom.reservation.propertyId !== propertyId) {
+                throw new Error(`DEPENDENCY_NOT_READY: Reservation room ${reservationRoomId} has not been created for this property yet`);
               }
+              await tx.reservationRoom.update({
+                where: { id: reservationRoomId },
+                data: {
+                  discountType: "COMPLIMENTARY",
+                  discountAmount: Number(payload.compAmount || 0),
+                  discountReason: payload.reason || "Offline complimentary request",
+                },
+              });
               await tx.complimentaryRecord.create({
                   data: {
                     propertyId,
                     businessDate: postingBusinessDate,
-                    reference: `COMP_RES_${aggregateId}_${id}`,
+                    reference: `COMP_RES_${reservationRoomId}_${idempotencyKey}`,
                     sourceModule: "FRONT_DESK",
                     roomId: resRoom.roomId,
                     guestId: resRoom.reservation?.primaryGuestId,
@@ -3047,7 +3061,10 @@ export async function POST(req: NextRequest) {
                     netAmount: 0,
                     complType: payload.compType === "FULL" ? "FULL" : "PARTIAL",
                     reason: payload.reason || "Offline complimentary request",
-                    notes: payload.acknowledgedByStaffId ? JSON.stringify({ acknowledgedByStaffId: payload.acknowledgedByStaffId }) : null
+                    notes: JSON.stringify({
+                      acknowledgedByStaffId: payload.acknowledgedByStaffId || null,
+                      reservation: payload.reservation || null,
+                    })
                   }
               });
             } else if (eventType === "DISCOUNT_APPLIED") {

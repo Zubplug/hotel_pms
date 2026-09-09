@@ -1,6 +1,7 @@
 import React from 'react';
 import { NightAuditData } from '@/types/night-audit';
 import { CheckCircle2 } from 'lucide-react';
+import { format } from 'date-fns';
 
 interface FinancialReviewProps {
   data: NightAuditData;
@@ -149,18 +150,23 @@ export function FinancialReview({ data, onResolve, baseCurrency }: FinancialRevi
             <p className="text-xs text-rose-600/80 dark:text-rose-500/80 mt-0.5">Every complimentary transaction must be verified before the business date can be closed.</p>
           </div>
           <div className="space-y-2">
-            <div className="text-sm p-3 bg-white dark:bg-slate-900 rounded-lg border border-rose-200 dark:border-rose-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm transition-colors hover:border-rose-300 dark:hover:border-rose-500/50">
-              <div>
-                <p className="font-medium text-rose-900 dark:text-rose-400">{unverifiedComplimentary.length} Unverified Complimentary Transactions</p>
-                <p className="text-xs text-rose-600 dark:text-rose-500 mt-0.5">Pending review</p>
+            {unverifiedComplimentary.map((record: any) => (
+              <div key={record.id} className="text-sm p-3 bg-white dark:bg-slate-900 rounded-lg border border-rose-200 dark:border-rose-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
+                <div className="min-w-0 space-y-1">
+                  <p className="font-semibold text-rose-900 dark:text-rose-400">
+                    {record.reservationRoom?.reservation?.primaryGuest ? `${record.reservationRoom.reservation.primaryGuest.firstName} ${record.reservationRoom.reservation.primaryGuest.lastName}` : 'Guest unavailable'}
+                    {' · '}{record.reservationRoom?.room?.number ? `Room ${record.reservationRoom.room.number}` : 'Room unavailable'}
+                    {record.reservationRoom?.reservation?.confirmationNumber ? ` · ${record.reservationRoom.reservation.confirmationNumber}` : ''}
+                  </p>
+                  <p className="text-xs text-rose-700 dark:text-rose-500">
+                    {record.reservationRoom?.room?.roomType?.name || 'Room type unavailable'} · {currency(Number(record.complAmount || 0), record.currency || baseCurrency)} · {record.complType || 'COMPLIMENTARY'}
+                    {' · '}Requested by {record.requestedByName || 'Unknown'}{record.acknowledgedByName ? ` · Acknowledged by ${record.acknowledgedByName}` : ''}
+                  </p>
+                  <p className="text-xs text-slate-500">{record.reason || 'No reason provided'}{record.reservationRoom ? ` · ${format(new Date(record.reservationRoom.checkIn), 'MMM d')} – ${format(new Date(record.reservationRoom.checkOut), 'MMM d, yyyy')}` : ''}</p>
+                </div>
+                <button onClick={() => onResolve('COMPLIMENTARY_VERIFICATION', { propertyId: data.property.id, records: unverifiedComplimentary })} className="shrink-0 text-xs font-medium text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-500/10 px-3 py-1.5 rounded-md w-full sm:w-auto text-center">Review</button>
               </div>
-              <button 
-                onClick={() => window.location.href = '/night-audit/exceptions'}
-                className="shrink-0 text-xs font-medium text-rose-700 dark:text-rose-400 hover:text-rose-900 dark:hover:text-rose-300 bg-rose-50 dark:bg-rose-500/10 px-3 py-1.5 rounded-md transition-colors w-full sm:w-auto text-center"
-              >
-                Go to Exceptions
-              </button>
-            </div>
+            ))}
           </div>
         </div>
       )}
