@@ -11,6 +11,7 @@ import { calculateFolioTotals } from "@/lib/finance/folio-totals";
 import { applyAvailableFolioCredit } from "@/lib/finance/apply-folio-credit";
 import { isNightAuditCutoverActive } from "@/lib/night-audit-guard";
 import { getPropertyBusinessDate } from "@/lib/date-utils";
+import { InventoryService } from "@/lib/inventory/InventoryService";
 
 const parseLocalDateString = (dateString: string | Date | undefined): Date | undefined => {
   if (!dateString) return undefined;
