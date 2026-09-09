@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
-import prisma, { AdjustmentReason, StockTransactionSource } from '@hotel-pms/db';
+import prisma, { AdjustmentReason, StockTransactionSource, UnitOfMeasure } from '@hotel-pms/db';
 import { hasInventoryPermission } from '@/lib/inventory/permissions';
 import { requireOrganizationContext } from '@/lib/organization-access';
 import { assertNightAuditAllowsTransaction } from '@/lib/night-audit-guard';
@@ -44,6 +44,7 @@ export async function POST(request: Request) {
     const quantity = Number(body.quantity);
     const unitCost = Number(body.unitCost ?? 0);
     const inputUnit = String(body.inputUnit || '');
+    const unitsInBase = body.unitsInBase == null || body.unitsInBase === '' ? null : Number(body.unitsInBase);
     const notes = String(body.notes || '').trim();
     const operationId = String(body.operationId || '').trim();
     if (!warehouseId || !stockItemId || !operationId || !Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(unitCost) || unitCost < 0) {
@@ -61,9 +62,40 @@ export async function POST(request: Request) {
       const item = await tx.stockItem.findFirst({ where: { id: stockItemId, propertyId, warehouseId, isActive: true }, include: { stockUnits: true } });
       if (!item) throw new Error('Stock item was not found in the selected main warehouse.');
 
+      if (inputUnit && !Object.values(UnitOfMeasure).includes(inputUnit as UnitOfMeasure)) {
+        throw new Error(`Unsupported purchase unit: ${inputUnit}.`);
+      }
+      if (inputUnit !== item.baseUnit && unitsInBase != null && (!Number.isFinite(unitsInBase) || unitsInBase <= 0)) {
+        throw new Error(`Enter a valid conversion for 1 ${inputUnit} in ${item.baseUnit}.`);
+      }
+      if (inputUnit !== item.baseUnit && unitsInBase != null) {
+        const itemIdentity = item.posProductId
+          ? { posProductId: item.posProductId }
+          : item.sku
+            ? { sku: item.sku }
+            : { name: { equals: item.name, mode: 'insensitive' as const } };
+        const relatedItems = await tx.stockItem.findMany({
+          where: { propertyId, isActive: true, ...itemIdentity },
+          select: { id: true },
+        });
+        const relatedIds = relatedItems.map((related) => related.id);
+        await tx.stockItemUnit.updateMany({
+          where: { stockItemId: { in: relatedIds }, isPurchaseUnit: true, unit: { not: inputUnit as UnitOfMeasure } },
+          data: { isPurchaseUnit: false },
+        });
+        for (const relatedId of relatedIds) {
+          await tx.stockItemUnit.upsert({
+            where: { stockItemId_unit: { stockItemId: relatedId, unit: inputUnit as UnitOfMeasure } },
+            create: { stockItemId: relatedId, unit: inputUnit as UnitOfMeasure, unitsInBase, isPurchaseUnit: true },
+            update: { unitsInBase, isPurchaseUnit: true },
+          });
+        }
+      }
       const conversion = inputUnit === item.baseUnit
         ? 1
-        : Number(item.stockUnits.find((unit) => unit.unit === inputUnit)?.unitsInBase || 0);
+        : unitsInBase != null
+          ? unitsInBase
+          : Number(item.stockUnits.find((unit) => unit.unit === inputUnit)?.unitsInBase || 0);
       if (!conversion || conversion <= 0) throw new Error(`No conversion is configured from ${inputUnit || 'the selected unit'} to ${item.baseUnit}.`);
       const baseQuantity = quantity * conversion;
       const baseUnitCost = unitCost / conversion;
