@@ -2994,18 +2994,23 @@ public class LocalRepository
                 PropertyId = propertyId,
                 DeviceId = deviceId,
                 OperatorId = userId,
-                AggregateType = "POS_ORDER",
+                AggregateType = action == "REPLACE" ? "POS_ORDER" : "POS_VOID",
                 AggregateId = order.Id,
                 AggregateVersion = order.Version + 1,
-                EventType = action == "REPLACE" ? "ITEM_REPLACED" : "ITEM_VOIDED",
+                EventType = action == "REPLACE" ? "ITEM_REPLACED" : "CREATE",
                 Sequence = 1,
                 PayloadJson = System.Text.Json.JsonSerializer.Serialize(new {
+                    id = voidId,
+                    operationId,
+                    orderId = order.Id,
+                    orderItemId = originalItem.Id,
                     action,
                     originalOrderItemId = originalItem.Id,
                     replacedByItemId = newOrderItemId,
                     reason,
                     inventoryAction,
-                    approverId
+                    approverId,
+                    deviceId
                 })
             };
             _dbContext.OutboxEvents.Add(evt);
