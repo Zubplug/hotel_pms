@@ -3481,8 +3481,12 @@ public class LocalRepository
             BankType = bankType,
             BankingModel = bankingModel,
             Status = "OPEN",
+            ControlStatus = "OPEN",
             OpenedAt = DateTime.UtcNow,
-            OpeningCash = openingBalance
+            OpeningCash = openingBalance,
+            BusinessDate = (await _dbContext.Properties.FindAsync(propertyId))?.BusinessDate ?? DateTime.UtcNow.Date,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
         };
 
         _dbContext.PosSessions.Add(session);
@@ -4165,9 +4169,10 @@ public class LocalRepository
         session.Status = session.BankType == "SERVER" ? "RECONCILIATION_REQUIRED" : "CLOSED";
         session.ControlStatus = "SUBMITTED";
         session.VarianceStatus = settlement.Variance != 0 ? "OPEN" : null;
-        session.SubmittedAt = session.ClosedAt;
+        var closedAt = DateTime.UtcNow;
+        session.SubmittedAt = closedAt;
         session.SubmittedBy = operatorId;
-        session.ClosedAt = DateTime.UtcNow;
+        session.ClosedAt = closedAt;
         session.UpdatedAt = session.ClosedAt.Value;
         session.Version++;
 
@@ -4430,8 +4435,12 @@ public class LocalRepository
 
     public async Task<LocalPosVoid> AuthorizeVoidAsync(string orderId, string orderItemId, string reason, string authorizerId, string userId, string deviceId)
     {
-        var order = await _dbContext.PosOrders.FindAsync(orderId);
+        var order = await _dbContext.PosOrders.Include(o => o.Items).FirstOrDefaultAsync(o => o.Id == orderId);
+        if (order == null) throw new Exception("Order not found");
         if (order != null) await AssertNightAuditAllowsAsync(order.PropertyId);
+        var item = order.Items.FirstOrDefault(i => i.Id == orderItemId);
+        if (item == null) throw new Exception("Order item not found");
+        if (!string.IsNullOrWhiteSpace(item.VoidReason)) throw new Exception("Order item is already voided");
 
         string operationId = $"op_void_{deviceId}_{DateTime.UtcNow.Ticks}";
         
@@ -4448,6 +4457,16 @@ public class LocalRepository
         };
 
         _dbContext.PosVoids.Add(posVoid);
+
+        item.VoidReason = reason;
+        item.Subtotal = 0;
+        item.Total = 0;
+        item.TaxAmount = 0;
+        item.UnitPrice = 0;
+        order.Subtotal = order.Items.Sum(i => i.Subtotal);
+        order.TaxAmount = order.Items.Sum(i => i.TaxAmount);
+        order.Total = order.Items.Sum(i => i.Total);
+        order.UpdatedAt = DateTime.UtcNow;
 
         _dbContext.SyncEvents.Add(new LocalSyncEvent
         {
@@ -5491,9 +5510,10 @@ public class LocalRepository
     {
         return await _dbContext.PosSessions
             .FirstOrDefaultAsync(s => s.PropertyId == propertyId
-                && s.PrimaryOperatorId == staffId
+                && (s.PrimaryOperatorId == staffId || s.StaffId == staffId || s.UserId == staffId)
                 && (string.IsNullOrEmpty(outletId) || s.OutletId == outletId)
                 && s.Status == "OPEN"
+                && (string.IsNullOrEmpty(s.ControlStatus) || s.ControlStatus == "OPEN")
                 && s.BankType == "SERVER");
     }
 

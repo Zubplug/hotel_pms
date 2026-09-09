@@ -23,7 +23,7 @@ public class SessionManager
     /// Authenticates a POS operator using their PIN, establishes a trusted local context, 
     /// and persists it to SQLite so it survives offline restarts.
     /// </summary>
-    public async Task<LocalOperatorContext> AuthenticateOperatorAsync(string staffId, string pin)
+    public async Task<LocalOperatorContext> AuthenticateOperatorAsync(string staffId, string pin, string? preferredSessionId = null)
     {
         var staff = await _dbContext.Staff.FirstOrDefaultAsync(s => s.Id == staffId && s.IsActive && s.HasPosAccess);
         if (staff == null)
@@ -48,7 +48,21 @@ public class SessionManager
                        ?? throw new InvalidOperationException("This terminal has no device identity. Re-provision the desktop terminal before using POS.");
 
         // Find if there's an active POS session for this specific operator or terminal
-        var activeSession = await FindBankingSessionAsync(property, staff, deviceId);
+        // Prefer the session ID retained by the desktop across restarts when
+        // it is still an open session owned by this operator. This avoids
+        // forcing a waiter to open a second shift after reopening offline.
+        LocalPosSession? activeSession = null;
+        if (!string.IsNullOrWhiteSpace(preferredSessionId))
+        {
+            var preferred = await _dbContext.PosSessions.FirstOrDefaultAsync(s =>
+                s.Id == preferredSessionId &&
+                s.PropertyId == property.Id &&
+                s.OutletId == outlet.Id &&
+                s.Status == PosConstants.SessionStatus.Open &&
+                (s.PrimaryOperatorId == staff.Id || s.StaffId == staff.Id || s.UserId == staff.Id));
+            activeSession = preferred;
+        }
+        activeSession ??= await FindBankingSessionAsync(property, staff, deviceId);
 
         // Invalidate previous contexts
         var oldContexts = await _dbContext.OperatorContexts.Where(c => c.IsActive).ToListAsync();

@@ -2086,7 +2086,7 @@ public class OfflinePMSInterop
         try
         {
             // We ignore propertyId and sessionId from React to ensure security
-            var ctx = await _sessionManager.AuthenticateOperatorAsync(staffId, pin);
+            var ctx = await _sessionManager.AuthenticateOperatorAsync(staffId, pin, sessionId);
             var staff = await _repo.GetStaffByIdAsync(staffId);
             if (staff == null) throw new Exception("Staff not found");
 
@@ -2326,6 +2326,15 @@ public class OfflinePMSInterop
             if (posSession == null && !string.Equals(property?.BankingModel, "SERVER_BANKING", StringComparison.OrdinalIgnoreCase))
             {
                 posSession = await _repo.GetActiveSessionForDeviceAsync(operatorContext.DeviceId);
+            }
+
+            if (posSession == null && string.Equals(property?.BankingModel, "SERVER_BANKING", StringComparison.OrdinalIgnoreCase))
+            {
+                posSession = await _repo.GetActiveServerBankAsync(operatorContext.StaffId, operatorContext.PropertyId, terminal?.OutletId ?? string.Empty);
+            }
+            if (posSession == null && !string.Equals(property?.BankingModel, "SERVER_BANKING", StringComparison.OrdinalIgnoreCase))
+            {
+                posSession = await _repo.GetActiveCentralBankAsync(operatorContext.PropertyId, terminal?.OutletId ?? string.Empty);
             }
             
             // Fallback outlet to the session's outlet if terminal doesn't provide it

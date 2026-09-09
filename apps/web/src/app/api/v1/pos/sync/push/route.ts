@@ -732,6 +732,45 @@ export async function POST(req: NextRequest) {
                   }
               });
           }
+          else if (event.eventType === 'POS_VOID' || (event.aggregateType === 'POS_VOID' && event.eventType === 'CREATE')) {
+              const operationId = payload.OperationId || payload.operationId || event.idempotencyKey;
+              const existingVoid = await tx.posVoid.findUnique({ where: { operationId } });
+              if (!existingVoid) {
+                  const orderId = payload.OrderId || payload.orderId || event.aggregateId;
+                  const itemId = payload.OrderItemId || payload.orderItemId || null;
+                  const order = await tx.posOrder.findUnique({ where: { id: orderId }, include: { items: true } });
+                  if (!order) throw new Error(`RETRYABLE_ORDER_NOT_FOUND: POS order ${orderId} has not reached the cloud yet`);
+                  const item = itemId ? order.items.find((candidate: any) => candidate.id === itemId) : null;
+                  if (itemId && !item) throw new Error(`POS order item ${itemId} was not found`);
+
+                  if (item && !item.voidReason) {
+                      await tx.posOrderItem.update({
+                          where: { id: item.id },
+                          data: { voidReason: payload.Reason || payload.reason || 'Voided', subtotal: 0, total: 0, taxAmount: 0, unitPrice: 0 },
+                      });
+                  }
+                  const remainingItems = await tx.posOrderItem.findMany({ where: { orderId }, select: { total: true, voidReason: true } });
+                  const orderTotal = remainingItems.reduce((sum: number, candidate: any) => sum + Number(candidate.total || 0), 0);
+                  await tx.posOrder.update({ where: { id: orderId }, data: { subtotal: orderTotal, total: orderTotal, updatedAt: new Date() } });
+                  const allItemsVoided = remainingItems.length > 0 && remainingItems.every((candidate: any) => candidate.voidReason || Number(candidate.total || 0) === 0);
+                  if (allItemsVoided) {
+                      await InventoryService.restoreSale(orderId, operatorId || 'SYSTEM', `pos_void_restore_${operationId}`, tx);
+                  }
+                  await tx.posVoid.create({
+                      data: {
+                          id: isUuid(payload.Id || payload.id) ? (payload.Id || payload.id) : crypto.randomUUID(),
+                          orderId,
+                          orderItemId: itemId,
+                          replacedByItemId: payload.ReplacedByItemId || payload.replacedByItemId || null,
+                          reason: payload.Reason || payload.reason || 'Voided',
+                          authorizerId: isUuid(payload.AuthorizerId || payload.authorizerId) ? (payload.AuthorizerId || payload.authorizerId) : null,
+                          operationId,
+                          businessDate: order.businessDate,
+                          deviceId: payload.DeviceId || payload.deviceId || event.deviceId,
+                      },
+                  });
+              }
+          }
           else if (event.eventType === 'POS_SETTLEMENT') {
               const operationId = payload.OperationId || payload.operationId || event.idempotencyKey;
               
