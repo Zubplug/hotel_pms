@@ -49,6 +49,7 @@ const CASH_MANAGEMENT_NAV = [
       { name: 'Cost Dashboard', href: '/inventory/cost-control' },
       { name: 'Recipes', href: '/inventory/cost-control/recipes' },
       { name: 'Stocktakes', href: '/inventory/stocktakes' },
+      { name: 'Opening Stock', href: '/inventory/opening-stock', roles: ['GENERAL_CASHIER'] },
       { name: 'GRNs', href: '/inventory/grns' },
     ],
   },
