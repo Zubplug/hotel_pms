@@ -5,6 +5,7 @@ import { getPropertyBusinessDate } from '@/lib/kpi';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { resolveUser } from '@/lib/resolve-user';
 import { requireOrganizationContext } from '@/lib/organization-access';
+import { format } from 'date-fns';
 
 export async function GET(req: NextRequest) {
   try {
@@ -52,6 +53,7 @@ export async function GET(req: NextRequest) {
       where: {
         roomId: { in: roomIds },
         status: { notIn: ['CANCELLED', 'NO_SHOW'] },
+        reservation: { status: 'CHECKED_IN' },
         checkIn: { lt: endOfDay },
         checkOut: { gt: startOfDay }
       },
@@ -65,6 +67,7 @@ export async function GET(req: NextRequest) {
       where: {
         roomId: { in: roomIds },
         status: { notIn: ['CANCELLED', 'NO_SHOW'] },
+        reservation: { status: { in: ['CONFIRMED', 'CHECKED_IN'] } },
         checkIn: { gte: startOfDay }
       },
       orderBy: { checkIn: 'asc' },
@@ -128,13 +131,13 @@ export async function GET(req: NextRequest) {
       
       // Attention indicator: Room is dirty but arriving today
       if (room.displayStatus === 'DIRTY' && nextRes) {
-        const daysToArrival = Math.round((nextRes.checkIn.getTime() - new Date().getTime()) / 86400000);
+        const daysToArrival = Math.round((nextRes.checkIn.getTime() - startOfDay.getTime()) / 86400000);
         if (daysToArrival === 0) indicators.push('ATTENTION');
       }
       
       // Attention indicator: OOO but arriving today/tomorrow
       if ((room.displayStatus === 'OUT_OF_ORDER' || room.displayStatus === 'OUT_OF_SERVICE') && nextRes) {
-         const daysToArrival = Math.round((nextRes.checkIn.getTime() - new Date().getTime()) / 86400000);
+         const daysToArrival = Math.round((nextRes.checkIn.getTime() - startOfDay.getTime()) / 86400000);
          if (daysToArrival <= 1) indicators.push('ATTENTION');
       }
 
@@ -156,7 +159,7 @@ export async function GET(req: NextRequest) {
           name: property.name,
           timezone: property.timezone
         },
-        businessDate: businessDate.toISOString().split('T')[0],
+        businessDate: format(businessDate, 'yyyy-MM-dd'),
         generatedAt: now,
         lastUpdated: now,
         serverTime: now,

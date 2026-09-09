@@ -58,16 +58,23 @@ public class Rfv2016LockProvider : ILockProvider
             if (Directory.Exists(sourceWRCard))
             {
                 CopyDirectory(sourceWRCard, targetWRCard);
-                // Allow the user to specify their actual SmartDoor.mdb path via a text file,
-                // or fallback to the known working path provided by the user.
-                string customDbPath = @"C:\Users\VOLCANOE PEAK HOTEL\Desktop\Douwin\";
+                // Allow the user to specify either the SmartDoor.mdb file or its
+                // containing directory. If it is unavailable, RFV's legacy SDK
+                // also supports the database directly under C:\.
+                string configuredDbPath = @"C:\Users\VOLCANOE PEAK HOTEL\Desktop\Douwin\";
                 string dbPathConfig = @"C:\Users\Public\Rfv2016\DbPath.txt";
                 
                 if (File.Exists(dbPathConfig))
                 {
-                    customDbPath = File.ReadAllText(dbPathConfig).Trim();
-                    if (!customDbPath.EndsWith("\\")) customDbPath += "\\";
+                    var configuredValue = File.ReadAllText(dbPathConfig).Trim();
+                    if (!string.IsNullOrWhiteSpace(configuredValue))
+                    {
+                        configuredDbPath = configuredValue;
+                    }
                 }
+
+                string customDbPath = ResolveSmartDoorDatabaseDirectory(configuredDbPath);
+                _logger.LogInformation("RFV2016 SmartDoor database directory: {DatabaseDirectory}", customDbPath);
                 
                 string iniPath = Path.Combine(targetWRCard, "nConDB.ini");
                 if (File.Exists(iniPath))
@@ -81,6 +88,39 @@ public class Rfv2016LockProvider : ILockProvider
             }
         }
     }
+
+    private static string ResolveSmartDoorDatabaseDirectory(string configuredPath)
+    {
+        var normalizedPath = configuredPath.Trim().Trim('"');
+        var configuredDirectory = normalizedPath;
+
+        if (string.Equals(Path.GetFileName(normalizedPath), "SmartDoor.mdb", StringComparison.OrdinalIgnoreCase))
+        {
+            configuredDirectory = Path.GetDirectoryName(normalizedPath) ?? @"C:\";
+        }
+
+        if (!configuredDirectory.EndsWith(":\\", StringComparison.Ordinal) &&
+            !configuredDirectory.EndsWith(":/", StringComparison.Ordinal))
+        {
+            configuredDirectory = configuredDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        }
+        var candidates = new[] { configuredDirectory, @"C:\" }
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var directory in candidates)
+        {
+            if (File.Exists(Path.Combine(directory, "SmartDoor.mdb")))
+            {
+                return directory + Path.DirectorySeparatorChar;
+            }
+        }
+
+        // If the configured database is unavailable, always use the requested
+        // root fallback so the SDK searches for C:\SmartDoor.mdb.
+        return @"C:\";
+    }
+
     private void CopyDirectory(string sourceDir, string destinationDir)
     {
         Directory.CreateDirectory(destinationDir);

@@ -4,7 +4,8 @@ import { resolveUser } from '@/lib/resolve-user';
 import { requireOrganizationContext } from '@/lib/organization-access';
 import { getPropertyBusinessDate } from '@/lib/kpi';
 import { prisma } from '@hotel-pms/db';
-import { startOfDay, endOfDay, startOfMonth, startOfYear } from 'date-fns';
+import { addDays, format, startOfMonth, startOfYear } from 'date-fns';
+import { fromZonedTime } from 'date-fns-tz';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,10 +26,15 @@ export async function GET(req: NextRequest) {
 
     const businessDate = await getPropertyBusinessDate(primaryPropertyId);
     const period = req.nextUrl.searchParams.get('period')?.toUpperCase() || 'TODAY';
+    const businessDateLabel = format(businessDate, 'yyyy-MM-dd');
+    const propertyDayStart = (date: Date) => fromZonedTime(`${format(date, 'yyyy-MM-dd')}T00:00:00`, property.timezone);
+    const propertyDayEnd = (date: Date) => fromZonedTime(`${format(date, 'yyyy-MM-dd')}T23:59:59.999`, property.timezone);
+    const businessDayStart = propertyDayStart(businessDate);
+    const businessDayEnd = propertyDayEnd(businessDate);
 
     // ── 1. Determine Date Boundaries for Models ──────────────────────────────
     const lastAudit = await prisma.nightAudit.findFirst({
-      where: { propertyId: primaryPropertyId, status: 'COMPLETED' },
+      where: { propertyId: primaryPropertyId, status: 'COMPLETED', businessDate: { lte: businessDate } },
       orderBy: { businessDate: 'desc' },
       select: { businessDate: true, completedAt: true, totalRevenue: true, totalRoomRevenue: true },
     });
@@ -40,32 +46,35 @@ export async function GET(req: NextRequest) {
     let auditedEndDate: Date | null = null;
     if (auditedBusinessDate) {
       if (period === 'MTD') {
-        auditedStartDate = startOfMonth(auditedBusinessDate);
+        auditedStartDate = propertyDayStart(startOfMonth(businessDate));
       } else if (period === 'YTD') {
-        auditedStartDate = startOfYear(auditedBusinessDate);
+        auditedStartDate = propertyDayStart(startOfYear(businessDate));
       } else {
-        auditedStartDate = startOfDay(auditedBusinessDate);
+        auditedStartDate = propertyDayStart(auditedBusinessDate);
       }
-      auditedEndDate = endOfDay(auditedBusinessDate);
+      auditedEndDate = propertyDayEnd(auditedBusinessDate);
     }
 
     // B) Live Folio Items & Sessions (businessDate > auditedBusinessDate)
-    const liveBusinessDateStart = auditedBusinessDate ? new Date(auditedBusinessDate.getTime() + 86400000) : startOfDay(businessDate); // Next day
-    const liveBusinessDateFilter = { gte: startOfDay(liveBusinessDateStart) }; 
+    const liveBusinessDateStart = auditedBusinessDate
+      ? propertyDayStart(addDays(auditedBusinessDate, 1))
+      : businessDayStart;
+    const liveBusinessDateFilter = { gte: liveBusinessDateStart, lte: businessDayEnd };
 
     // C) Real-time transactions like Payments & Approvals (createdAt / calendar date)
     const now = new Date();
-    let calendarStartDate = startOfDay(now);
-    const calendarEndDate = endOfDay(now);
-    if (period === 'MTD') calendarStartDate = startOfMonth(now);
-    if (period === 'YTD') calendarStartDate = startOfYear(now);
+    let calendarStartDate = businessDayStart;
+    const calendarEndDate = now;
+    if (period === 'MTD') calendarStartDate = propertyDayStart(startOfMonth(businessDate));
+    if (period === 'YTD') calendarStartDate = propertyDayStart(startOfYear(businessDate));
 
     // D) Cash Sessions (businessDate)
     // For TODAY: show only live sessions (businessDate >= liveBusinessDateStart)
     // For MTD/YTD: show sessions for the entire period up to now
     let sessionStartDate = liveBusinessDateStart;
-    if (period === 'MTD') sessionStartDate = auditedBusinessDate ? startOfMonth(auditedBusinessDate) : startOfMonth(businessDate);
-    if (period === 'YTD') sessionStartDate = auditedBusinessDate ? startOfYear(auditedBusinessDate) : startOfYear(businessDate);
+    if (period === 'MTD') sessionStartDate = propertyDayStart(startOfMonth(businessDate));
+    if (period === 'YTD') sessionStartDate = propertyDayStart(startOfYear(businessDate));
+    const sessionEndDate = businessDayEnd;
 
 
     // ── 2. Audited Revenue (Strictly from audited days) ────────────────────
@@ -114,38 +123,76 @@ export async function GET(req: NextRequest) {
     }
 
     // ── 3. Live Since Last Audit (Unaudited Activity) ──────────────────────
-    const livePosItems = await prisma.folioItem.findMany({
+    const liveFolioItems = await prisma.folioItem.findMany({
       where: {
         folio: { propertyId: primaryPropertyId },
         businessDate: liveBusinessDateFilter,
-        type: 'CHARGE',
+        type: { in: ['CHARGE', 'DISCOUNT'] },
         source: { in: ['POS', 'RESTAURANT', 'BAR'] },
         voidedAt: null,
       },
-      select: { amount: true },
+      select: { amount: true, type: true },
     });
-    const livePosSales = livePosItems.reduce((s: number, i: any) => s + Number(i.amount), 0);
+    const livePosSales = liveFolioItems.reduce(
+      (s: number, i: any) => s + (i.type === 'DISCOUNT' ? -1 : 1) * Number(i.amount),
+      0,
+    );
 
     const stayovers = await prisma.reservation.findMany({
-      where: { propertyId: primaryPropertyId, status: 'CHECKED_IN', checkOut: { gt: liveBusinessDateStart } },
-      include: { reservationRooms: { where: { status: 'ACTIVE' } } },
+      where: {
+        propertyId: primaryPropertyId,
+        status: 'CHECKED_IN',
+        checkIn: { lte: businessDate },
+        checkOut: { gt: businessDate },
+      },
+      include: {
+        reservationRooms: { where: { status: 'ACTIVE' } },
+        folios: {
+          where: { type: { in: ['MAIN', 'ROOM'] } },
+          include: {
+            items: {
+              where: {
+                source: 'ROOM_CHARGE',
+                businessDate: { gte: businessDayStart, lte: businessDayEnd },
+                voidedAt: null,
+              },
+            },
+          },
+        },
+      },
     });
-    let liveRoomCharges = 0;
+    const liveRoomItems = await prisma.folioItem.findMany({
+      where: {
+        folio: { propertyId: primaryPropertyId },
+        businessDate: liveBusinessDateFilter,
+        source: 'ROOM_CHARGE',
+        type: { in: ['CHARGE', 'DISCOUNT'] },
+        voidedAt: null,
+      },
+      select: { amount: true, type: true },
+    });
+    let liveRoomCharges = liveRoomItems.reduce(
+      (s: number, i: any) => s + (i.type === 'DISCOUNT' ? -1 : 1) * Number(i.amount),
+      0,
+    );
     for (const res of stayovers) {
-      const rr = res.reservationRooms[0];
-      if (!rr) continue;
-      const rate = Number(rr.rateAmount || 0);
-      let discount = 0;
-      if (rr.discountType === 'FIXED_AMOUNT') discount = Number(rr.discountAmount || 0);
-      else if (rr.discountType === 'PERCENTAGE') discount = rate * (Number(rr.discountPercent || 0) / 100);
-      liveRoomCharges += Math.max(0, rate - discount);
+      const hasPostedChargeToday = res.folios.some((folio: any) => folio.items.length > 0);
+      if (hasPostedChargeToday) continue;
+      for (const rr of res.reservationRooms) {
+        const rate = Number(rr.rateAmount || 0);
+        let discount = 0;
+        if (rr.discountType === 'FIXED_AMOUNT') discount = Number(rr.discountAmount || 0);
+        else if (rr.discountType === 'PERCENTAGE') discount = rate * (Number(rr.discountPercent || 0) / 100);
+        else if (rr.discountType === 'COMPLIMENTARY') discount = Number(rr.discountAmount || 0) || rate;
+        liveRoomCharges += Math.max(0, rate - discount);
+      }
     }
 
     const livePayments = await prisma.payment.findMany({
       where: {
         propertyId: primaryPropertyId,
         status: 'COMPLETED',
-        createdAt: { gte: startOfDay(now), lte: calendarEndDate }, // Today's live payments
+        createdAt: { gte: lastAudit?.completedAt ?? businessDayStart, lte: now },
       },
       select: { amount: true },
     });
@@ -160,12 +207,12 @@ export async function GET(req: NextRequest) {
 
     // ── 4. Cash Control (Variance reporting) ───────────────────────────────
     const fdSessions = await prisma.frontdeskSession.findMany({
-      where: { propertyId: primaryPropertyId, businessDate: { gte: sessionStartDate } },
+      where: { propertyId: primaryPropertyId, businessDate: { gte: sessionStartDate, lte: sessionEndDate } },
       include: { staff: { select: { firstName: true, lastName: true } } },
     });
     
     const posSessions = await prisma.posSession.findMany({
-      where: { outlet: { propertyId: primaryPropertyId }, businessDate: { gte: sessionStartDate } },
+      where: { outlet: { propertyId: primaryPropertyId }, businessDate: { gte: sessionStartDate, lte: sessionEndDate } },
       include: { outlet: { select: { name: true } } },
     });
 
@@ -179,7 +226,7 @@ export async function GET(req: NextRequest) {
         declared: s.declaredCash !== null ? Number(s.declaredCash) : null,
         variance: s.variance !== null ? Number(s.variance) : null,
         status: toStatus(s.variance !== null ? Number(s.variance) : null),
-        businessDate: s.businessDate.toISOString().split('T')[0],
+        businessDate: format(s.businessDate, 'yyyy-MM-dd'),
       })),
       ...posSessions.map(s => ({
         label: s.outlet.name,
@@ -187,7 +234,7 @@ export async function GET(req: NextRequest) {
         declared: s.actualCash !== null ? Number(s.actualCash) : null,
         variance: s.variance !== null ? Number(s.variance) : null,
         status: toStatus(s.variance !== null ? Number(s.variance) : null),
-        businessDate: s.businessDate.toISOString().split('T')[0],
+        businessDate: format(s.businessDate, 'yyyy-MM-dd'),
       })),
     ];
     
@@ -209,11 +256,12 @@ export async function GET(req: NextRequest) {
     };
 
     // ── 5. Transaction Controls (Using exact dates) ────────────────────────
-    let controlStartDate = period === 'TODAY' ? liveBusinessDateStart : sessionStartDate; // Use business date logic
+    const controlStartDate = period === 'TODAY' ? liveBusinessDateStart : sessionStartDate;
+    const controlEndDate = sessionEndDate;
 
     const [discountAgg, voidedItemsControl, refundAgg, overrideCount] = await Promise.all([
       prisma.folioItem.aggregate({
-        where: { folio: { propertyId: primaryPropertyId }, type: 'DISCOUNT', voidedAt: null, businessDate: { gte: controlStartDate } },
+        where: { folio: { propertyId: primaryPropertyId }, type: 'DISCOUNT', voidedAt: null, businessDate: { gte: controlStartDate, lte: controlEndDate } },
         _sum: { amount: true },
       }),
       prisma.folioItem.findMany({
@@ -221,7 +269,7 @@ export async function GET(req: NextRequest) {
         select: { amount: true },
       }),
       prisma.folioItem.aggregate({
-        where: { folio: { propertyId: primaryPropertyId }, type: 'REFUND', voidedAt: null, businessDate: { gte: controlStartDate } },
+        where: { folio: { propertyId: primaryPropertyId }, type: 'REFUND', voidedAt: null, businessDate: { gte: controlStartDate, lte: controlEndDate } },
         _sum: { amount: true },
       }),
       prisma.approvalRequest.count({
@@ -243,7 +291,7 @@ export async function GET(req: NextRequest) {
 
     const openFolios = await prisma.folio.findMany({
       where: { propertyId: primaryPropertyId, status: 'OPEN', balance: { gt: 0 } },
-      select: { balance: true },
+      select: { balance: true, reservation: { select: { corporateAccountId: true } } },
     });
 
     const highBalanceFolios = openFolios.filter((f: any) => Number(f.balance) > highBalThreshold);
@@ -258,7 +306,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Checking current day variances for alerts
-    const todayVariances = allSessions.filter(s => s.businessDate === businessDate.toISOString().split('T')[0] && s.variance !== null && s.variance < 0);
+    const todayVariances = allSessions.filter(s => s.businessDate === businessDateLabel && s.variance !== null && s.variance < 0);
     const todayVarianceTotal = todayVariances.reduce((s, a) => s + Math.abs(a.variance!), 0);
     if (todayVarianceTotal > 5000) {
       currentAlerts.push({
@@ -295,7 +343,7 @@ export async function GET(req: NextRequest) {
         _sum: { remainingAmount: true },
       }),
       prisma.folioCreditApplication.aggregate({
-        where: { credit: { propertyId: primaryPropertyId }, businessDate: { gte: controlStartDate } },
+        where: { credit: { propertyId: primaryPropertyId }, businessDate: { gte: controlStartDate, lte: controlEndDate } },
         _sum: { amount: true },
       }),
       prisma.folioCredit.aggregate({
@@ -325,8 +373,8 @@ export async function GET(req: NextRequest) {
     // ── Response ───────────────────────────────────────────────────────────
     return successResponse({
       period,
-      businessDate: businessDate.toISOString().split('T')[0],
-      lastAuditedBusinessDate: auditedBusinessDate ? auditedBusinessDate.toISOString().split('T')[0] : null,
+      businessDate: businessDateLabel,
+      lastAuditedBusinessDate: auditedBusinessDate ? format(auditedBusinessDate, 'yyyy-MM-dd') : null,
       property: { name: property.name, currency: property.baseCurrency || 'NGN' },
       audited,
       liveSinceLastAudit,

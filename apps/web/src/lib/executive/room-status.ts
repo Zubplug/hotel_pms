@@ -251,15 +251,9 @@ export async function getRoomIntelligenceView(
 
   if (!room) return null;
 
-  // Calculate canonical status directly for this room (same logic as calculateRoomStatuses)
-  const activeOccupancy = await prisma.reservationRoom.findFirst({
-    where: {
-      roomId,
-      status: 'ACTIVE',
-      reservation: { status: 'CHECKED_IN' },
-    },
-    select: { id: true }
-  });
+  // Reuse the same status calculation as the room list so room details cannot
+  // disagree with the status and counts shown on the previous screen.
+  const canonicalRoom = (await calculateRoomStatuses(propertyId, businessDate)).rooms.find((item) => item.id === roomId);
 
   const activeBlock = await prisma.roomBlock.findFirst({
     where: {
@@ -270,30 +264,11 @@ export async function getRoomIntelligenceView(
     }
   });
 
-  const isOccupied = !!activeOccupancy;
-  const isOOO = activeBlock?.type === 'OUT_OF_ORDER';
-  const isOOS = activeBlock?.type === 'OUT_OF_SERVICE';
-  const isClean = room.housekeepingStatus === 'CLEAN' || room.housekeepingStatus === 'INSPECTED';
-
-  let displayStatus: RoomDisplayStatus;
-  let availabilityStatus: RoomAvailabilityStatus;
-
-  if (isOOO) {
-    displayStatus = 'OUT_OF_ORDER';
-    availabilityStatus = 'UNAVAILABLE';
-  } else if (isOOS) {
-    displayStatus = 'OUT_OF_SERVICE';
-    availabilityStatus = 'UNAVAILABLE';
-  } else if (isOccupied) {
-    displayStatus = 'OCCUPIED';
-    availabilityStatus = 'OCCUPIED';
-  } else if (isClean) {
-    displayStatus = 'READY';
-    availabilityStatus = 'VACANT';
-  } else {
-    displayStatus = 'DIRTY';
-    availabilityStatus = 'VACANT';
-  }
+  const displayStatus = canonicalRoom?.displayStatus ?? 'DIRTY';
+  const availabilityStatus = canonicalRoom?.availabilityStatus ?? 'UNAVAILABLE';
+  const isOccupied = displayStatus === 'OCCUPIED';
+  const isOOO = displayStatus === 'OUT_OF_ORDER';
+  const isOOS = displayStatus === 'OUT_OF_SERVICE';
 
   let sellability: 'READY_TO_SELL' | 'NOT_READY' | 'NOT_SELLABLE';
   if (displayStatus === 'READY') {
@@ -309,6 +284,8 @@ export async function getRoomIntelligenceView(
     where: {
       roomId,
       status: 'ACTIVE',
+      checkIn: { lte: businessDate },
+      checkOut: { gt: businessDate },
       reservation: { status: 'CHECKED_IN' },
     },
     include: {
@@ -389,6 +366,7 @@ export async function getRoomIntelligenceView(
     where: {
       roomId,
       status: { notIn: ['CANCELLED', 'NO_SHOW'] },
+      reservation: { status: { in: ['CONFIRMED', 'CHECKED_IN'] } },
       checkIn: { gte: currentRes ? currentRes.checkOut : startOfDay }
     },
     orderBy: { checkIn: 'asc' },
@@ -472,7 +450,9 @@ export async function getRoomIntelligenceView(
   let managementAttention: { type: 'WARNING' | 'CRITICAL', message: string } | null = null;
   
   if (isOOO || isOOS) {
-    const hours = Math.round((new Date().getTime() - activeBlock!.createdAt.getTime()) / 3600000);
+    const hours = activeBlock
+      ? Math.max(0, Math.round((new Date().getTime() - activeBlock.createdAt.getTime()) / 3600000))
+      : 0;
     let msg = `${isOOO ? 'OOO' : 'OOS'} for ${hours} hours`;
     if (nextArrivalRes) {
       const daysToArrival = Math.round((nextArrivalRes.checkIn.getTime() - new Date().getTime()) / 86400000);
