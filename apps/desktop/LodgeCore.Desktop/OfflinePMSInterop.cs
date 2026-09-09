@@ -2338,6 +2338,11 @@ public class OfflinePMSInterop
             // if React sent a stale sessionId from a previous user. Server
             // sessions are owned by PrimaryOperatorId; UserId is optional for
             // waiters and is often blank in the local projection.
+            if (posSession != null && !string.Equals(posSession.Status, "OPEN", StringComparison.OrdinalIgnoreCase))
+            {
+                posSession = null;
+            }
+
             if (posSession != null 
                 && string.Equals(property?.BankingModel, "SERVER_BANKING", StringComparison.OrdinalIgnoreCase)
                 && posSession.PrimaryOperatorId != operatorContext.StaffId
@@ -2467,14 +2472,43 @@ public class OfflinePMSInterop
 
     private async Task<string> ResolvePosSessionIdAsync(string? providedSessionId, LodgeCore.Desktop.Data.Entities.LocalOperatorContext posCtx)
     {
-        if (string.IsNullOrWhiteSpace(providedSessionId))
-            return posCtx.SessionId;
+        if (!string.IsNullOrWhiteSpace(providedSessionId))
+        {
+            var providedSession = await _repo.GetSessionContextAsync(providedSessionId);
+            if (providedSession != null &&
+                string.Equals(providedSession.Status, "OPEN", StringComparison.OrdinalIgnoreCase))
+            {
+                var property = await _repo.GetPropertyAsync(posCtx.PropertyId);
+                if (!string.Equals(property?.BankingModel, "SERVER_BANKING", StringComparison.OrdinalIgnoreCase) ||
+                    (providedSession.PrimaryOperatorId == posCtx.StaffId ||
+                     providedSession.StaffId == posCtx.StaffId ||
+                     providedSession.UserId == posCtx.StaffId))
+                {
+                    return providedSession.Id;
+                }
+            }
+        }
 
-        var posSession = await _repo.GetSessionContextAsync(providedSessionId);
-        if (posSession != null)
-            return providedSessionId;
+        if (!string.IsNullOrWhiteSpace(posCtx.SessionId))
+        {
+            var contextSession = await _repo.GetSessionContextAsync(posCtx.SessionId);
+            if (contextSession != null && string.Equals(contextSession.Status, "OPEN", StringComparison.OrdinalIgnoreCase))
+                return contextSession.Id;
+        }
 
-        return posCtx.SessionId;
+        var propertyForFallback = await _repo.GetPropertyAsync(posCtx.PropertyId);
+        if (string.Equals(propertyForFallback?.BankingModel, "SERVER_BANKING", StringComparison.OrdinalIgnoreCase))
+        {
+            var serverSession = await _repo.GetActiveServerBankAsync(posCtx.StaffId, posCtx.PropertyId, posCtx.OutletId ?? string.Empty);
+            if (serverSession != null) return serverSession.Id;
+        }
+        else
+        {
+            var centralSession = await _repo.GetActiveCentralBankAsync(posCtx.PropertyId, posCtx.OutletId ?? string.Empty);
+            if (centralSession != null) return centralSession.Id;
+        }
+
+        throw new InvalidOperationException("No active POS session is available for this operator.");
     }
 
     public async Task<string> GetCashMovementsAsync(string sessionId)
