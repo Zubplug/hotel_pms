@@ -3402,7 +3402,7 @@ export async function POST(req: NextRequest) {
                   idempotencyKey,
                   actorId: isUuid(err.existingEvent.operatorId)
                     ? err.existingEvent.operatorId
-                    : actorId,
+                    : device.id,
                   payload: (err.existingEvent.payload || {}) as Record<string, any>,
                 });
               });
