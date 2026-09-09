@@ -25,6 +25,81 @@ const isUuid = (value: unknown): value is string =>
     value,
   );
 
+/**
+ * Persist the approval side-effect for an offline discount independently of
+ * HotelEvent idempotency. A discount event may be recorded before its room
+ * dependency exists, or the original transaction may fail after the event is
+ * recorded. Reconciliation must therefore be safe to run repeatedly.
+ */
+async function reconcileOfflineRoomDiscount(
+  tx: any,
+  args: {
+    propertyId: string;
+    aggregateId: string;
+    idempotencyKey: string;
+    actorId: string;
+    payload: Record<string, any>;
+  },
+) {
+  const reservationRoomId = args.payload.reservationRoomId || args.aggregateId;
+  const resRoom = await tx.reservationRoom.findUnique({
+    where: { id: reservationRoomId },
+    include: { reservation: true },
+  });
+
+  if (resRoom && resRoom.reservation.propertyId !== args.propertyId) {
+    throw new Error(`DISCOUNT_PROPERTY_MISMATCH: Reservation room ${reservationRoomId} is not in this property`);
+  }
+
+  const approval = await tx.approvalRequest.upsert({
+    where: { idempotencyKey: `offline_discount:${args.idempotencyKey}` },
+    create: {
+      propertyId: args.propertyId,
+      type: "DISCOUNT",
+      status: "PENDING",
+      executionStatus: "NOT_APPLIED",
+      requestedBy: args.actorId,
+      amount: Number(args.payload.discountAmount || args.payload.amount || 0),
+      currency: resRoom?.currency || args.payload.currency || "NGN",
+      reason: args.payload.reason || "Offline room discount request",
+      details: {
+        ...args.payload,
+        reservationRoomId,
+        dependencyStatus: resRoom ? "READY" : "WAITING_FOR_RESERVATION_ROOM",
+      },
+      snapshot: {
+        ...args.payload,
+        targetType: "RESERVATION_ROOM",
+        reservationRoomId,
+        originalRate: resRoom ? Number(resRoom.rateAmount) : null,
+      },
+      idempotencyKey: `offline_discount:${args.idempotencyKey}`,
+    },
+    update: {
+      details: {
+        ...args.payload,
+        reservationRoomId,
+        dependencyStatus: resRoom ? "READY" : "WAITING_FOR_RESERVATION_ROOM",
+      },
+      snapshot: {
+        ...args.payload,
+        targetType: "RESERVATION_ROOM",
+        reservationRoomId,
+        originalRate: resRoom ? Number(resRoom.rateAmount) : null,
+      },
+    },
+  });
+
+  if (resRoom && !resRoom.discountApprovalId) {
+    await tx.reservationRoom.update({
+      where: { id: resRoom.id },
+      data: { discountApprovalId: `PENDING:${approval.id}` },
+    });
+  }
+
+  return approval;
+}
+
 async function queueCancellationRefunds(
   tx: any,
   reservation: any,
@@ -2982,55 +3057,13 @@ export async function POST(req: NextRequest) {
             }
           } else if (aggregateType === "RESERVATION_ROOM") {
             if (eventType === "DISCOUNT_REQUESTED") {
-              const reservationRoomId = payload.reservationRoomId || aggregateId;
-              const resRoom = await tx.reservationRoom.findUnique({ where: { id: reservationRoomId }, include: { reservation: true } });
-              // A Front Desk discount is not auditable without its reservation
-              // context. Do not create an orphan approval when offline events
-              // arrive out of order; the sync queue will retry this event once
-              // the reservation-room has been created.
-              if (!resRoom || resRoom.reservation.propertyId !== propertyId) {
-                throw new Error(
-                  `DEPENDENCY_NOT_READY: Reservation room ${reservationRoomId} has not been created for this property yet`,
-                );
-              }
-              const discountApproval = await tx.approvalRequest.upsert({
-                where: { idempotencyKey: `offline_discount:${idempotencyKey}` },
-                create: {
-                    propertyId,
-                    type: "DISCOUNT",
-                    status: "PENDING",
-                    executionStatus: "NOT_APPLIED",
-                    requestedBy: actorId,
-                    amount: Number(payload.discountAmount || payload.amount || 0),
-                    currency: resRoom?.currency || payload.currency || "NGN",
-                    reason: payload.reason || "Offline room discount request",
-                    details: {
-                      ...payload,
-                      reservationRoomId,
-                      dependencyStatus: "READY",
-                    },
-                    snapshot: {
-                      ...payload,
-                      targetType: "RESERVATION_ROOM",
-                      reservationRoomId,
-                      originalRate: Number(resRoom.rateAmount),
-                    },
-                    idempotencyKey: `offline_discount:${idempotencyKey}`,
-                  },
-                  update: {
-                    details: {
-                      ...payload,
-                      reservationRoomId,
-                      dependencyStatus: "READY",
-                    },
-                  },
+              await reconcileOfflineRoomDiscount(tx, {
+                propertyId,
+                aggregateId,
+                idempotencyKey,
+                actorId,
+                payload,
               });
-              if (resRoom && !resRoom.discountApprovalId) {
-                await tx.reservationRoom.update({
-                  where: { id: resRoom.id },
-                  data: { discountApprovalId: `PENDING:${discountApproval.id}` },
-                });
-              }
             } else if (eventType === "COMPLIMENTARY_REQUESTED") {
               const reservationRoomId = payload.reservationRoomId || aggregateId;
               const resRoom = await tx.reservationRoom.findUnique({ where: { id: reservationRoomId }, include: { reservation: true } });
@@ -3353,6 +3386,41 @@ export async function POST(req: NextRequest) {
         }
       } catch (err: any) {
         if (err.message === "IDEMPOTENCY_DUPLICATE") {
+          // The HotelEvent may have been persisted by an earlier attempt
+          // before its approval side-effect completed. Reconcile the
+          // side-effect before treating the event as a harmless duplicate.
+          if (
+            aggregateType === "RESERVATION_ROOM" &&
+            eventType === "DISCOUNT_REQUESTED" &&
+            err.existingEvent
+          ) {
+            try {
+              await prisma.$transaction(async (tx: any) => {
+                await reconcileOfflineRoomDiscount(tx, {
+                  propertyId,
+                  aggregateId: rawAggregateId,
+                  idempotencyKey,
+                  actorId: isUuid(err.existingEvent.operatorId)
+                    ? err.existingEvent.operatorId
+                    : actorId,
+                  payload: (err.existingEvent.payload || {}) as Record<string, any>,
+                });
+              });
+            } catch (reconciliationError: any) {
+              console.error(
+                `[sync/frontdesk-push] failed to reconcile duplicate discount ${idempotencyKey}:`,
+                reconciliationError,
+              );
+              results.push({
+                id,
+                status: "FAILED",
+                idempotencyKey,
+                error: reconciliationError.message,
+              });
+              continue;
+            }
+          }
+
           // The duplicate marker may be reconstructed by Prisma/transaction
           // wrappers without carrying the original event object. A duplicate
           // is still safely idempotent in that case; only classify it as a
