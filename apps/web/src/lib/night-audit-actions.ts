@@ -149,8 +149,33 @@ export async function getNightAuditRoomCharges(propertyId: string, auditId: stri
     }
   });
 
+  // Corporate room charges are posted to a shared CITY_LEDGER folio, so that
+  // folio cannot carry the individual reservation/guest relationship. The
+  // night-audit poster stores the reservation in the operation id instead.
+  const reservationIds = Array.from(new Set(
+    charges
+      .map((charge) => charge.operationId?.match(/^ROOM_CHARGE_([0-9a-f-]{36})_/i)?.[1])
+      .filter((id): id is string => Boolean(id)),
+  ));
+
+  const reservations = reservationIds.length > 0
+    ? await prisma.reservation.findMany({
+        where: { propertyId, id: { in: reservationIds } },
+        include: {
+          reservationRooms: {
+            where: { status: 'ACTIVE' },
+            include: { room: true },
+          },
+          primaryGuest: true,
+        },
+      })
+    : [];
+  const reservationById = new Map(reservations.map((reservation) => [reservation.id, reservation]));
+
   return charges.map(charge => {
-    const res = charge.folio?.reservation;
+    const operationReservationId = charge.operationId?.match(/^ROOM_CHARGE_([0-9a-f-]{36})_/i)?.[1];
+    const res = charge.folio?.reservation ||
+      (operationReservationId ? reservationById.get(operationReservationId) : undefined);
     const roomNumber = res?.reservationRooms?.[0]?.room?.number || 'Unassigned';
     const guestName = res?.primaryGuest ? `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}` : 'Unknown Guest';
     

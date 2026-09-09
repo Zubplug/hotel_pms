@@ -40,7 +40,9 @@ const PAPER_WIDTHS = [
 const BLANK_PRINTER: Omit<PrinterConfig, 'id'> = {
   name: '',
   printerRole: 'RECEIPT',
-  connectionType: 'NETWORK',
+  // Windows-installed/system printers are discovered through the USB/direct
+  // hardware path. Start there so the POS setup drawer shows them immediately.
+  connectionType: 'USB',
   devicePath: '',
   baudRate: 9600,
   ipAddress: '',
@@ -147,6 +149,7 @@ function PrinterCard({
 
         <div className="mt-4 flex gap-2">
           <button
+            type="button"
             onClick={handleTest}
             disabled={testStatus === 'testing'}
             className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium border border-gray-200 dark:border-[#2a2a2a] rounded-lg hover:bg-gray-50 dark:hover:bg-[#252525] transition-colors disabled:opacity-60"
@@ -155,6 +158,7 @@ function PrinterCard({
             Test Print
           </button>
           <button
+            type="button"
             onClick={onEdit}
             className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium border border-gray-200 dark:border-[#2a2a2a] rounded-lg hover:bg-gray-50 dark:hover:bg-[#252525] transition-colors"
           >
@@ -162,6 +166,7 @@ function PrinterCard({
             Edit
           </button>
           <button
+            type="button"
             onClick={onDelete}
             className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-red-500 border border-red-100 dark:border-red-900/40 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
           >
@@ -191,16 +196,31 @@ function PrinterForm({
   });
   const [availablePorts, setAvailablePorts] = useState<string[]>([]);
   const [discovering, setDiscovering] = useState(false);
+  const [discoveryError, setDiscoveryError] = useState('');
 
   const set = (key: string, val: unknown) => setForm((f) => ({ ...f, [key]: val }));
 
   const discoverPrinters = async () => {
     setDiscovering(true);
+    setDiscoveryError('');
     try {
       const res = await invokeDesktop('hardware.getAvailableHardwarePrinters');
-      if (res?.success && Array.isArray(res.data)) setAvailablePorts(res.data);
-    } catch (e) { console.error(e); }
-    setDiscovering(false);
+      if (!res?.success) {
+        setAvailablePorts([]);
+        setDiscoveryError(res?.error || 'The desktop printer service did not respond.');
+      } else if (Array.isArray(res.data)) {
+        setAvailablePorts(res.data);
+      } else {
+        setAvailablePorts([]);
+        setDiscoveryError('The desktop printer service returned an invalid printer list.');
+      }
+    } catch (e) {
+      console.error('[POS printer discovery]', e);
+      setAvailablePorts([]);
+      setDiscoveryError(e instanceof Error ? e.message : 'Unable to discover system printers.');
+    } finally {
+      setDiscovering(false);
+    }
   };
 
   useEffect(() => {
@@ -285,7 +305,9 @@ function PrinterForm({
                   {availablePorts.map(p => <option key={p} value={p}>{p}</option>)}
                 </select>
               ) : (
-                <div className="text-xs text-amber-600 bg-amber-50 p-2 rounded-lg">No supported printers found. Please enter manually.</div>
+                <div className="text-xs text-amber-600 bg-amber-50 p-2 rounded-lg">
+                  {discoveryError || 'No supported printers found. Please enter manually.'}
+                </div>
               )}
               <input value={form.devicePath} onChange={(e) => set('devicePath', e.target.value)}
                 placeholder={form.connectionType === 'USB' ? 'e.g. Receipt Printer' : 'e.g. COM3 or /dev/ttyS0'}
@@ -350,11 +372,11 @@ function PrinterForm({
         </div>
 
         <div className="px-6 py-4 border-t border-gray-100 dark:border-[#2a2a2a] flex gap-3">
-          <button onClick={onCancel}
+          <button type="button" onClick={onCancel}
             className="flex-1 py-2.5 rounded-xl border border-gray-200 dark:border-[#2a2a2a] text-sm font-medium hover:bg-gray-50 dark:hover:bg-[#252525] transition-colors">
             Cancel
           </button>
-          <button onClick={() => onSave(form)}
+          <button type="button" onClick={() => onSave(form)}
             disabled={saving || !form.name.trim() || (form.connectionType === 'NETWORK' && !form.ipAddress.trim()) || (form.connectionType !== 'NETWORK' && !form.devicePath?.trim())}
             className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
@@ -447,7 +469,7 @@ export function PrinterSettingsView({ onClose }: { onClose?: () => void } = {}) 
               <p className="text-sm text-gray-400">Configure thermal receipt and kitchen printers for this terminal</p>
             </div>
           </div>
-          <button onClick={() => { setEditPrinter(null); setShowForm(true); }}
+          <button type="button" onClick={() => { setEditPrinter(null); setShowForm(true); }}
             className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl transition-colors shadow-sm shadow-indigo-200 dark:shadow-indigo-900/30">
             <Plus className="w-4 h-4" /> Add Printer
           </button>
@@ -473,7 +495,7 @@ export function PrinterSettingsView({ onClose }: { onClose?: () => void } = {}) 
             </div>
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No Printers Configured</h2>
             <p className="text-gray-500 text-sm max-w-xs">Add your first thermal printer to start printing receipts and kitchen order tickets from this terminal.</p>
-            <button onClick={() => { setEditPrinter(null); setShowForm(true); }}
+            <button type="button" onClick={() => { setEditPrinter(null); setShowForm(true); }}
               className="mt-6 flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl transition-colors">
               <Plus className="w-4 h-4" /> Add First Printer
             </button>

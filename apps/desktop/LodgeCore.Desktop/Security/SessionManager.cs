@@ -165,18 +165,22 @@ public class SessionManager
         var query = _dbContext.PosSessions
             .Where(s => s.PropertyId == property.Id && s.Status == PosConstants.SessionStatus.Open);
 
+        var serverBank = await query
+            .Where(s => s.BankType == "SERVER" && (s.UserId == staff.Id || s.PrimaryOperatorId == staff.Id || s.StaffId == staff.Id))
+            .OrderByDescending(s => s.OpenedAt)
+            .FirstOrDefaultAsync();
+
+        if (serverBank != null) return serverBank;
+
         if (string.Equals(property.BankingModel, PosConstants.BankingModels.ServerBanking, StringComparison.OrdinalIgnoreCase))
         {
-            return await query
-                .Where(s => s.UserId == staff.Id || s.PrimaryOperatorId == staff.Id || s.StaffId == staff.Id)
-                .OrderByDescending(s => s.OpenedAt)
-                .FirstOrDefaultAsync();
+            return null;
         }
 
         if (string.Equals(staff.Role, "WAITER", StringComparison.OrdinalIgnoreCase)) return null;
 
         return await query
-            .Where(s => s.DeviceId == deviceId)
+            .Where(s => s.DeviceId == deviceId && s.BankType != "SERVER")
             .OrderByDescending(s => s.OpenedAt)
             .FirstOrDefaultAsync();
     }

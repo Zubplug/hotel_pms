@@ -285,7 +285,7 @@ public class OfflinePMSInterop
             }
 
             var property = await _repo.GetPropertyAsync(propertyId);
-            var actualBankingModel = property?.BankingModel ?? "CENTRAL_CASHIER";
+            var actualBankingModel = bankingModel ?? property?.BankingModel ?? "CENTRAL_CASHIER";
 
             string? posSessionId = null;
             bool requiresBank = false;
@@ -2323,15 +2323,16 @@ public class OfflinePMSInterop
                 }
             }
 
+            if (posSession == null)
+            {
+                posSession = await _repo.GetActiveServerBankAsync(operatorContext.StaffId, operatorContext.PropertyId, terminal?.OutletId ?? string.Empty);
+            }
+
             if (posSession == null && !string.Equals(property?.BankingModel, "SERVER_BANKING", StringComparison.OrdinalIgnoreCase))
             {
                 posSession = await _repo.GetActiveSessionForDeviceAsync(operatorContext.DeviceId);
             }
 
-            if (posSession == null && string.Equals(property?.BankingModel, "SERVER_BANKING", StringComparison.OrdinalIgnoreCase))
-            {
-                posSession = await _repo.GetActiveServerBankAsync(operatorContext.StaffId, operatorContext.PropertyId, terminal?.OutletId ?? string.Empty);
-            }
             if (posSession == null && !string.Equals(property?.BankingModel, "SERVER_BANKING", StringComparison.OrdinalIgnoreCase))
             {
                 posSession = await _repo.GetActiveCentralBankAsync(operatorContext.PropertyId, terminal?.OutletId ?? string.Empty);

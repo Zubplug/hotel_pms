@@ -2438,13 +2438,15 @@ public class LocalRepository
 
         if (reservation == null) return null;
 
+        var property = await _dbContext.Properties.FirstOrDefaultAsync(p => p.Id == room.PropertyId);
+
         return new
         {
             reservationId = reservation.Id,
             checkIn = reservation.CheckInDate,
             checkOut = reservation.CheckOutDate,
             folioBalance = reservation.Folio?.NetBalance ?? 0,
-            currency = "NGN", // Hardcoded for now based on UI
+            currency = property?.Currency ?? "NGN",
             room = new { number = room.Number },
             guest = reservation.Guest != null ? new
             {
@@ -6018,7 +6020,7 @@ public class LocalRepository
                     PayloadJson = JsonSerializer.Serialize(new { 
                         amount = order.TotalAmount, 
                         description = $"Laundry Service - {order.ServiceType}", 
-                        currency = "NGN", 
+                        currency = folio.Currency ?? "NGN", 
                         businessDate = frontdeskSession.BusinessDate,
                         originalBusinessDate = frontdeskSession.BusinessDate,
                         idempotencyKey = idempotencyKey,
