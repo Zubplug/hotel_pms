@@ -167,6 +167,73 @@ public class LocalDbContext : DbContext
         }
     }
 
+    /// <summary>
+    /// Brings databases created by older desktop builds up to the current POS
+    /// settlement model. EnsureCreated() does not add tables or columns to an
+    /// existing SQLite database, so this must remain an additive repair.
+    /// </summary>
+    public async Task ApplyPosSettlementSchemaAsync()
+    {
+        await Database.ExecuteSqlRawAsync(@"
+            CREATE TABLE IF NOT EXISTS PosCashMovements (
+                Id TEXT NOT NULL PRIMARY KEY,
+                PropertyId TEXT NOT NULL,
+                DeviceId TEXT NOT NULL,
+                PosSessionId TEXT NULL,
+                FrontdeskSessionId TEXT NULL,
+                UserId TEXT NOT NULL,
+                Amount TEXT NOT NULL,
+                Currency TEXT NOT NULL DEFAULT 'NGN',
+                Type TEXT NOT NULL,
+                SourceAccountId TEXT NOT NULL DEFAULT '',
+                DestinationAccountId TEXT NOT NULL DEFAULT '',
+                ReasonCode TEXT NOT NULL DEFAULT '',
+                Notes TEXT NULL,
+                ReceiptReference TEXT NULL,
+                OperationId TEXT NOT NULL,
+                BusinessDate TEXT NOT NULL,
+                AuthorizedBy TEXT NULL,
+                CreatedAt TEXT NOT NULL
+            );");
+
+        await Database.ExecuteSqlRawAsync(@"
+            CREATE TABLE IF NOT EXISTS PosSettlements (
+                Id TEXT NOT NULL PRIMARY KEY,
+                SessionId TEXT NOT NULL,
+                PropertyId TEXT NOT NULL,
+                OutletId TEXT NOT NULL,
+                DeviceId TEXT NOT NULL,
+                SessionOwnerId TEXT NOT NULL,
+                OperatorId TEXT NOT NULL,
+                BusinessDate TEXT NOT NULL,
+                ExpectedCash TEXT NOT NULL,
+                ActualCash TEXT NOT NULL,
+                Variance TEXT NOT NULL,
+                AuthorizerId TEXT NULL,
+                SettledAt TEXT NOT NULL,
+                Status TEXT NOT NULL,
+                OperationId TEXT NOT NULL
+            );");
+
+        var columns = new[]
+        {
+            "ALTER TABLE PosCashMovements ADD COLUMN FrontdeskSessionId TEXT NULL",
+            "ALTER TABLE PosCashMovements ADD COLUMN Currency TEXT NOT NULL DEFAULT 'NGN'",
+            "ALTER TABLE PosCashMovements ADD COLUMN SourceAccountId TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE PosCashMovements ADD COLUMN DestinationAccountId TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE PosCashMovements ADD COLUMN ReasonCode TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE PosCashMovements ADD COLUMN ReceiptReference TEXT NULL",
+            "ALTER TABLE PosCashMovements ADD COLUMN AuthorizedBy TEXT NULL"
+        };
+
+        foreach (var sql in columns)
+        {
+            try { await Database.ExecuteSqlRawAsync(sql); }
+            catch (Microsoft.Data.Sqlite.SqliteException ex)
+                when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
+        }
+    }
+
     public async Task ApplyManagerOverrideSchemaAsync()
     {
         var sql = @"

@@ -95,6 +95,7 @@ public static class MauiProgram
             db.Database.EnsureCreated();
             db.ApplyNoShowSchemaAsync().GetAwaiter().GetResult();
             db.ApplyFinancialControlSchemaAsync().GetAwaiter().GetResult();
+            db.ApplyPosSettlementSchemaAsync().GetAwaiter().GetResult();
             db.ApplyManagerOverrideSchemaAsync().GetAwaiter().GetResult();
             db.ApplyDiscountSchemaAsync().GetAwaiter().GetResult();
             db.ApplyCorporateFolioSchemaAsync().GetAwaiter().GetResult();
