@@ -510,20 +510,18 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const corporateAccountIds = [...new Set(
-      finalReservations.map((reservation: any) => reservation.corporateAccountId).filter(Boolean),
-    )];
-    const sharedCorporateFolios = corporateAccountIds.length > 0
-      ? await prisma.folio.findMany({
-          where: {
-            propertyId,
-            corporateAccountId: { in: corporateAccountIds },
-            type: 'CITY_LEDGER',
-            status: 'OPEN',
-          },
-          include: { items: true, payments: true, credits: true },
-        })
-      : [];
+    // Shared corporate folios are independent of reservation.updatedAt. They
+    // must be included on incremental pulls as well, otherwise a payment,
+    // credit application, or night-audit correction on the ledger never
+    // reaches the desktop unless one of the linked reservations changes.
+    const sharedCorporateFolios = await prisma.folio.findMany({
+      where: {
+        propertyId,
+        type: 'CITY_LEDGER',
+        status: 'OPEN',
+      },
+      include: { items: true, payments: true, credits: true },
+    });
     const sharedCorporateFolioByAccount = new Map(
       sharedCorporateFolios.map((folio: any) => [folio.corporateAccountId, folio]),
     );
@@ -531,16 +529,19 @@ export async function GET(req: NextRequest) {
     // Flatten Guests and Folios from the resulting reservations
     const guestMap = new Map<string, any>();
     finalGuests.forEach(g => guestMap.set(g.id, g));
-    const folios: any[] = [];
+    const folioById = new Map<string, any>();
+    const addFolio = (folio: any) => {
+      if (folio?.id) folioById.set(folio.id, folio);
+    };
     const plainReservations = finalReservations.map(r => {
       if (r.primaryGuest) guestMap.set(r.primaryGuest.id, r.primaryGuest);
       r.reservationGuests.forEach((rg: any) => { if (rg.guest) guestMap.set(rg.guest.id, rg.guest); });
-      r.folios.forEach((f: any) => folios.push(f));
+      r.folios.forEach((f: any) => addFolio(f));
       const sharedCorporateFolio = r.corporateAccountId
         ? sharedCorporateFolioByAccount.get(r.corporateAccountId)
         : null;
       if (sharedCorporateFolio && !r.folios.some((f: any) => f.id === sharedCorporateFolio.id)) {
-        folios.push(sharedCorporateFolio);
+        addFolio(sharedCorporateFolio);
       }
 
       const roomId = r.reservationRooms?.[0]?.roomId || null;
@@ -575,6 +576,9 @@ export async function GET(req: NextRequest) {
         pendingDiscountApprovalId: pendingDiscount?.id ?? null,
       };
     });
+
+    sharedCorporateFolios.forEach(addFolio);
+    const folios = Array.from(folioById.values());
     
     // Resolve permissions for staff
     const staffWithPermissions = await Promise.all(
