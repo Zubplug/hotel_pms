@@ -2,6 +2,7 @@ import prisma from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
+import { formatUnit } from '@/lib/inventory/units';
 import { Package, ArrowLeft, Activity, Tag, BarChart2, Building2 } from 'lucide-react';
 
 export default async function StockItemDetailPage(props: { params: Promise<{ id: string }> }) {
@@ -160,11 +161,11 @@ export default async function StockItemDetailPage(props: { params: Promise<{ id:
                         </td>
                         <td className="px-6 py-4 text-right">
                           <span className={`font-semibold ${Number(tx.quantity) > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                            {Number(tx.quantity) > 0 ? '+' : ''}{Number(tx.quantity).toFixed(2)}
+                            {Number(tx.quantity) > 0 ? '+' : ''}{Number(tx.quantity).toFixed(2)} {formatUnit(item.baseUnit)}
                           </span>
                         </td>
                         <td className="px-6 py-4 text-right font-medium text-slate-900">
-                          {Number(tx.quantityAfter).toFixed(2)}
+                          {Number(tx.quantityAfter).toFixed(2)} {formatUnit(item.baseUnit)}
                         </td>
                         <td className="px-6 py-4 text-slate-500 text-xs max-w-[200px] truncate">
                           {tx.reference || tx.notes || '-'}

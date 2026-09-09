@@ -77,7 +77,7 @@ export async function POST(request: Request) {
           : { name: { equals: item.name, mode: 'insensitive' as const } };
       const relatedItems = await tx.stockItem.findMany({
         where: { propertyId, isActive: true, ...itemIdentity },
-        include: { stockUnits: true },
+        include: { stockUnits: true, warehouse: { select: { posOutletId: true } } },
       });
 
       if (overrideBaseUnit && inputUnit !== item.baseUnit) {
@@ -86,17 +86,20 @@ export async function POST(request: Request) {
           throw new Error(`Enter how many ${item.baseUnit} make 1 ${inputUnit}.`);
         }
         for (const related of relatedItems) {
-          const relatedTransactions = await tx.stockTransaction.findMany({ where: { stockItemId: related.id } });
-          for (const transaction of relatedTransactions) {
-            await tx.stockTransaction.update({
-              where: { id: transaction.id },
-              data: {
-                quantity: Number(transaction.quantity) / baseConversion,
-                quantityBefore: Number(transaction.quantityBefore) / baseConversion,
-                quantityAfter: Number(transaction.quantityAfter) / baseConversion,
-                unitCost: Number(transaction.unitCost) * baseConversion,
-              },
-            });
+          const isMainWarehouseItem = related.id === item.id && related.warehouse.posOutletId === null;
+          if (isMainWarehouseItem) {
+            const relatedTransactions = await tx.stockTransaction.findMany({ where: { stockItemId: related.id } });
+            for (const transaction of relatedTransactions) {
+              await tx.stockTransaction.update({
+                where: { id: transaction.id },
+                data: {
+                  quantity: Number(transaction.quantity) / baseConversion,
+                  quantityBefore: Number(transaction.quantityBefore) / baseConversion,
+                  quantityAfter: Number(transaction.quantityAfter) / baseConversion,
+                  unitCost: Number(transaction.unitCost) * baseConversion,
+                },
+              });
+            }
           }
           for (const unit of related.stockUnits) {
             if (unit.unit === inputUnit) {
@@ -112,8 +115,12 @@ export async function POST(request: Request) {
             where: { id: related.id },
             data: {
               baseUnit: inputUnit as UnitOfMeasure,
-              quantityOnHand: Number(related.quantityOnHand) / baseConversion,
-              costPrice: Number(related.costPrice) * baseConversion,
+              ...(related.id === item.id && related.warehouse.posOutletId === null
+                ? {
+                    quantityOnHand: Number(related.quantityOnHand) / baseConversion,
+                    costPrice: Number(related.costPrice) * baseConversion,
+                  }
+                : {}),
             },
           });
         }

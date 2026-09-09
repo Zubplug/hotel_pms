@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
+import { formatUnit } from '@/lib/inventory/units';
 import {
   Package,
   AlertTriangle,
@@ -87,7 +88,7 @@ export default async function InventoryDashboardPage() {
       where: { propertyId, timestamp: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }, warehouse: { posOutletId: null } },
       orderBy: { timestamp: 'desc' },
       take: 200,
-      include: { stockItem: { select: { name: true } } },
+      include: { stockItem: { select: { name: true, baseUnit: true } } },
     }),
   ]);
 
@@ -363,7 +364,7 @@ export default async function InventoryDashboardPage() {
                       <p className="text-xs text-slate-500 capitalize">
                         {txn.source.toLowerCase().replace(/_/g, ' ')} ·{' '}
                         <span className={isIn ? 'text-emerald-600 font-semibold' : 'text-red-500 font-semibold'}>
-                          {isIn ? '+' : ''}{Number(txn.quantity).toString()}
+                          {isIn ? '+' : ''}{Number(txn.quantity).toString()} {formatUnit(txn.stockItem.baseUnit)}
                         </span>
                       </p>
                     </div>
