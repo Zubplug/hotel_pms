@@ -559,6 +559,10 @@ export async function GET(req: NextRequest) {
         roomId,
         roomNumber,
         roomTypeId,
+        // Keep the reservation-room identity stable on the desktop. This is
+        // different from the physical Room.id and is required by follow-up
+        // offline events such as discount and complimentary requests.
+        reservationRoomId: reservationRoom?.id ?? null,
         discountType: reservationRoom?.discountType ?? null,
         discountAmount: reservationRoom?.discountAmount ?? null,
         discountPercent: reservationRoom?.discountPercent ?? null,

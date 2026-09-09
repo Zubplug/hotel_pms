@@ -1313,7 +1313,15 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     {
                         var rr = new LodgeCore.Desktop.Data.Entities.LocalReservationRoom
                         {
-                            Id = Guid.NewGuid().ToString(),
+                            // ReservationRoom.id is the identity used by
+                            // offline discount/complimentary events. Preserve
+                            // the server ID so those events can be replayed
+                            // against the same row after reconnecting.
+                            Id = el.TryGetProperty("reservationRoomId", out var reservationRoomId) &&
+                                 reservationRoomId.ValueKind != System.Text.Json.JsonValueKind.Null &&
+                                 !string.IsNullOrWhiteSpace(reservationRoomId.GetString())
+                                ? reservationRoomId.GetString()!
+                                : Guid.NewGuid().ToString(),
                             ReservationId = id,
                             RoomId = flattenedRoomId,
                             RoomTypeId = el.TryGetProperty("roomTypeId", out var rtid) && rtid.ValueKind != System.Text.Json.JsonValueKind.Null ? rtid.GetString() ?? "" : "",
