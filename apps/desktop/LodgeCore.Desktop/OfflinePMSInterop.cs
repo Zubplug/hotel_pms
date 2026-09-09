@@ -1887,7 +1887,8 @@ public class OfflinePMSInterop
         try
         {
             var ctx = await _sessionManager.GetActiveContextAsync();
-            var res = await _repo.GetServerOrdersAsync(ctx.StaffId, ctx.PropertyId, range, statusFilter, sessionId);
+            string? targetSessionId = string.IsNullOrEmpty(sessionId) ? null : await ResolvePosSessionIdAsync(sessionId, ctx);
+            var res = await _repo.GetServerOrdersAsync(ctx.StaffId, ctx.PropertyId, range, statusFilter, targetSessionId);
             return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
         catch (Exception ex)
@@ -1901,7 +1902,8 @@ public class OfflinePMSInterop
         try
         {
             var ctx = await _sessionManager.GetActiveContextAsync();
-            var res = await _repo.GetServerSalesAsync(ctx.StaffId, ctx.PropertyId, range, sessionId);
+            string? targetSessionId = string.IsNullOrEmpty(sessionId) ? null : await ResolvePosSessionIdAsync(sessionId, ctx);
+            var res = await _repo.GetServerSalesAsync(ctx.StaffId, ctx.PropertyId, range, targetSessionId);
             return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
         catch (Exception ex)
@@ -2037,11 +2039,14 @@ public class OfflinePMSInterop
                 return JsonSerializer.Serialize(new { success = false, error = "Invalid supervisor PIN or unauthorized." }, _jsonOptions);
             }
 
+            var posCtx = await _sessionManager.GetActiveContextAsync();
+            string targetSessionId = await ResolvePosSessionIdAsync(sessionId, posCtx);
+
             // Create movement
-            var res = await _repo.RecordCashMovementAsync(propertyId, sessionId, amount, type, reasonCode, notes, null, authorizer.Id, supervisorPin, ctx.UserId, ctx.DeviceId);
+            var res = await _repo.RecordCashMovementAsync(propertyId, targetSessionId, amount, type, reasonCode, notes, null, authorizer.Id, supervisorPin, ctx.UserId, ctx.DeviceId);
             
             // Log authorization explicitly
-            await _repo.LogAuthorizationAsync(propertyId, sessionId, ctx.UserId, authorizer.Id, type, reasonCode, res.OperationId, ctx.DeviceId);
+            await _repo.LogAuthorizationAsync(propertyId, targetSessionId, ctx.UserId, authorizer.Id, type, reasonCode, res.OperationId, ctx.DeviceId);
 
             return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
@@ -2056,8 +2061,10 @@ public class OfflinePMSInterop
         try
         {
             var ctx = await GetSecureContextAsync();
+            var posCtx = await _sessionManager.GetActiveContextAsync();
+            string? targetSessionId = string.IsNullOrEmpty(sessionId) ? null : await ResolvePosSessionIdAsync(sessionId, posCtx);
             
-            var res = await _repo.RecordReceiptPrintAsync(propertyId, orderId, sessionId, type, reason, printCount, ctx.UserId, ctx.DeviceId);
+            var res = await _repo.RecordReceiptPrintAsync(propertyId, orderId, targetSessionId, type, reason, printCount, ctx.UserId, ctx.DeviceId);
             return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
         catch (Exception ex)
@@ -2421,13 +2428,25 @@ public class OfflinePMSInterop
         }
     }
 
+    private async Task<string> ResolvePosSessionIdAsync(string? providedSessionId, LodgeCore.Desktop.Data.Entities.LocalOperatorContext posCtx)
+    {
+        if (string.IsNullOrWhiteSpace(providedSessionId))
+            return posCtx.SessionId;
+
+        var posSession = await _repo.GetSessionContextAsync(providedSessionId);
+        if (posSession != null)
+            return providedSessionId;
+
+        return posCtx.SessionId;
+    }
+
     public async Task<string> GetCashMovementsAsync(string sessionId)
     {
         try
         {
             var posCtx = await _sessionManager.GetActiveContextAsync();
             // If they pass null/empty or it's for their own session, we use the active one
-            string targetSession = string.IsNullOrEmpty(sessionId) ? posCtx.SessionId : sessionId;
+            string targetSession = await ResolvePosSessionIdAsync(sessionId, posCtx);
             var movements = await _repo.GetCashMovementsAsync(targetSession);
             return JsonSerializer.Serialize(new { success = true, data = movements }, _jsonOptions);
         }
@@ -2442,7 +2461,7 @@ public class OfflinePMSInterop
         try
         {
             var posCtx = await _sessionManager.GetActiveContextAsync();
-            string targetSession = string.IsNullOrEmpty(sessionId) ? posCtx.SessionId : sessionId;
+            string targetSession = await ResolvePosSessionIdAsync(sessionId, posCtx);
             var details = await _repo.GetSessionSettlementDetailsAsync(targetSession);
             var session = await _repo.GetSessionContextAsync(targetSession);
             return JsonSerializer.Serialize(new { 
@@ -2478,7 +2497,7 @@ public class OfflinePMSInterop
         {
             var posCtx = await _sessionManager.GetActiveContextAsync();
             // Enforce identity
-            string targetSessionId = string.IsNullOrEmpty(sessionId) ? posCtx.SessionId : sessionId;
+            string targetSessionId = await ResolvePosSessionIdAsync(sessionId, posCtx);
             var movement = await _repo.RecordCashMovementAsync(posCtx.PropertyId, targetSessionId, amount, type, reasonCode, notes, receiptReference, managerId, managerPin, posCtx.StaffId, posCtx.DeviceId);
             return JsonSerializer.Serialize(new { success = true, data = movement }, _jsonOptions);
         }
@@ -2494,7 +2513,7 @@ public class OfflinePMSInterop
         {
             var posCtx = await _sessionManager.GetActiveContextAsync();
             // Enforce identity
-            string targetSessionId = string.IsNullOrEmpty(sessionId) ? posCtx.SessionId : sessionId;
+            string targetSessionId = await ResolvePosSessionIdAsync(sessionId, posCtx);
             var settlement = await _repo.SettleSessionAsync(targetSessionId, actualCash, posCtx.StaffId, authorizerId, posCtx.DeviceId);
             var closedSession = await _repo.GetSessionContextAsync(targetSessionId);
             
@@ -2750,11 +2769,20 @@ public class OfflinePMSInterop
 
     // ── Printer Configuration Management ──────────────────────────────────────
 
+    private async Task<(string UserId, string DeviceId, string? OutletId)> GetPrinterContextAsync()
+    {
+        // POS waiters authenticate through SessionManager, not the separate
+        // desktop web-login session managed by AuthManager. Printer setup is a
+        // terminal/operator function, so use the trusted POS context here.
+        var context = await _sessionManager.GetActiveContextAsync();
+        return (context.StaffId, context.DeviceId, context.OutletId);
+    }
+
     public async Task<string> GetPrintersAsync()
     {
         try
         {
-            var ctx = await GetSecureContextAsync();
+            var ctx = await GetPrinterContextAsync();
             var printers = await _escPos.GetPrintersAsync(ctx.OutletId);
             return JsonSerializer.Serialize(new { success = true, data = printers }, _jsonOptions);
         }
@@ -2768,7 +2796,7 @@ public class OfflinePMSInterop
     {
         try
         {
-            await GetSecureContextAsync();
+            await GetPrinterContextAsync();
             var config = JsonSerializer.Deserialize<LocalPrinterConfig>(
                 printerConfigJson,
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
@@ -2790,7 +2818,7 @@ public class OfflinePMSInterop
     {
         try
         {
-            await GetSecureContextAsync();
+            await GetPrinterContextAsync();
             await _escPos.DeletePrinterAsync(printerId);
             return JsonSerializer.Serialize(new { success = true }, _jsonOptions);
         }
@@ -2804,7 +2832,7 @@ public class OfflinePMSInterop
     {
         try
         {
-            await GetSecureContextAsync();
+            await GetPrinterContextAsync();
             var printer = JsonSerializer.Deserialize<LocalPrinterConfig>(printerConfigJson, _jsonOptions);
             if (printer == null) throw new Exception("Invalid printer configuration.");
 
@@ -2821,7 +2849,7 @@ public class OfflinePMSInterop
     {
         try
         {
-            await GetSecureContextAsync();
+            await GetPrinterContextAsync();
             var list = await _escPos.GetAvailablePrintersAsync();
             return JsonSerializer.Serialize(new { success = true, data = list }, _jsonOptions);
         }
