@@ -155,7 +155,12 @@ export default function FiredItemActionsModal({
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="replace"><RefreshCcw className="w-4 h-4 mr-2" /> Replace</TabsTrigger>
-            <TabsTrigger value="void"><Trash className="w-4 h-4 mr-2" /> Void</TabsTrigger>
+            <TabsTrigger
+              value="void"
+              className="font-bold text-red-600 data-[state=active]:bg-red-600 data-[state=active]:text-white data-[state=active]:shadow-sm"
+            >
+              <Trash className="w-4 h-4 mr-2" /> VOID ITEM
+            </TabsTrigger>
           </TabsList>
           
           <TabsContent value="replace" className="space-y-4 pt-4">
@@ -227,8 +232,13 @@ export default function FiredItemActionsModal({
               {isSubmitting ? 'Replacing...' : 'Replace Item'}
             </Button>
           ) : (
-            <Button variant="destructive" onClick={() => handleVoid()} disabled={isSubmitting}>
-              {isSubmitting ? 'Voiding...' : 'Confirm Void'}
+            <Button
+              variant="destructive"
+              onClick={() => handleVoid()}
+              disabled={isSubmitting}
+              className="min-w-36 font-bold uppercase shadow-md"
+            >
+              {isSubmitting ? 'Voiding...' : 'VOID ITEM'}
             </Button>
           )}
         </DialogFooter>
