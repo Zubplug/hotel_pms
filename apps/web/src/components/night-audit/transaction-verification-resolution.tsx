@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Dialog,
@@ -13,13 +13,14 @@ import {
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, CheckCircle, HelpCircle, Receipt } from 'lucide-react';
+import { Loader2, CheckCircle, HelpCircle, Receipt, ShieldCheck } from 'lucide-react';
 
 interface TransactionVerificationResolutionProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   transactions: any[]; // Combined unverified transactions
   propertyId: string;
+  onSuccess?: () => void;
 }
 
 export function TransactionVerificationResolution({
@@ -27,6 +28,7 @@ export function TransactionVerificationResolution({
   onOpenChange,
   transactions,
   propertyId,
+  onSuccess,
 }: TransactionVerificationResolutionProps) {
   const router = useRouter();
   
@@ -35,9 +37,20 @@ export function TransactionVerificationResolution({
   const [notes, setNotes] = useState('');
   const [mode, setMode] = useState<'VIEW' | 'QUESTION' | 'SUCCESS'>('VIEW');
   const [successType, setSuccessType] = useState<'VERIFIED' | 'QUESTIONED' | null>(null);
+  const [resolvedIds, setResolvedIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (open) {
+      setCurrentIndex(0);
+      setResolvedIds(new Set());
+      setMode('VIEW');
+      setNotes('');
+      setSuccessType(null);
+    }
+  }, [open]);
 
   // Filter transactions to only those that are UNVERIFIED
-  const unverifiedTransactions = transactions?.filter(t => t.verificationStatus === 'UNVERIFIED') || [];
+  const unverifiedTransactions = transactions?.filter(t => t.verificationStatus === 'UNVERIFIED' && !resolvedIds.has(t.id)) || [];
   
   const handleClose = () => {
     setNotes('');
@@ -53,24 +66,25 @@ export function TransactionVerificationResolution({
     setMode('VIEW');
     setCurrentIndex(0);
     if (unverifiedTransactions.length === 0) {
+      onSuccess?.();
       handleClose();
     }
   };
 
   const transaction = unverifiedTransactions[currentIndex];
-  const isPos = !!transaction.order;
+  const isPos = !!transaction?.order;
   const transactionType = isPos ? 'POS_PAYMENT' : 'PAYMENT';
-  const methodLabel = transaction.method === 'BANK_TRANSFER' ? 'Bank Transfer' : 'POS';
-  const reference = transaction.reference || transaction.providerRef || transaction.providerTransactionId || 'N/A';
+  const methodLabel = transaction?.method === 'BANK_TRANSFER' ? 'Bank Transfer' : 'POS';
+  const reference = transaction?.reference || transaction?.providerRef || transaction?.providerTransactionId || 'N/A';
   
   const cashierName = isPos 
-    ? (transaction.session?.operator?.firstName ? `${transaction.session.operator.firstName} ${transaction.session.operator.lastName}` : 'System')
-    : (transaction.frontdeskSession?.staff?.firstName ? `${transaction.frontdeskSession.staff.firstName} ${transaction.frontdeskSession.staff.lastName}` : 'System');
+    ? (transaction?.session?.operator?.firstName ? `${transaction.session.operator.firstName} ${transaction.session.operator.lastName}` : 'System')
+    : (transaction?.frontdeskSession?.staff?.firstName ? `${transaction.frontdeskSession.staff.firstName} ${transaction.frontdeskSession.staff.lastName}` : 'System');
 
-  const shiftRef = isPos ? transaction.session?.shiftReference : transaction.frontdeskSession?.shiftReference;
-  const folioOrOrder = isPos ? `Order: ${transaction.order?.receiptNumber || transaction.order?.id.slice(-6)}` : `Folio: ${transaction.folio?.folioNumber}`;
-  const location = isPos ? transaction.order?.outlet?.name : 'Front Desk';
-  const guestName = !isPos && transaction.folio?.reservation?.primaryGuest 
+  const shiftRef = isPos ? transaction?.session?.shiftReference : transaction?.frontdeskSession?.shiftReference;
+  const folioOrOrder = isPos ? `Order: ${transaction?.order?.receiptNumber || transaction?.order?.id?.slice(-6)}` : `Folio: ${transaction?.folio?.folioNumber}`;
+  const location = isPos ? transaction?.order?.outlet?.name : 'Front Desk';
+  const guestName = !isPos && transaction?.folio?.reservation?.primaryGuest
     ? `${transaction.folio.reservation.primaryGuest.firstName} ${transaction.folio.reservation.primaryGuest.lastName}` 
     : 'N/A';
 
@@ -111,6 +125,7 @@ export function TransactionVerificationResolution({
       // alert(status === 'VERIFIED' ? 'Transaction verified successfully.' : 'Transaction marked as questioned.');
 
       // Instead of proceeding directly, show the success UI
+      setResolvedIds((current) => new Set(current).add(transaction.id));
       setSuccessType(status);
       setMode('SUCCESS');
       
@@ -126,7 +141,7 @@ export function TransactionVerificationResolution({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[640px] p-0 overflow-hidden">
         {unverifiedTransactions.length === 0 && mode !== 'SUCCESS' ? (
           <>
             <DialogHeader>
@@ -142,19 +157,34 @@ export function TransactionVerificationResolution({
           </>
         ) : (
           <>
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Receipt className="w-5 h-5 text-blue-500" />
-                Transaction Verification
-              </DialogTitle>
-              <DialogDescription>
-                {mode === 'SUCCESS' ? 'Status updated successfully.' : `Review the transaction details and compare them with the physical or digital receipt. (${unverifiedTransactions.length} remaining)`}
-              </DialogDescription>
-            </DialogHeader>
+            <div className="bg-slate-950 px-6 py-5 text-white">
+              <DialogHeader>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <DialogTitle className="flex items-center gap-2 text-white">
+                      <ShieldCheck className="w-5 h-5 text-indigo-300" />
+                      Transaction verification
+                    </DialogTitle>
+                    <DialogDescription className="mt-1 text-slate-400">
+                      Review each receipt before closing the business date.
+                    </DialogDescription>
+                  </div>
+                  {unverifiedTransactions.length > 0 && (
+                    <span className="shrink-0 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-indigo-200">
+                      {unverifiedTransactions.length} remaining
+                    </span>
+                  )}
+                </div>
+              </DialogHeader>
+            </div>
 
             {mode === 'VIEW' ? (
-          <div className="space-y-4 py-4">
-            <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg border">
+          <div className="space-y-5 p-6">
+            <div className="flex items-center justify-between text-xs font-medium text-slate-500">
+              <span>Receipt {currentIndex + 1} of {currentIndex + unverifiedTransactions.length}</span>
+              <span className="inline-flex items-center gap-1 text-rose-600"><Receipt className="h-3.5 w-3.5" /> Action required</span>
+            </div>
+            <div className="bg-slate-50 dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800">
               <div className="grid grid-cols-2 gap-y-3 text-sm">
                 <div className="text-muted-foreground">Amount</div>
                 <div className="font-bold text-lg text-right">{formatCurrency(Number(transaction.amount), transaction.currency)}</div>
@@ -189,17 +219,17 @@ export function TransactionVerificationResolution({
               </div>
             </div>
             
-            <div className="flex justify-between items-center pt-2">
+            <div className="flex justify-between items-center gap-3 pt-2">
               <Button
                 variant="outline"
-                className="w-1/2 mr-2 text-amber-600 border-amber-200 hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-950"
+                className="flex-1 text-amber-600 border-amber-200 hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-950"
                 onClick={() => setMode('QUESTION')}
               >
                 <HelpCircle className="w-4 h-4 mr-2" />
                 Question
               </Button>
               <Button
-                className="w-1/2 ml-2 bg-green-600 hover:bg-green-700 text-white"
+                className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
                 onClick={() => handleVerify('VERIFIED')}
                 disabled={isSubmitting}
               >

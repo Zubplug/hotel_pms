@@ -46,7 +46,7 @@ export function ResolutionManager({ action, onClose, onSuccess }: Props) {
         {action.type === 'FOLIO_PREVIEW' && <FolioPreview item={action.item} onClose={onClose} />}
         {action.type === 'SYNC_CONFLICT' && <FinancialSyncResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
         {action.type === 'CASH_HANDOVER' && <CashHandoverResolution propertyId={action.item.propertyId} baseCurrency="NGN" handover={action.item} onSuccess={onSuccess} onClose={onClose} />}
-        {action.type === 'TRANSACTION_VERIFICATION' && <TransactionVerificationResolution propertyId={action.item.propertyId} transactions={action.item.unverifiedTransactions} onOpenChange={(open) => !open && onClose()} open={true} />}
+        {action.type === 'TRANSACTION_VERIFICATION' && <TransactionVerificationResolution propertyId={action.item.propertyId} transactions={action.item.unverifiedTransactions} onOpenChange={(open) => !open && onClose()} onSuccess={onSuccess} open={true} />}
         {action.type === 'DISCOUNT_APPROVAL' && <DiscountApprovalResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
         {action.type === 'COMPLIMENTARY_VERIFICATION' && <ComplimentaryVerificationResolution propertyId={action.item.propertyId} records={action.item.records} onOpenChange={(open) => !open && onClose()} open={true} onSuccess={onSuccess} />}
         {action.type === 'CHECKIN_BYPASS' && <CheckinBypassResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
