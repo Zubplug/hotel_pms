@@ -603,9 +603,9 @@ export default function PosApp() {
           try {
              const receiptRes = await provider.pos.getReceipt(currentOrderId);
              if (receiptRes && receiptRes.data) {
-                await HardwareBridge.printReceipt(toReceiptPrintData(receiptRes.data));
+                await HardwareBridge.printReceipt(toReceiptPrintData(receiptRes.data, false, true));
              } else if (receiptRes && !receiptRes.error) {
-                await HardwareBridge.printReceipt(toReceiptPrintData(receiptRes));
+                await HardwareBridge.printReceipt(toReceiptPrintData(receiptRes, false, true));
              }
           } catch(e) {
              console.error('Auto receipt print failed', e);

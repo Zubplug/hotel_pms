@@ -32,7 +32,8 @@ public record ReceiptData(
     string? PropertyName,
     string? PropertyAddress,
     DateTime PrintedAt,
-    bool IsReprint = false
+    bool IsReprint = false,
+    bool IsStaffCopy = false
 );
 
 public record ReceiptItem(

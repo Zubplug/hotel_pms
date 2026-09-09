@@ -442,10 +442,9 @@ public class EscPosService
             return builder.Build();
         }
 
-        var customerCopy = await SendToPrinterAsync(printer, BuildCopy("CUSTOMER COPY", printer.OpenCashDrawer));
-        if (!customerCopy.success)
-            return customerCopy;
-        return await SendToPrinterAsync(printer, BuildCopy("STAFF COPY", false));
+        return await SendToPrinterAsync(
+            printer,
+            BuildCopy(receipt.IsStaffCopy ? "STAFF COPY" : "CUSTOMER COPY", printer.OpenCashDrawer));
     }
 
     public async Task<(bool success, string? error)> PrintKotAsync(KotData kot, string? outletId = null)

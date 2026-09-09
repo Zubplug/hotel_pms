@@ -17,6 +17,7 @@ export interface ReceiptData {
   propertyAddress?: string;
   printedAt: string;
   isReprint?: boolean;
+  isStaffCopy?: boolean;
 }
 
 export interface KitchenTicketData {
@@ -32,7 +33,7 @@ export interface KitchenTicketData {
 /** Converts both the desktop audit receipt and the online order receipt into
  * the stable printer payload. The desktop audit shape intentionally differs
  * from the customer-facing print shape. */
-export function toReceiptPrintData(source: any, isReprint = false): ReceiptData {
+export function toReceiptPrintData(source: any, isReprint = false, isStaffCopy = false): ReceiptData {
   const receipt = source?.data ?? source ?? {};
   const payment = receipt.payments?.[receipt.payments.length - 1] ?? {};
   const audit = receipt.auditChain ?? {};
@@ -73,6 +74,7 @@ export function toReceiptPrintData(source: any, isReprint = false): ReceiptData 
     propertyAddress: receipt.propertyAddress ?? audit.propertyAddress,
     printedAt: receipt.printedAt ?? new Date().toISOString(),
     isReprint,
+    isStaffCopy,
   };
 }
 
