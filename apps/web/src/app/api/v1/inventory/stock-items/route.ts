@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
+import { randomUUID } from 'crypto';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { hasInventoryPermission } from '@/lib/inventory/permissions';
 import { requireOrganizationContext } from "@/lib/organization-access";
+import { generateStockBarcode, generateStockSku } from '@/lib/inventory/identifiers';
 
 const STOCK_ITEM_TYPES = ['SELLABLE', 'RAW_MATERIAL', 'CONSUMABLE', 'CLEANING', 'HOUSEKEEPING', 'ASSET', 'PACKAGING'] as const;
 
@@ -97,13 +99,26 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Warehouse not found or unauthorized', data: null }, { status: 404 });
         }
 
+        const seed = randomUUID();
+        const generatedSku = String(sku || '').trim() || generateStockSku(seed);
+        let generatedBarcode = String(barcode || '').trim();
+        for (let attempt = 0; !generatedBarcode && attempt < 10; attempt++) {
+            const candidate = generateStockBarcode(ctx.propertyIds[0], seed, attempt);
+            const existingBarcode = await prisma.stockItem.findFirst({
+                where: { propertyId: ctx.propertyIds[0], barcode: candidate },
+                select: { id: true },
+            });
+            if (!existingBarcode) generatedBarcode = candidate;
+        }
+        if (!generatedBarcode) return NextResponse.json({ error: 'Could not generate a unique barcode', data: null }, { status: 409 });
+
         const item = await prisma.stockItem.create({
             data: {
                 propertyId: ctx.propertyIds[0],
                 warehouseId,
                 name,
-                sku,
-                barcode,
+                sku: generatedSku,
+                barcode: generatedBarcode,
                 baseUnit,
                 stockType,
                 costPrice: 0, // Default to 0, MAC computes actual cost on first GRN

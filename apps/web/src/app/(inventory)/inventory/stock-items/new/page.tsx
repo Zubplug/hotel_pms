@@ -87,12 +87,12 @@ export default function NewStockItemPage() {
 
             <div className="space-y-2">
               <label htmlFor="sku" className="text-sm font-medium text-slate-800">SKU</label>
-              <input id="sku" name="sku" type="text" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Optional" />
+              <input id="sku" name="sku" type="text" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Auto-generated if blank" />
             </div>
 
             <div className="space-y-2">
               <label htmlFor="barcode" className="text-sm font-medium text-slate-800">Barcode</label>
-              <input id="barcode" name="barcode" type="text" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Optional" />
+              <input id="barcode" name="barcode" type="text" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Auto-generated if blank" />
             </div>
 
             <div className="space-y-2">
