@@ -10,7 +10,7 @@ export default async function WarehousesPage() {
   if (!session?.user?.propertyId) return null;
 
   const warehouses = await prisma.warehouse.findMany({
-    where: { propertyId: session.user.propertyId },
+    where: { propertyId: session.user.propertyId, posOutletId: null },
     include: { _count: { select: { stockItems: true } } },
   });
 

@@ -46,7 +46,7 @@ export default async function StockItemsPage({ searchParams }: { searchParams: P
   const selectedType = STOCK_TYPE_FILTERS.some((type) => type.value === params.type) ? params.type : '';
 
   const stockItems = await prisma.stockItem.findMany({
-    where: { propertyId: session.user.propertyId, isActive: true, ...(selectedType ? { stockType: selectedType as any } : {}) },
+    where: { propertyId: session.user.propertyId, isActive: true, warehouse: { posOutletId: null }, ...(selectedType ? { stockType: selectedType as any } : {}) },
     include: {
       warehouse: { select: { name: true } },
       inventoryCategory: { select: { name: true } },

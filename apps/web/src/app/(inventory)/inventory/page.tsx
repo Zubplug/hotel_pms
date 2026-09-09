@@ -38,7 +38,7 @@ export default async function InventoryDashboardPage() {
     recentActivity,
   ] = await Promise.all([
     prisma.stockItem.findMany({
-      where: { propertyId, isActive: true },
+      where: { propertyId, isActive: true, warehouse: { posOutletId: null } },
       select: {
         id: true,
         name: true,
@@ -84,7 +84,7 @@ export default async function InventoryDashboardPage() {
       select: { id: true, status: true, requestedAt: true },
     }),
     prisma.stockTransaction.findMany({
-      where: { propertyId, timestamp: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } },
+      where: { propertyId, timestamp: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }, warehouse: { posOutletId: null } },
       orderBy: { timestamp: 'desc' },
       take: 200,
       include: { stockItem: { select: { name: true } } },
@@ -148,7 +148,7 @@ export default async function InventoryDashboardPage() {
     {
       label: 'Total Stock Value',
       value: `₦${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-      sub: 'Across all warehouses',
+      sub: 'Across main warehouses',
       icon: CreditCard,
       accent: 'border-l-emerald-500',
       iconBg: 'bg-emerald-500/10',
