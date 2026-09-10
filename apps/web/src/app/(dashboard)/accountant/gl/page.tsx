@@ -33,7 +33,7 @@ export default async function GeneralLedgerPage() {
   }) : [];
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount).replace('$', '₦');
+    return '₦' + new Intl.NumberFormat('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
   };
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 p-6 md:p-8 space-y-8">

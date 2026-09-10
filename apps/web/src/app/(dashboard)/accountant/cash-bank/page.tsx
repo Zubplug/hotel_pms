@@ -52,7 +52,7 @@ export default async function CashBankPage() {
   const totalBankBalance = 245600.80; // Hardcoded mock for operating balance unless we query CashAccount
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount).replace('$', '₦');
+    return '₦' + new Intl.NumberFormat('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
   };
 
   return (

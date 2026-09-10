@@ -39,7 +39,7 @@ export default function AccountantOverviewPage() {
   }
 
   const formatCurrency = (amount: number = 0) => {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+    return '₦' + new Intl.NumberFormat('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
   };
 
   const currentRev = kpis?.revenue?.today || 0;

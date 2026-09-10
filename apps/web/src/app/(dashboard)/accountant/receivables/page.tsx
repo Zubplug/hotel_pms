@@ -33,7 +33,7 @@ export default async function ReceivablesPage() {
   const totalOutstanding = accounts.reduce((sum, acc) => sum + Number(acc.balance), 0);
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount).replace('$', '₦');
+    return '₦' + new Intl.NumberFormat('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
   };
 
   return (

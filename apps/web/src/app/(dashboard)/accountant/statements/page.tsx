@@ -98,7 +98,7 @@ function ProfitAndLossStatement() {
           <thead className="bg-slate-900/80 text-slate-300">
             <tr>
               <th className="px-6 py-4 font-medium">Category</th>
-              <th className="px-6 py-4 font-medium text-right">Amount (USD)</th>
+              <th className="px-6 py-4 font-medium text-right">Amount (₦)</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/50">
@@ -106,7 +106,7 @@ function ProfitAndLossStatement() {
               <tr key={i} className="hover:bg-slate-800/30 transition-colors">
                 <td className="px-6 py-4 text-slate-300">{item.category}</td>
                 <td className={`px-6 py-4 text-right font-medium ₦{item.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  {item.amount > 0 ? '+' : ''}{item.amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                  {item.amount > 0 ? '+' : ''}{item.amount.toLocaleString('en-NG', { style: 'currency', currency: 'NGN' }).replace('NGN', '₦').replace('₦ ', '₦')}
                 </td>
               </tr>
             ))}
@@ -115,7 +115,7 @@ function ProfitAndLossStatement() {
             <tr>
               <td className="px-6 py-4 font-bold text-white">Net Income</td>
               <td className={`px-6 py-4 text-right font-bold ₦{netIncome >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                {netIncome.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                {netIncome.toLocaleString('en-NG', { style: 'currency', currency: 'NGN' }).replace('NGN', '₦').replace('₦ ', '₦')}
               </td>
             </tr>
           </tfoot>
@@ -155,12 +155,12 @@ function BalanceSheet() {
         {data.map((item, i) => (
           <div key={i} className="flex justify-between py-2 text-sm text-slate-300">
             <span>{item.item}</span>
-            <span>{item.amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</span>
+            <span>{item.amount.toLocaleString('en-NG', { style: 'currency', currency: 'NGN' }).replace('NGN', '₦').replace('₦ ', '₦')}</span>
           </div>
         ))}
         <div className="flex justify-between py-3 text-sm font-bold text-white border-t border-slate-800 mt-2">
           <span>Total {title}</span>
-          <span>{total.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</span>
+          <span>{total.toLocaleString('en-NG', { style: 'currency', currency: 'NGN' }).replace('NGN', '₦').replace('₦ ', '₦')}</span>
         </div>
       </div>
     </div>
@@ -178,7 +178,7 @@ function BalanceSheet() {
         <div className="bg-slate-900/50 border border-slate-700 p-4 rounded-lg flex justify-between items-center">
           <span className="font-medium text-slate-300">Liabilities + Equity</span>
           <span className="font-bold text-emerald-400">
-            {(totalLiabilities + totalEquity).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+            {(totalLiabilities + totalEquity).toLocaleString('en-NG', { style: 'currency', currency: 'NGN' }).replace('NGN', '₦').replace('₦ ', '₦')}
           </span>
         </div>
       </div>
@@ -223,7 +223,7 @@ function CashFlowStatement() {
                 <div key={j} className="flex justify-between text-slate-300">
                   <span>{item.name}</span>
                   <span className={item.amount < 0 ? 'text-rose-400' : 'text-slate-300'}>
-                    {item.amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                    {item.amount.toLocaleString('en-NG', { style: 'currency', currency: 'NGN' }).replace('NGN', '₦').replace('₦ ', '₦')}
                   </span>
                 </div>
               ))}
@@ -231,7 +231,7 @@ function CashFlowStatement() {
             <div className="mt-4 pt-3 border-t border-slate-800 flex justify-between font-bold text-sm">
               <span className="text-white">Net Cash from {section.title}</span>
               <span className={subtotal < 0 ? 'text-rose-400' : 'text-emerald-400'}>
-                {subtotal.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                {subtotal.toLocaleString('en-NG', { style: 'currency', currency: 'NGN' }).replace('NGN', '₦').replace('₦ ', '₦')}
               </span>
             </div>
           </div>
@@ -247,7 +247,7 @@ function SummaryCard({ title, amount, type }: { title: string, amount: number, t
       <h3 className="text-sm font-medium text-slate-400 mb-2">{title}</h3>
       <div className="flex items-end gap-3">
         <span className="text-2xl font-bold text-white">
-          {amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+          {amount.toLocaleString('en-NG', { style: 'currency', currency: 'NGN' }).replace('NGN', '₦').replace('₦ ', '₦')}
         </span>
         {type === 'positive' ? (
           <div className="flex items-center text-xs font-medium text-emerald-400 mb-1">
