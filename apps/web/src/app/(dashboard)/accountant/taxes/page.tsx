@@ -6,18 +6,18 @@ import { Badge } from '@/components/ui/badge';
 import { Landmark, FileSpreadsheet, CheckCircle2, Clock, AlertCircle, CalendarDays, ArrowRight, Download } from 'lucide-react';
 
 const MOCK_TAX_SUMMARY = [
-  { type: 'State Sales Tax', collected: '$45,230.50', rate: '6.5%', due: '2024-10-20' },
-  { type: 'City Occupancy Tax', collected: '$18,450.00', rate: '4.0%', due: '2024-10-15' },
-  { type: 'County Tourism Tax', collected: '$9,225.25', rate: '2.0%', due: '2024-10-20' },
-  { type: 'Federal Payroll Tax', collected: '$32,100.00', rate: 'Varies', due: '2024-09-30' },
+  { type: 'State Sales Tax', collected: '₦45,230.50', rate: '6.5%', due: '2024-10-20' },
+  { type: 'City Occupancy Tax', collected: '₦18,450.00', rate: '4.0%', due: '2024-10-15' },
+  { type: 'County Tourism Tax', collected: '₦9,225.25', rate: '2.0%', due: '2024-10-20' },
+  { type: 'Federal Payroll Tax', collected: '₦32,100.00', rate: 'Varies', due: '2024-09-30' },
 ];
 
 const MOCK_REMITTANCES = [
-  { id: 'REM-0924-A', period: 'August 2024', type: 'City Occupancy Tax', amount: '$17,890.00', status: 'Pending', dueDate: '2024-09-15' },
-  { id: 'REM-0924-B', period: 'August 2024', type: 'State Sales Tax', amount: '$43,100.50', status: 'Processing', dueDate: '2024-09-20' },
-  { id: 'REM-0824-A', period: 'July 2024', type: 'County Tourism Tax', amount: '$8,950.25', status: 'Paid', dueDate: '2024-08-20' },
-  { id: 'REM-0824-B', period: 'July 2024', type: 'State Sales Tax', amount: '$42,500.00', status: 'Paid', dueDate: '2024-08-20' },
-  { id: 'REM-0824-C', period: 'Q2 2024', type: 'Corporate Income Tax', amount: '$125,000.00', status: 'Paid', dueDate: '2024-07-15' },
+  { id: 'REM-0924-A', period: 'August 2024', type: 'City Occupancy Tax', amount: '₦17,890.00', status: 'Pending', dueDate: '2024-09-15' },
+  { id: 'REM-0924-B', period: 'August 2024', type: 'State Sales Tax', amount: '₦43,100.50', status: 'Processing', dueDate: '2024-09-20' },
+  { id: 'REM-0824-A', period: 'July 2024', type: 'County Tourism Tax', amount: '₦8,950.25', status: 'Paid', dueDate: '2024-08-20' },
+  { id: 'REM-0824-B', period: 'July 2024', type: 'State Sales Tax', amount: '₦42,500.00', status: 'Paid', dueDate: '2024-08-20' },
+  { id: 'REM-0824-C', period: 'Q2 2024', type: 'Corporate Income Tax', amount: '₦125,000.00', status: 'Paid', dueDate: '2024-07-15' },
 ];
 
 export default function TaxesPage() {
@@ -116,9 +116,9 @@ export default function TaxesPage() {
                     <Badge 
                       variant="outline" 
                       className={`
-                        ${remittance.status === 'Paid' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : ''}
-                        ${remittance.status === 'Pending' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : ''}
-                        ${remittance.status === 'Processing' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : ''}
+                        ₦{remittance.status === 'Paid' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : ''}
+                        ₦{remittance.status === 'Pending' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : ''}
+                        ₦{remittance.status === 'Processing' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : ''}
                       `}
                     >
                       {remittance.status === 'Paid' && <CheckCircle2 className="w-3 h-3 mr-1" />}

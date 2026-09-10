@@ -37,7 +37,7 @@ export default function ReportsPage() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-all ${
+              className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-all ₦{
                 activeTab === tab.id
                   ? "border-emerald-500 text-emerald-400 bg-emerald-500/10 rounded-t-lg"
                   : "border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-900/50 rounded-t-lg"

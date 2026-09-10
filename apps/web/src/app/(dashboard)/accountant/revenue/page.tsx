@@ -12,18 +12,18 @@ import {
 
 export default function RevenueAccountingPage() {
   const snapshotData = [
-    { title: 'Total Revenue', value: '$24,500', change: '+12.5%', isUp: true, icon: DollarSign },
-    { title: 'Room Revenue', value: '$18,200', change: '+8.2%', isUp: true, icon: Bed },
-    { title: 'F&B Revenue', value: '$4,300', change: '-2.4%', isUp: false, icon: Coffee },
-    { title: 'RevPAR', value: '$185.50', change: '+15.3%', isUp: true, icon: TrendingUp },
+    { title: 'Total Revenue', value: '₦24,500', change: '+12.5%', isUp: true, icon: DollarSign },
+    { title: 'Room Revenue', value: '₦18,200', change: '+8.2%', isUp: true, icon: Bed },
+    { title: 'F&B Revenue', value: '₦4,300', change: '-2.4%', isUp: false, icon: Coffee },
+    { title: 'RevPAR', value: '₦185.50', change: '+15.3%', isUp: true, icon: TrendingUp },
   ];
 
   const revenueStreams = [
-    { id: 1, department: 'Rooms', today: '$18,200', mtd: '$245,000', ytd: '$1,850,000', variance: '+5.2%', isUp: true },
-    { id: 2, department: 'Food & Beverage', today: '$4,300', mtd: '$85,400', ytd: '$640,000', variance: '-1.5%', isUp: false },
-    { id: 3, department: 'Spa & Wellness', today: '$1,200', mtd: '$18,500', ytd: '$145,000', variance: '+12.4%', isUp: true },
-    { id: 4, department: 'Events & Catering', today: '$800', mtd: '$45,000', ytd: '$380,000', variance: '+8.7%', isUp: true },
-    { id: 5, department: 'Other Operations', today: '$0', mtd: '$4,200', ytd: '$35,000', variance: '-0.5%', isUp: false },
+    { id: 1, department: 'Rooms', today: '₦18,200', mtd: '₦245,000', ytd: '₦1,850,000', variance: '+5.2%', isUp: true },
+    { id: 2, department: 'Food & Beverage', today: '₦4,300', mtd: '₦85,400', ytd: '₦640,000', variance: '-1.5%', isUp: false },
+    { id: 3, department: 'Spa & Wellness', today: '₦1,200', mtd: '₦18,500', ytd: '₦145,000', variance: '+12.4%', isUp: true },
+    { id: 4, department: 'Events & Catering', today: '₦800', mtd: '₦45,000', ytd: '₦380,000', variance: '+8.7%', isUp: true },
+    { id: 5, department: 'Other Operations', today: '₦0', mtd: '₦4,200', ytd: '₦35,000', variance: '-0.5%', isUp: false },
   ];
 
   return (
@@ -56,7 +56,7 @@ export default function RevenueAccountingPage() {
                   <div className="p-2 bg-white/5 rounded-lg border border-white/5">
                     <Icon className="h-5 w-5 text-emerald-400" />
                   </div>
-                  <div className={`flex items-center gap-1 text-sm font-medium ${item.isUp ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  <div className={`flex items-center gap-1 text-sm font-medium ₦{item.isUp ? 'text-emerald-400' : 'text-rose-400'}`}>
                     {item.isUp ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
                     {item.change}
                   </div>
@@ -97,7 +97,7 @@ export default function RevenueAccountingPage() {
                     <td className="px-6 py-4 text-slate-300">{stream.mtd}</td>
                     <td className="px-6 py-4 text-slate-300">{stream.ytd}</td>
                     <td className="px-6 py-4">
-                      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border ${
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border ₦{
                         stream.isUp 
                           ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
                           : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
@@ -112,9 +112,9 @@ export default function RevenueAccountingPage() {
               <tfoot className="bg-white/5 border-t border-white/10 font-medium">
                 <tr>
                   <td className="px-6 py-4 text-white">Total</td>
-                  <td className="px-6 py-4 text-emerald-400">$24,500</td>
-                  <td className="px-6 py-4 text-emerald-400">$398,100</td>
-                  <td className="px-6 py-4 text-emerald-400">$3,050,000</td>
+                  <td className="px-6 py-4 text-emerald-400">₦24,500</td>
+                  <td className="px-6 py-4 text-emerald-400">₦398,100</td>
+                  <td className="px-6 py-4 text-emerald-400">₦3,050,000</td>
                   <td className="px-6 py-4 text-emerald-400">+6.8%</td>
                 </tr>
               </tfoot>

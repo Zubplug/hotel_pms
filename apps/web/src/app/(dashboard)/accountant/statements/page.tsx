@@ -46,7 +46,7 @@ export default function StatementsPage() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ₦{
                 activeTab === tab.id
                   ? "border-emerald-500 text-emerald-400"
                   : "border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-700"
@@ -105,7 +105,7 @@ function ProfitAndLossStatement() {
             {plData.map((item, i) => (
               <tr key={i} className="hover:bg-slate-800/30 transition-colors">
                 <td className="px-6 py-4 text-slate-300">{item.category}</td>
-                <td className={`px-6 py-4 text-right font-medium ${item.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                <td className={`px-6 py-4 text-right font-medium ₦{item.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
                   {item.amount > 0 ? '+' : ''}{item.amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
                 </td>
               </tr>
@@ -114,7 +114,7 @@ function ProfitAndLossStatement() {
           <tfoot className="bg-slate-900/50 border-t border-slate-700">
             <tr>
               <td className="px-6 py-4 font-bold text-white">Net Income</td>
-              <td className={`px-6 py-4 text-right font-bold ${netIncome >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+              <td className={`px-6 py-4 text-right font-bold ₦{netIncome >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                 {netIncome.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
               </td>
             </tr>

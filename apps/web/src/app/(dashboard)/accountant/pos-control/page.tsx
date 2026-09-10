@@ -43,7 +43,7 @@ export default function POSControlPage() {
             <FileText className="h-4 w-4 text-emerald-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-white">$3,470.50</div>
+            <div className="text-2xl font-bold text-white">₦3,470.50</div>
             <p className="text-xs text-slate-400 mt-1">+12% from yesterday</p>
           </CardContent>
         </Card>
@@ -54,7 +54,7 @@ export default function POSControlPage() {
             <HandCoins className="h-4 w-4 text-amber-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-rose-400">-$5.00</div>
+            <div className="text-2xl font-bold text-rose-400">-₦5.00</div>
             <p className="text-xs text-slate-400 mt-1">Across all closed shifts</p>
           </CardContent>
         </Card>
@@ -65,7 +65,7 @@ export default function POSControlPage() {
             <UserX className="h-4 w-4 text-emerald-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-white">$187.00</div>
+            <div className="text-2xl font-bold text-white">₦187.00</div>
             <p className="text-xs text-slate-400 mt-1">3 transactions today</p>
           </CardContent>
         </Card>
@@ -109,11 +109,11 @@ export default function POSControlPage() {
                   <TableCell className="font-medium text-slate-300">{shift.shiftId}</TableCell>
                   <TableCell className="text-slate-300">{shift.terminal}</TableCell>
                   <TableCell className="text-slate-300">{shift.cashier}</TableCell>
-                  <TableCell className="text-right text-slate-300">${shift.netSales.toFixed(2)}</TableCell>
-                  <TableCell className="text-right text-slate-300">${shift.cashCollected.toFixed(2)}</TableCell>
-                  <TableCell className="text-right text-slate-300">${shift.cardCollected.toFixed(2)}</TableCell>
-                  <TableCell className={`text-right ${shift.variance < 0 ? 'text-rose-400' : 'text-slate-300'}`}>
-                    ${shift.variance.toFixed(2)}
+                  <TableCell className="text-right text-slate-300">₦{shift.netSales.toFixed(2)}</TableCell>
+                  <TableCell className="text-right text-slate-300">₦{shift.cashCollected.toFixed(2)}</TableCell>
+                  <TableCell className="text-right text-slate-300">₦{shift.cardCollected.toFixed(2)}</TableCell>
+                  <TableCell className={`text-right ₦{shift.variance < 0 ? 'text-rose-400' : 'text-slate-300'}`}>
+                    ₦{shift.variance.toFixed(2)}
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline" className={
@@ -164,7 +164,7 @@ export default function POSControlPage() {
                       <div className="text-xs text-slate-500">Appr: {vc.approvedBy}</div>
                     </TableCell>
                     <TableCell className="text-right text-slate-300 font-medium">
-                      ${vc.amount.toFixed(2)}
+                      ₦{vc.amount.toFixed(2)}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -199,7 +199,7 @@ export default function POSControlPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center">
-                        <div className={`w-2 h-2 rounded-full mr-2 ${terminal.status === 'Online' ? 'bg-emerald-500' : 'bg-rose-500 animate-pulse'}`}></div>
+                        <div className={`w-2 h-2 rounded-full mr-2 ₦{terminal.status === 'Online' ? 'bg-emerald-500' : 'bg-rose-500 animate-pulse'}`}></div>
                         <span className={terminal.status === 'Online' ? 'text-emerald-400' : 'text-rose-400'}>{terminal.status}</span>
                       </div>
                     </TableCell>

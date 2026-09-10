@@ -13,18 +13,18 @@ import {
 } from 'lucide-react';
 
 const AR_AGING_SUMMARY = [
-  { label: 'Current (0-30 Days)', amount: '$45,231.00', count: 24, status: 'healthy' },
-  { label: '31-60 Days', amount: '$12,450.50', count: 8, status: 'warning' },
-  { label: '61-90 Days', amount: '$4,120.00', count: 3, status: 'danger' },
-  { label: '90+ Days', amount: '$1,850.00', count: 2, status: 'critical' },
+  { label: 'Current (0-30 Days)', amount: '₦45,231.00', count: 24, status: 'healthy' },
+  { label: '31-60 Days', amount: '₦12,450.50', count: 8, status: 'warning' },
+  { label: '61-90 Days', amount: '₦4,120.00', count: 3, status: 'danger' },
+  { label: '90+ Days', amount: '₦1,850.00', count: 2, status: 'critical' },
 ];
 
 const UNPAID_ACCOUNTS = [
-  { id: 'INV-2026-001', company: 'Acme Corp', type: 'City Ledger', amount: '$4,500.00', dueDate: '2026-09-15', status: 'Pending', daysOverdue: 0 },
-  { id: 'INV-2026-042', company: 'Globex Inc', type: 'Corporate', amount: '$12,300.00', dueDate: '2026-08-10', status: 'Overdue', daysOverdue: 31 },
-  { id: 'INV-2026-088', company: 'Stark Industries', type: 'City Ledger', amount: '$1,850.00', dueDate: '2026-06-01', status: 'Critical', daysOverdue: 101 },
-  { id: 'INV-2026-102', company: 'Wayne Enterprises', type: 'Corporate', amount: '$8,200.00', dueDate: '2026-09-20', status: 'Pending', daysOverdue: 0 },
-  { id: 'INV-2026-115', company: 'Initech', type: 'City Ledger', amount: '$2,150.50', dueDate: '2026-07-15', status: 'Overdue', daysOverdue: 57 },
+  { id: 'INV-2026-001', company: 'Acme Corp', type: 'City Ledger', amount: '₦4,500.00', dueDate: '2026-09-15', status: 'Pending', daysOverdue: 0 },
+  { id: 'INV-2026-042', company: 'Globex Inc', type: 'Corporate', amount: '₦12,300.00', dueDate: '2026-08-10', status: 'Overdue', daysOverdue: 31 },
+  { id: 'INV-2026-088', company: 'Stark Industries', type: 'City Ledger', amount: '₦1,850.00', dueDate: '2026-06-01', status: 'Critical', daysOverdue: 101 },
+  { id: 'INV-2026-102', company: 'Wayne Enterprises', type: 'Corporate', amount: '₦8,200.00', dueDate: '2026-09-20', status: 'Pending', daysOverdue: 0 },
+  { id: 'INV-2026-115', company: 'Initech', type: 'City Ledger', amount: '₦2,150.50', dueDate: '2026-07-15', status: 'Overdue', daysOverdue: 57 },
 ];
 
 export default function ReceivablesPage() {
@@ -74,7 +74,7 @@ export default function ReceivablesPage() {
                 
                 <div className="mt-4 w-full bg-slate-900 rounded-full h-1.5 overflow-hidden">
                   <div 
-                    className={`h-full rounded-full ${
+                    className={`h-full rounded-full ₦{
                       item.status === 'healthy' ? 'bg-emerald-400' :
                       item.status === 'warning' ? 'bg-amber-400' :
                       item.status === 'danger' ? 'bg-orange-500' :
@@ -92,7 +92,7 @@ export default function ReceivablesPage() {
         <div className="bg-white/5 border border-white/10 rounded-xl p-6 backdrop-blur-sm flex flex-col md:flex-row items-center justify-between">
           <div className="mb-4 md:mb-0">
             <p className="text-slate-400 text-sm font-medium">Total Outstanding Receivables</p>
-            <h2 className="text-4xl font-bold text-white mt-1">$63,651.50</h2>
+            <h2 className="text-4xl font-bold text-white mt-1">₦63,651.50</h2>
             <div className="flex items-center gap-2 mt-2 text-sm">
               <span className="flex items-center text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded text-xs font-medium">
                 <ArrowDownRight className="h-3 w-3 mr-1" />
@@ -164,7 +164,7 @@ export default function ReceivablesPage() {
                       {account.amount}
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ₦{
                         account.status === 'Pending' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
                         account.status === 'Overdue' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
                         'bg-red-500/10 text-red-400 border-red-500/20'

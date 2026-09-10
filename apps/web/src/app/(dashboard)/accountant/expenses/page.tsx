@@ -95,7 +95,7 @@ const ExpenseControlPage = () => {
               <h3 className="font-medium text-slate-300">Total YTD Spend</h3>
             </div>
             <div className="mt-4">
-              <span className="text-3xl font-bold text-white">$142,500</span>
+              <span className="text-3xl font-bold text-white">₦142,500</span>
               <span className="text-emerald-400 ml-2 text-sm">↓ 2.4% vs LY</span>
             </div>
           </div>
@@ -143,10 +143,10 @@ const ExpenseControlPage = () => {
                         </div>
                       </td>
                       <td className="py-4 text-right">
-                        <span className="text-sm font-medium text-white">${voucher.amount.toFixed(2)}</span>
+                        <span className="text-sm font-medium text-white">₦{voucher.amount.toFixed(2)}</span>
                       </td>
                       <td className="py-4 text-center">
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ₦{
                           voucher.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
                           voucher.status === 'Rejected' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' :
                           'bg-amber-500/10 text-amber-400 border-amber-500/20'
@@ -182,7 +182,7 @@ const ExpenseControlPage = () => {
                         <span className="flex h-2 w-2 rounded-full bg-rose-500 animate-pulse"></span>
                       )}
                     </div>
-                    <div className={`text-sm font-medium flex items-center gap-1 ${
+                    <div className={`text-sm font-medium flex items-center gap-1 ₦{
                       dept.alertLevel === 'critical' ? 'text-rose-400' :
                       dept.alertLevel === 'warning' ? 'text-amber-400' : 'text-emerald-400'
                     }`}>
@@ -192,14 +192,14 @@ const ExpenseControlPage = () => {
                   </div>
                   
                   <div className="flex justify-between text-sm text-slate-400 mb-2">
-                    <span>Spend: <span className="text-slate-200">${dept.currentSpend.toLocaleString()}</span></span>
-                    <span>Budget: ${dept.budget.toLocaleString()}</span>
+                    <span>Spend: <span className="text-slate-200">₦{dept.currentSpend.toLocaleString()}</span></span>
+                    <span>Budget: ₦{dept.budget.toLocaleString()}</span>
                   </div>
                   
                   {/* Progress bar */}
                   <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
                     <div 
-                      className={`h-full rounded-full ${
+                      className={`h-full rounded-full ₦{
                         dept.alertLevel === 'critical' ? 'bg-gradient-to-r from-rose-500 to-rose-400' :
                         dept.alertLevel === 'warning' ? 'bg-gradient-to-r from-amber-500 to-amber-400' : 
                         'bg-gradient-to-r from-emerald-500 to-emerald-400'

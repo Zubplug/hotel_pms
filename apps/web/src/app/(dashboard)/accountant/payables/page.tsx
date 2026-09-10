@@ -13,18 +13,18 @@ import {
 } from 'lucide-react';
 
 const AP_AGING_SUMMARY = [
-  { label: 'Current (0-30 Days)', amount: '$28,450.00', count: 18, status: 'healthy' },
-  { label: '31-60 Days', amount: '$5,210.00', count: 4, status: 'warning' },
-  { label: '61-90 Days', amount: '$1,150.00', count: 1, status: 'danger' },
-  { label: '90+ Days', amount: '$0.00', count: 0, status: 'healthy' },
+  { label: 'Current (0-30 Days)', amount: '₦28,450.00', count: 18, status: 'healthy' },
+  { label: '31-60 Days', amount: '₦5,210.00', count: 4, status: 'warning' },
+  { label: '61-90 Days', amount: '₦1,150.00', count: 1, status: 'danger' },
+  { label: '90+ Days', amount: '₦0.00', count: 0, status: 'healthy' },
 ];
 
 const SUPPLIER_INVOICES = [
-  { id: 'PINV-8820', supplier: 'Sysco Foods', category: 'F&B', amount: '$4,250.00', dueDate: '2026-09-12', status: 'Pending Approval' },
-  { id: 'PINV-8821', supplier: 'Ecolab', category: 'Housekeeping', amount: '$1,820.50', dueDate: '2026-09-15', status: 'Approved' },
-  { id: 'PINV-8822', supplier: 'Otis Elevators', category: 'Maintenance', amount: '$3,500.00', dueDate: '2026-08-30', status: 'Overdue' },
-  { id: 'PINV-8823', supplier: 'Guest Supply', category: 'Amenities', amount: '$2,100.00', dueDate: '2026-09-20', status: 'Pending Approval' },
-  { id: 'PINV-8824', supplier: 'Comcast Business', category: 'IT/Telecom', amount: '$850.00', dueDate: '2026-09-05', status: 'Processing Payment' },
+  { id: 'PINV-8820', supplier: 'Sysco Foods', category: 'F&B', amount: '₦4,250.00', dueDate: '2026-09-12', status: 'Pending Approval' },
+  { id: 'PINV-8821', supplier: 'Ecolab', category: 'Housekeeping', amount: '₦1,820.50', dueDate: '2026-09-15', status: 'Approved' },
+  { id: 'PINV-8822', supplier: 'Otis Elevators', category: 'Maintenance', amount: '₦3,500.00', dueDate: '2026-08-30', status: 'Overdue' },
+  { id: 'PINV-8823', supplier: 'Guest Supply', category: 'Amenities', amount: '₦2,100.00', dueDate: '2026-09-20', status: 'Pending Approval' },
+  { id: 'PINV-8824', supplier: 'Comcast Business', category: 'IT/Telecom', amount: '₦850.00', dueDate: '2026-09-05', status: 'Processing Payment' },
 ];
 
 export default function PayablesPage() {
@@ -74,7 +74,7 @@ export default function PayablesPage() {
                 
                 <div className="mt-4 w-full bg-slate-900 rounded-full h-1.5 overflow-hidden">
                   <div 
-                    className={`h-full rounded-full ${
+                    className={`h-full rounded-full ₦{
                       item.status === 'healthy' ? 'bg-emerald-400' :
                       item.status === 'warning' ? 'bg-amber-400' :
                       item.status === 'danger' ? 'bg-orange-500' :
@@ -93,7 +93,7 @@ export default function PayablesPage() {
           <div className="lg:col-span-2 bg-white/5 border border-white/10 rounded-xl p-6 backdrop-blur-sm flex flex-col md:flex-row items-center justify-between gap-6">
             <div>
               <p className="text-slate-400 text-sm font-medium">Total Payables Outstanding</p>
-              <h2 className="text-4xl font-bold text-white mt-1">$34,810.00</h2>
+              <h2 className="text-4xl font-bold text-white mt-1">₦34,810.00</h2>
               <div className="flex items-center gap-2 mt-2 text-sm">
                 <span className="flex items-center text-red-400 bg-red-400/10 px-2 py-0.5 rounded text-xs font-medium">
                   <ArrowUpRight className="h-3 w-3 mr-1" />
@@ -182,7 +182,7 @@ export default function PayablesPage() {
                       {invoice.amount}
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ₦{
                         invoice.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
                         invoice.status === 'Pending Approval' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
                         invoice.status === 'Processing Payment' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :

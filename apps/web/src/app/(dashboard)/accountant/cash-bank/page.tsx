@@ -68,7 +68,7 @@ export default function CashBankPage() {
             <Wallet className="w-4 h-4 text-emerald-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-slate-50">$1,850.00</div>
+            <div className="text-3xl font-bold text-slate-50">₦1,850.00</div>
             <p className="text-xs text-slate-400 mt-1">Across 3 active drawers & petty cash</p>
           </CardContent>
         </Card>
@@ -79,7 +79,7 @@ export default function CashBankPage() {
             <Landmark className="w-4 h-4 text-indigo-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-indigo-400">$245,600.80</div>
+            <div className="text-3xl font-bold text-indigo-400">₦245,600.80</div>
             <p className="text-xs text-slate-400 mt-1">Last synced: 2 hours ago</p>
           </CardContent>
         </Card>
@@ -150,7 +150,7 @@ export default function CashBankPage() {
                       </TableCell>
                       <TableCell className="text-slate-400">{drawer.openedAt}</TableCell>
                       <TableCell className="text-right text-slate-200 font-medium">
-                        ${drawer.balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        ₦{drawer.balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -196,9 +196,9 @@ export default function CashBankPage() {
                       <TableCell className="text-slate-400">{rec.date}</TableCell>
                       <TableCell className="text-right font-medium">
                         {rec.difference === 0 ? (
-                          <span className="text-emerald-400">$0.00</span>
+                          <span className="text-emerald-400">₦0.00</span>
                         ) : (
-                          <span className="text-rose-400">${rec.difference.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                          <span className="text-rose-400">₦{rec.difference.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
                         )}
                       </TableCell>
                       <TableCell className="text-right">
@@ -231,7 +231,7 @@ export default function CashBankPage() {
             <CardContent>
               <div className="mb-6 p-4 rounded-lg bg-slate-950 border border-white/10 flex justify-between items-center">
                 <span className="text-slate-400">Current Fund Balance:</span>
-                <span className="text-2xl font-bold text-emerald-400">$500.00</span>
+                <span className="text-2xl font-bold text-emerald-400">₦500.00</span>
               </div>
               <Table>
                 <TableHeader>
@@ -262,7 +262,7 @@ export default function CashBankPage() {
                       </TableCell>
                       <TableCell className="text-right font-medium">
                         <span className={log.type === 'In' ? 'text-emerald-400' : 'text-slate-200'}>
-                          {log.type === 'In' ? '+' : '-'}${log.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          {log.type === 'In' ? '+' : '-'}₦{log.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                         </span>
                       </TableCell>
                     </TableRow>

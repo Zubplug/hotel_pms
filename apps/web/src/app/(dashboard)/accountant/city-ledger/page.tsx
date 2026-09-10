@@ -68,7 +68,7 @@ export default function CityLedgerPage() {
             <TrendingUp className="w-4 h-4 text-emerald-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-slate-50">$26,450.75</div>
+            <div className="text-3xl font-bold text-slate-50">₦26,450.75</div>
             <p className="text-xs text-slate-400 mt-1">+12% from last month</p>
           </CardContent>
         </Card>
@@ -79,7 +79,7 @@ export default function CityLedgerPage() {
             <AlertCircle className="w-4 h-4 text-rose-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-rose-400">$3,200.50</div>
+            <div className="text-3xl font-bold text-rose-400">₦3,200.50</div>
             <p className="text-xs text-slate-400 mt-1">1 account with overdue status</p>
           </CardContent>
         </Card>
@@ -151,7 +151,7 @@ export default function CityLedgerPage() {
                       </TableCell>
                       <TableCell className="text-slate-400">{account.lastPayment}</TableCell>
                       <TableCell className="text-right text-slate-200 font-medium">
-                        ${account.balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        ₦{account.balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -195,7 +195,7 @@ export default function CityLedgerPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right text-slate-200 font-medium">
-                        ${inv.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        ₦{inv.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -241,7 +241,7 @@ export default function CityLedgerPage() {
                         )}
                       </TableCell>
                       <TableCell className="text-slate-200 font-medium">
-                        ${payment.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        ₦{payment.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                       </TableCell>
                       <TableCell className="text-right">
                         {payment.matched ? (

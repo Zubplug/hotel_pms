@@ -77,7 +77,7 @@ const InventoryCostingPage = () => {
               <h3 className="font-medium">Inventory Value</h3>
             </div>
             <div className="mt-2">
-              <span className="text-2xl font-bold text-white">$52,500</span>
+              <span className="text-2xl font-bold text-white">₦52,500</span>
             </div>
           </div>
           <div className="bg-white/5 border border-white/10 rounded-2xl p-5 backdrop-blur-sm relative overflow-hidden group">
@@ -126,13 +126,13 @@ const InventoryCostingPage = () => {
                         <span className="font-medium text-slate-200">{row.category}</span>
                       </div>
                     </td>
-                    <td className="py-4 text-right text-slate-300">${row.opening.toLocaleString()}</td>
-                    <td className="py-4 text-right text-slate-300">${row.purchases.toLocaleString()}</td>
-                    <td className="py-4 text-right text-slate-300">${row.closing.toLocaleString()}</td>
-                    <td className="py-4 text-right font-medium text-white">${row.cogs.toLocaleString()}</td>
-                    <td className="py-4 text-right text-slate-300">${row.sales.toLocaleString()}</td>
+                    <td className="py-4 text-right text-slate-300">₦{row.opening.toLocaleString()}</td>
+                    <td className="py-4 text-right text-slate-300">₦{row.purchases.toLocaleString()}</td>
+                    <td className="py-4 text-right text-slate-300">₦{row.closing.toLocaleString()}</td>
+                    <td className="py-4 text-right font-medium text-white">₦{row.cogs.toLocaleString()}</td>
+                    <td className="py-4 text-right text-slate-300">₦{row.sales.toLocaleString()}</td>
                     <td className="py-4 text-right">
-                      <span className={`inline-flex items-center px-2 py-1 rounded bg-white/5 border ${
+                      <span className={`inline-flex items-center px-2 py-1 rounded bg-white/5 border ₦{
                         row.costPercentage > 30 ? 'border-rose-500/30 text-rose-400' : 'border-emerald-500/30 text-emerald-400'
                       }`}>
                         {row.costPercentage}%
@@ -169,13 +169,13 @@ const InventoryCostingPage = () => {
                     <h3 className="font-medium text-slate-200">{item.item}</h3>
                   </div>
                   <div className="text-sm text-slate-400 flex items-center gap-4 mt-2">
-                    <span>Std: ${item.standardCost.toFixed(2)}</span>
-                    <span>Act: ${item.actualCost.toFixed(2)}</span>
+                    <span>Std: ₦{item.standardCost.toFixed(2)}</span>
+                    <span>Act: ₦{item.actualCost.toFixed(2)}</span>
                   </div>
                 </div>
                 
                 <div className="text-right">
-                  <div className={`text-lg font-bold flex items-center justify-end gap-1 ${
+                  <div className={`text-lg font-bold flex items-center justify-end gap-1 ₦{
                     item.status === 'favorable' ? 'text-emerald-400' : 'text-rose-400'
                   }`}>
                     {item.status === 'favorable' ? <TrendingDown className="w-4 h-4" /> : <TrendingUp className="w-4 h-4" />}

@@ -75,7 +75,7 @@ export default function PayrollPage() {
             <div className="flex justify-between items-start">
               <div>
                 <p className="text-slate-400 text-sm font-medium">Est. Monthly Labor Cost</p>
-                <h3 className="text-3xl font-semibold mt-2 text-slate-100">${(totalMonthlyCost / 1000).toFixed(0)}k</h3>
+                <h3 className="text-3xl font-semibold mt-2 text-slate-100">₦{(totalMonthlyCost / 1000).toFixed(0)}k</h3>
               </div>
               <div className="p-3 bg-emerald-500/10 rounded-lg">
                 <DollarSign className="w-6 h-6 text-emerald-400" />
@@ -103,7 +103,7 @@ export default function PayrollPage() {
             <div className="flex justify-between items-start">
               <div>
                 <p className="text-slate-400 text-sm font-medium">YTD Payroll Spend</p>
-                <h3 className="text-3xl font-semibold mt-2 text-slate-100">$3.8M</h3>
+                <h3 className="text-3xl font-semibold mt-2 text-slate-100">₦3.8M</h3>
               </div>
               <div className="p-3 bg-purple-500/10 rounded-lg">
                 <Briefcase className="w-6 h-6 text-purple-400" />
@@ -146,7 +146,7 @@ export default function PayrollPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right font-medium text-slate-200">
-                        ${run.totalAmount.toLocaleString()}
+                        ₦{run.totalAmount.toLocaleString()}
                       </TableCell>
                       <TableCell className="text-center">
                         {run.status === 'Completed' ? (
@@ -180,7 +180,7 @@ export default function PayrollPage() {
                   <div key={dept.name} className="flex flex-col space-y-2">
                     <div className="flex justify-between items-center">
                       <span className="font-medium text-slate-200">{dept.name}</span>
-                      <span className="text-slate-300 font-medium">${dept.cost.toLocaleString()}</span>
+                      <span className="text-slate-300 font-medium">₦{dept.cost.toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between items-center text-xs text-slate-500">
                       <span>{dept.employees} Employees</span>

@@ -78,7 +78,7 @@ export default function AccountantOverviewPage() {
           <div className="mt-4 relative z-10">
             <span className="text-3xl font-bold text-white tracking-tight">{formatCurrency(currentRev)}</span>
             <div className="mt-2 flex items-center gap-2 text-sm">
-              <span className={`inline-flex items-center gap-1 font-medium ${revGrowth >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+              <span className={`inline-flex items-center gap-1 font-medium ₦{revGrowth >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                 {revGrowth >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
                 {Math.abs(revGrowth).toFixed(1)}%
               </span>
@@ -160,9 +160,9 @@ export default function AccountantOverviewPage() {
             </div>
             <div className="p-2">
               {[
-                { title: 'Tax Remittance', desc: 'VAT Q3 2026', time: '2 hours ago', amount: '$4,250.00' },
-                { title: 'Supplier Invoice', desc: 'Sysco Foods', time: '5 hours ago', amount: '$1,842.20' },
-                { title: 'Payroll Run', desc: 'September Week 1', time: '1 day ago', amount: '$12,400.00' },
+                { title: 'Tax Remittance', desc: 'VAT Q3 2026', time: '2 hours ago', amount: '₦4,250.00' },
+                { title: 'Supplier Invoice', desc: 'Sysco Foods', time: '5 hours ago', amount: '₦1,842.20' },
+                { title: 'Payroll Run', desc: 'September Week 1', time: '1 day ago', amount: '₦12,400.00' },
               ].map((item, i) => (
                 <div key={i} className="flex items-center justify-between p-3 rounded-xl hover:bg-white/5 transition-colors cursor-pointer group">
                   <div className="flex flex-col">

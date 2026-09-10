@@ -24,9 +24,9 @@ const assets = [
 ];
 
 const stats = [
-  { label: 'Total Assets Value', value: '$89,000', icon: Wallet, trend: '+4.5%' },
-  { label: 'Accumulated Depreciation', value: '$35,000', icon: TrendingDown, trend: '+12.3%' },
-  { label: 'Net Book Value', value: '$54,000', icon: Activity, trend: '-2.1%' },
+  { label: 'Total Assets Value', value: '₦89,000', icon: Wallet, trend: '+4.5%' },
+  { label: 'Accumulated Depreciation', value: '₦35,000', icon: TrendingDown, trend: '+12.3%' },
+  { label: 'Net Book Value', value: '₦54,000', icon: Activity, trend: '-2.1%' },
 ];
 
 export default function AssetsPage() {
@@ -120,9 +120,9 @@ export default function AssetsPage() {
                     </div>
                   </TableCell>
                   <TableCell className="text-slate-300">{asset.category}</TableCell>
-                  <TableCell className="text-right text-slate-300">${asset.value.toLocaleString()}</TableCell>
-                  <TableCell className="text-right text-red-400">-${asset.depreciation.toLocaleString()}</TableCell>
-                  <TableCell className="text-right text-emerald-400 font-medium">${asset.bookValue.toLocaleString()}</TableCell>
+                  <TableCell className="text-right text-slate-300">₦{asset.value.toLocaleString()}</TableCell>
+                  <TableCell className="text-right text-red-400">-₦{asset.depreciation.toLocaleString()}</TableCell>
+                  <TableCell className="text-right text-emerald-400 font-medium">₦{asset.bookValue.toLocaleString()}</TableCell>
                   <TableCell className="text-center">
                     <Badge variant="outline" className={
                       asset.status === 'Active' 

@@ -53,7 +53,7 @@ export default function BudgetsPage() {
               <div>
                 <p className="text-slate-400 text-sm font-medium">Total Allocated Budget</p>
                 <h3 className="text-3xl font-semibold mt-2 text-slate-100">
-                  ${(totalBudget / 1000000).toFixed(1)}M
+                  ₦{(totalBudget / 1000000).toFixed(1)}M
                 </h3>
               </div>
               <div className="p-3 bg-emerald-500/10 rounded-lg">
@@ -68,7 +68,7 @@ export default function BudgetsPage() {
               <div>
                 <p className="text-slate-400 text-sm font-medium">Total Actual Spend</p>
                 <h3 className="text-3xl font-semibold mt-2 text-slate-100">
-                  ${(totalActual / 1000000).toFixed(2)}M
+                  ₦{(totalActual / 1000000).toFixed(2)}M
                 </h3>
               </div>
               <div className="p-3 bg-blue-500/10 rounded-lg">
@@ -127,11 +127,11 @@ export default function BudgetsPage() {
                       )}
                     </div>
                     <p className="text-xs text-slate-400 mt-1">
-                      ${dept.actual.toLocaleString()} / ${dept.budget.toLocaleString()}
+                      ₦{dept.actual.toLocaleString()} / ₦{dept.budget.toLocaleString()}
                     </p>
                   </div>
                   <div className="text-right">
-                    <span className={`text-sm font-semibold ${isOver ? 'text-rose-400' : 'text-emerald-400'}`}>
+                    <span className={`text-sm font-semibold ₦{isOver ? 'text-rose-400' : 'text-emerald-400'}`}>
                       {percent.toFixed(1)}%
                     </span>
                   </div>
@@ -140,7 +140,7 @@ export default function BudgetsPage() {
                 {/* Progress Bar */}
                 <div className="relative w-full bg-slate-800/60 rounded-full h-3 overflow-hidden">
                   <div 
-                    className={`absolute top-0 left-0 h-full rounded-full transition-all duration-700 ${isOver ? 'bg-rose-500' : dept.color}`}
+                    className={`absolute top-0 left-0 h-full rounded-full transition-all duration-700 ₦{isOver ? 'bg-rose-500' : dept.color}`}
                     style={{ width: `${Math.min(percent, 100)}%` }}
                   />
                   {/* Budget Marker line if actual exceeds budget (conceptually, we cap the bar at 100%, so let's show an over-budget indicator differently if needed, but topping at 100% and coloring red is standard) */}
@@ -148,7 +148,7 @@ export default function BudgetsPage() {
                 
                 {isOver && (
                   <p className="text-xs text-rose-400/80">
-                    Over budget by ${(dept.actual - dept.budget).toLocaleString()}
+                    Over budget by ₦{(dept.actual - dept.budget).toLocaleString()}
                   </p>
                 )}
               </div>

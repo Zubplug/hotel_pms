@@ -6,19 +6,19 @@ import { Badge } from '@/components/ui/badge';
 import { BookOpen, FileText, Download, Filter, TrendingUp, TrendingDown, PlusCircle, Scale } from 'lucide-react';
 
 const MOCK_JOURNAL_ENTRIES = [
-  { id: 'JE-2024-089', date: '2024-09-10', description: 'Daily Revenue Recognition', amount: '$4,250.00', status: 'Posted' },
-  { id: 'JE-2024-090', date: '2024-09-10', description: 'Payroll Accrual', amount: '$12,400.00', status: 'Pending' },
-  { id: 'JE-2024-091', date: '2024-09-09', description: 'Supplier Payment - Linens', amount: '$850.00', status: 'Posted' },
-  { id: 'JE-2024-092', date: '2024-09-08', description: 'Monthly Rent Allocation', amount: '$5,000.00', status: 'Posted' },
-  { id: 'JE-2024-093', date: '2024-09-08', description: 'Utility Accrual', amount: '$1,200.00', status: 'Pending' },
+  { id: 'JE-2024-089', date: '2024-09-10', description: 'Daily Revenue Recognition', amount: '₦4,250.00', status: 'Posted' },
+  { id: 'JE-2024-090', date: '2024-09-10', description: 'Payroll Accrual', amount: '₦12,400.00', status: 'Pending' },
+  { id: 'JE-2024-091', date: '2024-09-09', description: 'Supplier Payment - Linens', amount: '₦850.00', status: 'Posted' },
+  { id: 'JE-2024-092', date: '2024-09-08', description: 'Monthly Rent Allocation', amount: '₦5,000.00', status: 'Posted' },
+  { id: 'JE-2024-093', date: '2024-09-08', description: 'Utility Accrual', amount: '₦1,200.00', status: 'Pending' },
 ];
 
 const MOCK_ACCOUNTS_SUMMARY = [
-  { category: 'Assets', balance: '$1,450,000.00', trend: 'up', percentage: '+2.4%' },
-  { category: 'Liabilities', balance: '$420,000.00', trend: 'down', percentage: '-1.2%' },
-  { category: 'Equity', balance: '$1,030,000.00', trend: 'up', percentage: '+4.1%' },
-  { category: 'Revenue', balance: '$125,500.00', trend: 'up', percentage: '+8.5%' },
-  { category: 'Expenses', balance: '$84,200.00', trend: 'down', percentage: '-0.5%' },
+  { category: 'Assets', balance: '₦1,450,000.00', trend: 'up', percentage: '+2.4%' },
+  { category: 'Liabilities', balance: '₦420,000.00', trend: 'down', percentage: '-1.2%' },
+  { category: 'Equity', balance: '₦1,030,000.00', trend: 'up', percentage: '+4.1%' },
+  { category: 'Revenue', balance: '₦125,500.00', trend: 'up', percentage: '+8.5%' },
+  { category: 'Expenses', balance: '₦84,200.00', trend: 'down', percentage: '-0.5%' },
 ];
 
 export default function GeneralLedgerPage() {

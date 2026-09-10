@@ -102,10 +102,10 @@ export default function NightAuditPage() {
                   <TableRow key={exception.id} className="border-b border-white/5 hover:bg-white/5">
                     <TableCell className="font-medium text-slate-300">{exception.id}</TableCell>
                     <TableCell className="text-slate-300">{exception.description}</TableCell>
-                    <TableCell className="text-right text-slate-300">${exception.amount.toFixed(2)}</TableCell>
+                    <TableCell className="text-right text-slate-300">₦{exception.amount.toFixed(2)}</TableCell>
                     <TableCell>
                       <Badge variant="outline" className={`
-                        ${exception.severity === 'High' ? 'text-rose-400 border-rose-400/50' : 
+                        ₦{exception.severity === 'High' ? 'text-rose-400 border-rose-400/50' : 
                           exception.severity === 'Medium' ? 'text-amber-400 border-amber-400/50' : 
                           'text-emerald-400 border-emerald-400/50'}
                       `}>
@@ -148,7 +148,7 @@ export default function NightAuditPage() {
                     </TableCell>
                     <TableCell className="text-right text-slate-300">
                        <span className={folio.balance < 0 ? 'text-rose-400' : 'text-emerald-400'}>
-                        ${Math.abs(folio.balance).toFixed(2)}
+                        ₦{Math.abs(folio.balance).toFixed(2)}
                         {folio.balance < 0 && ' CR'}
                        </span>
                     </TableCell>
