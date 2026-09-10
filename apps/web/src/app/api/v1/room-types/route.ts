@@ -15,10 +15,11 @@ export async function GET(req: NextRequest) {
     const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
     const { searchParams } = req.nextUrl;
     const propertyId = searchParams.get('propertyId');
+    const includeInactive = searchParams.get('includeInactive') === 'true';
     const allowed = (await requireOrganizationContext((session.user as any).id || (session as any).user.id)).propertyIds;
     const where: any = propertyId 
-      ? { propertyId, isActive: true } 
-      : { propertyId: { in: allowed as string[] }, isActive: true };
+      ? { propertyId, ...(includeInactive ? {} : { isActive: true }) }
+      : { propertyId: { in: allowed as string[] }, ...(includeInactive ? {} : { isActive: true }) };
 
     if (propertyId && !allowed.includes(propertyId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     const roomTypes = await prisma.roomType.findMany({ where, orderBy: { name: 'asc' } });

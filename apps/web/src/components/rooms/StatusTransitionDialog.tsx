@@ -62,25 +62,21 @@ export function StatusTransitionDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-sm">
+      <DialogContent className="overflow-hidden border-slate-200 p-0 shadow-2xl sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Change Room Status</DialogTitle>
-          <DialogDescription>
-            Select a new status to transition to from the current state.
-          </DialogDescription>
+          <div className="border-b bg-gradient-to-br from-slate-50 to-white px-6 pb-5 pt-6">
+            <DialogTitle className="text-xl tracking-tight">Update room status</DialogTitle>
+            <DialogDescription className="mt-1">Choose the next operational state for this room.</DialogDescription>
+          </div>
         </DialogHeader>
 
-        <div className="flex items-center gap-2 py-2">
-          <StatusBadge status={currentStatus} />
+        <div className="mx-6 mt-5 flex items-center justify-between rounded-2xl border bg-muted/20 p-4">
+          <div><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Current status</p><div className="mt-2"><StatusBadge status={currentStatus} /></div></div>
           <ArrowRight className="h-4 w-4 text-muted-foreground" />
-          {selectedStatus ? (
-            <StatusBadge status={selectedStatus} />
-          ) : (
-            <span className="text-sm text-muted-foreground italic">Select status below</span>
-          )}
+          <div className="text-right"><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">New status</p><div className="mt-2">{selectedStatus ? <StatusBadge status={selectedStatus} /> : <span className="text-sm text-muted-foreground">Select below</span>}</div></div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-3 px-6 py-5">
           {allowedTransitions.length === 0 ? (
             <p className="col-span-2 text-sm text-muted-foreground text-center py-4">
               No valid transitions from this status.
@@ -90,7 +86,7 @@ export function StatusTransitionDialog({
               <button
                 key={status}
                 onClick={() => setSelectedStatus(status)}
-                className={`rounded-lg border p-3 text-left text-sm transition-all hover:border-primary/50 hover:bg-primary/5 ${
+                className={`rounded-xl border p-3 text-left text-sm font-medium transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:bg-primary/5 hover:shadow-sm ${
                   selectedStatus === status ? 'border-primary bg-primary/10 ring-1 ring-primary/30' : ''
                 }`}
               >
@@ -100,11 +96,11 @@ export function StatusTransitionDialog({
           )}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="border-t bg-muted/20 px-6 py-4">
           <Button variant="outline" onClick={onClose} disabled={isSubmitting}>
             Cancel
           </Button>
-          <Button onClick={handleConfirm} disabled={!selectedStatus || isSubmitting}>
+          <Button className="min-w-32" onClick={handleConfirm} disabled={!selectedStatus || isSubmitting}>
             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Apply Transition
           </Button>
