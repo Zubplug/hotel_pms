@@ -34,9 +34,9 @@ function getDirectLandingUrl(
   // Super admins and management roles → Management Dashboard
   if (
     isSuperAdmin ||
-    ['CEO', 'SUPER_ADMIN', 'MANAGER'].includes(role)
+    ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER'].includes(role)
   ) {
-    return '/dashboard';
+    return '/general-manager';
   }
 
   // Front desk roles → Front Desk workspace
@@ -142,7 +142,7 @@ export default async function HubPage() {
     { cap: 'ACCESS_CASH_MANAGEMENT', label: 'CASH MANAGEMENT', icon: Banknote, href: '/cash-management', color: 'bg-green-600 hover:bg-green-700' },
     { cap: 'ACCESS_INVENTORY', label: 'INVENTORY', icon: Package, href: '/inventory', color: 'bg-amber-600 hover:bg-amber-700' },
     { cap: 'ACCESS_MAINTENANCE', label: 'MAINTENANCE', icon: Wrench, href: '/maintenance', color: 'bg-orange-600 hover:bg-orange-700' },
-    { cap: 'ACCESS_MANAGEMENT', label: 'MANAGEMENT', icon: BarChart3, href: '/dashboard', color: 'bg-slate-700 hover:bg-slate-600' },
+    { cap: 'ACCESS_MANAGEMENT', label: 'MANAGEMENT', icon: BarChart3, href: '/general-manager', color: 'bg-slate-700 hover:bg-slate-600' },
     { cap: 'ACCESS_NIGHT_AUDIT', label: 'NIGHT AUDIT', icon: Moon, href: '/night-audit', color: 'bg-purple-600 hover:bg-purple-700' },
     { cap: 'ACCESS_SYNC_CENTER', label: 'SYNC CENTER', icon: RefreshCw, href: '/sync-center', color: 'bg-blue-600 hover:bg-blue-700' },
   ];

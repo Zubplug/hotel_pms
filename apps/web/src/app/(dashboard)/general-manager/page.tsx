@@ -62,7 +62,7 @@ const formatCompactCurrency = (value: number) => {
   return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', notation: 'compact', maximumFractionDigits: 1 }).format(value);
 };
 
-export default function CEODashboardPage() {
+export default function GeneralManagerDashboardPage() {
   const { data: session } = useLodgeCoreSession();
   const [selectedPropertyId, setSelectedPropertyId] = useState<string>('ALL');
 

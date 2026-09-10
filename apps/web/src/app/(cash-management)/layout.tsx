@@ -11,7 +11,7 @@ export default async function CashierRootLayout({ children }: { children: React.
   const isSuperAdmin = (session?.user as any)?.isSuperAdmin;
   
   if (!session?.user || (!isSuperAdmin && !ALLOWED.includes(role))) {
-    redirect('/dashboard');
+    redirect('/general-manager');
   }
 
   return (

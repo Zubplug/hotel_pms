@@ -49,45 +49,45 @@ import { PropertySelector } from '@/components/properties/PropertySelector';
 
 
 const ALL_NAV = [
-  { name: 'Overview', href: '/dashboard', icon: LayoutDashboard, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER'] },
-  { name: 'Front Desk', href: '/frontdesk', icon: LayoutDashboard, restrictedTo: ['RECEPTIONIST', 'FRONT_DESK', 'SUPER_ADMIN', 'MANAGER'] },
-  { name: 'Properties', href: '/properties', icon: Hotel, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER'] },
-  { name: 'Rooms', href: '/rooms', icon: BedDouble, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'RECEPTIONIST'] },
-  { name: 'Room Types', href: '/room-types', icon: Layers, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER'] },
-  { name: 'Amenities', href: '/amenities', icon: Star, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER'] },
+  { name: 'Overview', href: '/general-manager', icon: LayoutDashboard, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER'] },
+  { name: 'Front Desk', href: '/frontdesk', icon: LayoutDashboard, restrictedTo: ['RECEPTIONIST', 'FRONT_DESK', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER'] },
+  { name: 'Properties', href: '/properties', icon: Hotel, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER'] },
+  { name: 'Rooms', href: '/rooms', icon: BedDouble, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'RECEPTIONIST'] },
+  { name: 'Room Types', href: '/room-types', icon: Layers, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER'] },
+  { name: 'Amenities', href: '/amenities', icon: Star, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER'] },
   { name: 'Reservations', href: '/reservations', icon: CalendarDays }, // Available to all staff
   { name: 'Housekeeping', href: '/housekeeping', icon: Brush }, // Available to all staff
   { name: 'Laundry', href: '/laundry', icon: Shirt }, // Available to all staff
   { name: 'Maintenance', href: '/maintenance', icon: Wrench }, // Available to all staff
-  { name: 'Night Audit', href: '/night-audit', icon: MoonStar, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'NIGHT_AUDITOR'] },
-  { name: 'Staff', href: '/staff', icon: Users, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER'] },
+  { name: 'Night Audit', href: '/night-audit', icon: MoonStar, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'NIGHT_AUDITOR'] },
+  { name: 'Staff', href: '/staff', icon: Users, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER'] },
   { 
     name: 'Reports', 
     href: '/reports', 
     icon: FileText,
     children: [
       { name: 'Shift / Cashier', href: '/reports/shift' },
-      { name: 'Receivables', href: '/reports/receivables', restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'ACCOUNTANT', 'GENERAL_CASHIER'] },
-      { name: 'Gateway', href: '/reports/gateway', restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'ACCOUNTANT', 'GENERAL_CASHIER'] },
+      { name: 'Receivables', href: '/reports/receivables', restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'ACCOUNTANT', 'GENERAL_CASHIER'] },
+      { name: 'Gateway', href: '/reports/gateway', restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'ACCOUNTANT', 'GENERAL_CASHIER'] },
       { name: 'Housekeeping', href: '/reports/housekeeping' },
       { name: 'Maintenance', href: '/reports/maintenance' },
       { name: 'Room Status', href: '/reports/room-status' },
     ]
   },
-  { name: 'Cash Management', href: '/cash-management', icon: HandCoins, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'ACCOUNTANT', 'GENERAL_CASHIER', 'NIGHT_AUDITOR'] },
-  { name: 'POS Menu', href: '/cashier/menu', icon: Utensils, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'ACCOUNTANT', 'GENERAL_CASHIER'] },
-  { name: 'Price Requests', href: '/cashier/price-approvals', icon: BadgeDollarSign, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'ACCOUNTANT', 'GENERAL_CASHIER'] },
-  { name: 'Refunds', href: '/refunds', icon: BadgeDollarSign, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'FINANCE_MANAGER', 'ADMIN'] },
-  { name: 'Sync Center', href: '/sync-center', icon: RefreshCw, restrictedTo: ['CEO', 'SUPER_ADMIN'] },
+  { name: 'Cash Management', href: '/cash-management', icon: HandCoins, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'ACCOUNTANT', 'GENERAL_CASHIER', 'NIGHT_AUDITOR'] },
+  { name: 'POS Menu', href: '/cashier/menu', icon: Utensils, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'ACCOUNTANT', 'GENERAL_CASHIER'] },
+  { name: 'Price Requests', href: '/cashier/price-approvals', icon: BadgeDollarSign, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'ACCOUNTANT', 'GENERAL_CASHIER'] },
+  { name: 'Refunds', href: '/refunds', icon: BadgeDollarSign, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'FINANCE_MANAGER', 'ADMIN'] },
+  { name: 'Sync Center', href: '/sync-center', icon: RefreshCw, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER'] },
 
   { 
     name: 'F&B Management', 
     href: '/fnb/dashboard', 
     icon: Utensils,
-    restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'FNB_MANAGER', 'EVENT_MANAGER', 'RESTAURANT_MANAGER', 'BANQUET_MANAGER'],
+    restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'FNB_MANAGER', 'EVENT_MANAGER', 'RESTAURANT_MANAGER', 'BANQUET_MANAGER'],
   },
 
-  { name: 'Settings', href: '/settings', icon: Settings, restrictedTo: ['CEO', 'SUPER_ADMIN', 'MANAGER'] },
+  { name: 'Settings', href: '/settings', icon: Settings, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER'] },
 ];
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -165,7 +165,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         {navigation.map((item) => {
           const isActive =
             pathname === item.href ||
-            (item.href !== '/dashboard' && pathname?.startsWith(item.href));
+            (item.href !== '/general-manager' && pathname?.startsWith(item.href));
           
           return (
             <div key={item.name}>
@@ -230,7 +230,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                   {session?.user?.email ?? 'User'}
                 </p>
                 <p className="text-xs text-muted-foreground truncate">
-                  {(session?.user as any)?.isSuperAdmin ? 'Super Admin' : 'Staff'}
+                  {(session?.user as any)?.isSuperAdmin ? 'General Manager' : 'Staff'}
                 </p>
               </div>
               <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />

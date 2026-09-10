@@ -14,7 +14,7 @@ export default async function InventoryRootLayout({ children }: { children: Reac
   
   // Enforce server-side authorization
   if (!session?.user || (!isSuperAdmin && !ALLOWED.includes(role))) {
-    redirect('/dashboard');
+    redirect('/general-manager');
   }
 
   return (

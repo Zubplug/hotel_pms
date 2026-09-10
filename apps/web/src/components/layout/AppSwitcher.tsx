@@ -38,7 +38,7 @@ const TILES = [
     href: '/inventory' 
   },
   { cap: ['ACCESS_MAINTENANCE'], label: 'Maintenance', icon: Wrench, href: '/maintenance' },
-  { cap: ['ACCESS_MANAGEMENT'], label: 'Management', icon: BarChart3, href: '/dashboard' },
+  { cap: ['ACCESS_MANAGEMENT'], label: 'Management', icon: BarChart3, href: '/general-manager' },
   { cap: ['ACCESS_NIGHT_AUDIT'], label: 'Night Audit', icon: Moon, href: '/night-audit' },
   { cap: ['ACCESS_SYNC_CENTER'], label: 'Sync Center', icon: RefreshCw, href: '/sync-center' },
 ];

@@ -152,7 +152,7 @@ export function FnbLayout({ children }: { children: React.ReactNode }) {
               <ChevronDown className="h-3.5 w-3.5 text-slate-500 shrink-0 group-hover:text-slate-300 transition-colors" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56" sideOffset={8}>
-            <DropdownMenuItem onClick={() => router.push('/dashboard')}>
+            <DropdownMenuItem onClick={() => router.push('/general-manager')}>
               Main Dashboard
             </DropdownMenuItem>
             <DropdownMenuSeparator />
