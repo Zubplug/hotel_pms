@@ -27,6 +27,7 @@ import {
   Wrench,
   HandCoins,
   BadgeDollarSign,
+  ClipboardCheck,
   Package,
   ShoppingCart,
   Truck,
@@ -35,6 +36,7 @@ import {
   BarChart3,
   Utensils,
   RefreshCw,
+  type LucideIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -46,8 +48,16 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { PropertySelector } from '@/components/properties/PropertySelector';
 
+type NavItem = {
+  section: string;
+  name: string;
+  href: string;
+  icon: LucideIcon;
+  restrictedTo?: string[];
+  children?: Array<{ name: string; href: string; restrictedTo?: string[] }>;
+};
 
-const ALL_NAV = [
+const ALL_NAV: NavItem[] = [
   { section: 'Portfolio', name: 'Overview', href: '/general-manager', icon: LayoutDashboard, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER'] },
   { section: 'Portfolio', name: 'Properties', href: '/properties', icon: Hotel, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER'] },
   { section: 'Portfolio', name: 'Rooms', href: '/rooms', icon: BedDouble, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'RECEPTIONIST'] },
@@ -58,31 +68,14 @@ const ALL_NAV = [
   { section: 'Operations', name: 'Maintenance', href: '/maintenance', icon: Wrench },
   { section: 'Operations', name: 'Night Audit', href: '/general-manager/night-audit', icon: MoonStar, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER'] },
   { section: 'Operations', name: 'Night Audit', href: '/night-audit', icon: MoonStar, restrictedTo: ['NIGHT_AUDITOR'] },
-  {
-    section: 'Finance & Reports', name: 'Reports',
-    href: '/reports', 
-    icon: FileText,
-    children: [
-      { name: 'Shift / Cashier', href: '/reports/shift' },
-      { name: 'Receivables', href: '/reports/receivables', restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'ACCOUNTANT', 'GENERAL_CASHIER'] },
-      { name: 'Gateway', href: '/reports/gateway', restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'ACCOUNTANT', 'GENERAL_CASHIER'] },
-      { name: 'Housekeeping', href: '/reports/housekeeping' },
-      { name: 'Maintenance', href: '/reports/maintenance' },
-      { name: 'Room Status', href: '/reports/room-status' },
-    ]
-  },
-  { section: 'Finance & Reports', name: 'Cash Management', href: '/cash-management', icon: HandCoins, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'ACCOUNTANT', 'GENERAL_CASHIER', 'NIGHT_AUDITOR'] },
-  { section: 'Finance & Reports', name: 'POS Menu', href: '/cashier/menu', icon: Utensils, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'ACCOUNTANT', 'GENERAL_CASHIER'] },
-  { section: 'Finance & Reports', name: 'Price Requests', href: '/cashier/price-approvals', icon: BadgeDollarSign, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'ACCOUNTANT', 'GENERAL_CASHIER'] },
-  { section: 'Finance & Reports', name: 'Refunds', href: '/refunds', icon: BadgeDollarSign, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'FINANCE_MANAGER', 'ADMIN'] },
+  { section: 'Finance & Reports', name: 'Reports', href: '/reports', icon: FileText },
+  { section: 'Finance & Reports', name: 'Cash Management', href: '/general-manager/cash-management', icon: HandCoins, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER'] },
+  { section: 'Finance & Reports', name: 'Cash Management', href: '/cash-management', icon: HandCoins, restrictedTo: ['ACCOUNTANT', 'GENERAL_CASHIER', 'NIGHT_AUDITOR'] },
+  { section: 'Finance & Reports', name: 'Approvals', href: '/general-manager/approvals', icon: ClipboardCheck, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER'] },
   { section: 'Finance & Reports', name: 'Sync Center', href: '/sync-center', icon: RefreshCw, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER'] },
 
-  {
-    section: 'Administration', name: 'F&B Management',
-    href: '/fnb/dashboard', 
-    icon: Utensils,
-    restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'FNB_MANAGER', 'EVENT_MANAGER', 'RESTAURANT_MANAGER', 'BANQUET_MANAGER'],
-  },
+  { section: 'Administration', name: 'F&B Management', href: '/general-manager/fnb', icon: Utensils, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER'] },
+  { section: 'Administration', name: 'F&B Management', href: '/fnb/dashboard', icon: Utensils, restrictedTo: ['FNB_MANAGER', 'EVENT_MANAGER', 'RESTAURANT_MANAGER', 'BANQUET_MANAGER'] },
 
   { section: 'Administration', name: 'Staff', href: '/staff', icon: Users, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER'] },
   { section: 'Administration', name: 'Amenities', href: '/amenities', icon: Star, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER'] },

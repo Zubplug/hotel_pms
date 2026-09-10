@@ -6,7 +6,7 @@ import { Activity, DollarSign, Utensils, TableProperties, Clock, AlertTriangle }
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
-export default function FnbDashboardClient() {
+export default function FnbDashboardClient({ managerMode = false }: { managerMode?: boolean }) {
   const { data: session } = useLodgeCoreSession();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -53,8 +53,8 @@ export default function FnbDashboardClient() {
     <div className="p-6 space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">F&B Dashboard</h1>
-          <p className="text-muted-foreground mt-1">Real-time overview of outlet performance and operations.</p>
+          <h1 className="text-3xl font-bold tracking-tight">{managerMode ? 'F&B Management Dashboard' : 'F&B Dashboard'}</h1>
+          <p className="text-muted-foreground mt-1">{managerMode ? 'Executive view of outlet performance, revenue, service activity, and operating exceptions.' : 'Real-time overview of outlet performance and operations.'}</p>
         </div>
       </div>
 

@@ -27,9 +27,12 @@ export async function GET(req: NextRequest) {
         propertyId: { in: targetProperties },
         status: 'PENDING'
       },
+      include: {
+        property: { select: { name: true } },
+      },
 
       orderBy: { createdAt: 'desc' },
-      take: 20
+      take: 100
     });
 
     return successResponse(pendingApprovals, 200);
