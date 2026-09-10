@@ -584,9 +584,24 @@ public class OfflinePMSInterop
         if (requiredPermissions != null && requiredPermissions.Length > 0 && session.Role != "ADMIN" && session.Role != "MANAGER")
         {
             bool hasPermission = false;
+            bool isFrontdeskRole = string.Equals(session.Role, "RECEPTIONIST", StringComparison.OrdinalIgnoreCase) || 
+                                   string.Equals(session.Role, "FRONT_DESK", StringComparison.OrdinalIgnoreCase);
+
             foreach (var p in requiredPermissions)
             {
-                if (session.Permissions != null && session.Permissions.Contains(p))
+                // Implicitly allow frontdesk roles to perform basic frontdesk/reservation actions if no explicit restrictions exist
+                if (isFrontdeskRole && (string.Equals(p, "frontdesk:all", StringComparison.OrdinalIgnoreCase) || 
+                                        string.Equals(p, "reservation:cancel", StringComparison.OrdinalIgnoreCase) ||
+                                        string.Equals(p, "reservation:update", StringComparison.OrdinalIgnoreCase)))
+                {
+                    hasPermission = true;
+                    break;
+                }
+
+                if (session.Permissions != null && (
+                    session.Permissions.Contains(p, StringComparer.OrdinalIgnoreCase) ||
+                    session.Permissions.Contains("frontdesk:all", StringComparer.OrdinalIgnoreCase) ||
+                    session.Permissions.Contains("pos:all", StringComparer.OrdinalIgnoreCase)))
                 {
                     hasPermission = true;
                     break;
