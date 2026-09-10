@@ -1,8 +1,6 @@
 import Link from 'next/link';
 import { 
-  Key, 
   Building2, 
-  Users, 
   CreditCard,
   Bell,
   MonitorSmartphone,
@@ -66,28 +64,13 @@ const settingsLinks = [
     bgColor: 'bg-blue-500/10'
   },
   {
-    title: 'Hardware Devices',
-    description: 'Configure physical door locks, key encoders, and Windows agents.',
-    href: '/settings/hardware',
-    icon: Key,
-    color: 'text-amber-500',
-    bgColor: 'bg-amber-500/10'
-  },
-  {
-    title: 'Team & Roles',
-    description: 'Manage staff access, front-desk accounts, and permissions.',
-    href: '/settings/team',
-    icon: Users,
-    color: 'text-emerald-500',
-    bgColor: 'bg-emerald-500/10'
-  },
-  {
     title: 'Billing & Payments',
     description: 'Configure payment gateways, invoices, and deposit policies.',
     href: '/settings/billing',
     icon: CreditCard,
     color: 'text-purple-500',
-    bgColor: 'bg-purple-500/10'
+    bgColor: 'bg-purple-500/10',
+    comingSoon: true,
   },
   {
     title: 'Security',
@@ -95,7 +78,8 @@ const settingsLinks = [
     href: '/settings/security',
     icon: ShieldCheck,
     color: 'text-rose-500',
-    bgColor: 'bg-rose-500/10'
+    bgColor: 'bg-rose-500/10',
+    comingSoon: true,
   },
   {
     title: 'Notifications',
@@ -103,7 +87,8 @@ const settingsLinks = [
     href: '/settings/notifications',
     icon: Bell,
     color: 'text-cyan-500',
-    bgColor: 'bg-cyan-500/10'
+    bgColor: 'bg-cyan-500/10',
+    comingSoon: true,
   },
   {
     title: 'Integrations',
@@ -111,7 +96,8 @@ const settingsLinks = [
     href: '/settings/integrations',
     icon: MonitorSmartphone,
     color: 'text-indigo-500',
-    bgColor: 'bg-indigo-500/10'
+    bgColor: 'bg-indigo-500/10',
+    comingSoon: true,
   },
   {
     title: 'POS Outlets',
@@ -136,21 +122,20 @@ export default function SettingsHubPage() {
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {settingsLinks.map((setting) => {
           const Icon = setting.icon;
-          return (
-            <Link key={setting.href} href={setting.href}>
+          const content = (
               <Card className="h-full hover:border-primary/50 hover:shadow-md transition-all duration-200 cursor-pointer group">
                 <CardHeader>
                   <div className={`w-12 h-12 rounded-lg flex items-center justify-center mb-4 ${setting.bgColor} group-hover:scale-110 transition-transform duration-200`}>
                     <Icon className={`w-6 h-6 ${setting.color}`} />
                   </div>
-                  <CardTitle className="text-xl">{setting.title}</CardTitle>
+                  <div className="flex items-center gap-2"><CardTitle className="text-xl">{setting.title}</CardTitle>{setting.comingSoon && <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Coming soon</span>}</div>
                   <CardDescription className="text-sm mt-2">
                     {setting.description}
                   </CardDescription>
                 </CardHeader>
               </Card>
-            </Link>
           );
+          return setting.comingSoon ? <div key={setting.href} className="opacity-75">{content}</div> : <Link key={setting.href} href={setting.href}>{content}</Link>;
         })}
       </div>
     </div>
