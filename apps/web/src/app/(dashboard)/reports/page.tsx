@@ -27,7 +27,7 @@ const groups = [
     description: 'Read-only manager views for business-date controls and close review.',
     reports: [
       { title: 'Night Audit Dashboard', description: 'View audit readiness, blockers, warnings, business date, and audit activity.', href: '/general-manager/night-audit', icon: MoonStar },
-      { title: 'Night Audit Reports', description: 'Open the detailed audit reports and manager flash pack.', href: '/night-audit/reports', icon: FileCheck2 },
+      { title: 'Night Audit Reports', description: 'Open the detailed audit reports and manager flash pack.', href: '/general-manager/night-audit/reports', icon: FileCheck2 },
       { title: 'Management Overview', description: 'Return to the executive dashboard for portfolio KPIs and alerts.', href: '/general-manager', icon: BarChart3 },
     ],
   },
