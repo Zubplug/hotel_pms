@@ -56,7 +56,8 @@ const ALL_NAV = [
   { section: 'Operations', name: 'Housekeeping', href: '/housekeeping', icon: Brush },
   { section: 'Operations', name: 'Laundry', href: '/general-manager/laundry', icon: Shirt, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER'] },
   { section: 'Operations', name: 'Maintenance', href: '/maintenance', icon: Wrench },
-  { section: 'Operations', name: 'Night Audit', href: '/night-audit', icon: MoonStar, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'NIGHT_AUDITOR'] },
+  { section: 'Operations', name: 'Night Audit', href: '/general-manager/night-audit', icon: MoonStar, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER'] },
+  { section: 'Operations', name: 'Night Audit', href: '/night-audit', icon: MoonStar, restrictedTo: ['NIGHT_AUDITOR'] },
   {
     section: 'Finance & Reports', name: 'Reports',
     href: '/reports', 

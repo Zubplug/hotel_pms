@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatRoomNumber } from '@/lib/format-room';
+import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 
 // ─── types ────────────────────────────────────────────────────────────────────
 interface Ticket {
@@ -151,6 +152,9 @@ function ticketAge(createdAt: string) {
 export default function MaintenancePage() {
   const { propertyId } = useProperty();
   const { provider, isDesktopMode, isOnline } = useLodgeCoreProvider();
+  const { data: session } = useLodgeCoreSession();
+  const role = String((session?.user as any)?.role || '').toUpperCase();
+  const managerReadOnly = ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER'].includes(role);
 
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
@@ -298,12 +302,12 @@ export default function MaintenancePage() {
               )}
             </span>
 
-            <DialogTrigger
+            {!managerReadOnly && <DialogTrigger
               render={<Button className="rounded-xl bg-orange-600 hover:bg-orange-700 text-white shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all font-semibold" />}
             >
               <Plus className="mr-2 h-4 w-4" />
               New Ticket
-            </DialogTrigger>
+            </DialogTrigger>}
           </div>
         </div>
 
@@ -358,7 +362,7 @@ export default function MaintenancePage() {
         </div>
 
         {/* ── New Ticket Form ── */}
-        <DialogContent className="max-w-2xl rounded-2xl p-0">
+        {!managerReadOnly && <DialogContent className="max-w-2xl rounded-2xl p-0">
             <DialogHeader className="border-b border-slate-100 bg-slate-50/50 px-6 py-5">
               <DialogTitle className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <Plus className="w-5 h-5 text-orange-600" />
@@ -477,7 +481,7 @@ export default function MaintenancePage() {
                 </div>
               </div>
             </div>
-        </DialogContent>
+        </DialogContent>}
 
         {/* ── Ticket Table ── */}
         <div className="bg-white rounded-3xl border border-slate-200/60 shadow-xl shadow-slate-200/40 overflow-hidden">
@@ -528,7 +532,7 @@ export default function MaintenancePage() {
                     <th className="px-6 py-4 font-semibold">Status</th>
                     <th className="px-6 py-4 font-semibold">Assigned</th>
                     <th className="px-6 py-4 font-semibold">Age</th>
-                    <th className="px-6 py-4 font-semibold text-right">Action</th>
+                    {!managerReadOnly && <th className="px-6 py-4 font-semibold text-right">Action</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -592,7 +596,7 @@ export default function MaintenancePage() {
                       </td>
 
                       {/* Action */}
-                      <td className="px-6 py-4 text-right">
+                      {!managerReadOnly && <td className="px-6 py-4 text-right">
                         {t.status !== 'RESOLVED' && t.status !== 'CLOSED' && t.status !== 'CANCELLED' ? (
                           <Button
                             variant="outline"
@@ -612,7 +616,7 @@ export default function MaintenancePage() {
                             {STATUS_CONFIG[t.status]?.label}
                           </span>
                         )}
-                      </td>
+                      </td>}
                     </tr>
                   ))}
                 </tbody>

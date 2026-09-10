@@ -10,9 +10,10 @@ interface StatusBannerProps {
   onRefresh: () => void;
   onOpenWizard: () => void;
   refreshing: boolean;
+  managerMode?: boolean;
 }
 
-export function StatusBanner({ data, isAuditInProgress, onRefresh, onOpenWizard, refreshing }: StatusBannerProps) {
+export function StatusBanner({ data, isAuditInProgress, onRefresh, onOpenWizard, refreshing, managerMode = false }: StatusBannerProps) {
   const businessDate = data.businessDate ? new Date(data.businessDate) : new Date();
   const isReady = data.summary.blockers === 0 && !isAuditInProgress && data.auditState !== 'COMPLETED';
 
@@ -74,7 +75,7 @@ export function StatusBanner({ data, isAuditInProgress, onRefresh, onOpenWizard,
             </div>
 
             <div className="flex flex-col gap-2 sm:flex-row">
-              <Button
+              {!managerMode && <Button
                 variant="outline"
                 size="lg"
                 className="flex items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 font-semibold text-white hover:bg-white/10"
@@ -83,7 +84,7 @@ export function StatusBanner({ data, isAuditInProgress, onRefresh, onOpenWizard,
               >
                 <RefreshCcw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
                 Refresh
-              </Button>
+              </Button>}
 
               <Button
                 size="lg"
@@ -130,4 +131,3 @@ export function StatusBanner({ data, isAuditInProgress, onRefresh, onOpenWizard,
     </div>
   );
 }
-

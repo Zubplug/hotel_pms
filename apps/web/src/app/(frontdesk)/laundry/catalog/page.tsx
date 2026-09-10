@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useProperty } from '@/components/PropertyProvider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Plus, Shirt, CheckCircle2, XCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Pencil, Plus, Shirt, X, XCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { formatCurrency } from '@/lib/utils';
 import { useSession } from 'next-auth/react';
@@ -18,6 +18,7 @@ export default function LaundryCatalogPage({ managementMode = false }: { managem
   const [items, setItems] = useState<any[]>([]);
   const [newItemName, setNewItemName] = useState('');
   const [newItemPrice, setNewItemPrice] = useState('');
+  const [editingItem, setEditingItem] = useState<any | null>(null);
 
   const role = (session?.user as any)?.role || 'STAFF';
   const isSuperAdmin = (session?.user as any)?.isSuperAdmin;
@@ -37,10 +38,8 @@ export default function LaundryCatalogPage({ managementMode = false }: { managem
     e.preventDefault();
     if (!newItemName || !newItemPrice) return;
 
-    // Creating catalog items isn't strictly necessary for offline parity, but we use native fetch 
-    // as it represents administrative setup rather than offline operational workflows.
-    await fetch('/api/v1/laundry/items', {
-      method: 'POST',
+    const response = await fetch(editingItem ? `/api/v1/laundry/items/${editingItem.id}` : '/api/v1/laundry/items', {
+      method: editingItem ? 'PATCH' : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         propertyId,
@@ -48,9 +47,20 @@ export default function LaundryCatalogPage({ managementMode = false }: { managem
         basePrice: parseFloat(newItemPrice)
       })
     });
+    if (!response.ok) {
+      const error = await response.json().catch(() => null);
+      throw new Error(error?.error?.message || 'Unable to save catalog item');
+    }
     setNewItemName('');
     setNewItemPrice('');
+    setEditingItem(null);
     fetchItems();
+  };
+
+  const startEditing = (item: any) => {
+    setEditingItem(item);
+    setNewItemName(item.name);
+    setNewItemPrice(String(item.basePrice));
   };
 
   if (!propertyId) return <div className="p-8 text-center text-slate-500">Select property</div>;
@@ -81,8 +91,9 @@ export default function LaundryCatalogPage({ managementMode = false }: { managem
               <Input required type="number" min="0" step="0.01" value={newItemPrice} onChange={e => setNewItemPrice(e.target.value)} placeholder="0.00" className="h-12 rounded-xl bg-slate-50 border-slate-200" />
             </div>
             <Button type="submit" className="h-12 px-6 rounded-xl bg-cyan-600 hover:bg-cyan-700 text-white font-bold shadow-md">
-              <Plus className="w-5 h-5 mr-2" /> Add catalog item
+              {editingItem ? <Pencil className="w-5 h-5 mr-2" /> : <Plus className="w-5 h-5 mr-2" />} {editingItem ? 'Save changes' : 'Add catalog item'}
             </Button>
+            {editingItem && <Button type="button" variant="ghost" className="h-12" onClick={() => { setEditingItem(null); setNewItemName(''); setNewItemPrice(''); }}><X className="h-4 w-4" /> Cancel</Button>}
           </form>
         )}
 
@@ -93,11 +104,12 @@ export default function LaundryCatalogPage({ managementMode = false }: { managem
                 <th className="px-6 py-4">Item Name</th>
                 <th className="px-6 py-4">Base Price</th>
                 <th className="px-6 py-4">Status</th>
+                {canManageCatalog && <th className="px-6 py-4 text-right">Actions</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {items.length === 0 ? (
-                <tr><td colSpan={3} className="text-center p-12 text-slate-400">No items in catalog.</td></tr>
+                <tr><td colSpan={canManageCatalog ? 4 : 3} className="text-center p-12 text-slate-400">No items in catalog.</td></tr>
               ) : items.map(item => (
                 <tr key={item.id} className="hover:bg-slate-50 transition-colors">
                   <td className="px-6 py-5 font-bold text-slate-900 text-base">{item.name}</td>
@@ -109,6 +121,7 @@ export default function LaundryCatalogPage({ managementMode = false }: { managem
                       <span className="text-red-600 font-medium text-xs flex items-center gap-1 bg-red-50 px-2 py-1 rounded-full w-fit"><XCircle className="w-3 h-3"/> Inactive</span>
                     )}
                   </td>
+                  {canManageCatalog && <td className="px-6 py-5 text-right"><Button type="button" variant="outline" size="sm" onClick={() => startEditing(item)}><Pencil className="mr-1.5 h-3.5 w-3.5" />Edit</Button></td>}
                 </tr>
               ))}
             </tbody>

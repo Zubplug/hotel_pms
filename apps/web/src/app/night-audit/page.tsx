@@ -16,7 +16,7 @@ import { AttentionQueue } from '@/components/night-audit/dashboard/attention-que
 import { AuditWizard } from '@/components/night-audit/audit-wizard';
 import { ResolutionManager, ResolutionAction } from '@/components/night-audit/resolution-manager';
 
-export default function NightAuditDashboard() {
+export default function NightAuditDashboard({ managerMode = false }: { managerMode?: boolean }) {
   const { propertyId, isLoading: propertyLoading } = useProperty();
   const [data, setData] = useState<NightAuditData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -42,7 +42,7 @@ export default function NightAuditDashboard() {
       setData(result.data);
       
       // Auto-open wizard if overdue
-      if (result.data.auditState === 'OVERDUE' && !quiet) {
+      if (result.data.auditState === 'OVERDUE' && !quiet && !managerMode) {
         setWizardOpen(true);
       }
     } catch (err: any) { 
@@ -155,6 +155,7 @@ export default function NightAuditDashboard() {
         onRefresh={() => load(true)}
         onOpenWizard={() => setWizardOpen(true)}
         refreshing={refreshing}
+        managerMode={managerMode}
       />
 
       {/* Primary Metrics */}
@@ -170,7 +171,7 @@ export default function NightAuditDashboard() {
       {data.auditState !== 'COMPLETED' && (
         <div className="grid gap-6 lg:grid-cols-2">
           <AuditReadiness data={data} />
-          <AttentionQueue data={data} onResolveItem={handleQueueResolve} />
+          <AttentionQueue data={data} onResolveItem={managerMode ? undefined : handleQueueResolve} />
         </div>
       )}
 
@@ -180,21 +181,21 @@ export default function NightAuditDashboard() {
       </div>
 
       {/* Audit Wizard Modal */}
-      <AuditWizard 
+      {!managerMode && <AuditWizard
         open={wizardOpen} 
         onOpenChange={setWizardOpen} 
         data={data}
         onExecute={execute}
         executing={executing}
         onRefresh={() => load(true)}
-      />
+      />}
 
       {/* Global Resolution Manager for direct queue clicks */}
-      <ResolutionManager 
+      {!managerMode && <ResolutionManager
         action={resolutionAction} 
         onClose={() => setResolutionAction(null)} 
         onSuccess={handleResolutionSuccess} 
-      />
+      />}
     </div>
   );
 }

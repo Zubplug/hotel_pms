@@ -136,7 +136,7 @@ export default function LaundryDashboard({ managementMode = false }: { managemen
             <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
               <Shirt className="w-5 h-5 text-cyan-600" /> Recent Laundry Orders
             </h2>
-            {!managementMode && <Button variant="link" asChild className="text-cyan-600 hover:text-cyan-700 font-bold"><Link href="/laundry/orders">View All Orders</Link></Button>}
+            <Button variant="link" asChild className="text-cyan-600 hover:text-cyan-700 font-bold"><Link href={managementMode ? '/general-manager/laundry/orders' : '/laundry/orders'}>View All Orders</Link></Button>
           </div>
           
           <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">

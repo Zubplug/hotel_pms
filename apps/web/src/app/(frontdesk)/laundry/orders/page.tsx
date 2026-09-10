@@ -9,7 +9,7 @@ import { useRouter } from 'next/navigation';
 import { formatCurrency } from '@/lib/utils';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
-export default function LaundryOrdersPage() {
+export default function LaundryOrdersPage({ managementMode = false }: { managementMode?: boolean }) {
   const { propertyId } = useProperty();
   const { provider } = useLodgeCoreProvider();
   const router = useRouter();
@@ -57,16 +57,16 @@ export default function LaundryOrdersPage() {
         
         <div className="flex justify-between items-center bg-white p-6 rounded-3xl border border-slate-200/60 shadow-xl shadow-slate-200/40">
           <div>
-            <Button onClick={() => router.push('/laundry')} variant="ghost" size="sm" className="rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 h-8 flex items-center gap-2 mb-2">
+            <Button onClick={() => router.push(managementMode ? '/general-manager/laundry' : '/laundry')} variant="ghost" size="sm" className="rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 h-8 flex items-center gap-2 mb-2">
               <ArrowLeft className="w-4 h-4" /> Back to Dashboard
             </Button>
             <h1 className="text-3xl font-extrabold text-slate-900 flex items-center gap-3">
               <Shirt className="w-8 h-8 text-cyan-600" /> All Laundry Orders
             </h1>
           </div>
-          <Button onClick={() => router.push('/laundry/orders/new')} className="rounded-xl px-6 h-12 bg-cyan-600 hover:bg-cyan-700 text-white font-bold shadow-md">
+          {!managementMode && <Button onClick={() => router.push('/laundry/orders/new')} className="rounded-xl px-6 h-12 bg-cyan-600 hover:bg-cyan-700 text-white font-bold shadow-md">
             + New Order
-          </Button>
+          </Button>}
         </div>
 
         <div className="bg-white rounded-3xl border border-slate-200/60 shadow-xl shadow-slate-200/40 overflow-hidden">
@@ -79,12 +79,12 @@ export default function LaundryOrdersPage() {
                 <th className="px-6 py-4">Items</th>
                 <th className="px-6 py-4">Status</th>
                 <th className="px-6 py-4">Total</th>
-                <th className="px-6 py-4 text-right">Actions</th>
+                {!managementMode && <th className="px-6 py-4 text-right">Actions</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? (
-                <tr><td colSpan={7} className="text-center p-12"><Loader2 className="w-8 h-8 animate-spin mx-auto text-slate-300" /></td></tr>
+                <tr><td colSpan={managementMode ? 6 : 7} className="text-center p-12"><Loader2 className="w-8 h-8 animate-spin mx-auto text-slate-300" /></td></tr>
               ) : orders.map(order => (
                 <tr key={order.id} className="hover:bg-cyan-50/50 transition-colors group">
                   <td className="px-6 py-5 font-bold text-slate-900 font-mono text-base">{order.room?.number || 'N/A'}</td>
@@ -97,11 +97,11 @@ export default function LaundryOrdersPage() {
                   <td className="max-w-xs px-6 py-5 font-medium text-slate-700"><p className="truncate" title={itemSummary(order)}>{itemSummary(order)}</p></td>
                   <td className="px-6 py-5">{renderStatus(order.status)}</td>
                   <td className="px-6 py-5 font-bold text-slate-900">{formatCurrency(Number(order.totalAmount), order.currency)}</td>
-                  <td className="px-6 py-5 text-right">
+                  {!managementMode && <td className="px-6 py-5 text-right">
                     <Button variant="secondary" size="sm" className="rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200" onClick={() => router.push(`/laundry/orders/detail?id=${order.id}`)}>
                       Manage
                     </Button>
-                  </td>
+                  </td>}
                 </tr>
               ))}
             </tbody>
