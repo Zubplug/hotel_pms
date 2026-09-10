@@ -10,7 +10,7 @@ import { formatCurrency } from '@/lib/utils';
 import { useSession } from 'next-auth/react';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
-export default function LaundryCatalogPage() {
+export default function LaundryCatalogPage({ managementMode = false }: { managementMode?: boolean }) {
   const { propertyId } = useProperty();
   const { provider } = useLodgeCoreProvider();
   const router = useRouter();
@@ -21,7 +21,7 @@ export default function LaundryCatalogPage() {
 
   const role = (session?.user as any)?.role || 'STAFF';
   const isSuperAdmin = (session?.user as any)?.isSuperAdmin;
-  const canManageCatalog = isSuperAdmin || role === 'CEO' || role === 'MANAGER';
+  const canManageCatalog = managementMode || isSuperAdmin || ['CEO', 'MANAGER', 'GENERAL_MANAGER', 'SUPER_ADMIN'].includes(role);
 
   const fetchItems = async () => {
     if (!propertyId) return;
@@ -61,7 +61,7 @@ export default function LaundryCatalogPage() {
         
         <div className="flex justify-between items-center bg-white p-6 rounded-3xl border border-slate-200/60 shadow-xl shadow-slate-200/40">
           <div>
-            <Button onClick={() => router.push('/laundry')} variant="ghost" size="sm" className="rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 h-8 flex items-center gap-2 mb-2">
+            <Button onClick={() => router.push(managementMode ? '/general-manager/laundry' : '/laundry')} variant="ghost" size="sm" className="rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 h-8 flex items-center gap-2 mb-2">
               <ArrowLeft className="w-4 h-4" /> Back to Dashboard
             </Button>
             <h1 className="text-3xl font-extrabold text-slate-900 flex items-center gap-3">
@@ -81,7 +81,7 @@ export default function LaundryCatalogPage() {
               <Input required type="number" min="0" step="0.01" value={newItemPrice} onChange={e => setNewItemPrice(e.target.value)} placeholder="0.00" className="h-12 rounded-xl bg-slate-50 border-slate-200" />
             </div>
             <Button type="submit" className="h-12 px-6 rounded-xl bg-cyan-600 hover:bg-cyan-700 text-white font-bold shadow-md">
-              <Plus className="w-5 h-5 mr-2" /> Add
+              <Plus className="w-5 h-5 mr-2" /> Add catalog item
             </Button>
           </form>
         )}

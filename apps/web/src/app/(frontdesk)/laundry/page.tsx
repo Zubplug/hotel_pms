@@ -81,13 +81,13 @@ export default function LaundryDashboard({ managementMode = false }: { managemen
           
           {/* Action Buttons */}
           <div className="grid grid-cols-2 sm:flex sm:flex-row gap-3 md:gap-4 w-full xl:w-auto shrink-0">
-            <Button onClick={() => router.push('/laundry/orders/new')} className="h-20 md:h-24 md:w-36 rounded-2xl bg-cyan-600 hover:bg-cyan-700 text-white shadow hover:shadow-md hover:-translate-y-1 transition-all flex flex-col gap-2 relative overflow-hidden group">
+            {!managementMode && <Button onClick={() => router.push('/laundry/orders/new')} className="h-20 md:h-24 md:w-36 rounded-2xl bg-cyan-600 hover:bg-cyan-700 text-white shadow hover:shadow-md hover:-translate-y-1 transition-all flex flex-col gap-2 relative overflow-hidden group">
               <div className="absolute top-0 right-0 w-24 h-24 bg-white opacity-10 rounded-full -mr-8 -mt-8 transform group-hover:scale-110 transition-transform"></div>
               <Plus className="w-6 h-6 md:w-7 md:h-7" />
               <span className="font-bold text-sm">New Order</span>
-            </Button>
+            </Button>}
             
-            <Button onClick={() => router.push('/laundry/catalog')} variant="outline" className="h-20 md:h-24 md:w-36 rounded-2xl bg-white/80 hover:bg-white text-slate-700 border-white/50 shadow hover:shadow-md hover:-translate-y-1 transition-all flex flex-col gap-2 group">
+            <Button onClick={() => router.push(managementMode ? '/general-manager/laundry/catalog' : '/laundry/catalog')} variant="outline" className="h-20 md:h-24 md:w-36 rounded-2xl bg-white/80 hover:bg-white text-slate-700 border-white/50 shadow hover:shadow-md hover:-translate-y-1 transition-all flex flex-col gap-2 group">
               <Shirt className="w-6 h-6 md:w-7 md:h-7 text-cyan-600 group-hover:scale-110 transition-transform" />
               <span className="font-bold text-sm">Catalog</span>
             </Button>
@@ -136,7 +136,7 @@ export default function LaundryDashboard({ managementMode = false }: { managemen
             <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
               <Shirt className="w-5 h-5 text-cyan-600" /> Recent Laundry Orders
             </h2>
-            <Button variant="link" asChild className="text-cyan-600 hover:text-cyan-700 font-bold"><Link href="/laundry/orders">View All Orders</Link></Button>
+            {!managementMode && <Button variant="link" asChild className="text-cyan-600 hover:text-cyan-700 font-bold"><Link href="/laundry/orders">View All Orders</Link></Button>}
           </div>
           
           <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
@@ -174,11 +174,11 @@ export default function LaundryDashboard({ managementMode = false }: { managemen
                       <p className="mt-2 truncate text-xs font-medium text-cyan-800" title={itemSummary(order)}>{itemSummary(order)}</p>
                     </div>
 
-                    <div className="shrink-0 pl-2 border-l border-slate-100">
+                    {!managementMode && <div className="shrink-0 pl-2 border-l border-slate-100">
                       <Button size="sm" variant="secondary" className="rounded-xl px-4 bg-slate-100 text-slate-600 hover:bg-slate-200" onClick={() => router.push(`/laundry/orders/detail?id=${order.id}`)}>
                         Manage
                       </Button>
-                    </div>
+                    </div>}
                   </div>
                 );
               })
