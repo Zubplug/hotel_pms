@@ -2,7 +2,7 @@
 
 
 import React from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -12,9 +12,11 @@ import { LoadingState, ErrorState } from '@/components/ui/EmptyState';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Building2, MapPin, Phone, Mail, BedDouble,
-  Layers, Edit, ArrowRight, Wrench, Settings, Activity, Users, CreditCard, DoorClosed, Hotel
+  Layers, Edit, ArrowRight, Wrench, Settings, Activity, Users, DoorClosed, Hotel,
+  CalendarDays, ClipboardList
 } from 'lucide-react';
 import Link from 'next/link';
+import { formatCurrency } from '@/lib/utils';
 
 interface PropertyDetail {
   id: string;
@@ -30,9 +32,24 @@ interface PropertyDetail {
   _count: { rooms: number; roomTypes: number };
 }
 
+const unwrap = <T,>(value: any, fallback: T): T => value?.data ?? fallback;
+
+const statusClass = (status: string) => {
+  if (['CONFIRMED', 'CHECKED_IN', 'COMPLETED', 'AVAILABLE', 'CLEAN'].includes(status)) return 'bg-emerald-100 text-emerald-700';
+  if (['CANCELLED', 'NO_SHOW', 'OUT_OF_ORDER', 'OVERDUE'].includes(status)) return 'bg-rose-100 text-rose-700';
+  return 'bg-amber-100 text-amber-700';
+};
+
+function InlineLoading() {
+  return <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground"><span className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />Loading live data…</div>;
+}
+
+function EmptyTab({ icon, title, description }: { icon: React.ReactNode; title: string; description: string }) {
+  return <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed bg-muted/10 px-6 py-12 text-center"><div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground">{icon}</div><p className="font-semibold">{title}</p><p className="mt-1 max-w-sm text-sm text-muted-foreground">{description}</p></div>;
+}
+
 export default function PropertyDetailPage() {
   const { propertyId } = useParams<{ propertyId: string }>();
-  const router = useRouter();
 
   const { data: property, isLoading, isError } = useQuery({
     queryKey: ['properties', 'detail', propertyId],
@@ -45,6 +62,49 @@ export default function PropertyDetailPage() {
     enabled: !!propertyId,
   });
 
+  const { data: roomsRes, isLoading: roomsLoading } = useQuery({
+    queryKey: ['properties', propertyId, 'rooms'],
+    queryFn: async () => (await fetch(`/api/v1/rooms?propertyId=${propertyId}&pageSize=100`)).json(),
+    enabled: !!propertyId,
+  });
+  const { data: reservationsRes, isLoading: reservationsLoading } = useQuery({
+    queryKey: ['properties', propertyId, 'reservations'],
+    queryFn: async () => (await fetch(`/api/v1/reservations?propertyId=${propertyId}&pageSize=8`)).json(),
+    enabled: !!propertyId,
+  });
+  const { data: guestsRes, isLoading: guestsLoading } = useQuery({
+    queryKey: ['properties', propertyId, 'guests'],
+    queryFn: async () => (await fetch(`/api/v1/guests?propertyId=${propertyId}`)).json(),
+    enabled: !!propertyId,
+  });
+  const { data: housekeepingRes, isLoading: housekeepingLoading } = useQuery({
+    queryKey: ['properties', propertyId, 'housekeeping'],
+    queryFn: async () => (await fetch(`/api/v1/housekeeping/tasks?propertyId=${propertyId}`)).json(),
+    enabled: !!propertyId,
+  });
+  const { data: maintenanceRes, isLoading: maintenanceLoading } = useQuery({
+    queryKey: ['properties', propertyId, 'maintenance'],
+    queryFn: async () => (await fetch(`/api/v1/maintenance/tickets?propertyId=${propertyId}`)).json(),
+    enabled: !!propertyId,
+  });
+  const { data: receivablesRes, isLoading: receivablesLoading } = useQuery({
+    queryKey: ['properties', propertyId, 'receivables'],
+    queryFn: async () => (await fetch(`/api/v1/reports/receivables?propertyId=${propertyId}`)).json(),
+    enabled: !!propertyId,
+  });
+
+  const rooms = unwrap<any[]>(roomsRes, []);
+  const reservations = unwrap<any[]>(reservationsRes, []);
+  const guests = unwrap<any[]>(guestsRes, []);
+  const housekeepingTasks = unwrap<any[]>(housekeepingRes, []);
+  const maintenanceTickets = maintenanceRes?.data?.tickets ?? maintenanceRes?.tickets ?? [];
+  const receivables = receivablesRes?.data?.receivables ?? [];
+  const roomStatusCounts = rooms.reduce((counts: Record<string, number>, room: any) => {
+    counts[room.status] = (counts[room.status] || 0) + 1;
+    return counts;
+  }, {});
+  const totalReceivables = receivables.reduce((sum: number, item: any) => sum + Number(item.financials?.balance || 0), 0);
+
   if (isLoading) return <LoadingState message="Loading property..." />;
   if (isError || !property) return <ErrorState description="Could not load property details." />;
 
@@ -54,19 +114,12 @@ export default function PropertyDetailPage() {
         title={property.name}
         description={`${property.city}, ${property.country} · ${property.code}`}
         actions={
-          <div className="flex gap-2">
-            <Button asChild variant="outline">
-              <Link href={`/properties/${propertyId}/edit`}>
-                <Edit className="h-4 w-4 mr-2" />
-                Edit Settings
-              </Link>
-            </Button>
-            <Button asChild>
-              <Link href={`/reservations/new?propertyId=${propertyId}`}>
-                New Reservation
-              </Link>
-            </Button>
-          </div>
+          <Button asChild variant="outline">
+            <Link href={`/properties/${propertyId}/edit`}>
+              <Edit className="h-4 w-4 mr-2" />
+              Edit Settings
+            </Link>
+          </Button>
         }
       />
 
@@ -185,76 +238,44 @@ export default function PropertyDetailPage() {
         </TabsContent>
 
         <TabsContent value="rooms" className="mt-0">
-          <Card className="border-muted/60 shadow-sm min-h-[400px] flex flex-col items-center justify-center text-center p-8">
-            <DoorClosed className="h-12 w-12 text-muted-foreground/50 mb-4" />
-            <CardTitle className="mb-2">Rooms & Room Types</CardTitle>
-            <CardDescription className="max-w-sm mb-6">
-              Manage physical rooms, categorization, bed types, and operational status.
-            </CardDescription>
-            <div className="flex gap-4">
-              <Button asChild variant="outline">
-                <Link href={`/room-types?propertyId=${propertyId}`}>Manage Types</Link>
-              </Button>
-              <Button asChild>
-                <Link href={`/rooms?propertyId=${propertyId}`}>View All Rooms</Link>
-              </Button>
-            </div>
+          <Card className="border-muted/60 shadow-sm">
+            <CardHeader>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div><CardTitle>Rooms & Room Types</CardTitle><CardDescription className="mt-1">Live room inventory and current operating status.</CardDescription></div>
+                <div className="flex gap-2"><Button asChild variant="outline" size="sm"><Link href={`/room-types?propertyId=${propertyId}`}>Room types</Link></Button><Button asChild size="sm"><Link href={`/rooms?propertyId=${propertyId}`}>All rooms</Link></Button></div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              {roomsLoading ? <InlineLoading /> : <>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  {['AVAILABLE', 'OCCUPIED', 'CLEANING', 'OUT_OF_ORDER'].map((status) => <div key={status} className="rounded-xl border bg-muted/20 p-3"><p className="text-xs font-medium text-muted-foreground">{status.replaceAll('_', ' ')}</p><p className="mt-1 text-2xl font-bold">{roomStatusCounts[status] || 0}</p></div>)}
+                </div>
+                {rooms.length === 0 ? <EmptyTab icon={<DoorClosed className="h-5 w-5" />} title="No rooms configured" description="Rooms added to this property will appear here." /> : <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{rooms.slice(0, 9).map((room: any) => <Link key={room.id} href={`/rooms/${room.id}`} className="flex items-center justify-between rounded-xl border p-3 transition-colors hover:border-primary/40 hover:bg-muted/30"><div><p className="font-semibold">Room {room.number}</p><p className="text-xs text-muted-foreground">{room.roomType?.name || 'Room type not set'}</p></div><Badge className={`border-0 text-[10px] ${statusClass(room.status)}`}>{String(room.status).replaceAll('_', ' ')}</Badge></Link>)}</div>}
+              </>}
+            </CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="reservations" className="mt-0">
-          <Card className="border-muted/60 shadow-sm min-h-[400px] flex flex-col items-center justify-center text-center p-8">
-            <Activity className="h-12 w-12 text-muted-foreground/50 mb-4" />
-            <CardTitle className="mb-2">Reservations Ledger</CardTitle>
-            <CardDescription className="max-w-sm mb-6">
-              View the booking ledger, arrivals, departures, and in-house guests for this property.
-            </CardDescription>
-            <Button asChild>
-              <Link href={`/reservations?propertyId=${propertyId}`}>Go to Reservations</Link>
-            </Button>
+          <Card className="border-muted/60 shadow-sm">
+            <CardHeader><div className="flex items-center justify-between gap-3"><div><CardTitle>Reservations Ledger</CardTitle><CardDescription className="mt-1">Recent bookings, arrivals, and in-house stays for this property.</CardDescription></div><Button asChild variant="outline" size="sm"><Link href={`/reservations?propertyId=${propertyId}`}>Open ledger</Link></Button></div></CardHeader>
+            <CardContent>{reservationsLoading ? <InlineLoading /> : reservations.length === 0 ? <EmptyTab icon={<CalendarDays className="h-5 w-5" />} title="No reservations yet" description="New reservations for this property will appear here." /> : <div className="divide-y rounded-xl border">{reservations.map((reservation: any) => <Link key={reservation.id} href={`/reservations/${reservation.id}`} className="flex flex-col gap-2 p-4 transition-colors hover:bg-muted/30 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold">{reservation.primaryGuest ? `${reservation.primaryGuest.firstName} ${reservation.primaryGuest.lastName}` : 'Guest not assigned'}</p><p className="text-xs text-muted-foreground">{reservation.confirmationNumber} · {reservation.reservationRooms?.[0]?.room?.number ? `Room ${reservation.reservationRooms[0].room.number}` : 'Room pending'}</p></div><div className="flex items-center gap-3"><span className="text-xs text-muted-foreground">{new Date(reservation.checkIn).toLocaleDateString()}</span><Badge className={`border-0 text-[10px] ${statusClass(reservation.status)}`}>{String(reservation.status).replaceAll('_', ' ')}</Badge></div></Link>)}</div>}</CardContent>
           </Card>
         </TabsContent>
-        
+
         <TabsContent value="guests" className="mt-0">
-          <Card className="border-muted/60 shadow-sm min-h-[400px] flex flex-col items-center justify-center text-center p-8">
-            <Users className="h-12 w-12 text-muted-foreground/50 mb-4" />
-            <CardTitle className="mb-2">Guest Directory</CardTitle>
-            <CardDescription className="max-w-sm mb-6">
-              Manage guest profiles, loyalty tiers, preferences, and stay history specific to this property.
-            </CardDescription>
-            <Button variant="outline" disabled>Module Coming Soon</Button>
+          <Card className="border-muted/60 shadow-sm">
+            <CardHeader><div className="flex items-center justify-between gap-3"><div><CardTitle>Guest Directory</CardTitle><CardDescription className="mt-1">Guests associated with this property.</CardDescription></div><Badge variant="secondary">{guests.length} shown</Badge></div></CardHeader>
+            <CardContent>{guestsLoading ? <InlineLoading /> : guests.length === 0 ? <EmptyTab icon={<Users className="h-5 w-5" />} title="No guests recorded" description="Guest profiles created for this property will appear here." /> : <div className="grid gap-3 sm:grid-cols-2">{guests.slice(0, 10).map((guest: any) => <div key={guest.id} className="flex items-center gap-3 rounded-xl border p-3"><div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">{`${guest.firstName?.[0] || ''}${guest.lastName?.[0] || ''}`}</div><div className="min-w-0"><p className="truncate font-semibold">{guest.firstName} {guest.lastName}</p><p className="truncate text-xs text-muted-foreground">{guest.email || guest.phone || 'No contact details'}</p></div></div>)}</div>}</CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="operations" className="mt-0">
-          <Card className="border-muted/60 shadow-sm min-h-[400px] flex flex-col items-center justify-center text-center p-8">
-            <Wrench className="h-12 w-12 text-muted-foreground/50 mb-4" />
-            <CardTitle className="mb-2">Operational Hub</CardTitle>
-            <CardDescription className="max-w-sm mb-6">
-              Manage Housekeeping task assignments, Maintenance ticketing, and general property health.
-            </CardDescription>
-            <div className="flex gap-4">
-              <Button asChild variant="outline">
-                <Link href={`/housekeeping?propertyId=${propertyId}`}>Housekeeping</Link>
-              </Button>
-              <Button asChild variant="outline">
-                <Link href={`/maintenance?propertyId=${propertyId}`}>Maintenance</Link>
-              </Button>
-            </div>
-          </Card>
+          <Card className="border-muted/60 shadow-sm"><CardHeader><CardTitle>Operational Hub</CardTitle><CardDescription className="mt-1">Live housekeeping and maintenance workload for this property.</CardDescription></CardHeader><CardContent>{housekeepingLoading || maintenanceLoading ? <InlineLoading /> : <div className="grid gap-4 md:grid-cols-2"><Link href={`/housekeeping?propertyId=${propertyId}`} className="rounded-2xl border p-5 transition-colors hover:border-primary/40 hover:bg-muted/20"><div className="flex items-center justify-between"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 text-amber-700"><ClipboardList className="h-5 w-5" /></div><ArrowRight className="h-4 w-4 text-muted-foreground" /></div><p className="mt-4 font-semibold">Housekeeping tasks</p><p className="mt-1 text-3xl font-bold">{housekeepingTasks.length}</p><p className="text-xs text-muted-foreground">Tasks on the current business date</p></Link><Link href={`/maintenance?propertyId=${propertyId}`} className="rounded-2xl border p-5 transition-colors hover:border-primary/40 hover:bg-muted/20"><div className="flex items-center justify-between"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-100 text-rose-700"><Wrench className="h-5 w-5" /></div><ArrowRight className="h-4 w-4 text-muted-foreground" /></div><p className="mt-4 font-semibold">Maintenance tickets</p><p className="mt-1 text-3xl font-bold">{maintenanceTickets.length}</p><p className="text-xs text-muted-foreground">Open work requiring attention</p></Link></div>}</CardContent></Card>
         </TabsContent>
 
         <TabsContent value="financials" className="mt-0">
-          <Card className="border-muted/60 shadow-sm min-h-[400px] flex flex-col items-center justify-center text-center p-8">
-            <CreditCard className="h-12 w-12 text-muted-foreground/50 mb-4" />
-            <CardTitle className="mb-2">Financials & Gateway</CardTitle>
-            <CardDescription className="max-w-sm mb-6">
-              Reconcile payments, track outstanding folios, and configure billing settings.
-            </CardDescription>
-            <Button asChild>
-              <Link href={`/reports/gateway?propertyId=${propertyId}`}>Gateway Reconciliation</Link>
-            </Button>
-          </Card>
+          <Card className="border-muted/60 shadow-sm"><CardHeader><div className="flex items-center justify-between gap-3"><div><CardTitle>Financials & Gateway</CardTitle><CardDescription className="mt-1">Current outstanding folios and reconciliation tools.</CardDescription></div><Button asChild variant="outline" size="sm"><Link href={`/reports/receivables?propertyId=${propertyId}`}>Receivables report</Link></Button></div></CardHeader><CardContent>{receivablesLoading ? <InlineLoading /> : <><div className="grid gap-3 sm:grid-cols-3"><div className="rounded-xl border bg-rose-50/50 p-4"><p className="text-xs font-medium text-muted-foreground">Outstanding folios</p><p className="mt-1 text-2xl font-bold text-rose-700">{receivables.length}</p></div><div className="rounded-xl border bg-emerald-50/50 p-4"><p className="text-xs font-medium text-muted-foreground">Total receivables</p><p className="mt-1 text-2xl font-bold text-emerald-700">{formatCurrency(totalReceivables)}</p></div><div className="rounded-xl border bg-muted/20 p-4"><p className="text-xs font-medium text-muted-foreground">Currency</p><p className="mt-1 text-2xl font-bold">NGN</p></div></div><div className="mt-5 flex flex-wrap gap-2"><Button asChild><Link href={`/reports/gateway?propertyId=${propertyId}`}>Gateway reconciliation</Link></Button><Button asChild variant="outline"><Link href={`/cash-management?propertyId=${propertyId}`}>Cash management</Link></Button></div></>}</CardContent></Card>
         </TabsContent>
 
         <TabsContent value="buildings" className="mt-0">

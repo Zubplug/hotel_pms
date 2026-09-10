@@ -12,11 +12,15 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = req.nextUrl;
     const search = searchParams.get('search') ?? '';
+    const propertyId = searchParams.get('propertyId');
+    if (propertyId && !ctx.propertyIds.includes(propertyId)) {
+      return errorResponse('FORBIDDEN', 'No access to this property', 403);
+    }
 
     const guests = await prisma.guest.findMany({
       where: {
         organizationId: ctx.organizationId,
-        propertyId: { in: [...ctx.propertyIds] },
+        propertyId: propertyId ? propertyId : { in: [...ctx.propertyIds] },
         ...(search
           ? {
               OR: [

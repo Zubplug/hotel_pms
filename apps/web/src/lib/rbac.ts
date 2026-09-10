@@ -44,6 +44,13 @@ export async function hasPermission(
   });
 
   for (const ur of userRoles) {
+    // A SUPER_ADMIN role can be granted at a single property without making
+    // the user a global system administrator. Keep the elevation scoped to
+    // the exact property assignment being checked.
+    if (ur.role.name === 'SUPER_ADMIN' && propertyId && ur.propertyId === propertyId) {
+      return true;
+    }
+
     for (const rp of ur.role.permissions) {
       if (rp.permission.resource === resource && rp.permission.action === action) {
         return true;
