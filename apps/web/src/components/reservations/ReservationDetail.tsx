@@ -1,44 +1,20 @@
 'use client';
 
-import { useState } from 'react';
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { EditReservationDialog } from './EditReservationDialog';
-import { RoomReassignmentDialog } from './RoomReassignmentDialog';
-import { CancelReservationDialog } from './CancelReservationDialog';
-import { CheckInDialog } from './CheckInDialog';
-import { ExtendStayDialog } from './ExtendStayDialog';
-import { ExtendKeyCardDialog } from './ExtendKeyCardDialog';
 import { CardInformationSection } from './CardInformationSection';
 import { FolioSection } from './FolioSection';
-import { NoShowActions } from './NoShowActions';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ReservationTimeline } from './ReservationTimeline';
 import { GuestHistory } from './GuestHistory';
-import { Calendar, User, DoorClosed, Clock, Settings, FileText, LogIn, CalendarClock, AlertCircle, KeySquare } from 'lucide-react';
+import { Calendar, User, DoorClosed, Clock, FileText, AlertCircle, KeySquare } from 'lucide-react';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function ReservationDetail({ reservation }: { reservation: any }) {
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [isReassignDialogOpen, setIsReassignDialogOpen] = useState(false);
-  const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
-  const [isCheckInDialogOpen, setIsCheckInDialogOpen] = useState(false);
-  const [isExtendStayDialogOpen, setIsExtendStayDialogOpen] = useState(false);
-  const [isExtendKeyCardDialogOpen, setIsExtendKeyCardDialogOpen] = useState(false);
-
   const resRoom = reservation.reservationRooms?.[0];
   const room = resRoom?.room;
   const guest = reservation.primaryGuest;
-
-  const isEditable = reservation.status !== 'CHECKED_IN' && reservation.status !== 'CHECKED_OUT' && reservation.status !== 'CANCELLED';
-  const isCancellable = reservation.status === 'CONFIRMED';
-  const canExtendStay = reservation.status === 'CHECKED_IN';
-
-  const formatCurrency = (amount: number, currency?: string | null) => {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency || 'NGN' }).format(amount);
-  };
 
   // Determine if key card needs extension
   const activeCredential = reservation.lockCredentials?.[0];
@@ -70,14 +46,11 @@ export function ReservationDetail({ reservation }: { reservation: any }) {
               </p>
             </div>
           </div>
-          <Button variant="outline" className="shrink-0 bg-white dark:bg-transparent" onClick={() => setIsExtendKeyCardDialogOpen(true)}>
-            Extend Key Card
-          </Button>
         </div>
       )}
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between bg-card p-6 rounded-lg border shadow-sm">
+      <div className="flex flex-col gap-4 rounded-2xl border bg-gradient-to-br from-card to-muted/20 p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex items-center gap-3 mb-2">
             <h1 className="text-3xl font-bold">Reservation #{reservation.id.slice(0, 8).toUpperCase()}</h1>
@@ -89,30 +62,7 @@ export function ReservationDetail({ reservation }: { reservation: any }) {
             <Clock className="w-4 h-4" /> Created on {format(new Date(reservation.createdAt), 'PPP')}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3 mt-4 sm:mt-0">
-          {reservation.status === 'CONFIRMED' && room && (
-            <Button onClick={() => setIsCheckInDialogOpen(true)} className="bg-blue-600 hover:bg-blue-700">
-              <LogIn className="w-4 h-4 mr-2" /> Check In Guest
-            </Button>
-          )}
-          {canExtendStay && (
-            <Button onClick={() => setIsExtendStayDialogOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white">
-              <CalendarClock className="w-4 h-4 mr-2" /> Extend Stay
-            </Button>
-          )}
-          <Button variant="outline" onClick={() => setIsReassignDialogOpen(true)} disabled={!isEditable && reservation.status !== 'CHECKED_IN'}>
-            Reassign Room
-          </Button>
-          <Button variant="outline" onClick={() => setIsEditDialogOpen(true)} disabled={!isEditable}>
-            <Settings className="w-4 h-4 mr-2" /> Edit Details
-          </Button>
-          <Button variant="destructive" onClick={() => setIsCancelDialogOpen(true)} disabled={!isCancellable}>
-            Cancel Reservation
-          </Button>
-        </div>
       </div>
-
-      <NoShowActions reservation={reservation} onUpdated={() => window.location.reload()} />
 
       <Tabs defaultValue="overview" className="w-full">
         <TabsList className="mb-4">
@@ -198,15 +148,15 @@ export function ReservationDetail({ reservation }: { reservation: any }) {
         </Card>
 
           </div>
-          <FolioSection reservation={reservation} />
+          <FolioSection reservation={reservation} readOnly />
         </TabsContent>
 
         <TabsContent value="keycards">
-          <CardInformationSection reservation={reservation} />
+          <CardInformationSection reservation={reservation} readOnly />
         </TabsContent>
 
         <TabsContent value="history">
-          <GuestHistory guest={guest} />
+          <GuestHistory guest={guest} readOnly />
         </TabsContent>
 
         <TabsContent value="timeline">
@@ -214,36 +164,6 @@ export function ReservationDetail({ reservation }: { reservation: any }) {
         </TabsContent>
       </Tabs>
 
-      <EditReservationDialog 
-        open={isEditDialogOpen} 
-        onOpenChange={setIsEditDialogOpen} 
-        reservation={reservation} 
-      />
-      <RoomReassignmentDialog 
-        open={isReassignDialogOpen} 
-        onOpenChange={setIsReassignDialogOpen} 
-        reservation={reservation} 
-      />
-      <CancelReservationDialog 
-        open={isCancelDialogOpen} 
-        onOpenChange={setIsCancelDialogOpen} 
-        reservation={reservation} 
-      />
-      <CheckInDialog
-        open={isCheckInDialogOpen}
-        onOpenChange={setIsCheckInDialogOpen}
-        reservation={reservation}
-      />
-      <ExtendStayDialog
-        open={isExtendStayDialogOpen}
-        onOpenChange={setIsExtendStayDialogOpen}
-        reservation={reservation}
-      />
-      <ExtendKeyCardDialog
-        open={isExtendKeyCardDialogOpen}
-        onOpenChange={setIsExtendKeyCardDialogOpen}
-        reservation={reservation}
-      />
     </div>
   );
 }

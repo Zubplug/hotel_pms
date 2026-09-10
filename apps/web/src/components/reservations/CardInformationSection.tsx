@@ -221,12 +221,12 @@ function OperationRow({ op }: { op: any }) {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function CardInformationSection({ reservation }: { reservation: any }) {
+export function CardInformationSection({ reservation, readOnly = false }: { reservation: any; readOnly?: boolean }) {
   const [showAllOps, setShowAllOps] = useState(false);
 
   const credentials = reservation.lockCredentials || [];
   const operations = reservation.lockOperations || [];
-  const visibleOps = showAllOps ? operations : operations.slice(0, 5);
+  const visibleOps = readOnly || showAllOps ? operations : operations.slice(0, 5);
   const showCardRetry = shouldShowCardRetry(credentials, operations)
     && reservation.status === 'CHECKED_IN';
 
@@ -250,7 +250,7 @@ export function CardInformationSection({ reservation }: { reservation: any }) {
             </div>
             <p className="font-medium text-muted-foreground">No key cards issued</p>
             <p className="text-sm text-muted-foreground">Cards will appear here after check-in</p>
-            {showCardRetry && <RetryKeyCardButton reservation={reservation} className="mt-4 border-amber-300 text-amber-700" />}
+            {!readOnly && showCardRetry && <RetryKeyCardButton reservation={reservation} className="mt-4 border-amber-300 text-amber-700" />}
           </div>
         </CardContent>
       </Card>
@@ -279,7 +279,7 @@ export function CardInformationSection({ reservation }: { reservation: any }) {
           ) : (
             <p className="text-sm text-muted-foreground text-center py-4">No credentials issued yet</p>
           )}
-          {showCardRetry && (
+          {!readOnly && showCardRetry && (
             <div className="pt-2 border-t">
               <RetryKeyCardButton reservation={reservation} className="w-full border-amber-300 text-amber-700" />
             </div>
@@ -304,7 +304,7 @@ export function CardInformationSection({ reservation }: { reservation: any }) {
                 <OperationRow key={op.id} op={op} />
               ))}
             </div>
-            {operations.length > 5 && (
+            {!readOnly && operations.length > 5 && (
               <Button
                 variant="ghost"
                 size="sm"

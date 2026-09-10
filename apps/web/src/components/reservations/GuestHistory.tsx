@@ -1,12 +1,10 @@
 import { format } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { History, ArrowRight } from 'lucide-react';
+import { History } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import Link from 'next/link';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function GuestHistory({ guest }: { guest: any }) {
+export function GuestHistory({ guest, readOnly = false }: { guest: any; readOnly?: boolean }) {
   const pastReservations = guest?.reservations || [];
 
   if (!pastReservations || pastReservations.length === 0) {
@@ -54,11 +52,7 @@ export function GuestHistory({ guest }: { guest: any }) {
                 <div className="font-bold text-primary">
                   {formatCurrency(res.ratePlanSnapshot?.total || 0, res.currency || 'NGN')}
                 </div>
-                <Button variant="ghost" size="sm" asChild className="h-8 text-xs">
-                  <Link href={`/reservations/${res.id}`}>
-                    View Folio <ArrowRight className="w-3 h-3 ml-1" />
-                  </Link>
-                </Button>
+                {!readOnly && <span className="text-xs text-muted-foreground">View folio</span>}
               </div>
             </div>
           ))}

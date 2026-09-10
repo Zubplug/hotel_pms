@@ -6,13 +6,11 @@ import Link from 'next/link';
 import {
   CalendarDays, Search, User, BedDouble,
   ArrowRight, CheckCircle2, Clock, XCircle,
-  AlertCircle, LogIn, Filter, Plus,
+  AlertCircle, LogIn, Filter,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { LoadingState, EmptyState } from '@/components/ui/EmptyState';
-import { ReadCardCheckoutDialog } from '@/components/reservations/ReadCardCheckoutDialog';
-import { useProperty } from '@/components/PropertyProvider';
 import { formatRoomNumber } from '@/lib/format-room';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -60,12 +58,10 @@ function nightCount(checkIn: string, checkOut: string) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ReservationsPage() {
-  const { propertyId } = useProperty();
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [page, setPage] = useState(1);
-  const [quickCheckoutOpen, setQuickCheckoutOpen] = useState(false);
 
   // Debounce search input
   React.useEffect(() => {
@@ -102,29 +98,7 @@ export default function ReservationsPage() {
             Manage guest reservations and key card check-in
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button 
-            variant="outline" 
-            className="shrink-0 h-10 gap-1.5" 
-            onClick={() => setQuickCheckoutOpen(true)}
-          >
-            <LogIn className="h-4 w-4" /> {/* Or a different icon */}
-            Quick Checkout
-          </Button>
-          <Link href="/reservations/new">
-            <Button className="shrink-0 h-10 gap-1.5" id="btn-new-reservation">
-              <Plus className="h-4 w-4" />
-              New Reservation
-            </Button>
-          </Link>
-        </div>
       </div>
-
-      <ReadCardCheckoutDialog 
-        open={quickCheckoutOpen}
-        onOpenChange={setQuickCheckoutOpen}
-        propertyId={propertyId ?? ''}
-      />
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">

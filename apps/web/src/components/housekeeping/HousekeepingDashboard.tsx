@@ -2,16 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { useProperty } from '@/components/PropertyProvider';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import {
   Loader2,
   AlertCircle,
-  RefreshCcw,
-  Check,
-  X,
   BedDouble,
   Sparkles,
   ShieldCheck,
@@ -19,7 +14,6 @@ import {
   WifiOff,
   Wifi,
   TriangleAlert,
-  ChevronDown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatRoomNumber } from '@/lib/format-room';
@@ -99,13 +93,6 @@ const STATUS_CONFIG: Record<
   },
 };
 
-const STATUS_NEXT: Record<string, string[]> = {
-  CLEANING: ['INSPECTED', 'MAINTENANCE_REQUIRED'],
-  INSPECTED: [],
-  CANCELLED: [],
-  MAINTENANCE_REQUIRED: ['CLEANING'],
-};
-
 // ─── KPI card ─────────────────────────────────────────────────────────────────
 function KpiCard({
   label,
@@ -182,9 +169,6 @@ export default function HousekeepingDashboard() {
   const [tasks, setTasks] = useState<HKTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [managingTaskId, setManagingTaskId] = useState<string | null>(null);
-  const [selectedStatus, setSelectedStatus] = useState('');
-  const [savingTaskId, setSavingTaskId] = useState<string | null>(null);
 
   const fetchTasks = async () => {
     if (!propertyId) return;
@@ -214,22 +198,6 @@ export default function HousekeepingDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId, provider]);
 
-  const saveTaskStatus = async (taskId: string) => {
-    if (!selectedStatus) return;
-    setSavingTaskId(taskId);
-    setError(null);
-    try {
-      await provider.housekeeping.updateTask(taskId, selectedStatus);
-      setManagingTaskId(null);
-      setSelectedStatus('');
-      await fetchTasks();
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setSavingTaskId(null);
-    }
-  };
-
   // ── guard: no property ──
   if (!propertyId) {
     return (
@@ -243,7 +211,6 @@ export default function HousekeepingDashboard() {
 
   // ── guard: permissions ──
   const role = String((session?.user as any)?.role || '').toUpperCase();
-  const isReceptionist = role === 'RECEPTIONIST' || role === 'FRONT_DESK';
   const capabilities = ((session?.user as any)?.capabilities || []) as string[];
   const canManage =
     ['RECEPTIONIST', 'FRONT_DESK', 'MANAGER', 'ADMIN'].includes(role) ||
@@ -304,19 +271,6 @@ export default function HousekeepingDashboard() {
               )}
             </span>
 
-            <Button
-              variant="outline"
-              onClick={fetchTasks}
-              disabled={loading}
-              className="rounded-xl border-slate-200 bg-white hover:bg-slate-50 shadow-sm"
-            >
-              {loading ? (
-                <Loader2 className="w-4 h-4 animate-spin mr-2" />
-              ) : (
-                <RefreshCcw className="w-4 h-4 mr-2" />
-              )}
-              Refresh
-            </Button>
           </div>
         </div>
 
@@ -398,18 +352,10 @@ export default function HousekeepingDashboard() {
                     <th className="px-6 py-4 font-semibold">Priority</th>
                     <th className="px-6 py-4 font-semibold">Status</th>
                     <th className="px-6 py-4 font-semibold">Assigned To</th>
-                    <th className="px-6 py-4 font-semibold text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {tasks.map((task) => {
-                    const nextOptions = STATUS_NEXT[task.status] || [];
-                    const actionLabel = task.status === 'CLEANING'
-                      ? (isReceptionist ? 'Inspect' : 'Update')
-                      : 'Done';
-                    const isManaging = managingTaskId === task.id;
-                    const isSaving = savingTaskId === task.id;
-
                     return (
                       <tr
                         key={task.id}
@@ -460,70 +406,6 @@ export default function HousekeepingDashboard() {
                           )}
                         </td>
 
-                        {/* Action */}
-                        <td className="px-6 py-4 text-right">
-                          {isManaging ? (
-                            <div className="flex items-center justify-end gap-2">
-                              {/* styled native select */}
-                              <div className="relative">
-                                <select
-                                  value={selectedStatus}
-                                  onChange={(e) => setSelectedStatus(e.target.value)}
-                                  className="appearance-none h-9 rounded-xl border border-slate-200 bg-white pr-8 pl-3 text-xs text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                >
-                                  <option value="">Update status…</option>
-                                  {nextOptions.map((s) => (
-                                    <option key={s} value={s}>
-                                      {s.replace(/_/g, ' ')}
-                                    </option>
-                                  ))}
-                                </select>
-                                <ChevronDown className="absolute right-2.5 top-2.5 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
-                              </div>
-
-                              <Button
-                                size="icon"
-                                className="h-9 w-9 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
-                                onClick={() => saveTaskStatus(task.id)}
-                                disabled={!selectedStatus || isSaving}
-                              >
-                                {isSaving ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <Check className="h-4 w-4" />
-                                )}
-                              </Button>
-
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="h-9 w-9 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100"
-                                onClick={() => setManagingTaskId(null)}
-                                disabled={isSaving}
-                              >
-                                <X className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          ) : (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className={cn(
-                                'rounded-xl px-4 font-semibold text-xs border-slate-200 shadow-sm transition-all',
-                                nextOptions.length === 0
-                                  ? 'opacity-40 cursor-not-allowed'
-                                  : 'hover:border-blue-300 hover:text-blue-700 hover:bg-blue-50 hover:-translate-y-0.5',
-                              )}
-                              onClick={() => {
-                                setManagingTaskId(task.id);
-                                setSelectedStatus('');
-                              }}
-                              disabled={nextOptions.length === 0}
-                            >
-                              {actionLabel}
-                            </Button>
-                          )}
-                        </td>
                       </tr>
                     );
                   })}

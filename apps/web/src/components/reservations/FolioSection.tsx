@@ -17,7 +17,7 @@ import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { formatRoomNumber } from '@/lib/format-room';
 
-export function FolioSection({ reservation }: { reservation: any }) {
+export function FolioSection({ reservation, readOnly = false }: { reservation: any; readOnly?: boolean }) {
   const pathname = usePathname();
   const isFrontDesk = pathname.startsWith('/frontdesk');
   const [isAddPaymentOpen, setIsAddPaymentOpen] = useState(false);
@@ -106,6 +106,7 @@ export function FolioSection({ reservation }: { reservation: any }) {
   };
 
   const renderItemActions = (item: any) => {
+    if (readOnly) return null;
     const linkedPayment = findLinkedPayment(item);
     if (!linkedPayment) {
       return (
@@ -204,7 +205,7 @@ export function FolioSection({ reservation }: { reservation: any }) {
               {folio.type === 'CITY_LEDGER' ? 'CORPORATE SHARED' : folio.status}
             </Badge>
           </div>
-          <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto lg:justify-end">
+          {!readOnly && <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto lg:justify-end">
             {!isClosed && (
               <>
                 <Button
@@ -236,7 +237,7 @@ export function FolioSection({ reservation }: { reservation: any }) {
                 <ArrowRightLeft className="w-4 h-4 mr-2" /> Check Out
               </Button>
             )}
-          </div>
+          </div>}
         </CardHeader>
         <CardContent className="p-0">
           <div className="border-b bg-slate-50 p-4 sm:p-6">
@@ -279,13 +280,13 @@ export function FolioSection({ reservation }: { reservation: any }) {
                   <th className="w-36 px-4 py-3">Date</th>
                   <th className="px-4 py-3">Transaction</th>
                   <th className="w-44 px-4 py-3 text-right">Amount</th>
-                  <th className="w-40 px-4 py-3 text-right">Actions</th>
+                  {!readOnly && <th className="w-40 px-4 py-3 text-right">Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
                 {ledgerItems.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-6 py-8 text-center text-muted-foreground">
+                    <td colSpan={readOnly ? 3 : 4} className="px-6 py-8 text-center text-muted-foreground">
                       No transactions recorded.
                     </td>
                   </tr>
@@ -311,8 +312,7 @@ export function FolioSection({ reservation }: { reservation: any }) {
                         <td className={`whitespace-nowrap px-4 py-4 text-right font-bold tabular-nums ${isDebit ? 'text-slate-900' : 'text-emerald-700'}`}>
                           <span className="mr-1 text-xs font-medium text-slate-400">{isDebit ? '+' : '−'}</span>{formatCurrency(absAmount)}
                         </td>
-                        <td className="w-40 px-4 py-4"><div className="flex justify-end">{renderItemActions(item)}</div>
-                        </td>
+                        {!readOnly && <td className="w-40 px-4 py-4"><div className="flex justify-end">{renderItemActions(item)}</div></td>}
                       </tr>
                     );
                   })
@@ -326,7 +326,7 @@ export function FolioSection({ reservation }: { reservation: any }) {
                 const absAmount = Math.abs(item.amount);
                 return <div key={item.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                   <div className="flex items-start justify-between gap-3"><div className="min-w-0"><Badge variant={item.type === 'CHARGE' ? 'outline' : item.type === 'PAYMENT' ? 'default' : 'secondary'} className="text-[10px]">{item.type}</Badge><p className="mt-2 font-semibold text-slate-900">{item.description}</p><p className="mt-1 text-xs text-slate-500">{format(new Date(item.createdAt), 'MMM d, yyyy · h:mm a')}</p></div><p className={`shrink-0 text-lg font-black tabular-nums ${isDebit ? 'text-slate-900' : 'text-emerald-700'}`}>{isDebit ? '+' : '−'}{formatCurrency(absAmount)}</p></div>
-                  <div className="mt-3 border-t pt-3">{renderItemActions(item)}</div>
+                  {!readOnly && <div className="mt-3 border-t pt-3">{renderItemActions(item)}</div>}
                 </div>;
               })}
             </div>
@@ -334,6 +334,7 @@ export function FolioSection({ reservation }: { reservation: any }) {
         </CardContent>
       </Card>
 
+      {!readOnly && <>
       {/* Dialogs */}
       {pathname.startsWith('/frontdesk') ? (
         <FrontDeskAddPaymentDialog 
@@ -397,6 +398,7 @@ export function FolioSection({ reservation }: { reservation: any }) {
           }}
         />
       )}
+      </>}
     </>
   );
 }
