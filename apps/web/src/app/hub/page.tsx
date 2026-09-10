@@ -44,6 +44,11 @@ function getDirectLandingUrl(
     return '/frontdesk';
   }
 
+  // Accountant role → Accountant workspace
+  if (role === 'ACCOUNTANT') {
+    return '/accountant';
+  }
+
   // Stock / Procurement roles → Inventory dashboard
   if (['STOCK_MANAGER', 'STOCK_KEEPER', 'PROCUREMENT_MANAGER', 'OUTLET_HEAD'].includes(role)) {
     return '/inventory';
