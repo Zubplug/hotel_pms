@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react';
@@ -516,10 +516,35 @@ function PosSessionResolution({ item, onSuccess, onClose }: { item: any; onSucce
   const [error, setError] = useState<string | null>(null);
   const [declared, setDeclared] = useState('');
   const [reason, setReason] = useState('');
-  
+  const [openOrders, setOpenOrders] = useState<any[] | null>(null);
+  const [checkingOrders, setCheckingOrders] = useState(true);
+
   // expected is fetched from the session summary
   const expected = Number(item.expectedCash || 0);
   const variance = Number(declared || 0) - expected;
+
+  // On mount, fetch any open (unpaid, non-voided) orders for this session
+  useEffect(() => {
+    async function fetchOpenOrders() {
+      try {
+        setCheckingOrders(true);
+        const res = await fetch(`/api/v1/pos/sessions/${item.id}/open-orders`);
+        if (res.ok) {
+          const body = await res.json();
+          setOpenOrders(body.data ?? []);
+        } else {
+          setOpenOrders([]);
+        }
+      } catch {
+        setOpenOrders([]);
+      } finally {
+        setCheckingOrders(false);
+      }
+    }
+    fetchOpenOrders();
+  }, [item.id]);
+
+  const hasOpenOrders = (openOrders?.length ?? 0) > 0;
 
   const handleClose = async () => {
     if (!reason && variance !== 0) {
@@ -536,7 +561,7 @@ function PosSessionResolution({ item, onSuccess, onClose }: { item: any; onSucce
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(body.error?.message || 'Failed to close POS session');
+        throw new Error(body.error || 'Failed to close POS session');
       }
       toast.success('POS session closed and reconciled');
       onSuccess();
@@ -556,34 +581,134 @@ function PosSessionResolution({ item, onSuccess, onClose }: { item: any; onSucce
         </DialogDescription>
       </DialogHeader>
       {error && <div className="p-3 bg-rose-50 text-rose-600 rounded-lg text-sm border border-rose-100">{error}</div>}
-      <div className="py-4 space-y-4">
-        <div className="flex items-center justify-between p-3 border rounded-lg bg-slate-50">
-          <span className="text-sm font-medium">Expected Cash</span>
-          <span className="font-semibold">{expected.toFixed(2)}</span>
+
+      {checkingOrders ? (
+        <div className="py-8 flex items-center justify-center gap-2 text-slate-500 text-sm">
+          <Loader2 className="h-4 w-4 animate-spin" /> Checking for open orders…
         </div>
-        <div className="space-y-2">
-          <label className="text-sm font-medium">Actual Declared Cash</label>
-          <input type="number" className="w-full border rounded-md px-3 py-2 text-sm" value={declared} onChange={e => setDeclared(e.target.value)} placeholder="0.00" />
-        </div>
-        {declared && (
-          <div className={`flex items-center justify-between p-3 border rounded-lg ${variance === 0 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>
-            <span className="text-sm font-medium">Variance</span>
-            <span className="font-semibold">{variance > 0 ? '+' : ''}{variance.toFixed(2)}</span>
+      ) : hasOpenOrders ? (
+        /* ── Hard blocker: open orders exist ───────────────────────────── */
+        <div className="py-4 space-y-4">
+
+          {/* Main warning banner */}
+          <div className="p-4 bg-rose-50 border-2 border-rose-300 rounded-xl space-y-3">
+            <div className="flex items-start gap-3">
+              <div className="p-1.5 bg-rose-100 rounded-lg shrink-0">
+                <AlertTriangle className="h-5 w-5 text-rose-600" />
+              </div>
+              <div>
+                <p className="font-bold text-rose-700 text-base">
+                  Cannot Close Shift — {openOrders!.length} Open Order{openOrders!.length !== 1 ? 's' : ''} Must Be Resolved
+                </p>
+                <p className="text-rose-600 text-sm mt-0.5">
+                  This shift cannot be closed until all pending orders are settled or voided by the responsible waiter.
+                </p>
+              </div>
+            </div>
+
+            {/* Action Required steps */}
+            <div className="bg-white border border-rose-200 rounded-lg p-3 space-y-2">
+              <p className="text-xs font-bold uppercase tracking-wider text-rose-700">⚡ Action Required — Tell the Waiter to:</p>
+              <ol className="text-sm text-slate-700 space-y-1.5 list-none">
+                <li className="flex items-start gap-2">
+                  <span className="font-bold text-rose-600 shrink-0">1.</span>
+                  <span>Log back into their POS terminal using their PIN or staff card.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="font-bold text-rose-600 shrink-0">2.</span>
+                  <span>Open each order listed below and <strong>collect payment</strong> from the guest, OR</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="font-bold text-rose-600 shrink-0">3.</span>
+                  <span>If the table is empty, <strong>void the order</strong> with a valid reason before logging out.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="font-bold text-rose-600 shrink-0">4.</span>
+                  <span>Once all orders are resolved, return here and click <strong>Resolve</strong> again to close the shift.</span>
+                </li>
+              </ol>
+            </div>
           </div>
-        )}
-        {variance !== 0 && declared !== '' && (
+
+          {/* Order cards */}
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
+              Pending Orders ({openOrders!.length})
+            </p>
+            <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+              {openOrders!.map((order: any) => (
+                <div
+                  key={order.id}
+                  className="p-3 rounded-lg border border-rose-200 bg-white text-sm shadow-sm"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="space-y-0.5">
+                      <p className="font-bold text-slate-800">
+                        #{order.orderNumber}
+                        {order.tableNumber ? ` · Table ${order.tableNumber}` : ''}
+                      </p>
+                      {order.outletName && (
+                        <p className="text-xs text-slate-500">{order.outletName}</p>
+                      )}
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <span className="text-xs text-slate-400">Waiter:</span>
+                        <span className="text-xs font-semibold text-rose-700">
+                          {order.waiterName ?? 'Unknown — contact outlet supervisor'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-slate-400">Status:</span>
+                        <span className="text-xs font-medium capitalize text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded-full border border-amber-200">
+                          {order.status?.toLowerCase().replace('_', ' ')}
+                        </span>
+                      </div>
+                    </div>
+                    <span className="font-bold text-slate-800 shrink-0 text-base">
+                      ₦{Number(order.total || 0).toLocaleString('en-NG', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={onClose}>Dismiss</Button>
+          </DialogFooter>
+        </div>
+
+      ) : (
+        /* ── Normal settle form — no open orders ────────────────────────── */
+        <div className="py-4 space-y-4">
+          <div className="flex items-center justify-between p-3 border rounded-lg bg-slate-50">
+            <span className="text-sm font-medium">Expected Cash</span>
+            <span className="font-semibold">₦{expected.toLocaleString('en-NG', { minimumFractionDigits: 2 })}</span>
+          </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium">Variance Reason (Required)</label>
-            <input type="text" className="w-full border rounded-md px-3 py-2 text-sm" value={reason} onChange={e => setReason(e.target.value)} placeholder="Explain the variance..." />
+            <label className="text-sm font-medium">Actual Declared Cash</label>
+            <input type="number" className="w-full border rounded-md px-3 py-2 text-sm" value={declared} onChange={e => setDeclared(e.target.value)} placeholder="0.00" />
           </div>
-        )}
-        <Button className="w-full" onClick={handleClose} disabled={loading || declared === ''}>
-          {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Confirm & Close Session'}
-        </Button>
-      </div>
+          {declared && (
+            <div className={`flex items-center justify-between p-3 border rounded-lg ${variance === 0 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>
+              <span className="text-sm font-medium">Variance</span>
+              <span className="font-semibold">{variance > 0 ? '+' : ''}{variance.toLocaleString('en-NG', { minimumFractionDigits: 2 })}</span>
+            </div>
+          )}
+          {variance !== 0 && declared !== '' && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Variance Reason (Required)</label>
+              <input type="text" className="w-full border rounded-md px-3 py-2 text-sm" value={reason} onChange={e => setReason(e.target.value)} placeholder="Explain the variance..." />
+            </div>
+          )}
+          <Button className="w-full" onClick={handleClose} disabled={loading || declared === ''}>
+            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Confirm & Close Session'}
+          </Button>
+        </div>
+      )}
     </>
   );
 }
+
 
 function FrontdeskShiftResolution({ item, onSuccess, onClose }: { item: any; onSuccess: () => void; onClose: () => void }) {
   const [loading, setLoading] = useState(false);

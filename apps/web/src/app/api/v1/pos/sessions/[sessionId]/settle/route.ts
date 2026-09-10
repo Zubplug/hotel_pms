@@ -29,6 +29,33 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
     if (current.status !== 'OPEN' && current.status !== 'RECONCILIATION_REQUIRED' && current.controlStatus !== 'RETURNED') return NextResponse.json({ error: `Session cannot be settled from ${current.status}` }, { status: 409 });
 
+    // ── Block shift close if cashier has open (unsettled) orders ──────────
+    const openOrders = await prisma.posOrder.findMany({
+      where: {
+        sessionId,
+        paymentStatus: 'UNPAID',
+        status: { not: 'VOIDED' },
+      },
+      select: { id: true, orderNumber: true, tableNumber: true, total: true, status: true },
+    });
+    if (openOrders.length > 0) {
+      return NextResponse.json(
+        {
+          error: `Cannot close shift: ${openOrders.length} open order(s) must be settled or voided first.`,
+          code: 'OPEN_ORDERS_EXIST',
+          openOrders: openOrders.map(o => ({
+            id: o.id,
+            orderNumber: o.orderNumber,
+            tableNumber: o.tableNumber,
+            total: Number(o.total),
+            status: o.status,
+          })),
+        },
+        { status: 409 }
+      );
+    }
+
+
     let ctx: any;
     if (actor?.user) {
       ctx = await requireOrganizationContext(actor.user.id);
