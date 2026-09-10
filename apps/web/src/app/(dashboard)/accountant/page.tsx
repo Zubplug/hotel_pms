@@ -80,9 +80,9 @@ export default function AccountantOverviewPage() {
             </div>
           </div>
           <div className="mt-4 relative z-10">
-            <span className="text-3xl font-bold text-white tracking-tight">₦{formatCurrency(currentRev).replace('$', '')}</span>
+            <span className="text-3xl font-bold text-white tracking-tight">{formatCurrency(Number(currentRev) || 0)}</span>
             <div className="mt-2 flex items-center gap-2 text-sm">
-              <span className={`inline-flex items-center gap-1 font-medium ₦{revGrowth >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+              <span className={`inline-flex items-center gap-1 font-medium ${revGrowth >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                 {revGrowth >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
                 {Math.abs(revGrowth).toFixed(1)}%
               </span>
@@ -101,7 +101,7 @@ export default function AccountantOverviewPage() {
             </div>
           </div>
           <div className="mt-4 relative z-10">
-            <span className="text-3xl font-bold text-white tracking-tight">₦{formatCurrency(currentExpenses).replace('$', '')}</span>
+            <span className="text-3xl font-bold text-white tracking-tight">{formatCurrency(Number(currentExpenses) || 0)}</span>
             <div className="mt-2 flex items-center gap-2 text-sm text-slate-500">
               <span>This period</span>
             </div>
@@ -118,7 +118,7 @@ export default function AccountantOverviewPage() {
             </div>
           </div>
           <div className="mt-4 relative z-10">
-            <span className="text-3xl font-bold text-white tracking-tight">₦{formatCurrency(arTotal).replace('$', '')}</span>
+            <span className="text-3xl font-bold text-white tracking-tight">{formatCurrency(Number(arTotal) || 0)}</span>
             <div className="mt-2 flex items-center gap-2 text-sm">
               <span className="text-slate-500">Outstanding</span>
             </div>
