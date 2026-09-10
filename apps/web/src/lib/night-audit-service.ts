@@ -129,7 +129,7 @@ export async function getSystemIntegrity(ctx: TenantContext, propertyId: string)
       outlet: { propertyId },
       businessDate,
       paymentStatus: { not: 'PAID' },
-      status: { notIn: ['VOIDED', 'CANCELLED', 'CLOSED'] },
+      status: { notIn: ['VOIDED', 'CLOSED'] },
     },
     select: {
       id: true,

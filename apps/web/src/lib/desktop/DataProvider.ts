@@ -137,6 +137,8 @@ export interface LodgeCoreDataProvider {
     // Service-first waiter flow
     fireItems(orderId: string, items: any[], operatorToken: string): Promise<{ data: any, error: string | null }>;
     getActiveOrders(sessionId: string, operatorToken: string, filter?: string): Promise<{ data: any[], error: string | null }>;
+    getPendingOrdersForSession(sessionId: string): Promise<{ data: any[], error: string | null }>;
+    voidWholeOrder(orderId: string, reason: string, isBarOrder: boolean, supervisorPin?: string): Promise<{ data: any, error: string | null }>;
     getProductionBatches(outletId: string, station: string): Promise<{ data: any[], error: string | null }>;
     updateBatchStatus(batchId: string, status: string): Promise<{ data: any, error: string | null }>;
   };
