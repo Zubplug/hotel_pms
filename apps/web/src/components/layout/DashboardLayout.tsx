@@ -102,7 +102,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     .split(/\s+/)
     .filter(Boolean)
     .slice(0, 2)
-    .map((part) => part[0])
+    .map((part: string) => part[0])
     .join('')
     .toUpperCase() || '??';
 
