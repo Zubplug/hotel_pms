@@ -8,7 +8,7 @@ import { FileText, Clock as Clock3, Download, Printer, Share2, FileSpreadsheet }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useProperty } from '@/components/PropertyProvider';
 
-export default function ReportsGeneratorPage() {
+export default function ReportsGeneratorPage({ managerMode = false }: { managerMode?: boolean }) {
   const { propertyId } = useProperty();
   
   const [businessDate, setBusinessDate] = useState<string | null>(null);
@@ -89,7 +89,8 @@ export default function ReportsGeneratorPage() {
                 <CardFooter className="pt-2 flex gap-2 border-t mt-4 bg-muted/10 rounded-b-xl">
                   <Button variant="ghost" size="sm" className="flex-1 text-muted-foreground hover:text-foreground" onClick={() => {
                     if (businessDate) {
-                      window.location.href = `/night-audit/reports/print/${report.slug}?propertyId=${propertyId}&businessDate=${businessDate}`;
+                      const reportBasePath = managerMode ? '/general-manager/night-audit/reports/print' : '/night-audit/reports/print';
+                      window.location.href = `${reportBasePath}/${report.slug}?propertyId=${propertyId}&businessDate=${businessDate}`;
                     } else {
                       alert('Business date is required to view reports.');
                     }

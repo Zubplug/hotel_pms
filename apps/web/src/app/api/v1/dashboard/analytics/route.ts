@@ -21,16 +21,16 @@ async function buildInventoryAndAuditAnalytics(propertyIds: string[], businessDa
 
   const [stockItems, openAlerts, transactions, properties, audits] = await Promise.all([
     prisma.stockItem.findMany({
-      where: { propertyId: { in: propertyIds }, isActive: true },
+      where: { propertyId: { in: propertyIds }, isActive: true, warehouse: { posOutletId: null } },
       select: { propertyId: true, quantityOnHand: true, costPrice: true, reorderLevel: true },
     }),
     prisma.inventoryAlert.groupBy({
       by: ['propertyId'],
-      where: { propertyId: { in: propertyIds }, status: 'OPEN' },
+      where: { propertyId: { in: propertyIds }, status: 'OPEN', stockItem: { warehouse: { posOutletId: null } } },
       _count: { id: true },
     }),
     prisma.stockTransaction.findMany({
-      where: { propertyId: { in: propertyIds }, businessDate: { gte: trendStart, lte: endOfBusinessDay(businessDate) } },
+      where: { propertyId: { in: propertyIds }, businessDate: { gte: trendStart, lte: endOfBusinessDay(businessDate) }, warehouse: { posOutletId: null } },
       select: { businessDate: true, source: true, totalValue: true },
       orderBy: { businessDate: 'asc' },
     }),

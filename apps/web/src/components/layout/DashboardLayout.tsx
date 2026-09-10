@@ -97,10 +97,15 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     }
   }, [status, router]);
 
-  const userInitials = session?.user?.email
-    ? session.user.email.slice(0, 2).toUpperCase()
-    : '??';
-  
+  const userDisplayName = session?.user?.name?.trim() || session?.user?.email || 'User';
+  const userInitials = userDisplayName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase() || '??';
+
   const role = (session?.user as any)?.role || 'STAFF';
   const isSuperAdmin = (session?.user as any)?.isSuperAdmin;
 
@@ -224,7 +229,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               </div>
               <div className="flex-1 text-left min-w-0">
                 <p className="text-sm font-medium truncate">
-                  {session?.user?.email ?? 'User'}
+                  {userDisplayName}
                 </p>
                 <p className="text-xs text-muted-foreground truncate">
                   {['SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'CEO'].includes(String(role).toUpperCase()) ? 'General Manager' : 'Staff'}
