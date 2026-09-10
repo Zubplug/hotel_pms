@@ -17,6 +17,7 @@ export type KPISnapshot = {
   revpar: number;
   availableRooms: number;
   occupiedRooms: number;
+  outOfOrderRooms: number;
   revenue: RevenueSnapshot;
 };
 
@@ -197,6 +198,7 @@ export async function getExecutiveKPISnapshot(propertyId: string, targetDate?: D
     revpar: Number(revpar.toFixed(2)),
     availableRooms: roomStats.availableRooms,
     occupiedRooms: roomStats.occupiedRooms,
+    outOfOrderRooms: roomStats.outOfOrderRooms,
     revenue
   };
 }
@@ -225,7 +227,37 @@ export async function getExecutiveRevenueTrend(propertyId: string, endBusinessDa
     }
   });
 
-  // Group by date string (yyyy-MM-dd)
+  const occupancyStart = new Date(endBusinessDate);
+  occupancyStart.setUTCDate(occupancyStart.getUTCDate() - (days - 1));
+  const occupancyEnd = new Date(endBusinessDate);
+  occupancyEnd.setUTCDate(occupancyEnd.getUTCDate() + 1);
+
+  const [rooms, reservations, blocks] = await Promise.all([
+    prisma.room.findMany({ where: { propertyId, isActive: true }, select: { id: true } }),
+    prisma.reservationRoom.findMany({
+      where: {
+        room: { propertyId, isActive: true },
+        status: 'ACTIVE',
+        checkIn: { lt: occupancyEnd },
+        checkOut: { gt: occupancyStart },
+        reservation: { status: { in: ['CHECKED_IN', 'CHECKED_OUT'] } },
+      },
+      select: { roomId: true, checkIn: true, checkOut: true },
+    }),
+    prisma.roomBlock.findMany({
+      where: {
+        propertyId,
+        status: 'ACTIVE',
+        startDate: { lt: occupancyEnd },
+        endDate: { gte: occupancyStart },
+        type: { in: ['OUT_OF_ORDER', 'OUT_OF_SERVICE', 'MAINTENANCE', 'HOUSE_USE', 'OWNER_USE', 'INVENTORY_BLOCK'] },
+      },
+      select: { roomId: true, startDate: true, endDate: true },
+    }),
+  ]);
+
+  // Group by date string (yyyy-MM-dd). Occupancy is based on room stays and
+  // excludes rooms blocked from sale for that business date.
   const dailyTotals = new Map<string, number>();
   let totalRevenue = 0;
 
@@ -255,6 +287,27 @@ export async function getExecutiveRevenueTrend(propertyId: string, endBusinessDa
     totalRevenue += dayRev;
   }
 
+  const roomCount = rooms.length;
+  const trendWithOccupancy = trendDays.map((day) => {
+    const dayStart = new Date(`${day.businessDate}T00:00:00.000Z`);
+    const dayEnd = new Date(`${day.businessDate}T23:59:59.999Z`);
+    const occupiedRoomIds = new Set(
+      reservations
+        .filter((room) => room.checkIn <= dayEnd && room.checkOut > dayStart && room.roomId)
+        .map((room) => room.roomId as string),
+    );
+    const blockedRoomIds = new Set(
+      blocks
+        .filter((block) => block.startDate <= dayEnd && block.endDate >= dayStart)
+        .map((block) => block.roomId),
+    );
+    const availableRooms = Math.max(0, roomCount - blockedRoomIds.size);
+    return {
+      ...day,
+      occupancyPct: availableRooms > 0 ? Number(((occupiedRoomIds.size / availableRooms) * 100).toFixed(1)) : 0,
+    };
+  });
+
   let previousTotal = 0;
   for (let i = days * 2 - 1; i >= days; i--) {
     const d = new Date(endBusinessDate);
@@ -267,7 +320,7 @@ export async function getExecutiveRevenueTrend(propertyId: string, endBusinessDa
     : Number((((totalRevenue - previousTotal) / previousTotal) * 100).toFixed(1));
 
   return {
-    days: trendDays,
+    days: trendWithOccupancy,
     total: totalRevenue,
     changePercent
   };

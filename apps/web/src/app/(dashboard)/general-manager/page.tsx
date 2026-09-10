@@ -1,443 +1,108 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
+import Link from 'next/link';
 import {
-  TrendingUp,
-  Banknote,
-  Users,
-  Activity,
-  CalendarCheck,
-  AlertCircle,
-  Building,
-  Wrench
+  Activity, ArrowUpRight, Banknote, BarChart3, BedDouble,
+  CalendarCheck, ClipboardList, CreditCard, Gauge, Hotel,
+  Package, RefreshCw, Settings, ShieldAlert, TrendingUp,
+  Users, Utensils, Wrench, MoonStar,
 } from 'lucide-react';
-import { LoadingState } from '@/components/ui/EmptyState';
-import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, AreaChart, Area, Bar, ComposedChart
-, Tooltip} from 'recharts';
+import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { LoadingState, ErrorState } from '@/components/ui/EmptyState';
+import { Area, AreaChart, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { formatCurrency } from '@/lib/utils';
 
-interface DashboardAnalytics {
+type Analytics = {
+  generatedAt: string;
+  scope: { propertyId: string; properties: Array<{ id: string; name: string; code: string }> };
   kpis: {
-    netCollected30d: number;
-    occupancy: number;
-    activeGuests: number;
-    receivables: number;
-    operationalHealth: {
-      available: number;
-      occupied: number;
-      cleaning: number;
-      outOfOrder: number;
-    };
+    revenueToday: number; roomRevenue: number; fbRevenue: number; otherRevenue: number;
+    occupancy: number; adr: number; revpar: number; occupiedRooms: number; availableRooms: number;
+    activeGuests: number; arrivals: number; departures: number; receivables: number;
+    receivablesCount: number; pendingApprovals: number; housekeepingOpen: number;
+    maintenanceOpen: number; offlineTerminals: number;
   };
-  trend: Array<{
-    date: string;
-    revenue: number;
-    occupancyPct: number;
-    roomNights: number;
-  }>;
-  properties: Array<{
-    id: string;
-    name: string;
-    occupancy: number;
-    netCollected: number;
-    adr: number;
-    outOfOrder: number;
-  }>;
-  activity: Array<{
-    id: string;
-    action: string;
-    property: string;
-    timeAgo: string;
-    details: any;
-  }>;
+  trend: Array<{ date: string; revenue: number; occupancyPct: number }>;
+  properties: Array<{ id: string; name: string; code: string; occupancy: number; adr: number; revpar: number; revenue: number; outOfOrder: number; arrivals: number; departures: number; alerts: number }>;
+  activity: Array<{ id: string; action: string; property: string; timeAgo: string; details?: any }>;
+};
+
+const money = (value: number) => formatCurrency(Number(value || 0), 'NGN');
+const compactMoney = (value: number) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', notation: 'compact', maximumFractionDigits: 1 }).format(Number(value || 0));
+
+function Kpi({ label, value, detail, icon: Icon, tone }: { label: string; value: string; detail: string; icon: React.ElementType; tone: string }) {
+  return <Card className="overflow-hidden border-muted/60 shadow-sm"><CardContent className="p-5"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">{label}</p><p className="mt-2 text-2xl font-bold tracking-tight">{value}</p><p className="mt-1 text-xs text-muted-foreground">{detail}</p></div><div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tone}`}><Icon className="h-5 w-5" /></div></div></CardContent></Card>;
 }
 
-const formatCompactCurrency = (value: number) => {
-  return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', notation: 'compact', maximumFractionDigits: 1 }).format(value);
-};
+function ModuleLink({ href, label, detail, icon: Icon, tone }: { href: string; label: string; detail: string; icon: React.ElementType; tone: string }) {
+  return <Link href={href} className="group flex items-center gap-3 rounded-2xl border bg-card p-4 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"><div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tone}`}><Icon className="h-5 w-5" /></div><div className="min-w-0 flex-1"><p className="font-semibold group-hover:text-primary">{label}</p><p className="truncate text-xs text-muted-foreground">{detail}</p></div><ArrowUpRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-primary" /></Link>;
+}
+
+function ComingSoonModule({ label, detail, icon: Icon }: { label: string; detail: string; icon: React.ElementType }) {
+  return <div className="flex items-center gap-3 rounded-2xl border border-dashed bg-muted/20 p-4"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500"><Icon className="h-5 w-5" /></div><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><p className="font-semibold">{label}</p><Badge variant="outline" className="text-[10px]">Coming soon</Badge></div><p className="truncate text-xs text-muted-foreground">{detail}</p></div></div>;
+}
 
 export default function GeneralManagerDashboardPage() {
   const { data: session } = useLodgeCoreSession();
-  const [selectedPropertyId, setSelectedPropertyId] = useState<string>('ALL');
-
-  const { data: propertiesList, isLoading: loadingProps } = useQuery({
-    queryKey: ['properties', 'list'],
+  const [propertyId, setPropertyId] = useState('ALL');
+  const { data, isLoading, isError, refetch, isFetching } = useQuery({
+    queryKey: ['general-manager', 'analytics', propertyId],
     queryFn: async () => {
-      const res = await fetch('/api/v1/properties?pageSize=50');
-      if (!res.ok) return { data: [] };
-      return res.json();
+      const response = await fetch(`/api/v1/dashboard/analytics${propertyId === 'ALL' ? '' : `?propertyId=${propertyId}`}`);
+      if (!response.ok) throw new Error('Unable to load management analytics');
+      return (await response.json()).data as Analytics;
     },
   });
-
-  const { data: analyticsRes, isLoading: loadingAnalytics } = useQuery({
-    queryKey: ['dashboard', 'analytics', selectedPropertyId],
-    queryFn: async () => {
-      const url = selectedPropertyId === 'ALL' 
-        ? '/api/v1/dashboard/analytics' 
-        : `/api/v1/dashboard/analytics?propertyId=${selectedPropertyId}`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error('Failed to fetch analytics');
-      return res.json();
-    },
+  const { data: propertiesRes } = useQuery({
+    queryKey: ['general-manager', 'properties'],
+    queryFn: async () => (await fetch('/api/v1/properties?pageSize=100')).json(),
   });
 
-  const analytics: DashboardAnalytics | undefined = analyticsRes?.data;
-  const properties = propertiesList?.data || [];
-  const isLoading = loadingProps || loadingAnalytics;
+  const properties = propertiesRes?.data || data?.scope?.properties || [];
+  const firstName = session?.user?.name?.split(' ')[0] || session?.user?.email?.split('@')[0] || 'Manager';
+  const greeting = new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening';
+  const alertCount = data ? data.kpis.pendingApprovals + data.kpis.housekeepingOpen + data.kpis.maintenanceOpen + data.kpis.offlineTerminals : 0;
+  const sortedProperties = useMemo(() => [...(data?.properties || [])].sort((a, b) => b.revenue - a.revenue), [data?.properties]);
 
-  const greeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 17) return 'Good afternoon';
-    return 'Good evening';
-  };
+  if (isLoading) return <LoadingState message="Preparing the management cockpit…" />;
+  if (isError || !data) return <ErrorState description="Management analytics could not be loaded." action={<Button onClick={() => refetch()}>Try again</Button>} />;
 
-  const firstName = session?.user?.name?.split(' ')[0] || session?.user?.email?.split('@')[0] || 'Executive';
-
-  return (
-    <div className="space-y-8 animate-in fade-in duration-700 pb-10">
-      {/* Header & Property Selector */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            {greeting()}, {firstName}
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-medium text-muted-foreground">Portfolio:</span>
-          <Select value={selectedPropertyId} onValueChange={(val: any) => val && setSelectedPropertyId(val)}>
-            <SelectTrigger className="w-[240px] bg-background">
-              <SelectValue placeholder="All Properties">
-                {selectedPropertyId === 'ALL'
-                  ? 'All Properties'
-                  : properties.find((property: any) => property.id === selectedPropertyId)?.name || 'All Properties'}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">All Properties</SelectItem>
-              {properties.map((p: any) => (
-                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+  return <div className="space-y-7 pb-10">
+    <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-primary/80 p-6 text-white shadow-xl sm:p-8">
+      <div className="pointer-events-none absolute -right-16 -top-24 h-64 w-64 rounded-full border-[30px] border-white/10" />
+      <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+        <div><div className="mb-3 flex items-center gap-2 text-sm font-medium text-white/70"><Gauge className="h-4 w-4" /> Executive control centre <span className="h-1 w-1 rounded-full bg-emerald-400" /> Live data</div><h1 className="text-3xl font-bold tracking-tight sm:text-4xl">{greeting}, {firstName}</h1><p className="mt-2 max-w-xl text-sm text-white/70">A single view of revenue, rooms, people, operations, and risk across your authorized properties.</p></div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center"><span className="text-xs font-semibold uppercase tracking-wider text-white/60">Scope</span><Select value={propertyId} onValueChange={(value) => value && setPropertyId(value)}><SelectTrigger className="w-full border-white/20 bg-white/10 text-white sm:w-[250px]"><SelectValue placeholder="All properties" /></SelectTrigger><SelectContent><SelectItem value="ALL">All properties</SelectItem>{properties.map((property: any) => <SelectItem key={property.id} value={property.id}>{property.name}</SelectItem>)}</SelectContent></Select><Button variant="ghost" size="icon" onClick={() => refetch()} className="text-white hover:bg-white/10 hover:text-white" aria-label="Refresh dashboard"><RefreshCw className={isFetching ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} /></Button></div>
       </div>
+    </section>
 
-      {isLoading || !analytics ? (
-        <LoadingState message="Aggregating financial & operational data..." />
-      ) : (
-        <>
-          {/* KPI Cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-            <Card className="border-muted/60 bg-gradient-to-br from-card to-muted/20">
-              <CardContent className="p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-sm font-medium text-muted-foreground">Net Collected (30d)</p>
-                  <div className="h-8 w-8 rounded-full bg-emerald-500/10 flex items-center justify-center">
-                    <Banknote className="h-4 w-4 text-emerald-600" />
-                  </div>
-                </div>
-                <p className="text-2xl font-bold">{formatCompactCurrency(analytics.kpis.netCollected30d)}</p>
-                <p className="text-xs text-muted-foreground mt-1">Gross payments minus refunds</p>
-              </CardContent>
-            </Card>
-
-            <Card className="border-muted/60 bg-gradient-to-br from-card to-muted/20">
-              <CardContent className="p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-sm font-medium text-muted-foreground">Occupancy (Today)</p>
-                  <div className="h-8 w-8 rounded-full bg-blue-500/10 flex items-center justify-center">
-                    <CalendarCheck className="h-4 w-4 text-blue-600" />
-                  </div>
-                </div>
-                <p className="text-2xl font-bold">{analytics.kpis.occupancy.toFixed(1)}%</p>
-                <p className="text-xs text-muted-foreground mt-1">Sellable rooms occupied</p>
-              </CardContent>
-            </Card>
-
-            <Card className="border-muted/60 bg-gradient-to-br from-card to-muted/20">
-              <CardContent className="p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-sm font-medium text-muted-foreground">Active Guests</p>
-                  <div className="h-8 w-8 rounded-full bg-purple-500/10 flex items-center justify-center">
-                    <Users className="h-4 w-4 text-purple-600" />
-                  </div>
-                </div>
-                <p className="text-2xl font-bold">{analytics.kpis.activeGuests}</p>
-                <p className="text-xs text-muted-foreground mt-1">Currently checked in</p>
-              </CardContent>
-            </Card>
-
-            <Card className="border-muted/60 bg-gradient-to-br from-card to-muted/20">
-              <CardContent className="p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-sm font-medium text-muted-foreground">Receivables</p>
-                  <div className="h-8 w-8 rounded-full bg-orange-500/10 flex items-center justify-center">
-                    <AlertCircle className="h-4 w-4 text-orange-600" />
-                  </div>
-                </div>
-                <p className="text-2xl font-bold">{formatCompactCurrency(analytics.kpis.receivables)}</p>
-                <p className="text-xs text-muted-foreground mt-1">Outstanding folio balances</p>
-              </CardContent>
-            </Card>
-
-            <Card className="border-muted/60 bg-gradient-to-br from-card to-muted/20">
-              <CardContent className="p-5">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-sm font-medium text-muted-foreground">Operational Health</p>
-                  <div className="h-8 w-8 rounded-full bg-cyan-500/10 flex items-center justify-center">
-                    <Activity className="h-4 w-4 text-cyan-600" />
-                  </div>
-                </div>
-                <div className="space-y-1 mt-3">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-muted-foreground">Available</span>
-                    <span className="font-medium text-emerald-600">{analytics.kpis.operationalHealth.available.toFixed(0)}%</span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-muted-foreground">Cleaning</span>
-                    <span className="font-medium text-yellow-600">{analytics.kpis.operationalHealth.cleaning.toFixed(0)}%</span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-muted-foreground">Out of Order</span>
-                    <span className="font-medium text-red-600">{analytics.kpis.operationalHealth.outOfOrder.toFixed(0)}%</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-            {/* Main Chart */}
-            <Card className="xl:col-span-2 border-muted/60 shadow-sm">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg font-semibold flex items-center">
-                  <TrendingUp className="mr-2 h-5 w-5 text-primary" />
-                  Revenue & Occupancy Trend (14 Days)
-                </CardTitle>
-                <CardDescription>
-                  Historical comparison of net collected revenue vs room occupancy
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="h-[350px] w-full mt-4">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={analytics.trend} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                          <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" strokeOpacity={0.1} />
-                      <XAxis 
-                        dataKey="date" 
-                        axisLine={false}
-                        tickLine={false}
-                        tick={{ fontSize: 12 }}
-                        tickFormatter={(val) => new Date(val).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                        dy={10}
-                      />
-                      <YAxis 
-                        yAxisId="left" 
-                        axisLine={false}
-                        tickLine={false}
-                        tick={{ fontSize: 12 }}
-                        tickFormatter={(val) => val > 1000 ? formatCurrency(val/1000000) + 'M' : formatCurrency(val)}
-                        dx={-10}
-                      />
-                      <YAxis 
-                        yAxisId="right" 
-                        orientation="right"
-                        axisLine={false}
-                        tickLine={false}
-                        tick={{ fontSize: 12 }}
-                        tickFormatter={(val) => `${val}%`}
-                        dx={10}
-                      />
-                      <Tooltip 
-                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                        formatter={(value: any, name: any) => {
-                          if (name === 'Revenue') return [formatCurrency(value), 'Net Collected'];
-                          if (name === 'Occupancy %') return [`${value}%`, 'Occupancy'];
-                          if (name === 'Room Nights') return [value, 'Room Nights'];
-                          return [value, name];
-                        }}
-                        labelFormatter={(label: any) => new Date(label).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
-                      />
-                      <Area 
-                        yAxisId="left"
-                        type="monotone" 
-                        dataKey="revenue" 
-                        name="Revenue"
-                        stroke="#10b981" 
-                        strokeWidth={2}
-                        fillOpacity={1} 
-                        fill="url(#colorRevenue)" 
-                      />
-                      <Line 
-                        yAxisId="right"
-                        type="monotone" 
-                        dataKey="occupancyPct" 
-                        name="Occupancy %"
-                        stroke="#3b82f6" 
-                        strokeWidth={3}
-                        dot={{ r: 4, strokeWidth: 2 }}
-                        activeDot={{ r: 6 }}
-                      />
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Live Activity Feed */}
-            <Card className="border-muted/60 shadow-sm flex flex-col">
-              <CardHeader className="pb-3 border-b border-muted/50">
-                <CardTitle className="text-lg font-semibold flex items-center">
-                  <Activity className="mr-2 h-5 w-5 text-primary" />
-                  Live Activity
-                </CardTitle>
-                <CardDescription>Recent portfolio-wide events</CardDescription>
-              </CardHeader>
-              <CardContent className="pt-4 flex-1 overflow-y-auto max-h-[350px] pr-2 custom-scrollbar">
-                {analytics.activity.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center mt-10">No recent activity found.</p>
-                ) : (
-                  <div className="space-y-5">
-                    {analytics.activity.map((event, idx) => {
-                      let icon = <Activity className="h-4 w-4 text-gray-500" />;
-                      let bgColor = "bg-gray-500/10";
-                      let title = "System Event";
-                      let details = "";
-
-                      if (event.action === 'GUEST_CHECK_IN') {
-                        icon = <Users className="h-4 w-4 text-blue-500" />;
-                        bgColor = "bg-blue-500/10";
-                        title = "Guest Checked In";
-                        details = `Reservation ${event.details?.reservationId?.substring(0, 8) || ''}`;
-                      } else if (event.action === 'PAYMENT_RECEIVED') {
-                        icon = <Banknote className="h-4 w-4 text-emerald-500" />;
-                        bgColor = "bg-emerald-500/10";
-                        title = "Payment Received";
-                        details = event.details?.amount ? formatCurrency(Number(event.details.amount)) : '';
-                      } else if (event.action === 'MAINTENANCE_TICKET_CREATED') {
-                        icon = <Wrench className="h-4 w-4 text-orange-500" />;
-                        bgColor = "bg-orange-500/10";
-                        title = "Maintenance Issue";
-                        details = `Priority: ${event.details?.priority || 'Normal'}`;
-                      } else if (event.action === 'ROOM_STATUS_UPDATED') {
-                        icon = <Building className="h-4 w-4 text-purple-500" />;
-                        bgColor = "bg-purple-500/10";
-                        title = "Room Status Changed";
-                        details = `${event.details?.oldStatus || ''} → ${event.details?.newStatus || ''}`;
-                      }
-
-                      return (
-                        <div key={event.id} className="flex gap-3 relative">
-                          {idx !== analytics.activity.length - 1 && (
-                            <div className="absolute left-[15px] top-8 bottom-[-16px] w-[2px] bg-muted" />
-                          )}
-                          <div className={`h-8 w-8 rounded-full ${bgColor} flex items-center justify-center shrink-0 z-10`}>
-                            {icon}
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium">{title}</p>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
-                              <span className="font-medium">{event.property}</span>
-                              <span>•</span>
-                              <span>
-                                {(() => {
-                                  const diff = Date.now() - new Date(event.timeAgo).getTime();
-                                  const mins = Math.floor(diff / 60000);
-                                  const hours = Math.floor(mins / 60);
-                                  if (mins < 60) return `${mins} min ago`;
-                                  if (hours < 24) return `${hours} hrs ago`;
-                                  return '1 day ago';
-                                })()}
-                              </span>
-                            </div>
-                            {details && <p className="text-xs text-muted-foreground mt-1 truncate max-w-[200px]">{details}</p>}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Property Performance Table */}
-          <Card className="border-muted/60 shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-lg font-semibold flex items-center">
-                <Building className="mr-2 h-5 w-5 text-primary" />
-                Property Performance
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                  <thead className="text-xs text-muted-foreground uppercase bg-muted/30">
-                    <tr>
-                      <th className="px-4 py-3 rounded-l-lg font-medium">Property</th>
-                      <th className="px-4 py-3 font-medium text-right">Occupancy</th>
-                      <th className="px-4 py-3 font-medium text-right">Net Collected (30d)</th>
-                      <th className="px-4 py-3 font-medium text-right">ADR</th>
-                      <th className="px-4 py-3 font-medium text-right rounded-r-lg">Out of Order</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {analytics.properties.length === 0 ? (
-                      <tr>
-                        <td colSpan={5} className="text-center py-6 text-muted-foreground">No properties available</td>
-                      </tr>
-                    ) : (
-                      analytics.properties.sort((a,b) => b.netCollected - a.netCollected).map((p) => (
-                        <tr key={p.id} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
-                          <td className="px-4 py-3 font-medium">{p.name}</td>
-                          <td className="px-4 py-3 text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
-                                <div className="h-full bg-blue-500" style={{ width: `${p.occupancy}%` }} />
-                              </div>
-                              <span className="w-9">{p.occupancy.toFixed(0)}%</span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 text-right font-medium text-emerald-600 dark:text-emerald-400">
-                            {formatCompactCurrency(p.netCollected)}
-                          </td>
-                          <td className="px-4 py-3 text-right">{formatCompactCurrency(p.adr)}</td>
-                          <td className="px-4 py-3 text-right">
-                            {p.outOfOrder > 0 ? (
-                              <Badge variant="outline" className="text-red-600 border-red-200 bg-red-50 dark:bg-red-950/30">
-                                {p.outOfOrder} rooms
-                              </Badge>
-                            ) : (
-                              <span className="text-muted-foreground">0</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-        </>
-      )}
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <Kpi label="Revenue today" value={compactMoney(data.kpis.revenueToday)} detail={`${money(data.kpis.roomRevenue)} from rooms`} icon={Banknote} tone="bg-emerald-100 text-emerald-700" />
+      <Kpi label="Occupancy" value={`${data.kpis.occupancy.toFixed(1)}%`} detail={`${data.kpis.occupiedRooms} of ${data.kpis.availableRooms} sellable rooms`} icon={CalendarCheck} tone="bg-blue-100 text-blue-700" />
+      <Kpi label="ADR" value={money(data.kpis.adr)} detail={`RevPAR ${money(data.kpis.revpar)}`} icon={TrendingUp} tone="bg-violet-100 text-violet-700" />
+      <Kpi label="Receivables" value={compactMoney(data.kpis.receivables)} detail={`${data.kpis.receivablesCount} open folios`} icon={CreditCard} tone="bg-amber-100 text-amber-700" />
     </div>
-  );
+
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(300px,0.8fr)]">
+      <Card className="border-muted/60 shadow-sm"><CardHeader><div className="flex items-start justify-between gap-3"><div><CardTitle>Performance trend</CardTitle><CardDescription>Authoritative business-date revenue and occupancy for the last 14 days.</CardDescription></div><Badge variant="secondary">{propertyId === 'ALL' ? 'Portfolio' : 'Property'}</Badge></div></CardHeader><CardContent><div className="h-[320px] w-full"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={data.trend} margin={{ top: 10, right: 8, left: 0, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" strokeOpacity={0.1} /><XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} tickFormatter={(value) => new Date(String(value)).toLocaleDateString('en-NG', { month: 'short', day: 'numeric' })} /><YAxis yAxisId="revenue" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} tickFormatter={(value) => value > 1000 ? `₦${Math.round(value / 1000)}k` : `₦${value}`} /><YAxis yAxisId="occupancy" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} tickFormatter={(value) => `${value}%`} /><Tooltip formatter={(value: any, name: any) => name === 'Revenue' ? [money(value), name] : [`${value}%`, 'Occupancy']} labelFormatter={(value) => new Date(String(value)).toLocaleDateString('en-NG', { weekday: 'short', month: 'short', day: 'numeric' })} /><Area yAxisId="revenue" type="monotone" dataKey="revenue" name="Revenue" stroke="#10b981" fill="#10b981" fillOpacity={0.12} strokeWidth={2} /><Line yAxisId="occupancy" type="monotone" dataKey="occupancyPct" name="Occupancy" stroke="#6366f1" strokeWidth={3} dot={{ r: 3 }} /></ComposedChart></ResponsiveContainer></div></CardContent></Card>
+
+      <Card className="border-muted/60 shadow-sm"><CardHeader><CardTitle>Today at a glance</CardTitle><CardDescription>Immediate operating workload.</CardDescription></CardHeader><CardContent className="space-y-3"><div className="flex items-center justify-between rounded-xl bg-blue-50 p-3"><span className="flex items-center gap-2 text-sm font-medium text-blue-900"><CalendarCheck className="h-4 w-4" /> Arrivals</span><strong className="text-lg text-blue-900">{data.kpis.arrivals}</strong></div><div className="flex items-center justify-between rounded-xl bg-violet-50 p-3"><span className="flex items-center gap-2 text-sm font-medium text-violet-900"><Users className="h-4 w-4" /> Active guests</span><strong className="text-lg text-violet-900">{data.kpis.activeGuests}</strong></div><div className="flex items-center justify-between rounded-xl bg-amber-50 p-3"><span className="flex items-center gap-2 text-sm font-medium text-amber-900"><ClipboardList className="h-4 w-4" /> Pending approvals</span><strong className="text-lg text-amber-900">{data.kpis.pendingApprovals}</strong></div><div className="flex items-center justify-between rounded-xl bg-rose-50 p-3"><span className="flex items-center gap-2 text-sm font-medium text-rose-900"><ShieldAlert className="h-4 w-4" /> Attention items</span><strong className="text-lg text-rose-900">{alertCount}</strong></div><p className="pt-2 text-xs text-muted-foreground">Data generated {new Date(data.generatedAt).toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' })}</p></CardContent></Card>
+    </div>
+
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+      <Card className="border-muted/60 shadow-sm"><CardHeader><div className="flex items-center justify-between gap-3"><div><CardTitle>Property performance</CardTitle><CardDescription>Compare occupancy, ADR, RevPAR, and revenue by property.</CardDescription></div><Link href="/properties" className="text-sm font-semibold text-primary hover:underline">Manage portfolio</Link></div></CardHeader><CardContent><div className="overflow-x-auto"><table className="w-full min-w-[680px] text-sm"><thead><tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground"><th className="px-3 py-3">Property</th><th className="px-3 py-3">Occupancy</th><th className="px-3 py-3 text-right">ADR</th><th className="px-3 py-3 text-right">RevPAR</th><th className="px-3 py-3 text-right">Revenue</th><th className="px-3 py-3 text-right">Alerts</th></tr></thead><tbody className="divide-y">{sortedProperties.map((property) => <tr key={property.id} className="group"><td className="px-3 py-4"><Link href={`/properties/${property.id}`} className="font-semibold group-hover:text-primary">{property.name}</Link><p className="text-xs text-muted-foreground">{property.code}</p></td><td className="px-3 py-4"><div className="flex items-center gap-2"><div className="h-2 w-20 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(100, property.occupancy)}%` }} /></div><span>{property.occupancy.toFixed(1)}%</span></div></td><td className="px-3 py-4 text-right font-medium">{money(property.adr)}</td><td className="px-3 py-4 text-right font-medium">{money(property.revpar)}</td><td className="px-3 py-4 text-right font-semibold">{compactMoney(property.revenue)}</td><td className="px-3 py-4 text-right">{property.alerts > 0 ? <Badge variant="destructive">{property.alerts}</Badge> : <span className="text-emerald-600">Clear</span>}</td></tr>)}</tbody></table></div></CardContent></Card>
+
+      <Card className="border-muted/60 shadow-sm"><CardHeader><CardTitle>Management alerts</CardTitle><CardDescription>Items that may need your attention.</CardDescription></CardHeader><CardContent className="space-y-3">{data.kpis.pendingApprovals + data.kpis.housekeepingOpen + data.kpis.maintenanceOpen + data.kpis.offlineTerminals === 0 ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-center"><ShieldAlert className="mx-auto h-7 w-7 text-emerald-600" /><p className="mt-2 font-semibold text-emerald-900">Operations are clear</p><p className="mt-1 text-xs text-emerald-700">No outstanding management alerts for this scope.</p></div> : <><Link href="/staff" className="flex items-center justify-between rounded-xl border p-3 hover:bg-muted/30"><span className="flex items-center gap-2 text-sm"><ClipboardList className="h-4 w-4 text-amber-600" /> Pending approvals</span><Badge variant={data.kpis.pendingApprovals ? 'destructive' : 'secondary'}>{data.kpis.pendingApprovals}</Badge></Link><Link href="/housekeeping" className="flex items-center justify-between rounded-xl border p-3 hover:bg-muted/30"><span className="flex items-center gap-2 text-sm"><BedDouble className="h-4 w-4 text-indigo-600" /> Open housekeeping</span><Badge variant={data.kpis.housekeepingOpen ? 'destructive' : 'secondary'}>{data.kpis.housekeepingOpen}</Badge></Link><Link href="/maintenance" className="flex items-center justify-between rounded-xl border p-3 hover:bg-muted/30"><span className="flex items-center gap-2 text-sm"><Wrench className="h-4 w-4 text-rose-600" /> Open maintenance</span><Badge variant={data.kpis.maintenanceOpen ? 'destructive' : 'secondary'}>{data.kpis.maintenanceOpen}</Badge></Link><Link href="/sync-center" className="flex items-center justify-between rounded-xl border p-3 hover:bg-muted/30"><span className="flex items-center gap-2 text-sm"><RefreshCw className="h-4 w-4 text-sky-600" /> Offline terminals</span><Badge variant={data.kpis.offlineTerminals ? 'destructive' : 'secondary'}>{data.kpis.offlineTerminals}</Badge></Link></>}</CardContent></Card>
+    </div>
+
+    <section><div className="mb-4 flex items-end justify-between"><div><h2 className="text-xl font-bold tracking-tight">Hotel management areas</h2><p className="text-sm text-muted-foreground">Every operating department is visible from the executive workspace.</p></div></div><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"><ModuleLink href="/properties" label="Properties" detail="Portfolio and property settings" icon={Hotel} tone="bg-blue-100 text-blue-700" /><ModuleLink href="/frontdesk" label="Front Desk" detail="Check-in, check-out, rooms, guests" icon={ClipboardList} tone="bg-indigo-100 text-indigo-700" /><ModuleLink href="/reservations" label="Reservations" detail="Arrivals, stays, departures" icon={CalendarCheck} tone="bg-amber-100 text-amber-700" /><ModuleLink href="/rooms" label="Rooms" detail="Room status, setup, availability" icon={BedDouble} tone="bg-emerald-100 text-emerald-700" /><ModuleLink href="/cash-management" label="General Cashier" detail="Handovers, deposits, expenses" icon={Banknote} tone="bg-green-100 text-green-700" /><ModuleLink href="/fnb/dashboard" label="F&B Management" detail="Outlets, menus, orders, revenue" icon={Utensils} tone="bg-pink-100 text-pink-700" /><ModuleLink href="/fnb/orders" label="POS" detail="Outlet sales and service activity" icon={CreditCard} tone="bg-rose-100 text-rose-700" /><ModuleLink href="/inventory" label="Stock Management" detail="Stock, purchasing, transfers" icon={Package} tone="bg-orange-100 text-orange-700" /><ModuleLink href="/housekeeping" label="Housekeeping" detail="Room readiness and workload" icon={BedDouble} tone="bg-cyan-100 text-cyan-700" /><ModuleLink href="/maintenance" label="Maintenance" detail="Tickets, assets, repairs" icon={Wrench} tone="bg-red-100 text-red-700" /><ModuleLink href="/night-audit" label="Night Auditor" detail="Business-date and reconciliation controls" icon={MoonStar} tone="bg-violet-100 text-violet-700" /><ModuleLink href="/staff" label="Staff & permissions" detail="People, roles, and access" icon={Users} tone="bg-slate-100 text-slate-700" /><ModuleLink href="/reports" label="Reports & finance" detail="Operational and financial reporting" icon={BarChart3} tone="bg-blue-100 text-blue-700" /><ComingSoonModule label="Accountant" detail="Accounting controls and close-ready financial workflows" icon={BarChart3} /><ModuleLink href="/settings" label="System settings" detail="Property and system configuration" icon={Settings} tone="bg-slate-100 text-slate-700" /></div></section>
+
+    <Card className="border-muted/60 shadow-sm"><CardHeader><div className="flex items-center justify-between"><div><CardTitle>Recent activity</CardTitle><CardDescription>Latest audit events across the selected scope.</CardDescription></div><Link href="/reports" className="text-sm font-semibold text-primary hover:underline">View reports</Link></div></CardHeader><CardContent>{data.activity.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">No recent activity recorded.</p> : <div className="grid gap-3 md:grid-cols-2">{data.activity.map((event) => <div key={event.id} className="flex items-start gap-3 rounded-xl border p-3"><div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted"><Activity className="h-4 w-4 text-primary" /></div><div className="min-w-0"><p className="font-medium">{event.action.replaceAll('_', ' ')}</p><p className="text-xs text-muted-foreground">{event.property} · {new Date(event.timeAgo).toLocaleString('en-NG')}</p></div></div>)}</div>}</CardContent></Card>
+  </div>;
 }
