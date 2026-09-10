@@ -4,14 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { BookOpen, FileText, Download, Filter, TrendingUp, TrendingDown, PlusCircle, Scale } from 'lucide-react';
+import { NewJournalEntryModal } from '@/components/accountant/NewJournalEntryModal';
 
-const MOCK_JOURNAL_ENTRIES = [
-  { id: 'JE-2024-089', date: '2024-09-10', description: 'Daily Revenue Recognition', amount: '₦4,250.00', status: 'Posted' },
-  { id: 'JE-2024-090', date: '2024-09-10', description: 'Payroll Accrual', amount: '₦12,400.00', status: 'Pending' },
-  { id: 'JE-2024-091', date: '2024-09-09', description: 'Supplier Payment - Linens', amount: '₦850.00', status: 'Posted' },
-  { id: 'JE-2024-092', date: '2024-09-08', description: 'Monthly Rent Allocation', amount: '₦5,000.00', status: 'Posted' },
-  { id: 'JE-2024-093', date: '2024-09-08', description: 'Utility Accrual', amount: '₦1,200.00', status: 'Pending' },
-];
+import { auth } from '@/lib/auth';
+import { prisma } from '@hotel-pms/db';
 
 const MOCK_ACCOUNTS_SUMMARY = [
   { category: 'Assets', balance: '₦1,450,000.00', trend: 'up', percentage: '+2.4%' },
@@ -21,7 +17,24 @@ const MOCK_ACCOUNTS_SUMMARY = [
   { category: 'Expenses', balance: '₦84,200.00', trend: 'down', percentage: '-0.5%' },
 ];
 
-export default function GeneralLedgerPage() {
+export default async function GeneralLedgerPage() {
+  const session = await auth();
+  const propertyId = session?.user?.propertyId;
+  
+  const recentJournals = propertyId ? await prisma.journalEntry.findMany({
+    where: { propertyId },
+    take: 5,
+    orderBy: { entryDate: 'desc' }
+  }) : [];
+
+  const chartPreview = propertyId ? await prisma.chartOfAccount.findMany({
+    where: { propertyId },
+    orderBy: { code: 'asc' }
+  }) : [];
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount).replace('$', '₦');
+  };
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 p-6 md:p-8 space-y-8">
       
@@ -38,10 +51,7 @@ export default function GeneralLedgerPage() {
             <Scale className="w-4 h-4 mr-2 text-indigo-400" />
             Trial Balance
           </Button>
-          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white">
-            <PlusCircle className="w-4 h-4 mr-2" />
-            New Entry
-          </Button>
+          <NewJournalEntryModal accounts={chartPreview.map(a => ({ id: a.id, name: a.name, code: a.code }))} />
         </div>
       </div>
 
@@ -110,16 +120,16 @@ export default function GeneralLedgerPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {MOCK_JOURNAL_ENTRIES.map((entry) => (
+                {recentJournals.length > 0 ? recentJournals.map((entry) => (
                   <TableRow key={entry.id} className="border-slate-800 hover:bg-white/5 transition-colors">
-                    <TableCell className="font-medium text-indigo-400">{entry.id}</TableCell>
-                    <TableCell className="text-slate-300">{entry.date}</TableCell>
+                    <TableCell className="font-medium text-indigo-400">{entry.entryNumber}</TableCell>
+                    <TableCell className="text-slate-300">{entry.entryDate.toISOString().split('T')[0]}</TableCell>
                     <TableCell className="text-slate-200">{entry.description}</TableCell>
-                    <TableCell className="text-right text-slate-200">{entry.amount}</TableCell>
+                    <TableCell className="text-right text-slate-200">{formatCurrency(Number(entry.totalDebit))}</TableCell>
                     <TableCell className="text-right">
                       <Badge 
-                        variant={entry.status === 'Posted' ? 'default' : 'secondary'}
-                        className={entry.status === 'Posted' 
+                        variant={entry.status === 'POSTED' ? 'default' : 'secondary'}
+                        className={entry.status === 'POSTED' 
                           ? 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 border-0'
                           : 'bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border-0'
                         }
@@ -128,7 +138,11 @@ export default function GeneralLedgerPage() {
                       </Badge>
                     </TableCell>
                   </TableRow>
-                ))}
+                )) : (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-slate-500 py-6">No recent journal entries found.</TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </CardContent>
@@ -147,13 +161,7 @@ export default function GeneralLedgerPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {[
-                { code: '1000', name: 'Cash & Equivalents', type: 'Asset' },
-                { code: '1200', name: 'Accounts Receivable', type: 'Asset' },
-                { code: '2000', name: 'Accounts Payable', type: 'Liability' },
-                { code: '4000', name: 'Room Revenue', type: 'Revenue' },
-                { code: '6000', name: 'Payroll Expenses', type: 'Expense' },
-              ].map((acc) => (
+              {chartPreview.map((acc) => (
                 <div key={acc.code} className="flex items-center justify-between p-3 rounded-lg bg-slate-900/50 border border-slate-800 hover:border-slate-700 transition-colors cursor-pointer">
                   <div>
                     <p className="text-sm font-medium text-slate-200">{acc.code} - {acc.name}</p>
@@ -164,6 +172,9 @@ export default function GeneralLedgerPage() {
                   </Button>
                 </div>
               ))}
+              {chartPreview.length === 0 && (
+                <p className="text-sm text-slate-500">No accounts configured.</p>
+              )}
               <Button className="w-full mt-4 bg-white/5 hover:bg-white/10 text-slate-200 border border-slate-700">
                 View Full Chart
               </Button>

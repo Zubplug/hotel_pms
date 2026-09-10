@@ -1,4 +1,6 @@
 import React from 'react';
+import { auth } from '@/lib/auth';
+import { prisma } from '@hotel-pms/db';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -14,22 +16,30 @@ import {
   Wallet,
   Activity
 } from 'lucide-react';
+import { RegisterAssetForm } from '@/components/accountant/RegisterAssetForm';
 
-const assets = [
-  { id: 'AST-1045', name: 'MacBook Pro M3 Max', category: 'IT Equipment', value: 4500, depreciation: 1500, bookValue: 3000, status: 'Active', icon: Monitor },
-  { id: 'AST-1046', name: 'Dell XPS 15', category: 'IT Equipment', value: 2500, depreciation: 500, bookValue: 2000, status: 'Active', icon: Monitor },
-  { id: 'AST-1047', name: 'Delivery Van - Transit', category: 'Vehicles', value: 45000, depreciation: 15000, bookValue: 30000, status: 'Active', icon: Car },
-  { id: 'AST-1048', name: 'HQ Office Furniture', category: 'Furniture', value: 12000, depreciation: 8000, bookValue: 4000, status: 'Maintenance', icon: Building },
-  { id: 'AST-1049', name: 'Server Rack Alpha', category: 'IT Equipment', value: 25000, depreciation: 10000, bookValue: 15000, status: 'Active', icon: Monitor },
-];
+export default async function AssetsPage() {
+  const session = await auth();
+  const propertyId = session?.user?.propertyId;
+  const assets = propertyId ? await prisma.fixedAsset.findMany({ 
+    where: { propertyId },
+    include: { category: true }
+  }) : [];
+  
+  const categories = propertyId ? await prisma.fixedAssetCategory.findMany({
+    where: { propertyId }
+  }) : [];
 
-const stats = [
-  { label: 'Total Assets Value', value: '₦89,000', icon: Wallet, trend: '+4.5%' },
-  { label: 'Accumulated Depreciation', value: '₦35,000', icon: TrendingDown, trend: '+12.3%' },
-  { label: 'Net Book Value', value: '₦54,000', icon: Activity, trend: '-2.1%' },
-];
+  const totalAssetsValue = assets.reduce((sum, a) => sum + Number(a.acquisitionCost || 0), 0);
+  const totalDepreciation = assets.reduce((sum, a) => sum + Number(a.accumulatedDepreciation || 0), 0);
+  const netBookValue = assets.reduce((sum, a) => sum + Number(a.currentBookValue || 0), 0);
 
-export default function AssetsPage() {
+  const stats = [
+    { label: 'Total Assets Value', value: `₦${totalAssetsValue.toLocaleString()}`, icon: Wallet, trend: '+4.5%' },
+    { label: 'Accumulated Depreciation', value: `₦${totalDepreciation.toLocaleString()}`, icon: TrendingDown, trend: '+12.3%' },
+    { label: 'Net Book Value', value: `₦${netBookValue.toLocaleString()}`, icon: Activity, trend: '-2.1%' },
+  ];
+
   return (
     <div className="p-8 space-y-8 bg-slate-950 min-h-screen text-slate-50">
       {/* Header */}
@@ -44,10 +54,7 @@ export default function AssetsPage() {
           <Button variant="outline" className="border-slate-800 bg-slate-900/50 hover:bg-slate-800 hover:text-slate-50">
             Export Register
           </Button>
-          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white">
-            <Plus className="w-4 h-4 mr-2" />
-            Add Asset
-          </Button>
+          <RegisterAssetForm categories={categories.map(c => ({ id: c.id, name: c.name }))} />
         </div>
       </div>
 
@@ -106,34 +113,44 @@ export default function AssetsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {assets.map((asset) => (
-                <TableRow key={asset.id} className="border-slate-800/60 hover:bg-white/[0.02] transition-colors">
-                  <TableCell className="font-medium text-slate-200">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-slate-800/50 rounded-md">
-                        <asset.icon className="w-4 h-4 text-emerald-400" />
-                      </div>
-                      <div>
-                        <div>{asset.name}</div>
-                        <div className="text-xs text-slate-500">{asset.id}</div>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-slate-300">{asset.category}</TableCell>
-                  <TableCell className="text-right text-slate-300">₦{asset.value.toLocaleString()}</TableCell>
-                  <TableCell className="text-right text-red-400">-₦{asset.depreciation.toLocaleString()}</TableCell>
-                  <TableCell className="text-right text-emerald-400 font-medium">₦{asset.bookValue.toLocaleString()}</TableCell>
-                  <TableCell className="text-center">
-                    <Badge variant="outline" className={
-                      asset.status === 'Active' 
-                        ? 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10' 
-                        : 'border-amber-500/30 text-amber-400 bg-amber-500/10'
-                    }>
-                      {asset.status}
-                    </Badge>
-                  </TableCell>
+              {assets.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center text-slate-400 py-4">No data</TableCell>
                 </TableRow>
-              ))}
+              ) : assets.map((asset) => {
+                const statusStr = asset.status.replace(/_/g, ' ');
+                const displayStatus = statusStr.charAt(0).toUpperCase() + statusStr.slice(1).toLowerCase();
+                const Icon = asset.category?.name?.toLowerCase().includes('vehicle') ? Car : asset.category?.name?.toLowerCase().includes('furniture') ? Building : Monitor;
+                
+                return (
+                  <TableRow key={asset.id} className="border-slate-800/60 hover:bg-white/[0.02] transition-colors">
+                    <TableCell className="font-medium text-slate-200">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-slate-800/50 rounded-md">
+                          <Icon className="w-4 h-4 text-emerald-400" />
+                        </div>
+                        <div>
+                          <div>{asset.name || 'N/A'}</div>
+                          <div className="text-xs text-slate-500">{asset.assetNumber || 'N/A'}</div>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-slate-300">{asset.category?.name || 'N/A'}</TableCell>
+                    <TableCell className="text-right text-slate-300">₦{asset.acquisitionCost ? Number(asset.acquisitionCost).toLocaleString() : '0'}</TableCell>
+                    <TableCell className="text-right text-red-400">-₦{asset.accumulatedDepreciation ? Number(asset.accumulatedDepreciation).toLocaleString() : '0'}</TableCell>
+                    <TableCell className="text-right text-emerald-400 font-medium">₦{asset.currentBookValue ? Number(asset.currentBookValue).toLocaleString() : '0'}</TableCell>
+                    <TableCell className="text-center">
+                      <Badge variant="outline" className={
+                        asset.status === 'ACTIVE' 
+                          ? 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10' 
+                          : 'border-amber-500/30 text-amber-400 bg-amber-500/10'
+                      }>
+                        {displayStatus}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </CardContent>

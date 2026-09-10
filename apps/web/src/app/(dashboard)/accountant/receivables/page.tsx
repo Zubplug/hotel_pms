@@ -12,22 +12,30 @@ import {
   FileText
 } from 'lucide-react';
 
+import { auth } from '@/lib/auth';
+import { prisma } from '@hotel-pms/db';
+
 const AR_AGING_SUMMARY = [
-  { label: 'Current (0-30 Days)', amount: '₦45,231.00', count: 24, status: 'healthy' },
-  { label: '31-60 Days', amount: '₦12,450.50', count: 8, status: 'warning' },
-  { label: '61-90 Days', amount: '₦4,120.00', count: 3, status: 'danger' },
-  { label: '90+ Days', amount: '₦1,850.00', count: 2, status: 'critical' },
+  { label: 'Current (0-30 Days)', amount: '₦0.00', count: 0, status: 'healthy' },
+  { label: '31-60 Days', amount: '₦0.00', count: 0, status: 'warning' },
+  { label: '61-90 Days', amount: '₦0.00', count: 0, status: 'danger' },
+  { label: '90+ Days', amount: '₦0.00', count: 0, status: 'critical' },
 ];
 
-const UNPAID_ACCOUNTS = [
-  { id: 'INV-2026-001', company: 'Acme Corp', type: 'City Ledger', amount: '₦4,500.00', dueDate: '2026-09-15', status: 'Pending', daysOverdue: 0 },
-  { id: 'INV-2026-042', company: 'Globex Inc', type: 'Corporate', amount: '₦12,300.00', dueDate: '2026-08-10', status: 'Overdue', daysOverdue: 31 },
-  { id: 'INV-2026-088', company: 'Stark Industries', type: 'City Ledger', amount: '₦1,850.00', dueDate: '2026-06-01', status: 'Critical', daysOverdue: 101 },
-  { id: 'INV-2026-102', company: 'Wayne Enterprises', type: 'Corporate', amount: '₦8,200.00', dueDate: '2026-09-20', status: 'Pending', daysOverdue: 0 },
-  { id: 'INV-2026-115', company: 'Initech', type: 'City Ledger', amount: '₦2,150.50', dueDate: '2026-07-15', status: 'Overdue', daysOverdue: 57 },
-];
+export default async function ReceivablesPage() {
+  const session = await auth();
+  const propertyId = session?.user?.propertyId;
 
-export default function ReceivablesPage() {
+  const accounts = propertyId ? await prisma.cityLedgerAccount.findMany({
+    where: { propertyId, balance: { gt: 0 } }
+  }) : [];
+
+  const totalOutstanding = accounts.reduce((sum, acc) => sum + Number(acc.balance), 0);
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount).replace('$', '₦');
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 p-6 md:p-8 font-sans selection:bg-emerald-500/30">
       <div className="max-w-7xl mx-auto space-y-8">
@@ -92,7 +100,7 @@ export default function ReceivablesPage() {
         <div className="bg-white/5 border border-white/10 rounded-xl p-6 backdrop-blur-sm flex flex-col md:flex-row items-center justify-between">
           <div className="mb-4 md:mb-0">
             <p className="text-slate-400 text-sm font-medium">Total Outstanding Receivables</p>
-            <h2 className="text-4xl font-bold text-white mt-1">₦63,651.50</h2>
+            <h2 className="text-4xl font-bold text-white mt-1">{formatCurrency(totalOutstanding)}</h2>
             <div className="flex items-center gap-2 mt-2 text-sm">
               <span className="flex items-center text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded text-xs font-medium">
                 <ArrowDownRight className="h-3 w-3 mr-1" />
@@ -139,13 +147,13 @@ export default function ReceivablesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
-                {UNPAID_ACCOUNTS.map((account) => (
+                {accounts.length > 0 ? accounts.map((account) => (
                   <tr key={account.id} className="hover:bg-white/[0.02] transition-colors group">
                     <td className="px-6 py-4 font-medium text-slate-300 group-hover:text-emerald-400 transition-colors">
-                      {account.id}
+                      {account.id.substring(0, 8)}
                     </td>
                     <td className="px-6 py-4 font-medium text-white">
-                      {account.company}
+                      {account.name}
                     </td>
                     <td className="px-6 py-4">
                       <span className="px-2.5 py-1 bg-slate-800 rounded text-xs font-medium text-slate-300 border border-white/5">
@@ -154,24 +162,17 @@ export default function ReceivablesPage() {
                     </td>
                     <td className="px-6 py-4 text-slate-400">
                       <div className="flex flex-col">
-                        <span>{account.dueDate}</span>
-                        {account.daysOverdue > 0 && (
-                          <span className="text-xs text-red-400 mt-0.5">{account.daysOverdue} days overdue</span>
-                        )}
+                        <span>N/A</span>
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right font-medium text-white">
-                      {account.amount}
+                      {formatCurrency(Number(account.balance))}
                     </td>
                     <td className="px-6 py-4">
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ₦{
-                        account.status === 'Pending' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                        account.status === 'Overdue' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                        account.status === 'ACTIVE' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
                         'bg-red-500/10 text-red-400 border-red-500/20'
                       }`}>
-                        {account.status === 'Pending' && <Clock className="h-3 w-3" />}
-                        {account.status === 'Overdue' && <AlertCircle className="h-3 w-3" />}
-                        {account.status === 'Critical' && <AlertCircle className="h-3 w-3" />}
                         {account.status}
                       </span>
                     </td>
@@ -181,13 +182,17 @@ export default function ReceivablesPage() {
                       </button>
                     </td>
                   </tr>
-                ))}
+                )) : (
+                  <tr>
+                    <td colSpan={7} className="text-center text-slate-500 py-6">No outstanding receivables found.</td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
           
           <div className="p-4 border-t border-white/10 text-center text-sm text-slate-500 bg-slate-900/30">
-            Showing 5 of 37 unpaid accounts
+            Showing {accounts.length} unpaid accounts
           </div>
         </div>
 

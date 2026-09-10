@@ -4,23 +4,47 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Landmark, FileSpreadsheet, CheckCircle2, Clock, AlertCircle, CalendarDays, ArrowRight, Download } from 'lucide-react';
+import { RecordRemittanceModal } from '@/components/accountant/RecordRemittanceModal';
 
-const MOCK_TAX_SUMMARY = [
-  { type: 'State Sales Tax', collected: '₦45,230.50', rate: '6.5%', due: '2024-10-20' },
-  { type: 'City Occupancy Tax', collected: '₦18,450.00', rate: '4.0%', due: '2024-10-15' },
-  { type: 'County Tourism Tax', collected: '₦9,225.25', rate: '2.0%', due: '2024-10-20' },
-  { type: 'Federal Payroll Tax', collected: '₦32,100.00', rate: 'Varies', due: '2024-09-30' },
-];
+import { auth } from '@/lib/auth';
+import { prisma } from '@hotel-pms/db';
 
-const MOCK_REMITTANCES = [
-  { id: 'REM-0924-A', period: 'August 2024', type: 'City Occupancy Tax', amount: '₦17,890.00', status: 'Pending', dueDate: '2024-09-15' },
-  { id: 'REM-0924-B', period: 'August 2024', type: 'State Sales Tax', amount: '₦43,100.50', status: 'Processing', dueDate: '2024-09-20' },
-  { id: 'REM-0824-A', period: 'July 2024', type: 'County Tourism Tax', amount: '₦8,950.25', status: 'Paid', dueDate: '2024-08-20' },
-  { id: 'REM-0824-B', period: 'July 2024', type: 'State Sales Tax', amount: '₦42,500.00', status: 'Paid', dueDate: '2024-08-20' },
-  { id: 'REM-0824-C', period: 'Q2 2024', type: 'Corporate Income Tax', amount: '₦125,000.00', status: 'Paid', dueDate: '2024-07-15' },
-];
+export default async function TaxesPage() {
+  const session = await auth();
+  const propertyId = session?.user?.propertyId;
 
-export default function TaxesPage() {
+  if (!propertyId) {
+    return <div className="p-8 text-slate-400">Property ID not found</div>;
+  }
+
+  const remittances = await prisma.taxRemittance.findMany({
+    where: { propertyId },
+    include: { tax: true },
+    orderBy: { periodStart: 'desc' },
+  });
+
+  // Generate summary
+  const summaryMap = remittances.reduce((acc, rem) => {
+    const type = rem.taxType || 'Other';
+    if (!acc[type]) {
+      acc[type] = {
+        type,
+        collected: 0,
+        rate: rem.tax?.rate ? `${Number(rem.tax.rate).toFixed(1)}%` : 'Varies',
+        due: rem.remittanceDate ? rem.remittanceDate.toISOString().split('T')[0] : 'N/A'
+      };
+    }
+    acc[type].collected += Number(rem.collectedAmount || 0);
+    return acc;
+  }, {} as Record<string, { type: string, collected: number, rate: string, due: string }>);
+
+  const taxSummary = Object.values(summaryMap).map(s => ({
+    ...s,
+    collected: `₦${s.collected.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  }));
+
+  // If no summary data, show a default empty state or fallback to empty array
+  // The UI will handle empty array by rendering no cards, but let's see.
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 p-6 md:p-8 space-y-8">
       
@@ -37,16 +61,16 @@ export default function TaxesPage() {
             <Download className="w-4 h-4 mr-2" />
             Tax Report
           </Button>
-          <Button className="bg-indigo-600 hover:bg-indigo-700 text-white">
-            <FileSpreadsheet className="w-4 h-4 mr-2" />
-            New Remittance
-          </Button>
+          <RecordRemittanceModal />
         </div>
       </div>
 
       {/* Tax Collected Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {MOCK_TAX_SUMMARY.map((tax, idx) => (
+        {taxSummary.length === 0 && (
+          <div className="col-span-full text-slate-400 p-4 border border-slate-800 rounded-lg">No tax data found.</div>
+        )}
+        {taxSummary.map((tax, idx) => (
           <Card key={idx} className="border-slate-800 bg-white/5 backdrop-blur-md relative overflow-hidden group">
             <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
               <Landmark className="w-16 h-16 text-emerald-400" />
@@ -105,42 +129,57 @@ export default function TaxesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {MOCK_REMITTANCES.map((remittance) => (
-                <TableRow key={remittance.id} className="border-slate-800 hover:bg-white/5 transition-colors">
-                  <TableCell className="font-medium text-slate-300">{remittance.id}</TableCell>
-                  <TableCell className="text-slate-200">{remittance.type}</TableCell>
-                  <TableCell className="text-slate-400">{remittance.period}</TableCell>
-                  <TableCell className="text-slate-300">{remittance.dueDate}</TableCell>
-                  <TableCell className="text-right font-medium text-slate-200">{remittance.amount}</TableCell>
-                  <TableCell className="text-center">
-                    <Badge 
-                      variant="outline" 
-                      className={`
-                        ₦{remittance.status === 'Paid' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : ''}
-                        ₦{remittance.status === 'Pending' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : ''}
-                        ₦{remittance.status === 'Processing' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : ''}
-                      `}
-                    >
-                      {remittance.status === 'Paid' && <CheckCircle2 className="w-3 h-3 mr-1" />}
-                      {remittance.status === 'Pending' && <AlertCircle className="w-3 h-3 mr-1" />}
-                      {remittance.status === 'Processing' && <Clock className="w-3 h-3 mr-1" />}
-                      {remittance.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {remittance.status === 'Pending' ? (
-                      <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white h-8">
-                        Pay Now
-                      </Button>
-                    ) : (
-                      <Button size="sm" variant="ghost" className="text-slate-400 hover:text-slate-200 h-8">
-                        View
-                        <ArrowRight className="w-4 h-4 ml-1" />
-                      </Button>
-                    )}
-                  </TableCell>
+              {remittances.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center text-slate-400 py-6">No data</TableCell>
                 </TableRow>
-              ))}
+              )}
+              {remittances.map((remittance) => {
+                const amountFormatted = `₦${Number(remittance.collectedAmount || 0).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                const dueDateFormatted = remittance.remittanceDate ? remittance.remittanceDate.toISOString().split('T')[0] : 'N/A';
+                const periodStartFormatted = remittance.periodStart ? remittance.periodStart.toISOString().split('T')[0] : 'N/A';
+                
+                let displayStatus = 'Pending';
+                if (remittance.status === 'REMITTED') displayStatus = 'Paid';
+                if (remittance.status === 'SUBMITTED' || remittance.status === 'APPROVED') displayStatus = 'Processing';
+
+                return (
+                  <TableRow key={remittance.id} className="border-slate-800 hover:bg-white/5 transition-colors">
+                    <TableCell className="font-medium text-slate-300">{remittance.remittanceRef || remittance.id.slice(0, 8)}</TableCell>
+                    <TableCell className="text-slate-200">{remittance.taxType ?? 'N/A'}</TableCell>
+                    <TableCell className="text-slate-400">{periodStartFormatted}</TableCell>
+                    <TableCell className="text-slate-300">{dueDateFormatted}</TableCell>
+                    <TableCell className="text-right font-medium text-slate-200">{amountFormatted}</TableCell>
+                    <TableCell className="text-center">
+                      <Badge 
+                        variant="outline" 
+                        className={`
+                          ₦{displayStatus === 'Paid' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : ''}
+                          ₦{displayStatus === 'Pending' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : ''}
+                          ₦{displayStatus === 'Processing' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : ''}
+                        `}
+                      >
+                        {displayStatus === 'Paid' && <CheckCircle2 className="w-3 h-3 mr-1" />}
+                        {displayStatus === 'Pending' && <AlertCircle className="w-3 h-3 mr-1" />}
+                        {displayStatus === 'Processing' && <Clock className="w-3 h-3 mr-1" />}
+                        {displayStatus}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {displayStatus === 'Pending' ? (
+                        <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white h-8">
+                          Pay Now
+                        </Button>
+                      ) : (
+                        <Button size="sm" variant="ghost" className="text-slate-400 hover:text-slate-200 h-8">
+                          View
+                          <ArrowRight className="w-4 h-4 ml-1" />
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </CardContent>

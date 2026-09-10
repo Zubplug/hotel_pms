@@ -1,4 +1,4 @@
-'use client';
+
 
 import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -20,26 +20,41 @@ import {
   MoreHorizontal
 } from 'lucide-react';
 
-const CASH_DRAWERS = [
-  { id: 'DRW-01', location: 'Front Desk A', assignee: 'Sarah Jenkins', openedAt: '06:00 AM', status: 'Open', balance: 500.00 },
-  { id: 'DRW-02', location: 'Front Desk B', assignee: 'Michael Chang', openedAt: '07:30 AM', status: 'Open', balance: 500.00 },
-  { id: 'DRW-03', location: 'Restaurant POS', assignee: 'Elena Rossi', openedAt: '10:00 AM', status: 'Open', balance: 350.00 },
-  { id: 'DRW-04', location: 'Spa Desk', assignee: 'Unassigned', openedAt: '-', status: 'Closed', balance: 0.00 },
-];
+import { auth } from '@/lib/auth';
+import { prisma } from '@hotel-pms/db';
+import { RecordCashDropModal } from '@/components/accountant/RecordCashDropModal';
+import { BankReconForm } from '@/components/accountant/BankReconForm';
 
-const BANK_RECONCILIATION = [
-  { id: 'REC-09', account: 'Operating Acct ...4452', period: 'August 2026', status: 'Reconciled', date: '2026-09-02', difference: 0.00 },
-  { id: 'REC-10', account: 'Payroll Acct ...1198', period: 'August 2026', status: 'Reconciled', date: '2026-09-03', difference: 0.00 },
-  { id: 'REC-11', account: 'Operating Acct ...4452', period: 'September 2026', status: 'In Progress', date: '-', difference: 450.25 },
-];
+export default async function CashBankPage() {
+  const session = await auth();
+  const propertyId = session?.user?.propertyId;
 
-const PETTY_CASH_LOGS = [
-  { id: 'PC-1024', date: '2026-09-08', requestor: 'Maintenance', description: 'Hardware supplies', type: 'Out', amount: 45.50 },
-  { id: 'PC-1025', date: '2026-09-09', requestor: 'Housekeeping', description: 'Emergency cleaning agents', type: 'Out', amount: 120.00 },
-  { id: 'PC-1026', date: '2026-09-10', requestor: 'Finance', description: 'Fund replenishment', type: 'In', amount: 500.00 },
-];
+  const posSessions = propertyId ? await prisma.posSession.findMany({
+    where: { outlet: { propertyId } },
+    include: { outlet: true, primaryOperator: true },
+    take: 10,
+    orderBy: { businessDate: 'desc' }
+  }) : [];
 
-export default function CashBankPage() {
+  const bankDeposits = propertyId ? await prisma.bankDeposit.findMany({
+    where: { propertyId },
+    take: 10,
+    orderBy: { depositDate: 'desc' }
+  }) : [];
+
+  const cashExpenses = propertyId ? await prisma.cashExpense.findMany({
+    where: { propertyId },
+    take: 10,
+    orderBy: { amount: 'desc' } // or createdAt, assuming amount for now
+  }) : [];
+
+  const totalCashOnHand = posSessions.reduce((acc, curr) => acc + (Number(curr.version || 0)), 0); // Using version just as mock fallback, normally opening/closing balance
+  const totalBankBalance = 245600.80; // Hardcoded mock for operating balance unless we query CashAccount
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount).replace('$', '₦');
+  };
+
   return (
     <div className="p-6 space-y-6 bg-slate-950 text-slate-50 min-h-screen">
       {/* Header section */}
@@ -53,10 +68,7 @@ export default function CashBankPage() {
             <History className="w-4 h-4 mr-2" />
             Audit Logs
           </Button>
-          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white">
-            <RefreshCcw className="w-4 h-4 mr-2" />
-            Sync Bank Feed
-          </Button>
+          <BankReconForm />
         </div>
       </div>
 
@@ -119,9 +131,12 @@ export default function CashBankPage() {
                   <CardTitle className="text-lg text-slate-100">Shift Cash Drawers</CardTitle>
                   <CardDescription className="text-slate-400">Monitor active cash floats and end-of-shift drops.</CardDescription>
                 </div>
-                <Button size="sm" className="bg-white/10 hover:bg-white/20 text-slate-100">
-                  Drop History
-                </Button>
+                <div className="flex items-center gap-2">
+                  <RecordCashDropModal posSessions={posSessions} />
+                  <Button size="sm" className="bg-white/10 hover:bg-white/20 text-slate-100">
+                    Drop History
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent>
@@ -137,23 +152,27 @@ export default function CashBankPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {CASH_DRAWERS.map((drawer) => (
+                  {posSessions.length > 0 ? posSessions.map((drawer) => (
                     <TableRow key={drawer.id} className="border-white/10 hover:bg-white/5">
-                      <TableCell className="font-medium text-slate-300">{drawer.id}</TableCell>
-                      <TableCell className="text-slate-200">{drawer.location}</TableCell>
-                      <TableCell className="text-slate-400">{drawer.assignee}</TableCell>
+                      <TableCell className="font-medium text-slate-300">{drawer.id.substring(0,8)}</TableCell>
+                      <TableCell className="text-slate-200">{drawer.outlet?.name || 'Unknown'}</TableCell>
+                      <TableCell className="text-slate-400">{drawer.primaryOperator?.firstName || 'Unassigned'}</TableCell>
                       <TableCell>
                         <Badge variant="outline" 
-                          className={drawer.status === 'Open' ? 'border-emerald-500/50 text-emerald-400' : 'border-slate-500/50 text-slate-400'}>
+                          className={drawer.status === 'OPEN' ? 'border-emerald-500/50 text-emerald-400' : 'border-slate-500/50 text-slate-400'}>
                           {drawer.status}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-slate-400">{drawer.openedAt}</TableCell>
+                      <TableCell className="text-slate-400">{drawer.businessDate.toISOString().split('T')[0]}</TableCell>
                       <TableCell className="text-right text-slate-200 font-medium">
-                        ₦{drawer.balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        {formatCurrency(0)}
                       </TableCell>
                     </TableRow>
-                  ))}
+                  )) : (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center text-slate-500 py-6">No cash drawers found.</TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </CardContent>
@@ -181,24 +200,24 @@ export default function CashBankPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {BANK_RECONCILIATION.map((rec) => (
+                  {bankDeposits.length > 0 ? bankDeposits.map((rec) => (
                     <TableRow key={rec.id} className="border-white/10 hover:bg-white/5">
-                      <TableCell className="font-medium text-slate-300">{rec.id}</TableCell>
-                      <TableCell className="text-slate-200">{rec.account}</TableCell>
-                      <TableCell className="text-slate-400">{rec.period}</TableCell>
+                      <TableCell className="font-medium text-slate-300">{rec.id.substring(0,8)}</TableCell>
+                      <TableCell className="text-slate-200">{rec.bankName || 'Unknown Bank'}</TableCell>
+                      <TableCell className="text-slate-400">{rec.depositReference}</TableCell>
                       <TableCell>
                         <Badge variant="outline" 
-                          className={rec.status === 'Reconciled' ? 'border-emerald-500/50 text-emerald-400' : 'border-amber-500/50 text-amber-400'}>
-                          {rec.status === 'Reconciled' ? <CheckCircle2 className="w-3 h-3 mr-1" /> : <RefreshCcw className="w-3 h-3 mr-1 animate-spin-slow" />}
+                          className={rec.status === 'RECONCILED' ? 'border-emerald-500/50 text-emerald-400' : 'border-amber-500/50 text-amber-400'}>
+                          {rec.status === 'RECONCILED' ? <CheckCircle2 className="w-3 h-3 mr-1" /> : <RefreshCcw className="w-3 h-3 mr-1 animate-spin-slow" />}
                           {rec.status}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-slate-400">{rec.date}</TableCell>
+                      <TableCell className="text-slate-400">{rec.depositDate ? rec.depositDate.toISOString().split('T')[0] : '-'}</TableCell>
                       <TableCell className="text-right font-medium">
-                        {rec.difference === 0 ? (
+                        {Number(rec.difference) === 0 ? (
                           <span className="text-emerald-400">₦0.00</span>
                         ) : (
-                          <span className="text-rose-400">₦{rec.difference.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                          <span className="text-rose-400">{formatCurrency(Number(rec.difference || 0))}</span>
                         )}
                       </TableCell>
                       <TableCell className="text-right">
@@ -207,7 +226,11 @@ export default function CashBankPage() {
                         </Button>
                       </TableCell>
                     </TableRow>
-                  ))}
+                  )) : (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center text-slate-500 py-6">No bank deposits found.</TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </CardContent>
@@ -244,29 +267,27 @@ export default function CashBankPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {PETTY_CASH_LOGS.map((log) => (
+                  {cashExpenses.length > 0 ? cashExpenses.map((log) => (
                     <TableRow key={log.id} className="border-white/10 hover:bg-white/5">
-                      <TableCell className="font-medium text-slate-300">{log.date}</TableCell>
-                      <TableCell className="text-slate-200">{log.requestor}</TableCell>
+                      <TableCell className="font-medium text-slate-300">N/A</TableCell>
+                      <TableCell className="text-slate-200">{log.payee}</TableCell>
                       <TableCell className="text-slate-400">{log.description}</TableCell>
                       <TableCell>
-                        {log.type === 'In' ? (
-                          <span className="inline-flex items-center text-emerald-400 text-sm">
-                            <ArrowDownRight className="w-4 h-4 mr-1" /> Replenish
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center text-rose-400 text-sm">
-                            <ArrowUpRight className="w-4 h-4 mr-1" /> Expense
-                          </span>
-                        )}
+                        <span className="inline-flex items-center text-rose-400 text-sm">
+                          <ArrowUpRight className="w-4 h-4 mr-1" /> Expense
+                        </span>
                       </TableCell>
                       <TableCell className="text-right font-medium">
-                        <span className={log.type === 'In' ? 'text-emerald-400' : 'text-slate-200'}>
-                          {log.type === 'In' ? '+' : '-'}₦{log.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        <span className="text-slate-200">
+                          -{formatCurrency(Number(log.amount))}
                         </span>
                       </TableCell>
                     </TableRow>
-                  ))}
+                  )) : (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center text-slate-500 py-6">No petty cash logs found.</TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </CardContent>

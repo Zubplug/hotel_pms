@@ -1,4 +1,6 @@
 import React from 'react';
+import { auth } from '@/lib/auth';
+import { prisma } from '@hotel-pms/db';
 import { 
   CreditCard, 
   Search, 
@@ -12,6 +14,8 @@ import {
   Wallet
 } from 'lucide-react';
 
+import { RecordSupplierBillModal } from '@/components/accountant/RecordSupplierBillModal';
+
 const AP_AGING_SUMMARY = [
   { label: 'Current (0-30 Days)', amount: '₦28,450.00', count: 18, status: 'healthy' },
   { label: '31-60 Days', amount: '₦5,210.00', count: 4, status: 'warning' },
@@ -19,15 +23,19 @@ const AP_AGING_SUMMARY = [
   { label: '90+ Days', amount: '₦0.00', count: 0, status: 'healthy' },
 ];
 
-const SUPPLIER_INVOICES = [
-  { id: 'PINV-8820', supplier: 'Sysco Foods', category: 'F&B', amount: '₦4,250.00', dueDate: '2026-09-12', status: 'Pending Approval' },
-  { id: 'PINV-8821', supplier: 'Ecolab', category: 'Housekeeping', amount: '₦1,820.50', dueDate: '2026-09-15', status: 'Approved' },
-  { id: 'PINV-8822', supplier: 'Otis Elevators', category: 'Maintenance', amount: '₦3,500.00', dueDate: '2026-08-30', status: 'Overdue' },
-  { id: 'PINV-8823', supplier: 'Guest Supply', category: 'Amenities', amount: '₦2,100.00', dueDate: '2026-09-20', status: 'Pending Approval' },
-  { id: 'PINV-8824', supplier: 'Comcast Business', category: 'IT/Telecom', amount: '₦850.00', dueDate: '2026-09-05', status: 'Processing Payment' },
-];
+export default async function PayablesPage() {
+  const session = await auth();
+  const propertyId = session?.user?.propertyId;
+  const supplierInvoices = propertyId ? await prisma.supplierInvoice.findMany({ 
+    where: { propertyId },
+    include: { supplier: true }
+  }) : [];
+  
+  const suppliers = propertyId ? await prisma.supplier.findMany({
+    where: { propertyId },
+    select: { id: true, name: true }
+  }) : [];
 
-export default function PayablesPage() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 p-6 md:p-8 font-sans selection:bg-emerald-500/30">
       <div className="max-w-7xl mx-auto space-y-8">
@@ -48,9 +56,7 @@ export default function PayablesPage() {
               <FileText className="h-4 w-4" />
               Run AP Report
             </button>
-            <button className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-medium transition-colors shadow-[0_0_15px_rgba(16,185,129,0.3)]">
-              Record Bill
-            </button>
+            <RecordSupplierBillModal suppliers={suppliers} />
           </div>
         </div>
 
@@ -161,47 +167,57 @@ export default function PayablesPage() {
                   <th className="px-6 py-4 font-medium text-center">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
-                {SUPPLIER_INVOICES.map((invoice) => (
-                  <tr key={invoice.id} className="hover:bg-white/[0.02] transition-colors group">
-                    <td className="px-6 py-4 font-medium text-slate-300 group-hover:text-emerald-400 transition-colors">
-                      {invoice.id}
-                    </td>
-                    <td className="px-6 py-4 font-medium text-white">
-                      {invoice.supplier}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="px-2.5 py-1 bg-slate-800 rounded text-xs font-medium text-slate-300 border border-white/5">
-                        {invoice.category}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-slate-400">
-                      {invoice.dueDate}
-                    </td>
-                    <td className="px-6 py-4 text-right font-medium text-white">
-                      {invoice.amount}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ₦{
-                        invoice.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                        invoice.status === 'Pending Approval' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
-                        invoice.status === 'Processing Payment' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
-                        'bg-red-500/10 text-red-400 border-red-500/20'
-                      }`}>
-                        {invoice.status === 'Approved' && <CheckCircle2 className="h-3 w-3" />}
-                        {invoice.status === 'Pending Approval' && <Clock className="h-3 w-3" />}
-                        {invoice.status === 'Processing Payment' && <Clock className="h-3 w-3" />}
-                        {invoice.status === 'Overdue' && <AlertCircle className="h-3 w-3" />}
-                        {invoice.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <button className="p-1.5 text-slate-400 hover:text-white rounded-md hover:bg-white/10 transition-colors">
-                        <MoreVertical className="h-4 w-4" />
-                      </button>
-                    </td>
+               <tbody className="divide-y divide-white/5">
+                {supplierInvoices.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-6 py-4 text-center text-slate-400">No data</td>
                   </tr>
-                ))}
+                ) : (
+                  supplierInvoices.map((invoice) => {
+                    const statusStr = invoice.status.replace(/_/g, ' ');
+                    const displayStatus = statusStr.charAt(0).toUpperCase() + statusStr.slice(1).toLowerCase();
+                    
+                    return (
+                      <tr key={invoice.id} className="hover:bg-white/[0.02] transition-colors group">
+                        <td className="px-6 py-4 font-medium text-slate-300 group-hover:text-emerald-400 transition-colors">
+                          {invoice.invoiceNumber || 'N/A'}
+                        </td>
+                        <td className="px-6 py-4 font-medium text-white">
+                          {invoice.supplier?.name || 'N/A'}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="px-2.5 py-1 bg-slate-800 rounded text-xs font-medium text-slate-300 border border-white/5">
+                            General
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-slate-400">
+                          {invoice.dueDate ? invoice.dueDate.toLocaleDateString() : 'N/A'}
+                        </td>
+                        <td className="px-6 py-4 text-right font-medium text-white">
+                          ₦{invoice.totalAmount ? Number(invoice.totalAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${
+                            invoice.status === 'APPROVED' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                            invoice.status === 'RECEIVED' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                            invoice.status === 'PAID' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
+                            'bg-slate-500/10 text-slate-400 border-slate-500/20'
+                          }`}>
+                            {invoice.status === 'APPROVED' && <CheckCircle2 className="h-3 w-3" />}
+                            {(invoice.status === 'RECEIVED') && <Clock className="h-3 w-3" />}
+                            {invoice.status === 'PAID' && <CheckCircle2 className="h-3 w-3" />}
+                            {displayStatus}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <button className="p-1.5 text-slate-400 hover:text-white rounded-md hover:bg-white/10 transition-colors">
+                            <MoreVertical className="h-4 w-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>

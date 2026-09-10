@@ -1,4 +1,6 @@
 import React from 'react';
+import { auth } from '@/lib/auth';
+import { prisma } from '@hotel-pms/db';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { 
@@ -10,18 +12,24 @@ import {
   AlertCircle
 } from 'lucide-react';
 
-const departments = [
-  { name: 'Engineering', budget: 1200000, actual: 950000, color: 'bg-emerald-500' },
-  { name: 'Marketing', budget: 800000, actual: 820000, color: 'bg-rose-500' },
-  { name: 'Sales', budget: 1500000, actual: 1100000, color: 'bg-emerald-400' },
-  { name: 'Operations', budget: 2000000, actual: 1850000, color: 'bg-blue-500' },
-  { name: 'HR', budget: 400000, actual: 380000, color: 'bg-emerald-300' },
-];
+export default async function BudgetsPage() {
+  const session = await auth();
+  const propertyId = session?.user?.propertyId;
+  const budgets = propertyId ? await prisma.budget.findMany({ 
+    where: { propertyId }
+  }) : [];
 
-export default function BudgetsPage() {
+  const colors = ['bg-emerald-500', 'bg-rose-500', 'bg-emerald-400', 'bg-blue-500', 'bg-emerald-300'];
+  const departments = budgets.map((b, i) => ({
+    name: b.name || 'Unnamed Budget',
+    budget: Number(b.totalExpenseBudget || 0),
+    actual: 0,
+    color: colors[i % colors.length]
+  }));
+
   const totalBudget = departments.reduce((acc, curr) => acc + curr.budget, 0);
   const totalActual = departments.reduce((acc, curr) => acc + curr.actual, 0);
-  const totalPercent = (totalActual / totalBudget) * 100;
+  const totalPercent = totalBudget > 0 ? (totalActual / totalBudget) * 100 : 0;
 
   return (
     <div className="p-8 space-y-8 bg-slate-950 min-h-screen text-slate-50">
@@ -112,8 +120,10 @@ export default function BudgetsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="p-6 space-y-8">
-          {departments.map((dept) => {
-            const percent = (dept.actual / dept.budget) * 100;
+          {departments.length === 0 ? (
+            <div className="text-center text-slate-400 py-4">No data</div>
+          ) : departments.map((dept) => {
+            const percent = dept.budget > 0 ? (dept.actual / dept.budget) * 100 : 0;
             const isOver = percent > 100;
             
             return (

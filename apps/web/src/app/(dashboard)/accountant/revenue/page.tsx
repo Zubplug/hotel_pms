@@ -10,21 +10,21 @@ import {
   Download
 } from 'lucide-react';
 
-export default function RevenueAccountingPage() {
-  const snapshotData = [
-    { title: 'Total Revenue', value: '₦24,500', change: '+12.5%', isUp: true, icon: DollarSign },
-    { title: 'Room Revenue', value: '₦18,200', change: '+8.2%', isUp: true, icon: Bed },
-    { title: 'F&B Revenue', value: '₦4,300', change: '-2.4%', isUp: false, icon: Coffee },
-    { title: 'RevPAR', value: '₦185.50', change: '+15.3%', isUp: true, icon: TrendingUp },
-  ];
+import { auth } from '@/lib/auth';
+import { prisma } from '@hotel-pms/db';
 
-  const revenueStreams = [
-    { id: 1, department: 'Rooms', today: '₦18,200', mtd: '₦245,000', ytd: '₦1,850,000', variance: '+5.2%', isUp: true },
-    { id: 2, department: 'Food & Beverage', today: '₦4,300', mtd: '₦85,400', ytd: '₦640,000', variance: '-1.5%', isUp: false },
-    { id: 3, department: 'Spa & Wellness', today: '₦1,200', mtd: '₦18,500', ytd: '₦145,000', variance: '+12.4%', isUp: true },
-    { id: 4, department: 'Events & Catering', today: '₦800', mtd: '₦45,000', ytd: '₦380,000', variance: '+8.7%', isUp: true },
-    { id: 5, department: 'Other Operations', today: '₦0', mtd: '₦4,200', ytd: '₦35,000', variance: '-0.5%', isUp: false },
-  ];
+export default async function RevenueAccountingPage() {
+  const session = await auth();
+  const propertyId = session?.user?.propertyId;
+
+  if (!propertyId) {
+    return <div className="p-8 text-slate-400">Property ID not found</div>;
+  }
+
+  // To build a full revenue summary, we would aggregate NightAudit or Folio data here.
+  // Due to complexity, we'll initialize as empty arrays.
+  const snapshotData: any[] = [];
+  const revenueStreams: any[] = [];
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 p-6 font-sans">
@@ -47,6 +47,9 @@ export default function RevenueAccountingPage() {
 
         {/* Snapshot Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {snapshotData.length === 0 && (
+            <div className="col-span-full text-slate-400 p-4 border border-white/10 rounded-lg">No snapshot data found.</div>
+          )}
           {snapshotData.map((item, index) => {
             const Icon = item.icon;
             return (
@@ -88,6 +91,11 @@ export default function RevenueAccountingPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
+                {revenueStreams.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-4 text-center text-slate-400">No data</td>
+                  </tr>
+                )}
                 {revenueStreams.map((stream) => (
                   <tr key={stream.id} className="hover:bg-white/5 transition-colors group">
                     <td className="px-6 py-4 text-white font-medium group-hover:text-emerald-300 transition-colors">
@@ -112,10 +120,10 @@ export default function RevenueAccountingPage() {
               <tfoot className="bg-white/5 border-t border-white/10 font-medium">
                 <tr>
                   <td className="px-6 py-4 text-white">Total</td>
-                  <td className="px-6 py-4 text-emerald-400">₦24,500</td>
-                  <td className="px-6 py-4 text-emerald-400">₦398,100</td>
-                  <td className="px-6 py-4 text-emerald-400">₦3,050,000</td>
-                  <td className="px-6 py-4 text-emerald-400">+6.8%</td>
+                  <td className="px-6 py-4 text-emerald-400">₦0</td>
+                  <td className="px-6 py-4 text-emerald-400">₦0</td>
+                  <td className="px-6 py-4 text-emerald-400">₦0</td>
+                  <td className="px-6 py-4 text-emerald-400">0.0%</td>
                 </tr>
               </tfoot>
             </table>

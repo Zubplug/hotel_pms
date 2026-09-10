@@ -12,25 +12,64 @@ import {
   DollarSign,
   Briefcase
 } from 'lucide-react';
+import { RunPayrollDialog } from '@/components/accountant/RunPayrollDialog';
 
-const payrollRuns = [
-  { id: 'PR-2026-09', period: 'Sep 2026', type: 'Regular', runDate: 'Sep 28, 2026', totalAmount: 425000, status: 'Processing' },
-  { id: 'PR-2026-08', period: 'Aug 2026', type: 'Regular', runDate: 'Aug 28, 2026', totalAmount: 418000, status: 'Completed' },
-  { id: 'PR-2026-07', period: 'Jul 2026', type: 'Regular', runDate: 'Jul 28, 2026', totalAmount: 420500, status: 'Completed' },
-  { id: 'PR-2026-06', period: 'Jun 2026', type: 'Bonus', runDate: 'Jun 15, 2026', totalAmount: 150000, status: 'Completed' },
-];
+import { auth } from '@/lib/auth';
+import { prisma } from '@hotel-pms/db';
 
-const deptLaborCosts = [
-  { name: 'Engineering', employees: 42, cost: 185000 },
-  { name: 'Marketing', employees: 18, cost: 65000 },
-  { name: 'Sales', employees: 35, cost: 110000 },
-  { name: 'Operations', employees: 85, cost: 220000 },
-  { name: 'HR & Admin', employees: 12, cost: 45000 },
-];
+export default async function PayrollPage() {
+  const session = await auth();
+  const propertyId = session?.user?.propertyId;
 
-export default function PayrollPage() {
-  const totalEmployees = deptLaborCosts.reduce((acc, curr) => acc + curr.employees, 0);
-  const totalMonthlyCost = deptLaborCosts.reduce((acc, curr) => acc + curr.cost, 0);
+  if (!propertyId) {
+    return <div className="p-8 text-slate-400">Property ID not found</div>;
+  }
+
+  const [payrollPeriods, staffList] = await Promise.all([
+    prisma.payrollPeriod.findMany({
+      where: { propertyId },
+      orderBy: { startDate: 'desc' },
+    }),
+    prisma.staff.findMany({
+      where: { propertyAccess: { has: propertyId } },
+    }),
+  ]);
+
+  const totalEmployees = staffList.length;
+
+  const payrollRuns = payrollPeriods.map(p => ({
+    id: p.id,
+    period: p.name,
+    type: 'Regular', // Assuming regular for now
+    runDate: p.paymentDate ? p.paymentDate.toISOString().split('T')[0] : p.endDate.toISOString().split('T')[0],
+    totalAmount: Number(p.totalGross || 0),
+    status: p.status === 'PAID' ? 'Completed' : 'Processing',
+  }));
+
+  const ytdPayrollSpend = payrollPeriods
+    .filter(p => p.startDate.getFullYear() === new Date().getFullYear())
+    .reduce((acc, curr) => acc + Number(curr.totalGross || 0), 0);
+  
+  const mostRecentPayrollCost = payrollRuns[0]?.totalAmount || 0;
+  const totalMonthlyCost = mostRecentPayrollCost;
+
+  // Group staff by department
+  const deptMap = staffList.reduce((acc, curr) => {
+    const dept = curr.department || 'Unassigned';
+    if (!acc[dept]) acc[dept] = 0;
+    acc[dept]++;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const deptLaborCosts = Object.keys(deptMap).map(dept => {
+    const count = deptMap[dept];
+    const cost = totalEmployees > 0 ? (count / totalEmployees) * totalMonthlyCost : 0;
+    return {
+      name: dept,
+      employees: count,
+      cost,
+    };
+  });
 
   return (
     <div className="p-8 space-y-8 bg-slate-950 min-h-screen text-slate-50">
@@ -47,10 +86,7 @@ export default function PayrollPage() {
             <FileText className="w-4 h-4 mr-2" />
             Tax Documents
           </Button>
-          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white">
-            <Banknote className="w-4 h-4 mr-2" />
-            New Payroll Run
-          </Button>
+          <RunPayrollDialog />
         </div>
       </div>
 
@@ -89,7 +125,7 @@ export default function PayrollPage() {
             <div className="flex justify-between items-start">
               <div>
                 <p className="text-slate-400 text-sm font-medium">Next Run Date</p>
-                <h3 className="text-2xl font-semibold mt-2 text-slate-100">Sep 28, 2026</h3>
+                <h3 className="text-2xl font-semibold mt-2 text-slate-100">{payrollRuns.find(r => r.status === 'Processing')?.runDate ?? 'N/A'}</h3>
               </div>
               <div className="p-3 bg-amber-500/10 rounded-lg">
                 <Clock className="w-6 h-6 text-amber-400" />
@@ -103,7 +139,7 @@ export default function PayrollPage() {
             <div className="flex justify-between items-start">
               <div>
                 <p className="text-slate-400 text-sm font-medium">YTD Payroll Spend</p>
-                <h3 className="text-3xl font-semibold mt-2 text-slate-100">₦3.8M</h3>
+                <h3 className="text-3xl font-semibold mt-2 text-slate-100">₦{(ytdPayrollSpend / 1000000).toFixed(1)}M</h3>
               </div>
               <div className="p-3 bg-purple-500/10 rounded-lg">
                 <Briefcase className="w-6 h-6 text-purple-400" />
@@ -133,11 +169,16 @@ export default function PayrollPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
+                  {payrollRuns.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center text-slate-400 py-6">No data</TableCell>
+                    </TableRow>
+                  )}
                   {payrollRuns.map((run) => (
                     <TableRow key={run.id} className="border-slate-800/60 hover:bg-white/[0.02] transition-colors">
                       <TableCell className="font-medium text-slate-200">
                         {run.period}
-                        <div className="text-xs text-slate-500">{run.id}</div>
+                        <div className="text-xs text-slate-500">{run.id.slice(0, 8)}</div>
                       </TableCell>
                       <TableCell className="text-slate-300">{run.runDate}</TableCell>
                       <TableCell>
@@ -146,7 +187,7 @@ export default function PayrollPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right font-medium text-slate-200">
-                        ₦{run.totalAmount.toLocaleString()}
+                        ₦{run.totalAmount.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </TableCell>
                       <TableCell className="text-center">
                         {run.status === 'Completed' ? (
@@ -176,20 +217,23 @@ export default function PayrollPage() {
             </CardHeader>
             <CardContent className="p-6">
               <div className="space-y-6">
+                {deptLaborCosts.length === 0 && (
+                  <div className="text-center text-slate-400 py-6">No data</div>
+                )}
                 {deptLaborCosts.map((dept) => (
                   <div key={dept.name} className="flex flex-col space-y-2">
                     <div className="flex justify-between items-center">
                       <span className="font-medium text-slate-200">{dept.name}</span>
-                      <span className="text-slate-300 font-medium">₦{dept.cost.toLocaleString()}</span>
+                      <span className="text-slate-300 font-medium">₦{dept.cost.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
                     <div className="flex justify-between items-center text-xs text-slate-500">
                       <span>{dept.employees} Employees</span>
-                      <span>{((dept.cost / totalMonthlyCost) * 100).toFixed(1)}% of total</span>
+                      <span>{totalMonthlyCost > 0 ? ((dept.cost / totalMonthlyCost) * 100).toFixed(1) : 0}% of total</span>
                     </div>
                     <div className="w-full bg-slate-800/60 rounded-full h-1.5 mt-1 overflow-hidden">
                       <div 
                         className="bg-emerald-500 h-1.5 rounded-full" 
-                        style={{ width: `${(dept.cost / totalMonthlyCost) * 100}%` }}
+                        style={{ width: `${totalMonthlyCost > 0 ? (dept.cost / totalMonthlyCost) * 100 : 0}%` }}
                       ></div>
                     </div>
                   </div>

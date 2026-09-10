@@ -42,9 +42,13 @@ export default function AccountantOverviewPage() {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
   };
 
-  const currentRev = kpis?.revenue?.current || 0;
-  const previousRev = kpis?.revenue?.previous || 0;
+  const currentRev = kpis?.revenue?.today || 0;
+  const previousRev = kpis?.revenue?.yesterday || 0;
   const revGrowth = previousRev > 0 ? ((currentRev - previousRev) / previousRev) * 100 : 0;
+
+  const currentExpenses = kpis?.balances?.apOutstanding || 0;
+  const arTotal = kpis?.balances?.arTotal || 0;
+  const pendingExceptions = kpis?.flags?.pendingExceptions || 0;
 
   return (
     <div className="flex flex-col gap-8 p-6 md:p-8 animate-in fade-in duration-500">
@@ -76,7 +80,7 @@ export default function AccountantOverviewPage() {
             </div>
           </div>
           <div className="mt-4 relative z-10">
-            <span className="text-3xl font-bold text-white tracking-tight">{formatCurrency(currentRev)}</span>
+            <span className="text-3xl font-bold text-white tracking-tight">₦{formatCurrency(currentRev).replace('$', '')}</span>
             <div className="mt-2 flex items-center gap-2 text-sm">
               <span className={`inline-flex items-center gap-1 font-medium ₦{revGrowth >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                 {revGrowth >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
@@ -97,7 +101,7 @@ export default function AccountantOverviewPage() {
             </div>
           </div>
           <div className="mt-4 relative z-10">
-            <span className="text-3xl font-bold text-white tracking-tight">{formatCurrency(kpis?.cashOut || 0)}</span>
+            <span className="text-3xl font-bold text-white tracking-tight">₦{formatCurrency(currentExpenses).replace('$', '')}</span>
             <div className="mt-2 flex items-center gap-2 text-sm text-slate-500">
               <span>This period</span>
             </div>
@@ -114,7 +118,7 @@ export default function AccountantOverviewPage() {
             </div>
           </div>
           <div className="mt-4 relative z-10">
-            <span className="text-3xl font-bold text-white tracking-tight">{formatCurrency(kpis?.arBalance || 0)}</span>
+            <span className="text-3xl font-bold text-white tracking-tight">₦{formatCurrency(arTotal).replace('$', '')}</span>
             <div className="mt-2 flex items-center gap-2 text-sm">
               <span className="text-slate-500">Outstanding</span>
             </div>
@@ -131,7 +135,7 @@ export default function AccountantOverviewPage() {
             </div>
           </div>
           <div className="mt-4 relative z-10">
-            <span className="text-3xl font-bold text-white tracking-tight">{kpis?.exceptions || 0}</span>
+            <span className="text-3xl font-bold text-white tracking-tight">{pendingExceptions}</span>
             <div className="mt-2 flex items-center gap-2 text-sm">
               <span className="text-rose-400 font-medium">Requires audit</span>
             </div>
