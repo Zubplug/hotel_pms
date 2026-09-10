@@ -162,6 +162,18 @@ model Property {
   CheckInBypass       CheckInBypass[]
   Hall                Hall[]
   Event               Event[]
+
+  // Enterprise Accounting Suite
+  supplierInvoices     SupplierInvoice[]
+  taxRemittances       TaxRemittance[]
+  accountingPeriods    AccountingPeriod[]
+  chartOfAccounts      ChartOfAccount[]
+  journalEntries       JournalEntry[]
+  payrollPeriods       PayrollPeriod[]
+  fixedAssetCategories FixedAssetCategory[]
+  fixedAssets          FixedAsset[]
+  assetDepreciations   AssetDepreciation[]
+  budgets              Budget[]
 }
 
 model Building {
@@ -1252,6 +1264,8 @@ model Tax {
   isInclusive Boolean  @default(false)
   isActive    Boolean  @default(true)
 
+  remittances TaxRemittance[]
+
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
 }
@@ -1818,6 +1832,10 @@ model Staff {
   bypassOperations       CheckInBypass[]         @relation("BypassOperator")
   bypassAcknowledgements CheckInBypass[]         @relation("BypassAcknowledger")
   bypassesReviewed       CheckInBypass[]         @relation("BypassReviewer")
+
+  // Enterprise Accounting Suite
+  salaryStructure SalaryStructure?
+  payslips        Payslip[]
 }
 
 model StaffPosOutletAccess {
@@ -2353,7 +2371,8 @@ model Supplier {
   taxIdentifier String?
   isActive      Boolean  @default(true)
 
-  purchaseOrders PurchaseOrder[]
+  purchaseOrders   PurchaseOrder[]
+  supplierInvoices SupplierInvoice[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -2607,8 +2626,9 @@ model PurchaseOrder {
   cancelledBy    String?   @db.Uuid
   cancelledAt    DateTime? @db.Timestamptz
 
-  items PurchaseOrderItem[]
-  grns  GoodsReceivedNote[]
+  items            PurchaseOrderItem[]
+  grns             GoodsReceivedNote[]
+  supplierInvoices SupplierInvoice[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -2656,6 +2676,7 @@ model GoodsReceivedNote {
 
   items        GoodsReceivedNoteItem[]
   transactions StockTransaction[]
+  invoiceLinks SupplierInvoiceGRN[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -4358,4 +4379,631 @@ model EventInvoice {
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
+}
+
+// =============================================================================
+// ENTERPRISE ACCOUNTANT WORKSPACE — NEW MODELS
+// Added: Enterprise Accounting Suite
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// ENUMS
+// -----------------------------------------------------------------------------
+
+enum SupplierInvoiceStatus {
+  RECEIVED
+  UNDER_REVIEW
+  APPROVED
+  PARTIAL
+  PAID
+  DISPUTED
+  OVERDUE
+  CANCELLED
+}
+
+enum TaxRemittanceStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REMITTED
+  REJECTED
+}
+
+enum AccountingPeriodStatus {
+  OPEN
+  CLOSING
+  CLOSED
+}
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+}
+
+enum BalanceSide {
+  DEBIT
+  CREDIT
+}
+
+enum JournalEntryStatus {
+  DRAFT
+  POSTED
+  REVERSED
+  VOID
+}
+
+enum PayrollPeriodStatus {
+  DRAFT
+  PROCESSING
+  PENDING_APPROVAL
+  APPROVED
+  PAID
+  CANCELLED
+}
+
+enum PayslipStatus {
+  DRAFT
+  CONFIRMED
+  PAID
+}
+
+enum AssetStatus {
+  ACTIVE
+  DISPOSED
+  FULLY_DEPRECIATED
+  UNDER_MAINTENANCE
+  WRITTEN_OFF
+}
+
+enum DepreciationMethod {
+  STRAIGHT_LINE
+  REDUCING_BALANCE
+  UNITS_OF_PRODUCTION
+}
+
+enum BudgetStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  ACTIVE
+  CLOSED
+}
+
+// -----------------------------------------------------------------------------
+// GROUP 1 — ACCOUNTS PAYABLE
+// -----------------------------------------------------------------------------
+
+model SupplierInvoice {
+  id         String   @id @default(uuid()) @db.Uuid
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id])
+
+  supplierId      String   @db.Uuid
+  supplier        Supplier @relation(fields: [supplierId], references: [id])
+  purchaseOrderId String?  @db.Uuid
+  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+
+  invoiceNumber String
+  invoiceDate   DateTime  @db.Date
+  dueDate       DateTime  @db.Date
+  receivedDate  DateTime? @db.Date
+
+  subtotal          Decimal @db.Decimal(18, 4)
+  taxAmount         Decimal @default(0) @db.Decimal(18, 4)
+  totalAmount       Decimal @db.Decimal(18, 4)
+  paidAmount        Decimal @default(0) @db.Decimal(18, 4)
+  outstandingAmount Decimal @db.Decimal(18, 4)
+  currency          String  @default("NGN")
+
+  status        SupplierInvoiceStatus @default(RECEIVED)
+  notes         String?
+  attachmentUrl String?
+
+  grnLinks SupplierInvoiceGRN[]
+  items    SupplierInvoiceItem[]
+  payments SupplierPayment[]
+
+  createdBy  String    @db.Uuid
+  approvedBy String?   @db.Uuid
+  approvedAt DateTime? @db.Timestamptz
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@unique([propertyId, invoiceNumber])
+  @@index([propertyId, status])
+  @@index([propertyId, dueDate])
+  @@index([supplierId])
+}
+
+model SupplierInvoiceGRN {
+  id        String @id @default(uuid()) @db.Uuid
+  invoiceId String @db.Uuid
+  grnId     String @db.Uuid
+
+  invoice         SupplierInvoice   @relation(fields: [invoiceId], references: [id])
+  grn             GoodsReceivedNote @relation(fields: [grnId], references: [id])
+  allocatedAmount Decimal           @db.Decimal(18, 4)
+
+  @@unique([invoiceId, grnId])
+  @@index([invoiceId])
+  @@index([grnId])
+}
+
+model SupplierInvoiceItem {
+  id        String          @id @default(uuid()) @db.Uuid
+  invoiceId String          @db.Uuid
+  invoice   SupplierInvoice @relation(fields: [invoiceId], references: [id])
+
+  grnItemId   String? @db.Uuid
+  description String
+  quantity    Decimal @db.Decimal(18, 4)
+  unitPrice   Decimal @db.Decimal(18, 4)
+  totalPrice  Decimal @db.Decimal(18, 4)
+  taxAmount   Decimal @default(0) @db.Decimal(18, 4)
+
+  @@index([invoiceId])
+}
+
+model SupplierPayment {
+  id         String @id @default(uuid()) @db.Uuid
+  propertyId String @db.Uuid
+  invoiceId  String @db.Uuid
+  supplierId String @db.Uuid
+
+  invoice SupplierInvoice @relation(fields: [invoiceId], references: [id])
+
+  amount           Decimal  @db.Decimal(18, 4)
+  currency         String   @default("NGN")
+  paymentDate      DateTime @db.Date
+  paymentMethod    String   // BANK_TRANSFER | CHEQUE | CASH | OTHER
+  bankReference    String?
+  paymentReference String   @unique
+  notes            String?
+
+  paidBy         String  @db.Uuid
+  journalEntryId String? @db.Uuid
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+
+  @@index([propertyId, paymentDate])
+  @@index([invoiceId])
+}
+
+// -----------------------------------------------------------------------------
+// GROUP 2 — TAX REMITTANCE
+// -----------------------------------------------------------------------------
+
+model TaxRemittance {
+  id         String   @id @default(uuid()) @db.Uuid
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id])
+
+  taxId String? @db.Uuid
+  tax   Tax?    @relation(fields: [taxId], references: [id])
+
+  periodStart DateTime @db.Date
+  periodEnd   DateTime @db.Date
+  taxType     String   // VAT | WHT | SERVICE_CHARGE | OTHER
+
+  collectedAmount Decimal @db.Decimal(18, 4)
+  remittedAmount  Decimal @db.Decimal(18, 4)
+  currency        String  @default("NGN")
+
+  remittanceDate DateTime  @db.Date
+  remittanceRef  String?
+  authorityName  String?   // FIRS | LIRS | etc.
+  attachmentUrl  String?
+  notes          String?
+
+  status     TaxRemittanceStatus @default(DRAFT)
+  recordedBy String              @db.Uuid
+  approvedBy String?             @db.Uuid
+  approvedAt DateTime?           @db.Timestamptz
+
+  journalEntryId String? @db.Uuid
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([propertyId, periodStart, periodEnd])
+  @@index([propertyId, status])
+}
+
+// -----------------------------------------------------------------------------
+// GROUP 3 — ACCOUNTING PERIOD
+// -----------------------------------------------------------------------------
+
+model AccountingPeriod {
+  id         String   @id @default(uuid()) @db.Uuid
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id])
+
+  name        String
+  periodStart DateTime @db.Date
+  periodEnd   DateTime @db.Date
+
+  status AccountingPeriodStatus @default(OPEN)
+
+  openedBy String?   @db.Uuid
+  closedBy String?   @db.Uuid
+  closedAt DateTime? @db.Timestamptz
+  notes    String?
+
+  journalEntries      JournalEntry[]
+  assetDepreciations  AssetDepreciation[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@unique([propertyId, periodStart])
+  @@index([propertyId, status])
+}
+
+// -----------------------------------------------------------------------------
+// GROUP 4 — GENERAL LEDGER
+// -----------------------------------------------------------------------------
+
+model ChartOfAccount {
+  id         String   @id @default(uuid()) @db.Uuid
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id])
+
+  code          String
+  name          String
+  type          AccountType
+  category      String      // e.g. "Current Assets", "Room Revenue"
+  normalBalance BalanceSide
+  parentCode    String?
+  description   String?
+  isActive      Boolean     @default(true)
+
+  journalLines JournalEntryLine[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@unique([propertyId, code])
+  @@index([propertyId, type])
+}
+
+model JournalEntry {
+  id         String   @id @default(uuid()) @db.Uuid
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id])
+
+  periodId String?           @db.Uuid
+  period   AccountingPeriod? @relation(fields: [periodId], references: [id])
+
+  entryNumber  String             @unique
+  entryDate    DateTime           @db.Date
+  description  String
+  reference    String?
+  source       String             @default("MANUAL") // MANUAL | AUTO_REVENUE | AUTO_PAYMENT | AUTO_EXPENSE | AUTO_DEPRECIATION | AUTO_PAYROLL
+  status       JournalEntryStatus @default(DRAFT)
+  totalDebit   Decimal            @default(0) @db.Decimal(18, 4)
+  totalCredit  Decimal            @default(0) @db.Decimal(18, 4)
+  isReversed   Boolean            @default(false)
+  reversalOfId String?            @db.Uuid
+
+  postedBy  String?   @db.Uuid
+  postedAt  DateTime? @db.Timestamptz
+  createdBy String    @db.Uuid
+
+  lines JournalEntryLine[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([propertyId, entryDate])
+  @@index([propertyId, status])
+  @@index([propertyId, periodId])
+}
+
+model JournalEntryLine {
+  id      String       @id @default(uuid()) @db.Uuid
+  entryId String       @db.Uuid
+  entry   JournalEntry @relation(fields: [entryId], references: [id])
+
+  accountId String         @db.Uuid
+  account   ChartOfAccount @relation(fields: [accountId], references: [id])
+
+  description String?
+  debit       Decimal @default(0) @db.Decimal(18, 4)
+  credit      Decimal @default(0) @db.Decimal(18, 4)
+
+  // Drill-down: links to source transaction (Phase 2 auto-posting hooks)
+  sourceType String? // FOLIO_ITEM | PAYMENT | CASH_EXPENSE | DEPRECIATION | PAYROLL | AP_PAYMENT
+  sourceId   String? @db.Uuid
+
+  @@index([entryId])
+  @@index([accountId])
+}
+
+// -----------------------------------------------------------------------------
+// GROUP 5 — PAYROLL
+// -----------------------------------------------------------------------------
+
+model SalaryStructure {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  propertyId     String @db.Uuid
+  staffId        String @unique @db.Uuid
+  staff          Staff  @relation(fields: [staffId], references: [id])
+
+  basicSalary        Decimal @db.Decimal(18, 4)
+  housingAllowance   Decimal @default(0) @db.Decimal(18, 4)
+  transportAllowance Decimal @default(0) @db.Decimal(18, 4)
+  otherAllowances    Decimal @default(0) @db.Decimal(18, 4)
+  currency           String  @default("NGN")
+
+  bankName          String?
+  bankAccountNumber String?
+  bankSortCode      String?
+  pensionFundAdmin  String?
+  pensionNumber     String?
+
+  effectiveFrom DateTime  @db.Date
+  effectiveTo   DateTime? @db.Date
+  isActive      Boolean   @default(true)
+
+  createdBy String @db.Uuid
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+}
+
+model PayrollPeriod {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  propertyId     String @db.Uuid
+  property       Property @relation(fields: [propertyId], references: [id])
+
+  name        String
+  startDate   DateTime  @db.Date
+  endDate     DateTime  @db.Date
+  paymentDate DateTime? @db.Date
+
+  status PayrollPeriodStatus @default(DRAFT)
+
+  totalGross          Decimal @default(0) @db.Decimal(18, 4)
+  totalDeductions     Decimal @default(0) @db.Decimal(18, 4)
+  totalNet            Decimal @default(0) @db.Decimal(18, 4)
+  totalEmployerPension Decimal @default(0) @db.Decimal(18, 4)
+  totalPAYE           Decimal @default(0) @db.Decimal(18, 4)
+  currency            String  @default("NGN")
+
+  createdBy    String    @db.Uuid
+  approvedBy   String?   @db.Uuid
+  approvedAt   DateTime? @db.Timestamptz
+  processedBy  String?   @db.Uuid
+  processedAt  DateTime? @db.Timestamptz
+
+  journalEntryId String? @db.Uuid
+
+  payslips Payslip[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@unique([organizationId, propertyId, startDate])
+  @@index([propertyId, status])
+  @@index([organizationId, startDate])
+}
+
+model Payslip {
+  id              String        @id @default(uuid()) @db.Uuid
+  payrollPeriodId String        @db.Uuid
+  payrollPeriod   PayrollPeriod @relation(fields: [payrollPeriodId], references: [id])
+  staffId         String        @db.Uuid
+  staff           Staff         @relation(fields: [staffId], references: [id])
+  propertyId      String        @db.Uuid
+
+  // Earnings
+  basicSalary        Decimal @db.Decimal(18, 4)
+  housingAllowance   Decimal @default(0) @db.Decimal(18, 4)
+  transportAllowance Decimal @default(0) @db.Decimal(18, 4)
+  otherAllowances    Decimal @default(0) @db.Decimal(18, 4)
+  overtime           Decimal @default(0) @db.Decimal(18, 4)
+  grossEarnings      Decimal @db.Decimal(18, 4)
+
+  // Statutory Deductions (Nigeria)
+  payeTax          Decimal @default(0) @db.Decimal(18, 4) // PAYE — progressive bands
+  pensionEmployee  Decimal @default(0) @db.Decimal(18, 4) // 8% of pensionable earnings
+  pensionEmployer  Decimal @default(0) @db.Decimal(18, 4) // 10% of pensionable earnings
+  nhf              Decimal @default(0) @db.Decimal(18, 4) // NHF — 2.5% of basic
+  nsitf            Decimal @default(0) @db.Decimal(18, 4) // NSITF — 1% of gross
+
+  // Other Deductions
+  staffLiabilityDeductions Decimal @default(0) @db.Decimal(18, 4) // From StaffReceivable
+  loanDeductions           Decimal @default(0) @db.Decimal(18, 4)
+  otherDeductions          Decimal @default(0) @db.Decimal(18, 4)
+  totalDeductions          Decimal @db.Decimal(18, 4)
+
+  netPay   Decimal      @db.Decimal(18, 4)
+  currency String       @default("NGN")
+  status   PayslipStatus @default(DRAFT)
+
+  bankName      String?
+  accountNumber String?
+
+  components PayslipComponent[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@unique([payrollPeriodId, staffId])
+  @@index([propertyId, payrollPeriodId])
+}
+
+model PayslipComponent {
+  id        String  @id @default(uuid()) @db.Uuid
+  payslipId String  @db.Uuid
+  payslip   Payslip @relation(fields: [payslipId], references: [id])
+
+  name   String
+  type   String  // EARNING | DEDUCTION | STATUTORY
+  amount Decimal @db.Decimal(18, 4)
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+
+  @@index([payslipId])
+}
+
+// -----------------------------------------------------------------------------
+// GROUP 6 — FIXED ASSETS
+// -----------------------------------------------------------------------------
+
+model FixedAssetCategory {
+  id         String   @id @default(uuid()) @db.Uuid
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id])
+
+  name               String
+  depreciationMethod DepreciationMethod @default(STRAIGHT_LINE)
+  usefulLifeYears    Int
+  salvagePercent     Decimal            @default(0) @db.Decimal(5, 2)
+
+  // GL account codes (Phase 2: link to ChartOfAccount.code)
+  glAccountCode       String?
+  depreciationGlCode  String?
+  accumulatedGlCode   String?
+
+  isActive Boolean @default(true)
+
+  assets FixedAsset[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+}
+
+model FixedAsset {
+  id         String   @id @default(uuid()) @db.Uuid
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id])
+
+  categoryId String             @db.Uuid
+  category   FixedAssetCategory @relation(fields: [categoryId], references: [id])
+
+  assetNumber String      @unique
+  name        String
+  description String?
+  location    String?
+
+  acquisitionDate    DateTime           @db.Date
+  acquisitionCost    Decimal            @db.Decimal(18, 4)
+  salvageValue       Decimal            @default(0) @db.Decimal(18, 4)
+  usefulLifeYears    Int
+  depreciationMethod DepreciationMethod
+
+  currentBookValue        Decimal @db.Decimal(18, 4)
+  accumulatedDepreciation Decimal @default(0) @db.Decimal(18, 4)
+
+  status AssetStatus @default(ACTIVE)
+
+  disposalDate   DateTime? @db.Date
+  disposalAmount Decimal?  @db.Decimal(18, 4)
+  disposalReason String?
+
+  supplier      String?
+  invoiceRef    String?
+  warrantyExpiry DateTime? @db.Date
+
+  createdBy String @db.Uuid
+
+  depreciationSchedule AssetDepreciation[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([propertyId, status])
+  @@index([propertyId, categoryId])
+}
+
+model AssetDepreciation {
+  id         String   @id @default(uuid()) @db.Uuid
+  assetId    String   @db.Uuid
+  asset      FixedAsset @relation(fields: [assetId], references: [id])
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id])
+
+  periodId String?           @db.Uuid
+  period   AccountingPeriod? @relation(fields: [periodId], references: [id])
+
+  depreciationDate  DateTime @db.Date
+  amount            Decimal  @db.Decimal(18, 4)
+  bookValueBefore   Decimal  @db.Decimal(18, 4)
+  bookValueAfter    Decimal  @db.Decimal(18, 4)
+  accumulatedAfter  Decimal  @db.Decimal(18, 4)
+
+  status         String  @default("POSTED") // DRAFT | POSTED
+  postedBy       String? @db.Uuid
+  journalEntryId String? @db.Uuid
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+
+  @@index([assetId, depreciationDate])
+  @@index([propertyId, depreciationDate])
+}
+
+// -----------------------------------------------------------------------------
+// GROUP 7 — BUDGETING
+// -----------------------------------------------------------------------------
+
+model Budget {
+  id         String   @id @default(uuid()) @db.Uuid
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id])
+
+  name       String
+  budgetType String // ANNUAL | MONTHLY | QUARTERLY | CUSTOM
+  periodStart DateTime @db.Date
+  periodEnd   DateTime @db.Date
+  currency    String   @default("NGN")
+  status      BudgetStatus @default(DRAFT)
+
+  totalRevenueBudget Decimal @default(0) @db.Decimal(18, 4)
+  totalExpenseBudget Decimal @default(0) @db.Decimal(18, 4)
+
+  lines BudgetLine[]
+
+  createdBy  String    @db.Uuid
+  approvedBy String?   @db.Uuid
+  approvedAt DateTime? @db.Timestamptz
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([propertyId, status])
+  @@index([propertyId, periodStart])
+}
+
+model BudgetLine {
+  id       String @id @default(uuid()) @db.Uuid
+  budgetId String @db.Uuid
+  budget   Budget @relation(fields: [budgetId], references: [id])
+
+  category    String  // ROOM_REVENUE | FNB_REVENUE | LAUNDRY_REVENUE | OTHER_REVENUE | FNB_COST | PAYROLL | UTILITIES | MAINTENANCE | MARKETING | ADMIN | DEPRECIATION | OTHER_EXPENSE
+  department  String? // ROOMS | FNB | LAUNDRY | SPA | ADMINISTRATION | MAINTENANCE
+  description String?
+
+  jan Decimal @default(0) @db.Decimal(18, 4)
+  feb Decimal @default(0) @db.Decimal(18, 4)
+  mar Decimal @default(0) @db.Decimal(18, 4)
+  apr Decimal @default(0) @db.Decimal(18, 4)
+  may Decimal @default(0) @db.Decimal(18, 4)
+  jun Decimal @default(0) @db.Decimal(18, 4)
+  jul Decimal @default(0) @db.Decimal(18, 4)
+  aug Decimal @default(0) @db.Decimal(18, 4)
+  sep Decimal @default(0) @db.Decimal(18, 4)
+  oct Decimal @default(0) @db.Decimal(18, 4)
+  nov Decimal @default(0) @db.Decimal(18, 4)
+  dec Decimal @default(0) @db.Decimal(18, 4)
+
+  totalAmount Decimal @db.Decimal(18, 4)
+
+  @@index([budgetId, category])
 }

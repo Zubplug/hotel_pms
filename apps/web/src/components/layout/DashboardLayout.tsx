@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useLogout } from '@/hooks/useLogout';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { CashManagementLayout } from './CashManagementLayout';
+import { AccountantLayout } from './AccountantLayout';
 import { cn } from '@/lib/utils';
 import {
   LayoutDashboard,
@@ -145,6 +146,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   if (role === 'GENERAL_CASHIER') {
     return <CashManagementLayout>{children}</CashManagementLayout>;
+  }
+
+  if (role === 'ACCOUNTANT') {
+    return <AccountantLayout>{children}</AccountantLayout>;
   }
 
   const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => (
