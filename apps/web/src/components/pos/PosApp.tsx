@@ -1495,7 +1495,7 @@ export default function PosApp() {
               allBar,
               supervisorPin,
             );
-            if (res?.success === false || res?.error) {
+            if (res?.error) {
               toast.error(res.error || 'Failed to void order.');
               return;
             }

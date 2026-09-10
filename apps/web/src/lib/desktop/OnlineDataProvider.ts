@@ -475,6 +475,14 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
         headers: { 'Authorization': `Bearer ${operatorToken}` }
       });
     },
+    getPendingOrdersForSession: async (sessionId: string) => {
+      // Stub for online REST API
+      return { data: [], error: 'Not implemented online' };
+    },
+    voidWholeOrder: async (orderId: string, reason: string, isBarOrder: boolean, supervisorPin?: string) => {
+      // Stub for online REST API
+      return { data: null, error: 'Not implemented online' };
+    },
     getProductionBatches: async (outletId: string, station: string) => {
       return apiFetchResult(`/api/v1/pos/outlets/${outletId}/production-batches?station=${station}`);
     },
