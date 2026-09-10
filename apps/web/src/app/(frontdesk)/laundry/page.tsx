@@ -10,7 +10,7 @@ import { cn, formatCurrency } from '@/lib/utils';
 import { ClientOnlyDate } from '@/components/ClientOnlyDate';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
-export default function LaundryDashboard() {
+export default function LaundryDashboard({ managementMode = false }: { managementMode?: boolean }) {
   const { propertyId } = useProperty();
   const { provider } = useLodgeCoreProvider();
   const router = useRouter();
@@ -92,10 +92,10 @@ export default function LaundryDashboard() {
               <span className="font-bold text-sm">Catalog</span>
             </Button>
 
-            <Button onClick={() => router.push('/frontdesk')} variant="outline" className="h-20 md:h-24 md:w-36 rounded-2xl bg-white/80 hover:bg-white text-slate-700 border-white/50 shadow hover:shadow-md hover:-translate-y-1 transition-all flex flex-col gap-2 group">
+            {!managementMode && <Button onClick={() => router.push('/frontdesk')} variant="outline" className="h-20 md:h-24 md:w-36 rounded-2xl bg-white/80 hover:bg-white text-slate-700 border-white/50 shadow hover:shadow-md hover:-translate-y-1 transition-all flex flex-col gap-2 group">
               <ArrowLeft className="w-6 h-6 md:w-7 md:h-7 text-slate-400 group-hover:-translate-x-1 transition-transform" />
               <span className="font-bold text-sm">Front Desk</span>
-            </Button>
+            </Button>}
           </div>
         </div>
 
