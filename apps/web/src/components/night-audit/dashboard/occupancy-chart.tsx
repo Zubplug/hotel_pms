@@ -5,7 +5,7 @@ import { RoomAnalytics } from '@/types/night-audit';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 
-export function OccupancyChart({ rooms }: { rooms: RoomAnalytics | undefined }) {
+export function OccupancyChart({ rooms, managerMode = false }: { rooms: RoomAnalytics | undefined; managerMode?: boolean }) {
   if (!rooms) return null;
 
   const total = rooms.total || 0;
@@ -29,7 +29,7 @@ export function OccupancyChart({ rooms }: { rooms: RoomAnalytics | undefined }) 
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Current room status for the business date</p>
         </div>
         <Button variant="outline" size="sm" asChild className="h-8 shadow-sm">
-          <Link href="/night-audit/rooms">
+          <Link href={managerMode ? '/general-manager/night-audit/rooms' : '/night-audit/rooms'}>
             View Rooms
           </Link>
         </Button>

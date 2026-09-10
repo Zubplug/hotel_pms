@@ -117,7 +117,7 @@ export default function LaundryDashboard({ managementMode = false }: { managemen
             <span className="text-4xl font-extrabold text-indigo-950">{washing}</span>
           </div>
 
-          <div className="bg-gradient-to-br from-emerald-50 to-emerald-100/50 p-6 rounded-2xl border border-emerald-100 shadow-sm flex flex-col group relative overflow-hidden cursor-pointer" onClick={() => router.push('/laundry/orders')}>
+          <div className="bg-gradient-to-br from-emerald-50 to-emerald-100/50 p-6 rounded-2xl border border-emerald-100 shadow-sm flex flex-col group relative overflow-hidden cursor-pointer" onClick={() => router.push(managementMode ? '/general-manager/laundry/orders' : '/laundry/orders')}>
             <div className="flex items-center justify-between mb-4">
               <span className="text-emerald-800 font-semibold text-sm uppercase tracking-wider">Ready / Done</span>
               <div className="bg-emerald-200/50 p-2 rounded-lg text-emerald-700"><CheckCircle2 className="w-5 h-5" /></div>
