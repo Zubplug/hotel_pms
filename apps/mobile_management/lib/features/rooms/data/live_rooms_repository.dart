@@ -58,6 +58,7 @@ class LiveRoomsRepository implements RoomsRepository {
     return RoomOverview(
       total: data['total'] as int,
       occupied: data['occupied'] as int,
+      occupiedDirty: data['occupiedDirty'] as int? ?? 0,
       vacant: data['vacant'] as int,
       ready: data['ready'] as int,
       dirty: data['dirty'] as int,

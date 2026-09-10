@@ -52,8 +52,15 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen>
   }
 
   // ── Status helpers ────────────────────────────────────────────────────────────
-  Color _statusColor(String status) {
-    switch (status) {
+  static const _dirtyHKStatuses = {'DIRTY', 'PENDING', 'ASSIGNED', 'CLEANING'};
+
+  bool _isStayoverDirty(RoomItem room) =>
+      room.displayStatus == 'OCCUPIED' &&
+      _dirtyHKStatuses.contains(room.housekeepingStatus.toUpperCase());
+
+  Color _statusColor(RoomItem room) {
+    if (_isStayoverDirty(room)) return const Color(0xFFF97316); // orange for occupied+dirty
+    switch (room.displayStatus) {
       case 'OCCUPIED':        return _blue;
       case 'READY':           return _green;
       case 'DIRTY':           return _orange;
@@ -63,14 +70,15 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen>
     }
   }
 
-  String _statusLabel(String status) {
-    switch (status) {
+  String _statusLabel(RoomItem room) {
+    if (_isStayoverDirty(room)) return 'OCCUPIED · DIRTY';
+    switch (room.displayStatus) {
       case 'OCCUPIED':        return 'OCCUPIED';
       case 'READY':           return 'VACANT · READY';
       case 'DIRTY':           return 'VACANT · DIRTY';
       case 'OUT_OF_ORDER':    return 'OUT OF ORDER';
       case 'OUT_OF_SERVICE':  return 'OUT OF SERVICE';
-      default:                return status.replaceAll('_', ' ');
+      default:                return room.displayStatus.replaceAll('_', ' ');
     }
   }
 
@@ -79,7 +87,9 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen>
     switch (_filter) {
       case 'Occupied': return rooms.where((r) => r.displayStatus == 'OCCUPIED').toList();
       case 'Ready':    return rooms.where((r) => r.displayStatus == 'READY').toList();
-      case 'Dirty':    return rooms.where((r) => r.displayStatus == 'DIRTY').toList();
+      // 'Dirty' shows BOTH vacant-dirty AND occupied rooms with dirty housekeeping
+      case 'Dirty':    return rooms.where((r) =>
+          r.displayStatus == 'DIRTY' || _isStayoverDirty(r)).toList();
       case 'OOO':      return rooms.where((r) => r.displayStatus == 'OUT_OF_ORDER').toList();
       case 'OOS':      return rooms.where((r) => r.displayStatus == 'OUT_OF_SERVICE').toList();
       default:         return rooms;
@@ -252,8 +262,9 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen>
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
                     child: _RoomCard(
                       room: rooms[i],
-                      statusColor: _statusColor(rooms[i].displayStatus),
-                      statusLabel: _statusLabel(rooms[i].displayStatus),
+                      statusColor: _statusColor(rooms[i]),
+                      statusLabel: _statusLabel(rooms[i]),
+                      isStayoverDirty: _isStayoverDirty(rooms[i]),
                       onTap: () => Navigator.of(ctx).push(
                         MaterialPageRoute(
                           builder: (_) => RoomDetailsScreen(roomId: rooms[i].id),
@@ -418,10 +429,12 @@ class _OccupancyBanner extends StatelessWidget {
             children: [
               _StatPill(value: overview.ready, label: 'Ready', color: _green),
               const SizedBox(width: 8),
-              _StatPill(value: overview.dirty, label: 'Dirty', color: _orange),
+              _StatPill(value: overview.dirty, label: 'Dirty (Vac)', color: _orange),
               const SizedBox(width: 8),
-              _StatPill(value: overview.vacant, label: 'Vacant', color: _textSecondary),
-              const SizedBox(width: 8),
+              if (overview.occupiedDirty > 0) ...[
+                _StatPill(value: overview.occupiedDirty, label: 'Stay Dirty', color: const Color(0xFFF59E0B)),
+                const SizedBox(width: 8),
+              ],
               _StatPill(value: oooOos, label: 'OOO/OOS', color: _red),
             ],
           ),
@@ -484,7 +497,8 @@ class _FilterBar extends StatelessWidget {
     switch (f) {
       case 'Occupied': return o.occupied;
       case 'Ready':    return o.ready;
-      case 'Dirty':    return o.dirty;
+      // Dirty filter: show vacant-dirty + occupied-dirty (stayover dirty) total
+      case 'Dirty':    return o.dirty + o.occupiedDirty;
       case 'OOO':      return o.outOfOrder;
       case 'OOS':      return o.outOfService;
       default:         return o.total;
@@ -558,11 +572,13 @@ class _RoomCard extends StatelessWidget {
   final RoomItem room;
   final Color statusColor;
   final String statusLabel;
+  final bool isStayoverDirty;
   final VoidCallback onTap;
   const _RoomCard({
     required this.room,
     required this.statusColor,
     required this.statusLabel,
+    required this.isStayoverDirty,
     required this.onTap,
   });
 
@@ -664,22 +680,45 @@ class _RoomCard extends StatelessWidget {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           // Status badge pill
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: statusColor.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: statusColor.withValues(alpha: 0.35)),
-                            ),
-                            child: Text(
-                              statusLabel,
-                              style: TextStyle(
-                                fontSize: 9,
-                                fontWeight: FontWeight.w800,
-                                color: statusColor,
-                                letterSpacing: 0.5,
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // Housekeeping dirty icon badge for stayover-dirty occupied rooms
+                              if (isStayoverDirty) ...[
+                                Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                        color: const Color(0xFFF59E0B).withValues(alpha: 0.4)),
+                                  ),
+                                  child: const Icon(
+                                    Icons.cleaning_services_rounded,
+                                    size: 11,
+                                    color: Color(0xFFF59E0B),
+                                  ),
+                                ),
+                                const SizedBox(width: 5),
+                              ],
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: statusColor.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(color: statusColor.withValues(alpha: 0.35)),
+                                ),
+                                child: Text(
+                                  statusLabel,
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w800,
+                                    color: statusColor,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
                               ),
-                            ),
+                            ],
                           ),
                           const SizedBox(height: 8),
                           Icon(

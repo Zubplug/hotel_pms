@@ -96,8 +96,10 @@ public static class MauiProgram
             db.ApplyNoShowSchemaAsync().GetAwaiter().GetResult();
             db.ApplyFinancialControlSchemaAsync().GetAwaiter().GetResult();
             db.ApplyManagerOverrideSchemaAsync().GetAwaiter().GetResult();
+            db.ApplyPosRoutingSchemaAsync().GetAwaiter().GetResult();   // was defined but never called
             db.ApplyDiscountSchemaAsync().GetAwaiter().GetResult();
             db.ApplyCorporateFolioSchemaAsync().GetAwaiter().GetResult();
+            db.ApplySettlementSchemaAsync().GetAwaiter().GetResult();   // fixes shift-submit DbUpdateException
         }
 
         return app;

@@ -13,6 +13,23 @@ using Microsoft.Extensions.Logging;
 
 namespace LodgeCore.Desktop.Services;
 
+/// <summary>
+/// Single-authority background service for production ticket printing.
+///
+/// Design principles:
+///   • This is the ONLY code path that prints KOTs. The frontend must NOT
+///     call PrintKitchenTicketAsync directly after firing items — that causes
+///     every ticket to print twice (once immediately, once when this service
+///     polls 5 s later and still sees PrintStatus = QUEUED).
+///   • Station routing: BAR KOTs → BAR printer, KITCHEN KOTs → KITCHEN printer.
+///     Fallback to RECEIPT printer when the station-specific printer is not
+///     configured.
+///   • Waiter slip is printed on the RECEIPT printer. A waiter-slip failure is
+///     logged as a warning but does NOT prevent the main KOT from being marked
+///     PRINTED — the kitchen must not be blocked by a waiter-side printer error.
+///   • Up to 3 automatic retries. After 3 failures the KOT is marked FAILED so
+///     it does not loop forever.
+/// </summary>
 public class KotPrintService : BackgroundService
 {
     private readonly IServiceProvider _serviceProvider;
@@ -51,7 +68,8 @@ public class KotPrintService : BackgroundService
         using var scope = _serviceProvider.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
 
-        // Fetch queued KOTs (max 3 retries)
+        // Fetch queued KOTs (max 3 retries), oldest first so urgent tickets
+        // are never starved by a later failed KOT.
         var queuedKots = await dbContext.PosKots
             .Where(k => k.PrintStatus == "QUEUED" || (k.PrintStatus == "FAILED" && k.AttemptCount < 3))
             .OrderBy(k => k.CreatedAt)
@@ -64,14 +82,21 @@ public class KotPrintService : BackgroundService
         {
             kot.AttemptCount++;
 
+            // Resolve station once — used for printer routing and logging.
+            var station = string.IsNullOrWhiteSpace(kot.ProductionStation)
+                ? "KITCHEN"
+                : kot.ProductionStation.Trim().ToUpperInvariant();
+
             try
             {
-                // Load the order items for this KOT
+                // ── 1. Load items for this KOT ──────────────────────────
                 var itemIds = JsonSerializer.Deserialize<List<string>>(kot.ItemIdsJson) ?? new List<string>();
                 var items = await dbContext.PosOrderItems
                     .Where(i => itemIds.Contains(i.Id))
                     .Include(i => i.Modifiers)
                     .ToListAsync(cancellationToken);
+
+                // ── 2. Resolve waiter name ───────────────────────────────
                 var order = await dbContext.PosOrders.FindAsync(new object[] { kot.OrderId }, cancellationToken);
                 var waiter = order?.ServerStaffId == null
                     ? null
@@ -80,7 +105,7 @@ public class KotPrintService : BackgroundService
                     ? kot.ServerName
                     : $"{waiter.FirstName} {waiter.LastName}".Trim();
 
-                // Build the KotData DTO for the ESC/POS service
+                // ── 3. Build the KotData DTO ─────────────────────────────
                 var kotData = new KotData(
                     KotNumber: kot.KotNumber,
                     OrderNumber: kot.OrderNumber,
@@ -95,30 +120,48 @@ public class KotPrintService : BackgroundService
                         Modifiers: i.Modifiers.Select(m => m.Name).ToList()
                     )).ToList(),
                     FiredAt: kot.FiredAt ?? kot.CreatedAt,
-                    Station: string.IsNullOrWhiteSpace(kot.ProductionStation) ? "KITCHEN" : kot.ProductionStation,
+                    // Station drives printer selection: BAR → bar printer, KITCHEN → kitchen printer.
+                    Station: station,
                     OrderType: order?.OrderType,
-                    IsIncremental: order != null && order.Kots.Count(k => k.CreatedAt < kot.CreatedAt) > 0
+                    // A KOT is incremental (i.e. "NEW ITEMS" on the ticket) when at least
+                    // one earlier KOT already exists for this order.
+                    IsIncremental: await dbContext.PosKots
+                        .AnyAsync(k => k.OrderId == kot.OrderId && k.CreatedAt < kot.CreatedAt, cancellationToken)
                 );
 
-                var (success, error) = await _escPos.PrintKotAsync(kotData, kot.OutletId);
-                var (waiterCopySuccess, waiterCopyError) = await _escPos.PrintWaiterSlipAsync(kotData, kot.OutletId);
-                if (!waiterCopySuccess)
-                {
-                    _logger.LogWarning("Waiter copy for KOT {KotNumber} was not printed: {Error}",
-                        kot.KotNumber, waiterCopyError);
-                }
+                // ── 4. Print to the station printer (BAR or KITCHEN) ────
+                _logger.LogInformation(
+                    "Printing KOT {KotNumber} to [{Station}] printer (attempt {Attempt}).",
+                    kot.KotNumber, station, kot.AttemptCount);
 
-                if (success)
+                var (stationSuccess, stationError) = await _escPos.PrintKotAsync(kotData, kot.OutletId);
+
+                // ── 5. Update print status based on station printer result ─
+                if (stationSuccess)
                 {
                     kot.PrintStatus = "PRINTED";
                     kot.PrintedAt = DateTime.UtcNow;
-                    _logger.LogInformation("KOT {KotNumber} printed successfully.", kot.KotNumber);
+                    _logger.LogInformation(
+                        "KOT {KotNumber} [{Station}] printed successfully.", kot.KotNumber, station);
+
+                    // ── 6. Waiter slip on RECEIPT printer (best-effort) ──
+                    // A failure here is a warning — it must NOT re-queue the
+                    // main KOT or the kitchen will receive the ticket twice.
+                    var (waiterSuccess, waiterError) = await _escPos.PrintWaiterSlipAsync(kotData, kot.OutletId);
+                    if (!waiterSuccess)
+                    {
+                        _logger.LogWarning(
+                            "Waiter slip for KOT {KotNumber} was not printed (non-fatal): {Error}",
+                            kot.KotNumber, waiterError);
+                    }
                 }
                 else
                 {
+                    // Station printer failed — retry up to 3 times then give up.
                     kot.PrintStatus = kot.AttemptCount >= 3 ? "FAILED" : "QUEUED";
-                    _logger.LogWarning("KOT {KotNumber} print failed (attempt {Attempt}): {Error}",
-                        kot.KotNumber, kot.AttemptCount, error);
+                    _logger.LogWarning(
+                        "KOT {KotNumber} [{Station}] print failed (attempt {Attempt}/{Max}): {Error}",
+                        kot.KotNumber, station, kot.AttemptCount, 3, stationError);
                 }
             }
             catch (Exception ex)

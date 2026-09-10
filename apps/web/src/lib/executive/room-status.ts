@@ -22,7 +22,8 @@ export interface RoomStatusOverview {
   occupied: number;
   vacant: number;
   ready: number;
-  dirty: number;
+  dirty: number;          // vacant rooms that are dirty (need cleaning before next guest)
+  occupiedDirty: number;  // occupied rooms whose housekeeping status is dirty (stayover dirty)
   outOfOrder: number;
   outOfService: number;
 }
@@ -86,6 +87,7 @@ export async function calculateRoomStatuses(propertyId: string, businessDate: Da
     vacant: 0,
     ready: 0,
     dirty: 0,
+    occupiedDirty: 0,
     outOfOrder: 0,
     outOfService: 0
   };
@@ -123,6 +125,8 @@ export async function calculateRoomStatuses(propertyId: string, businessDate: Da
     } else if (isOccupied) {
       displayStatus = 'OCCUPIED';
       overview.occupied++;
+      // Track occupied rooms that are also dirty (stayover dirty)
+      if (!isClean) overview.occupiedDirty++;
     } else if (isClean) {
       displayStatus = 'READY';
       overview.ready++;

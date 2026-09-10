@@ -1,12 +1,26 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, Wallet, DollarSign, ArrowRightLeft, CheckCircle2 } from 'lucide-react';
+import { X, Wallet, DollarSign, ArrowRightLeft, CheckCircle2, AlertTriangle, ClipboardList, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ActionSuccessModal } from '@/components/pos/ActionSuccessModal';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+
+type PendingOrder = {
+  id: string;
+  orderNumber: string;
+  displayName: string;
+  tableNumber?: string;
+  orderType: string;
+  status: string;
+  paymentStatus: string;
+  total: number;
+  itemCount: number;
+  waiterName: string;
+  createdAt: string;
+};
 
 type MyShiftBankModalProps = {
   isOpen: boolean;
@@ -35,28 +49,51 @@ export function MyShiftBankModal({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
+  // Pending orders state
+  const [pendingOrders, setPendingOrders] = useState<PendingOrder[]>([]);
+  const [pendingOrdersLoading, setPendingOrdersLoading] = useState(false);
+
   useEffect(() => {
     if (isOpen && posSessionId) {
-      loadSessionContext();
+      loadAll();
     }
   }, [isOpen, posSessionId]);
 
-  const loadSessionContext = async () => {
+  const loadAll = async () => {
     setIsLoading(true);
     setLoadError(null);
     try {
-      const res = await provider.pos.getSessionContext(posSessionId);
-      if (!res.error && res.data) {
-        setSessionDetails(res.data);
+      const [ctxRes, ordersRes] = await Promise.all([
+        provider.pos.getSessionContext(posSessionId),
+        provider.pos.getPendingOrdersForSession
+          ? provider.pos.getPendingOrdersForSession(posSessionId)
+          : Promise.resolve({ data: [] }),
+      ]);
+
+      if (!ctxRes.error && ctxRes.data) {
+        setSessionDetails(ctxRes.data);
       } else {
         setSessionDetails(null);
-        setLoadError(res.error || 'No active shift bank was found. Open a POS shift and try again.');
+        setLoadError(ctxRes.error || 'No active shift bank was found. Open a POS shift and try again.');
       }
+
+      setPendingOrders(ordersRes?.data ?? []);
     } catch (e: any) {
       setSessionDetails(null);
       setLoadError(e?.message || 'Failed to load shift bank details.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const refreshPendingOrders = async () => {
+    if (!posSessionId || !provider.pos.getPendingOrdersForSession) return;
+    setPendingOrdersLoading(true);
+    try {
+      const res = await provider.pos.getPendingOrdersForSession(posSessionId);
+      setPendingOrders(res?.data ?? []);
+    } finally {
+      setPendingOrdersLoading(false);
     }
   };
 
@@ -69,8 +106,16 @@ export function MyShiftBankModal({
   const actualCash = parseFloat(actualCashStr) || 0;
   const expectedCash = Number(sessionDetails?.expectedCash || 0);
   const variance = actualCash - expectedCash;
+  const hasPendingOrders = pendingOrders.length > 0;
+
+  const formatCurrency = (amount: number) =>
+    `₦${Number(amount || 0).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   const requestCloseShift = () => {
+    if (hasPendingOrders) {
+      toast.error(`You have ${pendingOrders.length} open order(s). Settle or void them in the POS before closing your shift.`);
+      return;
+    }
     if (actualCashStr === '') {
       toast.error('Please enter the actual physical cash you are handing over.');
       return;
@@ -84,7 +129,6 @@ export function MyShiftBankModal({
 
   const handleCloseShift = async () => {
     setShowCloseConfirm(false);
-
     setIsSubmitting(true);
     try {
       const res = await provider.pos.settleSession(sessionDetails.id || posSessionId, actualCash, sessionDetails.primaryOperatorId || '', undefined, operatorToken);
@@ -129,41 +173,100 @@ export function MyShiftBankModal({
             <div className="py-12 text-center">
               <p className="font-semibold text-red-600">Unable to load shift bank</p>
               <p className="mt-2 text-sm text-slate-500">{loadError}</p>
-              <Button className="mt-5" onClick={loadSessionContext}>Try again</Button>
+              <Button className="mt-5" onClick={loadAll}>Try again</Button>
             </div>
           ) : !sessionDetails ? (
             <div className="py-12 text-center text-slate-500">No active shift bank found.</div>
           ) : (
-            <div className="space-y-6">
-              
+            <div className="space-y-5">
+
+              {/* ── PENDING ORDERS BLOCKER ────────────────────────────────── */}
+              {hasPendingOrders && (
+                <div className="rounded-2xl border-2 border-amber-300 bg-amber-50 overflow-hidden">
+                  <div className="flex items-center justify-between px-4 pt-4 pb-2">
+                    <div className="flex items-center gap-2 text-amber-800">
+                      <AlertTriangle className="w-5 h-5 shrink-0 text-amber-500" />
+                      <div>
+                        <p className="font-bold text-sm">
+                          {pendingOrders.length} Open Order{pendingOrders.length !== 1 ? 's' : ''} — Shift Blocked
+                        </p>
+                        <p className="text-xs text-amber-700 mt-0.5">
+                          Settle or void all orders on your POS screen before closing your shift.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={refreshPendingOrders}
+                      disabled={pendingOrdersLoading}
+                      className="ml-3 shrink-0 p-1.5 rounded-lg hover:bg-amber-100 text-amber-600 transition-colors"
+                      title="Refresh"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${pendingOrdersLoading ? 'animate-spin' : ''}`} />
+                    </button>
+                  </div>
+
+                  <div className="px-4 pb-4 space-y-2">
+                    {pendingOrders.map((order) => (
+                      <div
+                        key={order.id}
+                        className="flex items-center justify-between bg-white rounded-xl border border-amber-200 px-3 py-2.5 gap-3"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <ClipboardList className="w-4 h-4 text-amber-500 shrink-0" />
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-slate-800 truncate">
+                              #{order.orderNumber}
+                              {order.tableNumber ? ` · Table ${order.tableNumber}` : ''}
+                            </p>
+                            <p className="text-xs text-slate-500 truncate">
+                              {order.orderType.replace('_', ' ')} · {order.itemCount} item{order.itemCount !== 1 ? 's' : ''}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <p className="text-sm font-bold text-slate-800">{formatCurrency(order.total)}</p>
+                          <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded-full ${
+                            order.paymentStatus === 'UNPAID'
+                              ? 'bg-red-100 text-red-700'
+                              : 'bg-amber-100 text-amber-700'
+                          }`}>
+                            {order.paymentStatus}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Total Shift Sales Overview */}
-              <div className="bg-slate-50 rounded-2xl border border-slate-200 overflow-hidden mb-6">
+              <div className="bg-slate-50 rounded-2xl border border-slate-200 overflow-hidden">
                 <div className="p-4 space-y-3">
                   <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2">Total Shift Sales</h3>
                   <div className="flex justify-between items-center text-slate-600">
                     <span>Cash Sales</span>
-                    <span className="font-medium text-slate-800">₦{Number(sessionDetails.cashSales || 0).toFixed(2)}</span>
+                    <span className="font-medium text-slate-800">{formatCurrency(sessionDetails.cashSales)}</span>
                   </div>
                   <div className="flex justify-between items-center text-slate-600">
                     <span>Card Sales</span>
-                    <span className="font-medium text-slate-800">₦{Number(sessionDetails.cardSales || 0).toFixed(2)}</span>
+                    <span className="font-medium text-slate-800">{formatCurrency(sessionDetails.cardSales)}</span>
                   </div>
                   <div className="flex justify-between items-center text-slate-600">
                     <span>Bank Transfer</span>
-                    <span className="font-medium text-slate-800">₦{Number(sessionDetails.bankTransferSales || 0).toFixed(2)}</span>
+                    <span className="font-medium text-slate-800">{formatCurrency(sessionDetails.bankTransferSales)}</span>
                   </div>
                   <div className="flex justify-between items-center text-slate-600">
                     <span>Room Charges</span>
-                    <span className="font-medium text-slate-800">₦{Number(sessionDetails.roomChargeSales || 0).toFixed(2)}</span>
+                    <span className="font-medium text-slate-800">{formatCurrency(sessionDetails.roomChargeSales)}</span>
                   </div>
                   <div className="flex justify-between items-center text-slate-600">
                     <span>Other Sales</span>
-                    <span className="font-medium text-slate-800">₦{Number(sessionDetails.otherSales || 0).toFixed(2)}</span>
+                    <span className="font-medium text-slate-800">{formatCurrency(sessionDetails.otherSales)}</span>
                   </div>
                 </div>
                 <div className="bg-indigo-50 px-4 py-3 border-t border-indigo-100 flex justify-between items-center">
                   <span className="font-semibold text-indigo-900">Total Revenue</span>
-                  <span className="font-bold text-xl text-indigo-900">₦{Number(sessionDetails.totalSales || 0).toFixed(2)}</span>
+                  <span className="font-bold text-xl text-indigo-900">{formatCurrency(sessionDetails.totalSales)}</span>
                 </div>
               </div>
 
@@ -173,66 +276,68 @@ export function MyShiftBankModal({
                   <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2">Cash Accountability</h3>
                   <div className="flex justify-between items-center text-slate-600">
                     <span>Opening Float</span>
-                    <span className="font-medium text-slate-800">₦{Number(sessionDetails.openingBalance || 0).toFixed(2)}</span>
+                    <span className="font-medium text-slate-800">{formatCurrency(sessionDetails.openingBalance)}</span>
                   </div>
                   <div className="flex justify-between items-center text-slate-600">
                     <span>Cash Sales</span>
-                    <span className="font-medium text-green-600">+ ₦{Number(sessionDetails.cashSales || 0).toFixed(2)}</span>
+                    <span className="font-medium text-green-600">+ {formatCurrency(sessionDetails.cashSales)}</span>
                   </div>
                   <div className="flex justify-between items-center text-slate-600">
                     <span>Cash Refunds</span>
-                    <span className="font-medium text-red-600">- ₦{Number(sessionDetails.cashRefunds || 0).toFixed(2)}</span>
+                    <span className="font-medium text-red-600">- {formatCurrency(sessionDetails.cashRefunds)}</span>
                   </div>
                   <div className="flex justify-between items-center text-slate-600">
                     <span>Cash Drops / Payouts</span>
-                    <span className="font-medium text-red-600">- ₦{Number(sessionDetails.cashPaidOut || 0).toFixed(2)}</span>
+                    <span className="font-medium text-red-600">- {formatCurrency(sessionDetails.cashPaidOut)}</span>
                   </div>
                 </div>
                 <div className="bg-slate-100 px-4 py-3 border-t border-slate-200 flex justify-between items-center">
                   <span className="font-semibold text-slate-700">Expected Cash on Hand</span>
-                  <span className="font-bold text-xl text-slate-900">₦{expectedCash.toFixed(2)}</span>
+                  <span className="font-bold text-xl text-slate-900">{expectedCash.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}</span>
                 </div>
               </div>
 
-              {/* Handover Input */}
-              <div className="bg-blue-50/50 rounded-2xl border border-blue-100 p-5 space-y-4">
-                <h3 className="font-semibold text-slate-800">Declared Cash</h3>
-                <p className="text-sm text-slate-500">Count the physical cash and enter the total below. The shift will be submitted for General Cashier/Finance review.</p>
-                
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <span className="text-slate-400 font-semibold text-lg">₦</span>
+              {/* Handover Input — only shown when no pending orders are blocking */}
+              {!hasPendingOrders && (
+                <div className="bg-blue-50/50 rounded-2xl border border-blue-100 p-5 space-y-4">
+                  <h3 className="font-semibold text-slate-800">Declared Cash</h3>
+                  <p className="text-sm text-slate-500">Count the physical cash and enter the total below. The shift will be submitted for General Cashier/Finance review.</p>
+
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                      <span className="text-slate-400 font-semibold text-lg">₦</span>
+                    </div>
+                    <Input
+                      type="number"
+                      value={actualCashStr}
+                      onChange={(e) => setActualCashStr(e.target.value)}
+                      placeholder="0.00"
+                      className="pl-10 h-14 text-2xl font-bold rounded-xl border-blue-200 focus-visible:ring-blue-500 bg-white"
+                    />
                   </div>
-                  <Input
-                    type="number"
-                    value={actualCashStr}
-                    onChange={(e) => setActualCashStr(e.target.value)}
-                    placeholder="0.00"
-                    className="pl-10 h-14 text-2xl font-bold rounded-xl border-blue-200 focus-visible:ring-blue-500 bg-white"
-                  />
+
+                  {expectedCash === 0 && (
+                    <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-3 rounded-xl flex items-center gap-2">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                      <div className="text-sm">
+                        <span className="font-semibold">Cashless Shift Detected:</span> No expected cash to drop.
+                      </div>
+                    </div>
+                  )}
+
+                  {actualCashStr !== '' && (
+                    <div className={`flex items-center gap-2 p-3 rounded-xl border ${variance === 0 ? 'bg-green-50 border-green-200 text-green-700' : variance < 0 ? 'bg-red-50 border-red-200 text-red-700' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
+                      <ArrowRightLeft className="w-5 h-5 shrink-0" />
+                      <div className="text-sm font-medium">
+                        {variance === 0
+                          ? 'Perfect Match (₦0.00 Variance)'
+                          : `Variance: ${variance > 0 ? '+' : ''}₦${variance.toFixed(2)} (${variance > 0 ? 'Over' : 'Short'})`
+                        }
+                      </div>
+                    </div>
+                  )}
                 </div>
-
-                {expectedCash === 0 && (
-                  <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-3 rounded-xl flex items-center gap-2">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-                    <div className="text-sm">
-                      <span className="font-semibold">Cashless Shift Detected:</span> No expected cash to drop.
-                    </div>
-                  </div>
-                )}
-
-                {actualCashStr !== '' && (
-                  <div className={`flex items-center gap-2 p-3 rounded-xl border ${variance === 0 ? 'bg-green-50 border-green-200 text-green-700' : variance < 0 ? 'bg-red-50 border-red-200 text-red-700' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
-                    <ArrowRightLeft className="w-5 h-5 shrink-0" />
-                    <div className="text-sm font-medium">
-                      {variance === 0 
-                        ? 'Perfect Match (₦0.00 Variance)' 
-                        : `Variance: ${variance > 0 ? '+' : ''}₦${variance.toFixed(2)} (${variance > 0 ? 'Over' : 'Short'})`
-                      }
-                    </div>
-                  </div>
-                )}
-              </div>
+              )}
 
             </div>
           )}
@@ -240,15 +345,35 @@ export function MyShiftBankModal({
 
         {/* Footer */}
         <div className="p-6 pt-0 mt-4 shrink-0">
-          <Button 
-            onClick={requestCloseShift}
-            disabled={isLoading || isSubmitting || !sessionDetails || (!!currentOperatorId && currentOperatorId !== sessionDetails.primaryOperatorId)}
-            className="w-full h-14 text-lg font-semibold rounded-xl bg-indigo-600 hover:bg-indigo-700"
-          >
-            {isSubmitting ? 'Submitting...' : (expectedCash === 0 && actualCashStr === '0' ? 'Submit Cashless Shift' : 'Close and Submit Shift')}
-          </Button>
-          {!!currentOperatorId && currentOperatorId !== sessionDetails?.primaryOperatorId && (
-            <p className="mt-2 text-center text-xs font-medium text-amber-700">Only the POS cashier who opened this shift can submit it.</p>
+          {hasPendingOrders ? (
+            <div className="space-y-3">
+              <Button
+                disabled
+                className="w-full h-14 text-lg font-semibold rounded-xl bg-slate-300 cursor-not-allowed opacity-60"
+              >
+                Submit Shift Blocked — Clear Open Orders First
+              </Button>
+              <button
+                onClick={refreshPendingOrders}
+                disabled={pendingOrdersLoading}
+                className="w-full text-center text-sm text-indigo-600 hover:text-indigo-800 font-medium transition-colors"
+              >
+                {pendingOrdersLoading ? 'Refreshing...' : '↻ Refresh order status'}
+              </button>
+            </div>
+          ) : (
+            <>
+              <Button
+                onClick={requestCloseShift}
+                disabled={isLoading || isSubmitting || !sessionDetails || (!!currentOperatorId && currentOperatorId !== sessionDetails.primaryOperatorId)}
+                className="w-full h-14 text-lg font-semibold rounded-xl bg-indigo-600 hover:bg-indigo-700"
+              >
+                {isSubmitting ? 'Submitting...' : (expectedCash === 0 && actualCashStr === '0' ? 'Submit Cashless Shift' : 'Close and Submit Shift')}
+              </Button>
+              {!!currentOperatorId && currentOperatorId !== sessionDetails?.primaryOperatorId && (
+                <p className="mt-2 text-center text-xs font-medium text-amber-700">Only the POS cashier who opened this shift can submit it.</p>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -260,14 +385,14 @@ export function MyShiftBankModal({
             <DialogDescription>Submitting will lock this POS shift and send it to General Cashier/Finance for review.</DialogDescription>
           </DialogHeader>
           <div className="rounded-lg bg-slate-50 p-4 text-sm space-y-2">
-            <div className="flex justify-between"><span className="text-slate-500">Expected cash</span><span className="font-semibold">₦{expectedCash.toFixed(2)}</span></div>
-            <div className="flex justify-between"><span className="text-slate-500">Declared cash</span><span className="font-semibold">₦{actualCash.toFixed(2)}</span></div>
+            <div className="flex justify-between"><span className="text-slate-500">Expected cash</span><span className="font-semibold">{formatCurrency(expectedCash)}</span></div>
+            <div className="flex justify-between"><span className="text-slate-500">Declared cash</span><span className="font-semibold">{formatCurrency(actualCash)}</span></div>
             <div className="flex justify-between"><span className="text-slate-500">Variance</span><span className="font-semibold text-emerald-700">₦0.00</span></div>
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setShowCloseConfirm(false)} disabled={isSubmitting}>Go back</Button><Button onClick={handleCloseShift} disabled={isSubmitting}>{isSubmitting ? 'Submitting…' : 'Confirm and submit'}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
-      
+
       {successDialog && (
         <ActionSuccessModal
           isOpen={successDialog}

@@ -47,6 +47,7 @@ export interface SystemData {
   openPosSessions: any[];
   openFrontdeskSessions: any[];
   financialSyncConflicts: any[];
+  openPosOrders: any[];
 }
 
 export interface FinancialData {

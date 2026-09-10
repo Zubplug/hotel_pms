@@ -122,7 +122,50 @@ export async function getSystemIntegrity(ctx: TenantContext, propertyId: string)
     return et.includes('PAYMENT') || et.includes('CHARGE') || et.includes('REFUND') || c.aggregateType === 'FOLIO';
   });
 
-  return { openPosSessions, openFrontdeskSessions, syncConflicts, financialSyncConflicts };
+  // Open POS orders — waiters must settle or void these before the day can close.
+  // This is read-only from the auditor's perspective; they notify the waiter.
+  const rawOpenPosOrders = await prisma.posOrder.findMany({
+    where: {
+      outlet: { propertyId },
+      businessDate,
+      paymentStatus: { not: 'PAID' },
+      status: { notIn: ['VOIDED', 'CANCELLED', 'CLOSED'] },
+    },
+    select: {
+      id: true,
+      orderNumber: true,
+      displayName: true,
+      tableNumber: true,
+      orderType: true,
+      status: true,
+      paymentStatus: true,
+      total: true,
+      createdAt: true,
+      session: { select: { id: true } },
+      serverStaff: { select: { firstName: true, lastName: true } },
+      outlet: { select: { name: true } },
+    },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  const openPosOrders = rawOpenPosOrders.map(o => ({
+    id: o.id,
+    orderNumber: o.orderNumber,
+    displayName: o.displayName,
+    tableNumber: o.tableNumber,
+    orderType: o.orderType,
+    status: o.status,
+    paymentStatus: o.paymentStatus,
+    total: Number(o.total),
+    outletName: o.outlet?.name ?? 'Unknown Outlet',
+    waiterName: o.serverStaff
+      ? `${o.serverStaff.firstName} ${o.serverStaff.lastName}`.trim()
+      : 'Unknown',
+    sessionId: o.session?.id ?? null,
+    createdAt: o.createdAt,
+  }));
+
+  return { openPosSessions, openFrontdeskSessions, syncConflicts, financialSyncConflicts, openPosOrders };
 }
 
 export async function getFinancialAudit(ctx: TenantContext, propertyId: string) {

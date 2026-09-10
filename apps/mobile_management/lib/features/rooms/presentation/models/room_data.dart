@@ -29,15 +29,17 @@ class PropertyInfo {
 class RoomOverview {
   final int total;
   final int occupied;
+  final int occupiedDirty; // checked-in rooms with dirty housekeeping (stayover dirty)
   final int vacant;
   final int ready;
-  final int dirty;
+  final int dirty;         // vacant rooms needing cleaning
   final int outOfOrder;
   final int outOfService;
 
   RoomOverview({
     required this.total,
     required this.occupied,
+    required this.occupiedDirty,
     required this.vacant,
     required this.ready,
     required this.dirty,

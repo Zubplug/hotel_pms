@@ -499,6 +499,12 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     getActiveOrders: async (sessionId: string, operatorToken: string, filter?: string) => {
       return invokeDesktop('pos.getActiveOrders', { sessionId, operatorToken, filter });
     },
+    getPendingOrdersForSession: async (sessionId: string) => {
+      return invokeDesktop('pos.getPendingOrdersForSession', { sessionId });
+    },
+    voidWholeOrder: async (orderId: string, reason: string, isBarOrder: boolean, supervisorPin?: string) => {
+      return invokeDesktop('pos.voidWholeOrder', { orderId, reason, isBarOrder, supervisorPin: supervisorPin ?? '' });
+    },
     getProductionBatches: async (outletId: string, station: string) => {
       return invokeDesktop('pos.getProductionBatches', { outletId, station });
     },

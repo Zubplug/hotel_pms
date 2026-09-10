@@ -2867,7 +2867,22 @@ public class LocalRepository
         var property = await _dbContext.Properties.FirstOrDefaultAsync(p => p.Id == propertyId);
         double autoApproveLimit = 1000;
 
-        bool requiresApproval = action == "VOID"; // VOID defaults to true
+        // BAR items can be self-voided by the waiter; all other stations
+        // (KITCHEN, etc.) require a manager override.
+        // The station is sent by the frontend in the payload; fall back to the
+        // item's linked KOT if the frontend didn't include it.
+        string itemStation = "KITCHEN";
+        if (root.TryGetProperty("station", out var stationEl) && !string.IsNullOrWhiteSpace(stationEl.GetString()))
+        {
+            itemStation = stationEl.GetString()!.Trim().ToUpperInvariant();
+        }
+        else if (!string.IsNullOrWhiteSpace(originalItem.KotId))
+        {
+            var kot = await _dbContext.PosKots.FindAsync(originalItem.KotId);
+            if (kot != null && !string.IsNullOrWhiteSpace(kot.ProductionStation))
+                itemStation = kot.ProductionStation.Trim().ToUpperInvariant();
+        }
+        bool requiresApproval = action == "VOID" && itemStation != "BAR";
 
 
         System.Text.Json.JsonElement replacementItemEl = default;
@@ -2987,6 +3002,35 @@ public class LocalRepository
             order.TaxAmount = order.Items.Sum(i => i.TaxAmount);
             order.Total = order.Items.Sum(i => i.Total);
             order.UpdatedAt = DateTime.UtcNow;
+
+            // Auto-void the whole order if every item is now voided
+            if (action == "VOID")
+            {
+                bool allItemsVoided = order.Items.All(i => !string.IsNullOrEmpty(i.VoidReason));
+                if (allItemsVoided && order.Status != "VOIDED" && order.Status != "CANCELLED")
+                {
+                    order.Status = "VOIDED";
+                    order.Subtotal = 0;
+                    order.TaxAmount = 0;
+                    order.Total = 0;
+                    order.Notes = string.IsNullOrEmpty(order.Notes)
+                        ? "Auto-voided: all items voided"
+                        : $"{order.Notes}\nAuto-voided: all items voided";
+
+                    // Release table lock
+                    var table = await _dbContext.PosTables.FirstOrDefaultAsync(t => t.CurrentOrderId == order.Id);
+                    if (table != null)
+                    {
+                        table.CurrentOrderId = null;
+                        table.UpdatedAt = DateTime.UtcNow;
+                    }
+
+                    // Emit order-level sync event
+                    AppendSyncEvent("POS_ORDER", order.Id, "ORDER_UPDATED",
+                        new { status = "VOIDED", notes = order.Notes, updatedAt = order.UpdatedAt },
+                        deviceId, order.OutletId, order.SessionId, userId);
+                }
+            }
 
             var evt = new LocalOutboxEvent
             {
@@ -3571,6 +3615,39 @@ public class LocalRepository
         return result;
     }
 
+    public async Task<List<object>> GetPendingOrdersForSessionAsync(string sessionId)
+    {
+        var orders = await _dbContext.PosOrders
+            .Include(o => o.Items)
+            .Where(o => o.SessionId == sessionId
+                && o.Status != "VOIDED"
+                && o.Status != "CANCELLED"
+                && o.Status != "CLOSED"
+                && o.PaymentStatus != "PAID")
+            .OrderBy(o => o.CreatedAt)
+            .ToListAsync();
+
+        var staffIds = orders.Select(o => o.ServerStaffId).Distinct().ToList();
+        var staffDict = await _dbContext.Staff
+            .Where(s => staffIds.Contains(s.Id))
+            .ToDictionaryAsync(s => s.Id!, s => s.FirstName + " " + s.LastName);
+
+        return orders.Select(o => (object)new {
+            id = o.Id,
+            orderNumber = o.OrderNumber,
+            displayName = o.DisplayName,
+            tableNumber = o.TableNumber,
+            orderType = o.OrderType,
+            status = o.Status,
+            paymentStatus = o.PaymentStatus,
+            total = o.Total,
+            itemCount = o.Items?.Sum(i => i.Quantity) ?? 0m,
+            waiterName = (!string.IsNullOrEmpty(o.ServerStaffId) && staffDict.ContainsKey(o.ServerStaffId!))
+                ? staffDict[o.ServerStaffId!] : "Unknown",
+            createdAt = o.CreatedAt
+        }).ToList();
+    }
+
     public async Task<List<object>> GetWaiterTicketsAsync(string outletId, string staffId, string sessionId)
     {
         // Start with the staff filter; only add outletId constraint when we actually have one
@@ -4059,6 +4136,12 @@ public class LocalRepository
         await AssertNightAuditAllowsAsync(session.PropertyId, session.BusinessDate);
         if (session.Status == "CLOSED" || session.Status == "SETTLED") throw new Exception("Session is already closed or settled");
 
+        // BLOCKER: all orders on this session must be settled or voided first
+        var pendingOrders = await GetPendingOrdersForSessionAsync(sessionId);
+        if (pendingOrders.Count > 0)
+            throw new InvalidOperationException(
+                $"You have {pendingOrders.Count} open order(s) that must be settled or voided before your shift can be closed.");
+
         var operatorStaff = await _dbContext.Staff.FirstOrDefaultAsync(staff => staff.Id == operatorId);
         var operatorRole = operatorStaff?.Role ?? string.Empty;
         var privileged = operatorRole.Contains("MANAGER", StringComparison.OrdinalIgnoreCase)
@@ -4440,6 +4523,87 @@ public class LocalRepository
             .ToListAsync();
     }
 
+    /// <summary>
+    /// Voids every item on the order and closes it as VOIDED.
+    /// <paramref name="requiresAuthorizer"/> — pass <c>true</c> for kitchen orders (authorizerId must be a supervisor);
+    /// pass <c>false</c> for all-bar orders where the waiter can self-authorise.
+    /// </summary>
+    public async Task<LocalPosOrder> VoidWholeOrderAsync(
+        string orderId, string reason, string authorizerId,
+        string userId, string deviceId, bool requiresAuthorizer = true)
+    {
+        var order = await _dbContext.PosOrders
+            .Include(o => o.Items)
+            .FirstOrDefaultAsync(o => o.Id == orderId);
+        if (order == null) throw new Exception("Order not found");
+        await AssertNightAuditAllowsAsync(order.PropertyId, order.BusinessDate);
+
+        if (order.Status == "VOIDED" || order.Status == "CANCELLED")
+            throw new Exception("Order is already voided or cancelled.");
+
+        // Void every non-already-voided item
+        foreach (var item in order.Items.Where(i => string.IsNullOrEmpty(i.VoidReason)))
+        {
+            string operationId = $"op_void_{deviceId}_{item.Id}_{DateTime.UtcNow.Ticks}";
+            var posVoid = new LocalPosVoid
+            {
+                Id = Guid.NewGuid().ToString(),
+                OrderId = orderId,
+                OrderItemId = item.Id,
+                Reason = reason,
+                AuthorizerId = authorizerId,
+                OperationId = operationId,
+                DeviceId = deviceId,
+                CreatedAt = DateTime.UtcNow
+            };
+            _dbContext.PosVoids.Add(posVoid);
+
+            item.VoidReason = reason;
+            item.Subtotal = 0;
+            item.Total = 0;
+            item.TaxAmount = 0;
+            item.UnitPrice = 0;
+
+            _dbContext.SyncEvents.Add(new LocalSyncEvent
+            {
+                OperationId = operationId,
+                EntityType = "POS_VOID",
+                EntityId = posVoid.Id,
+                OperationType = "CREATE",
+                PayloadJson = JsonSerializer.Serialize(posVoid),
+                UserId = userId,
+                DeviceId = deviceId
+            });
+        }
+
+        // Zero the order totals
+        order.Subtotal = 0;
+        order.TaxAmount = 0;
+        order.Total = 0;
+        order.Status = "VOIDED";
+        order.Notes = string.IsNullOrEmpty(order.Notes)
+            ? $"Voided: {reason}"
+            : $"{order.Notes}\nVoided: {reason}";
+        order.UpdatedAt = DateTime.UtcNow;
+
+        // Append order status sync event
+        AppendSyncEvent("POS_ORDER", order.Id, "ORDER_UPDATED",
+            new { status = "VOIDED", notes = order.Notes, updatedAt = order.UpdatedAt },
+            deviceId, order.OutletId, order.SessionId, userId);
+
+        // Release table lock if applicable
+        var table = await _dbContext.PosTables.FirstOrDefaultAsync(t => t.CurrentOrderId == order.Id);
+        if (table != null)
+        {
+            table.CurrentOrderId = null;
+            table.UpdatedAt = DateTime.UtcNow;
+        }
+
+        await _dbContext.SaveChangesAsync();
+        SyncEngine.Instance?.TriggerManualSync();
+        return order;
+    }
+
     public async Task<LocalPosVoid> AuthorizeVoidAsync(string orderId, string orderItemId, string reason, string authorizerId, string userId, string deviceId)
     {
         var order = await _dbContext.PosOrders.Include(o => o.Items).FirstOrDefaultAsync(o => o.Id == orderId);
@@ -4474,6 +4638,32 @@ public class LocalRepository
         order.TaxAmount = order.Items.Sum(i => i.TaxAmount);
         order.Total = order.Items.Sum(i => i.Total);
         order.UpdatedAt = DateTime.UtcNow;
+
+        // Auto-void the whole order if every item is now voided
+        bool allItemsVoided = order.Items.All(i => !string.IsNullOrEmpty(i.VoidReason));
+        if (allItemsVoided && order.Status != "VOIDED" && order.Status != "CANCELLED")
+        {
+            order.Status = "VOIDED";
+            order.Subtotal = 0;
+            order.TaxAmount = 0;
+            order.Total = 0;
+            order.Notes = string.IsNullOrEmpty(order.Notes)
+                ? $"Auto-voided: all items voided"
+                : $"{order.Notes}\nAuto-voided: all items voided";
+
+            // Release table lock
+            var table = await _dbContext.PosTables.FirstOrDefaultAsync(t => t.CurrentOrderId == order.Id);
+            if (table != null)
+            {
+                table.CurrentOrderId = null;
+                table.UpdatedAt = DateTime.UtcNow;
+            }
+
+            // Emit order-level sync event
+            AppendSyncEvent("POS_ORDER", order.Id, "ORDER_UPDATED",
+                new { status = "VOIDED", notes = order.Notes, updatedAt = order.UpdatedAt },
+                deviceId, order.OutletId, order.SessionId, userId);
+        }
 
         _dbContext.SyncEvents.Add(new LocalSyncEvent
         {
@@ -6051,6 +6241,19 @@ public class LocalRepository
             PayloadJson = JsonSerializer.Serialize(new { status = "DELIVERED" })
         });
         
+        await _dbContext.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Marks a KOT as PRINTED so the KotPrintService background worker never
+    /// re-queues it. Call this after any successful manual reprint.
+    /// </summary>
+    public async Task MarkKotPrintedAsync(string kotNumber)
+    {
+        var kot = await _dbContext.PosKots.FirstOrDefaultAsync(k => k.KotNumber == kotNumber);
+        if (kot == null) return;
+        kot.PrintStatus = "PRINTED";
+        kot.PrintedAt = DateTime.UtcNow;
         await _dbContext.SaveChangesAsync();
     }
 

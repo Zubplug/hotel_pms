@@ -137,12 +137,14 @@ class RoomSummary {
   final int occupied;
   final int vacant;
   final int dirty;
+  final int occupiedDirty; // occupied rooms with dirty housekeeping (stayover dirty)
   final int ooo;
 
   RoomSummary({
     required this.occupied,
     required this.vacant,
     required this.dirty,
+    required this.occupiedDirty,
     required this.ooo,
   });
 
@@ -151,6 +153,7 @@ class RoomSummary {
       occupied: json['occupied'] ?? 0,
       vacant: json['vacant'] ?? 0,
       dirty: json['dirty'] ?? 0,
+      occupiedDirty: json['occupiedDirty'] ?? 0,
       ooo: json['ooo'] ?? 0,
     );
   }

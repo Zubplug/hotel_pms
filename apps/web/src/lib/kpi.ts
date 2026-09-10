@@ -356,7 +356,8 @@ export async function getRoomSummary(propertyId: string) {
   return {
     occupied: overview.occupied,
     vacant: overview.vacant,
-    dirty: overview.dirty,
+    dirty: overview.dirty,               // vacant rooms needing cleaning
+    occupiedDirty: overview.occupiedDirty, // checked-in rooms with dirty housekeeping status
     ooo: overview.outOfOrder + overview.outOfService,
   };
 }

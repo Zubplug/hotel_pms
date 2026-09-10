@@ -247,6 +247,45 @@ public class LocalDbContext : DbContext
         catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
     }
 
+    /// <summary>
+    /// Adds columns required for the POS shift-settlement and cash-movement workflow.
+    /// Safe to call repeatedly — duplicate-column errors are silently swallowed.
+    /// </summary>
+    public async Task ApplySettlementSchemaAsync()
+    {
+        var columns = new[]
+        {
+            // ── PosCashMovements ───────────────────────────────────────────────
+            // Currency was added after initial schema creation
+            "ALTER TABLE PosCashMovements ADD COLUMN Currency TEXT NOT NULL DEFAULT 'NGN'",
+            // Accounting columns — required by entity but not in old DBs
+            "ALTER TABLE PosCashMovements ADD COLUMN SourceAccountId TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE PosCashMovements ADD COLUMN DestinationAccountId TEXT NOT NULL DEFAULT ''",
+            // FrontdeskSession link is optional
+            "ALTER TABLE PosCashMovements ADD COLUMN FrontdeskSessionId TEXT NULL",
+            // AuthorizedBy reference
+            "ALTER TABLE PosCashMovements ADD COLUMN AuthorizedBy TEXT NULL",
+
+            // ── PosSessions ───────────────────────────────────────────────────
+            // Additional session-ownership fields added in the service-banking model
+            "ALTER TABLE PosSessions ADD COLUMN PrimaryOperatorId TEXT NULL",
+            "ALTER TABLE PosSessions ADD COLUMN AuthorizedBy TEXT NULL",
+            "ALTER TABLE PosSessions ADD COLUMN Reason TEXT NULL",
+
+            // ── PosSettlements ────────────────────────────────────────────────
+            // Full table creation is handled by EnsureCreated on new installs;
+            // for upgrades we only need to ensure newer optional columns exist.
+            "ALTER TABLE PosSettlements ADD COLUMN AuthorizerId TEXT NULL",
+        };
+        foreach (var sql in columns)
+        {
+            try { await Database.ExecuteSqlRawAsync(sql); }
+            catch (Microsoft.Data.Sqlite.SqliteException ex)
+                when (ex.SqliteErrorCode == 1 &&
+                      ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
+        }
+    }
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
         if (!optionsBuilder.IsConfigured)

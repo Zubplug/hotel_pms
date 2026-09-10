@@ -6,7 +6,7 @@ import {
   ShoppingCart, Search, Trash2, Plus, Minus, User, Utensils,
   Loader2, CreditCard, Banknote, LayoutGrid,
   ChefHat, Scissors, X, Building2, Send, Flame, Lock,
-  Sparkles, Star, Package2, PanelRightClose, PanelRightOpen, RefreshCcw, Percent
+  Sparkles, Star, Package2, PanelRightClose, PanelRightOpen, AlertTriangle, Ban
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
@@ -22,7 +22,7 @@ import { ProductCardStepper } from '@/components/pos/ProductCardStepper';
 // PosStaffStrip removed from header — orders accessible via sidebar
 import { ChargeModal } from '@/components/pos/ChargeModal';
 import { DiscountModal } from '@/components/pos/DiscountModal';
-import { ComplimentaryModal } from '@/components/pos/ComplimentaryModal';
+
 import { ActionSuccessModal } from '@/components/pos/ActionSuccessModal';
 import { WaiterTicketsModal } from '@/components/pos/WaiterTicketsModal';
 import { MySalesModal } from '@/components/pos/MySalesModal';
@@ -36,6 +36,7 @@ import { PosSidebar } from '@/components/pos/PosSidebar';
 import { PrinterSettingsView } from '@/components/pos/PrinterSettingsView';
 import { SyncCenterPanel } from '@/components/sync/SyncCenterPanel';
 import FiredItemActionsModal from '@/components/pos/FiredItemActionsModal';
+import { ManagerOverrideModal } from '@/components/pos/ManagerOverrideModal';
 
 import { usePosOnlineStatus } from '@/lib/pos/usePosOnlineStatus';
 import { useLicenseGuard } from '@/lib/pos/useLicenseGuard';
@@ -106,8 +107,10 @@ export default function PosApp() {
   const [showMyOrders, setShowMyOrders] = useState(false);
   const [showActiveOrders, setShowActiveOrders] = useState(false);
   const [showChargeModal, setShowChargeModal] = useState(false);
+  const [showVoidOrderModal, setShowVoidOrderModal] = useState(false);
+  const [isVoidingOrder, setIsVoidingOrder] = useState(false);
   const [showDiscountModal, setShowDiscountModal] = useState(false);
-  const [showComplimentaryModal, setShowComplimentaryModal] = useState(false);
+
   const [isPrintingCustomerReceipt, setIsPrintingCustomerReceipt] = useState(false);
   const [activeOrderType, setActiveOrderType] = useState<string>('TABLE');
   const [activeDisplayName, setActiveDisplayName] = useState<string>('');
@@ -566,20 +569,12 @@ export default function PosApp() {
       setCart((prev) => prev.map((i) => ({ ...i, fired: true, firedQty: i.quantity, pendingQty: 0 })));
       setTableRefreshTrigger(Date.now());
       const batchCount = res.data?.newBatches?.length ?? 0;
-      
-      // Print the tickets asynchronously if available
-      if (HardwareBridge.isAvailable() && res.data?.newBatches) {
-        for (const batch of res.data.newBatches) {
-           try {
-             // The backend PrintKitchenTicketAsync handles both KITCHEN and RECEIPT (waiter slip) printing
-             await HardwareBridge.printKitchenTicket(batch);
-           } catch (e) {
-             console.error("Failed to print kitchen ticket", e);
-           }
-        }
-      }
-      
-      toast.success(`${itemsToFire.length} item(s) fired! ${batchCount > 0 ? `${batchCount} ticket(s) sent 🔥` : ''}`);
+      // KotPrintService (backend background service) is the sole print authority.
+      // It picks up QUEUED KOTs within 5 s, routes each KOT to the correct
+      // station printer (BAR → bar printer, KITCHEN → kitchen printer),
+      // prints the waiter slip on the receipt printer, then marks the KOT
+      // as PRINTED so it is never sent twice.
+      toast.success(`${itemsToFire.length} item(s) fired! ${batchCount > 0 ? `${batchCount} ticket(s) queued 🔥` : ''}`);
     } catch (err: any) {
       toast.error(err.message || 'Failed to fire items');
     } finally {
@@ -1101,9 +1096,11 @@ export default function PosApp() {
                       {hasFired && !hasPending && (
                         <button
                           onClick={() => setItemToModify(item)}
-                          className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-white border border-slate-200 text-slate-400 hover:text-amber-500 hover:border-amber-200 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm z-10"
+                          className="absolute -top-2 -right-2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-white border border-red-200 text-red-500 text-[10px] font-bold shadow-sm hover:bg-red-50 active:scale-95 transition-all z-10 touch-manipulation"
+                          title="Void or replace item"
                         >
-                          <RefreshCcw className="w-3 h-3" />
+                          <Trash2 className="w-2.5 h-2.5" />
+                          VOID
                         </button>
                       )}
 
@@ -1201,15 +1198,7 @@ export default function PosApp() {
               {currentOrderId && (
                 <div className="flex gap-2 w-full">
                   <button
-                    className={`flex-1 h-11 font-black text-sm tracking-wide rounded-xl transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 flex items-center justify-center gap-1 touch-manipulation bg-white border-2 border-slate-200 text-slate-700 hover:border-slate-300`}
-                    onClick={() => setShowComplimentaryModal(true)}
-                    disabled={isProcessing}
-                  >
-                    <Percent className="w-4 h-4" />
-                    COMP
-                  </button>
-                  <button
-                    className={`flex-[1.5] h-11 font-black text-sm tracking-wide rounded-xl transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 flex items-center justify-center gap-2 touch-manipulation ${
+                    className={`flex-1 h-11 font-black text-sm tracking-wide rounded-xl transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 flex items-center justify-center gap-2 touch-manipulation ${
                       cart.some(item => !item.fired) 
                         ? 'bg-white border-2 border-indigo-100 text-indigo-600 hover:border-indigo-200' 
                         : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/25'
@@ -1220,6 +1209,33 @@ export default function PosApp() {
                     <CreditCard className="w-4 h-4" />
                     CHARGE
                   </button>
+
+                  {/* Void Order — only shown when all items are fully fired (no pending qty) */}
+                  {(() => {
+                    const allFired = cart.length > 0 && cart.every(i => (i.pendingQty ?? 0) === 0 && (i.firedQty ?? 0) > 0);
+                    const allBar   = cart.every(i => (i.station ?? '').toUpperCase() === 'BAR');
+                    if (!allFired) return null;
+                    return (
+                      <button
+                        className="h-11 px-4 font-black text-sm tracking-wide rounded-xl transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 flex items-center justify-center gap-1.5 touch-manipulation bg-red-50 border-2 border-red-200 text-red-600 hover:bg-red-100 hover:border-red-300"
+                        onClick={() => {
+                          if (allBar) {
+                            // Pure bar order — immediate void, no PIN
+                            setShowVoidOrderModal(true);
+                          } else {
+                            // Kitchen/mixed — needs manager PIN first
+                            setShowVoidOrderModal(true);
+                          }
+                        }}
+                        disabled={isProcessing || isVoidingOrder}
+                        title={allBar ? 'Void whole order (no PIN required for bar)' : 'Void whole order (manager PIN required)'}
+                      >
+                        <Ban className="w-4 h-4" />
+                        VOID
+                      </button>
+                    );
+                  })()}
+
                 </div>
               )}
             </div>
@@ -1373,16 +1389,7 @@ export default function PosApp() {
         }}
       />
 
-      {/* Complimentary Modal */}
-      <ComplimentaryModal
-        isOpen={showComplimentaryModal}
-        orderId={currentOrderId || ''}
-        orderTotal={total}
-        onClose={() => setShowComplimentaryModal(false)}
-        onSuccess={() => {
-          setTableRefreshTrigger(Date.now());
-        }}
-      />
+
 
       {/* My Sales */}
       {activeOperator && operatorToken && (
@@ -1451,11 +1458,112 @@ export default function PosApp() {
         orderId={currentOrderId!}
         allProducts={products}
         onSuccess={(updatedOrder) => {
-          if (updatedOrder && updatedOrder.items) {
-            setCart(updatedOrder.items);
+          if (updatedOrder) {
+            // If all items were voided individually the backend auto-voids the whole order
+            const orderStatus = updatedOrder.status ?? updatedOrder.Status ?? '';
+            if (orderStatus === 'VOIDED' || orderStatus === 'CANCELLED') {
+              // Clear the entire cart and order context
+              setCart([]);
+              setCurrentOrderId(null);
+              setActiveTableId(null);
+              setActiveTableName(null);
+              setActiveDisplayName('');
+              setActiveOrderType('TABLE');
+              setTableRefreshTrigger(Date.now());
+              toast.success('All items voided — order automatically closed.');
+            } else if (updatedOrder.items ?? updatedOrder.Items) {
+              // Partial void: just refresh cart items
+              setCart(updatedOrder.items ?? updatedOrder.Items);
+            }
           }
+          setItemToModify(null);
         }}
       />
+
+      {/* ── Void Whole Order — Bar (no PIN needed) ──────────────────── */}
+      {showVoidOrderModal && (() => {
+        const allBar = cart.every(i => (i.station ?? '').toUpperCase() === 'BAR');
+
+        const executeVoid = async (supervisorPin?: string) => {
+          if (!currentOrderId) return;
+          setIsVoidingOrder(true);
+          setShowVoidOrderModal(false);
+          try {
+            const res = await provider.pos.voidWholeOrder(
+              currentOrderId,
+              'Voided by waiter',
+              allBar,
+              supervisorPin,
+            );
+            if (res?.success === false || res?.error) {
+              toast.error(res.error || 'Failed to void order.');
+              return;
+            }
+            // Clear cart and order state
+            setCart([]);
+            setCurrentOrderId(null);
+            setActiveTableId(null);
+            setActiveTableName(null);
+            setActiveDisplayName('');
+            setActiveOrderType('TABLE');
+            setTableRefreshTrigger(Date.now());
+            toast.success('Order voided successfully.');
+          } catch (e: any) {
+            toast.error(e.message || 'Error voiding order.');
+          } finally {
+            setIsVoidingOrder(false);
+          }
+        };
+
+        if (allBar) {
+          // Simple confirmation dialog — no PIN
+          return (
+            <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-5">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-xl bg-red-100 p-2.5">
+                    <AlertTriangle className="w-6 h-6 text-red-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-900">Void Entire Order?</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">All bar items will be voided and the order closed.</p>
+                  </div>
+                </div>
+                <div className="bg-red-50 border border-red-100 rounded-xl p-3 text-sm text-red-700">
+                  This action cannot be undone. {cart.length} item{cart.length !== 1 ? 's' : ''} will be voided.
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowVoidOrderModal(false)}
+                    className="flex-1 h-11 rounded-xl border-2 border-slate-200 text-slate-700 font-semibold hover:bg-slate-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => executeVoid()}
+                    disabled={isVoidingOrder}
+                    className="flex-1 h-11 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    <Ban className="w-4 h-4" />
+                    {isVoidingOrder ? 'Voiding...' : 'Void Order'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        // Kitchen/mixed — requires manager PIN
+        return (
+          <ManagerOverrideModal
+            isOpen={showVoidOrderModal}
+            actionName="Void Entire Order"
+            onAuthorized={(_managerId: string, managerPin: string, _reason: string) => executeVoid(managerPin)}
+            onCancel={() => setShowVoidOrderModal(false)}
+          />
+        );
+      })()}
+
     </div>
     </AutoLockScreen>
   );

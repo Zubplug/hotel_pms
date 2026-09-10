@@ -2005,6 +2005,19 @@ public class OfflinePMSInterop
         }
     }
 
+    public async Task<string> GetPendingOrdersForSessionAsync(string sessionId)
+    {
+        try
+        {
+            var res = await _repo.GetPendingOrdersForSessionAsync(sessionId);
+            return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
     public async Task<string> ConfirmHandoverAsync(string sessionId)
     {
         try
@@ -2012,6 +2025,39 @@ public class OfflinePMSInterop
             var ctx = await GetSecureContextAsync();
             var res = await _repo.ConfirmHandoverAsync(sessionId, ctx.UserId, ctx.DeviceId);
             return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
+    public async Task<string> VoidWholeOrderAsync(string orderId, string reason, string supervisorPin, bool isBarOrder)
+    {
+        try
+        {
+            var posCtx = await _sessionManager.GetActiveContextAsync();
+            string authorizerId;
+
+            if (isBarOrder)
+            {
+                // Bar orders: waiter self-authorises — no supervisor PIN required
+                authorizerId = posCtx.StaffId;
+            }
+            else
+            {
+                // Kitchen/mixed orders: validate supervisor PIN
+                var authorizer = await _repo.ValidateSupervisorPinAsync(supervisorPin, posCtx.PropertyId);
+                if (authorizer == null)
+                    return JsonSerializer.Serialize(new { success = false, error = "Invalid supervisor PIN or unauthorized." }, _jsonOptions);
+                authorizerId = authorizer.Id;
+            }
+
+            var res = await _repo.VoidWholeOrderAsync(
+                orderId, reason, authorizerId,
+                posCtx.StaffId, posCtx.DeviceId, requiresAuthorizer: !isBarOrder);
+
+            return JsonSerializer.Serialize(new { success = true, data = new { id = res.Id, status = res.Status } }, _jsonOptions);
         }
         catch (Exception ex)
         {
@@ -2770,8 +2816,12 @@ public class OfflinePMSInterop
     {
         try
         {
+            // ⚠  REPRINT PATH ONLY.
+            // Do NOT call this method after fireItems / sendOrder. The KotPrintService
+            // background service is the sole print authority for new tickets — calling
+            // this would print every ticket twice.
             var ctx = await GetSecureContextAsync();
-            await _repo.LogHardwareEventAsync(ctx.UserId, ctx.DeviceId, "KITCHEN_TICKET_PRINT", ticketDataJson);
+            await _repo.LogHardwareEventAsync(ctx.UserId, ctx.DeviceId, "KITCHEN_TICKET_REPRINT", ticketDataJson);
 
             var kot = JsonSerializer.Deserialize<KotData>(
                 ticketDataJson,
@@ -2781,13 +2831,13 @@ public class OfflinePMSInterop
             if (kot == null)
                 return JsonSerializer.Serialize(new { success = false, error = "Invalid KOT data" }, _jsonOptions);
 
-            var (kSuccess, kError) = await _escPos.PrintKotAsync(kot, ctx.OutletId);
-            
-            // Print Waiter Copy to RECEIPT printer
-            var (wSuccess, wError) = await _escPos.PrintWaiterSlipAsync(kot, ctx.OutletId);
-            
-            bool success = kSuccess || wSuccess;
-            string error = string.Join(" | ", new[] { kError, wError }.Where(e => !string.IsNullOrEmpty(e)));
+            var (success, error) = await _escPos.PrintKotAsync(kot, ctx.OutletId);
+
+            if (success)
+            {
+                // Mark the KOT as PRINTED so KotPrintService never re-queues it.
+                await _repo.MarkKotPrintedAsync(kot.KotNumber);
+            }
 
             return JsonSerializer.Serialize(new { success, error = string.IsNullOrEmpty(error) ? null : error }, _jsonOptions);
         }
@@ -2796,6 +2846,7 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
+
 
     public async Task<string> PrintLaundryTicketAsync(string ticketDataJson)
     {

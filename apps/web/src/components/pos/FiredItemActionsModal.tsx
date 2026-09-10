@@ -28,7 +28,11 @@ export default function FiredItemActionsModal({
 }) {
   const { provider } = useLodgeCoreProvider();
   
-  const [activeTab, setActiveTab] = useState('replace');
+  // Determine if this item is a bar item (no manager override needed)
+  const itemStation = (item?.station || '').toUpperCase();
+  const isBarItem = itemStation === 'BAR';
+
+  const [activeTab, setActiveTab] = useState('void');
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Void State
@@ -101,7 +105,8 @@ export default function FiredItemActionsModal({
         reason: reason || 'Customer changed mind',
         inventoryAction,
         managerId,
-        managerPin
+        managerPin,
+        station: item?.station || '',   // sent so backend can skip approval for BAR
       };
       
       const result = await provider.approvals.requestItemModification(payload);
@@ -200,13 +205,23 @@ export default function FiredItemActionsModal({
           </TabsContent>
           
           <TabsContent value="void" className="space-y-4 pt-4">
-            <div className="bg-red-50 text-red-700 p-3 rounded-md text-sm flex items-start gap-2">
-              <AlertTriangle className="w-5 h-5 flex-shrink-0" />
-              <div>
-                <strong>Manager Approval Required</strong>
-                <p>All voids require Manager override.</p>
+            {isBarItem ? (
+              <div className="bg-blue-50 text-blue-700 p-3 rounded-md text-sm flex items-start gap-2">
+                <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-blue-500" />
+                <div>
+                  <strong>No Manager Approval Required</strong>
+                  <p>Bar items can be voided directly by the server.</p>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="bg-red-50 text-red-700 p-3 rounded-md text-sm flex items-start gap-2">
+                <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+                <div>
+                  <strong>Manager Approval Required</strong>
+                  <p>All kitchen voids require Manager override.</p>
+                </div>
+              </div>
+            )}
 
             <div className="flex items-center justify-between border p-3 rounded-md">
               <div className="space-y-0.5">
@@ -250,6 +265,7 @@ export default function FiredItemActionsModal({
         onAuthorized={handleOverrideAuthorized}
         onCancel={() => setShowOverride(false)}
       />
+
     </Dialog>
   );
 }

@@ -640,7 +640,12 @@ public partial class MainPage : ContentPage
                         parameters?["actualCash"]?.GetValue<decimal>() ?? 0,
                         parameters?["cashPaidOut"]?.GetValue<decimal>() ?? 0);
                     break;
-                case "pos.confirmHandover":
+                case \"pos.getPendingOrdersForSession\":
+                    responseData = await pmsInterop.GetPendingOrdersForSessionAsync(
+                        parameters?["sessionId"]?.ToString() ?? ""
+                    );
+                    break;
+                case \"pos.confirmHandover\":
                     responseData = await pmsInterop.ConfirmHandoverAsync(
                         parameters?["sessionId"]?.ToString() ?? ""
                     );
@@ -678,6 +683,13 @@ public partial class MainPage : ContentPage
                         parameters?["managerPin"]?.ToString() ?? "",
                         parameters?["reason"]?.ToString() ?? ""
                     );
+                    break;
+                case "pos.voidWholeOrder":
+                    responseData = await pmsInterop.VoidWholeOrderAsync(
+                        parameters?["orderId"]?.ToString() ?? "",
+                        parameters?["reason"]?.ToString() ?? "Customer request",
+                        parameters?["supervisorPin"]?.ToString() ?? "",
+                        parameters?["isBarOrder"]?.GetValue<bool>() ?? false);
                     break;
                 case "pos.authorizeVoid":
                     responseData = await pmsInterop.AuthorizeVoidAsync(
