@@ -53,8 +53,6 @@ export async function calculateRoomStatuses(propertyId: string, businessDate: Da
     where: {
       room: { propertyId },
       status: 'ACTIVE',
-      checkIn: { lte: businessDate },
-      checkOut: { gt: businessDate },
       reservation: { status: 'CHECKED_IN' },
     },
     select: { roomId: true, status: true, checkIn: true, checkOut: true }
@@ -288,8 +286,6 @@ export async function getRoomIntelligenceView(
     where: {
       roomId,
       status: 'ACTIVE',
-      checkIn: { lte: businessDate },
-      checkOut: { gt: businessDate },
       reservation: { status: 'CHECKED_IN' },
     },
     include: {

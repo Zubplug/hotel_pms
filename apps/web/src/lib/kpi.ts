@@ -93,7 +93,6 @@ export async function calculateDailyRevenue(propertyId: string, businessDate: Da
     where: {
       propertyId,
       status: 'CHECKED_IN',
-      checkIn: { lte: businessDate },
       checkOut: { gt: businessDate },
     },
     include: {
