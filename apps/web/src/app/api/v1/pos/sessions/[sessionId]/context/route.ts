@@ -35,8 +35,9 @@ export async function GET(
     const cardSales = payments.filter(p => p.method === 'CARD').reduce((sum, p) => sum + Number(p.amount), 0);
     const bankTransferSales = payments.filter(p => p.method === 'BANK_TRANSFER').reduce((sum, p) => sum + Number(p.amount), 0);
     const roomChargeSales = payments.filter(p => p.method === 'ROOM_CHARGE').reduce((sum, p) => sum + Number(p.amount), 0);
-    const otherSales = payments.filter(p => !['CASH', 'CARD', 'BANK_TRANSFER', 'ROOM_CHARGE'].includes(p.method)).reduce((sum, p) => sum + Number(p.amount), 0);
-    const totalSales = payments.reduce((sum, p) => sum + Number(p.amount), 0);
+    const otherSales = payments.filter(p => !['CASH', 'CARD', 'BANK_TRANSFER', 'ROOM_CHARGE', 'COMPLIMENTARY'].includes(p.method)).reduce((sum, p) => sum + Number(p.amount), 0);
+    const complimentarySales = payments.filter(p => p.method === 'COMPLIMENTARY').reduce((sum, p) => sum + Number(p.amount), 0);
+    const totalSales = payments.filter(p => p.method !== 'COMPLIMENTARY').reduce((sum, p) => sum + Number(p.amount), 0);
 
     const cashIn = movements.filter(m => m.type === 'CASH_TRANSFER_IN').reduce((sum, m) => sum + Number(m.amount), 0);
     const cashDrops = movements.filter(m => m.type === 'CASH_DROP').reduce((sum, m) => sum + Number(m.amount), 0);
@@ -54,6 +55,7 @@ export async function GET(
         bankTransferSales,
         roomChargeSales,
         otherSales,
+        complimentarySales,
         totalSales,
         openingBalance: openingFloat,
         expectedCash,

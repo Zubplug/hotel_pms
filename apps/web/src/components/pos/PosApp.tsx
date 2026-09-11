@@ -1408,6 +1408,8 @@ export default function PosApp() {
           onClose={() => setShowMyOrders(false)}
           operatorToken={operatorToken}
           staffName={`${activeOperator.firstName} ${activeOperator.lastName}`}
+          refreshKey={tableRefreshTrigger}
+          onOrderSelect={handleOrderResume}
         />
       )}
       <ActiveOrdersModal
@@ -1419,6 +1421,7 @@ export default function PosApp() {
         operatorRole={activeOperator?.role || ''}
         onOrderSelect={handleOrderResume}
         onViewHistory={() => setShowMyOrders(true)}
+        refreshKey={tableRefreshTrigger}
       />
       
       {successDialog && (

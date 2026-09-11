@@ -6,6 +6,7 @@ namespace LodgeCore.Desktop.Data;
 
 public class LocalDbContext : DbContext
 {
+    private static readonly object SyncEventSequenceLock = new();
     public DbSet<LocalReservation> Reservations { get; set; } = null!;
     public DbSet<LocalReservationRoom> ReservationRooms { get; set; } = null!;
     public DbSet<LocalGuest> Guests { get; set; } = null!;
@@ -69,6 +70,53 @@ public class LocalDbContext : DbContext
 
     public LocalDbContext(DbContextOptions<LocalDbContext> options) : base(options)
     {
+    }
+
+    /// <summary>
+    /// A few legacy callers create SyncEvents directly instead of going through
+    /// LocalRepository.AppendSyncEvent. SQLite rejects those rows because their
+    /// default sequence is zero (and several events can be created in one save).
+    /// Allocate missing sequences immediately before persistence so every event
+    /// has a unique, monotonic cursor per terminal.
+    /// </summary>
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        AllocateMissingSyncEventSequences();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        AllocateMissingSyncEventSequences();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    private void AllocateMissingSyncEventSequences()
+    {
+        lock (SyncEventSequenceLock)
+        {
+            var added = ChangeTracker.Entries<LocalSyncEvent>()
+                .Where(entry => entry.State == EntityState.Added)
+                .Select(entry => entry.Entity)
+                .ToList();
+
+            foreach (var group in added.GroupBy(evt => evt.TerminalId ?? string.Empty))
+            {
+                var next = SyncEvents
+                    .Where(evt => evt.TerminalId == group.Key)
+                    .Select(evt => (long?)evt.SequenceNumber)
+                    .Max() ?? 0;
+
+                next = Math.Max(next, group
+                    .Where(evt => evt.SequenceNumber > 0)
+                    .Select(evt => evt.SequenceNumber)
+                    .DefaultIfEmpty(0)
+                    .Max());
+
+                foreach (var evt in group.Where(evt => evt.SequenceNumber <= 0))
+                    evt.SequenceNumber = ++next;
+            }
+        }
     }
 
     public async Task ApplyMigrationsSafelyAsync()

@@ -27,6 +27,8 @@ interface MyOrdersModalProps {
   onClose: () => void;
   operatorToken: string;
   staffName: string;
+  refreshKey?: number;
+  onOrderSelect?: (order: any) => void;
 }
 
 const STATUS_CONFIG: Record<string, { label: string; icon: React.ReactNode; className: string }> = {
@@ -67,7 +69,7 @@ const STATUS_FILTERS = [
   { value: 'voided',    label: 'Voided' },
 ];
 
-export function MyOrdersModal({ isOpen, onClose, operatorToken, staffName }: MyOrdersModalProps) {
+export function MyOrdersModal({ isOpen, onClose, operatorToken, staffName, refreshKey = 0, onOrderSelect }: MyOrdersModalProps) {
   const { provider } = useLodgeCoreProvider();
   const [orders, setOrders]               = useState<any[]>([]);
   const [isLoading, setIsLoading]         = useState(true);
@@ -141,7 +143,19 @@ export function MyOrdersModal({ isOpen, onClose, operatorToken, staffName }: MyO
 
   useEffect(() => {
     if (isOpen && operatorToken) fetchOrders();
-  }, [isOpen, operatorToken, dateRange, statusFilter]);
+  }, [isOpen, operatorToken, dateRange, statusFilter, refreshKey]);
+
+  const resumeOrder = async (order: any) => {
+    if (!onOrderSelect || !['SUBMITTED', 'IN_SERVICE'].includes(String(order.status).toUpperCase())) return;
+    try {
+      const res = await provider.pos.getOrder(order.id);
+      if (res.error) throw new Error(res.error);
+      onOrderSelect(res.data);
+      onClose();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to open order');
+    }
+  };
 
   const filteredOrders = orders.filter(order => {
     if (!searchQuery) return true;
@@ -370,14 +384,21 @@ export function MyOrdersModal({ isOpen, onClose, operatorToken, staffName }: MyO
                         {/* Action */}
                         <td className="py-4 px-4">
                           <button
-                            onClick={(e) => { e.stopPropagation(); loadReceipt(order); }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (['SUBMITTED', 'IN_SERVICE'].includes(String(order.status).toUpperCase()) && onOrderSelect) {
+                                void resumeOrder(order);
+                              } else {
+                                void loadReceipt(order);
+                              }
+                            }}
                             disabled={!!isLoadingReceipt}
                             className="flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 px-3 py-1.5 rounded-lg transition-all opacity-0 group-hover:opacity-100 border border-transparent hover:border-indigo-200"
                           >
                             {isLoadingThis
                               ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                               : <Receipt className="w-3.5 h-3.5" />}
-                            Receipt
+                            {['SUBMITTED', 'IN_SERVICE'].includes(String(order.status).toUpperCase()) && onOrderSelect ? 'Open' : 'Receipt'}
                             <ChevronRight className="w-3 h-3" />
                           </button>
                         </td>

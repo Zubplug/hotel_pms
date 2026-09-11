@@ -68,18 +68,31 @@ export async function GET(req: NextRequest) {
     let cashSales = 0;
     let cardSales = 0;
     let roomCharges = 0;
+    let complimentarySales = 0;
+    let complimentaryOrders = 0;
 
     orders.forEach((order: any) => {
       if (order.status !== 'VOIDED') {
         const orderTotal = Number(order.total);
         const orderDiscount = Number(order.discount);
-        
-        grossSales += (orderTotal + orderDiscount);
+
+        // Complimentary/FOC is a control category, not revenue. Keep its
+        // value visible for audit, but exclude it from gross/net sales and
+        // tender totals (otherwise it appears as an "other sale").
+        const complimentaryAmount = order.payments
+          .filter((payment: any) => String(payment.method).toUpperCase() === 'COMPLIMENTARY')
+          .reduce((sum: number, payment: any) => sum + Number(payment.amount), 0);
+        if (complimentaryAmount > 0) complimentaryOrders += 1;
+        complimentarySales += complimentaryAmount;
+        const revenueTotal = Math.max(0, orderTotal - complimentaryAmount);
+
+        grossSales += (revenueTotal + orderDiscount);
         totalDiscounts += orderDiscount;
-        netSales += orderTotal;
+        netSales += revenueTotal;
 
         order.payments.forEach((payment: any) => {
           const amount = Number(payment.amount);
+          if (String(payment.method).toUpperCase() === 'COMPLIMENTARY') return;
           if (payment.method === 'CASH') cashSales += amount;
           else if (payment.method === 'CARD') cardSales += amount;
           else if (payment.method === 'ROOM_CHARGE') roomCharges += amount;
@@ -91,6 +104,8 @@ export async function GET(req: NextRequest) {
       data: {
         staffId,
         ordersCount: orders.length,
+        complimentaryOrders,
+        complimentarySales,
         grossSales,
         totalDiscounts,
         netSales,

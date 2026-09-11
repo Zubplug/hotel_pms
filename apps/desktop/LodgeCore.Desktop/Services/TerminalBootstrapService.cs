@@ -162,6 +162,12 @@ public class TerminalBootstrapService
         
         await context.SaveChangesAsync();
 
+        // Provisioning only writes the terminal identity and the small bootstrap
+        // snapshot. Wake the background engine immediately so a fresh install
+        // hydrates the full offline POS dataset instead of waiting for its
+        // first backoff interval (or remaining empty until the next restart).
+        SyncEngine.Instance?.TriggerManualSync();
+
         return new { success = true, registrationState = newTerminal.RegistrationState };
     }
 }

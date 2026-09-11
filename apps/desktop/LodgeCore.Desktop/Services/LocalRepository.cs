@@ -3579,12 +3579,8 @@ public class LocalRepository
             .Include(o => o.Items)
             .Include(o => o.Checks)
             .Where(o => (!string.IsNullOrWhiteSpace(outletId) ? o.OutletId == outletId : o.SessionId == sessionId)
-                && o.Status != "CLOSED"
-                && o.Status != "COMPLETED"
-                && o.Status != "PAID"
-                && o.Status != "VOIDED"
-                && o.Status != "CANCELLED"
-                && o.PaymentStatus != "PAID");
+                && !new[] { "CLOSED", "COMPLETED", "PAID", "VOIDED", "CANCELLED" }.Contains(o.Status)
+                && !new[] { "PAID", "REFUNDED" }.Contains(o.PaymentStatus));
 
         if (filter == "my_orders" && !string.IsNullOrEmpty(staffId))
         {
@@ -4489,8 +4485,9 @@ public class LocalRepository
         decimal cardSales = payments.Where(p => p.Method == PosConstants.PaymentMethods.Card || p.Method == "CARD_OFFLINE").Sum(p => p.Amount);
         decimal bankTransferSales = payments.Where(p => p.Method == PosConstants.PaymentMethods.BankTransfer).Sum(p => p.Amount);
         decimal roomChargeSales = payments.Where(p => p.Method == PosConstants.PaymentMethods.RoomCharge).Sum(p => p.Amount);
-        decimal otherSales = payments.Where(p => p.Method != PosConstants.PaymentMethods.Cash && p.Method != PosConstants.PaymentMethods.Card && p.Method != "CARD_OFFLINE" && p.Method != PosConstants.PaymentMethods.BankTransfer && p.Method != PosConstants.PaymentMethods.RoomCharge).Sum(p => p.Amount);
-        decimal totalSales = payments.Sum(p => p.Amount);
+        decimal complimentarySales = payments.Where(p => string.Equals(p.Method, "COMPLIMENTARY", StringComparison.OrdinalIgnoreCase)).Sum(p => p.Amount);
+        decimal otherSales = payments.Where(p => p.Method != PosConstants.PaymentMethods.Cash && p.Method != PosConstants.PaymentMethods.Card && p.Method != "CARD_OFFLINE" && p.Method != PosConstants.PaymentMethods.BankTransfer && p.Method != PosConstants.PaymentMethods.RoomCharge && !string.Equals(p.Method, "COMPLIMENTARY", StringComparison.OrdinalIgnoreCase)).Sum(p => p.Amount);
+        decimal totalSales = payments.Where(p => !string.Equals(p.Method, "COMPLIMENTARY", StringComparison.OrdinalIgnoreCase)).Sum(p => p.Amount);
 
         decimal cashIn = movements.Where(m => m.Type == "CASH_IN" || m.Type == "CASH_TRANSFER_IN").Sum(m => m.Amount);
         decimal cashDrops = movements.Where(m => m.Type == "CASH_DROP").Sum(m => m.Amount);
@@ -5412,7 +5409,7 @@ public class LocalRepository
         var kots = await _dbContext.PosKots
             .Where(k => k.OutletId == outletId
                 && k.ProductionStation == station
-                && (k.Status == "PENDING" || k.Status == "ACKNOWLEDGED"))
+                && (k.Status == "PENDING" || k.Status == "ACKNOWLEDGED" || k.Status == "PREPARING" || k.Status == "READY"))
             .OrderBy(k => k.FiredAt)
             .ToListAsync();
 
@@ -5422,6 +5419,10 @@ public class LocalRepository
             List<string> itemIds;
             try { itemIds = System.Text.Json.JsonSerializer.Deserialize<List<string>>(k.ItemIdsJson) ?? new(); }
             catch { itemIds = new(); }
+
+            var orderItems = _dbContext.PosOrderItems
+                .Where(i => itemIds.Contains(i.Id))
+                .ToDictionary(i => i.Id);
 
             return (object)new
             {
@@ -5438,7 +5439,16 @@ public class LocalRepository
                     tableName = k.TableNumber,
                     guestCount = 0,
                 },
-                items = itemIds.Select(id => new { id, productName = (string?)null, quantity = 1 }).ToList()
+                items = itemIds.Select(id =>
+                {
+                    orderItems.TryGetValue(id, out var item);
+                    return new
+                    {
+                        id,
+                        productName = item?.ProductName,
+                        quantity = item?.Quantity ?? 1
+                    };
+                }).ToList()
             };
         }).ToList();
     }
@@ -5580,19 +5590,28 @@ public class LocalRepository
             .ToListAsync();
 
         var paidOrderIds = payments.Select(p => p.OrderId).Distinct().ToHashSet();
-        var grossSales = payments
-            .Where(p => orders.Any(o => o.Id == p.OrderId && o.Status != "VOIDED"))
-            .Sum(p => p.Amount);
+        var activeOrders = orders.Where(o => o.Status != "VOIDED").ToDictionary(o => o.Id);
+        var complimentaryPayments = payments
+            .Where(p => string.Equals(p.Method, "COMPLIMENTARY", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var complimentarySales = complimentaryPayments.Sum(p => p.Amount);
+        var complimentaryOrderIds = complimentaryPayments.Select(p => p.OrderId).Distinct().ToHashSet();
+        var revenuePayments = payments.Where(p =>
+            activeOrders.ContainsKey(p.OrderId)
+            && !string.Equals(p.Method, "COMPLIMENTARY", StringComparison.OrdinalIgnoreCase));
+        var grossSales = revenuePayments.Sum(p => p.Amount);
         
         return new
         {
             grossSales = grossSales,
             netSales = grossSales,
-            ordersCount = paidOrderIds.Count,
-            cashSales = payments.Where(p => string.Equals(p.Method, "CASH", StringComparison.OrdinalIgnoreCase)).Sum(p => p.Amount),
-            cardSales = payments.Where(p => string.Equals(p.Method, "CARD", StringComparison.OrdinalIgnoreCase) || string.Equals(p.Method, "CARD_OFFLINE", StringComparison.OrdinalIgnoreCase)).Sum(p => p.Amount),
-            roomChargeSales = payments.Where(p => string.Equals(p.Method, "ROOM_CHARGE", StringComparison.OrdinalIgnoreCase)).Sum(p => p.Amount),
-            cityLedger = payments.Where(p => string.Equals(p.Method, "CITY_LEDGER", StringComparison.OrdinalIgnoreCase)).Sum(p => p.Amount)
+            ordersCount = paidOrderIds.Count(id => activeOrders.ContainsKey(id) && !complimentaryOrderIds.Contains(id)),
+            complimentaryOrders = complimentaryOrderIds.Count(id => activeOrders.ContainsKey(id)),
+            complimentarySales,
+            cashSales = revenuePayments.Where(p => string.Equals(p.Method, "CASH", StringComparison.OrdinalIgnoreCase)).Sum(p => p.Amount),
+            cardSales = revenuePayments.Where(p => string.Equals(p.Method, "CARD", StringComparison.OrdinalIgnoreCase) || string.Equals(p.Method, "CARD_OFFLINE", StringComparison.OrdinalIgnoreCase)).Sum(p => p.Amount),
+            roomChargeSales = revenuePayments.Where(p => string.Equals(p.Method, "ROOM_CHARGE", StringComparison.OrdinalIgnoreCase)).Sum(p => p.Amount),
+            cityLedger = revenuePayments.Where(p => string.Equals(p.Method, "CITY_LEDGER", StringComparison.OrdinalIgnoreCase)).Sum(p => p.Amount)
         };
     }
     public async Task LogHardwareEventAsync(string userId, string deviceId, string eventType, string? payload)

@@ -278,6 +278,18 @@ public class SyncEngine : BackgroundService
         return string.IsNullOrEmpty(msg) ? "Unknown error occurred" : msg;
     }
 
+    private static string NormalizeProductionStation(string? station)
+    {
+        var normalized = (station ?? string.Empty).Trim().ToUpperInvariant();
+        return normalized switch
+        {
+            "BAR" => "BAR",
+            "DIRECT" => "DIRECT",
+            "NONE" => "NONE",
+            _ => "KITCHEN",
+        };
+    }
+
     private async Task LogSyncDiagnosticSummary(CancellationToken stoppingToken)
     {
         try
@@ -2317,9 +2329,10 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                             kot.KotNumber = kotEl.TryGetProperty("kotNumber", out var kkn) && kkn.ValueKind != System.Text.Json.JsonValueKind.Null ? kkn.GetString() ?? "" : "";
                             kot.Status = kotEl.TryGetProperty("status", out var ks) && ks.ValueKind != System.Text.Json.JsonValueKind.Null ? ks.GetString() ?? "PENDING" : "PENDING";
                             kot.PrintStatus = kotEl.TryGetProperty("printStatus", out var kps) && kps.ValueKind != System.Text.Json.JsonValueKind.Null ? kps.GetString() ?? "QUEUED" : "QUEUED";
-                            kot.ProductionStation = kotEl.TryGetProperty("productionStation", out var kstation) && kstation.ValueKind != System.Text.Json.JsonValueKind.Null
-                                ? (kstation.GetString() ?? "KITCHEN").Trim().ToUpperInvariant()
-                                : "KITCHEN";
+                            var incomingStation = kotEl.TryGetProperty("productionStation", out var kstation) && kstation.ValueKind != System.Text.Json.JsonValueKind.Null
+                                ? kstation.GetString()
+                                : null;
+                            kot.ProductionStation = NormalizeProductionStation(incomingStation);
                             kot.OrderNumber = kotEl.TryGetProperty("orderNumber", out var kon) && kon.ValueKind != System.Text.Json.JsonValueKind.Null ? kon.GetString() ?? "" : kot.OrderNumber;
                             kot.TableNumber = kotEl.TryGetProperty("tableNumber", out var ktn) && ktn.ValueKind != System.Text.Json.JsonValueKind.Null ? ktn.GetString() : kot.TableNumber;
                             kot.DeviceId = kotEl.TryGetProperty("deviceId", out var kdi) && kdi.ValueKind != System.Text.Json.JsonValueKind.Null ? kdi.GetString() ?? "" : kot.DeviceId;
@@ -2342,6 +2355,55 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                         }
                         var kotsToRemove = order.Kots.Where(k => !incomingKotIds.Contains(k.Id)).ToList();
                         foreach(var k in kotsToRemove) order.Kots.Remove(k);
+                    }
+
+                    // Current cloud POS writes production batches, while the
+                    // offline database exposes the legacy KOT projection. Keep
+                    // both shapes available locally so offline KDS and printer
+                    // routing see the same station (especially BAR vs KITCHEN).
+                    if (el.TryGetProperty("productionBatches", out var productionBatches) && productionBatches.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    {
+                        foreach (var batchEl in productionBatches.EnumerateArray())
+                        {
+                            var batchId = batchEl.TryGetProperty("id", out var bid) ? bid.GetString() : null;
+                            if (string.IsNullOrWhiteSpace(batchId)) continue;
+
+                            var batchKot = order.Kots.FirstOrDefault(k => k.Id == batchId);
+                            if (batchKot == null)
+                            {
+                                batchKot = new LodgeCore.Desktop.Data.Entities.LocalPosKot
+                                {
+                                    Id = batchId,
+                                    OrderId = id,
+                                    OutletId = order.OutletId,
+                                    OrderNumber = order.OrderNumber,
+                                    TableNumber = order.TableNumber,
+                                    CreatedAt = order.CreatedAt,
+                                };
+                                order.Kots.Add(batchKot);
+                            }
+
+                            batchKot.ProductionStation = NormalizeProductionStation(
+                                batchEl.TryGetProperty("station", out var stationEl) ? stationEl.GetString() : null);
+                            batchKot.Status = batchEl.TryGetProperty("status", out var batchStatus) && batchStatus.ValueKind != System.Text.Json.JsonValueKind.Null
+                                ? batchStatus.GetString() ?? "PENDING"
+                                : "PENDING";
+                            batchKot.KotNumber = batchEl.TryGetProperty("batchNumber", out var batchNumber) && batchNumber.ValueKind != System.Text.Json.JsonValueKind.Null
+                                ? batchNumber.ToString()
+                                : batchKot.KotNumber;
+                            batchKot.FiredAt = batchEl.TryGetProperty("firedAt", out var firedAt) && firedAt.ValueKind != System.Text.Json.JsonValueKind.Null
+                                ? firedAt.GetDateTime()
+                                : batchKot.FiredAt;
+                            batchKot.BusinessDate = order.BusinessDate;
+                            batchKot.PrintStatus = "COMPLETED";
+
+                            if (batchEl.TryGetProperty("items", out var batchItems) && batchItems.ValueKind == System.Text.Json.JsonValueKind.Array)
+                            {
+                                batchKot.ItemIdsJson = JsonSerializer.Serialize(batchItems.EnumerateArray()
+                                    .Select(item => item.TryGetProperty("orderItemId", out var itemId) ? itemId.GetString() : null)
+                                    .Where(itemId => !string.IsNullOrWhiteSpace(itemId)));
+                            }
+                        }
                     }
                 }
             }

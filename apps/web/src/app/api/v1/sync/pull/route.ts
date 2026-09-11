@@ -330,7 +330,10 @@ export async function GET(req: NextRequest) {
             ...baseWhere,
             updatedAt: { lte: watermark },
             OR: [
-              { status: { in: ['SUBMITTED', 'IN_SERVICE'] } },
+              // Keep every unpaid/non-terminal order available offline. Older
+              // clients and imported orders may use OPEN/DRAFT-like statuses,
+              // while the current enum uses SUBMITTED/IN_SERVICE.
+              { status: { notIn: ['CLOSED', 'VOIDED'] }, paymentStatus: { not: 'PAID' } },
               { closedAt: { gte: twoDaysAgo } }
             ]
         };
@@ -347,6 +350,7 @@ export async function GET(req: NextRequest) {
         items: { include: { modifiers: true } },
         checks: true,
         kots: { include: { items: true } },
+        productionBatches: { include: { items: true } },
         payments: true
       },
       take: limit,

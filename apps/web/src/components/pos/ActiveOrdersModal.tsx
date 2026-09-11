@@ -21,9 +21,10 @@ interface ActiveOrdersModalProps {
   onOrderSelect: (order: any) => void;
   onViewHistory?: () => void;
   operatorRole?: string;
+  refreshKey?: number;
 }
 
-export function ActiveOrdersModal({ isOpen, onClose, operatorToken, sessionId, staffName, operatorRole, onOrderSelect, onViewHistory }: ActiveOrdersModalProps) {
+export function ActiveOrdersModal({ isOpen, onClose, operatorToken, sessionId, staffName, operatorRole, onOrderSelect, onViewHistory, refreshKey = 0 }: ActiveOrdersModalProps) {
   const { provider } = useLodgeCoreProvider();
   const [orders, setOrders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -53,7 +54,7 @@ export function ActiveOrdersModal({ isOpen, onClose, operatorToken, sessionId, s
     if (isOpen && operatorToken) {
       fetchOrders();
     }
-  }, [isOpen, operatorToken, filter]);
+  }, [isOpen, operatorToken, filter, refreshKey]);
 
   const handleResume = async (orderId: string) => {
     setIsResuming(orderId);
