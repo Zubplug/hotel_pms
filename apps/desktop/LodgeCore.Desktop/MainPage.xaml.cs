@@ -640,12 +640,12 @@ public partial class MainPage : ContentPage
                         parameters?["actualCash"]?.GetValue<decimal>() ?? 0,
                         parameters?["cashPaidOut"]?.GetValue<decimal>() ?? 0);
                     break;
-                case \"pos.getPendingOrdersForSession\":
+                case "pos.getPendingOrdersForSession":
                     responseData = await pmsInterop.GetPendingOrdersForSessionAsync(
                         parameters?["sessionId"]?.ToString() ?? ""
                     );
                     break;
-                case \"pos.confirmHandover\":
+                case "pos.confirmHandover":
                     responseData = await pmsInterop.ConfirmHandoverAsync(
                         parameters?["sessionId"]?.ToString() ?? ""
                     );
