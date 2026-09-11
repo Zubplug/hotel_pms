@@ -107,7 +107,7 @@ export function ChargeModal({ isOpen, onClose, total, onCharge, onPrintReceipt, 
                       <Loader2 className="w-4 h-4 animate-spin" /> Loading staff list...
                     </div>
                   ) : (
-                    <Select value={selectedStaffId} onValueChange={setSelectedStaffId}>
+                    <Select value={selectedStaffId} onValueChange={(v) => setSelectedStaffId(v || '')}>
                       <SelectTrigger className="w-full h-12 rounded-xl bg-white border-slate-200">
                         <SelectValue placeholder="Choose a staff member..." />
                       </SelectTrigger>
