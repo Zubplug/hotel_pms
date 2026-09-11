@@ -1061,6 +1061,7 @@ model FolioItem {
 }
 
 enum PaymentMethod {
+  COMPLIMENTARY
   CASH
   BANK_TRANSFER
   POS

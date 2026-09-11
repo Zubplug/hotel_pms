@@ -585,12 +585,12 @@ export default function PosApp() {
   // ─────────────────────────────────────────────────────────────────
   // CHARGE — process payment on existing order
   // ─────────────────────────────────────────────────────────────────
-  const handleCharge = async (method: string) => {
+  const handleCharge = async (method: string, reference?: string) => {
     if (!operatorToken) { toast.error('No operator authenticated'); return; }
     if (!currentOrderId) { toast.error('No active order to charge'); return; }
     setIsProcessing(true);
     try {
-      const paymentData = { method, amount: total, currency: 'NGN', checkId: activeCheckId };
+      const paymentData = { method, amount: total, currency: 'NGN', checkId: activeCheckId, reference };
       const res = await provider.pos.payOrder(currentOrderId, paymentData, operatorToken);
       if (!res.error) {
         // Auto print receipt if on desktop

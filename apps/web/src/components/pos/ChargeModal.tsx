@@ -1,13 +1,15 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { formatCurrency } from '@/lib/utils';
-import { CreditCard, Banknote, Building2, User, Loader2, CheckCircle2, Printer } from 'lucide-react';
+import { CreditCard, Banknote, Building2, User, Loader2, CheckCircle2, Printer, Gift, ArrowLeft } from 'lucide-react';
+import { useDesktopData } from '@/lib/desktop/DataProviderContext';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface ChargeModalProps {
   isOpen: boolean;
   onClose: () => void;
   total: number;
-  onCharge: (method: string) => Promise<void>;
+  onCharge: (method: string, reference?: string) => Promise<void>;
   onPrintReceipt: () => Promise<void>;
   isProcessing: boolean;
   posSessionId?: string | null;
@@ -16,12 +18,35 @@ interface ChargeModalProps {
 }
 
 export function ChargeModal({ isOpen, onClose, total, onCharge, onPrintReceipt, isProcessing, posSessionId, bankingModel = 'CENTRAL_CASHIER', currentOperatorId }: ChargeModalProps) {
-  const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [showCompSelection, setShowCompSelection] = useState(false);
+  const [activeStaff, setActiveStaff] = useState<any[]>([]);
+  const [selectedStaffId, setSelectedStaffId] = useState<string>('');
+  const [isLoadingStaff, setIsLoadingStaff] = useState(false);
+  const { provider } = useDesktopData();
+
+  useEffect(() => {
+    if (showCompSelection && activeStaff.length === 0) {
+      const loadStaff = async () => {
+        setIsLoadingStaff(true);
+        try {
+          const res = await provider.pos.getActiveStaff('ALL');
+          if (res && res.data) {
+            setActiveStaff(res.data);
+          }
+        } catch(e) {
+          console.error("Failed to load staff", e);
+        } finally {
+          setIsLoadingStaff(false);
+        }
+      };
+      loadStaff();
+    }
+  }, [showCompSelection, provider.pos, activeStaff.length]);
 
   const handleCharge = (method: string) => {
     setErrorMsg(null);
-    
-    if (!posSessionId) {
+    if (!posSessionId && method !== 'COMPLIMENTARY') {
       if (bankingModel === 'CENTRAL_CASHIER') {
          setErrorMsg('Waiters cannot process payments. Please direct the guest to the Cashier to complete this transaction.');
          return;
@@ -30,80 +55,139 @@ export function ChargeModal({ isOpen, onClose, total, onCharge, onPrintReceipt, 
          return;
       }
     }
-    
-    // Allow EMERGENCY_MANAGER to process payments
-    
     onCharge(method);
   };
+
+  const handleComplimentaryCharge = () => {
+    if (!selectedStaffId) {
+      setErrorMsg("Please select a beneficiary staff member.");
+      return;
+    }
+    setErrorMsg(null);
+    onCharge('COMPLIMENTARY', `STAFF:${selectedStaffId}`);
+  };
+
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !isProcessing && !open && onClose()}>
+    <Dialog open={isOpen} onOpenChange={(open) => {
+      if (!isProcessing && !open) {
+        setShowCompSelection(false);
+        setSelectedStaffId('');
+        onClose();
+      }
+    }}>
       <DialogContent className="max-w-md p-0 overflow-hidden bg-slate-50 border-0 rounded-[2rem]">
         {/* Header Area */}
         <div className="bg-indigo-600 px-8 py-10 text-center relative overflow-hidden">
           <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white via-transparent to-transparent" />
-          <DialogTitle className="text-indigo-100 font-bold text-sm tracking-widest uppercase mb-2 relative z-10">Total Amount Due</DialogTitle>
+          <DialogTitle className="text-indigo-100 font-bold text-sm tracking-widest uppercase mb-2 relative z-10">
+            {showCompSelection ? 'Complimentary Settlement' : 'Total Amount Due'}
+          </DialogTitle>
           <div className="text-5xl font-black text-white tracking-tight relative z-10">
             {formatCurrency(total)}
           </div>
           <DialogDescription className="sr-only">Select payment method to complete the transaction.</DialogDescription>
         </div>
 
-        {/* Payment Methods */}
+        {/* Content Area */}
         <div className="p-8 pb-10">
-          <button
-            type="button"
-            onClick={onPrintReceipt}
-            disabled={isProcessing}
-            className="w-full mb-6 h-12 rounded-xl border-2 border-indigo-200 bg-indigo-50 text-indigo-700 font-bold text-sm flex items-center justify-center gap-2 hover:bg-indigo-100 hover:border-indigo-300 transition-colors disabled:opacity-50"
-          >
-            <Printer className="w-4 h-4" />
-            PRINT CUSTOMER RECEIPT
-          </button>
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 text-center">Select Payment Method</p>
-          <div className="grid grid-cols-2 gap-4">
-            <button
-              onClick={() => handleCharge('CASH')}
-              disabled={isProcessing}
-              className="flex flex-col items-center justify-center gap-3 p-6 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md hover:border-emerald-200 hover:bg-emerald-50 text-slate-600 hover:text-emerald-700 transition-all disabled:opacity-50 group"
-            >
-              <div className="w-12 h-12 rounded-full bg-slate-50 group-hover:bg-emerald-100 flex items-center justify-center transition-colors">
-                <Banknote className="w-6 h-6" />
+          {showCompSelection ? (
+            <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+              <button 
+                onClick={() => setShowCompSelection(false)}
+                className="mb-4 flex items-center text-sm font-semibold text-indigo-600 hover:text-indigo-800"
+              >
+                <ArrowLeft className="w-4 h-4 mr-1" /> Back to Payment Methods
+              </button>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">Select Beneficiary Staff</label>
+                  {isLoadingStaff ? (
+                    <div className="flex items-center gap-2 text-sm text-slate-500">
+                      <Loader2 className="w-4 h-4 animate-spin" /> Loading staff list...
+                    </div>
+                  ) : (
+                    <Select value={selectedStaffId} onValueChange={setSelectedStaffId}>
+                      <SelectTrigger className="w-full h-12 rounded-xl bg-white border-slate-200">
+                        <SelectValue placeholder="Choose a staff member..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {activeStaff.map(s => (
+                          <SelectItem key={s.id} value={s.id}>
+                            {s.firstName} {s.lastName} {s.department ? `(${s.department})` : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+                
+                <button
+                  onClick={handleComplimentaryCharge}
+                  disabled={isProcessing || !selectedStaffId}
+                  className="w-full h-14 rounded-xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 transition-colors mt-4 shadow-sm"
+                >
+                  {isProcessing ? 'Processing...' : 'Complete as Complimentary'}
+                </button>
               </div>
-              <span className="font-bold text-sm">Cash</span>
-            </button>
-            <button
-              onClick={() => handleCharge('CARD')}
-              disabled={isProcessing}
-              className="flex flex-col items-center justify-center gap-3 p-6 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-200 hover:bg-blue-50 text-slate-600 hover:text-blue-700 transition-all disabled:opacity-50 group"
-            >
-              <div className="w-12 h-12 rounded-full bg-slate-50 group-hover:bg-blue-100 flex items-center justify-center transition-colors">
-                <CreditCard className="w-6 h-6" />
+            </div>
+          ) : (
+            <div className="animate-in fade-in slide-in-from-left-4 duration-300">
+              <button
+                type="button"
+                onClick={onPrintReceipt}
+                disabled={isProcessing}
+                className="w-full mb-6 h-12 rounded-xl border-2 border-indigo-200 bg-indigo-50 text-indigo-700 font-bold text-sm flex items-center justify-center gap-2 hover:bg-indigo-100 hover:border-indigo-300 transition-colors disabled:opacity-50"
+              >
+                <Printer className="w-4 h-4" />
+                PRINT CUSTOMER RECEIPT
+              </button>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 text-center">Select Payment Method</p>
+              <div className="grid grid-cols-2 gap-4">
+                <button
+                  onClick={() => handleCharge('CASH')}
+                  disabled={isProcessing}
+                  className="flex flex-col items-center justify-center gap-3 p-6 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md hover:border-emerald-200 hover:bg-emerald-50 text-slate-600 hover:text-emerald-700 transition-all disabled:opacity-50 group"
+                >
+                  <div className="w-12 h-12 rounded-full bg-slate-50 group-hover:bg-emerald-100 flex items-center justify-center transition-colors">
+                    <Banknote className="w-6 h-6" />
+                  </div>
+                  <span className="font-bold text-sm">Cash</span>
+                </button>
+                <button
+                  onClick={() => handleCharge('CARD')}
+                  disabled={isProcessing}
+                  className="flex flex-col items-center justify-center gap-3 p-6 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-200 hover:bg-blue-50 text-slate-600 hover:text-blue-700 transition-all disabled:opacity-50 group"
+                >
+                  <div className="w-12 h-12 rounded-full bg-slate-50 group-hover:bg-blue-100 flex items-center justify-center transition-colors">
+                    <CreditCard className="w-6 h-6" />
+                  </div>
+                  <span className="font-bold text-sm">Card</span>
+                </button>
+                <button
+                  onClick={() => handleCharge('BANK_TRANSFER')}
+                  disabled={isProcessing}
+                  className="flex flex-col items-center justify-center gap-3 p-6 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md hover:border-purple-200 hover:bg-purple-50 text-slate-600 hover:text-purple-700 transition-all disabled:opacity-50 group"
+                >
+                  <div className="w-12 h-12 rounded-full bg-slate-50 group-hover:bg-purple-100 flex items-center justify-center transition-colors">
+                    <Building2 className="w-6 h-6" />
+                  </div>
+                  <span className="font-bold text-sm">Transfer</span>
+                </button>
+                
+                <button
+                  onClick={() => setShowCompSelection(true)}
+                  disabled={isProcessing}
+                  className="flex flex-col items-center justify-center gap-3 p-6 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md hover:border-pink-200 hover:bg-pink-50 text-slate-600 hover:text-pink-700 transition-all disabled:opacity-50 group"
+                >
+                  <div className="w-12 h-12 rounded-full bg-slate-50 group-hover:bg-pink-100 flex items-center justify-center transition-colors">
+                    <Gift className="w-6 h-6" />
+                  </div>
+                  <span className="font-bold text-sm">Complimentary</span>
+                </button>
               </div>
-              <span className="font-bold text-sm">Card</span>
-            </button>
-            <button
-              onClick={() => handleCharge('BANK_TRANSFER')}
-              disabled={isProcessing}
-              className="flex flex-col items-center justify-center gap-3 p-6 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md hover:border-purple-200 hover:bg-purple-50 text-slate-600 hover:text-purple-700 transition-all disabled:opacity-50 group"
-            >
-              <div className="w-12 h-12 rounded-full bg-slate-50 group-hover:bg-purple-100 flex items-center justify-center transition-colors">
-                <Building2 className="w-6 h-6" />
-              </div>
-              <span className="font-bold text-sm">Transfer</span>
-            </button>
-            {/* 
-            <button
-              onClick={() => handleCharge('ROOM_CHARGE')}
-              disabled={isProcessing}
-              className="flex flex-col items-center justify-center gap-3 p-6 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md hover:border-amber-200 hover:bg-amber-50 text-slate-600 hover:text-amber-700 transition-all disabled:opacity-50 group"
-            >
-              <div className="w-12 h-12 rounded-full bg-slate-50 group-hover:bg-amber-100 flex items-center justify-center transition-colors">
-                <User className="w-6 h-6" />
-              </div>
-              <span className="font-bold text-sm">Room</span>
-            </button>
-            */}
-          </div>
+            </div>
+          )}
           
           {errorMsg && (
             <div className="mt-6 p-4 rounded-xl bg-red-50 border border-red-200 text-red-600 text-sm font-medium text-center">

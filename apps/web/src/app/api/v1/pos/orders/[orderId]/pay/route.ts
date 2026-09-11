@@ -10,6 +10,7 @@ const PaymentSchema = z.object({
   amount: z.number().positive(),
   currency: z.string().default('NGN'),
   checkId: z.string().nullish(),
+  reference: z.string().nullish(),
   inventoryOverrideApprovalId: z.string().uuid().nullish(),
 });
 
@@ -27,7 +28,7 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid payment data' }, { status: 400 });
     }
 
-    const { method, amount, currency, checkId, inventoryOverrideApprovalId } = parsed.data;
+    const { method, amount, currency, checkId, reference, inventoryOverrideApprovalId } = parsed.data;
 
     // Payment posting must always be tied to an active operator session.
     let sessionId = null;
@@ -83,6 +84,7 @@ export async function POST(
           operationId: `op_pay_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
           sessionId: sessionId || undefined,
           processedById: staffId || undefined,
+          reference: reference || undefined,
         }
       });
 
