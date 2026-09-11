@@ -99,12 +99,10 @@ export async function getSystemIntegrity(ctx: TenantContext, propertyId: string)
     return { ...rest, expectedCash };
   });
 
-  // RECONCILIATION_REQUIRED sessions with zero expected cash are waiter-submitted
-  // SERVER-banking sessions where no physical cash handover is needed.
-  // They are auto-closed by the Night Audit itself, so exclude them from blockers.
-  const openPosSessions = processedPosSessions.filter(s =>
-    s.status === 'OPEN' || (s.status === 'RECONCILIATION_REQUIRED' && s.expectedCash !== 0)
-  );
+  // SERVER-banking sessions that are RECONCILIATION_REQUIRED have already been submitted
+  // by the waiter. The physical cash handover is handled separately. They should not
+  // block the System Control step, as the auditor cannot bypass them from this screen.
+  const openPosSessions = processedPosSessions.filter(s => s.status === 'OPEN');
 
   const rawFrontdeskSessions = await prisma.frontdeskSession.findMany({
     where: { propertyId, businessDate, status: { in: ['OPEN', 'CLOSING'] }, controlStatus: 'OPEN' },
