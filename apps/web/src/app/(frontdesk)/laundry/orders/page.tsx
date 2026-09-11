@@ -9,7 +9,7 @@ import { useRouter } from 'next/navigation';
 import { formatCurrency } from '@/lib/utils';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
-export default function LaundryOrdersPage({ managementMode = false }: { managementMode?: boolean }) {
+export function LaundryOrdersClient({ managementMode = false }: { managementMode?: boolean }) {
   const { propertyId } = useProperty();
   const { provider } = useLodgeCoreProvider();
   const router = useRouter();
@@ -111,3 +111,4 @@ export default function LaundryOrdersPage({ managementMode = false }: { manageme
     </div>
   );
 }
+export default function LaundryOrdersPage() { return <LaundryOrdersClient />; }

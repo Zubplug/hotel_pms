@@ -1,7 +1,7 @@
 'use client';
 
-import LaundryOrdersPage from '@/app/(frontdesk)/laundry/orders/page';
+import { LaundryOrdersClient } from '@/app/(frontdesk)/laundry/orders/page';
 
 export default function GeneralManagerLaundryOrdersPage() {
-  return <LaundryOrdersPage managementMode />;
+  return <LaundryOrdersClient managementMode />;
 }

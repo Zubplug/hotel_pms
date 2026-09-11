@@ -10,7 +10,7 @@ import { formatCurrency } from '@/lib/utils';
 import { useSession } from 'next-auth/react';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
-export default function LaundryCatalogPage({ managementMode = false }: { managementMode?: boolean }) {
+export function LaundryCatalogClient({ managementMode = false }: { managementMode?: boolean }) {
   const { propertyId } = useProperty();
   const { provider } = useLodgeCoreProvider();
   const router = useRouter();
@@ -131,3 +131,4 @@ export default function LaundryCatalogPage({ managementMode = false }: { managem
     </div>
   );
 }
+export default function LaundryCatalogPage() { return <LaundryCatalogClient />; }

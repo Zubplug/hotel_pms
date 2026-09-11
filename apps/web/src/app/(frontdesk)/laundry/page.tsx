@@ -10,7 +10,7 @@ import { cn, formatCurrency } from '@/lib/utils';
 import { ClientOnlyDate } from '@/components/ClientOnlyDate';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
-export default function LaundryDashboard({ managementMode = false }: { managementMode?: boolean }) {
+export function LaundryDashboardClient({ managementMode = false }: { managementMode?: boolean }) {
   const { propertyId } = useProperty();
   const { provider } = useLodgeCoreProvider();
   const router = useRouter();
@@ -190,3 +190,4 @@ export default function LaundryDashboard({ managementMode = false }: { managemen
     </div>
   );
 }
+export default function LaundryDashboardPage() { return <LaundryDashboardClient />; }

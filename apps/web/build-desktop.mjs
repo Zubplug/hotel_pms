@@ -19,7 +19,18 @@ const dirsToHide = [
 const buildTimeImportBridges = [
   path.join(process.cwd(), 'src/app/(cash-management)/cashier/menu/page.tsx'),
   path.join(process.cwd(), 'src/app/(cash-management)/cashier/price-approvals/page.tsx'),
-  path.join(process.cwd(), 'src/app/night-audit/handovers/page.tsx')
+  path.join(process.cwd(), 'src/app/night-audit/handovers/page.tsx'),
+  path.join(process.cwd(), 'src/app/(dashboard)/general-manager/cash-management/page.tsx'),
+  path.join(process.cwd(), 'src/app/(dashboard)/general-manager/fnb/page.tsx'),
+  path.join(process.cwd(), 'src/app/(dashboard)/general-manager/night-audit/page.tsx'),
+  path.join(process.cwd(), 'src/app/(dashboard)/general-manager/night-audit/reports/page.tsx'),
+  path.join(process.cwd(), 'src/app/(dashboard)/general-manager/night-audit/reports/print/cashier-summary/page.tsx'),
+  path.join(process.cwd(), 'src/app/(dashboard)/general-manager/night-audit/reports/print/departures-arrivals/page.tsx'),
+  path.join(process.cwd(), 'src/app/(dashboard)/general-manager/night-audit/reports/print/detailed-revenue/page.tsx'),
+  path.join(process.cwd(), 'src/app/(dashboard)/general-manager/night-audit/reports/print/in-house-guests/page.tsx'),
+  path.join(process.cwd(), 'src/app/(dashboard)/general-manager/night-audit/reports/print/managers-flash/page.tsx'),
+  path.join(process.cwd(), 'src/app/(dashboard)/general-manager/night-audit/reports/print/trial-balance/page.tsx'),
+  path.join(process.cwd(), 'src/app/(dashboard)/general-manager/night-audit/rooms/page.tsx')
 ];
 const originalBridgeContents = new Map();
 
@@ -38,10 +49,13 @@ try {
   for (const [file, contents] of originalBridgeContents) {
     let bridgedContents = contents.replaceAll("@/app/(admin)/admin/pos/", "@/app/_admin_group/admin/pos/");
     bridgedContents = bridgedContents.replaceAll("@/app/(cash-management)/", "@/app/_cash-management/");
+    bridgedContents = bridgedContents.replaceAll("@/app/(fnb)/", "@/app/_fnb/");
+    bridgedContents = bridgedContents.replaceAll("@/app/night-audit/", "@/app/_night-audit/");
     
     let buildFile = file;
     buildFile = buildFile.replace(`${path.sep}(cash-management)${path.sep}`, `${path.sep}_cash-management${path.sep}`);
     buildFile = buildFile.replace(`${path.sep}night-audit${path.sep}`, `${path.sep}_night-audit${path.sep}`);
+    buildFile = buildFile.replace(`${path.sep}(dashboard)${path.sep}`, `${path.sep}_dashboard${path.sep}`);
     
     if (bridgedContents !== contents) fs.writeFileSync(buildFile, bridgedContents);
   }
