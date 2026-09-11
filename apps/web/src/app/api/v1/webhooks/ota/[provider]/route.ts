@@ -3,8 +3,9 @@ import { handleOtaWebhook } from '@/lib/integrations/ota/webhook-handler';
 
 export async function POST(
   req: NextRequest, 
-  { params }: { params: { provider: string } }
+  { params }: { params: Promise<{ provider: string }> }
 ) {
   // Delegate the logic to the robust webhook handler we built
-  return handleOtaWebhook(req, params.provider);
+  const { provider } = await params;
+  return handleOtaWebhook(req, provider);
 }

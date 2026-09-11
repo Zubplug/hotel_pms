@@ -29,9 +29,11 @@ export const OTAReservationService = {
     const result = await prisma.$transaction(async (tx: any) => {
         
         // 1. ADVISORY LOCK: Solve the first-create race
-        // We hash the externalReservationId into a 32-bit integer for Postgres advisory lock.
-        const lockHash = crypto.createHash('md5').update(parsed.externalReservationId).digest().readInt32BE(0);
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockHash})`;
+        // We hash the channelConnectionId and externalReservationId into two 32-bit integers
+        // for Postgres advisory lock (pg_advisory_xact_lock(int, int)) to avoid cross-connection collisions.
+        const lockHash1 = crypto.createHash('md5').update(parsed.channelConnectionId || '').digest().readInt32BE(0);
+        const lockHash2 = crypto.createHash('md5').update(parsed.externalReservationId).digest().readInt32BE(0);
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockHash1}, ${lockHash2})`;
 
         // 2. ATOMIC LOCKING: Lock the row if it exists.
         const lockedRows: any[] = await tx.$queryRaw`

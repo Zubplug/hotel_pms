@@ -5,6 +5,7 @@ import crypto from 'crypto';
 
 test('Concurrent OTA webhook requests process exactly one native reservation', async () => {
     process.env.OTA_RESERVATION_IMPORT = 'true';
+    if (process.env.DATABASE_URL) process.env.DATABASE_URL += (process.env.DATABASE_URL.includes('?') ? '&' : '?') + 'connection_limit=30';
     const org = await prisma.organization.findFirst();
     if (!org) throw new Error('No org');
     const property = await prisma.property.findFirst({ where: { organizationId: org.id }});
