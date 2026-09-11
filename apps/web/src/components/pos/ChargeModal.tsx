@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { formatCurrency } from '@/lib/utils';
 import { CreditCard, Banknote, Building2, User, Loader2, CheckCircle2, Printer, Gift, ArrowLeft } from 'lucide-react';
-import { useDesktopData } from '@/lib/desktop/DataProviderContext';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface ChargeModalProps {
@@ -23,7 +23,7 @@ export function ChargeModal({ isOpen, onClose, total, onCharge, onPrintReceipt, 
   const [activeStaff, setActiveStaff] = useState<any[]>([]);
   const [selectedStaffId, setSelectedStaffId] = useState<string>('');
   const [isLoadingStaff, setIsLoadingStaff] = useState(false);
-  const { provider } = useDesktopData();
+  const { provider } = useLodgeCoreProvider();
 
   useEffect(() => {
     if (showCompSelection && activeStaff.length === 0) {
