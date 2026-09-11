@@ -2856,7 +2856,10 @@ public class LocalRepository
 
         var action = root.GetProperty("action").GetString(); // "VOID" or "REPLACE"
         var orderId = root.GetProperty("orderId").GetString();
-        var originalOrderItemId = root.GetProperty("originalOrderItemId").GetString();
+        var originalOrderItemId = root.TryGetProperty("originalOrderItemId", out var originalIdEl)
+            && originalIdEl.ValueKind != JsonValueKind.Null
+            ? originalIdEl.GetString()
+            : null;
         var reason = root.TryGetProperty("reason", out var rsn) ? rsn.GetString() : "Customer changed mind";
         var inventoryAction = root.TryGetProperty("inventoryAction", out var inv) ? inv.GetString() : "RESTOCK";
         var managerPin = root.TryGetProperty("managerPin", out var pin) ? pin.GetString() : "";
@@ -2865,6 +2868,38 @@ public class LocalRepository
         if (order == null) throw new Exception("Order not found");
 
         var originalItem = order.Items.FirstOrDefault(i => i.Id == originalOrderItemId);
+        if (originalItem == null)
+        {
+            // A resumed split/check order can contain a line item whose UI
+            // projection has an outdated ID. Recover only when the business
+            // identity identifies exactly one unvoided line item; never guess
+            // between duplicate products.
+            var productId = root.TryGetProperty("productId", out var productEl) && productEl.ValueKind != JsonValueKind.Null
+                ? productEl.GetString()
+                : null;
+            var productName = root.TryGetProperty("productName", out var nameEl) && nameEl.ValueKind != JsonValueKind.Null
+                ? nameEl.GetString()
+                : null;
+            var quantity = root.TryGetProperty("quantity", out var quantityEl) && quantityEl.TryGetDecimal(out var parsedQuantity)
+                ? parsedQuantity
+                : (decimal?)null;
+            var unitPrice = root.TryGetProperty("unitPrice", out var priceEl) && priceEl.TryGetDecimal(out var parsedPrice)
+                ? parsedPrice
+                : (decimal?)null;
+
+            var candidates = order.Items.Where(i => string.IsNullOrWhiteSpace(i.VoidReason)
+                && (string.IsNullOrWhiteSpace(productId) || i.ProductId == productId)
+                && (string.IsNullOrWhiteSpace(productName) || string.Equals(i.ProductName, productName, StringComparison.OrdinalIgnoreCase))
+                && (!quantity.HasValue || i.Quantity == quantity.Value)
+                && (!unitPrice.HasValue || i.UnitPrice == unitPrice.Value))
+                .ToList();
+
+            if (candidates.Count == 1)
+            {
+                originalItem = candidates[0];
+                originalOrderItemId = originalItem.Id;
+            }
+        }
         if (originalItem == null) throw new Exception("Original item not found");
 
         var propertyId = order.PropertyId;
@@ -3579,12 +3614,26 @@ public class LocalRepository
         var session = await _dbContext.PosSessions.FirstOrDefaultAsync(s => s.Id == sessionId);
         var outletId = session?.OutletId;
 
+        // Build this predicate in separate steps. SQLite's EF provider can
+        // attempt to evaluate the captured ternary/array expressions as query
+        // parameters, which crashes the desktop modal before it can render.
         var query = _dbContext.PosOrders
             .Include(o => o.Items)
             .Include(o => o.Checks)
-            .Where(o => (!string.IsNullOrWhiteSpace(outletId) ? o.OutletId == outletId : o.SessionId == sessionId)
-                && !new[] { "CLOSED", "COMPLETED", "PAID", "VOIDED", "CANCELLED" }.Contains(o.Status)
-                && !new[] { "PAID", "REFUNDED" }.Contains(o.PaymentStatus));
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(outletId))
+            query = query.Where(o => o.OutletId == outletId);
+        else
+            query = query.Where(o => o.SessionId == sessionId);
+
+        query = query.Where(o => o.Status != "CLOSED"
+            && o.Status != "COMPLETED"
+            && o.Status != "PAID"
+            && o.Status != "VOIDED"
+            && o.Status != "CANCELLED"
+            && o.PaymentStatus != "PAID"
+            && o.PaymentStatus != "REFUNDED");
 
         if (filter == "my_orders" && !string.IsNullOrEmpty(staffId))
         {
@@ -3592,8 +3641,15 @@ public class LocalRepository
         }
 
         var orders = await query.OrderByDescending(o => o.CreatedAt).ToListAsync();
-        var staffIds = orders.Select(o => o.ServerStaffId).Distinct().ToList();
-        var staffDict = await _dbContext.Staff.Where(s => staffIds.Contains(s.Id)).ToDictionaryAsync(s => s.Id, s => s.FirstName + " " + s.LastName);
+        var staffIds = orders.Select(o => o.ServerStaffId)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Distinct()
+            .ToList();
+        var staffDict = staffIds.Count == 0
+            ? new Dictionary<string, string>()
+            : await _dbContext.Staff
+                .Where(s => staffIds.Contains(s.Id))
+                .ToDictionaryAsync(s => s.Id, s => s.FirstName + " " + s.LastName);
 
         var result = new List<object>();
         foreach (var o in orders)

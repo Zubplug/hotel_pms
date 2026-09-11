@@ -8,7 +8,8 @@
     "build:desktop": "node build-desktop.mjs",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "seed:ota-system-users": "tsx scripts/seed-ota-system-users.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.3",
@@ -57,6 +58,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.0",
     "tailwindcss": "^4",
+    "tsx": "^4.23.12",
     "typescript": "^5",
     "vitest": "^4.1.10"
   }

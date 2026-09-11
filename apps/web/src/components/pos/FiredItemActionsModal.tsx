@@ -10,6 +10,7 @@ import { Trash, RefreshCcw, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { ManagerOverrideModal } from './ManagerOverrideModal';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
+import { generateUUID } from '@/lib/utils';
 
 export default function FiredItemActionsModal({
   isOpen,
@@ -59,12 +60,16 @@ export default function FiredItemActionsModal({
         action: 'REPLACE',
         orderId,
         originalOrderItemId: item.id,
+        productId: item.productId,
+        productName: item.productName ?? item.name,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice ?? item.price,
         reason: reason || 'Customer changed mind',
         inventoryAction: 'RESTOCK',
         managerId,
         managerPin,
         replacementItem: {
-          id: crypto.randomUUID(),
+          id: generateUUID(),
           productId: replacementProduct.id,
           productName: replacementProduct.name,
           unitPrice: replacementProduct.price,
@@ -102,6 +107,10 @@ export default function FiredItemActionsModal({
         action: 'VOID',
         orderId,
         originalOrderItemId: item.id,
+        productId: item.productId,
+        productName: item.productName ?? item.name,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice ?? item.price,
         reason: reason || 'Customer changed mind',
         inventoryAction,
         managerId,

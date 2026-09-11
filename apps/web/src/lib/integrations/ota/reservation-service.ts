@@ -45,27 +45,21 @@ export const OTAReservationService = {
     );
 
     // ── System actor (fail closed if not seeded) ─────────────────────────
-    const organization = await prisma.organization.findUnique({
-      where: { id: organizationId },
-      select: { slug: true },
-    });
-    const scopedSystemEmail = organization
-      ? `system+${organization.slug}@lodgecore.internal`
-      : null;
+    // Each organisation has its own dedicated OTA system user.
+    // Email convention: ota.system+{organizationId}@lodgecore.internal
+    // Sidesteps the UNIQUE(userId) constraint on OrganizationMembership.
+    // Seed with: pnpm run seed:ota-system-users
+    const systemUserEmail = `ota.system+${organizationId}@lodgecore.internal`;
     const systemUser = await prisma.user.findFirst({
       where: {
-        email: scopedSystemEmail ?? 'system@lodgecore.internal',
-        membership: { organizationId },
-      },
-    }) ?? await prisma.user.findFirst({
-      where: {
-        email: 'system@lodgecore.internal',
+        email: systemUserEmail,
         membership: { organizationId },
       },
     });
     if (!systemUser) {
       throw new Error(
-        'System integration user not found or not authorised for this organisation. Run the seed migration.',
+        `OTA system user not found: ${systemUserEmail}. ` +
+        `Run: pnpm run seed:ota-system-users to create it for organisation ${organizationId}.`,
       );
     }
     const actorId = systemUser.id;

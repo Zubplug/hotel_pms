@@ -4,6 +4,11 @@ import { OTAReservationService, LockContentionError } from '../reservation-servi
 import { MappingResolver } from '../resolver';
 import crypto from 'crypto';
 
+if (process.env.DATABASE_URL?.includes('aws-1-eu-west-1.pooler.supabase.com') || process.env.DATABASE_URL?.includes('neon.tech')) {
+  console.error('ERROR: This test cannot be run against a production database!');
+  process.exit(1);
+}
+
 // Mimic QStash outbox retry: retry up to maxAttempts times on transient errors
 async function processWithRetry(
   orgId: string,
@@ -72,15 +77,16 @@ test(
     const ratePlan = await prisma.ratePlan.findFirst({ where: { propertyId: property.id } });
     if (!ratePlan) throw new Error('No rate plan in test DB');
 
-    // System actor — must exist as real user + membership
+    // System actor — must match the per-org email convention used by OTAReservationService
+    const systemUserEmail = `ota.system+${org.id}@lodgecore.internal`;
     let systemUser = await prisma.user.findUnique({
-      where: { email: 'system@lodgecore.internal' },
+      where: { email: systemUserEmail },
     });
     if (!systemUser) {
       systemUser = await prisma.user.create({
         data: {
-          email:        'system@lodgecore.internal',
-          passwordHash: 'NO_LOGIN_SYSTEM_ACCOUNT',
+          email:        systemUserEmail,
+          passwordHash: 'NO_LOGIN_OTA_SYSTEM_ACCOUNT',
         },
       });
     }
@@ -89,7 +95,7 @@ test(
     });
     if (!mem) {
       await prisma.organizationMembership.create({
-        data: { userId: systemUser.id, organizationId: org.id, role: 'ADMIN' },
+        data: { userId: systemUser.id, organizationId: org.id, role: 'ADMIN', status: 'ACTIVE' },
       });
     }
 
