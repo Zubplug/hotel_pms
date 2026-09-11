@@ -110,14 +110,12 @@ export function ActiveOrdersModal({ isOpen, onClose, operatorToken, sessionId, s
                 >
                   My Orders
                 </button>
-                {(operatorRole === 'CASHIER' || operatorRole === 'MANAGER' || operatorRole === 'ADMIN') && (
-                  <button
+                <button
                     onClick={() => setFilter('all_open')}
                     className={`px-5 py-2 text-sm font-bold rounded-md transition-all ${filter === 'all_open' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                   >
                     All Open
-                  </button>
-                )}
+                </button>
               </div>
               <button
                 onClick={fetchOrders}

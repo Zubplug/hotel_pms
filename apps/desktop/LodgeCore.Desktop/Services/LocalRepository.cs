@@ -3572,10 +3572,13 @@ public class LocalRepository
 
     public async Task<List<object>> GetActiveOrdersAsync(string sessionId, string filter = "my_orders", string? staffId = null)
     {
+        var session = await _dbContext.PosSessions.FirstOrDefaultAsync(s => s.Id == sessionId);
+        var outletId = session?.OutletId;
+
         var query = _dbContext.PosOrders
             .Include(o => o.Items)
             .Include(o => o.Checks)
-            .Where(o => o.SessionId == sessionId
+            .Where(o => (!string.IsNullOrWhiteSpace(outletId) ? o.OutletId == outletId : o.SessionId == sessionId)
                 && o.Status != "CLOSED"
                 && o.Status != "COMPLETED"
                 && o.Status != "PAID"
@@ -3795,7 +3798,7 @@ public class LocalRepository
                 KotNumber = $"{order.OrderNumber}-{station}-{Guid.NewGuid().ToString("N").Substring(0, 4)}",
                 TableNumber = order.TableNumber, ServerName = "Server", Status = "PENDING",
                 ProductionStation = station, PrintStatus = "QUEUED",
-                OperationId = $"op_fire_{deviceId}_{DateTime.UtcNow.Ticks}",
+                OperationId = $"op_fire_{deviceId}_{Guid.NewGuid():N}",
                 BusinessDate = order.BusinessDate == default ? DateTime.UtcNow.Date : order.BusinessDate,
                 FiredAt = firedAt, CreatedAt = firedAt,
                 ItemIdsJson = JsonSerializer.Serialize(stationGroup.Select(i => i.Id))
@@ -4544,7 +4547,7 @@ public class LocalRepository
         // Void every non-already-voided item
         foreach (var item in order.Items.Where(i => string.IsNullOrEmpty(i.VoidReason)))
         {
-            string operationId = $"op_void_{deviceId}_{item.Id}_{DateTime.UtcNow.Ticks}";
+            string operationId = $"op_void_{deviceId}_{Guid.NewGuid():N}";
             var posVoid = new LocalPosVoid
             {
                 Id = Guid.NewGuid().ToString(),
@@ -4553,6 +4556,7 @@ public class LocalRepository
                 Reason = reason,
                 AuthorizerId = authorizerId,
                 OperationId = operationId,
+                BusinessDate = order.BusinessDate,
                 DeviceId = deviceId,
                 CreatedAt = DateTime.UtcNow
             };
@@ -4613,7 +4617,7 @@ public class LocalRepository
         if (item == null) throw new Exception("Order item not found");
         if (!string.IsNullOrWhiteSpace(item.VoidReason)) throw new Exception("Order item is already voided");
 
-        string operationId = $"op_void_{deviceId}_{DateTime.UtcNow.Ticks}";
+        string operationId = $"op_void_{deviceId}_{Guid.NewGuid():N}";
         
         var posVoid = new LocalPosVoid
         {
@@ -4623,6 +4627,7 @@ public class LocalRepository
             Reason = reason,
             AuthorizerId = authorizerId,
             OperationId = operationId,
+            BusinessDate = order.BusinessDate,
             DeviceId = deviceId,
             CreatedAt = DateTime.UtcNow
         };
@@ -5122,7 +5127,7 @@ public class LocalRepository
         // We have to iterate since we need to verify BCrypt hashes.
         // Get all active supervisors for the property first.
         var supervisors = await _dbContext.Staff
-            .Where(s => s.PropertyId == propertyId && s.IsActive && s.Role == "MANAGER")
+            .Where(s => s.PropertyId == propertyId && s.IsActive && (s.Role == "MANAGER" || s.Role == "ADMIN"))
             .ToListAsync();
 
         foreach (var s in supervisors)

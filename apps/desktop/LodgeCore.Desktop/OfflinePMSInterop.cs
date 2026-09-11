@@ -2076,7 +2076,7 @@ public class OfflinePMSInterop
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+            return JsonSerializer.Serialize(new { success = false, error = ex.InnerException?.InnerException?.Message ?? ex.InnerException?.Message ?? ex.Message }, _jsonOptions);
         }
     }
 
@@ -2207,6 +2207,17 @@ public class OfflinePMSInterop
             var actualBankingModel = property?.BankingModel ?? "CENTRAL_CASHIER";
 
             string? posSessionId = null;
+            if (!string.IsNullOrEmpty(ctx.SessionId))
+            {
+                var sessionObj = await _repo.GetSessionContextAsync(ctx.SessionId);
+                if (sessionObj != null && string.Equals(sessionObj.Status, "OPEN", StringComparison.OrdinalIgnoreCase) && (string.IsNullOrEmpty(outletId) || sessionObj.OutletId == outletId))
+                {
+                    posSessionId = sessionObj.Id;
+                    if (string.IsNullOrEmpty(outletId))
+                        outletId = sessionObj.OutletId;
+                }
+            }
+
             bool requiresBank = false;
             string? bankOwner = null;
 
@@ -2229,7 +2240,7 @@ public class OfflinePMSInterop
                 throw new Exception("General Cashier cannot open the POS bank. A POS cashier must open it.");
             }
 
-            if (!string.IsNullOrEmpty(deviceId))
+            if (string.IsNullOrEmpty(posSessionId) && !string.IsNullOrEmpty(deviceId))
             {
                 if (actualBankingModel == "SERVER_BANKING")
                 {
@@ -2314,6 +2325,14 @@ public class OfflinePMSInterop
     {
         try
         {
+            if (propertyId == "ALL")
+            {
+                var posCtx = await _sessionManager.GetActiveContextAsync();
+                if (posCtx != null && !string.IsNullOrEmpty(posCtx.PropertyId))
+                {
+                    propertyId = posCtx.PropertyId;
+                }
+            }
             var res = await _repo.GetActiveStaffAsync(propertyId, roleScope, outletId, isPosContext: true);
             return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }

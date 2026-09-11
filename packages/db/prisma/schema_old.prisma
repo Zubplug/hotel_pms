@@ -26,18 +26,15 @@ model Organization {
   defaultLocale   String  @default("en-NG")
   settings        Json?
 
-  properties         Property[]
-  guests             Guest[]
-  staff              Staff[]
-  roles              Role[]
-  notifications      Notification[]
-  auditLogs          AuditLog[]
-  refundRequests     RefundRequest[]
-  memberships        OrganizationMembership[]
-  corporateAccounts  CorporateAccount[]
-  outboxEvents       OutboxEvent[]
-  channelConnections ChannelConnection[]
-  channelSyncEvents  ChannelSyncEvent[]
+  properties        Property[]
+  guests            Guest[]
+  staff             Staff[]
+  roles             Role[]
+  notifications     Notification[]
+  auditLogs         AuditLog[]
+  refundRequests    RefundRequest[]
+  memberships       OrganizationMembership[]
+  corporateAccounts CorporateAccount[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -146,9 +143,9 @@ model Property {
   complimentaryRecords     ComplimentaryRecord[]
   staffReceivables         StaffReceivable[]
 
-  createdAt           DateTime             @default(now()) @db.Timestamptz
-  updatedAt           DateTime             @updatedAt @db.Timestamptz
-  deletedAt           DateTime?            @db.Timestamptz
+  createdAt           DateTime            @default(now()) @db.Timestamptz
+  updatedAt           DateTime            @updatedAt @db.Timestamptz
+  deletedAt           DateTime?           @db.Timestamptz
   PosSession          PosSession[]
   HotelEvent          HotelEvent[]
   HotelActivityEvent  HotelActivityEvent[]
@@ -177,10 +174,6 @@ model Property {
   fixedAssets          FixedAsset[]
   assetDepreciations   AssetDepreciation[]
   budgets              Budget[]
-
-  outboxEvents       OutboxEvent[]
-  channelConnections ChannelConnection[]
-  channelSyncEvents  ChannelSyncEvent[]
 }
 
 model Building {
@@ -851,15 +844,15 @@ model TransactionException {
 }
 
 model Folio {
-  id                 String            @id @default(uuid()) @db.Uuid
-  reservationId      String?           @db.Uuid // null for master/city ledgers
-  reservation        Reservation?      @relation(fields: [reservationId], references: [id])
-  corporateAccountId String?           @db.Uuid
+  id            String       @id @default(uuid()) @db.Uuid
+  reservationId String?      @db.Uuid // null for master/city ledgers
+  reservation   Reservation? @relation(fields: [reservationId], references: [id])
+  corporateAccountId String?          @db.Uuid
   corporateAccount   CorporateAccount? @relation(fields: [corporateAccountId], references: [id])
-  propertyId         String            @db.Uuid
-  property           Property          @relation(fields: [propertyId], references: [id])
-  guestId            String?           @db.Uuid
-  guest              Guest?            @relation(fields: [guestId], references: [id])
+  propertyId    String       @db.Uuid
+  property      Property     @relation(fields: [propertyId], references: [id])
+  guestId       String?      @db.Uuid
+  guest         Guest?       @relation(fields: [guestId], references: [id])
 
   folioNumber String @unique
   type        String // 'ROOM' | 'MASTER' | 'CITY_LEDGER'
@@ -1471,26 +1464,26 @@ model NightAudit {
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
 
-  folioItems        FolioItem[]
-  acknowledgements  NightAuditAcknowledgement[]
+  folioItems       FolioItem[]
+  acknowledgements NightAuditAcknowledgement[]
   financialSnapshot NightAuditFinancialSnapshot?
 
   @@unique([propertyId, businessDate])
 }
 
 model NightAuditFinancialSnapshot {
-  id           String     @id @default(uuid()) @db.Uuid
-  nightAuditId String     @unique @db.Uuid
+  id           String   @id @default(uuid()) @db.Uuid
+  nightAuditId String   @unique @db.Uuid
   nightAudit   NightAudit @relation(fields: [nightAuditId], references: [id])
-
-  roomRevenue  Decimal @default(0) @db.Decimal(18, 4)
-  fnbRevenue   Decimal @default(0) @db.Decimal(18, 4)
-  otherRevenue Decimal @default(0) @db.Decimal(18, 4)
-  taxes        Decimal @default(0) @db.Decimal(18, 4)
-  discounts    Decimal @default(0) @db.Decimal(18, 4)
-  refunds      Decimal @default(0) @db.Decimal(18, 4)
-  grossRevenue Decimal @default(0) @db.Decimal(18, 4)
-  netRevenue   Decimal @default(0) @db.Decimal(18, 4)
+  
+  roomRevenue   Decimal @default(0) @db.Decimal(18, 4)
+  fnbRevenue    Decimal @default(0) @db.Decimal(18, 4)
+  otherRevenue  Decimal @default(0) @db.Decimal(18, 4)
+  taxes         Decimal @default(0) @db.Decimal(18, 4)
+  discounts     Decimal @default(0) @db.Decimal(18, 4)
+  refunds       Decimal @default(0) @db.Decimal(18, 4)
+  grossRevenue  Decimal @default(0) @db.Decimal(18, 4)
+  netRevenue    Decimal @default(0) @db.Decimal(18, 4)
 
   createdAt DateTime @default(now()) @db.Timestamptz
 }
@@ -1725,32 +1718,32 @@ enum HotelActivitySeverity {
 }
 
 model HotelActivityEvent {
-  id         String   @id @default(uuid()) @db.Uuid
-  propertyId String   @db.Uuid
-  property   Property @relation(fields: [propertyId], references: [id])
-
+  id           String   @id @default(uuid()) @db.Uuid
+  propertyId   String   @db.Uuid
+  property     Property @relation(fields: [propertyId], references: [id])
+  
   businessDate DateTime @db.Date
   occurredAt   DateTime @db.Timestamptz
-
-  category  HotelActivityCategory
-  eventType String
-
-  actorId   String? @db.Uuid
-  actorName String?
-
-  entityType String?
-  entityId   String? @db.Uuid
-
-  title       String
-  description String?
-
-  amount   Decimal? @db.Decimal(18, 4)
-  currency String?
-
-  severity HotelActivitySeverity @default(INFO)
-
-  metadata Json?
-
+  
+  category     HotelActivityCategory
+  eventType    String
+  
+  actorId      String?  @db.Uuid
+  actorName    String?
+  
+  entityType   String?
+  entityId     String?  @db.Uuid
+  
+  title        String
+  description  String?
+  
+  amount       Decimal? @db.Decimal(18, 4)
+  currency     String?
+  
+  severity     HotelActivitySeverity @default(INFO)
+  
+  metadata     Json?
+  
   createdAt DateTime @default(now()) @db.Timestamptz
 
   @@index([propertyId, businessDate])
@@ -2389,15 +2382,15 @@ model Supplier {
 }
 
 model Warehouse {
-  id                String      @id @default(uuid()) @db.Uuid
-  propertyId        String      @db.Uuid
-  property          Property    @relation(fields: [propertyId], references: [id])
-  name              String
-  location          String?
-  isActive          Boolean     @default(true)
-  posOutletId       String?     @unique @db.Uuid
-  posOutlet         PosOutlet?  @relation(fields: [posOutletId], references: [id])
-  parentWarehouseId String?     @db.Uuid
+  id          String     @id @default(uuid()) @db.Uuid
+  propertyId  String     @db.Uuid
+  property    Property   @relation(fields: [propertyId], references: [id])
+  name        String
+  location    String?
+  isActive    Boolean    @default(true)
+  posOutletId String?    @unique @db.Uuid
+  posOutlet   PosOutlet? @relation(fields: [posOutletId], references: [id])
+  parentWarehouseId String? @db.Uuid
   parentWarehouse   Warehouse?  @relation("WarehouseHierarchy", fields: [parentWarehouseId], references: [id])
   childWarehouses   Warehouse[] @relation("WarehouseHierarchy")
 
@@ -2855,15 +2848,15 @@ model PosProductModifier {
   productId String     @db.Uuid
   product   PosProduct @relation(fields: [productId], references: [id])
 
-  name           String
-  price          Decimal        @default(0) @db.Decimal(18, 4)
-  isActive       Boolean        @default(true)
-  stockItemId    String?        @db.Uuid
-  stockItem      StockItem?     @relation("ModifierStockItem", fields: [stockItemId], references: [id])
-  quantity       Decimal        @default(1) @db.Decimal(18, 4)
-  unitOfMeasure  UnitOfMeasure?
-  groupName      String?
-  groupRequired  Boolean        @default(false)
+  name          String
+  price         Decimal        @default(0) @db.Decimal(18, 4)
+  isActive      Boolean        @default(true)
+  stockItemId   String?        @db.Uuid
+  stockItem     StockItem?     @relation("ModifierStockItem", fields: [stockItemId], references: [id])
+  quantity      Decimal        @default(1) @db.Decimal(18, 4)
+  unitOfMeasure UnitOfMeasure?
+  groupName     String?
+  groupRequired Boolean        @default(false)
   groupMaxSelect Int?
 
   createdAt DateTime @default(now()) @db.Timestamptz
@@ -4489,9 +4482,9 @@ model SupplierInvoice {
   propertyId String   @db.Uuid
   property   Property @relation(fields: [propertyId], references: [id])
 
-  supplierId      String         @db.Uuid
-  supplier        Supplier       @relation(fields: [supplierId], references: [id])
-  purchaseOrderId String?        @db.Uuid
+  supplierId      String   @db.Uuid
+  supplier        Supplier @relation(fields: [supplierId], references: [id])
+  purchaseOrderId String?  @db.Uuid
   purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
 
   invoiceNumber String
@@ -4567,7 +4560,7 @@ model SupplierPayment {
   amount           Decimal  @db.Decimal(18, 4)
   currency         String   @default("NGN")
   paymentDate      DateTime @db.Date
-  paymentMethod    String // BANK_TRANSFER | CHEQUE | CASH | OTHER
+  paymentMethod    String   // BANK_TRANSFER | CHEQUE | CASH | OTHER
   bankReference    String?
   paymentReference String   @unique
   notes            String?
@@ -4595,15 +4588,15 @@ model TaxRemittance {
 
   periodStart DateTime @db.Date
   periodEnd   DateTime @db.Date
-  taxType     String // VAT | WHT | SERVICE_CHARGE | OTHER
+  taxType     String   // VAT | WHT | SERVICE_CHARGE | OTHER
 
   collectedAmount Decimal @db.Decimal(18, 4)
   remittedAmount  Decimal @db.Decimal(18, 4)
   currency        String  @default("NGN")
 
-  remittanceDate DateTime @db.Date
+  remittanceDate DateTime  @db.Date
   remittanceRef  String?
-  authorityName  String? // FIRS | LIRS | etc.
+  authorityName  String?   // FIRS | LIRS | etc.
   attachmentUrl  String?
   notes          String?
 
@@ -4641,8 +4634,8 @@ model AccountingPeriod {
   closedAt DateTime? @db.Timestamptz
   notes    String?
 
-  journalEntries     JournalEntry[]
-  assetDepreciations AssetDepreciation[]
+  journalEntries      JournalEntry[]
+  assetDepreciations  AssetDepreciation[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -4663,7 +4656,7 @@ model ChartOfAccount {
   code          String
   name          String
   type          AccountType
-  category      String // e.g. "Current Assets", "Room Revenue"
+  category      String      // e.g. "Current Assets", "Room Revenue"
   normalBalance BalanceSide
   parentCode    String?
   description   String?
@@ -4765,9 +4758,9 @@ model SalaryStructure {
 }
 
 model PayrollPeriod {
-  id             String   @id @default(uuid()) @db.Uuid
-  organizationId String   @db.Uuid
-  propertyId     String   @db.Uuid
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  propertyId     String @db.Uuid
   property       Property @relation(fields: [propertyId], references: [id])
 
   name        String
@@ -4777,18 +4770,18 @@ model PayrollPeriod {
 
   status PayrollPeriodStatus @default(DRAFT)
 
-  totalGross           Decimal @default(0) @db.Decimal(18, 4)
-  totalDeductions      Decimal @default(0) @db.Decimal(18, 4)
-  totalNet             Decimal @default(0) @db.Decimal(18, 4)
+  totalGross          Decimal @default(0) @db.Decimal(18, 4)
+  totalDeductions     Decimal @default(0) @db.Decimal(18, 4)
+  totalNet            Decimal @default(0) @db.Decimal(18, 4)
   totalEmployerPension Decimal @default(0) @db.Decimal(18, 4)
-  totalPAYE            Decimal @default(0) @db.Decimal(18, 4)
-  currency             String  @default("NGN")
+  totalPAYE           Decimal @default(0) @db.Decimal(18, 4)
+  currency            String  @default("NGN")
 
-  createdBy   String    @db.Uuid
-  approvedBy  String?   @db.Uuid
-  approvedAt  DateTime? @db.Timestamptz
-  processedBy String?   @db.Uuid
-  processedAt DateTime? @db.Timestamptz
+  createdBy    String    @db.Uuid
+  approvedBy   String?   @db.Uuid
+  approvedAt   DateTime? @db.Timestamptz
+  processedBy  String?   @db.Uuid
+  processedAt  DateTime? @db.Timestamptz
 
   journalEntryId String? @db.Uuid
 
@@ -4819,11 +4812,11 @@ model Payslip {
   grossEarnings      Decimal @db.Decimal(18, 4)
 
   // Statutory Deductions (Nigeria)
-  payeTax         Decimal @default(0) @db.Decimal(18, 4) // PAYE — progressive bands
-  pensionEmployee Decimal @default(0) @db.Decimal(18, 4) // 8% of pensionable earnings
-  pensionEmployer Decimal @default(0) @db.Decimal(18, 4) // 10% of pensionable earnings
-  nhf             Decimal @default(0) @db.Decimal(18, 4) // NHF — 2.5% of basic
-  nsitf           Decimal @default(0) @db.Decimal(18, 4) // NSITF — 1% of gross
+  payeTax          Decimal @default(0) @db.Decimal(18, 4) // PAYE — progressive bands
+  pensionEmployee  Decimal @default(0) @db.Decimal(18, 4) // 8% of pensionable earnings
+  pensionEmployer  Decimal @default(0) @db.Decimal(18, 4) // 10% of pensionable earnings
+  nhf              Decimal @default(0) @db.Decimal(18, 4) // NHF — 2.5% of basic
+  nsitf            Decimal @default(0) @db.Decimal(18, 4) // NSITF — 1% of gross
 
   // Other Deductions
   staffLiabilityDeductions Decimal @default(0) @db.Decimal(18, 4) // From StaffReceivable
@@ -4831,8 +4824,8 @@ model Payslip {
   otherDeductions          Decimal @default(0) @db.Decimal(18, 4)
   totalDeductions          Decimal @db.Decimal(18, 4)
 
-  netPay   Decimal       @db.Decimal(18, 4)
-  currency String        @default("NGN")
+  netPay   Decimal      @db.Decimal(18, 4)
+  currency String       @default("NGN")
   status   PayslipStatus @default(DRAFT)
 
   bankName      String?
@@ -4853,7 +4846,7 @@ model PayslipComponent {
   payslip   Payslip @relation(fields: [payslipId], references: [id])
 
   name   String
-  type   String // EARNING | DEDUCTION | STATUTORY
+  type   String  // EARNING | DEDUCTION | STATUTORY
   amount Decimal @db.Decimal(18, 4)
 
   createdAt DateTime @default(now()) @db.Timestamptz
@@ -4876,9 +4869,9 @@ model FixedAssetCategory {
   salvagePercent     Decimal            @default(0) @db.Decimal(5, 2)
 
   // GL account codes (Phase 2: link to ChartOfAccount.code)
-  glAccountCode      String?
-  depreciationGlCode String?
-  accumulatedGlCode  String?
+  glAccountCode       String?
+  depreciationGlCode  String?
+  accumulatedGlCode   String?
 
   isActive Boolean @default(true)
 
@@ -4896,7 +4889,7 @@ model FixedAsset {
   categoryId String             @db.Uuid
   category   FixedAssetCategory @relation(fields: [categoryId], references: [id])
 
-  assetNumber String  @unique
+  assetNumber String      @unique
   name        String
   description String?
   location    String?
@@ -4916,8 +4909,8 @@ model FixedAsset {
   disposalAmount Decimal?  @db.Decimal(18, 4)
   disposalReason String?
 
-  supplier       String?
-  invoiceRef     String?
+  supplier      String?
+  invoiceRef    String?
   warrantyExpiry DateTime? @db.Date
 
   createdBy String @db.Uuid
@@ -4932,20 +4925,20 @@ model FixedAsset {
 }
 
 model AssetDepreciation {
-  id         String     @id @default(uuid()) @db.Uuid
-  assetId    String     @db.Uuid
+  id         String   @id @default(uuid()) @db.Uuid
+  assetId    String   @db.Uuid
   asset      FixedAsset @relation(fields: [assetId], references: [id])
-  propertyId String     @db.Uuid
-  property   Property   @relation(fields: [propertyId], references: [id])
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id])
 
   periodId String?           @db.Uuid
   period   AccountingPeriod? @relation(fields: [periodId], references: [id])
 
-  depreciationDate DateTime @db.Date
-  amount           Decimal  @db.Decimal(18, 4)
-  bookValueBefore  Decimal  @db.Decimal(18, 4)
-  bookValueAfter   Decimal  @db.Decimal(18, 4)
-  accumulatedAfter Decimal  @db.Decimal(18, 4)
+  depreciationDate  DateTime @db.Date
+  amount            Decimal  @db.Decimal(18, 4)
+  bookValueBefore   Decimal  @db.Decimal(18, 4)
+  bookValueAfter    Decimal  @db.Decimal(18, 4)
+  accumulatedAfter  Decimal  @db.Decimal(18, 4)
 
   status         String  @default("POSTED") // DRAFT | POSTED
   postedBy       String? @db.Uuid
@@ -4966,11 +4959,11 @@ model Budget {
   propertyId String   @db.Uuid
   property   Property @relation(fields: [propertyId], references: [id])
 
-  name        String
-  budgetType  String // ANNUAL | MONTHLY | QUARTERLY | CUSTOM
-  periodStart DateTime     @db.Date
-  periodEnd   DateTime     @db.Date
-  currency    String       @default("NGN")
+  name       String
+  budgetType String // ANNUAL | MONTHLY | QUARTERLY | CUSTOM
+  periodStart DateTime @db.Date
+  periodEnd   DateTime @db.Date
+  currency    String   @default("NGN")
   status      BudgetStatus @default(DRAFT)
 
   totalRevenueBudget Decimal @default(0) @db.Decimal(18, 4)
@@ -4994,7 +4987,7 @@ model BudgetLine {
   budgetId String @db.Uuid
   budget   Budget @relation(fields: [budgetId], references: [id])
 
-  category    String // ROOM_REVENUE | FNB_REVENUE | LAUNDRY_REVENUE | OTHER_REVENUE | FNB_COST | PAYROLL | UTILITIES | MAINTENANCE | MARKETING | ADMIN | DEPRECIATION | OTHER_EXPENSE
+  category    String  // ROOM_REVENUE | FNB_REVENUE | LAUNDRY_REVENUE | OTHER_REVENUE | FNB_COST | PAYROLL | UTILITIES | MAINTENANCE | MARKETING | ADMIN | DEPRECIATION | OTHER_EXPENSE
   department  String? // ROOMS | FNB | LAUNDRY | SPA | ADMINISTRATION | MAINTENANCE
   description String?
 
@@ -5014,146 +5007,4 @@ model BudgetLine {
   totalAmount Decimal @db.Decimal(18, 4)
 
   @@index([budgetId, category])
-}
-
-// -----------------------------------------------------------------------------
-// OUTBOX (Transactional Outbox)
-// -----------------------------------------------------------------------------
-
-model OutboxEvent {
-  id             String       @id @default(uuid()) @db.Uuid
-  organizationId String       @db.Uuid
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  propertyId     String       @db.Uuid
-  property       Property     @relation(fields: [propertyId], references: [id])
-
-  eventType     String
-  aggregateType String
-  aggregateId   String
-
-  payload Json
-
-  status String @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED, DEAD_LETTER
-
-  attemptCount  Int       @default(0)
-  nextAttemptAt DateTime? @db.Timestamptz
-  processedAt   DateTime? @db.Timestamptz
-
-  lastError String?
-
-  createdAt DateTime @default(now()) @db.Timestamptz
-
-  @@index([propertyId, status, nextAttemptAt])
-}
-
-// -----------------------------------------------------------------------------
-// OTA / CHANNEL MANAGER INTEGRATION
-// -----------------------------------------------------------------------------
-
-model ChannelConnection {
-  id             String       @id @default(uuid()) @db.Uuid
-  organizationId String       @db.Uuid
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  propertyId     String       @db.Uuid
-  property       Property     @relation(fields: [propertyId], references: [id])
-
-  provider           String // 'CHANNEX', 'BOOKING_COM'
-  status             String // 'CONNECTED', 'DEGRADED', 'ERROR', 'DISCONNECTED', 'SYNCING'
-  externalPropertyId String
-  credentialsRef     String // Encrypted string or vault reference
-
-  lastSuccessfulSync DateTime? @db.Timestamptz
-  lastInboundSync    DateTime? @db.Timestamptz
-  lastOutboundSync   DateTime? @db.Timestamptz
-
-  lastError   String?
-  lastErrorAt DateTime? @db.Timestamptz
-
-  createdAt DateTime @default(now()) @db.Timestamptz
-  updatedAt DateTime @updatedAt @db.Timestamptz
-
-  roomMappings     ChannelRoomMapping[]
-  ratePlanMappings ChannelRatePlanMapping[]
-  reservations     ChannelReservation[]
-
-  @@unique([propertyId, provider])
-}
-
-model ChannelRoomMapping {
-  id                  String            @id @default(uuid()) @db.Uuid
-  channelConnectionId String            @db.Uuid
-  channelConnection   ChannelConnection @relation(fields: [channelConnectionId], references: [id])
-
-  lodgecoreRoomTypeId String @db.Uuid
-  externalRoomTypeId  String
-
-  isActive Boolean @default(true)
-  status   String  @default("MAPPED") // 'MAPPED', 'UNMAPPED', 'CONFLICT'
-
-  createdAt DateTime @default(now()) @db.Timestamptz
-  updatedAt DateTime @updatedAt @db.Timestamptz
-
-  @@unique([channelConnectionId, lodgecoreRoomTypeId])
-  @@unique([channelConnectionId, externalRoomTypeId])
-}
-
-model ChannelRatePlanMapping {
-  id                  String            @id @default(uuid()) @db.Uuid
-  channelConnectionId String            @db.Uuid
-  channelConnection   ChannelConnection @relation(fields: [channelConnectionId], references: [id])
-
-  lodgecoreRatePlanId String @db.Uuid
-  externalRatePlanId  String
-
-  isActive Boolean @default(true)
-  status   String  @default("MAPPED") // 'MAPPED', 'UNMAPPED', 'CONFLICT'
-
-  createdAt DateTime @default(now()) @db.Timestamptz
-  updatedAt DateTime @updatedAt @db.Timestamptz
-
-  @@unique([channelConnectionId, lodgecoreRatePlanId])
-  @@unique([channelConnectionId, externalRatePlanId])
-}
-
-model ChannelReservation {
-  id                  String            @id @default(uuid()) @db.Uuid
-  channelConnectionId String            @db.Uuid
-  channelConnection   ChannelConnection @relation(fields: [channelConnectionId], references: [id])
-
-  externalReservationId String
-  provider              String
-
-  lodgecoreReservationId String? @db.Uuid // Nullable if import failed
-  externalStatus         String // e.g. 'CONFIRMED', 'CANCELLED', 'MODIFIED'
-  externalRevision       String?
-
-  rawPayloadReference String? // Pointing to secure storage, DB size limit, or JSON string
-
-  importedAt DateTime @default(now()) @db.Timestamptz
-  modifiedAt DateTime @default(now()) @db.Timestamptz
-
-  @@unique([channelConnectionId, externalReservationId])
-}
-
-model ChannelSyncEvent {
-  id             String       @id @default(uuid()) @db.Uuid
-  organizationId String       @db.Uuid
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  propertyId     String       @db.Uuid
-  property       Property     @relation(fields: [propertyId], references: [id])
-  provider       String
-
-  direction String // 'INBOUND' | 'OUTBOUND'
-  eventType String // 'RESERVATION', 'AVAILABILITY', 'RATE', 'ROOM_MAPPING'
-  entityId  String? // LodgeCore ID being synced
-
-  payload Json? // Used for audit details (do NOT store PCI/PII)
-
-  status String // 'PENDING', 'PROCESSING', 'SUCCESS', 'FAILED', 'DEAD_LETTER'
-
-  attemptCount  Int       @default(0)
-  nextAttemptAt DateTime? @db.Timestamptz
-
-  error     String?
-  createdAt DateTime @default(now()) @db.Timestamptz
 }

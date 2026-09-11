@@ -2317,6 +2317,20 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                             kot.KotNumber = kotEl.TryGetProperty("kotNumber", out var kkn) && kkn.ValueKind != System.Text.Json.JsonValueKind.Null ? kkn.GetString() ?? "" : "";
                             kot.Status = kotEl.TryGetProperty("status", out var ks) && ks.ValueKind != System.Text.Json.JsonValueKind.Null ? ks.GetString() ?? "PENDING" : "PENDING";
                             kot.PrintStatus = kotEl.TryGetProperty("printStatus", out var kps) && kps.ValueKind != System.Text.Json.JsonValueKind.Null ? kps.GetString() ?? "QUEUED" : "QUEUED";
+                            kot.ProductionStation = kotEl.TryGetProperty("productionStation", out var kstation) && kstation.ValueKind != System.Text.Json.JsonValueKind.Null
+                                ? (kstation.GetString() ?? "KITCHEN").Trim().ToUpperInvariant()
+                                : "KITCHEN";
+                            kot.OrderNumber = kotEl.TryGetProperty("orderNumber", out var kon) && kon.ValueKind != System.Text.Json.JsonValueKind.Null ? kon.GetString() ?? "" : kot.OrderNumber;
+                            kot.TableNumber = kotEl.TryGetProperty("tableNumber", out var ktn) && ktn.ValueKind != System.Text.Json.JsonValueKind.Null ? ktn.GetString() : kot.TableNumber;
+                            kot.DeviceId = kotEl.TryGetProperty("deviceId", out var kdi) && kdi.ValueKind != System.Text.Json.JsonValueKind.Null ? kdi.GetString() ?? "" : kot.DeviceId;
+                            kot.OperationId = kotEl.TryGetProperty("operationId", out var koi) && koi.ValueKind != System.Text.Json.JsonValueKind.Null ? koi.GetString() : kot.OperationId;
+                            if (kotEl.TryGetProperty("firedAt", out var kfa) && kfa.ValueKind != System.Text.Json.JsonValueKind.Null) kot.FiredAt = kfa.GetDateTime();
+                            if (kotEl.TryGetProperty("items", out var kotItems) && kotItems.ValueKind == System.Text.Json.JsonValueKind.Array)
+                            {
+                                kot.ItemIdsJson = JsonSerializer.Serialize(kotItems.EnumerateArray()
+                                    .Select(item => item.TryGetProperty("id", out var itemId) ? itemId.GetString() : null)
+                                    .Where(itemId => !string.IsNullOrWhiteSpace(itemId)));
+                            }
                             if (kotEl.TryGetProperty("businessDate", out var kbd) && kbd.ValueKind != System.Text.Json.JsonValueKind.Null) kot.BusinessDate = kbd.GetDateTime();
                             if (kotEl.TryGetProperty("createdAt", out var kcrt) && kcrt.ValueKind != System.Text.Json.JsonValueKind.Null) kot.CreatedAt = kcrt.GetDateTime();
                             

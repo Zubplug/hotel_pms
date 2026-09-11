@@ -1188,7 +1188,7 @@ export default function PosApp() {
                 <button
                   className="w-full h-11 font-black text-sm tracking-wide text-white rounded-xl shadow-lg transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 touch-manipulation"
                   style={{ boxShadow: '0 6px 18px rgba(79,70,229,0.25)' }}
-                  onClick={handleSendOrder}
+                  onClick={currentOrderId ? handleFireMore : handleSendOrder}
                   disabled={isProcessing}
                 >
                   {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}

@@ -91,13 +91,12 @@ const settingsLinks = [
     comingSoon: true,
   },
   {
-    title: 'Integrations',
-    description: 'Connect to external OTAs, POS systems, and other software.',
-    href: '/settings/integrations',
+    title: 'Channel Integrations',
+    description: 'Connect to external OTAs and Channel Managers (Booking.com, Expedia, Agoda).',
+    href: '/settings/integrations/channels',
     icon: MonitorSmartphone,
     color: 'text-indigo-500',
-    bgColor: 'bg-indigo-500/10',
-    comingSoon: true,
+    bgColor: 'bg-indigo-500/10'
   },
   {
     title: 'POS Outlets',

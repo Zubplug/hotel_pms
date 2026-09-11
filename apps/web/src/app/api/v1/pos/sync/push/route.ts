@@ -609,9 +609,7 @@ export async function POST(req: NextRequest) {
               }));
               const items = Array.isArray(payload)
                 ? payload
-                : (payload.Items || payload.items || (nestedItemIds.size
-                  ? nestedItems.filter((item: any) => nestedItemIds.has(item.Id || item.id))
-                  : nestedItems));
+                : (payload.Items || payload.items || []);
               for (const item of items) {
                   const discountAmount = Number(item.Discount ?? item.discount ?? 0);
                   

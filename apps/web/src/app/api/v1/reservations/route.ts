@@ -5,6 +5,8 @@ import { successResponse, errorResponse, paginatedResponse } from '@/lib/api-res
 import { requireOrganizationContext } from '@/lib/organization-access';
 import { NotificationEngine } from '@/lib/notification-engine';
 import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
+import { SharedReservationService } from '@/lib/services/reservation-service';
+
 
 export async function GET(req: NextRequest) {
   try {
@@ -151,157 +153,37 @@ export async function POST(req: NextRequest) {
     const totalAmount = Number(baseRate) * nights;
 
     // 2. Create the Reservation transactionally
-    const reservation = await prisma.$transaction(async (tx: any) => {
-      // Resolve Guest
-      let finalGuestId = guestId;
-      const prop = await tx.property.findUnique({ where: { id: propertyId } });
-      if (!finalGuestId) {
-        const newGuest = await tx.guest.create({
-          data: {
-            organizationId: prop?.organizationId || '',
-            propertyId: propertyId,
-            firstName: guestDetails.firstName,
-            lastName: guestDetails.lastName,
-            email: guestDetails.email,
-            phone: guestDetails.phone,
-          },
-        });
-        finalGuestId = newGuest.id;
-      } else {
-        // Validate that the provided guestId belongs to this property
-        const existingGuest = await tx.guest.findUnique({ where: { id: finalGuestId } });
-        if (!existingGuest || existingGuest.propertyId !== propertyId) {
-          throw new Error('Guest not found or does not belong to this property');
-        }
-      }
+    
+    const property = await prisma.property.findUnique({ where: { id: propertyId } });
+    if (!property) return errorResponse('NOT_FOUND', 'Property not found', 404);
 
-      const confirmationNumber = 'RES-' + Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
-
-      // Create Reservation
-      const newReservation = await tx.reservation.create({
-        data: { propertyId: (typeof reqPropertyId !== "undefined" ? reqPropertyId : ctx.propertyIds[0]),
-          primaryGuestId: finalGuestId as string,
-          confirmationNumber,
-          source: 'WALK_IN',
-          status: 'CONFIRMED',
-          checkIn: checkInDate,
-          checkOut: checkOutDate,
-          adults: parseInt(adults) || 1,
-          children: parseInt(children) || 0,
-          ratePlanId: ratePlanId,
-          ratePlanSnapshot: { baseRate, total: totalAmount, currency },
-          currency: currency,
-          corporateAccountId: corporateAccountId || null,
-          createdBy: (session.user.staffId || session.user.id) as string,
-        },
-      });
-
-      // Create Reservation Guest
-      await tx.reservationGuest.create({
-        data: {
-          reservationId: newReservation.id,
-          guestId: finalGuestId,
-          isPrimary: true,
-        },
-      });
-
-      // Create Reservation Room with authoritative pricing and full dates
-      await tx.reservationRoom.create({
-        data: {
-          reservationId: newReservation.id,
-          roomId: room.id,
-          roomTypeId: roomTypeId,
-          status: 'ACTIVE',
-          checkIn: checkInDate,
-          checkOut: checkOutDate,
-          adults: parseInt(adults) || 1,
-          children: parseInt(children) || 0,
-          ratePlanId: newReservation.ratePlanId,
-          rateAmount: baseRate,
-          currency: currency,
-          // Normalize adjustmentType: form sends DISCOUNT_PERCENTAGE/DISCOUNT_FIXED/COMP_FULL/COMP_PARTIAL
-          discountType: (adjustmentType === 'COMP_FULL' || adjustmentType === 'COMP_PARTIAL') ? 'COMPLIMENTARY'
-                      : adjustmentType === 'DISCOUNT_PERCENTAGE' ? 'PERCENTAGE'
-                      : adjustmentType === 'DISCOUNT_FIXED' ? 'FIXED_AMOUNT'
-                      : null,
-          discountPercent: adjustmentType === 'DISCOUNT_PERCENTAGE' ? Number(adjustmentValue) : null,
-          discountAmount: adjustmentType === 'DISCOUNT_FIXED' ? Number(adjustmentValue)
-                        : (adjustmentType === 'COMP_FULL' || adjustmentType === 'COMP_PARTIAL') ? (adjustmentType === 'COMP_FULL' ? baseRate : Number(adjustmentValue))
-                        : null,
-          discountReason: adjustmentReason || null,
-        },
-      });
-
-      const propertyBusinessDateStr = (prop?.businessDate ?? new Date()).toISOString().split('T')[0];
-      const checkInStr = checkInDate.toISOString().split('T')[0];
-      
-      if (checkInStr === propertyBusinessDateStr) {
-        await tx.room.update({
-          where: { id: room.id },
-          data: { status: 'RESERVED' },
-        });
-      }
-
-      // 7D.1: Create Folio
-      const folioPropertyId = typeof reqPropertyId !== "undefined" ? reqPropertyId : ctx.propertyIds[0];
-      const existingCorporateFolio = corporateAccountId
-        ? await tx.folio.findFirst({
-            where: { propertyId: folioPropertyId, corporateAccountId, type: 'CITY_LEDGER', status: 'OPEN' },
-          })
-        : null;
-      const newFolio = existingCorporateFolio ?? await tx.folio.create({
-        data: {
-          reservationId: corporateAccountId ? null : newReservation.id,
-          corporateAccountId: corporateAccountId || null,
-          propertyId: folioPropertyId,
-          guestId: corporateAccountId ? null : finalGuestId,
-          folioNumber: 'FOL-' + Math.floor(Math.random() * 1000000).toString().padStart(6, '0'),
-          type: corporateAccountId ? 'CITY_LEDGER' : 'ROOM',
-          status: 'OPEN',
-          currency,
-          totalCharges: 0,
-          totalPayments: 0,
-          balance: 0,
-        }
-      });
-
-
-      // Audit Log
-      const property = await tx.property.findUnique({ where: { id: propertyId } });
-      if (property) {
-        await tx.auditLog.create({
-          data: {
-            organizationId: property.organizationId,
-            propertyId: property.id,
-            userId: session.user.id,
-            userEmail: session.user.email,
-            userRole: (session.user as any).role || 'STAFF',
-            action: 'RESERVATION_CREATED',
-            resource: 'Reservation',
-            resourceId: newReservation.id,
-            newValue: {
-              confirmationNumber,
-              propertyId,
-              guestId: finalGuestId,
-              roomId: room.id,
-              roomTypeId,
-              checkIn: checkInDate.toISOString(),
-              checkOut: checkOutDate.toISOString(),
-              adults: parseInt(adults) || 1,
-              children: parseInt(children) || 0,
-              status: 'CONFIRMED',
-              totalAmount,
-              currency
-            },
-            ipAddress: req.headers.get('x-forwarded-for') || '127.0.0.1',
-            userAgent: req.headers.get('user-agent') || 'Unknown',
-            requestId: req.headers.get('x-request-id') || crypto.randomUUID(),
-          },
-        });
-      }
-
-      return { newReservation, organizationId: property?.organizationId || '' };
+    const newReservation = await SharedReservationService.createReservation({
+        propertyId,
+        organizationId: property.organizationId,
+        guestId,
+        guestDetails,
+        checkIn: checkInDate,
+        checkOut: checkOutDate,
+        roomTypeId,
+        roomId: room.id,
+        adults: parseInt(adults) || 1,
+        children: parseInt(children) || 0,
+        corporateAccountId,
+        ratePlanId,
+        currency,
+        adjustmentType,
+        adjustmentValue: Number(adjustmentValue),
+        adjustmentReason,
+        createdBy: (session.user as any).staffId || session.user.id,
+        userEmail: session.user.email,
+        userRole: (session.user as any).role,
+        ipAddress: req.headers.get('x-forwarded-for') || '127.0.0.1',
+        userAgent: req.headers.get('user-agent') || 'Unknown',
+        requestId: req.headers.get('x-request-id') || crypto.randomUUID()
     });
+
+    const reservation = { newReservation, organizationId: property.organizationId };
+    
 
     if (reservation.organizationId) {
       await NotificationEngine.emit({

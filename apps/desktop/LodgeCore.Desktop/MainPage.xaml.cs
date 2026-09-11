@@ -755,7 +755,7 @@ public partial class MainPage : ContentPage
                 case "pos.getActiveStaff":
                     responseData = await pmsInterop.GetActiveStaffAsync(
                         parameters?["propertyId"]?.ToString() ?? "",
-                        "WAITER,WAITRESS,CASHIER",
+                        null,
                         parameters?["outletId"]?.ToString());
                     break;
                 case "pos.getCategories":
