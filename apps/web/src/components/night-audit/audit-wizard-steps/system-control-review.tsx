@@ -12,8 +12,7 @@ export function SystemControlReview({ data, onResolve }: SystemControlReviewProp
   const hasIssues =
     (openPosSessions?.length || 0) > 0 ||
     (openFrontdeskSessions?.length || 0) > 0 ||
-    (financialSyncConflicts?.length || 0) > 0 ||
-    (openPosOrders?.length || 0) > 0;
+    (financialSyncConflicts?.length || 0) > 0;
 
   if (!hasIssues) {
     return (
@@ -27,63 +26,6 @@ export function SystemControlReview({ data, onResolve }: SystemControlReviewProp
   return (
     <div className="space-y-6">
 
-      {/* ── Open POS Orders (Waiter Action Required) ───────────────────── */}
-      {openPosOrders?.length > 0 && (
-        <div>
-          <div className="mb-3">
-            <h4 className="font-semibold text-sm text-amber-700 dark:text-amber-400">
-              Open POS Orders — Waiter Action Required ({openPosOrders.length})
-            </h4>
-            <p className="text-xs text-amber-600/80 dark:text-amber-500/80 mt-0.5">
-              These orders have not been settled or voided. Notify the responsible waiter to resolve them on their POS terminal.
-            </p>
-          </div>
-
-          <div className="rounded-xl border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/5 p-3 mb-3 flex items-start gap-2">
-            <Info className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-            <p className="text-xs text-amber-700 dark:text-amber-400">
-              The waiter must log back into their POS terminal, then settle or void each order before the business day can close.
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            {openPosOrders.map((order: any) => (
-              <div
-                key={order.id}
-                className="text-sm p-3 bg-white dark:bg-slate-900 rounded-lg border border-amber-200 dark:border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm"
-              >
-                <div className="flex items-start gap-2 min-w-0">
-                  <ClipboardList className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-                  <div className="min-w-0">
-                    <p className="font-semibold text-slate-800 dark:text-slate-200 truncate">
-                      #{order.orderNumber}
-                      {order.tableNumber ? ` · Table ${order.tableNumber}` : ''}
-                    </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
-                      {order.outletName} · {order.orderType?.replace('_', ' ')}
-                    </p>
-                    <p className="text-xs font-medium text-amber-700 dark:text-amber-400 mt-0.5">
-                      Waiter: {order.waiterName}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex flex-col items-end gap-1 shrink-0">
-                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
-                    ₦{Number(order.total || 0).toLocaleString('en-NG', { minimumFractionDigits: 2 })}
-                  </p>
-                  <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
-                    order.paymentStatus === 'UNPAID'
-                      ? 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400'
-                      : 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400'
-                  }`}>
-                    {order.paymentStatus}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* ── Open POS Sessions ──────────────────────────────────────────── */}
       {openPosSessions?.length > 0 && (
