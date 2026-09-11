@@ -53,9 +53,9 @@ try {
     bridgedContents = bridgedContents.replaceAll("@/app/night-audit/", "@/app/_night-audit/");
     
     let buildFile = file;
-    buildFile = buildFile.replace(`${path.sep}(cash-management)${path.sep}`, `${path.sep}_cash-management${path.sep}`);
-    buildFile = buildFile.replace(`${path.sep}night-audit${path.sep}`, `${path.sep}_night-audit${path.sep}`);
-    buildFile = buildFile.replace(`${path.sep}(dashboard)${path.sep}`, `${path.sep}_dashboard${path.sep}`);
+    buildFile = buildFile.replace(`${path.sep}app${path.sep}(cash-management)${path.sep}`, `${path.sep}app${path.sep}_cash-management${path.sep}`);
+    buildFile = buildFile.replace(`${path.sep}app${path.sep}night-audit${path.sep}`, `${path.sep}app${path.sep}_night-audit${path.sep}`);
+    buildFile = buildFile.replace(`${path.sep}app${path.sep}(dashboard)${path.sep}`, `${path.sep}app${path.sep}_dashboard${path.sep}`);
     
     if (bridgedContents !== contents) fs.writeFileSync(buildFile, bridgedContents);
   }
@@ -67,7 +67,7 @@ try {
   });
 
 } catch (error) {
-  console.error('Build failed.');
+  console.error('Build failed.', error);
   process.exitCode = 1;
 } finally {
   // Always restore the directory, even if the build fails
