@@ -1920,7 +1920,11 @@ public class LocalRepository
                 ?? await _dbContext.Rooms.FirstOrDefaultAsync(r => r.Id == checkoutRoomId);
             if (room != null)
             {
-                room.Status = "DIRTY";
+                // Checkout always places the room into the active cleaning
+                // workflow. It must not appear merely DIRTY while the
+                // checkout task is being serviced; housekeeping completion
+                // will move it to AVAILABLE after inspection.
+                room.Status = "CLEANING";
                 room.HousekeepingStatus = "CLEANING";
                 room.IsOccupied = false;
                 room.UpdatedAt = DateTime.UtcNow;

@@ -21,14 +21,15 @@ public static class MauiProgram
         builder.Services.AddSingleton<ILockProvider>(sp =>
         {
             var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
-            // Retrieve configured provider, defaulting to RFV 2016
-            var providerType = Microsoft.Maui.Storage.Preferences.Default.Get("LockProviderType", "rfv2016");
+            // Retrieve configured provider, defaulting to the Deluns encoder.
+            var providerType = Microsoft.Maui.Storage.Preferences.Default.Get("LockProviderType", "deluns");
             
             return providerType.ToLowerInvariant() switch
             {
+                "deluns" => new DelunsLockProvider(loggerFactory.CreateLogger<DelunsLockProvider>()),
                 "hslock" => new HsLockProvider(loggerFactory.CreateLogger<HsLockProvider>()),
                 "rfv2016" => new Rfv2016LockProvider(loggerFactory.CreateLogger<Rfv2016LockProvider>()),
-                _        => new Rfv2016LockProvider(loggerFactory.CreateLogger<Rfv2016LockProvider>()) // RFV 2016 is the default
+                _        => new DelunsLockProvider(loggerFactory.CreateLogger<DelunsLockProvider>())
             };
         });
         builder.Services.AddSingleton<HardwareInterop>();
