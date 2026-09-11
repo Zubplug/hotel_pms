@@ -1,5 +1,6 @@
 import prisma from '@hotel-pms/db';
 import crypto from 'crypto';
+import { Prisma } from '@hotel-pms/db';
 
 export interface CreateReservationParams {
   propertyId: string;
@@ -22,25 +23,27 @@ export interface CreateReservationParams {
   
   // Rate & Financial
   ratePlanId?: string;
-  overrideTotalAmount?: number; // E.g., OTA forces total amount
+  overrideTotalAmount?: number;
   currency?: string;
   adjustmentType?: string;
   adjustmentValue?: number;
   adjustmentReason?: string;
 
   // Metadata
-  source?: string; // e.g. WALK_IN, CHANNEX, BOOKING_ENGINE
-  status?: string; // e.g. CONFIRMED
+  source?: string;
+  status?: string;
   confirmationNumber?: string;
   specialRequests?: string;
 
   // Audit
-  createdBy: string; // Staff ID or System Actor UUID
+  createdBy: string;
   userEmail?: string;
   userRole?: string;
   ipAddress?: string;
   userAgent?: string;
   requestId?: string;
+
+  tx?: Prisma.TransactionClient;
 }
 
 export const SharedReservationService = {
@@ -53,22 +56,22 @@ export const SharedReservationService = {
       source = 'WALK_IN', status = 'CONFIRMED',
       confirmationNumber, specialRequests,
       createdBy, userEmail = 'system', userRole = 'SYSTEM',
-      ipAddress = '127.0.0.1', userAgent = 'System', requestId = crypto.randomUUID()
+      ipAddress = '127.0.0.1', userAgent = 'System', requestId = crypto.randomUUID(),
+      tx: externalTx
     } = params;
 
     const nights = Math.max(1, Math.ceil((checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24)));
 
-    // 1. Validate Room/RoomType and Rates
     let room;
     if (roomId) {
-      room = await prisma.room.findFirst({
+      room = await (externalTx || prisma).room.findFirst({
         where: { id: roomId, propertyId, roomTypeId },
         include: { roomType: true },
       });
       if (!room) throw new Error('Room not found or does not belong to property/room type');
     }
 
-    const roomType = await prisma.roomType.findUnique({
+    const roomType = await (externalTx || prisma).roomType.findUnique({
       where: { id: roomTypeId }
     });
     if (!roomType) throw new Error('Room Type not found');
@@ -78,13 +81,13 @@ export const SharedReservationService = {
     let finalRatePlanId = ratePlanId;
 
     if (corporateAccountId) {
-      const corporateAccount = await prisma.corporateAccount.findUnique({
+      const corporateAccount = await (externalTx || prisma).corporateAccount.findUnique({
         where: { id: corporateAccountId },
         include: { ratePlan: true }
       });
       if (corporateAccount?.ratePlan) {
         finalRatePlanId = corporateAccount.ratePlan.id;
-        const rate = await prisma.rate.findFirst({
+        const rate = await (externalTx || prisma).rate.findFirst({
           where: { ratePlanId: finalRatePlanId, roomTypeId }
         });
         if (rate && (rate as any).amount) {
@@ -96,7 +99,7 @@ export const SharedReservationService = {
     }
 
     if (!finalRatePlanId) {
-      const defaultRatePlan = await prisma.ratePlan.findFirst({
+      const defaultRatePlan = await (externalTx || prisma).ratePlan.findFirst({
         where: { propertyId }
       });
       if (defaultRatePlan) finalRatePlanId = defaultRatePlan.id;
@@ -104,9 +107,7 @@ export const SharedReservationService = {
 
     const totalAmount = overrideTotalAmount !== undefined ? overrideTotalAmount : Number(baseRate) * nights;
 
-    // 2. Create the Reservation transactionally
-    const newReservation = await prisma.$transaction(async (tx: any) => {
-      // Resolve Guest
+    const performTransaction = async (tx: any) => {
       let finalGuestId = guestId;
       if (!finalGuestId && guestDetails) {
         const newGuest = await tx.guest.create({
@@ -158,8 +159,6 @@ export const SharedReservationService = {
           isPrimary: true,
         },
       });
-
-      // Special Requests handling (we can put it in Folio notes or add a field to Reservation if it exists. Wait, there's no specialRequests field in Reservation. I will skip unless there is a specific field for notes.)
 
       await tx.reservationRoom.create({
         data: {
@@ -227,7 +226,7 @@ export const SharedReservationService = {
         data: {
           organizationId,
           propertyId,
-          userId: createdBy, // Now properly passed in
+          userId: createdBy,
           userEmail,
           userRole,
           action: 'RESERVATION_CREATED',
@@ -254,22 +253,23 @@ export const SharedReservationService = {
       });
 
       return newRes;
-    });
+    };
 
-    return newReservation;
+    if (externalTx) {
+        return performTransaction(externalTx);
+    } else {
+        return prisma.$transaction(performTransaction);
+    }
   },
 
-  async modifyReservation(reservationId: string, params: Partial<CreateReservationParams>) {
-    // Implement modification logic
-    return await prisma.$transaction(async (tx: any) => {
+  async modifyReservation(reservationId: string, params: Partial<CreateReservationParams> & { tx?: Prisma.TransactionClient }) {
+    const performTransaction = async (tx: any) => {
         const existing = await tx.reservation.findUnique({
             where: { id: reservationId },
             include: { reservationRooms: true }
         });
         if (!existing) throw new Error('Reservation not found');
 
-        // Note: Full modification engine is complex (rates, folios, dates).
-        // Since OTA modifications usually touch dates, occupancy, or totalAmount:
         const checkIn = params.checkIn || existing.checkIn;
         const checkOut = params.checkOut || existing.checkOut;
         const adults = params.adults !== undefined ? params.adults : existing.adults;
@@ -289,7 +289,6 @@ export const SharedReservationService = {
             }
         });
 
-        // Update ReservationRoom
         const resRoom = existing.reservationRooms[0];
         if (resRoom) {
             await tx.reservationRoom.update({
@@ -304,10 +303,9 @@ export const SharedReservationService = {
             });
         }
 
-        // Audit Log
         await tx.auditLog.create({
             data: {
-                organizationId: params.organizationId!,
+                organizationId: params.organizationId || existing.propertyId, // fallback
                 propertyId: existing.propertyId,
                 userId: params.createdBy || 'SYSTEM',
                 userEmail: params.userEmail || 'system',
@@ -322,11 +320,17 @@ export const SharedReservationService = {
             }
         });
         return updated;
-    });
+    };
+
+    if (params.tx) {
+        return performTransaction(params.tx);
+    } else {
+        return prisma.$transaction(performTransaction);
+    }
   },
 
-  async cancelReservation(reservationId: string, params: { createdBy: string, organizationId: string, ipAddress?: string, userAgent?: string }) {
-    return await prisma.$transaction(async (tx: any) => {
+  async cancelReservation(reservationId: string, params: { createdBy: string, organizationId: string, ipAddress?: string, userAgent?: string, tx?: Prisma.TransactionClient }) {
+    const performTransaction = async (tx: any) => {
         const existing = await tx.reservation.findUnique({
             where: { id: reservationId },
             include: { reservationRooms: true }
@@ -338,7 +342,6 @@ export const SharedReservationService = {
             data: { status: 'CANCELLED' }
         });
 
-        // Cancel Rooms
         for (const room of existing.reservationRooms) {
             await tx.reservationRoom.update({
                 where: { id: room.id },
@@ -363,6 +366,12 @@ export const SharedReservationService = {
             }
         });
         return updated;
-    });
+    };
+
+    if (params.tx) {
+        return performTransaction(params.tx);
+    } else {
+        return prisma.$transaction(performTransaction);
+    }
   }
 };

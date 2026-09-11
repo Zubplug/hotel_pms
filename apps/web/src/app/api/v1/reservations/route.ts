@@ -175,7 +175,7 @@ export async function POST(req: NextRequest) {
         adjustmentValue: Number(adjustmentValue),
         adjustmentReason,
         createdBy: (session.user as any).staffId || session.user.id,
-        userEmail: session.user.email,
+        userEmail: session.user.email ?? undefined,
         userRole: (session.user as any).role,
         ipAddress: req.headers.get('x-forwarded-for') || '127.0.0.1',
         userAgent: req.headers.get('user-agent') || 'Unknown',

@@ -1,14 +1,16 @@
 import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { requireOrganizationContext } from '@/lib/auth';
-import prisma from '@/lib/prisma';
+import { auth } from '@/lib/auth';
+import { redirect } from 'next/navigation';
+import { requireOrganizationContext } from '@/lib/organization-access';
+import prisma from '@hotel-pms/db';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
-import { ArrowLeftIcon } from '@heroicons/react/24/outline';
+import { ArrowLeft } from 'lucide-react';
 
 export const metadata: Metadata = {
   title: 'Channel Configuration | LodgeCore',
@@ -16,7 +18,9 @@ export const metadata: Metadata = {
 
 export default async function ChannelProviderPage({ params }: { params: { provider: string } }) {
   const providerSlug = params.provider.toUpperCase();
-  const ctx = await requireOrganizationContext();
+  const session = await auth();
+  if (!session?.user) redirect('/login');
+  const ctx = await requireOrganizationContext(session.user.id);
   const propertyId = ctx.propertyIds[0];
 
   let connection;
@@ -47,7 +51,7 @@ export default async function ChannelProviderPage({ params }: { params: { provid
       <div className="flex items-center space-x-4">
         <Button variant="ghost" size="icon" asChild>
           <Link href="/settings/integrations/channels">
-            <ArrowLeftIcon className="w-5 h-5" />
+            <ArrowLeft className="w-5 h-5" />
           </Link>
         </Button>
         <div>

@@ -1,10 +1,12 @@
 import { Metadata } from 'next';
-import { requireOrganizationContext } from '@/lib/auth';
-import prisma from '@/lib/prisma';
+import { auth } from '@/lib/auth';
+import { redirect } from 'next/navigation';
+import { requireOrganizationContext } from '@/lib/organization-access';
+import prisma from '@hotel-pms/db';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { PlusIcon, ArrowPathIcon, ExclamationTriangleIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
+import { Plus, RefreshCw, AlertTriangle, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -13,7 +15,9 @@ export const metadata: Metadata = {
 };
 
 export default async function ChannelsPage() {
-  const ctx = await requireOrganizationContext();
+  const session = await auth();
+  if (!session?.user) redirect('/login');
+  const ctx = await requireOrganizationContext(session.user.id);
   const propertyId = ctx.propertyIds[0]; // Assuming single property context for settings page
 
   // Try to safely fetch if the schema is migrated
@@ -42,7 +46,7 @@ export default async function ChannelsPage() {
           </p>
         </div>
         <Button>
-          <PlusIcon className="w-4 h-4 mr-2" />
+          <Plus className="w-4 h-4 mr-2" />
           Connect Provider
         </Button>
       </div>
@@ -50,7 +54,7 @@ export default async function ChannelsPage() {
       {connections.length === 0 ? (
         <Card className="flex flex-col items-center justify-center p-12 text-center border-dashed">
           <div className="bg-muted p-4 rounded-full mb-4">
-            <ArrowPathIcon className="w-8 h-8 text-muted-foreground" />
+            <RefreshCw className="w-8 h-8 text-muted-foreground" />
           </div>
           <h3 className="text-lg font-semibold mb-2">No Active Integrations</h3>
           <p className="text-muted-foreground max-w-sm mb-6">
@@ -117,14 +121,14 @@ function StatusBadge({ status }: { status: string }) {
   if (status === 'CONNECTED') {
     return (
       <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
-        <CheckCircleIcon className="w-3 h-3 mr-1" /> Connected
+        <CheckCircle className="w-3 h-3 mr-1" /> Connected
       </Badge>
     );
   }
   if (status === 'ERROR' || status === 'DEGRADED') {
     return (
       <Badge variant="destructive">
-        <ExclamationTriangleIcon className="w-3 h-3 mr-1" /> {status}
+        <AlertTriangle className="w-3 h-3 mr-1" /> {status}
       </Badge>
     );
   }

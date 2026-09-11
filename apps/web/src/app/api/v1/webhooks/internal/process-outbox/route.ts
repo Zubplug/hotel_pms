@@ -1,35 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import prisma from '@hotel-pms/db';
 import { ParsedReservation } from '@/lib/integrations/ota/types';
 import { OTAReservationService } from '@/lib/integrations/ota/reservation-service';
 import { OTALogger } from '@/lib/integrations/ota/logger';
 import { errorResponse, successResponse } from '@/lib/api-response';
+import { Receiver } from '@upstash/qstash';
 
-// QStash validation (In production, use upstash/qstash/nextjs)
-async function verifyQStashSignature(req: NextRequest) {
+async function verifyQStashSignature(req: NextRequest, rawBody: string) {
     if (process.env.NODE_ENV === 'development' && process.env.IGNORE_QSTASH_SIGNATURE === 'true') {
         return true;
     }
     const signature = req.headers.get('upstash-signature');
     if (!signature) throw new Error('Missing QStash signature');
-    // Implement actual QStash verification here.
-    return true;
+
+    const receiver = new Receiver({
+      currentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY || '',
+      nextSigningKey: process.env.QSTASH_NEXT_SIGNING_KEY || '',
+    });
+
+    return await receiver.verify({ signature, body: rawBody });
 }
 
 export async function POST(req: NextRequest) {
   try {
+    const rawBody = await req.text();
+
     try {
-        await verifyQStashSignature(req);
+        await verifyQStashSignature(req, rawBody);
     } catch (e: any) {
         return errorResponse('UNAUTHORIZED', 'Invalid signature', 401);
     }
 
-    const body = await req.json();
+    const body = JSON.parse(rawBody);
     const { outboxEventId } = body;
 
-    if (!outboxEventId) {
-      return errorResponse('BAD_REQUEST', 'outboxEventId is required', 400);
-    }
+    if (!outboxEventId) return errorResponse('BAD_REQUEST', 'outboxEventId is required', 400);
 
     // Atomic Claiming: UPDATE PENDING -> PROCESSING
     const claimResult = await prisma.outboxEvent.updateMany({
@@ -41,16 +46,13 @@ export async function POST(req: NextRequest) {
         const eventState = await prisma.outboxEvent.findUnique({ where: { id: outboxEventId }});
         if (!eventState) return errorResponse('NOT_FOUND', 'Outbox event not found', 404);
         
-        // If it's DRY_RUN or COMPLETED, return success. If PROCESSING by another worker, ignore.
         if (eventState.status === 'COMPLETED' || eventState.status === 'DRY_RUN') {
             return successResponse({ message: 'Already processed' });
         }
         return errorResponse('LOCKED', 'Event is currently being processed or has failed permanently', 423);
     }
 
-    const event = await prisma.outboxEvent.findUnique({
-      where: { id: outboxEventId }
-    });
+    const event = await prisma.outboxEvent.findUnique({ where: { id: outboxEventId } });
 
     if (!event) return errorResponse('NOT_FOUND', 'Outbox event not found', 404);
 
@@ -67,55 +69,44 @@ export async function POST(req: NextRequest) {
         if (result.dryRun) {
              await prisma.outboxEvent.update({
                 where: { id: event.id },
-                data: {
-                    status: 'DRY_RUN', // Keep it in DB without completing it permanently
-                    processedAt: new Date(),
-                }
+                data: { status: 'DRY_RUN', processedAt: new Date() }
              });
              return successResponse({ message: 'Dry run completed successfully' });
         }
 
         await prisma.outboxEvent.update({
           where: { id: event.id },
-          data: {
-            status: 'COMPLETED',
-            processedAt: new Date(),
-          }
+          data: { status: 'COMPLETED', processedAt: new Date() }
         });
 
       } catch (err: any) {
         OTALogger.error('OTA_PROCESS_ERROR', err, { eventId: event.id });
 
-        const isPermanent = err.message.includes('not belong') || err.message.includes('Unmapped') || err.message.includes('Unsupported');
+        const isPermanent = err.message.includes('not belong') || err.message.includes('Unmapped') || err.message.includes('Unsupported') || err.message.includes('not authorized');
         
         if (isPermanent) {
             await prisma.outboxEvent.update({
                 where: { id: event.id },
-                data: {
-                    status: 'FAILED',
-                    lastError: err.message || 'Permanent processing error',
-                }
+                data: { status: 'FAILED', lastError: err.message || 'Permanent error' }
             });
-            // Return 200 so QStash doesn't retry permanent failures
             return successResponse({ message: 'Permanent failure recorded' });
         }
 
-        // Transient failure
+        // Transient failure (including Prisma P2002 duplicate inserts from concurrent racing)
         const attempts = event.attemptCount + 1;
-        const jitter = Math.floor(Math.random() * 1000 * 60); // Jitter up to 1m
-        const backoffMs = Math.pow(2, attempts) * 1000 * 60 + jitter; // Exponential
+        const jitter = Math.floor(Math.random() * 1000 * 60);
+        const backoffMs = Math.pow(2, attempts) * 1000 * 60 + jitter;
 
         await prisma.outboxEvent.update({
           where: { id: event.id },
           data: {
             status: attempts >= 5 ? 'FAILED' : 'PENDING',
             attemptCount: attempts,
-            lastError: err.message || 'Transient processing error',
+            lastError: err.message || 'Transient error',
             nextAttemptAt: attempts < 5 ? new Date(Date.now() + backoffMs) : null
           }
         });
 
-        // Return 500 to let QStash automatically retry
         return errorResponse('TRANSIENT_ERROR', 'Transient failure, please retry', 500);
       }
     }
@@ -123,7 +114,6 @@ export async function POST(req: NextRequest) {
     return successResponse({ message: 'Event processed successfully' });
 
   } catch (error: any) {
-    console.error('[ProcessOutbox] Critical failure:', error);
     return errorResponse('INTERNAL_ERROR', 'Unexpected error', 500);
   }
 }

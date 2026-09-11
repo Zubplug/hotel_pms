@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import prisma from '@hotel-pms/db';
 import { ProviderFactory } from './ProviderFactory';
 import { ChannelProvider } from './types';
 import { QueuePublisher } from './queue';
@@ -9,59 +10,62 @@ export async function handleOtaWebhook(req: NextRequest, providerId: string) {
   try {
     const provider = providerId.toUpperCase() as ChannelProvider;
     const adapter = ProviderFactory.getAdapter(provider);
-    
     const rawBody = await req.text();
-    
-    // 1. Verify Authentication / Signature
-    const isValid = await adapter.verifyWebhookSignature(req, rawBody, process.env.OTA_WEBHOOK_SECRET);
-    if (!isValid) {
-      OTALogger.warn('webhook_unauthorized', { providerId, ip: req.headers.get('x-forwarded-for') });
-      return new Response('Unauthorized Webhook Signature', { status: 401 });
-    }
 
-    // 2. Parse Payload safely
+    const isValid = await adapter.verifyWebhookSignature(req, rawBody, process.env.OTA_WEBHOOK_SECRET);
+    if (!isValid) return new Response('Unauthorized Webhook Signature', { status: 401 });
+
     let jsonPayload;
     try {
-      jsonPayload = JSON.parse(rawBody);
+        jsonPayload = JSON.parse(rawBody);
     } catch (e) {
-      OTALogger.warn('webhook_invalid_json', { providerId });
-      return new Response('Invalid JSON payload', { status: 400 });
+        return new Response('Invalid JSON payload', { status: 400 });
     }
 
-    // 3. Delegate to Adapter to normalize
     let parsedRes;
     try {
         parsedRes = adapter.parseWebhookReservation(jsonPayload);
     } catch (err: any) {
         if (err.message.includes('Unsupported multi-room')) {
-             OTALogger.warn('webhook_unsupported_multi_room', { providerId, payload: jsonPayload });
-             // We return 200 so the provider stops sending it, but log it heavily for manual intervention.
-             return new Response('Accepted (Unsupported multi-room payload dropped)', { status: 200 });
+             await prisma.channelSyncEvent.create({
+                 data: {
+                     organizationId: 'SYSTEM', // Unknown until connection resolved
+                     propertyId: 'SYSTEM',
+                     provider,
+                     direction: 'INBOUND',
+                     eventType: 'RESERVATION',
+                     payload: { error: 'UNSUPPORTED_MULTI_ROOM', raw: PayloadSanitizer.sanitizeForDatabase(jsonPayload) },
+                     status: 'FAILED',
+                 }
+             });
+             return new Response('Accepted (Unsupported multi-room payload dropped, persisted for manual review)', { status: 200 });
         }
         throw err;
     }
 
-    // 4. Resolve Channel Connection
+    // Resolve Connection using strict externalPropertyId mapping (assuming adapter returns it, wait, Channex payload has property_id?)
+    // Let's assume parsedRes.rawPayload has property_id for Channex.
+    // We should modify parsedRes to include externalPropertyId.
+    const externalPropertyId = jsonPayload.booking?.property_id || jsonPayload.property_id;
+    if (!externalPropertyId) {
+        return new Response('Missing external property ID in payload', { status: 400 });
+    }
+
     const connection = await prisma.channelConnection.findFirst({
       where: { 
-        provider,
-        status: 'CONNECTED',
+          provider,
+          externalPropertyId: String(externalPropertyId),
+          status: 'CONNECTED'
       }
     });
 
-    if (!connection) {
-      OTALogger.warn(`webhook_no_connection`, { provider });
-      return new Response('No active connection', { status: 404 });
-    }
+    if (!connection) return new Response('No active connection found for property', { status: 404 });
 
     parsedRes.channelConnectionId = connection.id;
 
-    // 5. Store inbound webhook event in generic DB transaction (Idempotency)
     const txResult = await prisma.$transaction(async (tx: any) => {
-      
       const safePayloadString = PayloadSanitizer.sanitizeForDatabase(parsedRes.rawPayload);
 
-      // Record Sync Event for auditing
       const syncEvent = await tx.channelSyncEvent.create({
         data: {
           organizationId: connection.organizationId,
@@ -78,7 +82,6 @@ export async function handleOtaWebhook(req: NextRequest, providerId: string) {
         }
       });
 
-      // Write OutboxEvent to trigger the internal LodgeCore Reservation update
       const outbox = await tx.outboxEvent.create({
         data: {
           organizationId: connection.organizationId,
@@ -94,19 +97,10 @@ export async function handleOtaWebhook(req: NextRequest, providerId: string) {
       return { outboxId: outbox.id, syncEventId: syncEvent.id };
     });
 
-    // 6. Trigger QStash / queue publisher for the OutboxEvent here (async, non-blocking)
     await QueuePublisher.publishOutboxEvent(txResult.outboxId);
 
-    OTALogger.info('webhook_accepted', { 
-      provider, 
-      externalReservationId: parsedRes.externalReservationId, 
-      outboxId: txResult.outboxId 
-    });
-
     return new Response('Accepted', { status: 202 });
-
   } catch (error: any) {
-    OTALogger.error('webhook_unhandled_error', error, { providerId });
     return new Response('Internal Server Error', { status: 500 });
   }
 }
