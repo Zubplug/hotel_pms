@@ -32,8 +32,8 @@ export async function GET(
     const openOrders = await prisma.posOrder.findMany({
       where: {
         sessionId,
-        paymentStatus: 'UNPAID',
-        status: { not: 'VOIDED' },
+        paymentStatus: { not: 'PAID' },
+        status: { notIn: ['VOIDED', 'CLOSED'] },
       },
       select: {
         id: true,
