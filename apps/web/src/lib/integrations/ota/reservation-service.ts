@@ -2,7 +2,7 @@ import prisma from '@hotel-pms/db';
 import { ParsedReservation } from './types';
 import { MappingResolver } from './resolver';
 import { OTALogger } from './logger';
-import { SharedReservationService } from '../services/reservation-service';
+import { SharedReservationService } from '../../services/reservation-service';
 import crypto from 'crypto';
 
 export const OTAReservationService = {
@@ -16,9 +16,7 @@ export const OTAReservationService = {
     const systemUser = await prisma.user.findFirst({
         where: {
             email: 'system@lodgecore.internal',
-            organizationMemberships: {
-                some: { organizationId: organizationId }
-            }
+            membership: { organizationId }
         }
     });
 
@@ -124,7 +122,7 @@ export const OTAReservationService = {
             ratePlanId,
             overrideTotalAmount: parsed.totalAmount,
             currency: parsed.currency,
-            source: parsed.provider,
+            source: 'OTA',
             status: 'CONFIRMED',
             confirmationNumber: parsed.externalReservationId,
             specialRequests: parsed.specialRequests,
