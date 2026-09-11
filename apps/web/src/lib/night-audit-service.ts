@@ -74,14 +74,36 @@ export async function getSystemIntegrity(ctx: TenantContext, propertyId: string)
       openedAt: true,
       expectedCash: true,
       actualCash: true,
+      openingCash: true,
+      payments: {
+        where: { method: 'CASH', status: { in: ['CONFIRMED', 'PAID'] } },
+        select: { amount: true },
+      },
+      cashMovements: {
+        select: { type: true, amount: true },
+      },
     }
+  });
+
+  const processedPosSessions = rawPosSessions.map(session => {
+    const cashSales = session.payments.reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
+    const movementTotal = (types: string[]) => session.cashMovements.filter((m: any) => types.includes(m.type)).reduce((sum: number, m: any) => sum + Number(m.amount || 0), 0);
+    const calculatedExpectedCash = Number(session.openingCash || 0) + cashSales 
+      + movementTotal(['CASH_IN', 'CASH_TRANSFER_IN']) 
+      - movementTotal(['CASH_DROP', 'PAID_OUT', 'CASH_TRANSFER_OUT']) 
+      - movementTotal(['REFUND', 'REFUND_CASH']);
+      
+    // Use the calculated value if the session is OPEN (where DB expectedCash might be 0/null), otherwise prefer the DB value.
+    const expectedCash = session.status === 'OPEN' ? calculatedExpectedCash : Number(session.expectedCash ?? calculatedExpectedCash);
+    const { payments, cashMovements, openingCash, ...rest } = session;
+    return { ...rest, expectedCash };
   });
 
   // RECONCILIATION_REQUIRED sessions with zero expected cash are waiter-submitted
   // SERVER-banking sessions where no physical cash handover is needed.
   // They are auto-closed by the Night Audit itself, so exclude them from blockers.
-  const openPosSessions = rawPosSessions.filter(s =>
-    s.status === 'OPEN' || (s.status === 'RECONCILIATION_REQUIRED' && Number(s.expectedCash ?? 0) !== 0)
+  const openPosSessions = processedPosSessions.filter(s =>
+    s.status === 'OPEN' || (s.status === 'RECONCILIATION_REQUIRED' && s.expectedCash !== 0)
   );
 
   const rawFrontdeskSessions = await prisma.frontdeskSession.findMany({
