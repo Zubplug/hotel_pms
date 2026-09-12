@@ -1969,7 +1969,13 @@ public class OfflinePMSInterop
         try
         {
             var posCtx = await _sessionManager.GetActiveContextAsync();
+            // Session creation is always scoped to the provisioned trusted
+            // context. Client payload values are only legacy hints.
+            propertyId = posCtx.PropertyId;
+            outletId = posCtx.OutletId ?? string.Empty;
             var property = await _repo.GetPropertyAsync(propertyId);
+            if (property == null || string.IsNullOrWhiteSpace(outletId))
+                throw new InvalidOperationException("This terminal has no valid POS outlet configuration.");
             var actualBankingModel = property?.BankingModel ?? "CENTRAL_CASHIER";
             var actualBankType = string.Equals(actualBankingModel, "SERVER_BANKING", StringComparison.OrdinalIgnoreCase)
                 ? "SERVER"
@@ -1998,6 +2004,7 @@ public class OfflinePMSInterop
                 openingBalance,
                 posCtx.StaffId,
                 posCtx.DeviceId);
+            await _sessionManager.AttachSessionAsync(res.Id);
             return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
         catch (Exception ex)

@@ -33,19 +33,24 @@ public class SessionManager
         if (!VerifyPin(pin, staff.PosPinHash))
             throw new Exception("Invalid PIN.");
 
-        // Find the device and outlet (assuming single device context for the desktop app)
-        var property = await _dbContext.Properties.FirstOrDefaultAsync();
+        // The provisioned terminal is the source of truth for the POS scope.
+        // Never fall back to the first property/outlet: that can attach a
+        // restarted terminal to another outlet and make a valid shift appear
+        // to be missing.
+        var deviceId = await Microsoft.Maui.Storage.SecureStorage.Default.GetAsync(DeviceIdKey)
+                       ?? throw new InvalidOperationException("This terminal has no device identity. Re-provision the desktop terminal before using POS.");
+        var terminal = await _dbContext.PosTerminals.FirstOrDefaultAsync(t => t.Id == deviceId);
+        if (terminal == null || string.IsNullOrWhiteSpace(terminal.PropertyId) || string.IsNullOrWhiteSpace(terminal.OutletId))
+            throw new InvalidOperationException("This terminal is not fully configured. Re-provision the desktop terminal before using POS.");
+
+        var property = await _dbContext.Properties.FirstOrDefaultAsync(p => p.Id == terminal.PropertyId);
         if (property == null)
             throw new Exception("Device is not configured to a property.");
 
-        // We assume the device is tied to an outlet. For now, fetch the first active outlet
-        var outlet = await _dbContext.PosOutlets.FirstOrDefaultAsync(o => o.PropertyId == property.Id && o.IsActive);
+        var outlet = await _dbContext.PosOutlets.FirstOrDefaultAsync(o =>
+            o.Id == terminal.OutletId && o.PropertyId == property.Id && o.IsActive);
         if (outlet == null)
-            throw new Exception("No active POS outlet found for this property.");
-
-        // Fetch device ID ahead of LINQ query to avoid expression tree await error
-        var deviceId = await Microsoft.Maui.Storage.SecureStorage.Default.GetAsync(DeviceIdKey)
-                       ?? throw new InvalidOperationException("This terminal has no device identity. Re-provision the desktop terminal before using POS.");
+            throw new Exception("The provisioned POS outlet is unavailable. Re-provision the desktop terminal or activate its outlet.");
 
         // Find if there's an active POS session for this specific operator or terminal
         // Prefer the session ID retained by the desktop across restarts when
@@ -62,7 +67,7 @@ public class SessionManager
                 (s.PrimaryOperatorId == staff.Id || s.StaffId == staff.Id || s.UserId == staff.Id));
             activeSession = preferred;
         }
-        activeSession ??= await FindBankingSessionAsync(property, staff, deviceId);
+        activeSession ??= await FindBankingSessionAsync(property, staff, deviceId, outlet.Id);
 
         // Invalidate previous contexts
         var oldContexts = await _dbContext.OperatorContexts.Where(c => c.IsActive).ToListAsync();
@@ -98,17 +103,21 @@ public class SessionManager
         if (staff == null)
             throw new Exception("Staff member not found or inactive.");
 
-        var property = await _dbContext.Properties.FirstOrDefaultAsync();
+        var deviceId = await Microsoft.Maui.Storage.SecureStorage.Default.GetAsync(DeviceIdKey)
+                       ?? throw new InvalidOperationException("This terminal has no device identity. Re-provision the desktop terminal before using POS.");
+        var terminal = await _dbContext.PosTerminals.FirstOrDefaultAsync(t => t.Id == deviceId);
+        if (terminal == null || string.IsNullOrWhiteSpace(terminal.PropertyId) || string.IsNullOrWhiteSpace(terminal.OutletId))
+            throw new InvalidOperationException("This terminal is not fully configured. Re-provision the desktop terminal before using POS.");
+
+        var property = await _dbContext.Properties.FirstOrDefaultAsync(p => p.Id == terminal.PropertyId);
         if (property == null)
             throw new Exception("Device is not configured to a property.");
 
-        var outlet = await _dbContext.PosOutlets.FirstOrDefaultAsync(o => o.PropertyId == property.Id && o.IsActive);
+        var outlet = await _dbContext.PosOutlets.FirstOrDefaultAsync(o =>
+            o.Id == terminal.OutletId && o.PropertyId == property.Id && o.IsActive);
         if (outlet == null)
-            throw new Exception("No active POS outlet found for this property.");
-
-        var deviceId = await Microsoft.Maui.Storage.SecureStorage.Default.GetAsync(DeviceIdKey)
-                       ?? throw new InvalidOperationException("This terminal has no device identity. Re-provision the desktop terminal before using POS.");
-        var activeSession = await FindBankingSessionAsync(property, staff, deviceId);
+            throw new Exception("The provisioned POS outlet is unavailable. Re-provision the desktop terminal or activate its outlet.");
+        var activeSession = await FindBankingSessionAsync(property, staff, deviceId, outlet.Id);
 
         var oldContexts = await _dbContext.OperatorContexts.Where(c => c.IsActive).ToListAsync();
         foreach (var context in oldContexts)
@@ -148,7 +157,7 @@ public class SessionManager
         var property = await _dbContext.Properties.FirstOrDefaultAsync(p => p.Id == context.PropertyId);
         var staff = await _dbContext.Staff.FirstOrDefaultAsync(s => s.Id == context.StaffId);
         var activePosSession = property != null && staff != null
-            ? await FindBankingSessionAsync(property, staff, context.DeviceId)
+            ? await FindBankingSessionAsync(property, staff, context.DeviceId, context.OutletId)
             : null;
             
         if (activePosSession != null && context.SessionId != activePosSession.Id)
@@ -160,10 +169,13 @@ public class SessionManager
         return context;
     }
 
-    private async Task<LocalPosSession?> FindBankingSessionAsync(LocalProperty property, LocalStaff staff, string deviceId)
+    private async Task<LocalPosSession?> FindBankingSessionAsync(LocalProperty property, LocalStaff staff, string deviceId, string outletId)
     {
         var query = _dbContext.PosSessions
-            .Where(s => s.PropertyId == property.Id && s.Status == PosConstants.SessionStatus.Open);
+            .Where(s => s.PropertyId == property.Id
+                && s.OutletId == outletId
+                && s.Status == PosConstants.SessionStatus.Open
+                && (string.IsNullOrEmpty(s.ControlStatus) || s.ControlStatus == "OPEN"));
 
         var serverBank = await query
             .Where(s => s.BankType == "SERVER" && (s.UserId == staff.Id || s.PrimaryOperatorId == staff.Id || s.StaffId == staff.Id))
@@ -198,6 +210,34 @@ public class SessionManager
     public async Task KeepAliveAsync()
     {
         await Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Binds the active trusted operator to an open session after shift start.
+    /// This prevents the next protected IPC call from seeing the operator as
+    /// authenticated but sessionless.
+    /// </summary>
+    public async Task AttachSessionAsync(string sessionId)
+    {
+        var context = await _dbContext.OperatorContexts.FirstOrDefaultAsync(c => c.IsActive)
+            ?? throw new UnauthorizedAccessException("No active operator session found on this terminal.");
+        var session = await _dbContext.PosSessions.FirstOrDefaultAsync(s =>
+            s.Id == sessionId
+            && s.PropertyId == context.PropertyId
+            && s.OutletId == context.OutletId
+            && s.Status == PosConstants.SessionStatus.Open
+            && (string.IsNullOrEmpty(s.ControlStatus) || s.ControlStatus == "OPEN"));
+        if (session == null)
+            throw new InvalidOperationException("The selected POS shift is not open for this terminal.");
+
+        if (string.Equals(session.BankType, "SERVER", StringComparison.OrdinalIgnoreCase)
+            && session.PrimaryOperatorId != context.StaffId
+            && session.StaffId != context.StaffId
+            && session.UserId != context.StaffId)
+            throw new UnauthorizedAccessException("This POS shift belongs to another operator.");
+
+        context.SessionId = session.Id;
+        await _dbContext.SaveChangesAsync();
     }
 
     /// <summary>

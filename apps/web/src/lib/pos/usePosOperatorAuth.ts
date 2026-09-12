@@ -220,12 +220,13 @@ export function usePosOperatorAuth({
         return;
       }
 
-      // All other models — directly in
-      if (!auth.posSessionId && !auth.sessionId) {
-        localStorage.removeItem('lodgecore_pos_session_id');
-      }
+      // Never enter POS without an open session. This keeps the lifecycle
+      // deterministic for both central-cashier and server-banking terminals.
+      localStorage.removeItem('lodgecore_pos_session_id');
       if (token) localStorage.setItem('lodgecore_pos_operator_token', token);
-      onAuthenticated(operator, token, auth);
+      setVerifiedOperator(operator);
+      setPendingToken(token);
+      setStep('shift');
     } catch (e: any) {
       setError(e.message || 'Authentication failed. Check your connection.');
       setPin('');

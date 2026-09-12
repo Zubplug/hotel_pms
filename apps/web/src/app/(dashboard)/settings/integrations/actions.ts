@@ -10,6 +10,7 @@ const channexSetupSchema = z.object({
   provider: z.literal('CHANNEX'),
   externalPropertyId: z.string().min(1, 'Property ID is required'),
   webhookSecret: z.string().min(1, 'Webhook Secret is required'),
+  apiToken: z.string().min(1, 'API Token is required'),
 });
 
 export async function saveChannelConnection(data: z.infer<typeof channexSetupSchema>) {
@@ -24,7 +25,7 @@ export async function saveChannelConnection(data: z.infer<typeof channexSetupSch
       return { success: false, error: 'Invalid data submitted' };
     }
 
-    const { provider, externalPropertyId, webhookSecret } = parsed.data;
+    const { provider, externalPropertyId, webhookSecret, apiToken } = parsed.data;
 
     const ctx = await requireOrganizationContext(session.user.id);
     const propertyId = ctx.propertyIds[0]; // Assuming single property context for settings
@@ -32,6 +33,7 @@ export async function saveChannelConnection(data: z.infer<typeof channexSetupSch
     // We store the credentials as an encrypted JSON string
     const credentialsPayload = JSON.stringify({
       webhookSecret,
+      apiToken,
     });
 
     const encryptedCredentials = encrypt(credentialsPayload);

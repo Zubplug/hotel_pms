@@ -209,17 +209,30 @@ export default function PosApp() {
           })));
         }
 
+        // A desktop terminal owns one provisioned POS scope. Restore its
+        // saved session before operator login so a restart does not turn an
+        // open shift into a false "no session open" state.
         const activeSessionId = !isDesktopMode
           ? ((session as any)?.sessionId || localStorage.getItem('lodgecore_pos_session_id'))
-          : (activeOperator ? localStorage.getItem('lodgecore_pos_session_id') : '');
+          : localStorage.getItem('lodgecore_pos_session_id');
         if (activeSessionId) setPosSessionId(activeSessionId);
 
-        if (activeSessionId && (!isDesktopMode || activeOperator)) {
+        if (activeSessionId) {
           try {
             const contextRes = await provider.pos.getSessionContext(activeSessionId);
             if (!contextRes.error && contextRes.data) {
               setSessionContext(contextRes.data);
               if (contextRes.data.bankingModel) setBankingModel(contextRes.data.bankingModel);
+              const restoredContextSessionId = contextRes.data.id || contextRes.data.sessionId;
+              if (restoredContextSessionId && restoredContextSessionId !== activeSessionId) {
+                setPosSessionId(restoredContextSessionId);
+                localStorage.setItem('lodgecore_pos_session_id', restoredContextSessionId);
+              } else if (!restoredContextSessionId) {
+                // The saved ID is stale/closed. Do not let it keep the POS in
+                // a phantom session state after restart.
+                localStorage.removeItem('lodgecore_pos_session_id');
+                setPosSessionId('');
+              }
             } else {
               // Keep the trusted session ID during offline/transient context
               // failures. The desktop bridge can recover the authoritative
@@ -241,9 +254,19 @@ export default function PosApp() {
              if (!operatorRes.error && operatorRes.data?.staff) {
                setActiveOperator(operatorRes.data.staff);
                setOperatorToken(savedToken);
+               const restoredSessionId = operatorRes.data?.operatorSession?.id || activeSessionId;
+               if (restoredSessionId) {
+                 setPosSessionId(restoredSessionId);
+                 localStorage.setItem('lodgecore_pos_session_id', restoredSessionId);
+               }
              } else {
                // Token invalid, clear operator
                setActiveOperator(null);
+               setOperatorToken(null);
+               localStorage.removeItem('lodgecore_pos_operator_token');
+               localStorage.removeItem('lodgecore_pos_session_id');
+               setPosSessionId('');
+               setSessionContext(null);
              }
            } catch {
              console.error('Failed to load operator');

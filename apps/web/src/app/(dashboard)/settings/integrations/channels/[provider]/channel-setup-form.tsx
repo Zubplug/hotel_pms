@@ -15,6 +15,7 @@ import { saveChannelConnection } from '../../actions';
 const setupSchema = z.object({
   externalPropertyId: z.string().min(1, 'Property ID is required'),
   webhookSecret: z.string().min(1, 'Webhook Secret is required'),
+  apiToken: z.string().min(1, 'API Token is required'),
 });
 
 type SetupFormValues = z.infer<typeof setupSchema>;
@@ -91,6 +92,22 @@ export function ChannelSetupForm({ provider }: ChannelSetupFormProps) {
             )}
             <p className="text-xs text-muted-foreground mt-1">
               You can find this in the {provider} dashboard when registering the webhook URL.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="apiToken">API Token</Label>
+            <Input
+              id="apiToken"
+              type="password"
+              placeholder="Enter the API token for outbound sync..."
+              {...register('apiToken')}
+            />
+            {errors.apiToken && (
+              <p className="text-sm text-destructive">{errors.apiToken.message}</p>
+            )}
+            <p className="text-xs text-muted-foreground mt-1">
+              Used by LodgeCore to push availability and rates out to {provider}.
             </p>
           </div>
         </CardContent>
