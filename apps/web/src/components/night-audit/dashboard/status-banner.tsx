@@ -2,18 +2,17 @@ import React from 'react';
 import { format } from 'date-fns';
 import { NightAuditData } from '@/types/night-audit';
 import { Button } from '@/components/ui/button';
-import { CheckCircle2, Clock3, Loader2, MoonStar, Play, AlertTriangle, FileCheck2, Sparkles, RefreshCcw } from 'lucide-react';
+import { CheckCircle2, Clock3, Loader2, MoonStar, Play, AlertTriangle, FileCheck2, Sparkles } from 'lucide-react';
 
 interface StatusBannerProps {
   data: NightAuditData;
   isAuditInProgress: boolean;
-  onRefresh: () => void;
   onOpenWizard: () => void;
   refreshing: boolean;
   managerMode?: boolean;
 }
 
-export function StatusBanner({ data, isAuditInProgress, onRefresh, onOpenWizard, refreshing, managerMode = false }: StatusBannerProps) {
+export function StatusBanner({ data, isAuditInProgress, onOpenWizard, refreshing, managerMode = false }: StatusBannerProps) {
   const businessDate = data.businessDate ? new Date(data.businessDate) : new Date();
   const isReady = data.summary.blockers === 0 && !isAuditInProgress && data.auditState !== 'COMPLETED';
 
@@ -75,17 +74,6 @@ export function StatusBanner({ data, isAuditInProgress, onRefresh, onOpenWizard,
             </div>
 
             <div className="flex flex-col gap-2 sm:flex-row">
-              {!managerMode && <Button
-                variant="outline"
-                size="lg"
-                className="flex items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 font-semibold text-white hover:bg-white/10"
-                onClick={onRefresh}
-                disabled={refreshing}
-              >
-                <RefreshCcw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-                Refresh
-              </Button>}
-
               <Button
                 size="lg"
                 className="flex items-center justify-center rounded-xl bg-indigo-500 px-5 font-semibold text-white shadow-lg shadow-indigo-500/20 transition hover:bg-indigo-400"

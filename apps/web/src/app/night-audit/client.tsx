@@ -167,7 +167,6 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
       <StatusBanner 
         data={data} 
         isAuditInProgress={isAuditInProgress}
-        onRefresh={() => load(true)}
         onOpenWizard={() => setWizardOpen(true)}
         refreshing={refreshing}
         managerMode={managerMode}
@@ -180,7 +179,7 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
 
       {/* Charts Layout */}
       <div className="grid gap-6 lg:grid-cols-[1fr_2fr]">
-        <OccupancyChart rooms={data.analytics.rooms} managerMode={managerMode} />
+        <OccupancyChart rooms={data.analytics.rooms} />
         <RevenueTrendChart trend={data.analytics.trend} baseCurrency={data.property.baseCurrency} />
       </div>
 

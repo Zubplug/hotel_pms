@@ -2,10 +2,8 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { RoomAnalytics } from '@/types/night-audit';
-import Link from 'next/link';
-import { Button } from '@/components/ui/button';
 
-export function OccupancyChart({ rooms, managerMode = false }: { rooms: RoomAnalytics | undefined; managerMode?: boolean }) {
+export function OccupancyChart({ rooms }: { rooms: RoomAnalytics | undefined }) {
   if (!rooms) return null;
 
   const total = rooms.total || 0;
@@ -23,16 +21,11 @@ export function OccupancyChart({ rooms, managerMode = false }: { rooms: RoomAnal
 
   return (
     <Card className="flex h-full flex-col border-slate-200/60 bg-white/50 backdrop-blur-xl transition-all duration-200 hover:shadow-md dark:border-slate-800/60 dark:bg-slate-950/50">
-      <CardHeader className="pb-2 flex flex-row items-start justify-between space-y-0">
+      <CardHeader className="pb-2">
         <div>
           <CardTitle className="text-lg font-semibold">Occupancy Distribution</CardTitle>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Current room status for the business date</p>
         </div>
-        <Button variant="outline" size="sm" asChild className="h-8 shadow-sm">
-          <Link href={managerMode ? '/general-manager/night-audit/rooms' : '/night-audit/rooms'}>
-            View Rooms
-          </Link>
-        </Button>
       </CardHeader>
       <CardContent className="flex min-h-[250px] flex-1 flex-col justify-center">
         {total > 0 ? (

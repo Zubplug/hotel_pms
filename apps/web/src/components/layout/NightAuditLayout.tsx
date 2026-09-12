@@ -17,7 +17,8 @@ import {
   ShieldCheck,
   ArrowUpRight,
   Circle,
-  WalletCards
+  WalletCards,
+  BedDouble
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -37,6 +38,7 @@ const NIGHT_AUDIT_NAV = [
   { name: 'Exceptions & variances', href: '/night-audit/exceptions', icon: AlertTriangle, group: 'Controls' },
   { name: 'Shift reviews', href: '/night-audit/shift-reviews', icon: FileText, group: 'Controls' },
   { name: 'Cash handovers', href: '/night-audit/handovers', icon: WalletCards, group: 'Controls' },
+  { name: 'Room status', href: '/night-audit/rooms', icon: BedDouble, group: 'Controls' },
   { name: 'Audit reports', href: '/night-audit/reports', icon: FileText, group: 'Insights' },
   { name: 'System & sync', href: '/night-audit/system', icon: Server, group: 'Insights' },
 ];
