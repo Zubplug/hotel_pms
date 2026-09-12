@@ -125,6 +125,7 @@ export function ChannelSetupForm({ provider }: ChannelSetupFormProps) {
               Used by LodgeCore to push availability and rates out to {provider}.
             </p>
           </div>
+          </div>
         </CardContent>
         <CardFooter className="flex justify-end space-x-2">
           <Button variant="outline" type="button" onClick={() => router.back()}>
