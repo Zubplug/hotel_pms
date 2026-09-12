@@ -1791,6 +1791,46 @@ public class LocalRepository
         if (res == null || res.Status != "CHECKED_IN") return false;
         await AssertNightAuditAllowsAsync(res.PropertyId);
 
+        // Day-use stays are no longer CHECKED_IN when Night Audit runs, so
+        // post their room charge at checkout. The idempotency key keeps this
+        // from duplicating a charge already posted by an audit/recovery flow.
+        if (res.Folio != null && res.CheckInDate.Date == res.CheckOutDate.Date)
+        {
+            var dayUseKey = $"ROOM_CHARGE_{res.Id}_{res.CheckInDate:yyyy-MM-dd}:DAY_USE";
+            if (!CheckFolioIdempotency(res.Folio, dayUseKey))
+            {
+                decimal dayUseAmount = 0m;
+                if (!string.IsNullOrWhiteSpace(res.RatePlanSnapshotJson))
+                {
+                    try
+                    {
+                        using var snapshot = JsonDocument.Parse(res.RatePlanSnapshotJson);
+                        if (snapshot.RootElement.TryGetProperty("total", out var total) && total.TryGetDecimal(out var parsedTotal))
+                            dayUseAmount = parsedTotal;
+                    }
+                    catch { }
+                }
+
+                if (dayUseAmount <= 0m && res.Rooms.Any())
+                {
+                    var roomType = await _dbContext.RoomTypes.FirstOrDefaultAsync(rt => rt.Id == res.Rooms.First().RoomTypeId);
+                    dayUseAmount = roomType?.BasePrice ?? 0m;
+                }
+
+                if (dayUseAmount > 0m)
+                {
+                    await RecordChargeAsync(
+                        res.Folio.Id,
+                        dayUseAmount,
+                        $"Day-use room charge for {res.CheckInDate:yyyy-MM-dd}",
+                        userId,
+                        deviceId,
+                        dayUseKey,
+                        requireFrontdeskSession: false);
+                }
+            }
+        }
+
         if (res.CorporateAccountId != null && res.CorporateAccount != null && res.Folio != null && res.Folio.NetBalance > 0.01m)
         {
             if (string.IsNullOrEmpty(res.CorporateAccount.CityLedgerAccountId))

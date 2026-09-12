@@ -24,7 +24,7 @@ export async function POST(
 
     const reservation = await prisma.reservation.findUnique({
       where: { id },
-      select: { id: true, status: true, propertyId: true, corporateAccountId: true, confirmationNumber: true, reservationRooms: { include: { room: true } } },
+      select: { id: true, status: true, propertyId: true, corporateAccountId: true, confirmationNumber: true, checkIn: true, checkOut: true, reservationRooms: { include: { room: true } } },
     });
 
     if (!reservation) return errorResponse('NOT_FOUND', 'Reservation not found', 404);
@@ -46,7 +46,7 @@ export async function POST(
       // 1. Verify and Lock Financial State (Check Folios)
       // Note: In Postgres, FOR UPDATE ensures that concurrent transactions modifying these folios are blocked.
       const folios = await tx.$queryRaw<any[]>`
-        SELECT id, balance, version 
+        SELECT id, balance, version, currency
         FROM "Folio" 
         WHERE "reservationId" = ${id}::uuid 
         FOR UPDATE
@@ -54,7 +54,7 @@ export async function POST(
 
       if (reservation.corporateAccountId) {
         const sharedCorporateFolios = await tx.$queryRaw<any[]>`
-          SELECT id, balance, version
+          SELECT id, balance, version, currency
           FROM "Folio"
           WHERE "corporateAccountId" = ${reservation.corporateAccountId}::uuid
             AND "propertyId" = ${reservation.propertyId}::uuid
@@ -64,6 +64,59 @@ export async function POST(
         `;
         for (const sharedFolio of sharedCorporateFolios) {
           if (!folios.some((folio: { id: string }) => folio.id === sharedFolio.id)) folios.push(sharedFolio);
+        }
+      }
+
+      // Day-use/same-day stays must be charged at checkout because they will
+      // no longer be CHECKED_IN when Night Audit selects overnight guests.
+      // The deterministic operation key prevents a duplicate if another
+      // workflow already posted the room charge for this business date.
+      const sameDayStay = reservation.checkIn.toISOString().slice(0, 10) === reservation.checkOut.toISOString().slice(0, 10);
+      if (sameDayStay && folios.length > 0) {
+        const auditKeyPrefix = `ROOM_CHARGE_${reservation.id}_`;
+        const chargeAlreadyPosted = await tx.folioItem.findFirst({
+          where: {
+            folioId: { in: folios.map((folio: { id: string }) => folio.id) },
+            source: 'ROOM_CHARGE',
+            operationId: { startsWith: auditKeyPrefix },
+          },
+          select: { id: true },
+        });
+
+        if (!chargeAlreadyPosted) {
+          const targetFolio = folios[0];
+          for (const room of reservation.reservationRooms.filter((item: any) => item.status === 'ACTIVE')) {
+            const amount = Number(room.rateAmount || 0);
+            if (amount <= 0) continue;
+            const operationId = `${auditKeyPrefix}${reservation.checkIn.toISOString().slice(0, 10)}:DAY_USE:${room.id}`;
+            await tx.folioItem.create({
+              data: {
+                folioId: targetFolio.id,
+                businessDate: reservation.checkIn,
+                type: 'CHARGE',
+                source: 'ROOM_CHARGE',
+                revenueCategory: 'ROOM',
+                description: `Day-use room charge for ${reservation.checkIn.toISOString().slice(0, 10)}`,
+                quantity: 1,
+                unitAmount: amount,
+                amount,
+                baseAmount: amount,
+                currency: room.currency || targetFolio.currency || 'NGN',
+                postedBy: session.user.id,
+                operationId,
+              },
+            });
+            await tx.folio.update({
+              where: { id: targetFolio.id },
+              data: {
+                totalCharges: { increment: amount },
+                balance: { increment: amount },
+                version: { increment: 1 },
+              },
+            });
+            targetFolio.balance = Number(targetFolio.balance) + amount;
+            targetFolio.version += 1;
+          }
         }
       }
 

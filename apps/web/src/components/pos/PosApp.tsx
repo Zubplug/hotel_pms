@@ -1448,7 +1448,7 @@ export default function PosApp() {
         onOrderSelect={handleOrderResume}
         onViewHistory={() => setShowMyOrders(true)}
         refreshKey={tableRefreshTrigger}
-        allowAllOpen={String(bankingModel).toUpperCase() === 'SERVER_BANKING'}
+        allowAllOpen
       />
       
       {successDialog && (
