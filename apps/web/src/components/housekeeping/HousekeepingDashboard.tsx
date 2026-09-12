@@ -14,7 +14,9 @@ import {
   WifiOff,
   Wifi,
   TriangleAlert,
+  CheckCircle2,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { formatRoomNumber } from '@/lib/format-room';
 
@@ -169,6 +171,7 @@ export default function HousekeepingDashboard() {
   const [tasks, setTasks] = useState<HKTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null);
 
   const fetchTasks = async () => {
     if (!propertyId) return;
@@ -190,6 +193,19 @@ export default function HousekeepingDashboard() {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleStatusUpdate = async (task: HKTask, status: 'INSPECTED') => {
+    setUpdatingTaskId(task.id);
+    setError(null);
+    try {
+      await provider.housekeeping.updateTask(task.id, status);
+      await fetchTasks();
+    } catch (err: any) {
+      setError(err?.message || 'Unable to update housekeeping task. Try again.');
+    } finally {
+      setUpdatingTaskId(null);
     }
   };
 
@@ -352,6 +368,7 @@ export default function HousekeepingDashboard() {
                     <th className="px-6 py-4 font-semibold">Priority</th>
                     <th className="px-6 py-4 font-semibold">Status</th>
                     <th className="px-6 py-4 font-semibold">Assigned To</th>
+                    <th className="px-6 py-4 font-semibold text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -403,6 +420,30 @@ export default function HousekeepingDashboard() {
                             </div>
                           ) : (
                             <span className="text-slate-400 italic text-xs">Unassigned</span>
+                          )}
+                        </td>
+
+                        {/* Frontdesk/reception completes the control step after housekeeping reports cleaning finished. */}
+                        <td className="px-6 py-4 text-right">
+                          {task.status === 'CLEANING' ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              disabled={updatingTaskId === task.id}
+                              onClick={() => handleStatusUpdate(task, 'INSPECTED')}
+                              className="bg-emerald-600 text-white hover:bg-emerald-700"
+                            >
+                              {updatingTaskId === task.id ? (
+                                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                              ) : (
+                                <CheckCircle2 className="mr-1.5 h-4 w-4" />
+                              )}
+                              Mark Inspected
+                            </Button>
+                          ) : task.status === 'INSPECTED' ? (
+                            <span className="text-xs font-medium text-emerald-600">Ready for sale</span>
+                          ) : (
+                            <span className="text-xs text-slate-400">No action</span>
                           )}
                         </td>
 

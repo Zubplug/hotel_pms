@@ -24,7 +24,7 @@ export async function POST(
 
     const reservation = await prisma.reservation.findUnique({
       where: { id },
-      select: { id: true, status: true, propertyId: true, corporateAccountId: true, reservationRooms: { include: { room: true } } },
+      select: { id: true, status: true, propertyId: true, corporateAccountId: true, confirmationNumber: true, reservationRooms: { include: { room: true } } },
     });
 
     if (!reservation) return errorResponse('NOT_FOUND', 'Reservation not found', 404);
@@ -83,26 +83,52 @@ export async function POST(
           
           // Automatically route balance to City Ledger
           for (const folio of folios) {
-            if (Number(folio.balance) > 0) {
+            const amount = Number(folio.balance);
+            if (amount > 0) {
+              const issueDate = new Date();
+              issueDate.setUTCHours(0, 0, 0, 0);
+              const dueDate = new Date(issueDate);
+              dueDate.setUTCDate(dueDate.getUTCDate() + 30);
+              const invoiceNumber = `AR-${reservation.confirmationNumber}-${String(folio.id).slice(0, 8).toUpperCase()}`;
+              const invoice = await tx.cityLedgerInvoice.create({
+                data: {
+                  propertyId: reservation.propertyId,
+                  accountId: corporateAccount.cityLedgerAccountId,
+                  invoiceNumber,
+                  issueDate,
+                  dueDate,
+                  description: `Corporate folio ${folio.id} for reservation ${reservation.confirmationNumber}`,
+                  amount,
+                  outstandingAmount: amount,
+                  currency: folio.currency || 'NGN',
+                  createdBy: session.user.id,
+                },
+              });
               await tx.cityLedgerEntry.create({
                 data: {
                   accountId: corporateAccount.cityLedgerAccountId,
                   propertyId: reservation.propertyId,
                   reservationId: reservation.id,
                   folioId: folio.id,
-                  amount: folio.balance,
-                  currency: 'NGN',
+                  amount,
+                  currency: folio.currency || 'NGN',
                   type: 'TRANSFER_IN',
                   reason: 'Auto-routed to City Ledger upon checkout',
+                  reference: invoiceNumber,
+                  invoiceId: invoice.id,
                   createdBy: session.user.id
                 }
+              });
+              await tx.cityLedgerAccount.update({
+                where: { id: corporateAccount.cityLedgerAccountId },
+                data: { balance: { increment: amount } },
               });
 
               await tx.folio.update({
                 where: { id: folio.id },
                 data: {
                   balance: 0,
-                  totalPayments: { increment: folio.balance },
+                  totalPayments: { increment: amount },
                   version: { increment: 1 }
                 }
               });

@@ -347,7 +347,10 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
       return res?.data || [];
     },
     updateTask: async (taskId: string, status: string) => {
-      await invokeDesktop('housekeeping.updateTask', { taskId, status });
+      const res: any = await invokeDesktop('housekeeping.updateTask', { taskId, status });
+      if (res?.success === false) {
+        throw new Error(res.error || 'Unable to update housekeeping task');
+      }
     }
   },
   maintenance: {

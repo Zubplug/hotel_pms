@@ -1869,6 +1869,9 @@ public class LocalRepository
                     amount = settleAmount, 
                     accountId = res.CorporateAccount.CityLedgerAccountId,
                     reservationId = res.Id,
+                    confirmationNumber = res.ConfirmationNumber,
+                    invoiceNumber = $"AR-{res.ConfirmationNumber}-{res.Folio.Id.Substring(0, Math.Min(8, res.Folio.Id.Length)).ToUpperInvariant()}",
+                    invoiceDescription = $"Corporate folio {res.Folio.Id} for reservation {res.ConfirmationNumber}",
                     guestId = res.GuestId,
                     currency = res.Folio.Currency ?? "NGN", 
                     businessDate = frontdeskSession?.BusinessDate

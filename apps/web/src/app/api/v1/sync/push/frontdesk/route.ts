@@ -1756,6 +1756,27 @@ export async function POST(req: NextRequest) {
               where: { folioId: aggregateId, type: "TRANSFER_IN", amount },
             });
             if (!existing) {
+              const issueDate = new Date();
+              issueDate.setUTCHours(0, 0, 0, 0);
+              const dueDate = new Date(issueDate);
+              dueDate.setUTCDate(dueDate.getUTCDate() + 30);
+              const invoiceNumber = String(payload.invoiceNumber || `AR-${payload.confirmationNumber || aggregateId}-${String(aggregateId).slice(0, 8).toUpperCase()}`);
+              const invoice = await tx.cityLedgerInvoice.upsert({
+                where: { propertyId_invoiceNumber: { propertyId, invoiceNumber } },
+                create: {
+                  propertyId,
+                  accountId,
+                  invoiceNumber,
+                  issueDate,
+                  dueDate,
+                  description: String(payload.invoiceDescription || `Corporate folio transfer ${aggregateId}`),
+                  amount,
+                  outstandingAmount: amount,
+                  currency: payload.currency || "NGN",
+                  createdBy: actorId,
+                },
+                update: {},
+              });
               await tx.cityLedgerEntry.create({
                 data: {
                   accountId,
@@ -1765,10 +1786,16 @@ export async function POST(req: NextRequest) {
                   amount,
                   currency: payload.currency || "NGN",
                   type: "TRANSFER_IN",
+                  reference: invoiceNumber,
+                  invoiceId: invoice.id,
                   reason:
                     "Auto-routed to City Ledger upon checkout (Offline sync)",
                   createdBy: actorId,
                 },
+              });
+              await tx.cityLedgerAccount.update({
+                where: { id: accountId },
+                data: { balance: { increment: amount } },
               });
               await tx.folio.update({
                 where: { id: aggregateId },
