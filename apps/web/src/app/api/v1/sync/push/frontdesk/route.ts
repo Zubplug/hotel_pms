@@ -1084,7 +1084,7 @@ export async function POST(req: NextRequest) {
                 version: 1,
               },
             });
-          } else if (eventType === "CHECKIN_BYPASS") {
+          } else if (aggregateType === "RESERVATION" && eventType === "CHECKIN_BYPASS") {
             const bypassOpId = payload.operationId || randomUUID();
 
             const existingBypass = await tx.checkInBypass.findUnique({
@@ -1114,7 +1114,7 @@ export async function POST(req: NextRequest) {
                 }
               });
             }
-          } else if (eventType === "CHECK_IN") {
+          } else if (aggregateType === "RESERVATION" && eventType === "CHECK_IN") {
             const reservation = await tx.reservation.findUnique({
               where: { id: aggregateId },
             });
@@ -1138,7 +1138,7 @@ export async function POST(req: NextRequest) {
                 data: { status: "OCCUPIED" },
               });
             }
-          } else if (eventType === "CHECK_OUT") {
+          } else if (aggregateType === "RESERVATION" && eventType === "CHECK_OUT") {
             // Desktop checkouts are queued while offline, so enforce the same
             // financial rule again when the event reaches the cloud. This must
             // happen inside the transaction before changing reservation/room state.
@@ -1168,7 +1168,7 @@ export async function POST(req: NextRequest) {
                 data: { status: "AVAILABLE" },
               });
             }
-          } else if (eventType === "ROOM_CREDIT") {
+          } else if (aggregateType === "RESERVATION" && eventType === "ROOM_CREDIT") {
             const amount = Number(payload.amount);
             if (!Number.isFinite(amount) || amount <= 0)
               throw new Error("Credit amount must be positive");
@@ -1354,7 +1354,7 @@ export async function POST(req: NextRequest) {
                 remainingToApply -= applied;
               }
             }
-          } else if (eventType === "DISCOUNT_REQUESTED") {
+          } else if (aggregateType === "FOLIO" && eventType === "DISCOUNT_REQUESTED") {
             const folio = await tx.folio.findUnique({ where: { id: aggregateId, propertyId } });
             if (folio) {
               await tx.approvalRequest.upsert({
@@ -1375,7 +1375,7 @@ export async function POST(req: NextRequest) {
                 update: {},
               });
             }
-          } else if (eventType === "FOLIO_DISCOUNT_APPLIED") {
+          } else if (aggregateType === "FOLIO" && eventType === "FOLIO_DISCOUNT_APPLIED") {
             const existingDiscount = await tx.folioItem.findFirst({
               where: { posTransactionId: idempotencyKey },
             });
@@ -1516,7 +1516,7 @@ export async function POST(req: NextRequest) {
               },
             });
             resultStatus = "PENDING_APPROVAL";
-          } else if (eventType === "ADVANCE_DEPOSIT") {
+          } else if (aggregateType === "FOLIO" && eventType === "ADVANCE_DEPOSIT") {
             const amount = Number(payload.amount);
             if (!Number.isFinite(amount) || amount <= 0)
               throw new Error("Deposit amount must be positive");
@@ -1626,7 +1626,7 @@ export async function POST(req: NextRequest) {
                 businessDate: postingBusinessDate,
               });
             }
-          } else if (eventType === "POST_PAYMENT") {
+          } else if (aggregateType === "FOLIO" && eventType === "POST_PAYMENT") {
             // Folio-level payment — idempotent via posTransactionId uniqueness
             const amount = Number(payload.amount);
             if (!amount || amount <= 0)
@@ -1737,7 +1737,7 @@ export async function POST(req: NextRequest) {
                 },
               });
             }
-          } else if (eventType === "CITY_LEDGER_SETTLEMENT") {
+          } else if (aggregateType === "FOLIO" && eventType === "CITY_LEDGER_SETTLEMENT") {
             const amount = Number(payload.amount ?? payload.Amount);
             const accountId = payload.accountId || payload.AccountId;
             if (!Number.isFinite(amount) || amount <= 0)
@@ -1805,7 +1805,7 @@ export async function POST(req: NextRequest) {
                 },
               });
             }
-          } else if (eventType === "REFUND_REQUESTED") {
+          } else if (aggregateType === "FOLIO" && eventType === "REFUND_REQUESTED") {
             const amount = Math.abs(Number(payload.amount ?? payload.Amount));
             const paymentId =
               payload.paymentId || payload.PaymentId || aggregateId;
@@ -1938,7 +1938,7 @@ export async function POST(req: NextRequest) {
                 },
               });
             }
-          } else if (eventType === "LATE_ARRIVAL") {
+          } else if (aggregateType === "RESERVATION" && eventType === "LATE_ARRIVAL") {
             const res = await tx.reservation.findUnique({
               where: { id: aggregateId, propertyId },
             });
@@ -1958,7 +1958,7 @@ export async function POST(req: NextRequest) {
                   : null,
               },
             });
-          } else if (eventType === "NO_SHOW") {
+          } else if (aggregateType === "RESERVATION" && eventType === "NO_SHOW") {
             const res = await tx.reservation.findUnique({
               where: { id: aggregateId, propertyId },
               include: {
@@ -2035,7 +2035,7 @@ export async function POST(req: NextRequest) {
               where: { reservationId: aggregateId, status: "ACTIVE" },
               data: { status: "NO_SHOW" },
             });
-          } else if (eventType === "REINSTATE") {
+          } else if (aggregateType === "RESERVATION" && eventType === "REINSTATE") {
             const res = await tx.reservation.findUnique({
               where: { id: aggregateId, propertyId },
               include: { noShowPolicy: true },
@@ -2090,7 +2090,7 @@ export async function POST(req: NextRequest) {
                 }
               }
             }
-          } else if (eventType === "CANCEL") {
+          } else if (aggregateType === "RESERVATION" && eventType === "CANCEL") {
             // Idempotent — if already cancelled, treat as success
             const res = await tx.reservation.findUnique({
               where: { id: aggregateId, propertyId },
@@ -2151,7 +2151,7 @@ export async function POST(req: NextRequest) {
               isUuid(event.operatorId) ? event.operatorId : device.id,
               payload.reason || "Offline reservation cancellation",
             );
-          } else if (eventType === "REASSIGN_ROOM") {
+          } else if (aggregateType === "RESERVATION" && eventType === "REASSIGN_ROOM") {
             const { newRoomId, oldRoomId, newRoomNumber } = payload;
             if (!newRoomId)
               throw new Error("newRoomId is required for REASSIGN_ROOM");
@@ -2339,7 +2339,7 @@ export async function POST(req: NextRequest) {
               where: { id: newRoomId },
               data: { status: newStatus as any },
             });
-          } else if (eventType === "EXTEND_STAY") {
+          } else if (aggregateType === "RESERVATION" && eventType === "EXTEND_STAY") {
             const newCheckOut = parseLocalDateString(payload.newCheckOutDate);
             if (!newCheckOut || isNaN(newCheckOut.getTime()))
               throw new Error("Invalid newCheckOutDate");
@@ -2409,7 +2409,7 @@ export async function POST(req: NextRequest) {
                 data: { checkOut: newCheckOut },
               });
             }
-          } else if (eventType === "KEYCARD_ENCODE") {
+          } else if (aggregateType === "RESERVATION" && eventType === "KEYCARD_ENCODE") {
             const reservation = await tx.reservation.findUnique({
               where: { id: aggregateId, propertyId },
               include: { reservationRooms: { where: { status: "ACTIVE" } } },
@@ -2466,7 +2466,7 @@ export async function POST(req: NextRequest) {
                 metadata: { initiatedBy: actorId, responseData: encodeData },
               },
             });
-          } else if (eventType === "EDIT") {
+          } else if (aggregateType === "RESERVATION" && eventType === "EDIT") {
             const res = await tx.reservation.findUnique({
               where: { id: aggregateId, propertyId },
               include: {
