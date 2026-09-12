@@ -2492,6 +2492,7 @@ public class LocalRepository
             reservationId = reservation.Id,
             checkIn = reservation.CheckInDate,
             checkOut = reservation.CheckOutDate,
+            folioId = reservation.Folio?.Id,
             folioBalance = reservation.Folio?.NetBalance ?? 0,
             currency = property?.Currency ?? "NGN",
             room = new { number = room.Number },

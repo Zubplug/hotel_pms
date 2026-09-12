@@ -11,12 +11,13 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Loader2, Key, CalendarClock, CreditCard, User, ExternalLink, RefreshCw, LogOut } from 'lucide-react';
+import { Loader2, Key, CalendarClock, CreditCard, User, ExternalLink, RefreshCw, LogOut, FileText } from 'lucide-react';
 import { format } from 'date-fns';
 import { formatRoomNumber } from '@/lib/format-room';
 import { useProperty } from '@/components/PropertyProvider';
 import { FrontDeskExtendStayDialog } from './FrontDeskExtendStayDialog';
 import { FrontDeskQuickCheckoutDialog } from './FrontDeskQuickCheckoutDialog';
+import { FolioDetailView } from '@/components/finance/FolioDetailView';
 
 interface FrontDeskOccupiedRoomDialogProps {
   room: { id: string; number: string; status: string } | null;
@@ -34,6 +35,7 @@ export function FrontDeskOccupiedRoomDialog({ room, isOpen, onClose, isAuditorMo
   
   const [showExtendStay, setShowExtendStay] = useState(false);
   const [showCheckOut, setShowCheckOut] = useState(false);
+  const [showFolio, setShowFolio] = useState(false);
 
   const { data: resData, isLoading, isError, refetch } = useQuery({
     queryKey: ['active-reservation', room?.id],
@@ -145,6 +147,16 @@ export function FrontDeskOccupiedRoomDialog({ room, isOpen, onClose, isAuditorMo
                   </span>
                 </div>
 
+                {isAuditorMode && resData.folioId && (
+                  <Button
+                    variant="outline"
+                    className="h-11 w-full rounded-xl border-indigo-200 bg-indigo-50/50 font-semibold text-indigo-700 hover:bg-indigo-100"
+                    onClick={() => setShowFolio(true)}
+                  >
+                    <FileText className="mr-2 h-4 w-4" /> View folio <ExternalLink className="ml-1 h-3.5 w-3.5" />
+                  </Button>
+                )}
+
                 {/* Active Key */}
                 {resData.lockCredentials && resData.lockCredentials.length > 0 && (
                   <div className="flex items-center gap-2 text-sm font-medium text-emerald-600 bg-emerald-50 p-3 rounded-xl border border-emerald-100">
@@ -188,6 +200,20 @@ export function FrontDeskOccupiedRoomDialog({ room, isOpen, onClose, isAuditorMo
           )}
         </DialogContent>
       </Dialog>
+
+      {isAuditorMode && resData?.folioId && (
+        <Dialog open={showFolio} onOpenChange={setShowFolio}>
+          <DialogContent className="max-h-[92vh] max-w-6xl overflow-y-auto rounded-[2rem] border-0 bg-slate-50 p-5 shadow-2xl sm:p-7">
+            <DialogHeader className="sr-only">
+              <DialogTitle>Guest folio</DialogTitle>
+              <DialogDescription>Read-only guest folio for audit review</DialogDescription>
+            </DialogHeader>
+            <div className="rounded-2xl bg-white p-1 sm:p-3">
+              <FolioDetailView folioId={resData.folioId} onBack={() => setShowFolio(false)} readOnly />
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Sub Dialogs */}
       {resData && (

@@ -120,12 +120,14 @@ export function FolioDetailView({ folioId, onBack, readOnly = false }: { folioId
           )}
         </div>
       </section>
-      <AddPaymentDialog 
-        open={paymentOpen} 
-        onOpenChange={setPaymentOpen} 
-        folio={{ id: folio.id, balance: folio.balance, currency: folio.currency, reservationId: folio.reservation?.id }} 
-        collectionSource="RECEIVABLES" 
-      />
+      {!readOnly && (
+        <AddPaymentDialog
+          open={paymentOpen}
+          onOpenChange={setPaymentOpen}
+          folio={{ id: folio.id, balance: folio.balance, currency: folio.currency, reservationId: folio.reservation?.id }}
+          collectionSource="RECEIVABLES"
+        />
+      )}
     </div>
   );
 }

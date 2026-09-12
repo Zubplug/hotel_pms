@@ -78,6 +78,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
       },
       checkIn: activeAssignment.checkIn,
       checkOut: activeAssignment.checkOut,
+      folioId: folio?.id ?? null,
       folioBalance: balance,
       currency: folio ? folio.currency : activeAssignment.currency,
       lockCredentials: reservation.lockCredentials,
