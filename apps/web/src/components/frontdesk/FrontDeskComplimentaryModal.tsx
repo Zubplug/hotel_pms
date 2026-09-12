@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { X, User, Users, Hash } from 'lucide-react';
+import { User } from 'lucide-react';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { useQuery } from '@tanstack/react-query';
 import { useProperty } from '@/components/PropertyProvider';
@@ -21,11 +21,8 @@ export function FrontDeskComplimentaryModal({ isOpen, targetType, targetId, targ
   const { provider } = useLodgeCoreProvider();
   const { propertyId } = useProperty();
   
-  const [beneficiaryType, setBeneficiaryType] = useState<'GUEST' | 'STAFF'>('GUEST');
-  const [beneficiaryStaffId, setBeneficiaryStaffId] = useState('');
   const [benefitType, setBenefitType] = useState<'FULL' | 'PARTIAL'>('FULL');
   const [amount, setAmount] = useState('');
-  const [settlementType, setSettlementType] = useState<'PAY_NOW' | 'STAFF_PAY_LATER'>('STAFF_PAY_LATER');
   const [reason, setReason] = useState('');
   const [acknowledgedByStaffId, setAcknowledgedByStaffId] = useState('');
   
@@ -52,10 +49,6 @@ export function FrontDeskComplimentaryModal({ isOpen, targetType, targetId, targ
       setError('Please enter a valid partial complimentary amount.');
       return;
     }
-    if (beneficiaryType === 'STAFF' && !beneficiaryStaffId) {
-      setError('Please select the staff member receiving the benefit.');
-      return;
-    }
     if (!reason.trim()) {
       setError('A reason is required.');
       return;
@@ -75,11 +68,8 @@ export function FrontDeskComplimentaryModal({ isOpen, targetType, targetId, targ
         targetType,
         reservationRoomId: targetType === 'RESERVATION_ROOM' ? targetId : undefined,
         orderId: targetType === 'POS_ORDER' ? targetId : undefined,
-        beneficiaryType,
-        beneficiaryStaffId: beneficiaryType === 'STAFF' ? beneficiaryStaffId : null,
         compType: benefitType,
         compAmount: numValue,
-        settlementType: beneficiaryType === 'STAFF' ? settlementType : 'PAY_NOW',
         reason,
         acknowledgedByStaffId,
       };
@@ -113,28 +103,8 @@ export function FrontDeskComplimentaryModal({ isOpen, targetType, targetId, targ
             </div>
           )}
 
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
-              Beneficiary Type
-            </label>
-            <div className="flex bg-slate-100 p-1 rounded-xl">
-              <button
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                  beneficiaryType === 'GUEST' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'
-                }`}
-                onClick={() => setBeneficiaryType('GUEST')}
-              >
-                <User className="w-4 h-4" /> Guest
-              </button>
-              <button
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                  beneficiaryType === 'STAFF' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'
-                }`}
-                onClick={() => setBeneficiaryType('STAFF')}
-              >
-                <Users className="w-4 h-4" /> Staff
-              </button>
-            </div>
+          <div className="flex items-center gap-2 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            <User className="h-4 w-4" /> Complimentary benefit applies to the guest only.
           </div>
 
           <div>
@@ -155,25 +125,6 @@ export function FrontDeskComplimentaryModal({ isOpen, targetType, targetId, targ
             </Select>
           </div>
 
-          {beneficiaryType === 'STAFF' && (
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
-                Staff Beneficiary
-              </label>
-              <Select value={beneficiaryStaffId} onValueChange={(val) => setBeneficiaryStaffId(val || "")}>
-                <SelectTrigger className="w-full h-12 rounded-xl bg-slate-50 border-slate-200">
-                  <SelectValue placeholder="Select staff member" />
-                </SelectTrigger>
-                <SelectContent>
-                  {activeStaff.map((staff: any) => (
-                    <SelectItem key={staff.id} value={staff.id}>
-                      {staff.firstName} {staff.lastName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">
@@ -212,22 +163,6 @@ export function FrontDeskComplimentaryModal({ isOpen, targetType, targetId, targ
             </div>
           )}
 
-          {beneficiaryType === 'STAFF' && (
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
-                Settlement
-              </label>
-              <Select value={settlementType} onValueChange={(val: any) => setSettlementType(val)}>
-                <SelectTrigger className="w-full h-12 rounded-xl bg-slate-50 border-slate-200">
-                  <SelectValue placeholder="Select settlement" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="STAFF_PAY_LATER">Staff Pay Later</SelectItem>
-                  <SelectItem value="PAY_NOW">Pay Now</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          )}
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">

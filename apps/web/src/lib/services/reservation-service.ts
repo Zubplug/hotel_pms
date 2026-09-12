@@ -28,6 +28,7 @@ export interface CreateReservationParams {
   adjustmentType?: string;
   adjustmentValue?: number;
   adjustmentReason?: string;
+  acknowledgedByStaffId?: string;
 
   // Metadata
   source?: string;
@@ -53,6 +54,7 @@ export const SharedReservationService = {
       checkIn, checkOut, roomTypeId, roomId, adults, children,
       corporateAccountId, ratePlanId, overrideTotalAmount,
       adjustmentType, adjustmentValue, adjustmentReason,
+      acknowledgedByStaffId,
       source = 'WALK_IN', status = 'CONFIRMED',
       confirmationNumber, specialRequests,
       createdBy, userEmail = 'system', userRole = 'SYSTEM',
@@ -160,7 +162,7 @@ export const SharedReservationService = {
         },
       });
 
-      await tx.reservationRoom.create({
+      const createdReservationRoom = await tx.reservationRoom.create({
         data: {
           reservationId: newRes.id,
           roomId: roomId || null,
@@ -184,6 +186,87 @@ export const SharedReservationService = {
           discountReason: adjustmentReason || null,
         },
       });
+
+      if (adjustmentType === 'DISCOUNT_PERCENTAGE' || adjustmentType === 'DISCOUNT_FIXED') {
+        if (!acknowledgedByStaffId) {
+          throw new Error('Acknowledging staff is required for discounted reservations');
+        }
+        const operator = await tx.staff.findFirst({
+          where: { id: createdBy, propertyAccess: { has: propertyId }, isActive: true },
+          select: { id: true },
+        });
+        if (!operator) throw new Error('Discount reservation operator is not an active staff member');
+        const discountValue = Number(adjustmentValue || 0);
+        if (adjustmentType === 'DISCOUNT_FIXED' && (!Number.isFinite(discountValue) || discountValue <= 0 || discountValue > Number(baseRate))) {
+          throw new Error('Invalid fixed discount amount');
+        }
+        if (adjustmentType === 'DISCOUNT_PERCENTAGE' && (!Number.isFinite(discountValue) || discountValue <= 0 || discountValue > 100)) {
+          throw new Error('Invalid discount percentage');
+        }
+        const approval = await tx.approvalRequest.create({
+          data: {
+            propertyId,
+            type: 'DISCOUNT',
+            status: 'PENDING',
+            executionStatus: 'NOT_APPLIED',
+            requestedBy: operator.id,
+            amount: adjustmentType === 'DISCOUNT_FIXED' ? discountValue : 0,
+            currency,
+            reason: adjustmentReason || 'Guest reservation discount',
+            details: { targetType: 'RESERVATION_ROOM', reservationId: newRes.id, reservationRoomId: createdReservationRoom.id, acknowledgedByStaffId },
+            snapshot: {
+              targetType: 'RESERVATION_ROOM',
+              reservationRoomId: createdReservationRoom.id,
+              originalRate: Number(baseRate),
+              discountType: adjustmentType === 'DISCOUNT_FIXED' ? 'FIXED_AMOUNT' : 'PERCENTAGE',
+              discountAmount: adjustmentType === 'DISCOUNT_FIXED' ? discountValue : 0,
+              discountPercent: adjustmentType === 'DISCOUNT_PERCENTAGE' ? discountValue : 0,
+              reason: adjustmentReason || 'Guest reservation discount',
+            },
+            idempotencyKey: `DISCOUNT_CREATE:${newRes.id}`,
+          },
+        });
+        await tx.reservationRoom.update({
+          where: { id: createdReservationRoom.id },
+          data: { discountApprovalId: `PENDING:${approval.id}` },
+        });
+      }
+
+      if (adjustmentType === 'COMP_FULL' || adjustmentType === 'COMP_PARTIAL') {
+        if (!acknowledgedByStaffId) {
+          throw new Error('Acknowledging staff is required for complimentary reservations');
+        }
+        const operator = await tx.staff.findFirst({
+          where: { id: createdBy, propertyAccess: { has: propertyId }, isActive: true },
+          select: { id: true },
+        });
+        if (!operator) throw new Error('Complimentary reservation operator is not an active staff member');
+        const complimentaryAmount = adjustmentType === 'COMP_FULL'
+          ? Number(baseRate)
+          : Number(adjustmentValue || 0);
+        if (!Number.isFinite(complimentaryAmount) || complimentaryAmount <= 0 || complimentaryAmount > Number(baseRate)) {
+          throw new Error('Invalid complimentary amount');
+        }
+        const propertyForComp = await tx.property.findUnique({ where: { id: propertyId }, select: { businessDate: true } });
+        await tx.complimentaryRecord.create({
+          data: {
+            propertyId,
+            businessDate: propertyForComp?.businessDate || new Date(),
+            reference: `COMP_RES_${newRes.id}_${checkIn.toISOString().slice(0, 10)}`,
+            sourceModule: 'FRONT_DESK',
+            roomId: roomId || null,
+            guestId: finalGuestId,
+            operatorId: operator.id,
+            operationId: `COMP_CREATE_${newRes.id}`,
+            grossAmount: complimentaryAmount,
+            complAmount: complimentaryAmount,
+            netAmount: 0,
+            complType: adjustmentType === 'COMP_FULL' ? 'FULL' : 'PARTIAL',
+            reason: adjustmentReason || 'Guest complimentary reservation',
+            notes: JSON.stringify({ acknowledgedByStaffId }),
+          },
+        });
+      }
 
       if (roomId) {
         const prop = await tx.property.findUnique({ where: { id: propertyId } });

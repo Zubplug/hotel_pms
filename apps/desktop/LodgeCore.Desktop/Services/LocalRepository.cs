@@ -2471,8 +2471,20 @@ public class LocalRepository
         await AssertNightAuditAllowsAsync(room.PropertyId);
 
         newStatus = newStatus.ToUpperInvariant();
-        if (newStatus == "AVAILABLE" && new[] { "DIRTY", "MAINTENANCE", "OUT_OF_ORDER" }.Contains(room.Status.ToUpperInvariant()))
-            throw new InvalidOperationException("This room must be cleared by maintenance and/or housekeeping before it becomes Available.");
+        var currentStatus = room.Status.ToUpperInvariant();
+        if (newStatus == "AVAILABLE" && currentStatus == "DIRTY")
+        {
+            var hasCheckedInGuest = await _dbContext.Reservations.AnyAsync(reservation =>
+                reservation.PropertyId == room.PropertyId
+                && reservation.Status == "CHECKED_IN"
+                && reservation.Rooms.Any(assignment => assignment.RoomId == room.Id && assignment.Status == "ACTIVE"));
+            if (room.IsOccupied || hasCheckedInGuest)
+                throw new InvalidOperationException("An occupied room cannot be marked Available from the room status dialog.");
+        }
+        else if (newStatus == "AVAILABLE" && new[] { "MAINTENANCE", "OUT_OF_ORDER" }.Contains(currentStatus))
+        {
+            throw new InvalidOperationException("This room must be cleared by maintenance before it becomes Available.");
+        }
 
         room.Status = newStatus;
         // If it's CLEAN or DIRTY, also update HousekeepingStatus to match cloud behavior if necessary.
@@ -2506,6 +2518,44 @@ public class LocalRepository
                 PayloadJson = JsonSerializer.Serialize(cleaningTask),
                 CreatedAt = DateTime.UtcNow
             });
+        }
+
+        if (newStatus == "AVAILABLE" && currentStatus == "DIRTY")
+        {
+            // Front desk may release an unoccupied dirty room when housekeeping
+            // has already completed it. Close the active local task as inspected
+            // and sync both changes together so the server cannot leave the room
+            // available with an open housekeeping task.
+            var openTask = await _dbContext.HousekeepingTasks
+                .Where(task => task.PropertyId == room.PropertyId
+                    && task.RoomId == room.Id
+                    && task.Status != "INSPECTED"
+                    && task.Status != "CANCELLED")
+                .OrderByDescending(task => task.CreatedAt)
+                .FirstOrDefaultAsync();
+
+            if (openTask != null)
+            {
+                openTask.Status = "INSPECTED";
+                openTask.UpdatedAt = DateTime.UtcNow;
+                openTask.IsDirty = true;
+                openTask.Version++;
+                _dbContext.OutboxEvents.Add(new LocalOutboxEvent
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    PropertyId = openTask.PropertyId,
+                    DeviceId = "System",
+                    OperatorId = "System",
+                    AggregateType = "HOUSEKEEPING_TASK",
+                    AggregateId = openTask.Id,
+                    AggregateVersion = openTask.Version,
+                    EventType = "UPDATE_STATUS",
+                    Sequence = openTask.Version,
+                    PayloadJson = JsonSerializer.Serialize(new { status = "INSPECTED" }),
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+            room.HousekeepingStatus = "INSPECTED";
         }
         
         room.UpdatedAt = DateTime.UtcNow;
@@ -3240,6 +3290,11 @@ public class LocalRepository
         var beneficiaryStaffId = root.TryGetProperty("beneficiaryStaffId", out var bsid) ? bsid.GetString() : null;
         var settlementType = root.TryGetProperty("settlementType", out var st) ? st.GetString() : "PAY_NOW";
 
+        if (string.Equals(beneficiaryType, "STAFF", StringComparison.OrdinalIgnoreCase)
+            || !string.IsNullOrWhiteSpace(beneficiaryStaffId)
+            || string.Equals(settlementType, "STAFF_PAY_LATER", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Complimentary benefits are for guests only.");
+
         string propertyId = "";
         LocalPosOrder? posOrder = null;
         LocalReservationRoom? resRoom = null;
@@ -3263,6 +3318,15 @@ public class LocalRepository
         if (string.IsNullOrEmpty(propertyId)) throw new Exception("Property context not found");
 
         var approvalId = Guid.NewGuid().ToString();
+        if (resRoom != null)
+        {
+            // Persist the pending state locally as well as in the outbox. A
+            // desktop can remain offline until after audit preparation.
+            resRoom.DiscountType = "COMPLIMENTARY";
+            resRoom.DiscountAmount = (decimal)compAmount;
+            resRoom.DiscountReason = reason;
+            resRoom.DiscountApprovalId = "PENDING:" + approvalId;
+        }
         var reservationSnapshot = resRoom == null ? null : new
         {
             id = resRoom.Id,
@@ -3309,9 +3373,6 @@ public class LocalRepository
                 compType,
                 compAmount,
                 reason,
-                beneficiaryType,
-                beneficiaryStaffId,
-                settlementType,
                 acknowledgedByStaffId = root.TryGetProperty("acknowledgedByStaffId", out var complimentaryAck) ? complimentaryAck.GetString() : null,
                 reservation = reservationSnapshot
             })

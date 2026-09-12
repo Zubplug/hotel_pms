@@ -91,6 +91,12 @@ export async function POST(req: NextRequest) {
     if (!propertyId || (!guestId && !guestDetails) || !checkIn || !checkOut || !roomTypeId || !roomId) {
       return errorResponse('BAD_REQUEST', 'Missing required fields', 400);
     }
+    if ((adjustmentType === 'COMP_FULL' || adjustmentType === 'COMP_PARTIAL') && !acknowledgedByStaffId) {
+      return errorResponse('BAD_REQUEST', 'Acknowledging staff is required for complimentary reservations', 400);
+    }
+    if ((adjustmentType === 'DISCOUNT_FIXED' || adjustmentType === 'DISCOUNT_PERCENTAGE') && !acknowledgedByStaffId) {
+      return errorResponse('BAD_REQUEST', 'Acknowledging staff is required for discounted reservations', 400);
+    }
 
     const allowedPropertyIds = (await requireOrganizationContext(session.user.id)).propertyIds;
     if (!allowedPropertyIds.includes(propertyId)) {
@@ -174,6 +180,7 @@ export async function POST(req: NextRequest) {
         adjustmentType,
         adjustmentValue: Number(adjustmentValue),
         adjustmentReason,
+        acknowledgedByStaffId,
         createdBy: (session.user as any).staffId || session.user.id,
         userEmail: session.user.email ?? undefined,
         userRole: (session.user as any).role,

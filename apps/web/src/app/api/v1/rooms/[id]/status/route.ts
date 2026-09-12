@@ -29,12 +29,26 @@ export async function POST(req: NextRequest, { params }: Params) {
         if (reqPropertyId && !ctx.propertyIds.includes(reqPropertyId)) return NextResponse.json({ error: 'Forbidden property' }, { status: 403 });
     const { newStatus, reason, source, referenceId } = roomStatusTransitionSchema.parse(body);
 
-    if (newStatus === 'AVAILABLE' && ['DIRTY', 'MAINTENANCE', 'OUT_OF_ORDER'].includes(room.status)) {
+    if (newStatus === 'AVAILABLE' && ['MAINTENANCE', 'OUT_OF_ORDER'].includes(room.status)) {
       return errorResponse(
         'HOUSEKEEPING_REQUIRED',
-        'This room must be cleared by maintenance and/or housekeeping before it becomes Available.',
+        'This room must be cleared by maintenance before it becomes Available.',
         422
       );
+    }
+
+    if (newStatus === 'AVAILABLE' && room.status === 'DIRTY') {
+      const activeCheckedIn = await prisma.reservationRoom.findFirst({
+        where: {
+          roomId: room.id,
+          status: 'ACTIVE',
+          reservation: { propertyId: room.propertyId, status: 'CHECKED_IN' },
+        },
+        select: { id: true },
+      });
+      if (activeCheckedIn) {
+        return errorResponse('ROOM_OCCUPIED', 'An occupied room cannot be marked Available from the room status dialog.', 422);
+      }
     }
 
     // STATE MACHINE ENFORCEMENT — server-side, non-bypassable
@@ -68,6 +82,26 @@ export async function POST(req: NextRequest, { params }: Params) {
           reason,
         },
       });
+      if (newStatus === 'AVAILABLE' && room.status === 'DIRTY') {
+        const openTask = await tx.housekeepingTask.findFirst({
+          where: {
+            propertyId: room.propertyId,
+            roomId: room.id,
+            status: { notIn: ['INSPECTED', 'CANCELLED'] },
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+        if (openTask) {
+          await tx.housekeepingTask.update({
+            where: { id: openTask.id },
+            data: { status: 'INSPECTED', completedAt: new Date(), inspectedAt: new Date() },
+          });
+        }
+        await tx.room.update({
+          where: { id: room.id },
+          data: { housekeepingStatus: 'INSPECTED' },
+        });
+      }
       if (newStatus === 'DIRTY') {
         await tx.housekeepingTask.create({
           data: {

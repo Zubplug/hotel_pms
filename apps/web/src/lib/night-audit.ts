@@ -66,9 +66,10 @@ export async function executeNightAudit(
   // must be reconciled before the old business date can be closed.
   if (!isRecovery) {
     const { openPosSessions, openFrontdeskSessions, financialSyncConflicts } = await getSystemIntegrity(ctx, propertyId);
-    const { unverifiedComplimentary } = await getFinancialAudit(ctx, propertyId);
+    const { unverifiedComplimentary, pendingDiscounts } = await getFinancialAudit(ctx, propertyId);
     
     if (unverifiedComplimentary.length > 0) throw new Error('BLOCKER:Cannot execute audit. Unverified complimentary transactions must be resolved.');
+    if (pendingDiscounts.length > 0) throw new Error('BLOCKER:Cannot execute audit. Pending discount approvals must be resolved.');
     if (openPosSessions.length > 0) throw new Error('BLOCKER:Cannot execute audit. There are open POS sessions.');
     if (openFrontdeskSessions.length > 0) throw new Error('BLOCKER:Cannot execute audit. There are open front-desk cashier shifts.');
     if (financialSyncConflicts.length > 0) throw new Error('BLOCKER:Cannot execute audit. There are unresolved financial sync conflicts.');
@@ -325,19 +326,46 @@ export async function executeNightAudit(
                       sourceModule: 'FRONT_DESK',
                       status: 'VERIFIED',
                     },
-                    select: { complAmount: true },
+                    select: { id: true, complAmount: true, complType: true },
                   })
                 : null;
 
+              const unresolvedComplimentary = activeRoom?.roomId
+                ? await tx.complimentaryRecord.findFirst({
+                    where: {
+                      propertyId,
+                      businessDate,
+                      roomId: activeRoom.roomId,
+                      guestId: reservation.primaryGuestId,
+                      sourceModule: 'FRONT_DESK',
+                      status: { in: ['PENDING_NIGHT_AUDIT', 'UNRESOLVED'] },
+                    },
+                    select: { id: true },
+                  })
+                : null;
+
+              if (unresolvedComplimentary || (activeRoom?.discountType === 'COMPLIMENTARY' && !verifiedComplimentary)) {
+                throw new Error(
+                  `BLOCKER:Complimentary room for reservation ${reservation.id} must be verified before room charges are posted.`,
+                );
+              }
+
               if (verifiedComplimentary) {
-                discountDeduction = Math.min(originalRate, Number(verifiedComplimentary.complAmount || 0));
+                discountDeduction = verifiedComplimentary.complType === 'FULL'
+                  ? originalRate
+                  : Math.min(originalRate, Number(verifiedComplimentary.complAmount || 0));
                 discountNote = ' (complimentary approved by Night Auditor)';
               }
 
               if (!verifiedComplimentary && activeRoom?.discountType && discountApprovalId) {
                 // Check approval status
+                // Reservation creation stores a pending marker until the approval
+                // endpoint replaces it with the canonical approval ID.
+                const approvalId = discountApprovalId.startsWith('PENDING:')
+                  ? discountApprovalId.slice('PENDING:'.length)
+                  : discountApprovalId;
                 const approval = await tx.approvalRequest.findUnique({
-                  where: { id: discountApprovalId },
+                  where: { id: approvalId },
                   select: { status: true },
                 });
 
@@ -363,36 +391,73 @@ export async function executeNightAudit(
               }
               
               const effectiveRate = Math.max(0, originalRate - discountDeduction);
+              const auditDateLabel = businessDate.toISOString().split('T')[0];
 
+              // Keep gross room revenue and the guest concession as separate
+              // folio lines. This is the hotel-accounting treatment for a
+              // complimentary night: Room Revenue is credited at gross, then
+              // Guest Complimentary (contra-revenue) is debited for the
+              // approved concession. The folio balance remains net.
+              const grossRoomCharge = discountDeduction > 0 ? originalRate : effectiveRate;
               await tx.folioItem.create({
                 data: {
                   folioId: mainFolio.id,
                   businessDate,
                   type: 'CHARGE',
                   source: 'ROOM_CHARGE',
-                  description: discountDeduction > 0 
-                    ? `Room Charge for ${businessDate.toISOString().split('T')[0]} (discount approved)` 
-                    : `Room Charge for ${businessDate.toISOString().split('T')[0]}${discountNote}`,
+                  revenueCategory: 'ROOM',
+                  description: `Room Charge for ${auditDateLabel}${discountDeduction > 0 ? ' (gross)' : discountNote}`,
                   quantity: 1,
-                  unitAmount: effectiveRate,
-                  amount: effectiveRate,
-                  baseAmount: effectiveRate,
+                  unitAmount: grossRoomCharge,
+                  amount: grossRoomCharge,
+                  baseAmount: grossRoomCharge,
                   currency: chargeCurrency,
                   postedBy: actorId!,
                   nightAuditRunId: auditRun.id,
                   operationId: roomChargeKey,
-                  discountApprovalId: discountApprovalId
+                  discountApprovalId: null,
                 }
               });
 
-                // Update folio balance and totalCharges
-                await tx.folio.update({
-                  where: { id: mainFolio.id },
-                  data: { 
-                    balance: { increment: effectiveRate },
-                    totalCharges: { increment: effectiveRate }
+              if (discountDeduction > 0) {
+                const concessionItem = await tx.folioItem.create({
+                  data: {
+                    folioId: mainFolio.id,
+                    businessDate,
+                    type: verifiedComplimentary ? 'COMPLIMENTARY' : 'DISCOUNT',
+                    source: 'ROOM_CHARGE',
+                    revenueCategory: 'ROOM',
+                    description: verifiedComplimentary
+                      ? `Guest Complimentary for ${auditDateLabel}`
+                      : `Approved room discount for ${auditDateLabel}`,
+                    quantity: 1,
+                    unitAmount: -discountDeduction,
+                    amount: -discountDeduction,
+                    baseAmount: -discountDeduction,
+                    currency: chargeCurrency,
+                    postedBy: actorId!,
+                    nightAuditRunId: auditRun.id,
+                    operationId: `${roomChargeKey}:CONCESSION`,
+                    discountApprovalId: discountApprovalId,
                   }
                 });
+
+                if (verifiedComplimentary) {
+                  await tx.complimentaryRecord.updateMany({
+                    where: { id: verifiedComplimentary.id },
+                    data: { folioItemId: concessionItem.id },
+                  });
+                }
+              }
+
+              // Update the folio with the net amount after the concession.
+              await tx.folio.update({
+                where: { id: mainFolio.id },
+                data: {
+                  balance: { increment: effectiveRate },
+                  totalCharges: { increment: effectiveRate }
+                }
+              });
 
                 // Automatically apply any available guest credit to this room charge
                 await applyAvailableFolioCredit(tx, {
@@ -510,7 +575,7 @@ export async function executeNightAudit(
     for (const group of otherItemsByType) {
       const amt = Number(group._sum?.amount || 0);
       if (group.type === 'TAX') taxesVal += amt;
-      else if (group.type === 'DISCOUNT' || group.type === 'COMPLIMENTARY') discountsVal += amt;
+      else if (group.type === 'DISCOUNT' || group.type === 'COMPLIMENTARY') discountsVal += Math.abs(amt);
       else if (group.type === 'REFUND') refundsVal += amt;
     }
 

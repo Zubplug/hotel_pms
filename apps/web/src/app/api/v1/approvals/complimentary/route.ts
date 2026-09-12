@@ -29,6 +29,9 @@ export async function POST(req: NextRequest) {
     if (!acknowledgedByStaffId) {
       return errorResponse('BAD_REQUEST', 'acknowledgedByStaffId is required', 400);
     }
+    if (beneficiaryType === 'STAFF' || beneficiaryStaffId || settlementType === 'STAFF_PAY_LATER') {
+      return errorResponse('BAD_REQUEST', 'Complimentary benefits are for guests only', 400);
+    }
 
     const idempotencyKey = `comp_${targetType}_${reservationRoomId || orderId}_${Date.now()}`;
 
@@ -72,7 +75,7 @@ export async function POST(req: NextRequest) {
             sourceModule: 'FRONT_DESK',
             roomId,
             guestId,
-            staffId: beneficiaryStaffId || null,
+            staffId: null,
             operatorId,
             operationId: idempotencyKey,
             grossAmount: finalCompAmount,
@@ -109,7 +112,7 @@ export async function POST(req: NextRequest) {
             reference: `COMP_POS_${orderId}_${Date.now()}`,
             sourceModule: 'POS',
             posOrderId: orderId,
-            staffId: beneficiaryStaffId || null,
+            staffId: null,
             operatorId,
             operationId: idempotencyKey,
             grossAmount: finalCompAmount,

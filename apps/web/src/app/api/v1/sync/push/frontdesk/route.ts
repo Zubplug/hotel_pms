@@ -973,7 +973,28 @@ export async function POST(req: NextRequest) {
               const managerId = payload.discountApprovingManagerId || payload.DiscountApprovingManagerId || null;
               const discountType = payload.discountType || payload.DiscountType;
               const discountValue = Number(payload.discountValue || payload.DiscountValue || 0);
-              const discountApproval = await tx.approvalRequest.upsert({
+              if (discountType === 'COMPLIMENTARY') {
+                const complimentaryAmount = discountValue > 0 ? discountValue : Number(createdReservationRoom.rateAmount);
+                await tx.complimentaryRecord.create({
+                  data: {
+                    propertyId,
+                    businessDate: property?.businessDate || authoritativeBusinessDate,
+                    reference: `COMP_RES_${aggregateId}_${checkInDate.toISOString().slice(0, 10)}`,
+                    sourceModule: 'FRONT_DESK',
+                    roomId: createdReservationRoom.roomId,
+                    guestId: finalGuestId,
+                    operatorId: actorId!,
+                    operationId: `COMP_CREATE_${aggregateId}`,
+                    grossAmount: complimentaryAmount,
+                    complAmount: complimentaryAmount,
+                    netAmount: 0,
+                    complType: complimentaryAmount >= Number(createdReservationRoom.rateAmount) ? 'FULL' : 'PARTIAL',
+                    reason: payload.discountReason || payload.DiscountReason || 'Offline guest complimentary reservation',
+                    notes: JSON.stringify({ acknowledgedByStaffId: managerId }),
+                  },
+                });
+              } else {
+                const discountApproval = await tx.approvalRequest.upsert({
                 where: { idempotencyKey: `DISCOUNT:${aggregateId}` },
                 create: {
                   propertyId,
@@ -1004,12 +1025,13 @@ export async function POST(req: NextRequest) {
                   idempotencyKey: `DISCOUNT:${aggregateId}`,
                 },
                 update: {},
-              });
-              // Link the approval back to the reservationRoom
-              await tx.reservationRoom.update({
-                where: { id: createdReservationRoom.id },
-                data: { discountApprovalId: `PENDING:${discountApproval.id}` },
-              });
+                });
+                // Link the approval back to the reservationRoom
+                await tx.reservationRoom.update({
+                  where: { id: createdReservationRoom.id },
+                  data: { discountApprovalId: `PENDING:${discountApproval.id}` },
+                });
+              }
             }
 
             const propertyBusinessDateStr = (property?.businessDate ?? new Date()).toISOString().split('T')[0];
@@ -3074,6 +3096,9 @@ export async function POST(req: NextRequest) {
                 payload,
               });
             } else if (eventType === "COMPLIMENTARY_REQUESTED") {
+              if (payload.beneficiaryType === "STAFF" || payload.beneficiaryStaffId || payload.settlementType === "STAFF_PAY_LATER") {
+                throw new Error("Complimentary benefits are for guests only");
+              }
               const reservationRoomId = payload.reservationRoomId || aggregateId;
               const resRoom = await tx.reservationRoom.findUnique({ where: { id: reservationRoomId }, include: { reservation: true } });
               if (!resRoom || resRoom.reservation.propertyId !== propertyId) {
@@ -3083,10 +3108,16 @@ export async function POST(req: NextRequest) {
                 where: { id: reservationRoomId },
                 data: {
                   discountType: "COMPLIMENTARY",
-                  discountAmount: Number(payload.compAmount || 0),
+                  discountAmount: payload.compType === "FULL"
+                    ? Number(resRoom.rateAmount || payload.compAmount || 0)
+                    : Number(payload.compAmount || 0),
+                  discountApprovalId: `PENDING:${idempotencyKey}`,
                   discountReason: payload.reason || "Offline complimentary request",
                 },
               });
+              const complimentaryAmount = payload.compType === "FULL"
+                ? Number(resRoom.rateAmount || payload.compAmount || 0)
+                : Number(payload.compAmount || 0);
               await tx.complimentaryRecord.create({
                   data: {
                     propertyId,
@@ -3095,11 +3126,11 @@ export async function POST(req: NextRequest) {
                     sourceModule: "FRONT_DESK",
                     roomId: resRoom.roomId,
                     guestId: resRoom.reservation?.primaryGuestId,
-                    staffId: payload.beneficiaryStaffId || null,
+                    staffId: null,
                     operatorId: actorId,
                     operationId: idempotencyKey,
-                    grossAmount: payload.compAmount || 0,
-                    complAmount: payload.compAmount || 0,
+                    grossAmount: complimentaryAmount,
+                    complAmount: complimentaryAmount,
                     netAmount: 0,
                     complType: payload.compType === "FULL" ? "FULL" : "PARTIAL",
                     reason: payload.reason || "Offline complimentary request",
@@ -3165,6 +3196,9 @@ export async function POST(req: NextRequest) {
                 }
               });
             } else if (eventType === "COMPLIMENTARY_APPLIED") {
+              if (payload.beneficiaryType === "STAFF" || payload.beneficiaryStaffId || payload.settlementType === "STAFF_PAY_LATER") {
+                throw new Error("Complimentary benefits are for guests only");
+              }
               const resRoom = await tx.reservationRoom.findUnique({
                 where: { id: aggregateId },
                 include: { reservation: true }
@@ -3187,7 +3221,7 @@ export async function POST(req: NextRequest) {
                     sourceModule: "FRONT_DESK",
                     roomId: resRoom.roomId,
                     guestId: resRoom.reservation?.primaryGuestId,
-                    staffId: payload.beneficiaryStaffId || null,
+                    staffId: null,
                     operatorId: actorId,
                     operationId: idempotencyKey,
                     grossAmount: payload.compAmount,
@@ -3287,6 +3321,9 @@ export async function POST(req: NextRequest) {
                 });
               }
             } else if (eventType === "POS_COMPLIMENTARY_REQUESTED") {
+              if (payload.beneficiaryType === "STAFF" || payload.beneficiaryStaffId || payload.settlementType === "STAFF_PAY_LATER") {
+                throw new Error("Complimentary benefits are for guests only");
+              }
               const order = await tx.posOrder.findUnique({ where: { id: aggregateId } });
               if (order) {
                 await tx.complimentaryRecord.create({
@@ -3296,7 +3333,7 @@ export async function POST(req: NextRequest) {
                     reference: `COMP_POS_${aggregateId}_${id}`,
                     sourceModule: "POS",
                     posOrderId: aggregateId,
-                    staffId: payload.beneficiaryStaffId || null,
+                    staffId: null,
                     operatorId: actorId,
                     operationId: idempotencyKey,
                     grossAmount: payload.compAmount || 0,
@@ -3348,6 +3385,9 @@ export async function POST(req: NextRequest) {
                 });
               }
             } else if (eventType === "POS_COMPLIMENTARY_APPLIED") {
+              if (payload.beneficiaryType === "STAFF" || payload.beneficiaryStaffId || payload.settlementType === "STAFF_PAY_LATER") {
+                throw new Error("Complimentary benefits are for guests only");
+              }
               const order = await tx.posOrder.findUnique({ where: { id: aggregateId } });
               if (order) {
                 await tx.posOrder.update({
@@ -3364,7 +3404,7 @@ export async function POST(req: NextRequest) {
                     reference: `COMP_POS_${aggregateId}_${Date.now()}`,
                     sourceModule: "POS",
                     posOrderId: aggregateId,
-                    staffId: payload.beneficiaryStaffId || null,
+                    staffId: null,
                     operatorId: actorId,
                     operationId: idempotencyKey,
                     grossAmount: payload.compAmount,
