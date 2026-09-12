@@ -3579,6 +3579,19 @@ export async function POST(req: NextRequest) {
           err.message === "CONCURRENCY_CONFLICT" ||
           err.code === "P2002"
         ) {
+          // If the unique constraint violation is on idempotencyKey, treat it as a successful duplicate
+          if (err.code === "P2002" && err.meta?.target && (
+            (Array.isArray(err.meta.target) && err.meta.target.includes("idempotencyKey")) ||
+            (typeof err.meta.target === "string" && err.meta.target.includes("idempotencyKey"))
+          )) {
+            console.log(`[sync/push] Handled P2002 idempotencyKey conflict as SYNCED for ${idempotencyKey}`);
+            results.push({ id, status: "SYNCED", idempotencyKey });
+            continue;
+          }
+          
+          if (err.code === "P2002") {
+            console.warn(`[sync/push] P2002 error details for event ${id}:`, err.meta);
+          }
           // If P2002, it means another thread inserted the same aggregateVersion for this aggregate.
           let expectedVersion = err.currentVersion || aggregateVersion;
 
