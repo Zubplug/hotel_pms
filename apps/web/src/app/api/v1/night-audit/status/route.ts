@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
     if (!user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
 
     const userRole = user.role;
-    const ALLOWED_ROLES = ['NIGHT_AUDITOR', 'MANAGER', 'HOTEL_MANAGER', 'ADMIN', 'SUPER_ADMIN', 'CEO', 'FINANCE_MANAGER', 'GENERAL_CASHIER', 'FRONT_DESK_SUPERVISOR'];
+    const ALLOWED_ROLES = ['NIGHT_AUDITOR', 'ACCOUNTANT', 'MANAGER', 'HOTEL_MANAGER', 'ADMIN', 'SUPER_ADMIN', 'CEO', 'FINANCE_MANAGER', 'GENERAL_CASHIER', 'FRONT_DESK_SUPERVISOR'];
     if (!ALLOWED_ROLES.includes(userRole)) {
       return errorResponse('FORBIDDEN', 'Insufficient permissions to view night audit status', 403);
     }
