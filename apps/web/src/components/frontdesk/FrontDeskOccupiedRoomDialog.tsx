@@ -203,7 +203,7 @@ export function FrontDeskOccupiedRoomDialog({ room, isOpen, onClose, isAuditorMo
 
       {isAuditorMode && resData?.folioId && (
         <Dialog open={showFolio} onOpenChange={setShowFolio}>
-          <DialogContent className="h-[94vh] w-[calc(100vw-2rem)] max-w-[1400px] overflow-y-auto rounded-[2rem] border-0 bg-slate-100/95 p-3 shadow-2xl backdrop-blur-xl sm:p-5 lg:p-7">
+          <DialogContent className="!h-[94vh] !w-[calc(100vw-2rem)] !max-w-[1400px] overflow-x-hidden overflow-y-auto rounded-[2rem] border-0 bg-slate-100/95 p-3 shadow-2xl backdrop-blur-xl sm:p-5 lg:p-7">
             <DialogHeader className="sr-only">
               <DialogTitle>Guest folio</DialogTitle>
               <DialogDescription>Read-only guest folio for audit review</DialogDescription>

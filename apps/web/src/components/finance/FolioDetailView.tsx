@@ -49,7 +49,7 @@ export function FolioDetailView({ folioId, onBack, readOnly = false }: { folioId
           <div>
             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-indigo-300"><ReceiptText className="h-4 w-4" /> Guest folio</div>
             <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">{guest}</h1>
-            <p className="mt-3 text-sm text-slate-400">Folio {folio.folioNumber} <span className="mx-1 text-slate-600">·</span> {folio.reservation?.confirmationNumber || 'No reservation'} <span className="mx-1 text-slate-600">·</span> Room {folio.reservation?.reservationRooms?.[0]?.room?.number || 'Unassigned'}</p>
+            <p className="mt-3 break-words text-sm text-slate-400">Folio {folio.folioNumber} <span className="mx-1 text-slate-600">·</span> {folio.reservation?.confirmationNumber || 'No reservation'} <span className="mx-1 text-slate-600">·</span> Room {folio.reservation?.reservationRooms?.[0]?.room?.number || 'Unassigned'}</p>
           </div>
           <div className="min-w-[210px] rounded-2xl border border-white/10 bg-white/[0.06] p-4 backdrop-blur-sm sm:text-right">
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Outstanding balance</p>
