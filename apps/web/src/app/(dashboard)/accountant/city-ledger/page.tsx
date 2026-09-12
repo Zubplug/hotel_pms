@@ -5,7 +5,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { NewCityLedgerInvoiceModal } from '@/components/accountant/NewCityLedgerInvoiceModal';
 import { RecordCityLedgerPaymentModal } from '@/components/accountant/RecordCityLedgerPaymentModal';
 import { ExportCityLedgerButton } from '@/components/accountant/ExportCityLedgerButton';
 import { auth } from '@/lib/auth';
@@ -49,7 +48,7 @@ export default async function CityLedgerPage() {
     <div className="min-h-screen space-y-6 bg-slate-950 p-6 text-slate-50 md:p-8">
       <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
         <div><h1 className="flex items-center gap-2 text-3xl font-bold tracking-tight text-emerald-400"><Building2 className="h-8 w-8" />City Ledger</h1><p className="mt-1 text-sm text-slate-400">Production corporate billing, receivables, invoice aging, and payment reconciliation for {property?.name || 'this property'}.</p></div>
-        <div className="flex flex-wrap gap-2"><ExportCityLedgerButton rows={exportRows} currency={currency} /><NewCityLedgerInvoiceModal accounts={accounts.filter(account => account.status === 'ACTIVE').map(account => ({ id: account.id, name: account.name }))} /></div>
+        <div className="flex flex-wrap gap-2"><ExportCityLedgerButton rows={exportRows} currency={currency} /></div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">

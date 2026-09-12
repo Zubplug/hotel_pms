@@ -2,7 +2,6 @@ import React from 'react';
 import { AlertCircle, ArrowRightLeft, Building2, CheckCircle2, Clock, FileText, TrendingUp } from 'lucide-react';
 import { redirect } from 'next/navigation';
 
-import { NewCityLedgerInvoiceModal } from '@/components/accountant/NewCityLedgerInvoiceModal';
 import { RecordCityLedgerPaymentModal } from '@/components/accountant/RecordCityLedgerPaymentModal';
 import { ExportReceivablesButton } from '@/components/accountant/ExportReceivablesButton';
 import { auth } from '@/lib/auth';
@@ -101,7 +100,7 @@ export default async function ReceivablesPage() {
             <h1 className="flex items-center gap-2 text-3xl font-bold tracking-tight text-white"><Building2 className="h-8 w-8 text-emerald-400" />Accounts Receivable</h1>
             <p className="mt-1 text-sm text-slate-400">Live city-ledger balances, corporate billing, and AR aging for {property?.name || 'this property'}.</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2"><ExportReceivablesButton currency={currency} rows={accountRows.map(({ account, oldestTransfer, lastPayment, daysOutstanding }) => ({ name: account.name, type: account.type, balance: Number(account.balance), oldestOpenItem: formatDate(oldestTransfer?.createdAt || null), lastPayment: formatDate(lastPayment), status: daysOutstanding > 30 ? 'OVERDUE' : 'CURRENT' }))} /><NewCityLedgerInvoiceModal accounts={accounts.filter(account => account.status === 'ACTIVE').map(account => ({ id: account.id, name: account.name }))} /></div>
+          <div className="flex flex-wrap items-center gap-2"><ExportReceivablesButton currency={currency} rows={accountRows.map(({ account, oldestTransfer, lastPayment, daysOutstanding }) => ({ name: account.name, type: account.type, balance: Number(account.balance), oldestOpenItem: formatDate(oldestTransfer?.createdAt || null), lastPayment: formatDate(lastPayment), status: daysOutstanding > 30 ? 'OVERDUE' : 'CURRENT' }))} /></div>
         </div>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -125,7 +124,7 @@ export default async function ReceivablesPage() {
           <div className="border-t border-white/10 bg-slate-900/30 p-4 text-center text-sm text-slate-500">Showing {accountRows.length} open account{accountRows.length === 1 ? '' : 's'}</div>
         </div>
 
-        <div className="flex items-start gap-3 rounded-xl border border-indigo-500/20 bg-indigo-500/10 p-4 text-sm text-indigo-200"><ArrowRightLeft className="mt-0.5 h-5 w-5 shrink-0" /><p>Use <strong>New Invoice</strong> to issue a controlled receivable with an invoice number and due date. Payments are applied oldest-due-first and update the live balance atomically.</p></div>
+        <div className="flex items-start gap-3 rounded-xl border border-indigo-500/20 bg-indigo-500/10 p-4 text-sm text-indigo-200"><ArrowRightLeft className="mt-0.5 h-5 w-5 shrink-0" /><p>Corporate folio balances are converted into receivable invoices automatically at checkout. Payments are applied oldest-due-first and update the live balance atomically.</p></div>
       </div>
     </div>
   );
