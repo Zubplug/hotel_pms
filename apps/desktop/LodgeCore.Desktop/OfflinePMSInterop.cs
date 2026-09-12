@@ -1290,14 +1290,18 @@ public class OfflinePMSInterop
             var validStatuses = new[] { "PENDING", "CONFIRMED", "CHECKED_IN", "CHECKED_OUT", "CANCELLED", "NO_SHOW" };
             res.Status = validStatuses.Contains(reqStatus) ? (reqStatus ?? "CONFIRMED") : "CONFIRMED";
             
-            var room = new LodgeCore.Desktop.Data.Entities.LocalReservationRoom {
-                Id = Guid.NewGuid().ToString(),
-                ReservationId = res.Id,
-                RoomId = res.RoomId,
-                RoomTypeId = res.RoomTypeId,
-                CheckInDate = res.CheckInDate,
-                CheckOutDate = res.CheckOutDate
-            };
+            var room = res.Rooms.FirstOrDefault();
+            if (room == null) {
+                room = new LodgeCore.Desktop.Data.Entities.LocalReservationRoom {
+                    Id = Guid.NewGuid().ToString(),
+                    ReservationId = res.Id,
+                    RoomId = res.RoomId,
+                    RoomTypeId = res.RoomTypeId
+                };
+                res.Rooms.Add(room);
+            }
+            room.CheckInDate = res.CheckInDate;
+            room.CheckOutDate = res.CheckOutDate;
 
             if (root.TryGetProperty("adjustmentType", out var adjTypeProp) && adjTypeProp.ValueKind != System.Text.Json.JsonValueKind.Null) {
                 var adjType = adjTypeProp.GetString();
@@ -1317,7 +1321,6 @@ public class OfflinePMSInterop
                     room.DiscountApprovingManagerId = root.TryGetProperty("acknowledgedByStaffId", out var ack) ? ack.GetString() : null;
                 }
             }
-            res.Rooms.Add(room);
 
             
             var created = await _repo.CreateReservationAsync(res, "System", "Device1");
