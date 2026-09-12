@@ -604,12 +604,20 @@ export async function POST(req: NextRequest) {
               const nestedOrder = payload.order || payload.Order;
               const nestedKots = payload.kots || payload.Kots || [];
               const nestedItems = nestedOrder?.Items || nestedOrder?.items || [];
-              const nestedItemIds = new Set<string>(nestedKots.flatMap((kot: any) => {
-                try { return JSON.parse(kot.ItemIdsJson || kot.itemIdsJson || '[]'); } catch { return []; }
-              }));
-              const items = Array.isArray(payload)
-                ? payload
-                : (payload.Items || payload.items || []);
+              const candidateItems = Array.isArray(nestedItems) && nestedItems.length > 0
+                ? nestedItems
+                : (Array.isArray(payload) ? payload : (payload.Items || payload.items || []));
+              const existingItemIds = new Set(
+                (await tx.posOrderItem.findMany({ where: { orderId: parentOrderId }, select: { id: true } }))
+                  .map((item: any) => item.id),
+              );
+              // Offline Fire More sends the complete updated order snapshot.
+              // Materialize only unseen items so original items are never
+              // duplicated during incremental sync.
+              const items = candidateItems.filter((item: any) => {
+                const itemId = item.Id || item.id;
+                return itemId && !existingItemIds.has(itemId);
+              });
               for (const item of items) {
                   const discountAmount = Number(item.Discount ?? item.discount ?? 0);
                   
@@ -660,12 +668,24 @@ export async function POST(req: NextRequest) {
                   const orderId = items[0].OrderId || items[0].orderId || event.aggregateId;
                   const currentOrder = await tx.posOrder.findUnique({ where: { id: orderId } });
                   if (currentOrder) {
+                      const snapshotSubtotal = nestedOrder?.Subtotal ?? nestedOrder?.subtotal;
+                      const snapshotTaxAmount = nestedOrder?.TaxAmount ?? nestedOrder?.taxAmount;
+                      const snapshotTotal = nestedOrder?.Total ?? nestedOrder?.total;
                       await tx.posOrder.update({
                           where: { id: orderId },
                           data: {
-                            subtotal: Number(currentOrder.subtotal) + items.reduce((sum: number, i: any) => sum + Number(i.Subtotal ?? i.subtotal ?? i.Total ?? i.total ?? 0), 0),
-                            taxAmount: Number(currentOrder.taxAmount) + items.reduce((sum: number, i: any) => sum + Number(i.TaxAmount ?? i.taxAmount ?? 0), 0),
-                            total: Number(currentOrder.total) + items.reduce((sum: number, i: any) => sum + Number(i.Total ?? i.total ?? 0), 0)
+                            subtotal: snapshotSubtotal != null
+                              ? Number(snapshotSubtotal)
+                              : Number(currentOrder.subtotal) + items.reduce((sum: number, i: any) => sum + Number(i.Subtotal ?? i.subtotal ?? i.Total ?? i.total ?? 0), 0),
+                            taxAmount: snapshotTaxAmount != null
+                              ? Number(snapshotTaxAmount)
+                              : Number(currentOrder.taxAmount) + items.reduce((sum: number, i: any) => sum + Number(i.TaxAmount ?? i.taxAmount ?? 0), 0),
+                            total: snapshotTotal != null
+                              ? Number(snapshotTotal)
+                              : Number(currentOrder.total) + items.reduce((sum: number, i: any) => sum + Number(i.Total ?? i.total ?? 0), 0),
+                            ...(nestedOrder?.Status || nestedOrder?.status
+                              ? { status: nestedOrder.Status || nestedOrder.status }
+                              : {}),
                           }
                       });
                   }
@@ -676,11 +696,16 @@ export async function POST(req: NextRequest) {
                 try { itemIds = JSON.parse(kot.ItemIdsJson || kot.itemIdsJson || '[]'); } catch { }
                 const station = String(kot.ProductionStation || kot.productionStation || 'KITCHEN').toUpperCase();
                 const batchItems = items.filter((item: any) => itemIds.includes(item.Id || item.id));
+                if (batchItems.length === 0) continue;
+                const latestBatch = await tx.posProductionBatch.aggregate({
+                  where: { orderId: event.aggregateId, station: station as any },
+                  _max: { batchNumber: true },
+                });
                 await tx.posProductionBatch.create({
                   data: {
                     id: kot.Id || kot.id || crypto.randomUUID(),
                     orderId: event.aggregateId,
-                    batchNumber: 1,
+                    batchNumber: (latestBatch._max.batchNumber ?? 0) + 1,
                     station,
                     status: 'PENDING',
                     firedAt: new Date(kot.FiredAt || kot.firedAt || event.occurredAt),

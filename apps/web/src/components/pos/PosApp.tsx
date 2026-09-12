@@ -590,7 +590,9 @@ export default function PosApp() {
       if (res.error) throw new Error(res.error);
       // After firing: firedQty = total quantity, pendingQty = 0 for all items
       setCart((prev) => prev.map((i) => ({ ...i, fired: true, firedQty: i.quantity, pendingQty: 0 })));
-      setTableRefreshTrigger(Date.now());
+      // Force the All Orders modal to re-query even if Fire More completes
+      // within the same millisecond as the previous refresh.
+      setTableRefreshTrigger((value) => value + 1);
       const batchCount = res.data?.newBatches?.length ?? 0;
       // KotPrintService (backend background service) is the sole print authority.
       // It picks up QUEUED KOTs within 5 s, routes each KOT to the correct

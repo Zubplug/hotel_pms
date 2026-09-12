@@ -471,6 +471,9 @@ public class LocalPosKot
     public string? PrinterId { get; set; }
     public int AttemptCount { get; set; }
     public DateTime? PrintedAt { get; set; }
+    // Tracks the receipt-printer copy independently from the kitchen KOT.
+    // A kitchen printer can fail and retry without duplicating the waiter slip.
+    public DateTime? WaiterSlipPrintedAt { get; set; }
     public DateTime CreatedAt { get; set; }
     public string OrderNumber { get; set; } = string.Empty;
     public string? TableNumber { get; set; }

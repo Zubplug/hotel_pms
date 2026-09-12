@@ -147,16 +147,15 @@ public class KotPrintService : BackgroundService
                     // ── 6. Waiter slip on RECEIPT printer (best-effort) ──
                     // A failure here is a warning — it must NOT re-queue the
                     // main KOT or the kitchen will receive the ticket twice.
-                    var (waiterSuccess, waiterError) = await _escPos.PrintWaiterSlipAsync(kotData, kot.OutletId);
-                    if (!waiterSuccess)
-                    {
-                        _logger.LogWarning(
-                            "Waiter slip for KOT {KotNumber} was not printed (non-fatal): {Error}",
-                            kot.KotNumber, waiterError);
-                    }
+                    await PrintWaiterSlipOnceAsync(kot, kotData);
                 }
                 else
                 {
+                    // The station printer may be configured but unreachable.
+                    // Still send the waiter copy to the receipt printer now;
+                    // the station KOT remains queued for its normal retries.
+                    await PrintWaiterSlipOnceAsync(kot, kotData);
+
                     // Station printer failed — retry up to 3 times then give up.
                     kot.PrintStatus = kot.AttemptCount >= 3 ? "FAILED" : "QUEUED";
                     _logger.LogWarning(
@@ -172,6 +171,24 @@ public class KotPrintService : BackgroundService
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task PrintWaiterSlipOnceAsync(LocalPosKot kot, KotData kotData)
+    {
+        if (kot.WaiterSlipPrintedAt.HasValue) return;
+
+        var (waiterSuccess, waiterError) = await _escPos.PrintWaiterSlipAsync(kotData, kot.OutletId);
+        if (waiterSuccess)
+        {
+            kot.WaiterSlipPrintedAt = DateTime.UtcNow;
+            _logger.LogInformation("Waiter slip for KOT {KotNumber} printed on RECEIPT printer.", kot.KotNumber);
+        }
+        else
+        {
+            _logger.LogWarning(
+                "Waiter slip for KOT {KotNumber} was not printed (non-fatal): {Error}",
+                kot.KotNumber, waiterError);
+        }
     }
 
     private static async Task<string> GetOutletNameAsync(LocalDbContext db, string outletId)

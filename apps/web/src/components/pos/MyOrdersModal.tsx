@@ -10,7 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import {
-  Loader2, Search, Receipt, FileText,
+  Loader2, Search, Receipt, Printer, FileText,
   CalendarDays, SlidersHorizontal, TrendingUp,
   CheckCircle2, Clock, XCircle, AlertCircle,
   User, UtensilsCrossed, Hotel, Coffee, ShoppingBag,
@@ -21,6 +21,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { ReceiptVerificationModal } from './ReceiptVerificationModal';
+import { HardwareBridge, toReceiptPrintData } from '@/lib/desktop/HardwareBridge';
 
 interface MyOrdersModalProps {
   isOpen: boolean;
@@ -78,6 +79,7 @@ export function MyOrdersModal({ isOpen, onClose, operatorToken, staffName, refre
   const [searchQuery, setSearchQuery]     = useState('');
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
   const [isLoadingReceipt, setIsLoadingReceipt] = useState<string | null>(null);
+  const [isReprinting, setIsReprinting] = useState<string | null>(null);
 
   const loadReceipt = async (order: any) => {
     setIsLoadingReceipt(order.id);
@@ -89,6 +91,31 @@ export function MyOrdersModal({ isOpen, onClose, operatorToken, staffName, refre
       setSelectedOrder(order);
     } finally {
       setIsLoadingReceipt(null);
+    }
+  };
+
+  const reprintReceipt = async (order: any) => {
+    if (!HardwareBridge.isAvailable()) {
+      toast.error('Receipt printer is only available in the desktop app');
+      return;
+    }
+
+    setIsReprinting(order.id);
+    try {
+      // DesktopDataProvider reads this from the local SQLite database while
+      // offline; no cloud request is needed for a historical reprint.
+      const receiptRes = await provider.pos.getReceipt(order.id);
+      if (receiptRes.error) throw new Error(receiptRes.error);
+      const receiptData = toReceiptPrintData(receiptRes.data ?? receiptRes, true);
+      const printResult = await HardwareBridge.printReceipt(receiptData);
+      if (printResult?.success === false) {
+        throw new Error(printResult.error || 'Receipt printer rejected the reprint');
+      }
+      toast.success('Receipt reprint sent to the receipt printer');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to reprint receipt');
+    } finally {
+      setIsReprinting(null);
     }
   };
 
@@ -315,6 +342,7 @@ export function MyOrdersModal({ isOpen, onClose, operatorToken, staffName, refre
                     const payMethod = order.payments?.[0]?.method ?? order.payments?.[0]?.Method;
                     const isPaid = order.paymentStatus === 'PAID' || ['PAID', 'CLOSED', 'COMPLETED'].includes(order.status);
                     const isLoadingThis = isLoadingReceipt === order.id;
+                    const isReprintingThis = isReprinting === order.id;
                     return (
                       <tr
                         key={order.id}
@@ -383,24 +411,38 @@ export function MyOrdersModal({ isOpen, onClose, operatorToken, staffName, refre
 
                         {/* Action */}
                         <td className="py-4 px-4">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (['SUBMITTED', 'IN_SERVICE'].includes(String(order.status).toUpperCase()) && onOrderSelect) {
-                                void resumeOrder(order);
-                              } else {
-                                void loadReceipt(order);
-                              }
-                            }}
-                            disabled={!!isLoadingReceipt}
-                            className="flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 px-3 py-1.5 rounded-lg transition-all opacity-0 group-hover:opacity-100 border border-transparent hover:border-indigo-200"
-                          >
-                            {isLoadingThis
-                              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                              : <Receipt className="w-3.5 h-3.5" />}
-                            {['SUBMITTED', 'IN_SERVICE'].includes(String(order.status).toUpperCase()) && onOrderSelect ? 'Open' : 'Receipt'}
-                            <ChevronRight className="w-3 h-3" />
-                          </button>
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (['SUBMITTED', 'IN_SERVICE'].includes(String(order.status).toUpperCase()) && onOrderSelect) {
+                                  void resumeOrder(order);
+                                } else {
+                                  void loadReceipt(order);
+                                }
+                              }}
+                              disabled={!!isLoadingReceipt || !!isReprinting}
+                              className="flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 px-3 py-1.5 rounded-lg transition-all border border-transparent hover:border-indigo-200"
+                            >
+                              {isLoadingThis
+                                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                : <Receipt className="w-3.5 h-3.5" />}
+                              {['SUBMITTED', 'IN_SERVICE'].includes(String(order.status).toUpperCase()) && onOrderSelect ? 'Open' : 'Receipt'}
+                              <ChevronRight className="w-3 h-3" />
+                            </button>
+                            {!['SUBMITTED', 'IN_SERVICE'].includes(String(order.status).toUpperCase()) && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); void reprintReceipt(order); }}
+                                disabled={!!isLoadingReceipt || !!isReprinting}
+                                title="Reprint receipt"
+                                className="p-1.5 rounded-md text-slate-500 hover:text-indigo-700 hover:bg-indigo-50 border border-transparent hover:border-indigo-200"
+                              >
+                                {isReprintingThis
+                                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  : <Printer className="w-3.5 h-3.5" />}
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );

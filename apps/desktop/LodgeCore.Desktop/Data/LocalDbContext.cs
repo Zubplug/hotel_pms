@@ -241,6 +241,7 @@ public class LocalDbContext : DbContext
         var columns = new[]
         {
             "ALTER TABLE PosKots ADD COLUMN ProductionStation TEXT NOT NULL DEFAULT 'KITCHEN'",
+            "ALTER TABLE PosKots ADD COLUMN WaiterSlipPrintedAt TEXT NULL",
             "ALTER TABLE ProductCategories ADD COLUMN ProductionStation TEXT NOT NULL DEFAULT 'KITCHEN'",
             "ALTER TABLE PosProducts ADD COLUMN ProductionStation TEXT NULL"
             ,"ALTER TABLE PosProducts ADD COLUMN InventoryMode TEXT NOT NULL DEFAULT 'NON_STOCK'"

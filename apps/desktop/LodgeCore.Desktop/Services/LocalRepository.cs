@@ -3876,6 +3876,12 @@ public class LocalRepository
         order.Subtotal += newItems.Sum(i => i.UnitPrice * i.Quantity);
         order.TaxAmount += newItems.Sum(i => i.TaxAmount);
         order.Total += newItems.Sum(i => i.Total);
+        // Keep the offline flow aligned with the online fire endpoint: once
+        // additional items are fired, a submitted order is in service.
+        if (order.Status == "SUBMITTED")
+        {
+            order.Status = "IN_SERVICE";
+        }
         order.UpdatedAt = DateTime.UtcNow;
 
         var productIds = newItems.Where(i => !string.IsNullOrWhiteSpace(i.ProductId)).Select(i => i.ProductId!).Distinct().ToList();
