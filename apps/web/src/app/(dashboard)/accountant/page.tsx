@@ -67,7 +67,8 @@ export default function AccountantOverviewPage() {
   // and silently render the fallback value of ₦0.00.
   const currentRev = Number(kpis?.revenue?.today?.totalRevenue ?? 0);
   const previousRev = Number(kpis?.revenue?.yesterday?.totalRevenue ?? 0);
-  const revGrowth = previousRev > 0 ? ((currentRev - previousRev) / previousRev) * 100 : 0;
+  const hasRevenueBaseline = previousRev > 0;
+  const revGrowth = hasRevenueBaseline ? ((currentRev - previousRev) / previousRev) * 100 : null;
 
   const currentExpenses = kpis?.balances?.apOutstanding || 0;
   const arTotal = kpis?.balances?.arTotal || 0;
@@ -136,9 +137,9 @@ export default function AccountantOverviewPage() {
           <div className="mt-4 relative z-10">
             <span className="text-3xl font-bold text-white tracking-tight">{formatCurrency(Number(currentRev) || 0)}</span>
             <div className="mt-2 flex items-center gap-2 text-sm">
-              <span className={`inline-flex items-center gap-1 font-medium ${revGrowth >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                {revGrowth >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                {Math.abs(revGrowth).toFixed(1)}%
+            <span className={`inline-flex items-center gap-1 font-medium ${revGrowth === null ? 'text-slate-400' : revGrowth >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                {revGrowth === null ? '—' : revGrowth >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                {revGrowth === null ? 'No prior-day baseline' : `${Math.abs(revGrowth).toFixed(1)}%`}
               </span>
               <span className="text-slate-500">vs previous business day</span>
             </div>
@@ -149,7 +150,7 @@ export default function AccountantOverviewPage() {
         <div className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 to-slate-950 p-6 border border-white/5 shadow-xl transition-all hover:border-amber-500/30 hover:shadow-amber-900/20">
           <div className="absolute right-0 top-0 -mt-4 -mr-4 h-24 w-24 rounded-full bg-amber-500/10 blur-2xl transition-all group-hover:bg-amber-500/20" />
           <div className="flex items-center justify-between relative z-10">
-            <span className="text-sm font-medium text-slate-400">Cash Expenses</span>
+            <span className="text-sm font-medium text-slate-400">Accounts Payable</span>
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/20 text-amber-400">
               <Wallet className="h-4 w-4" />
             </div>
@@ -157,7 +158,7 @@ export default function AccountantOverviewPage() {
           <div className="mt-4 relative z-10">
             <span className="text-3xl font-bold text-white tracking-tight">{formatCurrency(Number(currentExpenses) || 0)}</span>
             <div className="mt-2 flex items-center gap-2 text-sm text-slate-500">
-              <span>Outstanding supplier balance</span>
+              <span>Outstanding supplier invoices</span>
             </div>
           </div>
         </div>

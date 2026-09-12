@@ -13,14 +13,14 @@ type DepartmentRevenue = {
   ytd: number;
   priorYear: number;
   count: number;
-  variance: number;
+  variance: number | null;
   isUp: boolean;
 };
 
 type RevenueReport = {
   property: { name: string; currency: string };
   businessDate: string;
-  snapshot: { today: number; mtd: number; ytd: number; priorYear: number; variance: number; isUp: boolean };
+  snapshot: { today: number; mtd: number; ytd: number; priorYear: number; variance: number | null; isUp: boolean };
   departments: DepartmentRevenue[];
 };
 
@@ -49,8 +49,8 @@ export default function RevenueAccountingPage() {
     const { snapshot, departments, businessDate } = reportQuery.data;
     const rows = [
       ['Department', 'Today', 'MTD', 'YTD', 'Prior year same day', 'Variance'],
-      ...departments.map(item => [item.department, item.today, item.mtd, item.ytd, item.priorYear, `${item.variance}%`]),
-      ['Total', snapshot.today, snapshot.mtd, snapshot.ytd, snapshot.priorYear, `${snapshot.variance}%`],
+      ...departments.map(item => [item.department, item.today, item.mtd, item.ytd, item.priorYear, item.variance === null ? 'N/A' : `${item.variance}%`]),
+      ['Total', snapshot.today, snapshot.mtd, snapshot.ytd, snapshot.priorYear, snapshot.variance === null ? 'N/A' : `${snapshot.variance}%`],
     ];
     const csv = rows.map(row => row.map(value => `"${String(value).replaceAll('"', '""')}"`).join(',')).join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
@@ -85,8 +85,8 @@ export default function RevenueAccountingPage() {
         </div>
 
         <div className="overflow-hidden rounded-xl border border-white/10 bg-white/5">
-          <div className="border-b border-white/5 p-6"><h2 className="text-lg font-semibold text-white">Revenue Streams</h2><p className="mt-1 text-sm text-slate-400">Departments are derived from the current revenue sources recorded in the database.</p></div>
-          <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left"><thead><tr className="bg-white/5 text-sm uppercase tracking-wider text-slate-300"><th className="border-b border-white/10 px-6 py-4 font-medium">Department</th><th className="border-b border-white/10 px-6 py-4 font-medium">Today</th><th className="border-b border-white/10 px-6 py-4 font-medium">MTD</th><th className="border-b border-white/10 px-6 py-4 font-medium">YTD</th><th className="border-b border-white/10 px-6 py-4 font-medium">Variance (YoY)</th></tr></thead><tbody className="divide-y divide-white/5">{report.departments.length === 0 ? <tr><td colSpan={5} className="px-6 py-10 text-center text-slate-400">No revenue transactions found for this property.</td></tr> : report.departments.map(stream => <tr key={stream.id} className="transition-colors hover:bg-white/5"><td className="px-6 py-4 font-medium text-white">{stream.department}<span className="ml-2 text-xs text-slate-500">{stream.count} charges</span></td><td className="px-6 py-4 text-slate-300">{money(stream.today, report.property.currency)}</td><td className="px-6 py-4 text-slate-300">{money(stream.mtd, report.property.currency)}</td><td className="px-6 py-4 text-slate-300">{money(stream.ytd, report.property.currency)}</td><td className="px-6 py-4"><span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium ${stream.isUp ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400' : 'border-rose-500/20 bg-rose-500/10 text-rose-400'}`}>{stream.isUp ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}{pct(stream.variance)}</span></td></tr>)}</tbody><tfoot className="border-t border-white/10 bg-white/5 font-medium"><tr><td className="px-6 py-4 text-white">Total</td><td className="px-6 py-4 text-emerald-400">{money(report.snapshot.today, report.property.currency)}</td><td className="px-6 py-4 text-emerald-400">{money(report.snapshot.mtd, report.property.currency)}</td><td className="px-6 py-4 text-emerald-400">{money(report.snapshot.ytd, report.property.currency)}</td><td className="px-6 py-4 text-emerald-400">{pct(report.snapshot.variance)}</td></tr></tfoot></table></div>
+          <div className="border-b border-white/5 p-6"><h2 className="text-lg font-semibold text-white">Departmental Revenue</h2><p className="mt-1 text-sm text-slate-400">Professional hotel revenue departments aligned with the active chart of accounts and transaction sources.</p></div>
+          <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left"><thead><tr className="bg-white/5 text-sm uppercase tracking-wider text-slate-300"><th className="border-b border-white/10 px-6 py-4 font-medium">Department</th><th className="border-b border-white/10 px-6 py-4 font-medium">Today</th><th className="border-b border-white/10 px-6 py-4 font-medium">MTD</th><th className="border-b border-white/10 px-6 py-4 font-medium">YTD</th><th className="border-b border-white/10 px-6 py-4 font-medium">Variance (YoY)</th></tr></thead><tbody className="divide-y divide-white/5">{report.departments.map(stream => <tr key={stream.id} className="transition-colors hover:bg-white/5"><td className="px-6 py-4 font-medium text-white">{stream.department}<span className="ml-2 text-xs text-slate-500">{stream.count} charges</span></td><td className="px-6 py-4 text-slate-300">{money(stream.today, report.property.currency)}</td><td className="px-6 py-4 text-slate-300">{money(stream.mtd, report.property.currency)}</td><td className="px-6 py-4 text-slate-300">{money(stream.ytd, report.property.currency)}</td><td className="px-6 py-4"><span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium ${stream.variance === null ? 'border-white/10 bg-white/5 text-slate-400' : stream.isUp ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400' : 'border-rose-500/20 bg-rose-500/10 text-rose-400'}`}>{stream.variance === null ? 'N/A' : <>{stream.isUp ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}{pct(stream.variance)}</>}</span></td></tr>)}</tbody><tfoot className="border-t border-white/10 bg-white/5 font-medium"><tr><td className="px-6 py-4 text-white">Total</td><td className="px-6 py-4 text-emerald-400">{money(report.snapshot.today, report.property.currency)}</td><td className="px-6 py-4 text-emerald-400">{money(report.snapshot.mtd, report.property.currency)}</td><td className="px-6 py-4 text-emerald-400">{money(report.snapshot.ytd, report.property.currency)}</td><td className="px-6 py-4 text-emerald-400">{report.snapshot.variance === null ? 'N/A' : pct(report.snapshot.variance)}</td></tr></tfoot></table></div>
         </div>
       </div>
     </div>

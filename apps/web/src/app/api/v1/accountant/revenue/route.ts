@@ -6,22 +6,25 @@ import { successResponse, errorResponse } from '@/lib/api-response';
 import prisma from '@hotel-pms/db';
 
 const departmentForSource: Record<string, string> = {
-  ROOM_CHARGE: 'Rooms',
-  ROOM_UPGRADE: 'Rooms',
-  ROOM_DOWNGRADE_CREDIT: 'Rooms',
-  POS: 'Food & Beverage',
-  RESTAURANT: 'Food & Beverage',
-  BAR: 'Bar',
-  SPA: 'Spa',
-  LAUNDRY: 'Laundry',
-  TRANSPORT: 'Transport',
-  MINIBAR: 'Minibar',
-  TELEPHONE: 'Telephone',
-  INTERNET: 'Internet',
-  CITY_LEDGER: 'City Ledger',
-  MANUAL: 'Other',
-  OTHER: 'Other',
+  ROOM_CHARGE: 'ROOMS',
+  ROOM_UPGRADE: 'ROOMS',
+  ROOM_DOWNGRADE_CREDIT: 'ROOMS',
+  POS: 'FOOD & BEVERAGE',
+  RESTAURANT: 'FOOD & BEVERAGE',
+  BAR: 'FOOD & BEVERAGE',
+  SPA: 'OTHER OPERATING REVENUE',
+  LAUNDRY: 'LAUNDRY',
+  TRANSPORT: 'OTHER OPERATING REVENUE',
+  MINIBAR: 'FOOD & BEVERAGE',
+  TELEPHONE: 'OTHER OPERATING REVENUE',
+  INTERNET: 'OTHER OPERATING REVENUE',
+  MANUAL: 'OTHER OPERATING REVENUE',
+  OTHER: 'OTHER OPERATING REVENUE',
 };
+
+const reportDepartments = [
+  'ROOMS', 'FOOD & BEVERAGE', 'LAUNDRY', 'EVENTS / BANQUETS', 'OTHER OPERATING REVENUE',
+];
 
 const dateOnly = (date: Date) => new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 const addDays = (date: Date, days: number) => new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
@@ -76,7 +79,7 @@ export async function GET(req: NextRequest) {
     for (const item of items) {
       const itemDate = dateOnly(new Date(item.businessDate));
       const value = amountForItem(item);
-      const department = departmentForSource[item.source] || 'Other';
+      const department = departmentForSource[item.source] || 'OTHER OPERATING REVENUE';
       const departmentTotals = getTotals(department);
       if (key(itemDate) === key(businessDate)) departmentTotals.today += value;
       if (itemDate >= monthStart && itemDate <= businessDate) departmentTotals.mtd += value;
@@ -85,7 +88,8 @@ export async function GET(req: NextRequest) {
       if (item.type === 'CHARGE') departmentTotals.count += 1;
     }
 
-    const departments = Array.from(totals.entries())
+    const departments = reportDepartments
+      .map(department => [department, totals.get(department) || { today: 0, mtd: 0, ytd: 0, priorYear: 0, count: 0 }] as const)
       .map(([department, values]) => {
         const today = Number(values.today.toFixed(2));
         const mtd = Number(values.mtd.toFixed(2));
@@ -99,11 +103,10 @@ export async function GET(req: NextRequest) {
           ytd,
           priorYear,
           count: values.count,
-          variance: priorYear === 0 ? (today === 0 ? 0 : 100) : Number((((today - priorYear) / Math.abs(priorYear)) * 100).toFixed(1)),
-          isUp: today >= priorYear,
+          variance: priorYear === 0 ? null : Number((((today - priorYear) / Math.abs(priorYear)) * 100).toFixed(1)),
+          isUp: priorYear > 0 && today >= priorYear,
         };
-      })
-      .sort((a, b) => b.today - a.today || a.department.localeCompare(b.department));
+      });
 
     const sum = (field: 'today' | 'mtd' | 'ytd' | 'priorYear') => departments.reduce((total, item) => total + Number(item[field] || 0), 0);
     const today = sum('today');
@@ -117,8 +120,8 @@ export async function GET(req: NextRequest) {
         mtd: Number(sum('mtd').toFixed(2)),
         ytd: Number(sum('ytd').toFixed(2)),
         priorYear: Number(priorYear.toFixed(2)),
-        variance: priorYear === 0 ? (today === 0 ? 0 : 100) : Number((((today - priorYear) / Math.abs(priorYear)) * 100).toFixed(1)),
-        isUp: today >= priorYear,
+        variance: priorYear === 0 ? null : Number((((today - priorYear) / Math.abs(priorYear)) * 100).toFixed(1)),
+        isUp: priorYear > 0 && today >= priorYear,
       },
       departments,
     });

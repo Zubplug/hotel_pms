@@ -76,20 +76,17 @@ export class AccountantAnalyticsService {
     const cashFlowStart = subDays(businessDate, 7);
     
     const [inflows, outflows, supplierPayments] = await Promise.all([
-      prisma.payment.groupBy({
-        by: ['createdAt'],
+      prisma.payment.findMany({
         where: { folio: { propertyId }, createdAt: { gte: startOfDay(cashFlowStart), lte: endOfDay(businessDate) }, status: 'COMPLETED' },
-        _sum: { amount: true }
+        select: { createdAt: true, amount: true }
       }),
-      prisma.cashExpense.groupBy({
-        by: ['paidAt'],
+      prisma.cashExpense.findMany({
         where: { propertyId, paidAt: { gte: startOfDay(cashFlowStart), lte: endOfDay(businessDate) }, status: 'PAID' },
-        _sum: { amount: true }
+        select: { paidAt: true, amount: true }
       }),
-      prisma.supplierPayment.groupBy({
-        by: ['paymentDate'],
+      prisma.supplierPayment.findMany({
         where: { propertyId, paymentDate: { gte: startOfDay(cashFlowStart), lte: endOfDay(businessDate) } },
-        _sum: { amount: true }
+        select: { paymentDate: true, amount: true }
       })
     ]);
 
@@ -98,9 +95,9 @@ export class AccountantAnalyticsService {
       const date = subDays(businessDate, 7 - i);
       const dateStr = date.toISOString().split('T')[0];
       
-      const dayIn = inflows.filter(x => x.createdAt?.toISOString().split('T')[0] === dateStr).reduce((sum, item) => sum + Number(item._sum?.amount ?? 0), 0);
-      const expenseOut = outflows.filter(x => x.paidAt?.toISOString().split('T')[0] === dateStr).reduce((sum, item) => sum + Number(item._sum?.amount ?? 0), 0);
-      const supplierOut = supplierPayments.filter(x => x.paymentDate?.toISOString().split('T')[0] === dateStr).reduce((sum, item) => sum + Number(item._sum?.amount ?? 0), 0);
+      const dayIn = inflows.filter(x => x.createdAt.toISOString().split('T')[0] === dateStr).reduce((sum, item) => sum + Number(item.amount ?? 0), 0);
+      const expenseOut = outflows.filter(x => x.paidAt?.toISOString().split('T')[0] === dateStr).reduce((sum, item) => sum + Number(item.amount ?? 0), 0);
+      const supplierOut = supplierPayments.filter(x => x.paymentDate.toISOString().split('T')[0] === dateStr).reduce((sum, item) => sum + Number(item.amount ?? 0), 0);
       
       return {
         date: dateStr,

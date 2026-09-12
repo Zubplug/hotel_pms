@@ -29,25 +29,30 @@ export default async function CityLedgerPage() {
 
   const accounts = propertyId ? await prisma.cityLedgerAccount.findMany({
     where: { propertyId },
-    take: 10,
+    orderBy: { name: 'asc' }
+  }) : [];
+
+  const entries = propertyId ? await prisma.cityLedgerEntry.findMany({
+    where: { propertyId },
+    include: { account: { select: { name: true } } },
+    take: 100,
     orderBy: { createdAt: 'desc' }
   }) : [];
 
-  const invoices = propertyId ? await prisma.cityLedgerEntry.findMany({
-    where: { propertyId, type: 'TRANSFER_IN' }, // Using TRANSFER_IN to represent invoices sent to AR
-    take: 10,
-    orderBy: { id: 'desc' }
-  }) : [];
-
-  const payments = propertyId ? await prisma.cityLedgerEntry.findMany({
-    where: { propertyId, type: 'PAYMENT' },
-    take: 10,
-    orderBy: { id: 'desc' }
-  }) : [];
+  const invoices = entries.filter(entry => entry.type === 'TRANSFER_IN');
+  const payments = entries.filter(entry => entry.type === 'PAYMENT');
+  const totalOutstanding = accounts.reduce((total, account) => total + Math.max(0, Number(account.balance)), 0);
+  const accountsWithBalance = accounts.filter(account => Number(account.balance) > 0).length;
+  const unmatchedPayments = payments.filter(payment => payment.status !== 'SETTLED').length;
+  const lastPaymentByAccount = new Map<string, Date>();
+  for (const payment of payments) {
+    if (!lastPaymentByAccount.has(payment.accountId)) lastPaymentByAccount.set(payment.accountId, payment.createdAt);
+  }
 
   const formatCurrency = (amount: number) => {
     return '₦' + new Intl.NumberFormat('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
   };
+  const formatDate = (date: Date) => new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium' }).format(date);
 
   return (
     <div className="p-6 space-y-6 bg-slate-950 text-slate-50 min-h-screen">
@@ -74,8 +79,8 @@ export default async function CityLedgerPage() {
             <TrendingUp className="w-4 h-4 text-emerald-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-slate-50">₦26,450.75</div>
-            <p className="text-xs text-slate-400 mt-1">+12% from last month</p>
+            <div className="text-3xl font-bold text-slate-50">{formatCurrency(totalOutstanding)}</div>
+            <p className="text-xs text-slate-400 mt-1">{accountsWithBalance} account{accountsWithBalance === 1 ? '' : 's'} with an outstanding balance</p>
           </CardContent>
         </Card>
         
@@ -85,8 +90,8 @@ export default async function CityLedgerPage() {
             <AlertCircle className="w-4 h-4 text-rose-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-rose-400">₦3,200.50</div>
-            <p className="text-xs text-slate-400 mt-1">1 account with overdue status</p>
+            <div className="text-3xl font-bold text-rose-400">Not tracked</div>
+            <p className="text-xs text-slate-400 mt-1">Due dates are not stored on city ledger entries</p>
           </CardContent>
         </Card>
 
@@ -96,8 +101,8 @@ export default async function CityLedgerPage() {
             <ArrowRightLeft className="w-4 h-4 text-indigo-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-indigo-400">1</div>
-            <p className="text-xs text-slate-400 mt-1">Requires reconciliation</p>
+            <div className="text-3xl font-bold text-indigo-400">{unmatchedPayments}</div>
+            <p className="text-xs text-slate-400 mt-1">Payment entries awaiting settlement</p>
           </CardContent>
         </Card>
       </div>
@@ -155,7 +160,7 @@ export default async function CityLedgerPage() {
                           {account.status}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-slate-400">N/A</TableCell>
+                      <TableCell className="text-slate-400">{lastPaymentByAccount.get(account.id) ? formatDate(lastPaymentByAccount.get(account.id)!) : 'No payments'}</TableCell>
                       <TableCell className="text-right text-slate-200 font-medium">
                         {formatCurrency(Number(account.balance))}
                       </TableCell>
@@ -194,9 +199,9 @@ export default async function CityLedgerPage() {
                   {invoices.length > 0 ? invoices.map((inv) => (
                     <TableRow key={inv.id} className="border-white/10 hover:bg-white/5">
                       <TableCell className="font-medium text-slate-300">{inv.id.substring(0,8)}</TableCell>
-                      <TableCell className="text-slate-200">AR Transfer</TableCell>
-                      <TableCell className="text-slate-400">N/A</TableCell>
-                      <TableCell className="text-slate-400">N/A</TableCell>
+                      <TableCell className="text-slate-200">{inv.account.name}</TableCell>
+                      <TableCell className="text-slate-400">{formatDate(inv.createdAt)}</TableCell>
+                      <TableCell className="text-slate-400">—</TableCell>
                       <TableCell>
                         <Badge variant="outline" 
                           className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
@@ -244,11 +249,9 @@ export default async function CityLedgerPage() {
                   {payments.length > 0 ? payments.map((payment) => (
                     <TableRow key={payment.id} className="border-white/10 hover:bg-white/5">
                       <TableCell className="font-medium text-slate-300">{payment.id.substring(0,8)}</TableCell>
-                      <TableCell className="text-slate-400">N/A</TableCell>
-                      <TableCell className="text-slate-400">System Payment</TableCell>
-                      <TableCell className="text-slate-200">
-                        N/A
-                      </TableCell>
+                      <TableCell className="text-slate-400">{formatDate(payment.createdAt)}</TableCell>
+                      <TableCell className="text-slate-400">{payment.reference || '—'}</TableCell>
+                      <TableCell className="text-slate-200">{payment.account.name}</TableCell>
                       <TableCell className="text-slate-200 font-medium">
                         {formatCurrency(Number(payment.amount))}
                       </TableCell>
