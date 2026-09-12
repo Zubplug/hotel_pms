@@ -82,7 +82,7 @@ model Property {
   cashVarianceNightAuditTolerance Decimal? @db.Decimal(18, 4)
   // Folio balances above this threshold are flagged as warnings during Night Audit.
   // Default: 50,000 (property currency units). Replaces the former hardcoded 5,000 dummy check.
-  nightAuditHighBalanceThreshold  Decimal  @default(50000) @db.Decimal(18, 4)
+  nightAuditHighBalanceThreshold  Decimal  @default(1000000) @db.Decimal(18, 4)
   // When true, all Night Audit warnings must be explicitly acknowledged (via
   // NightAuditAcknowledgement tied to the specific run ID) before /execute proceeds.
   requireAuditAcknowledgements    Boolean  @default(false)

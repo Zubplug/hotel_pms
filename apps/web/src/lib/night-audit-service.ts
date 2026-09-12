@@ -219,8 +219,8 @@ export async function getFinancialAudit(ctx: TenantContext, propertyId: string) 
   });
 
   // Flag folios whose balance exceeds the property-configured threshold.
-  // Configurable via Property.nightAuditHighBalanceThreshold (default: 50,000).
-  const highBalanceThreshold = Number(property.nightAuditHighBalanceThreshold ?? 50000);
+  // Configurable via Property.nightAuditHighBalanceThreshold (default: 1,000,000).
+  const highBalanceThreshold = Number(property.nightAuditHighBalanceThreshold ?? 1000000);
   
   const highBalances = openFolios
     .map(f => {
