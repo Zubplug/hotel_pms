@@ -3485,7 +3485,10 @@ public class LocalRepository
             query = query.Where(p => outletCategoryIds.Contains(p.CategoryId));
         }
 
-        var products = await query.ToListAsync();
+        var products = await query
+            .OrderBy(product => product.Name)
+            .ThenBy(product => product.Id)
+            .ToListAsync();
         var categoryIds = products.Select(p => p.CategoryId).Where(id => !string.IsNullOrWhiteSpace(id)).Distinct().ToList();
         var categories = await _dbContext.ProductCategories
             .Where(c => categoryIds.Contains(c.Id))
@@ -5457,6 +5460,8 @@ public class LocalRepository
     {
         return await _dbContext.PosProductModifiers
             .Where(m => m.ProductId == productId && m.IsActive)
+            .OrderBy(m => m.Name)
+            .ThenBy(m => m.Id)
             .ToListAsync();
     }
 

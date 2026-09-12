@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import prisma from '@hotel-pms/db';
+import prisma, { decrypt } from '@hotel-pms/db';
 import { ProviderFactory } from './ProviderFactory';
 import { ChannelProvider } from './types';
 import { QueuePublisher } from './queue';
@@ -13,15 +13,29 @@ import { PayloadSanitizer } from './payload-sanitizer';
  * environment variable that holds the webhook secret for that connection.
  *
  * Example:
- *   credentialsRef = "CHANNEX_WEBHOOK_SECRET_BALLYS_PLACE"
- *   process.env["CHANNEX_WEBHOOK_SECRET_BALLYS_PLACE"] = "<actual secret>"
+ *   credentialsRef = '{"iv":"...","content":"...","authTag":"..."}' (JSON string of encrypted webhookSecret)
  *
- * This keeps secrets out of the database while allowing each org/property
+ * This keeps secrets out of plain text in the database while allowing each org/property
  * to have its own independent Channex account and webhook secret.
  */
 function resolveConnectionSecret(credentialsRef: string): string | undefined {
   if (!credentialsRef || credentialsRef === 'none') return undefined;
-  return process.env[credentialsRef];
+  
+  try {
+    // Check if it's the old .env format first (fallback)
+    if (!credentialsRef.startsWith('{')) {
+      return process.env[credentialsRef];
+    }
+    
+    // New encrypted JSON format
+    const encryptedPayload = JSON.parse(credentialsRef);
+    const decryptedJsonString = decrypt(encryptedPayload);
+    const credentials = JSON.parse(decryptedJsonString);
+    return credentials.webhookSecret;
+  } catch (error) {
+    console.error('Failed to resolve/decrypt connection secret', error);
+    return undefined;
+  }
 }
 
 export async function handleOtaWebhook(req: NextRequest, providerId: string) {

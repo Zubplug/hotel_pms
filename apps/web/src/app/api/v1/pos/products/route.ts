@@ -31,8 +31,9 @@ export async function GET(req: NextRequest) {
         ...(outletId ? { category: { outletId } } : {}),
         // include inactive if specifically requested? Usually POS wants active, but menu manager might want all.
         // Let's pass `all=true` to include inactive.
-        ...(url.searchParams.get('all') === 'true' ? {} : { isActive: true })
+      ...(url.searchParams.get('all') === 'true' ? {} : { isActive: true })
       },
+      orderBy: [{ name: 'asc' }, { id: 'asc' }],
       include: {
         category: {
           select: { id: true, name: true, productionStation: true },

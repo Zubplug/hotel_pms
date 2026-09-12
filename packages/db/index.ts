@@ -7,4 +7,5 @@ export const prisma = globalForPrisma.prisma || (process.env.NEXT_PUBLIC_IS_DESK
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 
 export * from '@prisma/client';
+export * from './src/crypto';
 export default prisma;

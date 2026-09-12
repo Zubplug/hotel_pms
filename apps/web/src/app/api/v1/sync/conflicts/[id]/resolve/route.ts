@@ -167,8 +167,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                  });
                  if (!existingBypass) {
                    if (!edgeEvent.operatorId) throw new Error("Operator ID missing from edge event");
+                   
+                   const staff = await tx.staff.findFirst({
+                     where: {
+                       OR: [
+                         { id: edgeEvent.operatorId },
+                         { userId: edgeEvent.operatorId }
+                       ]
+                     }
+                   });
+                   if (!staff) throw new Error("Staff record not found for operator");
+
                    const operatorSession = await tx.frontdeskSession.findFirst({
-                     where: { propertyId: conflict.propertyId, staffId: edgeEvent.operatorId, controlStatus: 'OPEN' }
+                     where: { propertyId: conflict.propertyId, staffId: staff.id, controlStatus: 'OPEN' }
                    });
 
                    if (!operatorSession) {
@@ -183,7 +194,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                        reason: payload.reason,
                        operationId: bypassOpId,
                        frontdeskSessionId: operatorSession.id,
-                       operatorId: edgeEvent.operatorId,
+                       operatorId: staff.id,
                        businessDate: operatorSession.businessDate,
                        status: 'PENDING',
                        createdAt: new Date(),

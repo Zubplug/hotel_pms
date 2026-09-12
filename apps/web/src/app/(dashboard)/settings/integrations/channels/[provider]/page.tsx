@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
+import { ChannelSetupForm } from './channel-setup-form';
 
 export const metadata: Metadata = {
   title: 'Channel Configuration | LodgeCore',
@@ -65,15 +66,7 @@ export default async function ChannelProviderPage({ params }: { params: { provid
       </div>
 
       {!isConnected ? (
-        <Card className="border-dashed bg-muted/30">
-          <CardContent className="flex flex-col items-center justify-center p-12 text-center">
-            <h3 className="text-lg font-semibold mb-2">Not Connected</h3>
-            <p className="text-muted-foreground mb-6">
-              You need to authenticate and connect this provider before mapping rooms.
-            </p>
-            <Button>Connect via OAuth</Button>
-          </CardContent>
-        </Card>
+        <ChannelSetupForm provider={providerSlug} />
       ) : (
         <Tabs defaultValue="rooms" className="w-full">
           <TabsList>

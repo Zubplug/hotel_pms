@@ -43,11 +43,19 @@ export async function POST(req: NextRequest) {
     // A REJECTED bypass will remain a blocker for the night audit until resolved.
     const newStatus = action === 'VERIFY' ? 'VERIFIED' : 'REJECTED';
 
+    const staff = await prisma.staff.findUnique({
+      where: { userId: session.user.id }
+    });
+
+    if (!staff) {
+      return errorResponse('FORBIDDEN', 'User is not associated with a staff record', 403);
+    }
+
     await prisma.checkInBypass.update({
       where: { id: bypassId },
       data: {
         status: newStatus,
-        reviewedByStaffId: session.user.id,
+        reviewedByStaffId: staff.id,
         reviewedAt: new Date(),
         reviewNotes: notes
       }

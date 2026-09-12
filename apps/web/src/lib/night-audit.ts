@@ -394,10 +394,13 @@ export async function executeNightAudit(
             }
           }
 
-          // Generate Housekeeping Tasks Idempotently
-          for (const rr of reservation.reservationRooms) {
-            const room = rr.room;
-            if (!room) continue;
+          // Generate Housekeeping Tasks Idempotently. Housekeeping is best
+          // effort: a task conflict or room update failure must not roll back
+          // the room charge that was already posted in this transaction.
+          try {
+            for (const rr of reservation.reservationRooms) {
+              const room = rr.room;
+              if (!room) continue;
 
             const hkIdempotencyKey = `STAYOVER_${reservation.id}_${room.id}_${nextBusinessDate.toISOString().split('T')[0]}`;
             
@@ -444,7 +447,11 @@ export async function executeNightAudit(
               }
             });
             
-            totalTasksCreated++;
+              totalTasksCreated++;
+            }
+          } catch (e) {
+            console.error(`[Night Audit] Housekeeping task failed for reservation ${reservation.id}; room charge retained:`, e);
+            errors++;
           }
         });
       } catch (e) {

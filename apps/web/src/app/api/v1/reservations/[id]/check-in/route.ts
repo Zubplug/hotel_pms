@@ -154,9 +154,15 @@ export async function POST(
                throw new Error('BAD_REQUEST: Invalid acknowledging staff ID');
              }
 
+             // Find staff record for current user
+             const currentStaff = await tx.staff.findUnique({ where: { userId: session.user.id } });
+             if (!currentStaff) {
+               throw new Error('BAD_REQUEST: User is not associated with a staff record');
+             }
+
              // Find currently open frontdesk session for the operator
              const operatorSession = await tx.frontdeskSession.findFirst({
-               where: { propertyId, staffId: session.user.id, controlStatus: 'OPEN' }
+               where: { propertyId, staffId: currentStaff.id, controlStatus: 'OPEN' }
              });
              if (!operatorSession) {
                throw new Error('BAD_REQUEST: You must have an open Front Desk shift to bypass deposit.');
@@ -174,7 +180,7 @@ export async function POST(
                    propertyId,
                    reservationId,
                    frontdeskSessionId: operatorSession.id,
-                   operatorId: session.user.id,
+                   operatorId: currentStaff.id,
                    acknowledgedByStaffId,
                    reason,
                    status: 'PENDING',
