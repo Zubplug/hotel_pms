@@ -203,7 +203,11 @@ export async function executeNightAudit(
     },
     include: {
       priorities: true,
-      reservationRooms: { where: { status: 'ACTIVE' }, include: { room: true } },
+      reservationRooms: {
+        where: { status: 'ACTIVE' },
+        include: { room: true },
+        orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
+      },
       folios: { where: { type: { in: ['MAIN', 'ROOM', 'CITY_LEDGER'] }, status: 'OPEN' } },
       ratePlan: true,
       corporateAccount: { include: { ratePlan: true } },
@@ -221,6 +225,22 @@ export async function executeNightAudit(
     await Promise.all(batch.map(async (reservation: any) => {
       try {
         await prisma.$transaction(async (tx: any) => {
+          // Re-read the assignment inside the posting transaction. The
+          // candidate list is loaded before posting begins, so it can contain
+          // a room that was replaced afterward. The newest active assignment
+          // is the guest's authoritative room for this audit.
+          const currentAssignments = await tx.reservationRoom.findMany({
+            where: { reservationId: reservation.id, status: 'ACTIVE' },
+            include: { room: true },
+            orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
+          });
+          const activeRoom = currentAssignments[0] || null;
+
+          if (currentAssignments.length > 1) {
+            console.warn(
+              `[Night Audit] Reservation ${reservation.id} has ${currentAssignments.length} active room assignments; using ${activeRoom?.room?.number || activeRoom?.roomId || 'latest assignment'}.`,
+            );
+          }
           
           // Post Room Charge Idempotently
           if (reservation.folios && reservation.folios.length > 0 || reservation.corporateAccountId) {
@@ -262,7 +282,6 @@ export async function executeNightAudit(
             });
 
             if (!existingCharge) {
-              const activeRoom = reservation.reservationRooms[0];
               let originalRate = activeRoom
                 ? Number(activeRoom.rateAmount || 0)
                 : Number(reservation.ratePlan?.baseRate || 0);
@@ -398,7 +417,7 @@ export async function executeNightAudit(
           // effort: a task conflict or room update failure must not roll back
           // the room charge that was already posted in this transaction.
           try {
-            for (const rr of reservation.reservationRooms) {
+            for (const rr of currentAssignments) {
               const room = rr.room;
               if (!room) continue;
 

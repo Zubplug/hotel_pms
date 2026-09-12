@@ -66,7 +66,22 @@ export function ChannelSetupForm({ provider }: ChannelSetupFormProps) {
         </CardDescription>
       </CardHeader>
       <form onSubmit={handleSubmit(onSubmit)}>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-6">
+          <div className="bg-muted p-4 rounded-md text-sm text-muted-foreground space-y-2 border">
+            <h4 className="font-semibold text-foreground">How to configure {provider}</h4>
+            <ol className="list-decimal pl-4 space-y-1">
+              <li>Log into {provider} and select your property to find your <strong>Property ID</strong>.</li>
+              <li>Under Settings &gt; API Tokens, generate a new <strong>API Token</strong>.</li>
+              <li>Under Webhooks, create a new webhook pointing to:<br/>
+                <code className="text-xs bg-background p-1 rounded border mt-1 inline-block">
+                  https://lodgecore.vercel.app/api/v1/webhooks/ota/{provider.toLowerCase()}
+                </code>
+              </li>
+              <li>Copy the generated <strong>Webhook Secret</strong> from {provider}.</li>
+            </ol>
+          </div>
+
+          <div className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="externalPropertyId">{provider} Property ID</Label>
             <Input

@@ -2046,7 +2046,10 @@ export async function POST(req: NextRequest) {
             const res = await tx.reservation.findUnique({
               where: { id: aggregateId, propertyId },
               include: {
-                reservationRooms: { where: { status: "ACTIVE" } },
+                reservationRooms: {
+                  where: { status: "ACTIVE" },
+                  orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }, { id: "desc" }],
+                },
                 folios: {
                   include: { payments: { include: { refunds: true } } },
                 },
@@ -2186,6 +2189,11 @@ export async function POST(req: NextRequest) {
                 ratePlanId: activeRoom?.ratePlanId,
                 rateAmount: newRate,
                 currency: activeRoom?.currency || "NGN",
+                discountType: activeRoom?.discountType,
+                discountAmount: activeRoom?.discountAmount,
+                discountPercent: activeRoom?.discountPercent,
+                discountReason: activeRoom?.discountReason,
+                discountApprovalId: activeRoom?.discountApprovalId,
                 status: "ACTIVE",
               },
             });
