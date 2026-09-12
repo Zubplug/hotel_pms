@@ -27,7 +27,12 @@ import {
   FileText,
   Coffee,
   Package,
-  CalendarClock
+  CalendarClock,
+  TrendingUp,
+  ShieldCheck,
+  TimerReset,
+  BarChart3,
+  ListTree
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { useProperty } from '@/components/PropertyProvider';
@@ -41,6 +46,7 @@ export default function AuditHistoryPage() {
   const [showFilter, setShowFilter] = useState(false);
   const [dateRange, setDateRange] = useState({ from: '', to: '' });
   const [selectedAudit, setSelectedAudit] = useState<any>(null);
+  const [selectedChargesAudit, setSelectedChargesAudit] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   const formatDuration = (start: string | null, end: string | null) => {
@@ -75,6 +81,25 @@ export default function AuditHistoryPage() {
       return true;
     });
   }, [history, searchQuery, dateRange]);
+
+  const historyInsights = useMemo(() => {
+    const completed = history.filter((audit) => audit.status === 'COMPLETED');
+    const durations = completed
+      .map((audit) => {
+        if (!audit.startedAt || !audit.completedAt) return 0;
+        return Math.max(0, new Date(audit.completedAt).getTime() - new Date(audit.startedAt).getTime());
+      })
+      .filter(Boolean);
+    const averageDuration = durations.length ? durations.reduce((sum, duration) => sum + duration, 0) / durations.length : 0;
+    const latest = completed[0];
+    return {
+      completed: completed.length,
+      successRate: history.length ? Math.round((completed.length / history.length) * 100) : 0,
+      totalRevenue: completed.reduce((sum, audit) => sum + Number(audit.totalRevenue || 0), 0),
+      averageDuration: averageDuration ? formatDuration(new Date(0).toISOString(), new Date(averageDuration).toISOString()) : '—',
+      latestRevenue: Number(latest?.totalRevenue || 0),
+    };
+  }, [history]);
 
   const exportCsv = () => {
     const header = ['Date', 'Auditor', 'Status', 'Duration', 'Rooms Charged', 'Total Revenue'];
@@ -135,17 +160,14 @@ export default function AuditHistoryPage() {
   };
 
   return (
-    <div className="space-y-8 pb-12 animate-in fade-in duration-500">
+    <div className="min-h-full bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.07),transparent_28rem)] px-5 pb-12 pt-6 sm:px-8 sm:pt-8">
+      <div className="mx-auto max-w-[1540px] space-y-8 animate-in fade-in duration-500">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
+      <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 flex items-center gap-3">
-            <CalendarClock className="h-8 w-8 text-indigo-600" />
-            Audit History
-          </h1>
-          <p className="text-slate-500 mt-2 text-sm font-medium">
-            Review past night audits, generated reports, and financial snapshots.
-          </p>
+          <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-indigo-600"><span className="h-1.5 w-1.5 rounded-full bg-indigo-500" /> Night audit / Records</div>
+          <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-[-0.035em] text-slate-950 sm:text-4xl"><CalendarClock className="h-8 w-8 text-indigo-600" /> Audit history</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Review the close performance of every business date, trace accountability, and spot operational drift early.</p>
         </div>
         
         <div className="flex items-center gap-3 w-full sm:w-auto">
@@ -199,8 +221,17 @@ export default function AuditHistoryPage() {
         </div>
       </div>
 
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {[
+          { label: 'Completion rate', value: `${historyInsights.successRate}%`, detail: `${historyInsights.completed} completed runs`, icon: ShieldCheck, tone: 'text-emerald-600 bg-emerald-50' },
+          { label: 'Average close time', value: historyInsights.averageDuration, detail: 'Across completed audits', icon: TimerReset, tone: 'text-indigo-600 bg-indigo-50' },
+          { label: 'Audited revenue', value: formatCurrency(historyInsights.totalRevenue), detail: 'Cumulative recorded revenue', icon: TrendingUp, tone: 'text-amber-600 bg-amber-50' },
+          { label: 'Latest revenue', value: formatCurrency(historyInsights.latestRevenue), detail: 'Most recent completed date', icon: BarChart3, tone: 'text-violet-600 bg-violet-50' },
+        ].map((insight) => { const Icon = insight.icon; return <Card key={insight.label} className="rounded-2xl border-slate-200/70 bg-white/85 shadow-[0_10px_28px_rgba(15,23,42,0.04)]"><CardContent className="flex items-start justify-between p-5"><div><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">{insight.label}</p><p className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">{insight.value}</p><p className="mt-1 text-xs text-slate-400">{insight.detail}</p></div><span className={`flex h-10 w-10 items-center justify-center rounded-xl ${insight.tone}`}><Icon className="h-5 w-5" /></span></CardContent></Card>; })}
+      </div>
+
       {/* Main Card */}
-      <Card className="rounded-3xl border-slate-200/60 bg-white/60 backdrop-blur-xl shadow-sm overflow-hidden transition-all duration-300">
+      <Card className="overflow-hidden rounded-[24px] border-slate-200/70 bg-white/85 shadow-[0_14px_38px_rgba(15,23,42,0.05)] backdrop-blur-xl transition-all duration-300">
         <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between sm:items-center gap-4 bg-white/40">
           <div>
             <CardTitle className="text-xl font-bold text-slate-900">Past Executions</CardTitle>
@@ -292,32 +323,35 @@ export default function AuditHistoryPage() {
 
       {/* Advanced Details Dialog */}
       <Dialog open={!!selectedAudit} onOpenChange={(open) => !open && setSelectedAudit(null)}>
-        <DialogContent className="sm:max-w-2xl overflow-hidden p-0 rounded-[2rem] border-0 shadow-2xl">
-          <div className="bg-gradient-to-br from-indigo-50 via-white to-slate-50 p-8">
+        <DialogContent className="!max-h-[90vh] !w-[calc(100vw-2rem)] !max-w-4xl overflow-y-auto overflow-x-hidden rounded-[2rem] border-0 bg-slate-50 p-2 shadow-2xl sm:p-3">
+          <div className="rounded-[1.5rem] bg-slate-50 p-3 sm:p-5">
             
             {/* Dialog Header */}
-            <div className="flex justify-between items-start mb-8">
+            <div className="relative mb-6 overflow-hidden rounded-[1.35rem] bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900 p-6 text-white shadow-[0_16px_35px_rgba(15,23,42,0.2)] sm:p-7">
+              <div className="absolute -right-16 -top-20 h-56 w-56 rounded-full bg-indigo-400/20 blur-3xl" />
+              <div className="relative flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
               <div className="flex items-center gap-4">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-600 shadow-lg shadow-indigo-600/30 text-white rotate-3">
+                <div className="flex h-14 w-14 rotate-3 items-center justify-center rounded-2xl bg-white/10 text-white shadow-lg ring-1 ring-white/15">
                   <FileText className="h-7 w-7 -rotate-3" />
                 </div>
                 <div>
-                  <DialogTitle className="text-2xl font-black text-slate-900 tracking-tight">Audit Summary</DialogTitle>
-                  <p className="mt-1 flex items-center gap-1.5 text-sm font-bold text-indigo-600">
+                  <DialogTitle className="text-2xl font-semibold tracking-tight text-white">Audit summary</DialogTitle>
+                  <p className="mt-1 flex items-center gap-1.5 text-sm font-medium text-indigo-200">
                     <Calendar className="h-4 w-4" />
                     {selectedAudit ? new Date(selectedAudit.businessDate).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : ''}
                   </p>
                 </div>
               </div>
               {selectedAudit && getStatusBadge(selectedAudit.status)}
+              </div>
             </div>
             
             {selectedAudit && (
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 
                 {/* Meta Information Grid */}
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="rounded-2xl border border-slate-200/60 bg-white/80 backdrop-blur-sm p-4 shadow-sm hover:shadow-md transition-shadow">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  <div className="rounded-2xl border border-slate-200/70 bg-white p-4 shadow-sm transition-shadow hover:shadow-md">
                     <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
                       <User className="h-4 w-4" /> Auditor
                     </div>
@@ -325,7 +359,7 @@ export default function AuditHistoryPage() {
                       {selectedAudit.auditorName || 'SYSTEM'}
                     </div>
                   </div>
-                  <div className="rounded-2xl border border-slate-200/60 bg-white/80 backdrop-blur-sm p-4 shadow-sm hover:shadow-md transition-shadow">
+                  <div className="rounded-2xl border border-slate-200/70 bg-white p-4 shadow-sm transition-shadow hover:shadow-md">
                     <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
                       <Clock className="h-4 w-4" /> Duration
                     </div>
@@ -333,19 +367,21 @@ export default function AuditHistoryPage() {
                       {formatDuration(selectedAudit.startedAt, selectedAudit.completedAt)}
                     </div>
                   </div>
-                  <div className="rounded-2xl border border-slate-200/60 bg-white/80 backdrop-blur-sm p-4 shadow-sm hover:shadow-md transition-shadow">
+                  <div className="rounded-2xl border border-slate-200/70 bg-white p-4 shadow-sm transition-shadow hover:shadow-md">
                     <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
                       <BedDouble className="h-4 w-4" /> Rooms Billed
                     </div>
                     <div className="font-black text-slate-900 text-lg flex items-center justify-between">
                       <span>{selectedAudit.roomChargesPosted || 0}</span>
-                      <RoomChargesDialog businessDate={selectedAudit.businessDate} auditId={selectedAudit.id} />
+                      <Button variant="outline" size="sm" className="mt-2 text-xs font-semibold" onClick={() => { setSelectedChargesAudit(selectedAudit); setSelectedAudit(null); }}>
+                        <ListTree className="mr-1 h-3 w-3" /> View Analysis
+                      </Button>
                     </div>
                   </div>
                 </div>
                 
                 {/* Revenue Breakdown */}
-                <div className="rounded-3xl border border-indigo-100 bg-white p-6 shadow-sm relative overflow-hidden">
+                <div className="relative overflow-hidden rounded-3xl border border-indigo-100 bg-white p-6 shadow-sm sm:p-7">
                   <div className="absolute top-0 right-0 p-8 opacity-5">
                     <Banknote className="w-40 h-40" />
                   </div>
@@ -427,6 +463,17 @@ export default function AuditHistoryPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {selectedChargesAudit && (
+        <RoomChargesDialog
+          businessDate={selectedChargesAudit.businessDate}
+          auditId={selectedChargesAudit.id}
+          open
+          showTrigger={false}
+          onOpenChange={(open) => { if (!open) setSelectedChargesAudit(null); }}
+        />
+      )}
+      </div>
     </div>
   );
 }
