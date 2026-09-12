@@ -56,7 +56,7 @@ export function FrontDeskOccupiedRoomDialog({ room, isOpen, onClose, isAuditorMo
 
   return (
     <>
-      <Dialog open={isOpen} onOpenChange={(open) => {
+      <Dialog open={isOpen && !showFolio} onOpenChange={(open) => {
         if (!open) {
           onClose();
         }

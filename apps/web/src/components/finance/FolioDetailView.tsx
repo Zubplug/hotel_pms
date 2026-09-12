@@ -58,7 +58,7 @@ export function FolioDetailView({ folioId, onBack, readOnly = false }: { folioId
           </div>
         </div>
       </section>
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Total charges</p>
           <p className="mt-2 text-xl font-bold text-slate-900">{folio.currency} {folio.totalCharges.toLocaleString()}</p>
@@ -66,6 +66,11 @@ export function FolioDetailView({ folioId, onBack, readOnly = false }: { folioId
         <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Payments received</p>
           <p className="mt-2 text-xl font-bold text-emerald-600">{folio.currency} {folio.totalPayments.toLocaleString()}</p>
+        </div>
+        <div className="rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-5 shadow-sm">
+          <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-blue-700"><WalletCards className="h-4 w-4" /> Credit balance wallet</p>
+          <p className="mt-2 text-xl font-bold text-blue-700">{folio.currency} {Number(folio.availableCredit || 0).toLocaleString()}</p>
+          <p className="mt-1 text-xs text-blue-600/70">Available for this stay</p>
         </div>
         <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Account type</p>
