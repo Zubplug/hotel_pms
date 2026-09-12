@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ArrowLeft, CreditCard, Loader2, Printer } from 'lucide-react';
+import { ArrowLeft, CreditCard, Loader2, Printer, LockKeyhole, WalletCards, ReceiptText } from 'lucide-react';
 import { AddPaymentDialog } from '@/components/reservations/AddPaymentDialog';
 
 export function FolioDetailView({ folioId, onBack, readOnly = false }: { folioId: string, onBack?: () => void, readOnly?: boolean }) {
@@ -23,15 +23,16 @@ export function FolioDetailView({ folioId, onBack, readOnly = false }: { folioId
   const guest = folio.guest ? `${folio.guest.firstName} ${folio.guest.lastName}`.trim() : 'Guest account';
   
   return (
-    <div className="w-full space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="w-full max-w-none space-y-6 text-slate-900">
+      <div className="flex flex-wrap items-center justify-between gap-4 px-1">
         {onBack ? (
           <button onClick={onBack} className="flex items-center gap-2 text-sm font-medium text-indigo-700 hover:text-indigo-900 transition-colors">
             <ArrowLeft className="h-4 w-4" />Back
           </button>
         ) : <div />}
-        <div className="flex gap-2">
-          <button onClick={() => window.print()} className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm hover:bg-slate-50 transition-colors">
+        <div className="flex items-center gap-2">
+          {readOnly && <span className="hidden items-center gap-1.5 rounded-full bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-600 sm:inline-flex"><LockKeyhole className="h-3.5 w-3.5" /> Read-only audit view</span>}
+          <button onClick={() => window.print()} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:bg-slate-50">
             <Printer className="h-4 w-4" />Print
           </button>
           {!readOnly && (
@@ -41,35 +42,38 @@ export function FolioDetailView({ folioId, onBack, readOnly = false }: { folioId
           )}
         </div>
       </div>
-      <section className="rounded-2xl bg-slate-950 p-6 text-white shadow-md">
-        <div className="flex flex-wrap justify-between gap-5">
+      <section className="relative overflow-hidden rounded-[1.5rem] bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 p-6 text-white shadow-[0_18px_45px_rgba(15,23,42,0.2)] sm:p-8">
+        <div className="absolute -right-16 -top-24 h-72 w-72 rounded-full bg-indigo-500/20 blur-3xl" />
+        <div className="absolute -bottom-32 left-1/3 h-64 w-64 rounded-full bg-violet-500/10 blur-3xl" />
+        <div className="relative flex flex-wrap justify-between gap-8">
           <div>
-            <p className="text-xs uppercase tracking-widest text-indigo-300 font-semibold">Guest folio</p>
-            <h1 className="mt-2 text-2xl font-bold tracking-tight">{guest}</h1>
-            <p className="mt-2 text-sm text-slate-400">Folio {folio.folioNumber} &middot; {folio.reservation?.confirmationNumber || 'No reservation'} &middot; Room {folio.reservation?.reservationRooms?.[0]?.room?.number || 'Unassigned'}</p>
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-indigo-300"><ReceiptText className="h-4 w-4" /> Guest folio</div>
+            <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">{guest}</h1>
+            <p className="mt-3 text-sm text-slate-400">Folio {folio.folioNumber} <span className="mx-1 text-slate-600">·</span> {folio.reservation?.confirmationNumber || 'No reservation'} <span className="mx-1 text-slate-600">·</span> Room {folio.reservation?.reservationRooms?.[0]?.room?.number || 'Unassigned'}</p>
           </div>
-          <div className="text-right">
-            <p className="text-xs uppercase text-slate-400 font-semibold tracking-wider">Outstanding balance</p>
-            <p className="mt-1 text-3xl font-bold text-amber-400 tracking-tight">{folio.currency} {folio.balance.toLocaleString()}</p>
+          <div className="min-w-[210px] rounded-2xl border border-white/10 bg-white/[0.06] p-4 backdrop-blur-sm sm:text-right">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Outstanding balance</p>
+            <p className="mt-2 text-3xl font-semibold tracking-tight text-amber-300">{folio.currency} {folio.balance.toLocaleString()}</p>
+            <p className="mt-1 text-xs text-slate-500">{folio.status}</p>
           </div>
         </div>
       </section>
       <div className="grid gap-4 sm:grid-cols-3">
-        <div className="rounded-xl border bg-white p-5 shadow-sm">
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Total charges</p>
           <p className="mt-2 text-xl font-bold text-slate-900">{folio.currency} {folio.totalCharges.toLocaleString()}</p>
         </div>
-        <div className="rounded-xl border bg-white p-5 shadow-sm">
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Payments received</p>
           <p className="mt-2 text-xl font-bold text-emerald-600">{folio.currency} {folio.totalPayments.toLocaleString()}</p>
         </div>
-        <div className="rounded-xl border bg-white p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Status</p>
-          <p className="mt-2 text-xl font-bold text-slate-900">{folio.status}</p>
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Account type</p>
+          <p className="mt-2 flex items-center gap-2 text-xl font-bold text-slate-900"><WalletCards className="h-5 w-5 text-indigo-500" /> Room folio</p>
         </div>
       </div>
-      <section className="overflow-hidden rounded-xl border bg-white shadow-sm">
-        <div className="border-b bg-slate-50/50 px-5 py-4 font-semibold text-slate-900">Folio activity</div>
+      <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+        <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/70 px-5 py-4"><div><p className="font-semibold text-slate-900">Folio activity</p><p className="mt-0.5 text-xs text-slate-500">Charges and adjustments posted to this account</p></div><span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">{folio.items.length} entries</span></div>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500 border-b">
@@ -100,8 +104,8 @@ export function FolioDetailView({ folioId, onBack, readOnly = false }: { folioId
           </table>
         </div>
       </section>
-      <section className="overflow-hidden rounded-xl border bg-white shadow-sm">
-        <div className="border-b bg-slate-50/50 px-5 py-4 font-semibold text-slate-900">Payment history</div>
+      <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+        <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/70 px-5 py-4"><div><p className="font-semibold text-slate-900">Payment history</p><p className="mt-0.5 text-xs text-slate-500">Verified collections applied to this folio</p></div><span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-700">{folio.payments.length} payments</span></div>
         <div className="divide-y">
           {folio.payments.length === 0 ? (
             <p className="p-8 text-center text-sm text-slate-500">No payments recorded.</p>
