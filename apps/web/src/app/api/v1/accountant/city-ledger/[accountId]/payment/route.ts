@@ -41,6 +41,31 @@ export async function POST(
           createdBy: session.user.id,
         },
       });
+      let remaining = amount;
+      const invoices = await tx.cityLedgerInvoice.findMany({
+        where: { accountId, status: { in: ['OPEN', 'PARTIALLY_PAID'] }, outstandingAmount: { gt: 0 } },
+        orderBy: [{ dueDate: 'asc' }, { issueDate: 'asc' }]
+      });
+      for (const invoice of invoices) {
+        if (remaining <= 0) break;
+        const applied = Math.min(remaining, Number(invoice.outstandingAmount));
+        const outstandingAmount = Number(invoice.outstandingAmount) - applied;
+        await tx.cityLedgerInvoice.update({
+          where: { id: invoice.id },
+          data: {
+            paidAmount: { increment: applied },
+            outstandingAmount,
+            status: outstandingAmount <= 0.01 ? 'PAID' : 'PARTIALLY_PAID'
+          }
+        });
+        if (outstandingAmount <= 0.01) {
+          await tx.cityLedgerEntry.updateMany({
+            where: { invoiceId: invoice.id, type: 'TRANSFER_IN', status: 'OPEN' },
+            data: { status: 'SETTLED' }
+          });
+        }
+        remaining -= applied;
+      }
       await tx.cityLedgerAccount.update({ where: { id: accountId }, data: { balance: { decrement: amount } } });
       return created;
     });

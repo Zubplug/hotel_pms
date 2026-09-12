@@ -162,6 +162,7 @@ model Property {
   expenseCategories   ExpenseCategory[]
   costCenters         CostCenter[]
   CityLedgerAccount   CityLedgerAccount[]
+  cityLedgerInvoices  CityLedgerInvoice[]
   CheckInBypass       CheckInBypass[]
   Hall                Hall[]
   Event               Event[]
@@ -4230,11 +4231,38 @@ model CityLedgerAccount {
   balance        Decimal @default(0) @db.Decimal(18, 4)
   currency       String
 
-  property         Property           @relation(fields: [propertyId], references: [id])
+  property         Property            @relation(fields: [propertyId], references: [id])
   entries          CityLedgerEntry[]
-  createdAt        DateTime           @default(now()) @db.Timestamptz
-  updatedAt        DateTime           @updatedAt @db.Timestamptz
+  invoices         CityLedgerInvoice[]
+  createdAt        DateTime            @default(now()) @db.Timestamptz
+  updatedAt        DateTime            @updatedAt @db.Timestamptz
   CorporateAccount CorporateAccount[]
+}
+
+model CityLedgerInvoice {
+  id                String   @id @default(uuid()) @db.Uuid
+  propertyId        String   @db.Uuid
+  accountId         String   @db.Uuid
+  invoiceNumber     String
+  issueDate         DateTime @db.Date
+  dueDate           DateTime @db.Date
+  description       String
+  amount            Decimal  @db.Decimal(18, 4)
+  paidAmount        Decimal  @default(0) @db.Decimal(18, 4)
+  outstandingAmount Decimal  @db.Decimal(18, 4)
+  currency          String
+  status            String   @default("OPEN") // OPEN | PARTIALLY_PAID | PAID | VOID
+  createdBy         String   @db.Uuid
+  createdAt         DateTime @default(now()) @db.Timestamptz
+  updatedAt         DateTime @updatedAt @db.Timestamptz
+
+  property Property          @relation(fields: [propertyId], references: [id])
+  account  CityLedgerAccount @relation(fields: [accountId], references: [id])
+  entries  CityLedgerEntry[]
+
+  @@unique([propertyId, invoiceNumber])
+  @@index([propertyId, dueDate])
+  @@index([accountId, status])
 }
 
 model CityLedgerEntry {
@@ -4244,6 +4272,7 @@ model CityLedgerEntry {
   guestId       String? @db.Uuid
   reservationId String? @db.Uuid
   folioId       String? @db.Uuid
+  invoiceId     String? @db.Uuid
 
   amount    Decimal @db.Decimal(18, 4)
   currency  String
@@ -4254,10 +4283,11 @@ model CityLedgerEntry {
 
   createdBy String @db.Uuid // Staff ID
 
-  account     CityLedgerAccount @relation(fields: [accountId], references: [id])
-  guest       Guest?            @relation(fields: [guestId], references: [id])
-  reservation Reservation?      @relation(fields: [reservationId], references: [id])
-  folio       Folio?            @relation(fields: [folioId], references: [id])
+  account     CityLedgerAccount  @relation(fields: [accountId], references: [id])
+  guest       Guest?             @relation(fields: [guestId], references: [id])
+  reservation Reservation?       @relation(fields: [reservationId], references: [id])
+  folio       Folio?             @relation(fields: [folioId], references: [id])
+  invoice     CityLedgerInvoice? @relation(fields: [invoiceId], references: [id])
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz

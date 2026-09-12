@@ -6,7 +6,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowRightLeft, Loader2 } from "lucide-react";
+import { FilePlus2, Loader2 } from "lucide-react";
 
 import {
   Dialog,
@@ -36,6 +36,9 @@ import {
 
 const formSchema = z.object({
   accountId: z.string().min(1, "Please select an account"),
+  invoiceNumber: z.string().min(1, "Invoice number is required"),
+  issueDate: z.string().min(1, "Issue date is required"),
+  dueDate: z.string().min(1, "Due date is required"),
   amount: z.coerce.number().positive("Amount must be greater than 0"),
   description: z.string().min(1, "Description is required"),
 });
@@ -57,11 +60,16 @@ export function NewCityLedgerInvoiceModal({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const today = new Date().toISOString().slice(0, 10);
+  const defaultDueDate = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       accountId: "",
+      invoiceNumber: `INV-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`,
+      issueDate: today,
+      dueDate: defaultDueDate,
       amount: 0,
       description: "",
     },
@@ -78,11 +86,10 @@ export function NewCityLedgerInvoiceModal({
         body: JSON.stringify(data),
       });
 
-      if (!response.ok) {
-        throw new Error("Failed to create AR transfer");
-      }
+      const body = await response.json();
+      if (!response.ok || body.success === false) throw new Error(body.error?.message || body.error || "Failed to create invoice");
 
-      toast.success("AR transfer created successfully");
+      toast.success(`Invoice ${data.invoiceNumber} created successfully`);
       setOpen(false);
       form.reset();
       router.refresh();
@@ -97,20 +104,31 @@ export function NewCityLedgerInvoiceModal({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger >
         <Button className="bg-emerald-600 hover:bg-emerald-700 text-white">
-          <ArrowRightLeft className="w-4 h-4 mr-2" />
-          New AR Transfer
+          <FilePlus2 className="w-4 h-4 mr-2" />
+          New Invoice
         </Button>
       </DialogTrigger>
       <DialogContent className="bg-slate-900 border-white/10 text-white sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>New AR Transfer</DialogTitle>
+          <DialogTitle>New Accounts Receivable Invoice</DialogTitle>
           <DialogDescription className="text-slate-400">
-            Create a new invoice transfer to the city ledger.
+            Issue a controlled invoice to the selected city-ledger account.
           </DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="invoiceNumber"
+              render={({ field }) => (
+                <FormItem><FormLabel className="text-slate-200">Invoice number</FormLabel><FormControl><Input placeholder="INV-2026-0001" className="bg-slate-950 border-white/10 text-slate-200 focus:border-emerald-500" {...field} /></FormControl><FormMessage className="text-rose-400" /></FormItem>
+              )}
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <FormField control={form.control} name="issueDate" render={({ field }) => <FormItem><FormLabel className="text-slate-200">Issue date</FormLabel><FormControl><Input type="date" className="bg-slate-950 border-white/10 text-slate-200" {...field} /></FormControl><FormMessage className="text-rose-400" /></FormItem>} />
+              <FormField control={form.control} name="dueDate" render={({ field }) => <FormItem><FormLabel className="text-slate-200">Due date</FormLabel><FormControl><Input type="date" className="bg-slate-950 border-white/10 text-slate-200" {...field} /></FormControl><FormMessage className="text-rose-400" /></FormItem>} />
+            </div>
             <FormField
               control={form.control}
               name="accountId"
