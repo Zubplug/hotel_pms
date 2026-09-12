@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useProperty } from '@/components/PropertyProvider';
 import { NightAuditData } from '@/types/night-audit';
-import { Loader2, MoonStar, XCircle, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Loader2, MoonStar, XCircle, AlertTriangle, CheckCircle2, CalendarDays, Radio } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 import { StatusBanner } from '@/components/night-audit/dashboard/status-banner';
@@ -13,6 +13,7 @@ import { OccupancyChart } from '@/components/night-audit/dashboard/occupancy-cha
 import { RevenueTrendChart } from '@/components/night-audit/dashboard/revenue-trend-chart';
 import { ActivityFeed } from '@/components/night-audit/dashboard/activity-feed';
 import { AttentionQueue } from '@/components/night-audit/dashboard/attention-queue';
+import { AuditPulse } from '@/components/night-audit/dashboard/audit-pulse';
 import { AuditWizard } from '@/components/night-audit/audit-wizard';
 import { ResolutionManager, ResolutionAction } from '@/components/night-audit/resolution-manager';
 
@@ -120,7 +121,21 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
   const isAuditInProgress = (data.auditState === 'IN_PROGRESS' || data.auditState === 'POSTING');
 
   return (
-    <div className="space-y-8 pb-12">
+    <div className="min-h-full bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.07),transparent_28rem)] px-5 pb-12 pt-6 sm:px-8 sm:pt-8">
+      <div className="mx-auto max-w-[1540px] space-y-8">
+      <header className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
+        <div>
+          <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-indigo-600"><span className="h-1.5 w-1.5 rounded-full bg-indigo-500" /> Night audit / Control center</div>
+          <h1 className="text-3xl font-semibold tracking-[-0.035em] text-slate-950 sm:text-4xl">Good evening, keep the close moving.</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">A clear view of financial controls, room movement, and the next actions required to close today confidently.</p>
+        </div>
+        <div className="flex items-center gap-2 self-start rounded-2xl border border-slate-200/80 bg-white/80 px-3 py-2.5 shadow-sm backdrop-blur-sm lg:self-auto">
+          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600"><CalendarDays className="h-4 w-4" /></span>
+          <div><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">Business date</p><p className="text-sm font-semibold text-slate-800">{new Date(data.businessDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p></div>
+          <span className="ml-2 flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700"><Radio className="h-3 w-3" /> Synced</span>
+        </div>
+      </header>
+
       {/* Global Alerts */}
       <div className="space-y-4">
         {data.auditState === 'FAILED' && (
@@ -157,6 +172,8 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
         refreshing={refreshing}
         managerMode={managerMode}
       />
+
+      <AuditPulse data={data} />
 
       {/* Primary Metrics */}
       <MetricCards data={data} />
@@ -196,6 +213,7 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
         onClose={() => setResolutionAction(null)} 
         onSuccess={handleResolutionSuccess} 
       />}
+      </div>
     </div>
   );
 }
