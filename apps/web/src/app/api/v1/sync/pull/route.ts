@@ -227,8 +227,17 @@ export async function GET(req: NextRequest) {
       select: { id: true },
     });
     const outletWarehouseIds = outletWarehouses.map((warehouse) => warehouse.id);
+    // A POS terminal can sell kitchen items even when its physical outlet is
+    // assigned to the bar. Sync all active production categories for the
+    // property to offline tills; the assigned outlet is still used for
+    // orders, tables, sessions, and inventory scope.
+    const posCategoryWhere = terminalOutletId
+      ? (!since
+          ? { outlet: { propertyId }, isActive: true, updatedAt: { lte: watermark } }
+          : { outlet: { propertyId }, updatedAt: { gt: since, lte: watermark } })
+      : buildOutletWhere({ outletId: { in: outletIds }, isActive: true });
     const posCategories = await prisma.productCategory.findMany({
-      where: buildOutletWhere({ outletId: { in: outletIds }, isActive: true }),
+      where: posCategoryWhere,
       take: limit,
       orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     });

@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { HardwareBridge, toReceiptPrintData } from '@/lib/desktop/HardwareBridge';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, generateUUID } from '@/lib/utils';
 import { TerminalAuthScreen } from '@/components/pos/TerminalAuthScreen';
 import { MyShiftBankModal } from '@/components/pos/MyShiftBankModal';
 import { EmergencyCashBankModal } from '@/components/pos/EmergencyCashBankModal';
@@ -811,6 +811,7 @@ export default function PosApp() {
           viewMode={viewMode}
           setViewMode={setViewMode}
           onOpenMyOrders={() => setShowActiveOrders(true)}
+          bankingModel={bankingModel}
           onOpenMySales={() => setShowMySales(true)}
           onOpenShiftBank={() => setShowShiftBank(true)}
           onOpenKitchen={() => setShowKitchenModal(true)}
@@ -1447,6 +1448,7 @@ export default function PosApp() {
         onOrderSelect={handleOrderResume}
         onViewHistory={() => setShowMyOrders(true)}
         refreshKey={tableRefreshTrigger}
+        allowAllOpen={String(bankingModel).toUpperCase() === 'SERVER_BANKING'}
       />
       
       {successDialog && (
@@ -1488,7 +1490,7 @@ export default function PosApp() {
         onSuccess={(updatedOrder) => {
           if (updatedOrder) {
             // If all items were voided individually the backend auto-voids the whole order
-            const orderStatus = updatedOrder.status ?? updatedOrder.Status ?? '';
+            const orderStatus = String(updatedOrder.status ?? updatedOrder.Status ?? '').toUpperCase();
             if (orderStatus === 'VOIDED' || orderStatus === 'CANCELLED') {
               // Clear the entire cart and order context
               setCart([]);
@@ -1500,8 +1502,41 @@ export default function PosApp() {
               setTableRefreshTrigger(Date.now());
               toast.success('All items voided — order automatically closed.');
             } else if (updatedOrder.items ?? updatedOrder.Items) {
-              // Partial void: just refresh cart items
-              setCart(updatedOrder.items ?? updatedOrder.Items);
+              // The offline repository returns its EF entities with PascalCase
+              // fields and keeps voided lines in the order for audit history.
+              // Rebuild the POS cart shape and exclude those audit-only lines;
+              // otherwise a successful void/replacement appears unchanged.
+              const rawItems = (updatedOrder.items ?? updatedOrder.Items) as any[];
+              const currentByProduct = new Map(cart.map((entry) => [entry.productId, entry]));
+              const refreshedItems: OrderItem[] = rawItems
+                .filter((raw) => !String(raw.voidReason ?? raw.VoidReason ?? '').trim())
+                .map((raw) => {
+                  const productId = raw.productId ?? raw.ProductId;
+                  const existing = currentByProduct.get(productId);
+                  const product = products.find((candidate) => candidate.id === productId);
+                  const quantity = Number(raw.quantity ?? raw.Quantity ?? existing?.quantity ?? 0);
+                  const price = Number(raw.unitPrice ?? raw.UnitPrice ?? product?.price ?? existing?.price ?? 0);
+                  const taxRate = Number(raw.taxRate ?? raw.TaxRate ?? product?.taxRate ?? existing?.taxRate ?? 0);
+                  const station = String(
+                    raw.station ?? raw.Station ?? product?.resolvedStation ?? product?.productionStation ?? existing?.station ?? 'KITCHEN'
+                  ).toUpperCase();
+                  return {
+                    id: raw.id ?? raw.Id ?? existing?.id ?? generateUUID(),
+                    productId,
+                    name: raw.productName ?? raw.ProductName ?? product?.name ?? existing?.name ?? 'Item',
+                    price,
+                    quantity,
+                    firedQty: quantity,
+                    pendingQty: 0,
+                    taxRate,
+                    station,
+                    fired: true,
+                    kitchenStatus: raw.kitchenStatus ?? raw.KitchenStatus ?? existing?.kitchenStatus,
+                    modifiers: raw.modifiers ?? raw.Modifiers ?? existing?.modifiers ?? [],
+                  };
+                })
+                .filter((entry) => entry.quantity > 0);
+              setCart(refreshedItems);
             }
           }
           setItemToModify(null);

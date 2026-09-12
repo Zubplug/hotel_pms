@@ -21,15 +21,20 @@ interface ActiveOrdersModalProps {
   onOrderSelect: (order: any) => void;
   onViewHistory?: () => void;
   operatorRole?: string;
+  allowAllOpen?: boolean;
   refreshKey?: number;
 }
 
-export function ActiveOrdersModal({ isOpen, onClose, operatorToken, sessionId, staffName, operatorRole, onOrderSelect, onViewHistory, refreshKey = 0 }: ActiveOrdersModalProps) {
+export function ActiveOrdersModal({ isOpen, onClose, operatorToken, sessionId, staffName, operatorRole, onOrderSelect, onViewHistory, refreshKey = 0, allowAllOpen = false }: ActiveOrdersModalProps) {
   const { provider } = useLodgeCoreProvider();
   const [orders, setOrders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState<'my_orders' | 'all_open'>('my_orders');
   const [isResuming, setIsResuming] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!allowAllOpen && filter !== 'my_orders') setFilter('my_orders');
+  }, [allowAllOpen, filter]);
 
   const fetchOrders = async () => {
     setIsLoading(true);
@@ -111,12 +116,12 @@ export function ActiveOrdersModal({ isOpen, onClose, operatorToken, sessionId, s
                 >
                   My Orders
                 </button>
-                <button
+                {allowAllOpen && <button
                     onClick={() => setFilter('all_open')}
                     className={`px-5 py-2 text-sm font-bold rounded-md transition-all ${filter === 'all_open' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                   >
                     All Open
-                </button>
+                  </button>}
               </div>
               <button
                 onClick={fetchOrders}

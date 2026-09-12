@@ -12,6 +12,7 @@ interface PosSidebarProps {
   viewMode: 'menu' | 'tables';
   setViewMode: (mode: 'menu' | 'tables') => void;
   onOpenMyOrders: () => void;
+  bankingModel?: string;
   onOpenMySales: () => void;
   onOpenShiftBank: () => void;
 
@@ -30,6 +31,7 @@ export function PosSidebar({
   viewMode,
   setViewMode,
   onOpenMyOrders,
+  bankingModel = 'CENTRAL_CASHIER',
   onOpenMySales,
   onOpenShiftBank,
 
@@ -151,7 +153,7 @@ export function PosSidebar({
       {/* ── Manage Nav ───────────────────────────────────── */}
       <div className="flex flex-col gap-0.5 px-2">
         {!collapsed && <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest px-1 mb-1">Manage</p>}
-        <NavItem icon={Receipt}    label="All Orders"   onClick={onOpenMyOrders} />
+        {String(bankingModel).toUpperCase() === 'SERVER_BANKING' && <NavItem icon={Receipt} label="All Orders" onClick={onOpenMyOrders} />}
         <NavItem icon={TrendingUp} label="My Sales"     onClick={onOpenMySales} />
         <NavItem icon={Wallet}     label="Shift Bank"   onClick={onOpenShiftBank} />
 

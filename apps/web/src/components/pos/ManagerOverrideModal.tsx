@@ -22,6 +22,8 @@ type ManagerProfile = {
 
 type Step = 'select' | 'reason' | 'pin';
 
+const AUTHORIZER_ROLES = new Set(['MANAGER', 'ADMIN', 'GENERAL_MANAGER', 'SUPER_ADMIN', 'OWNER', 'FINANCE_MANAGER']);
+
 export function ManagerOverrideModal({ isOpen, actionName, onAuthorized, onCancel }: ManagerOverrideModalProps) {
   const { provider, isDesktopMode } = useLodgeCoreProvider();
   const { data: session } = useLodgeCoreSession();
@@ -40,20 +42,23 @@ export function ManagerOverrideModal({ isOpen, actionName, onAuthorized, onCance
     try {
       let res: any;
       if (isDesktopMode) {
-        res = await provider.auth.getActiveStaff('MANAGER,ADMIN');
+        res = await provider.auth.getActiveStaff('MANAGER,ADMIN,GENERAL_MANAGER,SUPER_ADMIN,OWNER,FINANCE_MANAGER');
       } else if (propertyId) {
         res = await provider.pos.getActiveStaff(propertyId);
       }
       if (res?.data) {
-        const roles = new Set(['MANAGER', 'ADMIN']);
         const fetched = res.data.filter((member: ManagerProfile) => {
-          const r = String(member.role || member.position || '').toUpperCase().replace(/[^A-Z]/g, '');
-          return roles.has(r);
+          const role = String(member.role || '').toUpperCase().replace(/[^A-Z]/g, '');
+          const position = String(member.position || '').toUpperCase().replace(/[^A-Z]/g, '');
+          return AUTHORIZER_ROLES.has(role) || AUTHORIZER_ROLES.has(position);
         });
         setManagers(fetched);
+      } else {
+        setError('Unable to load authorizing staff. Try again.');
       }
     } catch (e) {
       console.error('Failed to load managers:', e);
+      setError('Unable to load authorizing staff. Try again.');
     } finally {
       setLoading(false);
     }

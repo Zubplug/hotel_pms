@@ -514,7 +514,10 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
   },
   approvals: {
     requestItemModification: async (payload: any) => {
-      return invokeDesktop('approvals.requestItemModification', payload);
+      const response: any = await invokeDesktop('approvals.requestItemModification', payload);
+      // Desktop IPC wraps the repository result in { success, data }, while
+      // the POS approval flow consumes the repository result directly.
+      return response?.data ?? response;
     },
     requestDiscount: async (payload: any) => {
       return invokeDesktop('approvals.requestDiscount', payload);

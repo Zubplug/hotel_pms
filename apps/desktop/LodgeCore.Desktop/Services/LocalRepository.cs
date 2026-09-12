@@ -3539,8 +3539,19 @@ public class LocalRepository
         // If outletId given, filter products to only those in categories belonging to that outlet
         if (!string.IsNullOrWhiteSpace(outletId))
         {
+            // A terminal may sell both bar and kitchen items. Keep the
+            // terminal outlet as the primary scope, but include active
+            // production categories from the same property so a kitchen
+            // category is not hidden just because the till is assigned to bar.
+            var propertyOutletIds = await _dbContext.PosOutlets
+                .Where(o => o.PropertyId == propertyId && o.IsActive)
+                .Select(o => o.Id)
+                .ToListAsync();
             var outletCategoryIds = await _dbContext.ProductCategories
-                .Where(c => c.OutletId == outletId && c.IsActive)
+                .Where(c => c.IsActive && propertyOutletIds.Contains(c.OutletId)
+                    && (c.OutletId == outletId
+                        || c.ProductionStation == "KITCHEN"
+                        || c.ProductionStation == "BAR"))
                 .Select(c => c.Id)
                 .ToListAsync();
             query = query.Where(p => outletCategoryIds.Contains(p.CategoryId));
@@ -5185,9 +5196,15 @@ public class LocalRepository
         }
 
         if (string.IsNullOrWhiteSpace(roleScope)) return allStaff;
+        static string NormalizeRole(string? role) => (role ?? string.Empty)
+            .Trim()
+            .ToUpperInvariant()
+            .Replace(" ", "_")
+            .Replace("-", "_");
         var roles = roleScope.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(NormalizeRole)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        return allStaff.Where(s => roles.Contains(s.Role)).ToList();
+        return allStaff.Where(s => roles.Contains(NormalizeRole(s.Role))).ToList();
     }
 
     public async Task<LocalStaff?> AuthenticateOperatorAsync(string staffId, string pin, string propertyId)
@@ -5254,12 +5271,12 @@ public class LocalRepository
         // We have to iterate since we need to verify BCrypt hashes.
         // Get all active supervisors for the property first.
         var supervisors = await _dbContext.Staff
-            .Where(s => s.PropertyId == propertyId && s.IsActive && (s.Role == "MANAGER" || s.Role == "ADMIN"))
+            .Where(s => s.IsActive && s.PropertyId == propertyId)
             .ToListAsync();
 
         foreach (var s in supervisors)
         {
-            if (!string.IsNullOrEmpty(s.PosPinHash) && BCrypt.Net.BCrypt.Verify(pin, s.PosPinHash))
+            if (IsAuthorizerRole(s.Role, null) && !string.IsNullOrEmpty(s.PosPinHash) && BCrypt.Net.BCrypt.Verify(pin, s.PosPinHash))
             {
                 return s;
             }
@@ -5271,14 +5288,20 @@ public class LocalRepository
     public async Task<LocalStaff?> AuthorizeManagerOverrideAsync(string managerStaffId, string pin, string propertyId)
     {
         var manager = await _dbContext.Staff
-            .FirstOrDefaultAsync(s => s.Id == managerStaffId && s.PropertyId == propertyId && s.IsActive && (s.Role == "MANAGER" || s.Role == "ADMIN"));
+            .FirstOrDefaultAsync(s => s.Id == managerStaffId && s.IsActive && s.PropertyId == propertyId);
 
-        if (manager == null || string.IsNullOrEmpty(manager.PosPinHash) || !BCrypt.Net.BCrypt.Verify(pin, manager.PosPinHash))
+        if (manager == null || !IsAuthorizerRole(manager.Role, null) || string.IsNullOrEmpty(manager.PosPinHash) || !BCrypt.Net.BCrypt.Verify(pin, manager.PosPinHash))
         {
             return null;
         }
 
         return manager;
+    }
+
+    private static bool IsAuthorizerRole(string? role, string? position)
+    {
+        var value = (role ?? position ?? string.Empty).Trim().ToUpperInvariant().Replace(" ", "_").Replace("-", "_");
+        return value is "MANAGER" or "ADMIN" or "GENERAL_MANAGER" or "SUPER_ADMIN" or "OWNER" or "FINANCE_MANAGER";
     }
 
     public void LogOverrideAudit(
@@ -5425,9 +5448,18 @@ public class LocalRepository
     {
         if (!string.IsNullOrWhiteSpace(outletId))
         {
-            // Filter strictly to the requested outlet
+            // Show the assigned outlet plus active kitchen/bar production
+            // categories for this property. This keeps kitchen categories
+            // available on a bar-assigned waiter terminal.
+            var propertyOutletIds = await _dbContext.PosOutlets
+                .Where(o => o.PropertyId == propertyId && o.IsActive)
+                .Select(o => o.Id)
+                .ToListAsync();
             return await _dbContext.ProductCategories
-                .Where(c => c.IsActive && c.OutletId == outletId)
+                .Where(c => c.IsActive && propertyOutletIds.Contains(c.OutletId)
+                    && (c.OutletId == outletId
+                        || c.ProductionStation == "KITCHEN"
+                        || c.ProductionStation == "BAR"))
                 .OrderBy(c => c.SortOrder)
                 .ToListAsync();
         }
