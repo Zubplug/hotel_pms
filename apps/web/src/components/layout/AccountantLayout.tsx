@@ -53,7 +53,7 @@ const ACCOUNTANT_NAV = [
       { name: 'General Ledger', href: '/accountant/gl' },
       { name: 'Fixed Assets', href: '/accountant/assets' },
       { name: 'Payroll Periods', href: '/accountant/payroll' },
-      { name: 'Night Audit', href: '/night-audit' },
+      { name: 'Audit', href: '/accountant/audit' },
       { name: 'Tax Remittances', href: '/accountant/taxes' },
       { name: 'Budgets', href: '/accountant/budgets' },
     ],

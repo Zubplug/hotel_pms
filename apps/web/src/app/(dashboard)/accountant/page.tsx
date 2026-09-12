@@ -62,8 +62,11 @@ export default function AccountantOverviewPage() {
     return '₦' + new Intl.NumberFormat('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
   };
 
-  const currentRev = kpis?.revenue?.today || 0;
-  const previousRev = kpis?.revenue?.yesterday || 0;
+  // The analytics API returns a RevenueSnapshot for each day, not a scalar.
+  // Read totalRevenue explicitly so the card does not coerce the object to NaN
+  // and silently render the fallback value of ₦0.00.
+  const currentRev = Number(kpis?.revenue?.today?.totalRevenue ?? 0);
+  const previousRev = Number(kpis?.revenue?.yesterday?.totalRevenue ?? 0);
   const revGrowth = previousRev > 0 ? ((currentRev - previousRev) / previousRev) * 100 : 0;
 
   const currentExpenses = kpis?.balances?.apOutstanding || 0;
