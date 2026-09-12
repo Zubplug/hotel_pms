@@ -37,11 +37,10 @@ public class SessionManager
         // Never fall back to the first property/outlet: that can attach a
         // restarted terminal to another outlet and make a valid shift appear
         // to be missing.
-        var deviceId = await Microsoft.Maui.Storage.SecureStorage.Default.GetAsync(DeviceIdKey)
-                       ?? throw new InvalidOperationException("This terminal has no device identity. Re-provision the desktop terminal before using POS.");
-        var terminal = await _dbContext.PosTerminals.FirstOrDefaultAsync(t => t.Id == deviceId);
+        var terminal = await GetProvisionedTerminalAsync();
         if (terminal == null || string.IsNullOrWhiteSpace(terminal.PropertyId) || string.IsNullOrWhiteSpace(terminal.OutletId))
             throw new InvalidOperationException("This terminal is not fully configured. Re-provision the desktop terminal before using POS.");
+        var deviceId = terminal.Id;
 
         var property = await _dbContext.Properties.FirstOrDefaultAsync(p => p.Id == terminal.PropertyId);
         if (property == null)
@@ -103,11 +102,10 @@ public class SessionManager
         if (staff == null)
             throw new Exception("Staff member not found or inactive.");
 
-        var deviceId = await Microsoft.Maui.Storage.SecureStorage.Default.GetAsync(DeviceIdKey)
-                       ?? throw new InvalidOperationException("This terminal has no device identity. Re-provision the desktop terminal before using POS.");
-        var terminal = await _dbContext.PosTerminals.FirstOrDefaultAsync(t => t.Id == deviceId);
+        var terminal = await GetProvisionedTerminalAsync();
         if (terminal == null || string.IsNullOrWhiteSpace(terminal.PropertyId) || string.IsNullOrWhiteSpace(terminal.OutletId))
             throw new InvalidOperationException("This terminal is not fully configured. Re-provision the desktop terminal before using POS.");
+        var deviceId = terminal.Id;
 
         var property = await _dbContext.Properties.FirstOrDefaultAsync(p => p.Id == terminal.PropertyId);
         if (property == null)
@@ -140,6 +138,35 @@ public class SessionManager
         _dbContext.OperatorContexts.Add(newContext);
         await _dbContext.SaveChangesAsync();
         return newContext;
+    }
+
+    /// <summary>
+    /// Resolves the provisioned terminal and migrates installations created
+    /// before terminal identity was persisted to secure storage. Older builds
+    /// generated a local device ID, while the terminal row uses the cloud
+    /// terminal ID; there is only one terminal in the local desktop database.
+    /// </summary>
+    private async Task<LocalPosTerminal?> GetProvisionedTerminalAsync()
+    {
+        var deviceId = await Microsoft.Maui.Storage.SecureStorage.Default.GetAsync(DeviceIdKey);
+        var terminal = !string.IsNullOrWhiteSpace(deviceId)
+            ? await _dbContext.PosTerminals.FirstOrDefaultAsync(t => t.Id == deviceId)
+            : null;
+
+        if (terminal != null) return terminal;
+
+        var terminals = await _dbContext.PosTerminals.Take(2).ToListAsync();
+        if (terminals.Count == 1)
+        {
+            terminal = terminals[0];
+            if (!string.IsNullOrWhiteSpace(terminal.Id))
+            {
+                await Microsoft.Maui.Storage.SecureStorage.Default.SetAsync(DeviceIdKey, terminal.Id);
+            }
+            return terminal;
+        }
+
+        return null;
     }
 
     /// <summary>

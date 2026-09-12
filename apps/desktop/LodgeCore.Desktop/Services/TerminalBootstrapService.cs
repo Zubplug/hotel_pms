@@ -147,6 +147,11 @@ public class TerminalBootstrapService
             RegisteredAt = DateTime.UtcNow
         };
 
+        // Bind the secure local identity to the provisioned cloud terminal.
+        // Older builds generated a separate random device ID, which caused
+        // the session guard to reject an otherwise valid provisioned terminal.
+        await Microsoft.Maui.Storage.SecureStorage.Default.SetAsync("LodgeCore_DeviceId", terminalInfo.Id);
+
         context.PosTerminals.Add(newTerminal);
         
         context.PosOutlets.RemoveRange(context.PosOutlets);
