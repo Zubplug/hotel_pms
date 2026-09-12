@@ -137,7 +137,6 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
                 )}
               />
               <span className="relative z-10">{item.name}</span>
-              {item.badge && <span className="relative z-10 ml-auto rounded-md bg-amber-400/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300 ring-1 ring-amber-300/15">{item.badge}</span>}
               {isActive && <ArrowUpRight className="relative z-10 ml-auto h-3.5 w-3.5 text-indigo-300/70" />}
             </Link>
           );
