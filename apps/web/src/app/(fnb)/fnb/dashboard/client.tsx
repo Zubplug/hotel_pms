@@ -52,13 +52,13 @@ export default function FnbAnalyticsClient() {
   }, [session, propertyId, dateRange]);
 
   if (loading && !data) return (
-    <div className="flex min-h-[60vh] items-center justify-center bg-slate-50 dark:bg-[#0B0F19]">
+    <div className="flex min-h-[60vh] items-center justify-center">
       <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
     </div>
   );
 
   if (error && !data) return (
-    <div className="min-h-full px-5 pb-12 pt-8 bg-slate-50 dark:bg-[#0B0F19]">
+    <div className="min-h-full px-5 pb-12 pt-8">
       <div className="mx-auto max-w-3xl rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400">{error}</div>
     </div>
   );
