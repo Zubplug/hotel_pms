@@ -2,15 +2,16 @@ import { NextResponse } from 'next/server';
 import prisma, { PosProductionBatchStatus } from '@hotel-pms/db';
 
 const ALLOWED_TRANSITIONS: Record<PosProductionBatchStatus, PosProductionBatchStatus[]> = {
-  PENDING: ['PREPARING', 'RECALLED', 'COMPLETED'], // sometimes skipped directly to completed
-  PREPARING: ['READY', 'RECALLED', 'COMPLETED'],
-  READY: ['COMPLETED', 'RECALLED'],
-  COMPLETED: ['RECALLED'],
-  RECALLED: ['PENDING', 'PREPARING'],
+  PENDING: ['PREPARING', 'COMPLETED'],
+  PREPARING: ['READY', 'COMPLETED'],
+  READY: ['COMPLETED'],
+  COMPLETED: [],
+  ACKNOWLEDGED: ['PREPARING', 'COMPLETED'],
 };
 
-export async function POST(req: Request, { params }: { params: { batchId: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ batchId: string }> }) {
   try {
+    const resolvedParams = await params;
     const { status: targetStatus, actorId } = await req.json();
     
     if (!targetStatus) {
@@ -19,7 +20,7 @@ export async function POST(req: Request, { params }: { params: { batchId: string
 
     const result = await prisma.$transaction(async (tx) => {
       const batch = await tx.posProductionBatch.findUnique({
-        where: { id: params.batchId }
+        where: { id: resolvedParams.batchId }
       });
 
       if (!batch) throw new Error('Batch not found');
@@ -34,13 +35,13 @@ export async function POST(req: Request, { params }: { params: { batchId: string
       }
 
       const updated = await tx.posProductionBatch.update({
-        where: { id: params.batchId },
+        where: { id: resolvedParams.batchId },
         data: { status: targetStatus as PosProductionBatchStatus }
       });
 
       await tx.posProductionBatchEvent.create({
         data: {
-          batchId: params.batchId,
+          batchId: resolvedParams.batchId,
           fromStatus: currentStatus,
           toStatus: targetStatus as PosProductionBatchStatus,
           actorId: actorId || null,

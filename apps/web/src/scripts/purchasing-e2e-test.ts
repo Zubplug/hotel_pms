@@ -29,17 +29,16 @@ async function run() {
       data: {
         propertyId: property.id,
         name: 'Test Food Supplier',
-        code: 'TEST-SUPP',
         currency: 'NGN'
       }
     });
   }
 
   const category = await prisma.inventoryCategory.findFirst({ where: { propertyId: property.id } })
-    || await prisma.inventoryCategory.create({ data: { propertyId: property.id, name: 'Food', type: 'FOOD' } });
+    || await prisma.inventoryCategory.create({ data: { propertyId: property.id, name: 'Food' } });
 
   const warehouse = await prisma.warehouse.findFirst({ where: { propertyId: property.id } })
-    || await prisma.warehouse.create({ data: { propertyId: property.id, name: 'Main Store', type: 'MAIN' } });
+    || await prisma.warehouse.create({ data: { propertyId: property.id, name: 'Main Store' } });
 
   const stockItem = await prisma.stockItem.create({
     data: {
@@ -145,8 +144,8 @@ async function run() {
   }
 
   // 6e. Idempotency (Duplicate posting)
-  const duplicateRes = await InventoryService.postReceipt(ctx, grn.id, actorId, operationId);
-  console.log(`Duplicate GRN Protection: ${duplicateRes.message === 'Already processed' ? '✅ Passed' : '❌ Failed'}`);
+  const duplicateRes = await InventoryService.postReceipt(ctx, grn.id, actorId, operationId).catch((err: any) => ({ success: false, message: err.message }));
+  console.log(`Duplicate GRN Protection: ${(duplicateRes as any).message === 'Already processed' ? '✅ Passed' : '❌ Failed'}`);
 }
 
 run().catch(console.error).finally(() => prisma.$disconnect());
