@@ -19,6 +19,7 @@ import { AuditPulse } from '@/components/night-audit/dashboard/audit-pulse';
 import { CloseControl } from '@/components/night-audit/dashboard/close-control';
 import { AuditWizard } from '@/components/night-audit/audit-wizard';
 import { ResolutionManager, ResolutionAction } from '@/components/night-audit/resolution-manager';
+import { AuditSuccessModal } from '@/components/night-audit/audit-success-modal';
 
 export default function NightAuditDashboard({ managerMode = false }: { managerMode?: boolean }) {
   const { propertyId, isLoading: propertyLoading } = useProperty();
@@ -31,6 +32,7 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
 
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [successResult, setSuccessResult] = useState<any>(null);
 
   const [resolutionAction, setResolutionAction] = useState<ResolutionAction>(null);
 
@@ -67,7 +69,7 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
       const result = await response.json();
       if (!response.ok) throw new Error(result.error?.message || 'Audit execution failed');
       setWizardOpen(false);
-      setMessage(`Audit completed. ${result.data?.roomChargesPosted || 0} room charges posted.`);
+      setSuccessResult(result.data);
       await load(true);
     } catch (err: any) {
       setError(err.message);
@@ -243,6 +245,14 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
           onSuccess={handleResolutionSuccess}
         />
       )}
+
+      {/* Success Modal */}
+      <AuditSuccessModal 
+        open={!!successResult} 
+        onOpenChange={(open) => !open && setSuccessResult(null)} 
+        result={successResult}
+        businessDate={data.businessDate}
+      />
     </div>
   );
 }
