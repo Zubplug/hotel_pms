@@ -48,11 +48,11 @@ export default async function FnbEventsPage() {
                   <div className="flex justify-between items-start gap-2">
                     <CardTitle className="text-lg leading-tight">{event.name}</CardTitle>
                     <div className={`px-2 py-1 text-[10px] font-bold tracking-wider uppercase rounded-full shrink-0 ${
-                      event.status === 'CONFIRMED' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300' :
-                      event.status === 'TENTATIVE' ? 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300' :
-                      event.status === 'COMPLETED' ? 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300' :
-                      event.status === 'CANCELLED' ? 'bg-rose-100 text-rose-800 dark:bg-rose-500/20 dark:text-rose-300' :
-                      'bg-slate-100 text-slate-800 dark:bg-slate-500/20 dark:text-slate-300'
+                      event.status === 'CONFIRMED' ? 'bg-emerald-100 text-emerald-800  ' :
+                      event.status === 'TENTATIVE' ? 'bg-amber-100 text-amber-800  ' :
+                      event.status === 'COMPLETED' ? 'bg-blue-100 text-blue-800  ' :
+                      event.status === 'CANCELLED' ? 'bg-rose-100 text-rose-800  ' :
+                      'bg-slate-100 text-slate-800  '
                     }`}>
                       {event.status}
                     </div>
