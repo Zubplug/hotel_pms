@@ -2,7 +2,6 @@
 
 import prisma from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
-import { getSystemIntegrity, getFinancialAudit, getCashReconciliation } from './night-audit-service';
 
 export async function getNightAuditHistory(propertyId: string) {
   if (!propertyId) return [];
@@ -67,60 +66,6 @@ export async function getNightAuditHistory(propertyId: string) {
       : audit.financialSnapshot,
     auditorName: audit.runBy ? nameMap.get(audit.runBy) || 'Unknown User' : 'SYSTEM',
   }));
-}
-
-export async function getExceptions(propertyId: string) {
-  if (!propertyId) return null;
-  const session = await auth();
-  if (!session?.user?.id) throw new Error('UNAUTHORIZED');
-  const { requireOrganizationContext } = await import('@/lib/organization-access');
-  const ctx = await requireOrganizationContext(session.user.id);
-  if (!ctx.propertyIds.includes(propertyId)) throw new Error('FORBIDDEN');
-
-  const sys = await getSystemIntegrity(ctx, propertyId);
-  const fin = await getFinancialAudit(ctx, propertyId);
-  const cash = await getCashReconciliation(ctx, propertyId);
-  
-  // Calculate overages and shortages
-  let overage = 0;
-  let shortage = 0;
-  
-  if (cash && cash.cashHandovers) {
-    cash.cashHandovers.forEach((handover: any) => {
-      if (handover.actualAmount !== null && handover.amount !== null) {
-         const diff = Number(handover.actualAmount) - Number(handover.amount);
-         if (diff > 0) overage += diff;
-         if (diff < 0) shortage += Math.abs(diff);
-      }
-    });
-  }
-
-  const pendingCheckInBypasses = await prisma.checkInBypass.findMany({
-    where: {
-      reservation: { propertyId },
-      status: 'PENDING'
-    },
-    include: {
-      reservation: {
-        include: {
-          primaryGuest: true,
-          folios: true
-        }
-      },
-      operator: true,
-      acknowledgedBy: true
-    }
-  });
-  
-  return {
-    openPosSessions: sys.openPosSessions.length,
-    syncConflicts: sys.financialSyncConflicts.length,
-    highBalances: fin.highBalances.length,
-    rateVariances: fin.rateVariances.length,
-    cashOverages: overage,
-    cashShortages: shortage,
-    pendingCheckInBypasses,
-  };
 }
 
 export async function getSystemHealth(propertyId: string) {

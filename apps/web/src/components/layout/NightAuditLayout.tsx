@@ -9,7 +9,6 @@ import {
   Menu,
   MoonStar,
   Clock,
-  AlertTriangle,
   FileText,
   LogOut,
   ChevronDown,
@@ -35,7 +34,6 @@ import { PropertySelector } from '@/components/properties/PropertySelector';
 const NIGHT_AUDIT_NAV = [
   { name: 'Audit overview', href: '/night-audit', icon: MoonStar, group: 'Workspace' },
   { name: 'Audit history', href: '/night-audit/history', icon: Clock, group: 'Workspace' },
-  { name: 'Exceptions & variances', href: '/night-audit/exceptions', icon: AlertTriangle, group: 'Controls' },
   { name: 'Shift reviews', href: '/night-audit/shift-reviews', icon: FileText, group: 'Controls' },
   { name: 'Cash handovers', href: '/night-audit/handovers', icon: WalletCards, group: 'Controls' },
   { name: 'Room status', href: '/night-audit/rooms', icon: BedDouble, group: 'Controls' },

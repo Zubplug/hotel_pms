@@ -1,5 +1,4 @@
 import React, { useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, CheckCircle2, ChevronRight, ChevronDown, ChevronUp, XCircle, Info } from 'lucide-react';
@@ -32,7 +31,6 @@ const getStableQueueId = (prefix: string, item: Record<string, unknown>) => {
 };
 
 export function AttentionQueue({ data, onResolveItem }: { data: NightAuditData; onResolveItem?: (action: string, item: Record<string, unknown> | null) => void }) {
-  const router = useRouter();
   const [isExpanded, setIsExpanded] = useState(false);
 
   const queue = useMemo(() => {
@@ -161,11 +159,7 @@ export function AttentionQueue({ data, onResolveItem }: { data: NightAuditData; 
                   {onResolveItem && (
                     <button
                       onClick={() => {
-                        if (item.actionType === 'GOTO_EXCEPTIONS') {
-                          router.push('/night-audit/exceptions');
-                        } else {
-                          onResolveItem(item.actionType, item.payload);
-                        }
+                        onResolveItem(item.actionType, item.payload);
                       }}
                       className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-indigo-700 transition hover:border-indigo-200 hover:bg-indigo-50"
                     >
