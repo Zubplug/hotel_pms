@@ -32,7 +32,7 @@ export default function NightAuditRoomsControlPage() {
 
   const { data: allRoomsData } = useQuery({
     queryKey: ['frontdesk', 'rooms', propertyId],
-    queryFn: () => provider.rooms.list(propertyId, { page: '1', pageSize: '200' } as any),
+    queryFn: () => provider.rooms.list(propertyId, { page: '1', pageSize: '100' } as any),
     enabled: !!propertyId,
   });
 
