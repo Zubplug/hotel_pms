@@ -19,6 +19,21 @@ export async function getNightAuditHistory(propertyId: string) {
     include: { financialSnapshot: true }
   });
 
+  const roomRevenueByAudit = audits.length > 0
+    ? await prisma.folioItem.groupBy({
+        by: ['nightAuditRunId'],
+        where: {
+          folio: { propertyId },
+          nightAuditRunId: { in: audits.map((audit) => audit.id) },
+          type: 'CHARGE',
+          source: 'ROOM_CHARGE',
+          voidedAt: null,
+        },
+        _sum: { amount: true },
+      })
+    : [];
+  const roomRevenueMap = new Map(roomRevenueByAudit.map((row) => [row.nightAuditRunId, Number(row._sum.amount || 0)]));
+
   const userIds = [...new Set(audits.map(a => a.runBy).filter(Boolean))];
   
   const users = await prisma.user.findMany({
@@ -47,6 +62,9 @@ export async function getNightAuditHistory(propertyId: string) {
 
   return audits.map(audit => ({
     ...audit,
+    financialSnapshot: audit.financialSnapshot && roomRevenueMap.has(audit.id)
+      ? { ...audit.financialSnapshot, roomRevenue: roomRevenueMap.get(audit.id) }
+      : audit.financialSnapshot,
     auditorName: audit.runBy ? nameMap.get(audit.runBy) || 'Unknown User' : 'SYSTEM',
   }));
 }

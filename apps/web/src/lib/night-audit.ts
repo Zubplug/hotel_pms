@@ -547,9 +547,9 @@ export async function executeNightAudit(
 
   // The date was already rolled during cutover. Finish the previous date's
   // posting work and publish a final, immutable audit result.
-    const [revenueByCategory, otherItemsByType, roomCount, occupiedCount] = await Promise.all([
+    const [revenueByCategory, otherItemsByType, roomCount, occupiedCount, posOrders, posFolioItems] = await Promise.all([
       prisma.folioItem.groupBy({
-        by: ['revenueCategory'],
+        by: ['source', 'revenueCategory'],
         where: { folio: { propertyId }, businessDate, type: 'CHARGE', voidedAt: null },
         _sum: { amount: true }
       }),
@@ -559,17 +559,44 @@ export async function executeNightAudit(
         _sum: { amount: true }
       }),
       prisma.room.count({ where: { propertyId, isActive: true } }),
-      prisma.room.count({ where: { propertyId, isActive: true, status: 'OCCUPIED' } })
+      prisma.room.count({ where: { propertyId, isActive: true, status: 'OCCUPIED' } }),
+      prisma.posOrder.findMany({
+        where: { propertyId, businessDate, status: 'CLOSED', paymentStatus: 'PAID' },
+        select: {
+          id: true,
+          total: true,
+          payments: { where: { status: 'CONFIRMED' }, select: { amount: true, method: true } },
+        },
+      }),
+      prisma.folioItem.findMany({
+        where: { folio: { propertyId }, businessDate, type: 'CHARGE', source: 'POS', voidedAt: null },
+        select: { posTransactionId: true },
+      })
     ]);
 
     let roomRevenueVal = 0, fnbRevenueVal = 0, otherRevenueVal = 0, taxesVal = 0, discountsVal = 0, refundsVal = 0;
 
     for (const group of revenueByCategory) {
       const amt = Number(group._sum?.amount || 0);
-      if (group.revenueCategory === 'ROOM') roomRevenueVal += amt;
-      else if (group.revenueCategory === 'FNB') fnbRevenueVal += amt;
+      // ROOM_CHARGE is the source of truth for accommodation revenue. This
+      // protects older/imported room charges whose revenueCategory was left at
+      // the schema default of OTHER.
+      if (group.source === 'ROOM_CHARGE' || group.revenueCategory === 'ROOM') roomRevenueVal += amt;
+      else if (group.source === 'POS' || group.revenueCategory === 'FNB') fnbRevenueVal += amt;
       else if (group.revenueCategory === 'OTHER') otherRevenueVal += amt;
       else if (group.revenueCategory === 'TAX') taxesVal += amt;
+    }
+
+    // POS orders paid directly by cash/card are not represented by folio
+    // items. Add them to F&B revenue, while excluding room-charge orders that
+    // already have a POS folio item so the same sale is never counted twice.
+    const posFolioOrderIds = new Set(posFolioItems.map((item) => item.posTransactionId).filter(Boolean));
+    for (const order of posOrders) {
+      if (posFolioOrderIds.has(order.id)) continue;
+      const complimentary = order.payments
+        .filter((payment) => String(payment.method).toUpperCase() === 'COMPLIMENTARY')
+        .reduce((sum, payment) => sum + Number(payment.amount), 0);
+      fnbRevenueVal += Math.max(0, Number(order.total) - complimentary);
     }
 
     for (const group of otherItemsByType) {

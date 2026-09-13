@@ -10,6 +10,7 @@
     "db:migrate": "prisma migrate dev",
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
+    "db:backfill-night-audit-revenue": "tsx prisma/backfill-night-audit-revenue.ts",
     "type-check": "tsc --noEmit",
     "postinstall": "prisma generate"
   },

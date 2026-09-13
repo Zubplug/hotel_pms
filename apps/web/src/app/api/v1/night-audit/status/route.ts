@@ -88,6 +88,7 @@ export async function GET(req: NextRequest) {
         orderBy: { businessDate: 'asc' }, 
         take: 7, 
         select: { 
+          id: true,
           businessDate: true, 
           totalRevenue: true, 
           occupancy: true, 
@@ -104,6 +105,34 @@ export async function GET(req: NextRequest) {
       result[room.status] = (result[room.status] || 0) + 1;
       return result;
     }, {});
+
+    // Rebuild room revenue from the posting source so legacy room charges
+    // incorrectly stored with revenueCategory=OTHER still render as Rooms.
+    const trendAuditIds = trend.map((audit) => audit.id).filter(Boolean);
+    const roomRevenueByAudit = trendAuditIds.length > 0
+      ? await prisma.folioItem.groupBy({
+          by: ['nightAuditRunId'],
+          where: {
+            folio: { propertyId },
+            nightAuditRunId: { in: trendAuditIds },
+            type: 'CHARGE',
+            source: 'ROOM_CHARGE',
+            voidedAt: null,
+          },
+          _sum: { amount: true },
+        })
+      : [];
+    const roomRevenueMap = new Map(roomRevenueByAudit.map((row) => [row.nightAuditRunId, Number(row._sum.amount || 0)]));
+    const normalizedTrend = trend.map((audit) => {
+      const sourceRoomRevenue = roomRevenueMap.get(audit.id);
+      if (sourceRoomRevenue === undefined) return audit;
+      return {
+        ...audit,
+        financialSnapshot: audit.financialSnapshot
+          ? { ...audit.financialSnapshot, roomRevenue: sourceRoomRevenue }
+          : audit.financialSnapshot,
+      };
+    });
 
     // Calculate readiness score
     let blockers = 0;
@@ -160,7 +189,7 @@ export async function GET(req: NextRequest) {
         latePostings,
         inHouseGuests,
         rooms: { total: rooms.length, occupied: roomAnalysis.OCCUPIED || 0, available: roomAnalysis.AVAILABLE || 0, outOfOrder: roomAnalysis.OUT_OF_ORDER || 0 },
-        trend,
+        trend: normalizedTrend,
       },
       activityFeed,
       financialSnapshot,
