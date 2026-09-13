@@ -1,11 +1,8 @@
-import { Metadata } from 'next';
-import FnbDashboardClient from './client';
+import React from 'react';
+import FnbAnalyticsClient from './client';
 
-export const metadata: Metadata = {
-  title: 'F&B Dashboard | LodgeCore',
-  description: 'Overview of Food and Beverage operations.',
-};
+export const metadata = { title: 'F&B Dashboard' };
 
-export default function FnbDashboardPage() {
-  return <FnbDashboardClient />;
+export default function FnbGeneralDashboardPage() {
+  return <FnbAnalyticsClient />;
 }

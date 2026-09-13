@@ -3,194 +3,280 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useProperty } from '@/components/PropertyProvider';
 import {
-  AlertTriangle, CheckCircle2, Loader2, Scale, WalletCards, RefreshCw, XCircle, DollarSign, Activity, Users, FileText
+  AlertCircle, BarChart3, Loader2, Calendar, Filter, Users, DollarSign, ListOrdered, UtensilsCrossed, AlertTriangle, RefreshCw
 } from 'lucide-react';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, Legend } from 'recharts';
 
 const money = (value: number, currency = 'NGN') =>
   new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 0 }).format(Number(value || 0));
 
-function StatCard({ label, value, detail, accent }: { label: string; value: string | number; detail: string; accent: string }) {
+function KPI({ label, value, subtext, icon: Icon }: any) {
   return (
-    <div className={`flex flex-col gap-3 rounded-[20px] border p-5 ${accent}`}>
-      <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-500">{label}</p>
-      <p className="text-xl font-bold text-white tabular-nums">{value}</p>
-      <p className="text-[11px] text-slate-600">{detail}</p>
+    <div className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/[0.08] dark:bg-[#111627] dark:shadow-none">
+      <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
+        <span className="text-xs font-semibold uppercase tracking-wider">{label}</span>
+        <Icon className="h-4 w-4 opacity-70" />
+      </div>
+      <div className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums tracking-tight">{value}</div>
+      {subtext && <div className="text-xs text-slate-500 dark:text-slate-500">{subtext}</div>}
     </div>
   );
 }
 
-export default function FnbDashboardClient({ managerMode = false }: { managerMode?: boolean }) {
+const COLORS = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6'];
+
+export default function FnbAnalyticsClient() {
   const { propertyId } = useProperty();
   const { data: session } = useLodgeCoreSession();
+  
+  const [dateRange, setDateRange] = useState('TODAY');
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [refreshToken, setRefreshToken] = useState(0);
 
   useEffect(() => {
     if (!session?.user || !propertyId) return;
     
     setLoading(true);
     setError(null);
-    fetch(`/api/v1/fnb/dashboard?propertyId=${propertyId}`)
+    fetch(`/api/v1/fnb/dashboard/analytics?propertyId=${propertyId}&range=${dateRange}`)
       .then(async res => {
         const body = await res.json();
-        if (!res.ok) throw new Error(body.error?.message || 'Unable to load dashboard');
+        if (!res.ok) throw new Error(body.error?.message || 'Unable to load analytics');
         return body.data;
       })
       .then(setData)
       .catch(err => setError(err.message))
       .finally(() => setLoading(false));
-  }, [session, propertyId, refreshToken]);
-
-  // Set up auto-refresh for active monitoring
-  useEffect(() => {
-    if (!session?.user || !propertyId) return;
-    const interval = setInterval(() => setRefreshToken(v => v + 1), 60000);
-    return () => clearInterval(interval);
-  }, [session, propertyId]);
-
-  const kpis = data?.kpis || {};
-  const alerts = data?.alerts || [];
-  const currency = 'NGN'; // Normally from property config
-
-  const PAGE_BG = { background: 'linear-gradient(160deg, #060b18 0%, #080e1f 60%, #0a0c22 100%)' };
+  }, [session, propertyId, dateRange]);
 
   if (loading && !data) return (
-    <div className="flex min-h-[60vh] items-center justify-center" style={PAGE_BG}>
-      <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
+    <div className="flex min-h-[60vh] items-center justify-center bg-slate-50 dark:bg-[#0B0F19]">
+      <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
     </div>
   );
 
   if (error && !data) return (
-    <div className="min-h-full px-5 pb-12 pt-8" style={PAGE_BG}>
-      <div className="mx-auto max-w-3xl rounded-2xl border border-rose-400/20 bg-rose-400/[0.07] p-5 text-sm text-rose-300">{error}</div>
+    <div className="min-h-full px-5 pb-12 pt-8 bg-slate-50 dark:bg-[#0B0F19]">
+      <div className="mx-auto max-w-3xl rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400">{error}</div>
     </div>
   );
 
-  const blockClose = kpis.openOrders > 0 || kpis.openSessions > 0;
+  const { summary, hourlyRevenue, categoryRevenue, outletRevenue, paymentMethods, topItems, operationalMetrics } = data || {};
+  const currency = 'NGN';
 
   return (
-    <div className="min-h-full px-4 pb-16 pt-6 sm:px-6 sm:pt-8 md:px-8" style={PAGE_BG}>
-      <div className="mx-auto max-w-[1540px] space-y-6">
+    <div className="min-h-full bg-slate-50 pb-16 pt-6 dark:bg-[#0B0F19] sm:pt-8">
+      <div className="mx-auto max-w-[1600px] px-4 sm:px-6 md:px-8 space-y-6">
 
         {/* ── Header ── */}
-        <header className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
+        <header className="flex flex-col justify-between gap-5 border-b border-slate-200 pb-5 dark:border-white/10 lg:flex-row lg:items-end">
           <div>
-            <div className="mb-3 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-indigo-400/80">
-              <span className="h-1.5 w-1.5 rounded-full bg-indigo-400" />
-              F&B Audit / Controls
-            </div>
-            <h1 className="flex items-center gap-3 text-3xl font-bold tracking-tight text-white sm:text-4xl">
-              <span className="flex h-10 w-10 items-center justify-center rounded-2xl border border-indigo-400/25"
-                style={{ background: 'linear-gradient(135deg,rgba(99,102,241,0.2),rgba(124,58,237,0.15))', boxShadow: '0 0 24px rgba(99,102,241,0.2)' }}>
-                <Scale className="h-5 w-5 text-indigo-300" />
-              </span>
-              F&B Dashboard
+            <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl">
+              F&B Sales & Analytics
             </h1>
-            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-500">
-              Real-time exception monitoring, revenue tracking, and day closure blockers.
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              Aggregated revenue insights, outlet performance, and operational KPIs.
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => setRefreshToken((v) => v + 1)}
-              className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 text-sm font-semibold text-slate-400 transition-all hover:bg-white/[0.06] hover:text-slate-200"
-            >
-              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center rounded-lg border border-slate-200 bg-white p-1 shadow-sm dark:border-white/10 dark:bg-[#111627]">
+              {['TODAY', 'YESTERDAY', 'LAST_7', 'THIS_MONTH'].map((range) => (
+                <button
+                  key={range}
+                  onClick={() => setDateRange(range)}
+                  className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                    dateRange === range 
+                      ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300' 
+                      : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-white/5'
+                  }`}
+                >
+                  {range.replace('_', ' ')}
+                </button>
+              ))}
+            </div>
+            <button className="flex h-8 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-600 shadow-sm hover:bg-slate-50 dark:border-white/10 dark:bg-[#111627] dark:text-slate-300 dark:hover:bg-white/5">
+              <Filter className="h-3.5 w-3.5" /> Outlet
             </button>
           </div>
         </header>
 
-        {/* ── Hero status card ── */}
-        <section
-          className="relative overflow-hidden rounded-[24px] border border-white/[0.07] p-6 sm:p-8"
-          style={{ background: 'linear-gradient(135deg,rgba(99,102,241,0.14) 0%,rgba(124,58,237,0.09) 100%)' }}
-        >
-          <div className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-indigo-500/15 blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-20 left-1/3 h-40 w-40 rounded-full bg-violet-600/10 blur-2xl" />
-          <div className="relative flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-indigo-400/80">Audit Readiness</p>
-              <h2 className="mt-2 text-2xl font-bold tracking-tight text-white">
-                Active Business Date
-              </h2>
-              <p className="mt-1.5 text-sm text-slate-500">
-                {kpis.openSessions} open POS sessions
-                <span className="mx-1.5 text-slate-700">·</span>
-                {kpis.openOrders} unclosed orders
-                <span className="mx-1.5 text-slate-700">·</span>
-                {kpis.covers} covers recorded
-              </p>
-            </div>
-            <span className={`inline-flex items-center gap-2 self-start rounded-full border px-4 py-2 text-xs font-bold ${
-              !blockClose
-                ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-300'
-                : 'border-amber-400/30 bg-amber-400/10 text-amber-300'
-            }`}>
-              {!blockClose ? <CheckCircle2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
-              {!blockClose ? 'Ready for Close' : 'Blockers Active'}
-            </span>
+        {/* ── Exception Strip ── */}
+        <div className="flex flex-wrap items-center gap-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200/90">
+          <div className="flex items-center gap-1.5 font-semibold"><AlertTriangle className="h-4 w-4" /> Operations:</div>
+          <div className="flex gap-4 opacity-90">
+            <span>Voids: <strong>{money(operationalMetrics?.voids)}</strong> ({operationalMetrics?.voidCount})</span>
+            <span>Discounts: <strong>{money(operationalMetrics?.discounts)}</strong></span>
+            <span>Refunds: <strong>{money(operationalMetrics?.refunds)}</strong></span>
+            <span>Unsettled Orders: <strong>{operationalMetrics?.unsettledOrders}</strong></span>
+            <span>Open Sessions: <strong>{operationalMetrics?.openSessions}</strong></span>
           </div>
+        </div>
+
+        {/* ── KPI Row ── */}
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <KPI label="Net Revenue" value={money(summary?.netRevenue)} subtext="Total finalized sales" icon={DollarSign} />
+          <KPI label="Covers" value={summary?.covers} subtext="Total guests served" icon={Users} />
+          <KPI label="Average Check" value={money(summary?.averageCheck)} subtext="Revenue per cover" icon={BarChart3} />
+          <KPI label="Total Orders" value={summary?.orders} subtext="Submitted & closed" icon={ListOrdered} />
         </section>
 
-        {/* ── Revenue Stat cards ── */}
-        <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500 mt-8">Revenue & Controls</div>
-        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-          <StatCard label="Gross Sales" value={money(kpis.grossSales, currency)} detail="Before discounts/comps" accent="border-indigo-400/20 bg-indigo-400/[0.07] text-indigo-300" />
-          <StatCard label="Discounts" value={money(kpis.discounts, currency)} detail="Applied to orders" accent="border-slate-400/20 bg-slate-400/[0.07] text-slate-300" />
-          <StatCard label="Complimentary" value={money(kpis.comps, currency)} detail="Staff & Management Comps" accent="border-slate-400/20 bg-slate-400/[0.07] text-slate-300" />
-          <StatCard label="Voids" value={money(kpis.voidedAmount, currency)} detail="Cancelled / Voided items" accent="border-rose-400/20 bg-rose-400/[0.07] text-rose-300" />
-          <StatCard label="Net F&B Revenue" value={money(kpis.netSales, currency)} detail="Gross - Discounts/Voids" accent="border-emerald-400/20 bg-emerald-400/[0.07] text-emerald-300" />
-        </section>
-
-        {/* ── Operational Stat cards ── */}
-        <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500 mt-8">Cash & Operations</div>
-        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-          <StatCard label="Payments Collected" value={money(kpis.paymentsCollected, currency)} detail="Live tender total" accent="border-amber-400/20 bg-amber-400/[0.07] text-amber-300" />
-          <StatCard label="Refunds" value={money(kpis.refunds, currency)} detail="Returned to guests" accent="border-orange-400/20 bg-orange-400/[0.07] text-orange-300" />
-          <StatCard label="Unclosed Orders" value={kpis.openOrders} detail="SUBMITTED / IN SERVICE" accent={kpis.openOrders > 0 ? "border-amber-400/20 bg-amber-400/[0.07] text-amber-300" : "border-emerald-400/20 bg-emerald-400/[0.07] text-emerald-300"} />
-          <StatCard label="Open POS Sessions" value={kpis.openSessions} detail="Active tills/cashiers" accent={kpis.openSessions > 0 ? "border-violet-400/20 bg-violet-400/[0.07] text-violet-300" : "border-emerald-400/20 bg-emerald-400/[0.07] text-emerald-300"} />
-          <StatCard label="Avg Check" value={money(kpis.averageCheck, currency)} detail="Revenue per cover" accent="border-slate-600/40 bg-slate-600/10 text-slate-300" />
-        </section>
-
-        {/* ── Main grid for exceptions/alerts ── */}
-        <section className="grid gap-5 xl:grid-cols-2 mt-8">
-          {/* Alerts Box */}
-          <div className="overflow-hidden rounded-[20px] border border-white/[0.06]" style={{ background: 'rgba(255,255,255,0.025)' }}>
-            <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4">
-              <div>
-                <h3 className="flex items-center gap-2 text-sm font-bold text-white">
-                  <AlertTriangle className="h-4 w-4 text-indigo-400" />
-                  Exception Monitoring
-                </h3>
-                <p className="mt-0.5 text-[11px] text-slate-500">Live operational anomalies affecting audit</p>
-              </div>
-              <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-600">
-                {alerts.length} ALERTS
-              </span>
-            </div>
-            <div className="p-5 space-y-3">
-              {alerts.length === 0 ? (
-                <div className="text-sm text-slate-500 py-4 text-center border border-white/[0.04] rounded-xl border-dashed">
-                  No active exceptions.
-                </div>
-              ) : (
-                alerts.map((alert: any, idx: number) => {
-                  let accent = alert.severity === 'destructive' ? 'border-rose-400/20 bg-rose-400/[0.05] text-rose-300' : 'border-amber-400/20 bg-amber-400/[0.05] text-amber-300';
-                  return (
-                    <div key={idx} className={`flex flex-col gap-1 rounded-xl border p-3.5 ${accent}`}>
-                      <h4 className="text-xs font-bold">{alert.title}</h4>
-                      <p className="text-[11px] opacity-80">{alert.message}</p>
-                    </div>
-                  );
-                })
-              )}
+        {/* ── Main Section ── */}
+        <div className="grid gap-6 lg:grid-cols-3">
+          
+          {/* Hourly Trend */}
+          <div className="col-span-2 rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/[0.08] dark:bg-[#111627]">
+            <h3 className="mb-4 text-sm font-bold text-slate-800 dark:text-slate-200">Revenue Trend (Hourly)</h3>
+            <div className="h-[280px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={hourlyRevenue} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.3} />
+                  <XAxis dataKey="hour" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#64748b' }} dy={10} />
+                  <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#64748b' }} tickFormatter={(val) => `₦${val/1000}k`} />
+                  <RechartsTooltip 
+                    contentStyle={{ borderRadius: '8px', border: 'none', backgroundColor: '#1e293b', color: '#fff', fontSize: '12px' }}
+                    itemStyle={{ color: '#818cf8' }}
+                    formatter={(value: any) => money(value)} 
+                    labelStyle={{ color: '#94a3b8', marginBottom: '4px' }}
+                  />
+                  <Area type="monotone" dataKey="revenue" stroke="#4f46e5" strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" />
+                </AreaChart>
+              </ResponsiveContainer>
             </div>
           </div>
-        </section>
+
+          {/* F&B Class Split */}
+          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/[0.08] dark:bg-[#111627]">
+            <h3 className="mb-4 text-sm font-bold text-slate-800 dark:text-slate-200">Revenue by F&B Class</h3>
+            <div className="h-[280px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={categoryRevenue} innerRadius={70} outerRadius={100} paddingAngle={2} dataKey="value" nameKey="name" stroke="none">
+                    {categoryRevenue?.map((entry: any, index: number) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <RechartsTooltip formatter={(value: any) => money(value)} contentStyle={{ borderRadius: '8px', border: 'none', backgroundColor: '#1e293b', color: '#fff', fontSize: '12px' }} />
+                  <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '12px', color: '#64748b' }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Second Section (Outlet & Payments) ── */}
+        <div className="grid gap-6 lg:grid-cols-2">
+          
+          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/[0.08] dark:bg-[#111627]">
+            <h3 className="mb-4 text-sm font-bold text-slate-800 dark:text-slate-200">Revenue by Outlet</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 dark:border-white/5">
+                    <th className="pb-2 text-left font-semibold text-slate-500 dark:text-slate-400">Outlet</th>
+                    <th className="pb-2 text-right font-semibold text-slate-500 dark:text-slate-400">Covers</th>
+                    <th className="pb-2 text-right font-semibold text-slate-500 dark:text-slate-400">Net Revenue</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                  {outletRevenue?.map((o: any, idx: number) => (
+                    <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-white/5">
+                      <td className="py-2.5 font-medium text-slate-800 dark:text-slate-200">{o.name}</td>
+                      <td className="py-2.5 text-right tabular-nums text-slate-600 dark:text-slate-300">{o.covers}</td>
+                      <td className="py-2.5 text-right font-semibold tabular-nums text-slate-800 dark:text-indigo-300">{money(o.revenue)}</td>
+                    </tr>
+                  ))}
+                  {outletRevenue?.length === 0 && <tr><td colSpan={3} className="py-4 text-center text-xs text-slate-500">No outlet data</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/[0.08] dark:bg-[#111627]">
+            <h3 className="mb-4 text-sm font-bold text-slate-800 dark:text-slate-200">Payment Method Mix</h3>
+            <div className="h-[200px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={paymentMethods} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#334155" opacity={0.2} />
+                  <XAxis type="number" tickFormatter={(val) => `₦${val/1000}k`} tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                  <YAxis type="category" dataKey="method" tick={{ fontSize: 11, fill: '#94a3b8', fontWeight: 600 }} axisLine={false} tickLine={false} />
+                  <RechartsTooltip formatter={(value: any) => money(value)} cursor={{ fill: '#334155', opacity: 0.2 }} contentStyle={{ borderRadius: '8px', border: 'none', backgroundColor: '#1e293b', color: '#fff', fontSize: '12px' }} />
+                  <Bar dataKey="amount" fill="#0ea5e9" radius={[0, 4, 4, 0]} barSize={24} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+        </div>
+
+        {/* ── Third Section (Top Items) ── */}
+        <div className="grid gap-6 lg:grid-cols-2">
+          
+          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/[0.08] dark:bg-[#111627]">
+            <h3 className="mb-4 text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+              <UtensilsCrossed className="h-4 w-4 text-indigo-500" />
+              Top 10 Items (By Revenue)
+            </h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 dark:border-white/5">
+                    <th className="pb-2 text-left font-semibold text-slate-500 dark:text-slate-400">Item</th>
+                    <th className="pb-2 text-right font-semibold text-slate-500 dark:text-slate-400">Qty</th>
+                    <th className="pb-2 text-right font-semibold text-slate-500 dark:text-slate-400">Revenue</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                  {topItems?.revenue.map((i: any, idx: number) => (
+                    <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-white/5">
+                      <td className="py-2.5 font-medium text-slate-800 dark:text-slate-200">{i.name}</td>
+                      <td className="py-2.5 text-right tabular-nums text-slate-600 dark:text-slate-400">{i.quantity}</td>
+                      <td className="py-2.5 text-right font-semibold tabular-nums text-slate-800 dark:text-indigo-300">{money(i.revenue)}</td>
+                    </tr>
+                  ))}
+                  {(!topItems?.revenue || topItems.revenue.length === 0) && <tr><td colSpan={3} className="py-4 text-center text-xs text-slate-500">No items sold</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/[0.08] dark:bg-[#111627]">
+            <h3 className="mb-4 text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+              <ListOrdered className="h-4 w-4 text-emerald-500" />
+              Top 10 Items (By Quantity)
+            </h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 dark:border-white/5">
+                    <th className="pb-2 text-left font-semibold text-slate-500 dark:text-slate-400">Item</th>
+                    <th className="pb-2 text-right font-semibold text-slate-500 dark:text-slate-400">Qty</th>
+                    <th className="pb-2 text-right font-semibold text-slate-500 dark:text-slate-400">Revenue</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                  {topItems?.quantity.map((i: any, idx: number) => (
+                    <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-white/5">
+                      <td className="py-2.5 font-medium text-slate-800 dark:text-slate-200">{i.name}</td>
+                      <td className="py-2.5 text-right font-semibold tabular-nums text-slate-800 dark:text-emerald-300">{i.quantity}</td>
+                      <td className="py-2.5 text-right tabular-nums text-slate-600 dark:text-slate-400">{money(i.revenue)}</td>
+                    </tr>
+                  ))}
+                  {(!topItems?.quantity || topItems.quantity.length === 0) && <tr><td colSpan={3} className="py-4 text-center text-xs text-slate-500">No items sold</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+
       </div>
     </div>
   );
