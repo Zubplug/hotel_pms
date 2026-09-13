@@ -41,6 +41,11 @@ export default function ReportsGeneratorPage({ managerMode = false }: { managerM
     { title: "Cashier Shift Summary", slug: 'cashier-summary', desc: "Consolidated view of all shift drops and variances.", icon: FileText, color: "text-amber-500", bg: "bg-amber-100 dark:bg-amber-900/30" },
     { title: "In-House Guest List", slug: 'in-house-guests', desc: "Roster of all guests currently checked in.", icon: FileText, color: "text-rose-500", bg: "bg-rose-100 dark:bg-rose-900/30" },
     { title: "Departures & Arrivals", slug: 'departures-arrivals', desc: "Expected movements for the upcoming day.", icon: FileText, color: "text-purple-500", bg: "bg-purple-100 dark:bg-purple-900/30" },
+    { title: "Payment Reconciliation", slug: 'payment-reconciliation', desc: "All payments and refunds by method.", icon: FileSpreadsheet, color: "text-teal-500", bg: "bg-teal-100 dark:bg-teal-900/30" },
+    { title: "Transaction Journal", slug: 'transaction-journal', desc: "Chronological ledger of all postings.", icon: FileText, color: "text-slate-500", bg: "bg-slate-100 dark:bg-slate-800" },
+    { title: "Exceptions Report", slug: 'exceptions-report', desc: "Voids, refunds, discounts, and comps.", icon: FileText, color: "text-red-500", bg: "bg-red-100 dark:bg-red-900/30" },
+    { title: "POS Reconciliation", slug: 'pos-reconciliation', desc: "POS sales, variances, and room charges.", icon: FileSpreadsheet, color: "text-orange-500", bg: "bg-orange-100 dark:bg-orange-900/30" },
+    { title: "Room-Charge Detail", slug: 'room-charge-detail', desc: "All ancillary charges posted to guest folios.", icon: FileText, color: "text-cyan-500", bg: "bg-cyan-100 dark:bg-cyan-900/30" },
   ];
 
   return (
