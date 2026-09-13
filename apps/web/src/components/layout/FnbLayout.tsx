@@ -21,6 +21,10 @@ import {
   Settings,
   Menu,
   X,
+  ChefHat,
+  ShoppingCart,
+  Truck,
+  ShieldCheck,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -35,20 +39,36 @@ import { PropertySelector } from '@/components/properties/PropertySelector';
 
 const FNB_NAV = [
   {
-    name: 'F&B Management',
+    name: 'F&B Operations',
     icon: Utensils,
     children: [
-      { name: 'Dashboard', href: '/fnb/dashboard', icon: LayoutDashboard },
+      { name: 'Sales & Analytics', href: '/fnb/dashboard', icon: LayoutDashboard },
       { name: 'Live Orders', href: '/fnb/orders', icon: ClipboardList },
+      { name: 'Kitchen (KDS)', href: '/fnb/kitchen', icon: ChefHat },
       { name: 'Menu', href: '/fnb/menu', icon: Utensils },
+    ],
+  },
+  {
+    name: 'Inventory & Procurement',
+    icon: ReceiptText,
+    children: [
       { name: 'Inventory & AvT', href: '/fnb/inventory', icon: ReceiptText },
+      { name: 'Purchasing (POs)', href: '/fnb/purchasing', icon: ShoppingCart },
+      { name: 'Receiving (GRN)', href: '/fnb/purchasing/receiving', icon: Truck },
       { name: 'Requisitions', href: '/fnb/requisitions', icon: ArrowLeftRight },
+    ],
+  },
+  {
+    name: 'Management & Controls',
+    icon: Settings,
+    children: [
+      { name: 'Audit & Controls', href: '/fnb/controls', icon: ShieldCheck },
       { name: 'Staff Performance', href: '/fnb/staff', icon: Users },
       { name: 'Halls & Events', href: '/fnb/events', icon: CalendarDays },
       { name: 'Reports (DSS)', href: '/fnb/reports', icon: TrendingUp },
       { name: 'Settings', href: '/fnb/settings', icon: Settings },
     ],
-  },
+  }
 ];
 
 export function FnbLayout({ children }: { children: React.ReactNode }) {
