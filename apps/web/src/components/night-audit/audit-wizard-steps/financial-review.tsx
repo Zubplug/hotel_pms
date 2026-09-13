@@ -16,7 +16,7 @@ const formatMoney = (amount: number, currency: string = 'NGN') => {
 };
 
 export function FinancialReview({ data, onResolve }: FinancialReviewProps) {
-  const { pendingNightAuditPostings, unverifiedComplimentary, pendingDiscounts } = data.financial;
+  const { pendingNightAuditPostings = [], unverifiedComplimentary, pendingDiscounts } = data.financial;
   const propertyId = data.property.id;
   const currency = data.property.baseCurrency || 'NGN';
 

@@ -16,7 +16,7 @@ const formatMoney = (amount: number, currency: string = 'NGN') => {
 };
 
 export function CashControlReview({ data, onResolve }: CashControlReviewProps) {
-  const { unverifiedTransactions, pendingCashDrops } = data.cash;
+  const { unverifiedTransactions, pendingCashDrops = [] } = data.cash;
   const propertyId = data.property.id;
   const currency = data.property.baseCurrency || 'NGN';
 
