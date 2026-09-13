@@ -25,13 +25,17 @@ interface PropertySelectorProps {
   selectedPropertyId?: string;
   onPropertyChange?: (propertyId: string) => void;
   className?: string;
+  onMultiplePropertiesChange?: (hasMultipleProperties: boolean) => void;
 }
 
 import { buttonVariants } from '@/components/ui/button';
 import { useProperty } from '@/components/PropertyProvider';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
-export function PropertySelector({ className }: { className?: string }) {
+export function PropertySelector({
+  className,
+  onMultiplePropertiesChange,
+}: Pick<PropertySelectorProps, 'className' | 'onMultiplePropertiesChange'>) {
   const { propertyId, setPropertyId } = useProperty();
   const { provider } = useLodgeCoreProvider();
 
@@ -47,6 +51,12 @@ export function PropertySelector({ className }: { className?: string }) {
   });
 
   React.useEffect(() => {
+    if (properties) {
+      onMultiplePropertiesChange?.(properties.length > 1);
+    }
+  }, [properties, onMultiplePropertiesChange]);
+
+  React.useEffect(() => {
     if (properties && properties.length > 0 && !propertyId) {
       setPropertyId(properties[0].id);
     }
@@ -60,7 +70,7 @@ export function PropertySelector({ className }: { className?: string }) {
     );
   }
 
-  if (!properties || properties.length === 0) return null;
+  if (!properties || properties.length <= 1) return null;
 
   return (
     <DropdownMenu>

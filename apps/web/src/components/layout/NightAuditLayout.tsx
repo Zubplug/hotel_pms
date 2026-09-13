@@ -45,6 +45,7 @@ const NIGHT_AUDIT_NAV = [
 
 export function NightAuditLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [hasMultipleProperties, setHasMultipleProperties] = useState<boolean | null>(null);
   const pathname = usePathname();
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -197,7 +198,10 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
       {/* Main content area */}
       <div className="flex min-w-0 flex-1 flex-col lg:pl-[296px] print:pl-0 transition-all duration-300">
         {/* Top bar */}
-        <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between border-b border-slate-200/60 bg-white/80 backdrop-blur-md px-4 shadow-sm sm:px-6 print:hidden">
+        <header className={cn(
+          'sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between border-b border-slate-200/60 bg-white/80 px-4 shadow-sm backdrop-blur-md sm:px-6 print:hidden',
+          hasMultipleProperties === false && 'lg:hidden',
+        )}>
             <Button
               variant="ghost"
               size="icon"
@@ -208,7 +212,9 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
           </Button>
 
           <div className="flex items-center gap-3">
-            <PropertySelector />
+            {hasMultipleProperties !== false && (
+              <PropertySelector onMultiplePropertiesChange={setHasMultipleProperties} />
+            )}
           </div>
         </header>
 
