@@ -52,8 +52,8 @@ export function AuditWizard({ open, onOpenChange, data, onExecute, executing, on
     switch (step) {
       case 0: return <OperationsReview data={data} onResolve={handleResolve} />;
       case 1: return <SystemControlReview data={data} onResolve={handleResolve} />;
-      case 2: return <FinancialReview data={data} onResolve={handleResolve} baseCurrency={data.property.baseCurrency} />;
-      case 3: return <CashControlReview data={data} onResolve={handleResolve} baseCurrency={data.property.baseCurrency} />;
+      case 2: return <FinancialReview data={data} onResolve={handleResolve} />;
+      case 3: return <CashControlReview data={data} onResolve={handleResolve} />;
       case 4: return (
         <div className="flex flex-col items-center py-10 text-center">
           {/* Glow icon */}

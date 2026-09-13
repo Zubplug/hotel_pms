@@ -56,12 +56,14 @@ export interface FinancialData {
   unverifiedComplimentary: any[];
   pendingCheckInBypasses: any[];
   rateVariances: any[];
+  pendingNightAuditPostings?: any[];
 }
 
 export interface CashData {
   cashHandovers: any[];
   unverifiedTransactions: any[];
   bankDeposits: any[];
+  pendingCashDrops?: any[];
 }
 
 export interface SummaryData {

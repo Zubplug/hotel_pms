@@ -17,8 +17,8 @@ const formatMoney = (amount: number, currency: string = 'NGN') => {
 
 export function CashControlReview({ data, onResolve }: CashControlReviewProps) {
   const { unverifiedTransactions, pendingCashDrops } = data.cash;
-  const propertyId = data.propertyId;
-  const currency = data.baseCurrency || 'NGN';
+  const propertyId = data.property.id;
+  const currency = data.property.baseCurrency || 'NGN';
 
   // Only consider transactions that actually need verification
   const pendingTransactions = unverifiedTransactions?.filter((t: any) => t.verificationStatus === 'UNVERIFIED') || [];

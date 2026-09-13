@@ -16,11 +16,11 @@ const formatMoney = (amount: number, currency: string = 'NGN') => {
 };
 
 export function FinancialReview({ data, onResolve }: FinancialReviewProps) {
-  const { pendingNightAuditPostings, unverifiedComplimentaries, pendingDiscounts } = data.financial;
-  const propertyId = data.propertyId;
-  const currency = data.baseCurrency || 'NGN';
+  const { pendingNightAuditPostings, unverifiedComplimentary, pendingDiscounts } = data.financial;
+  const propertyId = data.property.id;
+  const currency = data.property.baseCurrency || 'NGN';
 
-  const unverifiedCompl = unverifiedComplimentaries?.filter((c: any) => c.status === 'PENDING_NIGHT_AUDIT') || [];
+  const unverifiedCompl = unverifiedComplimentary?.filter((c: any) => c.status === 'PENDING_NIGHT_AUDIT') || [];
 
   const hasIssues = (pendingNightAuditPostings?.length || 0) > 0 || unverifiedCompl.length > 0 || (pendingDiscounts?.length || 0) > 0;
 
