@@ -12,7 +12,28 @@ import { formatCurrency } from '@/lib/utils';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { FrontDeskOccupiedRoomDialog } from '@/components/frontdesk/FrontDeskOccupiedRoomDialog';
 import { formatRoomNumber } from '@/lib/format-room';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { FolioDetailView } from '@/components/finance/FolioDetailView';
+import { FrontDeskReservationDetail } from '@/components/frontdesk/FrontDeskReservationDetail';
 import Link from 'next/link';
+
+const ReservationDetailModalContent = ({ reservationId, onClose }: { reservationId: string, onClose: () => void }) => {
+  const { provider } = useLodgeCoreProvider();
+  const { data: res, isLoading } = useQuery({
+    queryKey: ['reservation', reservationId],
+    queryFn: () => provider.reservations.get(reservationId),
+    enabled: !!reservationId,
+  });
+
+  if (isLoading) return <div className="p-8 flex justify-center"><div className="animate-spin h-8 w-8 rounded-full border-4 border-indigo-600 border-t-transparent"></div></div>;
+  if (!res) return <div className="p-8 text-center text-red-500 bg-red-50 rounded-xl">Failed to load reservation details.</div>;
+
+  return (
+    <div className="max-h-[85vh] overflow-y-auto p-1">
+      <FrontDeskReservationDetail reservation={res.data || res} />
+    </div>
+  );
+};
 
 export default function NightAuditRoomsControlPage() {
   const router = useRouter();
@@ -22,6 +43,10 @@ export default function NightAuditRoomsControlPage() {
   // For the Full Property View
   const { provider } = useLodgeCoreProvider();
   const [selectedRoom, setSelectedRoom] = useState<any | null>(null);
+
+  // For Modals
+  const [viewingFolioId, setViewingFolioId] = useState<string | null>(null);
+  const [viewingReservationId, setViewingReservationId] = useState<string | null>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['night-audit', 'rooms-control', propertyId],
@@ -108,7 +133,7 @@ export default function NightAuditRoomsControlPage() {
       resId: r.id,
       details: `Room ${r.reservationRooms[0]?.room?.number || 'Unassigned'} • Departs Today`,
       actionLabel: 'Open Folio',
-      actionUrl: `/cashier/folios/${r.folios[0]?.id}`
+      onAction: () => setViewingFolioId(r.folios[0]?.id)
     }));
     unassignedArrivals.forEach((r: any) => exceptionsList.push({
       type: 'Unassigned Arrival',
@@ -117,7 +142,7 @@ export default function NightAuditRoomsControlPage() {
       resId: r.id,
       details: `Arriving Today`,
       actionLabel: 'Assign Room',
-      actionUrl: `/frontdesk/reservations/detail?id=${r.id}`
+      onAction: () => setViewingReservationId(r.id)
     }));
   }
 
@@ -129,7 +154,7 @@ export default function NightAuditRoomsControlPage() {
       resId: r.id,
       details: `Missing charge for ${format(new Date(businessDate), 'dd MMM')}`,
       actionLabel: 'Investigate',
-      actionUrl: r.folios[0] ? `/cashier/folios/${r.folios[0].id}` : `/frontdesk/reservations/detail?id=${r.id}`
+      onAction: () => r.folios[0] ? setViewingFolioId(r.folios[0]?.id) : setViewingReservationId(r.id)
     }));
     folioBalanceExceptions.forEach((r: any) => exceptionsList.push({
       type: 'Departure Balance',
@@ -138,7 +163,7 @@ export default function NightAuditRoomsControlPage() {
       resId: r.id,
       details: `Departure with outstanding balance: ${formatCurrency(Number(r.folios[0]?.balance || 0), 'NGN')}`,
       actionLabel: 'Settle Balance',
-      actionUrl: `/cashier/folios/${r.folios[0]?.id}`
+      onAction: () => setViewingFolioId(r.folios[0]?.id)
     }));
     creditLimitExceptions.forEach((r: any) => exceptionsList.push({
       type: 'Credit Limit Breach',
@@ -147,7 +172,7 @@ export default function NightAuditRoomsControlPage() {
       resId: r.id,
       details: `Balance ${formatCurrency(Number(r.folios[0]?.balance || 0), 'NGN')} exceeds limit ${formatCurrency(Number(r.corporateAccount?.creditLimit || 0), 'NGN')}`,
       actionLabel: 'View Folio',
-      actionUrl: `/cashier/folios/${r.folios[0]?.id}`
+      onAction: () => setViewingFolioId(r.folios[0]?.id)
     }));
     unbalancedFolios.forEach((e: any) => exceptionsList.push({
       type: 'Unsettled Folio',
@@ -156,7 +181,7 @@ export default function NightAuditRoomsControlPage() {
       resId: e.reservation.id,
       details: e.reason,
       actionLabel: 'View Folio',
-      actionUrl: `/cashier/folios/${e.reservation.folios[0]?.id}`
+      onAction: () => setViewingFolioId(e.reservation.folios[0]?.id)
     }));
   }
 
@@ -168,7 +193,7 @@ export default function NightAuditRoomsControlPage() {
       resId: e.room.id,
       details: e.reason,
       actionLabel: 'View Room',
-      actionUrl: `/frontdesk/rooms` // or open a dialog
+      onAction: () => setSelectedRoom(e.room)
     }));
     assignmentIntegrity.forEach((e: any) => exceptionsList.push({
       type: 'Assignment Integrity',
@@ -177,7 +202,7 @@ export default function NightAuditRoomsControlPage() {
       resId: e.reservations[0]?.id,
       details: e.reason,
       actionLabel: 'Investigate',
-      actionUrl: `/frontdesk/reservations/detail?id=${e.reservations[0]?.id}`
+      onAction: () => setViewingReservationId(e.reservations[0]?.id)
     }));
   }
 
@@ -333,12 +358,10 @@ export default function NightAuditRoomsControlPage() {
                       <p className="text-sm text-slate-500 font-medium">{exc.details}</p>
                     </div>
                     <div>
-                      {exc.actionUrl && (
-                        <Link href={exc.actionUrl} target="_blank" rel="noopener noreferrer">
-                          <Button variant="outline" className="bg-white hover:bg-slate-50">
-                            {exc.actionLabel} <ChevronRight className="w-4 h-4 ml-1" />
-                          </Button>
-                        </Link>
+                      {exc.onAction && (
+                        <Button variant="outline" className="bg-white hover:bg-slate-50" onClick={exc.onAction}>
+                          {exc.actionLabel} <ChevronRight className="w-4 h-4 ml-1" />
+                        </Button>
                       )}
                     </div>
                   </div>
@@ -381,6 +404,19 @@ export default function NightAuditRoomsControlPage() {
         onClose={() => setSelectedRoom(null)}
         isAuditorMode={true}
       />
+
+      <Dialog open={!!viewingFolioId} onOpenChange={(open) => !open && setViewingFolioId(null)}>
+        <DialogContent className="max-w-5xl h-[90vh] p-0 overflow-y-auto">
+          {viewingFolioId && <FolioDetailView folioId={viewingFolioId} onBack={() => setViewingFolioId(null)} />}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!viewingReservationId} onOpenChange={(open) => !open && setViewingReservationId(null)}>
+        <DialogContent className="max-w-5xl h-[90vh] p-0 overflow-y-auto">
+          {viewingReservationId && <ReservationDetailModalContent reservationId={viewingReservationId} onClose={() => setViewingReservationId(null)} />}
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }
