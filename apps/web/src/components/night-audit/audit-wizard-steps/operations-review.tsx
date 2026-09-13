@@ -7,15 +7,19 @@ interface OperationsReviewProps {
   onResolve: (action: string, item: any) => void;
 }
 
+const GLASS = { background: 'rgba(255,255,255,0.025)' };
+
 export function OperationsReview({ data, onResolve }: OperationsReviewProps) {
   const { arrivals, departures, roomReconciliation } = data.operational;
   const hasIssues = (arrivals?.length || 0) > 0 || (departures?.length || 0) > 0 || (roomReconciliation?.filter(r => r.issue).length || 0) > 0;
 
   if (!hasIssues) {
     return (
-      <div className="text-sm text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 dark:text-emerald-400 p-4 rounded-xl border border-emerald-100 dark:border-emerald-500/20 flex items-center gap-3 shadow-sm">
-        <CheckCircle2 className="h-5 w-5" /> 
-        <span>All arrivals, departures, and rooms are processed.</span>
+      <div className="flex items-center gap-3 rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.07] p-5 text-sm text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.05)]">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-400/20 text-emerald-300">
+          <CheckCircle2 className="h-4 w-4" />
+        </span>
+        <span className="font-medium">All arrivals, departures, and rooms are processed.</span>
       </div>
     );
   }
@@ -25,19 +29,19 @@ export function OperationsReview({ data, onResolve }: OperationsReviewProps) {
       {arrivals?.length > 0 && (
         <div>
           <div className="mb-3">
-            <h4 className="font-semibold text-sm text-slate-900 dark:text-slate-100">Pending Arrivals</h4>
-            <p className="text-xs text-muted-foreground mt-0.5">Guests scheduled to arrive today must be checked in, cancelled, or marked as no-show.</p>
+            <h4 className="text-sm font-bold text-sky-300">Pending Arrivals</h4>
+            <p className="mt-0.5 text-xs text-sky-400/70">Guests scheduled to arrive today must be checked in, cancelled, or marked as no-show.</p>
           </div>
           <div className="space-y-2">
             {arrivals.map((arr: any) => (
-              <div key={arr.id} className="text-sm p-3 bg-white dark:bg-slate-900 rounded-lg border dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm transition-colors hover:border-slate-300 dark:hover:border-slate-700">
+              <div key={arr.id} className="flex flex-col justify-between gap-3 rounded-xl border border-white/[0.06] p-4 text-sm transition-all hover:border-white/[0.1] sm:flex-row sm:items-center" style={GLASS}>
                 <div>
-                  <p className="font-medium text-slate-900 dark:text-slate-100">{arr.primaryGuest?.firstName} {arr.primaryGuest?.lastName}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Confirmation: {arr.confirmationNumber}</p>
+                  <p className="font-bold text-slate-200">{arr.primaryGuest?.firstName} {arr.primaryGuest?.lastName}</p>
+                  <p className="mt-0.5 text-xs text-slate-500">Confirmation: <span className="font-medium text-slate-400">{arr.confirmationNumber}</span></p>
                 </div>
                 <button 
                   onClick={() => onResolve('ARRIVALS', arr)} 
-                  className="shrink-0 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 bg-indigo-50 dark:bg-indigo-500/10 px-3 py-1.5 rounded-md transition-colors w-full sm:w-auto text-center"
+                  className="w-full shrink-0 rounded-xl border border-sky-400/30 bg-sky-400/10 px-4 py-2 text-xs font-bold text-sky-300 transition-all hover:bg-sky-400/20 sm:w-auto text-center"
                 >
                   Resolve
                 </button>
@@ -48,21 +52,21 @@ export function OperationsReview({ data, onResolve }: OperationsReviewProps) {
       )}
 
       {departures?.length > 0 && (
-        <div>
+        <div className="pt-2">
           <div className="mb-3">
-            <h4 className="font-semibold text-sm text-slate-900 dark:text-slate-100">Pending Departures</h4>
-            <p className="text-xs text-muted-foreground mt-0.5">Guests scheduled to depart today must be checked out or have their stay extended.</p>
+            <h4 className="text-sm font-bold text-sky-300">Pending Departures</h4>
+            <p className="mt-0.5 text-xs text-sky-400/70">Guests scheduled to depart today must be checked out or have their stay extended.</p>
           </div>
           <div className="space-y-2">
             {departures.map((dep: any) => (
-              <div key={dep.id} className="text-sm p-3 bg-white dark:bg-slate-900 rounded-lg border dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm transition-colors hover:border-slate-300 dark:hover:border-slate-700">
+              <div key={dep.id} className="flex flex-col justify-between gap-3 rounded-xl border border-white/[0.06] p-4 text-sm transition-all hover:border-white/[0.1] sm:flex-row sm:items-center" style={GLASS}>
                 <div>
-                  <p className="font-medium text-slate-900 dark:text-slate-100">{dep.primaryGuest?.firstName} {dep.primaryGuest?.lastName}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Confirmation: {dep.confirmationNumber}</p>
+                  <p className="font-bold text-slate-200">{dep.primaryGuest?.firstName} {dep.primaryGuest?.lastName}</p>
+                  <p className="mt-0.5 text-xs text-slate-500">Confirmation: <span className="font-medium text-slate-400">{dep.confirmationNumber}</span></p>
                 </div>
                 <button 
                   onClick={() => onResolve('DEPARTURES', dep)} 
-                  className="shrink-0 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 bg-indigo-50 dark:bg-indigo-500/10 px-3 py-1.5 rounded-md transition-colors w-full sm:w-auto text-center"
+                  className="w-full shrink-0 rounded-xl border border-sky-400/30 bg-sky-400/10 px-4 py-2 text-xs font-bold text-sky-300 transition-all hover:bg-sky-400/20 sm:w-auto text-center"
                 >
                   Resolve
                 </button>
@@ -73,21 +77,25 @@ export function OperationsReview({ data, onResolve }: OperationsReviewProps) {
       )}
 
       {roomReconciliation?.filter((r: any) => r.issue).length > 0 && (
-        <div>
+        <div className="pt-2">
           <div className="mb-3">
-            <h4 className="font-semibold text-sm text-amber-700 dark:text-amber-500">Room Discrepancies</h4>
-            <p className="text-xs text-amber-600/80 dark:text-amber-500/80 mt-0.5">Rooms where the Housekeeping status doesn't match the expected Front Desk status.</p>
+            <h4 className="text-sm font-bold text-amber-300">Room Discrepancies</h4>
+            <p className="mt-0.5 text-xs text-amber-400/70">Rooms where the Housekeeping status doesn't match the expected Front Desk status.</p>
           </div>
           <div className="space-y-2">
             {roomReconciliation.filter((r: any) => r.issue).map((rm: any) => (
-              <div key={rm.roomId} className="text-sm p-3 bg-white dark:bg-slate-900 rounded-lg border border-amber-200 dark:border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm transition-colors hover:border-amber-300 dark:hover:border-amber-500/50">
+              <div key={rm.roomId} className="flex flex-col justify-between gap-3 rounded-xl border border-amber-400/20 bg-amber-400/[0.03] p-4 text-sm transition-all hover:bg-amber-400/[0.05] sm:flex-row sm:items-center">
                 <div>
-                  <p className="font-medium text-amber-900 dark:text-amber-400">Room {rm.roomNumber}</p>
-                  <p className="text-xs text-amber-700 dark:text-amber-500 mt-0.5">PMS: {rm.pmsStatus} (Expected: {rm.expected}) | HK: {rm.hkStatus}</p>
+                  <p className="font-bold text-amber-200">Room {rm.roomNumber}</p>
+                  <p className="mt-1 flex items-center gap-2 text-[11px] font-medium text-amber-300/80">
+                    <span className="rounded border border-amber-400/20 px-1.5 py-0.5">PMS: {rm.pmsStatus}</span>
+                    <span>Expected: {rm.expected}</span>
+                    <span className="rounded border border-amber-400/20 px-1.5 py-0.5">HK: {rm.hkStatus}</span>
+                  </p>
                 </div>
                 <button 
                   onClick={() => onResolve('ROOM_DISCREPANCY', rm)} 
-                  className="shrink-0 text-xs font-medium text-amber-700 dark:text-amber-400 hover:text-amber-900 dark:hover:text-amber-300 bg-amber-50 dark:bg-amber-500/10 px-3 py-1.5 rounded-md transition-colors w-full sm:w-auto text-center"
+                  className="w-full shrink-0 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-2 text-xs font-bold text-amber-300 transition-all hover:bg-amber-400/20 sm:w-auto text-center"
                 >
                   Fix
                 </button>

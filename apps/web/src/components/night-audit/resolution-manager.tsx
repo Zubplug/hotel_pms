@@ -35,7 +35,12 @@ export function ResolutionManager({ action, onClose, onSuccess }: Props) {
 
   return (
     <Dialog open={!!action} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className={action?.type === 'FOLIO_PREVIEW' ? "sm:max-w-4xl max-h-[90vh] overflow-y-auto p-0 border-0 bg-transparent shadow-none" : "sm:max-w-[500px]"}>
+      <DialogContent 
+        className={action?.type === 'FOLIO_PREVIEW' 
+          ? "sm:max-w-4xl max-h-[90vh] overflow-y-auto p-0 border-0 bg-transparent shadow-none" 
+          : "sm:max-w-[500px] border-white/[0.08] shadow-[0_40px_120px_rgba(0,0,0,0.8)]"}
+        style={action?.type !== 'FOLIO_PREVIEW' ? { background: '#07090f', color: 'white' } : undefined}
+      >
         {action.type === 'ARRIVALS' && <ArrivalResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
         {action.type === 'DEPARTURES' && <DepartureResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
         {action.type === 'ROOM_DISCREPANCY' && <RoomDiscrepancyResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
@@ -108,16 +113,16 @@ function ArrivalResolution({ item, onSuccess, onClose }: { item: any; onSuccess:
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Resolve Pending Arrival</DialogTitle>
-        <DialogDescription>
+        <DialogTitle className="text-white">Resolve Pending Arrival</DialogTitle>
+        <DialogDescription className="text-slate-400">
           {item.primaryGuest?.firstName} {item.primaryGuest?.lastName} (Conf: {item.confirmationNumber})
           <div className="mt-2 text-sm">
             {isPaid ? (
-              <span className="inline-flex items-center gap-1.5 font-medium text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md">
+              <span className="inline-flex items-center gap-1.5 font-medium text-emerald-300 bg-emerald-400/10 border border-emerald-400/20 px-2 py-1 rounded-md">
                 <CheckCircle2 className="h-4 w-4" /> Pre-paid/Deposit: {Math.abs(totalBalance).toLocaleString('en-NG', { style: 'currency', currency: 'NGN' })}
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1.5 font-medium text-amber-600 bg-amber-50 px-2 py-1 rounded-md">
+              <span className="inline-flex items-center gap-1.5 font-medium text-amber-300 bg-amber-400/10 border border-amber-400/20 px-2 py-1 rounded-md">
                 <AlertTriangle className="h-4 w-4" /> No prepayment on file
               </span>
             )}
@@ -125,24 +130,24 @@ function ArrivalResolution({ item, onSuccess, onClose }: { item: any; onSuccess:
         </DialogDescription>
       </DialogHeader>
       
-      {error && <div className="p-3 bg-rose-50 text-rose-600 rounded-lg text-sm border border-rose-100">{error}</div>}
+      {error && <div className="p-3 bg-rose-400/[0.04] text-rose-300 rounded-lg text-sm border border-rose-400/20">{error}</div>}
       
       <div className="grid gap-3 py-4">
-        <Button variant="outline" className="justify-between" onClick={() => handleAction('no-show')} disabled={!!loading}>
+        <Button variant="outline" className="justify-between border-white/[0.1] bg-white/[0.02] hover:bg-white/[0.05] text-white" onClick={() => handleAction('no-show')} disabled={!!loading}>
           <span>Mark as No-Show</span>
           {loading === 'no-show' && <Loader2 className="h-4 w-4 animate-spin" />}
         </Button>
-        <Button variant="outline" className="justify-between" onClick={() => handleAction('cancel')} disabled={!!loading}>
+        <Button variant="outline" className="justify-between border-white/[0.1] bg-white/[0.02] hover:bg-white/[0.05] text-white" onClick={() => handleAction('cancel')} disabled={!!loading}>
           <span>Cancel Reservation</span>
           {loading === 'cancel' && <Loader2 className="h-4 w-4 animate-spin" />}
         </Button>
-        <Button variant="outline" className="justify-between" onClick={handleLateArrival} disabled={!!loading}>
+        <Button variant="outline" className="justify-between border-white/[0.1] bg-white/[0.02] hover:bg-white/[0.05] text-white" onClick={handleLateArrival} disabled={!!loading}>
           <span>Mark as Late Arrival</span>
           {loading === 'late' && <Loader2 className="h-4 w-4 animate-spin" />}
         </Button>
       </div>
       <DialogFooter>
-        <Button variant="ghost" onClick={onClose} disabled={!!loading}>Cancel</Button>
+        <Button variant="ghost" onClick={onClose} disabled={!!loading} className="text-slate-300 hover:text-white">Cancel</Button>
       </DialogFooter>
     </>
   );
@@ -265,7 +270,6 @@ function DepartureResolution({ item, onSuccess, onClose }: { item: any; onSucces
   };
 
   const handleExtend = async () => {
-    // A simplified extend - add 1 night
     setLoading('extend');
     setError(null);
     try {
@@ -292,28 +296,28 @@ function DepartureResolution({ item, onSuccess, onClose }: { item: any; onSucces
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Resolve Pending Departure</DialogTitle>
-        <DialogDescription>
+        <DialogTitle className="text-white">Resolve Pending Departure</DialogTitle>
+        <DialogDescription className="text-slate-400">
           {item.primaryGuest?.firstName} {item.primaryGuest?.lastName} (Conf: {item.confirmationNumber})
         </DialogDescription>
       </DialogHeader>
 
-      {error && <div className="p-3 bg-rose-50 text-rose-600 rounded-lg text-sm border border-rose-100">{error}</div>}
+      {error && <div className="p-3 bg-rose-400/[0.04] text-rose-300 rounded-lg text-sm border border-rose-400/20">{error}</div>}
 
       {showSkipperConfirm ? (
         <div className="py-4 space-y-4">
-          <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800 space-y-3">
+          <div className="p-4 bg-amber-400/[0.05] border border-amber-400/20 rounded-xl text-sm text-amber-200 space-y-3">
             <h4 className="font-bold flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4" /> Transfer Balance & Force Check-Out
+              <AlertTriangle className="h-4 w-4 text-amber-400" /> Transfer Balance & Force Check-Out
             </h4>
             <p>This guest has an outstanding balance of <strong>{balance.toFixed(2)}</strong>.</p>
             <p>The balance will be transferred to the <strong>City Ledger / Accounts Receivable</strong> and the reservation will be checked out.</p>
-            <p className="font-medium">The guest will still owe this amount to the hotel.</p>
-            <div className="space-y-1.5 pt-2 border-t border-amber-200/50">
-              <label className="text-xs font-semibold">Reason (Required)</label>
+            <p className="font-medium text-amber-300">The guest will still owe this amount to the hotel.</p>
+            <div className="space-y-1.5 pt-2 border-t border-amber-400/20">
+              <label className="text-xs font-semibold text-amber-400">Reason (Required)</label>
               <input 
                 type="text" 
-                className="w-full px-3 py-2 border border-amber-300 rounded-md bg-white focus:ring-2 focus:ring-amber-500 outline-none" 
+                className="w-full px-3 py-2 border border-white/[0.1] rounded-md bg-black/20 text-white focus:border-amber-400/50 outline-none" 
                 placeholder="Guest left without settling balance..."
                 value={skipperReason}
                 onChange={e => setSkipperReason(e.target.value)}
@@ -321,8 +325,8 @@ function DepartureResolution({ item, onSuccess, onClose }: { item: any; onSucces
             </div>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" className="flex-1" onClick={() => setShowSkipperConfirm(false)} disabled={!!loading}>Cancel</Button>
-            <Button className="flex-1 bg-amber-600 hover:bg-amber-700" onClick={handleSkipper} disabled={!!loading || !skipperReason.trim()}>
+            <Button variant="outline" className="flex-1 border-white/[0.1] bg-white/[0.02] text-white hover:bg-white/[0.05]" onClick={() => setShowSkipperConfirm(false)} disabled={!!loading}>Cancel</Button>
+            <Button className="flex-1 bg-amber-600 hover:bg-amber-700 text-white border-none" onClick={handleSkipper} disabled={!!loading || !skipperReason.trim()}>
               {loading === 'skipper' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Transfer & Check-Out
             </Button>
@@ -330,15 +334,15 @@ function DepartureResolution({ item, onSuccess, onClose }: { item: any; onSucces
         </div>
       ) : showRetainConfirm ? (
         <div className="py-4 space-y-4">
-          <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 space-y-3">
-            <h4 className="font-bold flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-emerald-600" /> Retain {Math.abs(balance).toLocaleString('en-NG', { style: 'currency', currency: 'NGN' })} and Check Out?
+          <div className="p-4 bg-white/[0.03] border border-white/[0.08] rounded-xl text-sm text-slate-300 space-y-3">
+            <h4 className="font-bold flex items-center gap-2 text-white">
+              <AlertTriangle className="h-4 w-4 text-emerald-400" /> Retain {Math.abs(balance).toLocaleString('en-NG', { style: 'currency', currency: 'NGN' })} and Check Out?
             </h4>
             <p>This will apply an approved early-departure/retention charge of <strong>{Math.abs(balance).toFixed(2)}</strong>.</p>
             <p>The guest will no longer have a credit balance.</p>
-            <div className="space-y-1.5 pt-2 border-t">
-              <label className="text-xs font-semibold">Retention Code (Required)</label>
-              <select className="w-full px-3 py-2 border rounded-md bg-white text-sm outline-none" value={retainReasonCode} onChange={e => setRetainReasonCode(e.target.value)}>
+            <div className="space-y-1.5 pt-2 border-t border-white/[0.08]">
+              <label className="text-xs font-semibold text-slate-400">Retention Code (Required)</label>
+              <select className="w-full px-3 py-2 border border-white/[0.1] rounded-md bg-black/20 text-white outline-none" value={retainReasonCode} onChange={e => setRetainReasonCode(e.target.value)}>
                 <option value="EARLY_DEPARTURE">Early departure penalty</option>
                 <option value="DEPOSIT_FORFEITURE">Deposit forfeiture</option>
                 <option value="NO_SHOW">Cancellation/no-show penalty</option>
@@ -346,10 +350,10 @@ function DepartureResolution({ item, onSuccess, onClose }: { item: any; onSucces
               </select>
             </div>
             <div className="space-y-1.5 pt-2">
-              <label className="text-xs font-semibold">Notes (Required)</label>
+              <label className="text-xs font-semibold text-slate-400">Notes (Required)</label>
               <input 
                 type="text" 
-                className="w-full px-3 py-2 border rounded-md bg-white text-sm outline-none" 
+                className="w-full px-3 py-2 border border-white/[0.1] rounded-md bg-black/20 text-white outline-none" 
                 placeholder="Manager approved retention..."
                 value={retainNotes}
                 onChange={e => setRetainNotes(e.target.value)}
@@ -357,8 +361,8 @@ function DepartureResolution({ item, onSuccess, onClose }: { item: any; onSucces
             </div>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" className="flex-1" onClick={() => setShowRetainConfirm(false)} disabled={!!loading}>Cancel</Button>
-            <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={handleRetainCredit} disabled={!!loading || !retainNotes.trim()}>
+            <Button variant="outline" className="flex-1 border-white/[0.1] bg-white/[0.02] text-white hover:bg-white/[0.05]" onClick={() => setShowRetainConfirm(false)} disabled={!!loading}>Cancel</Button>
+            <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white border-none" onClick={handleRetainCredit} disabled={!!loading || !retainNotes.trim()}>
               {loading === 'retain' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Retain & Check-Out
             </Button>
@@ -366,26 +370,26 @@ function DepartureResolution({ item, onSuccess, onClose }: { item: any; onSucces
         </div>
       ) : showRefundConfirm ? (
         <div className="py-4 space-y-4">
-          <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-800 space-y-3">
-            <h4 className="font-bold flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4" /> Transfer {Math.abs(balance).toLocaleString('en-NG', { style: 'currency', currency: 'NGN' })} to Pending Guest Refunds?
+          <div className="p-4 bg-blue-400/[0.05] border border-blue-400/20 rounded-xl text-sm text-blue-200 space-y-3">
+            <h4 className="font-bold flex items-center gap-2 text-white">
+              <AlertTriangle className="h-4 w-4 text-blue-400" /> Transfer {Math.abs(balance).toLocaleString('en-NG', { style: 'currency', currency: 'NGN' })} to Pending Guest Refunds?
             </h4>
             <p>This will record <strong>{Math.abs(balance).toFixed(2)}</strong> as a liability owed by the hotel to the guest.</p>
-            <p className="font-semibold text-rose-600">No money will be refunded now.</p>
+            <p className="font-semibold text-rose-400">No money will be refunded now.</p>
             <p>Finance will process the actual refund transfer at a later date.</p>
-            <div className="space-y-1.5 pt-2 border-t border-blue-200">
-              <label className="text-xs font-semibold">Reason (Required)</label>
+            <div className="space-y-1.5 pt-2 border-t border-blue-400/20">
+              <label className="text-xs font-semibold text-blue-400">Reason (Required)</label>
               <input 
                 type="text" 
-                className="w-full px-3 py-2 border border-blue-300 rounded-md bg-white text-sm outline-none focus:ring-2 focus:ring-blue-500" 
+                className="w-full px-3 py-2 border border-white/[0.1] rounded-md bg-black/20 text-white outline-none focus:border-blue-400/50" 
                 value={refundReason}
                 onChange={e => setRefundReason(e.target.value)}
               />
             </div>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" className="flex-1" onClick={() => setShowRefundConfirm(false)} disabled={!!loading}>Cancel</Button>
-            <Button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white" onClick={handleTransferRefund} disabled={!!loading || !refundReason.trim()}>
+            <Button variant="outline" className="flex-1 border-white/[0.1] bg-white/[0.02] text-white hover:bg-white/[0.05]" onClick={() => setShowRefundConfirm(false)} disabled={!!loading}>Cancel</Button>
+            <Button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white border-none" onClick={handleTransferRefund} disabled={!!loading || !refundReason.trim()}>
               {loading === 'transfer-refund' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Transfer & Check-Out
             </Button>
@@ -393,49 +397,49 @@ function DepartureResolution({ item, onSuccess, onClose }: { item: any; onSucces
         </div>
       ) : (
         <div className="py-4 space-y-4">
-          <div className="p-4 bg-slate-50 border rounded-xl flex items-center justify-between">
-            <span className="text-sm font-medium">Outstanding Balance</span>
-            <span className={`font-semibold ${isSkipper ? 'text-rose-600' : isCredit ? 'text-blue-600' : 'text-emerald-600'}`}>
+          <div className="p-4 bg-white/[0.03] border border-white/[0.08] rounded-xl flex items-center justify-between">
+            <span className="text-sm font-medium text-slate-300">Outstanding Balance</span>
+            <span className={`font-semibold ${isSkipper ? 'text-rose-400' : isCredit ? 'text-blue-400' : 'text-emerald-400'}`}>
               {balance.toFixed(2)}
             </span>
           </div>
 
           {!hasBalance ? (
-            <Button className="w-full justify-between bg-indigo-600 hover:bg-indigo-700" onClick={handleCheckout} disabled={!!loading}>
+            <Button className="w-full justify-between bg-indigo-600 hover:bg-indigo-700 text-white border-none" onClick={handleCheckout} disabled={!!loading}>
               <span>Process Check-Out</span>
               {loading === 'checkout' && <Loader2 className="h-4 w-4 animate-spin" />}
             </Button>
           ) : isCredit ? (
-            <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl text-sm text-blue-700 space-y-3">
-              <p className="font-semibold">Credit Balance - Cannot Check Out</p>
+            <div className="p-4 bg-blue-400/[0.05] border border-blue-400/20 rounded-xl text-sm text-blue-200 space-y-3">
+              <p className="font-semibold text-white">Credit Balance - Cannot Check Out</p>
               <p>This guest has an overpayment of <strong>{Math.abs(balance).toFixed(2)}</strong>. You must zero this balance before checking out.</p>
               <div className="grid gap-2 pt-2">
-                <Button size="sm" variant="outline" className="w-full justify-between bg-white text-slate-700" onClick={() => window.open(`/reservations/${item.id}/folios`, '_blank')}>
+                <Button size="sm" variant="outline" className="w-full justify-between border-white/[0.1] bg-white/[0.05] text-white hover:bg-white/[0.1]" onClick={() => window.open(`/reservations/${item.id}/folios`, '_blank')}>
                   <span>Go to Billing (Actual Refund)</span>
                 </Button>
-                <Button size="sm" variant="outline" className="w-full justify-between border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-800" onClick={() => setShowRetainConfirm(true)}>
+                <Button size="sm" variant="outline" className="w-full justify-between border-emerald-400/30 bg-emerald-400/10 hover:bg-emerald-400/20 text-emerald-300" onClick={() => setShowRetainConfirm(true)}>
                   <span>Retain Credit (Early Departure Fee)</span>
                 </Button>
-                <Button size="sm" variant="outline" className="w-full justify-between border-blue-200 bg-blue-100 hover:bg-blue-200 text-blue-800" onClick={() => setShowRefundConfirm(true)}>
+                <Button size="sm" variant="outline" className="w-full justify-between border-blue-400/30 bg-blue-400/10 hover:bg-blue-400/20 text-blue-300" onClick={() => setShowRefundConfirm(true)}>
                   <span>Transfer to Pending Guest Refunds (Liability)</span>
                 </Button>
               </div>
             </div>
           ) : (
-            <div className="p-4 bg-rose-50 border border-rose-100 rounded-xl text-sm text-rose-700 space-y-3">
-              <p className="font-semibold">Balance Due - Cannot Standard Check-Out</p>
+            <div className="p-4 bg-rose-400/[0.05] border border-rose-400/20 rounded-xl text-sm text-rose-200 space-y-3">
+              <p className="font-semibold text-white">Balance Due - Cannot Standard Check-Out</p>
               <p>This reservation has a non-zero folio balance. You can process payment in billing, or if the guest has left, transfer the debt to Accounts Receivable (City Ledger).</p>
               <div className="flex gap-2 pt-2">
-                <Button size="sm" variant="outline" className="bg-white" onClick={() => window.open(`/reservations/${item.id}/folios`, '_blank')}>Go to Billing</Button>
-                <Button size="sm" variant="secondary" className="bg-rose-100 hover:bg-rose-200 text-rose-800 border border-rose-200" onClick={() => setShowSkipperConfirm(true)}>
+                <Button size="sm" variant="outline" className="border-white/[0.1] bg-white/[0.05] text-white hover:bg-white/[0.1]" onClick={() => window.open(`/reservations/${item.id}/folios`, '_blank')}>Go to Billing</Button>
+                <Button size="sm" variant="outline" className="bg-rose-400/10 hover:bg-rose-400/20 text-rose-300 border border-rose-400/30" onClick={() => setShowSkipperConfirm(true)}>
                   Transfer to City Ledger (Skipper)
                 </Button>
               </div>
             </div>
           )}
 
-          <div className="relative border-t mt-4 pt-4">
-            <Button variant="outline" className="w-full justify-between" onClick={handleExtend} disabled={!!loading}>
+          <div className="relative border-t border-white/[0.08] mt-4 pt-4">
+            <Button variant="outline" className="w-full justify-between border-white/[0.1] bg-white/[0.02] hover:bg-white/[0.05] text-white" onClick={handleExtend} disabled={!!loading}>
               <span>Extend Stay (1 Night)</span>
               {loading === 'extend' && <Loader2 className="h-4 w-4 animate-spin" />}
             </Button>
@@ -443,7 +447,7 @@ function DepartureResolution({ item, onSuccess, onClose }: { item: any; onSucces
         </div>
       )}
       <DialogFooter>
-        <Button variant="ghost" onClick={onClose} disabled={!!loading}>Cancel</Button>
+        <Button variant="ghost" onClick={onClose} disabled={!!loading} className="text-slate-300 hover:text-white">Cancel</Button>
       </DialogFooter>
     </>
   );
@@ -457,8 +461,6 @@ function RoomDiscrepancyResolution({ item, onSuccess, onClose }: { item: any; on
     setLoading(true);
     setError(null);
     try {
-      // Reconcile HK status with PMS status. For a skip/sleep we usually force the HK status.
-      // Expected comes from PMS.
       const res = await fetch(`/api/v1/housekeeping/tasks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Idempotency-Key': crypto.randomUUID() },
@@ -484,23 +486,23 @@ function RoomDiscrepancyResolution({ item, onSuccess, onClose }: { item: any; on
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Room Discrepancy</DialogTitle>
-        <DialogDescription>Room {item.roomNumber}</DialogDescription>
+        <DialogTitle className="text-white">Room Discrepancy</DialogTitle>
+        <DialogDescription className="text-slate-400">Room {item.roomNumber}</DialogDescription>
       </DialogHeader>
-      {error && <div className="p-3 bg-rose-50 text-rose-600 rounded-lg text-sm border border-rose-100">{error}</div>}
+      {error && <div className="p-3 bg-rose-400/[0.04] text-rose-300 rounded-lg text-sm border border-rose-400/20">{error}</div>}
       <div className="py-4 space-y-4">
         <div className="grid grid-cols-2 gap-4">
-          <div className="p-4 border rounded-xl bg-slate-50">
-            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">PMS Status</p>
-            <p className="font-semibold">{item.pmsStatus}</p>
-            <p className="text-xs text-indigo-600 mt-1">Expected: {item.expected}</p>
+          <div className="p-4 border border-white/[0.08] rounded-xl bg-white/[0.03]">
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">PMS Status</p>
+            <p className="font-semibold text-white">{item.pmsStatus}</p>
+            <p className="text-[11px] text-indigo-400 mt-1 font-medium">Expected: {item.expected}</p>
           </div>
-          <div className="p-4 border rounded-xl bg-amber-50">
-            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Housekeeping</p>
-            <p className="font-semibold text-amber-700">{item.hkStatus}</p>
+          <div className="p-4 border border-amber-400/20 rounded-xl bg-amber-400/10">
+            <p className="text-[10px] font-bold text-amber-500/70 uppercase tracking-wider mb-1">Housekeeping</p>
+            <p className="font-semibold text-amber-300">{item.hkStatus}</p>
           </div>
         </div>
-        <Button className="w-full" onClick={handleFix} disabled={loading}>
+        <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white border-none" onClick={handleFix} disabled={loading}>
           {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Reconcile Status'}
         </Button>
       </div>
@@ -516,11 +518,9 @@ function PosSessionResolution({ item, onSuccess, onClose }: { item: any; onSucce
   const [openOrders, setOpenOrders] = useState<any[] | null>(null);
   const [checkingOrders, setCheckingOrders] = useState(true);
 
-  // expected is fetched from the session summary
   const expected = Number(item.expectedCash || 0);
   const variance = Number(declared || 0) - expected;
 
-  // On mount, fetch any open (unpaid, non-voided) orders for this session
   useEffect(() => {
     async function fetchOpenOrders() {
       try {
@@ -572,95 +572,90 @@ function PosSessionResolution({ item, onSuccess, onClose }: { item: any; onSucce
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Close POS Session</DialogTitle>
-        <DialogDescription>
+        <DialogTitle className="text-white">Close POS Session</DialogTitle>
+        <DialogDescription className="text-slate-400">
           {item.outlet?.name} - Opened by {item.openedBy}
         </DialogDescription>
       </DialogHeader>
-      {error && <div className="p-3 bg-rose-50 text-rose-600 rounded-lg text-sm border border-rose-100">{error}</div>}
+      {error && <div className="p-3 bg-rose-400/[0.04] text-rose-300 rounded-lg text-sm border border-rose-400/20">{error}</div>}
 
       {checkingOrders ? (
-        <div className="py-8 flex items-center justify-center gap-2 text-slate-500 text-sm">
-          <Loader2 className="h-4 w-4 animate-spin" /> Checking for open orders…
+        <div className="py-8 flex items-center justify-center gap-2 text-slate-400 text-sm">
+          <Loader2 className="h-4 w-4 animate-spin text-indigo-400" /> Checking for open orders…
         </div>
       ) : hasOpenOrders ? (
-        /* ── Hard blocker: open orders exist ───────────────────────────── */
         <div className="py-4 space-y-4">
-
-          {/* Main warning banner */}
-          <div className="p-4 bg-rose-50 border-2 border-rose-300 rounded-xl space-y-3">
+          <div className="p-4 bg-rose-400/[0.05] border border-rose-400/30 rounded-xl space-y-3">
             <div className="flex items-start gap-3">
-              <div className="p-1.5 bg-rose-100 rounded-lg shrink-0">
-                <AlertTriangle className="h-5 w-5 text-rose-600" />
+              <div className="p-1.5 bg-rose-400/10 rounded-lg shrink-0">
+                <AlertTriangle className="h-5 w-5 text-rose-400" />
               </div>
               <div>
-                <p className="font-bold text-rose-700 text-base">
+                <p className="font-bold text-rose-300 text-base">
                   Cannot Close Shift — {openOrders!.length} Open Order{openOrders!.length !== 1 ? 's' : ''} Must Be Resolved
                 </p>
-                <p className="text-rose-600 text-sm mt-0.5">
+                <p className="text-rose-200/80 text-sm mt-0.5">
                   This shift cannot be closed until all pending orders are settled or voided by the responsible waiter.
                 </p>
               </div>
             </div>
 
-            {/* Action Required steps */}
-            <div className="bg-white border border-rose-200 rounded-lg p-3 space-y-2">
-              <p className="text-xs font-bold uppercase tracking-wider text-rose-700">⚡ Action Required — Tell the Waiter to:</p>
-              <ol className="text-sm text-slate-700 space-y-1.5 list-none">
+            <div className="bg-black/20 border border-white/[0.08] rounded-lg p-3 space-y-2">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-rose-400">⚡ Action Required — Tell the Waiter to:</p>
+              <ol className="text-[13px] text-slate-300 space-y-2 list-none mt-2">
                 <li className="flex items-start gap-2">
-                  <span className="font-bold text-rose-600 shrink-0">1.</span>
+                  <span className="font-bold text-rose-400/70 shrink-0">1.</span>
                   <span>Log back into their POS terminal using their PIN or staff card.</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="font-bold text-rose-600 shrink-0">2.</span>
+                  <span className="font-bold text-rose-400/70 shrink-0">2.</span>
                   <span>Open each order listed below and <strong>collect payment</strong> from the guest, OR</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="font-bold text-rose-600 shrink-0">3.</span>
+                  <span className="font-bold text-rose-400/70 shrink-0">3.</span>
                   <span>If the table is empty, <strong>void the order</strong> with a valid reason before logging out.</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="font-bold text-rose-600 shrink-0">4.</span>
+                  <span className="font-bold text-rose-400/70 shrink-0">4.</span>
                   <span>Once all orders are resolved, return here and click <strong>Resolve</strong> again to close the shift.</span>
                 </li>
               </ol>
             </div>
           </div>
 
-          {/* Order cards */}
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">
               Pending Orders ({openOrders!.length})
             </p>
             <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
               {openOrders!.map((order: any) => (
                 <div
                   key={order.id}
-                  className="p-3 rounded-lg border border-rose-200 bg-white text-sm shadow-sm"
+                  className="p-3 rounded-lg border border-white/[0.08] bg-white/[0.02] text-sm shadow-sm transition-colors hover:bg-white/[0.04]"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="space-y-0.5">
-                      <p className="font-bold text-slate-800">
+                      <p className="font-bold text-slate-200">
                         #{order.orderNumber}
                         {order.tableNumber ? ` · Table ${order.tableNumber}` : ''}
                       </p>
                       {order.outletName && (
-                        <p className="text-xs text-slate-500">{order.outletName}</p>
+                        <p className="text-xs text-slate-400">{order.outletName}</p>
                       )}
                       <div className="flex items-center gap-1.5 mt-1">
-                        <span className="text-xs text-slate-400">Waiter:</span>
-                        <span className="text-xs font-semibold text-rose-700">
+                        <span className="text-xs text-slate-500">Waiter:</span>
+                        <span className="text-xs font-semibold text-rose-300">
                           {order.waiterName ?? 'Unknown — contact outlet supervisor'}
                         </span>
                       </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs text-slate-400">Status:</span>
-                        <span className="text-xs font-medium capitalize text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded-full border border-amber-200">
-                          {order.status?.toLowerCase().replace('_', ' ')}
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="text-xs text-slate-500">Status:</span>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-amber-300 bg-amber-400/10 px-1.5 py-0.5 rounded border border-amber-400/20">
+                          {order.status?.replace('_', ' ')}
                         </span>
                       </div>
                     </div>
-                    <span className="font-bold text-slate-800 shrink-0 text-base">
+                    <span className="font-bold text-white shrink-0 text-base tabular-nums">
                       ₦{Number(order.total || 0).toLocaleString('en-NG', { minimumFractionDigits: 2 })}
                     </span>
                   </div>
@@ -670,34 +665,32 @@ function PosSessionResolution({ item, onSuccess, onClose }: { item: any; onSucce
           </div>
 
           <DialogFooter>
-            <Button variant="ghost" onClick={onClose}>Dismiss</Button>
+            <Button variant="ghost" onClick={onClose} className="text-slate-300 hover:text-white">Dismiss</Button>
           </DialogFooter>
         </div>
-
       ) : (
-        /* ── Normal settle form — no open orders ────────────────────────── */
         <div className="py-4 space-y-4">
-          <div className="flex items-center justify-between p-3 border rounded-lg bg-slate-50">
-            <span className="text-sm font-medium">Expected Cash</span>
-            <span className="font-semibold">₦{expected.toLocaleString('en-NG', { minimumFractionDigits: 2 })}</span>
+          <div className="flex items-center justify-between p-3 border border-white/[0.08] rounded-lg bg-white/[0.03]">
+            <span className="text-sm font-medium text-slate-300">Expected Cash</span>
+            <span className="font-bold text-white tabular-nums">₦{expected.toLocaleString('en-NG', { minimumFractionDigits: 2 })}</span>
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium">Actual Declared Cash</label>
-            <input type="number" className="w-full border rounded-md px-3 py-2 text-sm" value={declared} onChange={e => setDeclared(e.target.value)} placeholder="0.00" />
+            <label className="text-sm font-medium text-slate-300">Actual Declared Cash</label>
+            <input type="number" className="w-full border border-white/[0.1] rounded-md px-3 py-2 text-sm bg-black/20 text-white outline-none focus:border-indigo-400/50 tabular-nums" value={declared} onChange={e => setDeclared(e.target.value)} placeholder="0.00" />
           </div>
           {declared && (
-            <div className={`flex items-center justify-between p-3 border rounded-lg ${variance === 0 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>
+            <div className={`flex items-center justify-between p-3 border rounded-lg ${variance === 0 ? 'bg-emerald-400/10 text-emerald-300 border-emerald-400/20' : 'bg-rose-400/10 text-rose-300 border-rose-400/20'}`}>
               <span className="text-sm font-medium">Variance</span>
-              <span className="font-semibold">{variance > 0 ? '+' : ''}{variance.toLocaleString('en-NG', { minimumFractionDigits: 2 })}</span>
+              <span className="font-bold tabular-nums">{variance > 0 ? '+' : ''}{variance.toLocaleString('en-NG', { minimumFractionDigits: 2 })}</span>
             </div>
           )}
           {variance !== 0 && declared !== '' && (
             <div className="space-y-2">
-              <label className="text-sm font-medium">Variance Reason (Required)</label>
-              <input type="text" className="w-full border rounded-md px-3 py-2 text-sm" value={reason} onChange={e => setReason(e.target.value)} placeholder="Explain the variance..." />
+              <label className="text-sm font-medium text-slate-300">Variance Reason (Required)</label>
+              <input type="text" className="w-full border border-white/[0.1] rounded-md px-3 py-2 text-sm bg-black/20 text-white outline-none focus:border-indigo-400/50" value={reason} onChange={e => setReason(e.target.value)} placeholder="Explain the variance..." />
             </div>
           )}
-          <Button className="w-full" onClick={handleClose} disabled={loading || declared === ''}>
+          <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white border-none" onClick={handleClose} disabled={loading || declared === ''}>
             {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Confirm & Close Session'}
           </Button>
         </div>
@@ -713,7 +706,6 @@ function FrontdeskShiftResolution({ item, onSuccess, onClose }: { item: any; onS
   const [declared, setDeclared] = useState('');
   const [reason, setReason] = useState('');
   
-  // expected is fetched from the session summary
   const expected = Number(item.systemExpectedCash || item.expectedCash || 0);
   const variance = Number(declared || 0) - expected;
 
@@ -746,32 +738,32 @@ function FrontdeskShiftResolution({ item, onSuccess, onClose }: { item: any; onS
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Close Front Desk Shift</DialogTitle>
-        <DialogDescription>Shift {item.shiftReference}</DialogDescription>
+        <DialogTitle className="text-white">Close Front Desk Shift</DialogTitle>
+        <DialogDescription className="text-slate-400">Shift {item.shiftReference}</DialogDescription>
       </DialogHeader>
-      {error && <div className="p-3 bg-rose-50 text-rose-600 rounded-lg text-sm border border-rose-100">{error}</div>}
+      {error && <div className="p-3 bg-rose-400/[0.04] text-rose-300 rounded-lg text-sm border border-rose-400/20">{error}</div>}
       <div className="py-4 space-y-4">
-        <div className="flex items-center justify-between p-3 border rounded-lg bg-slate-50">
-          <span className="text-sm font-medium">Expected Cash Drawer</span>
-          <span className="font-semibold">{expected.toFixed(2)}</span>
+        <div className="flex items-center justify-between p-3 border border-white/[0.08] rounded-lg bg-white/[0.03]">
+          <span className="text-sm font-medium text-slate-300">Expected Cash Drawer</span>
+          <span className="font-bold text-white tabular-nums">{expected.toFixed(2)}</span>
         </div>
         <div className="space-y-2">
-          <label className="text-sm font-medium">Actual Declared Cash</label>
-          <input type="number" className="w-full border rounded-md px-3 py-2 text-sm" value={declared} onChange={e => setDeclared(e.target.value)} placeholder="0.00" />
+          <label className="text-sm font-medium text-slate-300">Actual Declared Cash</label>
+          <input type="number" className="w-full border border-white/[0.1] rounded-md px-3 py-2 text-sm bg-black/20 text-white outline-none focus:border-indigo-400/50 tabular-nums" value={declared} onChange={e => setDeclared(e.target.value)} placeholder="0.00" />
         </div>
         {declared && (
-          <div className={`flex items-center justify-between p-3 border rounded-lg ${variance === 0 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+          <div className={`flex items-center justify-between p-3 border rounded-lg ${variance === 0 ? 'bg-emerald-400/10 text-emerald-300 border-emerald-400/20' : 'bg-amber-400/10 text-amber-300 border-amber-400/20'}`}>
             <span className="text-sm font-medium">Variance</span>
-            <span className="font-semibold">{variance > 0 ? '+' : ''}{variance.toFixed(2)}</span>
+            <span className="font-bold tabular-nums">{variance > 0 ? '+' : ''}{variance.toFixed(2)}</span>
           </div>
         )}
         {variance !== 0 && declared !== '' && (
           <div className="space-y-2">
-            <label className="text-sm font-medium">Variance Reason (Required)</label>
-            <input type="text" className="w-full border rounded-md px-3 py-2 text-sm" value={reason} onChange={e => setReason(e.target.value)} placeholder="Explain the variance..." />
+            <label className="text-sm font-medium text-slate-300">Variance Reason (Required)</label>
+            <input type="text" className="w-full border border-white/[0.1] rounded-md px-3 py-2 text-sm bg-black/20 text-white outline-none focus:border-indigo-400/50" value={reason} onChange={e => setReason(e.target.value)} placeholder="Explain the variance..." />
           </div>
         )}
-        <Button className="w-full" onClick={handleClose} disabled={loading || declared === ''}>
+        <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white border-none" onClick={handleClose} disabled={loading || declared === ''}>
           {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Confirm & Close Shift'}
         </Button>
       </div>
@@ -808,54 +800,54 @@ function FinancialSyncResolution({ item, onSuccess, onClose }: { item: any; onSu
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Financial Sync Conflict</DialogTitle>
-        <DialogDescription>A POS or remote device attempted to sync data that conflicts with the PMS.</DialogDescription>
+        <DialogTitle className="text-white">Financial Sync Conflict</DialogTitle>
+        <DialogDescription className="text-slate-400">A POS or remote device attempted to sync data that conflicts with the PMS.</DialogDescription>
       </DialogHeader>
       
-      {error && <div className="p-3 bg-rose-50 text-rose-600 rounded-lg text-sm border border-rose-100">{error}</div>}
+      {error && <div className="p-3 bg-rose-400/[0.04] text-rose-300 rounded-lg text-sm border border-rose-400/20">{error}</div>}
       
       <div className="py-4 space-y-4">
-        <div className="p-4 border rounded-xl bg-slate-50 space-y-2 text-sm">
+        <div className="p-4 border border-white/[0.08] rounded-xl bg-white/[0.03] space-y-2 text-sm">
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Type:</span>
-            <span className="font-medium">{item.aggregateType}</span>
+            <span className="text-slate-400">Type:</span>
+            <span className="font-medium text-white">{item.aggregateType}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Event:</span>
-            <span className="font-medium">{item.hotelEvent?.eventType || 'Unknown'}</span>
+            <span className="text-slate-400">Event:</span>
+            <span className="font-medium text-white">{item.hotelEvent?.eventType || 'Unknown'}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Device:</span>
-            <span className="font-medium">{item.hotelEvent?.deviceId || 'Unknown'}</span>
+            <span className="text-slate-400">Device:</span>
+            <span className="font-medium text-white">{item.hotelEvent?.deviceId || 'Unknown'}</span>
           </div>
 
           {item.hotelEvent?.payload && (
-            <div className="pt-3 mt-3 border-t space-y-2">
-              <p className="text-xs font-semibold text-slate-800 uppercase tracking-wider mb-2">Sync Payload Data</p>
+            <div className="pt-3 mt-3 border-t border-white/[0.08] space-y-2">
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Sync Payload Data</p>
               {item.hotelEvent.payload.amount !== undefined && (
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Amount:</span>
-                  <span className="font-medium font-mono text-indigo-700">
+                  <span className="text-slate-400">Amount:</span>
+                  <span className="font-medium font-mono text-indigo-400 tabular-nums">
                     {Number(item.hotelEvent.payload.amount).toLocaleString('en-NG', { style: 'currency', currency: item.hotelEvent.payload.currency || 'NGN' })}
                   </span>
                 </div>
               )}
               {item.hotelEvent.payload.description && (
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Description:</span>
-                  <span className="font-medium">{item.hotelEvent.payload.description}</span>
+                  <span className="text-slate-400">Description:</span>
+                  <span className="font-medium text-white">{item.hotelEvent.payload.description}</span>
                 </div>
               )}
               {item.hotelEvent.payload.method && (
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Method:</span>
-                  <span className="font-medium">{item.hotelEvent.payload.method}</span>
+                  <span className="text-slate-400">Method:</span>
+                  <span className="font-medium text-white">{item.hotelEvent.payload.method}</span>
                 </div>
               )}
             </div>
           )}
 
-          <div className="pt-2 mt-2 border-t text-xs text-muted-foreground">
+          <div className="pt-2 mt-2 border-t border-white/[0.08] text-[11px] text-slate-500">
             {item.errorDetails?.message || 'Version mismatch detected.'}
           </div>
         </div>
@@ -863,22 +855,22 @@ function FinancialSyncResolution({ item, onSuccess, onClose }: { item: any; onSu
         <div className="grid grid-cols-2 gap-3">
           <Button 
             variant="outline" 
-            className="w-full whitespace-normal h-auto py-3 px-4 flex flex-col items-start gap-1"
+            className="w-full whitespace-normal h-auto py-3 px-4 flex flex-col items-start gap-1 border-white/[0.1] bg-white/[0.02] hover:bg-white/[0.05] text-white"
             onClick={() => handleResolve('REJECT_EDGE_EVENT')} 
             disabled={!!loading}
           >
-            <span className="font-semibold text-sm">Reject Event</span>
-            <span className="text-xs text-muted-foreground text-left">Discard the POS change. The PMS state wins.</span>
-            {loading === 'REJECT_EDGE_EVENT' && <Loader2 className="absolute right-4 h-4 w-4 animate-spin" />}
+            <span className="font-semibold text-sm text-white">Reject Event</span>
+            <span className="text-[10px] text-slate-400 text-left leading-tight mt-1">Discard the POS change. The PMS state wins.</span>
+            {loading === 'REJECT_EDGE_EVENT' && <Loader2 className="absolute right-4 h-4 w-4 animate-spin text-white" />}
           </Button>
 
           <Button 
-            className="w-full whitespace-normal h-auto py-3 px-4 flex flex-col items-start gap-1 bg-rose-600 hover:bg-rose-700 text-white"
+            className="w-full whitespace-normal h-auto py-3 px-4 flex flex-col items-start gap-1 bg-rose-600 hover:bg-rose-700 text-white border-none"
             onClick={() => handleResolve('FORCE_EDGE_EVENT')} 
             disabled={!!loading}
           >
             <span className="font-semibold text-sm">Force Sync</span>
-            <span className="text-xs text-rose-200 text-left">Apply the POS charge/payment forcibly.</span>
+            <span className="text-[10px] text-rose-200 text-left leading-tight mt-1">Apply the POS charge/payment forcibly.</span>
             {loading === 'FORCE_EDGE_EVENT' && <Loader2 className="absolute right-4 h-4 w-4 animate-spin text-white" />}
           </Button>
         </div>
@@ -889,7 +881,7 @@ function FinancialSyncResolution({ item, onSuccess, onClose }: { item: any; onSu
 
 function FolioPreview({ item, onClose }: { item: any; onClose: () => void }) {
   return (
-    <div className="bg-slate-50 rounded-2xl overflow-hidden shadow-2xl ring-1 ring-slate-900/5">
+    <div className="bg-[#07090f] rounded-2xl overflow-hidden shadow-[0_40px_120px_rgba(0,0,0,0.8)] border border-white/[0.08]">
       <div className="max-h-[90vh] overflow-y-auto p-6">
         <FolioDetailView folioId={item.id} onBack={onClose} readOnly={true} darkMode />
       </div>
@@ -928,43 +920,45 @@ function DiscountApprovalResolution({ item, onSuccess, onClose }: { item: any; o
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Review Discount</DialogTitle>
-        <DialogDescription>
+        <DialogTitle className="text-white">Review Discount</DialogTitle>
+        <DialogDescription className="text-slate-400">
           A discount requires approval before room charges can be posted.
         </DialogDescription>
       </DialogHeader>
       
-      {error && <div className="p-3 bg-rose-50 text-rose-600 rounded-lg text-sm border border-rose-100">{error}</div>}
+      {error && <div className="p-3 bg-rose-400/[0.04] text-rose-300 rounded-lg text-sm border border-rose-400/20">{error}</div>}
       
       <div className="py-4 space-y-4">
-        <div className="p-4 border rounded-xl bg-slate-50 space-y-2 text-sm">
+        <div className="p-4 border border-white/[0.08] rounded-xl bg-white/[0.03] space-y-2 text-sm">
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Type:</span>
-            <span className="font-medium">{d.targetType || 'RESERVATION_ROOM'}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Requested By:</span>
-            <span className="font-medium">{item.requestedByName || item.requestedBy}</span>
+            <span className="text-slate-400">Type:</span>
+            <span className="font-medium text-white">{d.targetType || 'RESERVATION_ROOM'}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Acknowledged By:</span>
-            <span className="font-medium">{item.acknowledgedByName || 'Not acknowledged'}</span>
-          </div>
-          <div className="pt-2 border-t">
-            <p className="font-semibold text-slate-800">Reservation details</p>
-            <p>Guest: {item.reservationRoom?.reservation?.primaryGuest ? `${item.reservationRoom.reservation.primaryGuest.firstName} ${item.reservationRoom.reservation.primaryGuest.lastName}` : 'Unavailable'}</p>
-            <p>Confirmation: {item.reservationRoom?.reservation?.confirmationNumber || 'Unavailable'}</p>
-            <p>Room: {item.reservationRoom?.room?.number || 'Waiting for room sync'}{item.reservationRoom?.room?.roomType?.name ? ` (${item.reservationRoom.room.roomType.name})` : ''}</p>
-            {item.reservationRoom?.reservation?.corporateAccount && <p>Corporate: {item.reservationRoom.reservation.corporateAccount.name} ({item.reservationRoom.reservation.corporateAccount.code})</p>}
-            {item.reservationRoom && <p>Stay: {format(new Date(item.reservationRoom.checkIn), 'MMM d, yyyy')} – {format(new Date(item.reservationRoom.checkOut), 'MMM d, yyyy')}</p>}
+            <span className="text-slate-400">Requested By:</span>
+            <span className="font-medium text-white">{item.requestedByName || item.requestedBy}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Reason:</span>
-            <span className="font-medium">{item.reason || d.reason || 'No reason provided'}</span>
+            <span className="text-slate-400">Acknowledged By:</span>
+            <span className="font-medium text-white">{item.acknowledgedByName || 'Not acknowledged'}</span>
           </div>
-          <div className="pt-3 mt-3 border-t flex justify-between items-center text-base">
-            <span className="font-semibold text-slate-900">Discount Amount:</span>
-            <span className="font-bold text-indigo-700">
+          <div className="pt-2 border-t border-white/[0.08] mt-2">
+            <p className="font-semibold text-[11px] uppercase tracking-wider text-slate-500 mb-2">Reservation details</p>
+            <div className="space-y-1 text-slate-300">
+              <p>Guest: {item.reservationRoom?.reservation?.primaryGuest ? `${item.reservationRoom.reservation.primaryGuest.firstName} ${item.reservationRoom.reservation.primaryGuest.lastName}` : 'Unavailable'}</p>
+              <p>Confirmation: <span className="font-medium text-white">{item.reservationRoom?.reservation?.confirmationNumber || 'Unavailable'}</span></p>
+              <p>Room: {item.reservationRoom?.room?.number || 'Waiting for room sync'}{item.reservationRoom?.room?.roomType?.name ? ` (${item.reservationRoom.room.roomType.name})` : ''}</p>
+              {item.reservationRoom?.reservation?.corporateAccount && <p>Corporate: {item.reservationRoom.reservation.corporateAccount.name} ({item.reservationRoom.reservation.corporateAccount.code})</p>}
+              {item.reservationRoom && <p>Stay: {format(new Date(item.reservationRoom.checkIn), 'MMM d, yyyy')} – {format(new Date(item.reservationRoom.checkOut), 'MMM d, yyyy')}</p>}
+            </div>
+          </div>
+          <div className="flex justify-between pt-2 mt-2 border-t border-white/[0.08]">
+            <span className="text-slate-400">Reason:</span>
+            <span className="font-medium text-white">{item.reason || d.reason || 'No reason provided'}</span>
+          </div>
+          <div className="pt-4 mt-4 border-t border-white/[0.08] flex justify-between items-center text-base">
+            <span className="font-semibold text-white">Discount Amount:</span>
+            <span className="font-bold text-indigo-400 tabular-nums">
               {d.discountAmount ? Number(d.discountAmount).toLocaleString('en-NG', { style: 'currency', currency: 'NGN' }) : d.discountPercent ? `${d.discountPercent}%` : 'Variable'}
             </span>
           </div>
@@ -973,7 +967,7 @@ function DiscountApprovalResolution({ item, onSuccess, onClose }: { item: any; o
         <div className="flex gap-3 pt-2">
           <Button 
             variant="outline" 
-            className="flex-1 border-rose-200 text-rose-700 hover:bg-rose-50 hover:text-rose-800"
+            className="flex-1 border-rose-400/30 bg-rose-400/10 text-rose-300 hover:bg-rose-400/20"
             onClick={() => handleAction('reject')} 
             disabled={!!loading}
           >
@@ -981,7 +975,7 @@ function DiscountApprovalResolution({ item, onSuccess, onClose }: { item: any; o
             Reject Discount
           </Button>
           <Button 
-            className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white"
+            className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white border-none"
             onClick={() => handleAction('approve')} 
             disabled={!!loading || item.roomStatus !== 'READY'}
           >
@@ -1024,49 +1018,49 @@ export function CheckinBypassResolution({ item, onSuccess, onClose }: { item: an
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Check-In Bypass Review</DialogTitle>
-        <DialogDescription>
+        <DialogTitle className="text-white">Check-In Bypass Review</DialogTitle>
+        <DialogDescription className="text-slate-400">
           Conf: {item.reservation?.confirmationNumber} - {item.reservation?.primaryGuest?.firstName} {item.reservation?.primaryGuest?.lastName}
         </DialogDescription>
       </DialogHeader>
-      {error && <div className="p-3 bg-rose-50 text-rose-600 rounded-lg text-sm border border-rose-100">{error}</div>}
+      {error && <div className="p-3 bg-rose-400/[0.04] text-rose-300 rounded-lg text-sm border border-rose-400/20">{error}</div>}
       <div className="py-4 space-y-4">
-        <div className="p-4 border rounded-xl bg-slate-50 space-y-2 text-sm">
+        <div className="p-4 border border-white/[0.08] rounded-xl bg-white/[0.03] space-y-2 text-sm">
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Reason:</span>
-            <span className="font-medium text-right max-w-[200px]">{item.reason}</span>
+            <span className="text-slate-400">Reason:</span>
+            <span className="font-medium text-right max-w-[200px] text-white">{item.reason}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Operator:</span>
-            <span className="font-medium">{item.operator?.firstName} {item.operator?.lastName}</span>
+            <span className="text-slate-400">Operator:</span>
+            <span className="font-medium text-white">{item.operator?.firstName} {item.operator?.lastName}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Acknowledged by:</span>
-            <span className="font-medium">{item.acknowledgedBy?.firstName} {item.acknowledgedBy?.lastName}</span>
+            <span className="text-slate-400">Acknowledged by:</span>
+            <span className="font-medium text-white">{item.acknowledgedBy?.firstName} {item.acknowledgedBy?.lastName}</span>
           </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Balance:</span>
-            <span className="font-medium text-rose-600">
+          <div className="flex justify-between pt-2 mt-2 border-t border-white/[0.08]">
+            <span className="text-slate-400">Balance:</span>
+            <span className="font-bold text-rose-400 tabular-nums">
               {Number(item.reservation?.folios?.[0]?.balance || 0).toLocaleString('en-NG', { style: 'currency', currency: 'NGN' })}
             </span>
           </div>
         </div>
         <div className="space-y-2">
-          <label className="text-sm font-medium">Review Notes</label>
+          <label className="text-sm font-medium text-slate-300">Review Notes</label>
           <input 
             type="text" 
-            className="w-full border rounded-md px-3 py-2 text-sm" 
+            className="w-full border border-white/[0.1] rounded-md px-3 py-2 text-sm bg-black/20 text-white outline-none focus:border-indigo-400/50" 
             value={notes} 
             onChange={e => setNotes(e.target.value)} 
             placeholder="Add notes..." 
           />
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" className="flex-1 text-rose-600 hover:text-rose-700 hover:bg-rose-50" onClick={() => handleAction('REJECT')} disabled={!!loading}>
+        <div className="flex gap-2 pt-2">
+          <Button variant="outline" className="flex-1 border-rose-400/30 bg-rose-400/10 text-rose-300 hover:bg-rose-400/20" onClick={() => handleAction('REJECT')} disabled={!!loading}>
             {loading === 'REJECT' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Reject
           </Button>
-          <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={() => handleAction('VERIFY')} disabled={!!loading}>
+          <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white border-none" onClick={() => handleAction('VERIFY')} disabled={!!loading}>
             {loading === 'VERIFY' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Verify
           </Button>

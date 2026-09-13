@@ -121,15 +121,10 @@ export function TransactionVerificationResolution({
         throw new Error(error.message || 'Failed to verify transaction');
       }
 
-      // Optionally alert on success
-      // alert(status === 'VERIFIED' ? 'Transaction verified successfully.' : 'Transaction marked as questioned.');
-
-      // Instead of proceeding directly, show the success UI
       setResolvedIds((current) => new Set(current).add(transaction.id));
       setSuccessType(status);
       setMode('SUCCESS');
       
-      // Need to refresh the router to get updated data from the server
       router.refresh();
 
     } catch (error: any) {
@@ -141,36 +136,41 @@ export function TransactionVerificationResolution({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[640px] p-0 overflow-hidden">
+      <DialogContent className="sm:max-w-[640px] p-0 overflow-hidden border-white/[0.08] shadow-[0_40px_120px_rgba(0,0,0,0.8)]" style={{ background: '#07090f', color: 'white' }}>
         {unverifiedTransactions.length === 0 && mode !== 'SUCCESS' ? (
           <>
-            <DialogHeader>
+            <DialogHeader className="p-6 pb-0">
               <DialogTitle>All Transactions Verified</DialogTitle>
             </DialogHeader>
-            <div className="py-6 text-center text-muted-foreground">
-              <CheckCircle className="mx-auto h-12 w-12 text-green-500 mb-4" />
+            <div className="py-6 text-center text-slate-400">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-emerald-400/20 bg-emerald-400/10 mb-4">
+                <CheckCircle className="h-8 w-8 text-emerald-400" />
+              </div>
               <p>No more pending transactions to verify.</p>
             </div>
-            <DialogFooter>
-              <Button onClick={handleClose}>Close</Button>
-            </DialogFooter>
+            <div className="p-6 pt-0 flex justify-center">
+              <button onClick={handleClose} className="rounded-xl border border-white/[0.1] bg-white/[0.05] px-6 py-2 text-sm font-semibold text-white transition-all hover:bg-white/[0.1]">
+                Close
+              </button>
+            </div>
           </>
         ) : (
           <>
-            <div className="bg-slate-950 px-6 py-5 text-white">
+            <div className="relative px-6 py-6 border-b border-white/[0.08]" style={{ background: 'linear-gradient(135deg, rgba(99,102,241,0.1) 0%, rgba(124,58,237,0.05) 100%)' }}>
+              <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-indigo-500/15 blur-3xl" />
               <DialogHeader>
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <DialogTitle className="flex items-center gap-2 text-white">
-                      <ShieldCheck className="w-5 h-5 text-indigo-300" />
-                      Transaction verification
+                      <ShieldCheck className="w-5 h-5 text-indigo-400" />
+                      Transaction Verification
                     </DialogTitle>
                     <DialogDescription className="mt-1 text-slate-400">
                       Review each receipt before closing the business date.
                     </DialogDescription>
                   </div>
                   {unverifiedTransactions.length > 0 && (
-                    <span className="shrink-0 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-indigo-200">
+                    <span className="shrink-0 rounded-full border border-indigo-400/20 bg-indigo-400/10 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-indigo-300">
                       {unverifiedTransactions.length} remaining
                     </span>
                   )}
@@ -179,125 +179,125 @@ export function TransactionVerificationResolution({
             </div>
 
             {mode === 'VIEW' ? (
-          <div className="space-y-5 p-6">
-            <div className="flex items-center justify-between text-xs font-medium text-slate-500">
-              <span>Receipt {currentIndex + 1} of {currentIndex + unverifiedTransactions.length}</span>
-              <span className="inline-flex items-center gap-1 text-rose-600"><Receipt className="h-3.5 w-3.5" /> Action required</span>
-            </div>
-            <div className="bg-slate-50 dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800">
-              <div className="grid grid-cols-2 gap-y-3 text-sm">
-                <div className="text-muted-foreground">Amount</div>
-                <div className="font-bold text-lg text-right">{formatCurrency(Number(transaction.amount), transaction.currency)}</div>
+              <div className="space-y-5 p-6">
+                <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                  <span>Receipt {currentIndex + 1} of {currentIndex + unverifiedTransactions.length}</span>
+                  <span className="inline-flex items-center gap-1 text-rose-400"><Receipt className="h-3.5 w-3.5" /> Action required</span>
+                </div>
+                <div className="bg-white/[0.02] p-5 rounded-xl border border-white/[0.06]">
+                  <div className="grid grid-cols-2 gap-y-4 text-sm">
+                    <div className="text-slate-500 text-[11px] uppercase tracking-wider">Amount</div>
+                    <div className="font-bold text-lg text-right text-white tabular-nums">{formatCurrency(Number(transaction.amount), transaction.currency)}</div>
+                    
+                    <div className="text-slate-500 text-[11px] uppercase tracking-wider">Method</div>
+                    <div className="text-right font-medium text-slate-200">{methodLabel}</div>
+
+                    <div className="text-slate-500 text-[11px] uppercase tracking-wider">Reference</div>
+                    <div className="text-right font-mono text-xs text-slate-300 mt-0.5">{reference}</div>
+
+                    <div className="text-slate-500 text-[11px] uppercase tracking-wider">Date / Time</div>
+                    <div className="text-right text-slate-300 tabular-nums">{new Date(transaction.createdAt).toLocaleString()}</div>
+
+                    <div className="col-span-2 border-t border-white/[0.06] my-2"></div>
+
+                    <div className="text-slate-500 text-[11px] uppercase tracking-wider">Cashier</div>
+                    <div className="text-right text-slate-200">{cashierName}</div>
+
+                    <div className="text-slate-500 text-[11px] uppercase tracking-wider">Location</div>
+                    <div className="text-right text-slate-200">{location}</div>
+
+                    <div className="text-slate-500 text-[11px] uppercase tracking-wider">Shift Ref</div>
+                    <div className="text-right text-xs text-slate-400 mt-0.5">{shiftRef || 'N/A'}</div>
+
+                    <div className="col-span-2 border-t border-white/[0.06] my-2"></div>
+
+                    <div className="text-slate-500 text-[11px] uppercase tracking-wider">Guest / Account</div>
+                    <div className="text-right text-slate-200">{guestName}</div>
+
+                    <div className="text-slate-500 text-[11px] uppercase tracking-wider">Record</div>
+                    <div className="text-right text-slate-300">{folioOrOrder}</div>
+                  </div>
+                </div>
                 
-                <div className="text-muted-foreground">Method</div>
-                <div className="text-right font-medium">{methodLabel}</div>
-
-                <div className="text-muted-foreground">Reference</div>
-                <div className="text-right font-mono text-xs mt-1">{reference}</div>
-
-                <div className="text-muted-foreground">Date / Time</div>
-                <div className="text-right">{new Date(transaction.createdAt).toLocaleString()}</div>
-
-                <div className="col-span-2 border-t my-1"></div>
-
-                <div className="text-muted-foreground">Cashier</div>
-                <div className="text-right">{cashierName}</div>
-
-                <div className="text-muted-foreground">Location</div>
-                <div className="text-right">{location}</div>
-
-                <div className="text-muted-foreground">Shift Ref</div>
-                <div className="text-right text-xs mt-1">{shiftRef || 'N/A'}</div>
-
-                <div className="col-span-2 border-t my-1"></div>
-
-                <div className="text-muted-foreground">Guest / Account</div>
-                <div className="text-right">{guestName}</div>
-
-                <div className="text-muted-foreground">Record</div>
-                <div className="text-right">{folioOrOrder}</div>
+                <div className="flex justify-between items-center gap-3 pt-2">
+                  <button
+                    className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-2 text-sm font-bold text-amber-300 transition-all hover:bg-amber-400/20"
+                    onClick={() => setMode('QUESTION')}
+                  >
+                    <HelpCircle className="w-4 h-4" />
+                    Question
+                  </button>
+                  <button
+                    className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-sm font-bold text-emerald-300 transition-all hover:bg-emerald-400/20 disabled:opacity-50"
+                    onClick={() => handleVerify('VERIFIED')}
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                    Verify
+                  </button>
+                </div>
               </div>
-            </div>
-            
-            <div className="flex justify-between items-center gap-3 pt-2">
-              <Button
-                variant="outline"
-                className="flex-1 text-amber-600 border-amber-200 hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-950"
-                onClick={() => setMode('QUESTION')}
-              >
-                <HelpCircle className="w-4 h-4 mr-2" />
-                Question
-              </Button>
-              <Button
-                className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
-                onClick={() => handleVerify('VERIFIED')}
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle className="w-4 h-4 mr-2" />}
-                Verify
-              </Button>
-            </div>
-          </div>
-        ) : mode === 'SUCCESS' ? (
-          <div className="space-y-6 py-8 text-center flex flex-col items-center justify-center">
-            <div className={`p-4 rounded-full ${successType === 'VERIFIED' ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-600'}`}>
-              <CheckCircle className="w-12 h-12" />
-            </div>
-            <div className="space-y-2">
-              <h3 className="text-xl font-semibold">
-                {successType === 'VERIFIED' ? 'Transaction Verified' : 'Transaction Questioned'}
-              </h3>
-              <p className="text-muted-foreground text-sm max-w-sm mx-auto">
-                {successType === 'VERIFIED' 
-                  ? 'This transaction has been successfully verified and reconciled.' 
-                  : 'This transaction has been flagged for further review by the finance team.'}
-              </p>
-            </div>
-            <div className="w-full pt-4">
-              <Button 
-                className="w-full h-12 text-lg font-medium" 
-                onClick={handleContinue}
-              >
-                {unverifiedTransactions.length > 0 ? `Continue to Next (${unverifiedTransactions.length} left)` : 'Complete Verification'}
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-4 py-4">
-            <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 p-3 rounded-md text-amber-800 dark:text-amber-300 text-sm">
-              You are questioning this transaction. It will remain an outstanding financial exception for Finance/Management to follow up on.
-            </div>
-            
-            <div className="space-y-2">
-              <Label>Reason / Observation (Required)</Label>
-              <Textarea
-                placeholder="e.g., Bank reference does not match receipt, amount differs, etc."
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={4}
-              />
-            </div>
-            
-            <div className="flex justify-between items-center pt-2">
-              <Button
-                variant="ghost"
-                onClick={() => setMode('VIEW')}
-                disabled={isSubmitting}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="default"
-                onClick={() => handleVerify('QUESTIONED')}
-                disabled={isSubmitting || !notes.trim()}
-              >
-                {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                Submit Question
-              </Button>
-            </div>
-          </div>
-        )}
-        </>
+            ) : mode === 'SUCCESS' ? (
+              <div className="space-y-6 py-10 px-6 text-center flex flex-col items-center justify-center">
+                <div className={`p-4 rounded-full border ${successType === 'VERIFIED' ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-400' : 'border-amber-400/20 bg-amber-400/10 text-amber-400'}`}>
+                  <CheckCircle className="w-12 h-12" />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-xl font-bold text-white">
+                    {successType === 'VERIFIED' ? 'Transaction Verified' : 'Transaction Questioned'}
+                  </h3>
+                  <p className="text-slate-400 text-sm max-w-sm mx-auto">
+                    {successType === 'VERIFIED' 
+                      ? 'This transaction has been successfully verified and reconciled.' 
+                      : 'This transaction has been flagged for further review by the finance team.'}
+                  </p>
+                </div>
+                <div className="w-full pt-6">
+                  <button 
+                    className="w-full rounded-xl border border-indigo-400/30 bg-indigo-500/20 px-6 py-3 text-sm font-bold text-indigo-300 transition-all hover:bg-indigo-500/30" 
+                    onClick={handleContinue}
+                  >
+                    {unverifiedTransactions.length > 0 ? `Continue to Next (${unverifiedTransactions.length} left)` : 'Complete Verification'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-5 p-6">
+                <div className="rounded-xl border border-amber-400/20 bg-amber-400/10 p-4 text-sm text-amber-300">
+                  You are questioning this transaction. It will remain an outstanding financial exception for Finance/Management to follow up on.
+                </div>
+                
+                <div className="space-y-3">
+                  <Label className="text-slate-300">Reason / Observation (Required)</Label>
+                  <Textarea
+                    placeholder="e.g., Bank reference does not match receipt, amount differs, etc."
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    rows={4}
+                    className="resize-none border-white/[0.08] bg-white/[0.02] text-white focus-visible:ring-amber-400/30"
+                  />
+                </div>
+                
+                <div className="flex justify-between items-center gap-3 pt-2">
+                  <button
+                    className="flex-1 rounded-xl border border-white/[0.1] bg-white/[0.05] px-4 py-2 text-sm font-bold text-white transition-all hover:bg-white/[0.1]"
+                    onClick={() => setMode('VIEW')}
+                    disabled={isSubmitting}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-2 text-sm font-bold text-amber-300 transition-all hover:bg-amber-400/20 disabled:opacity-50"
+                    onClick={() => handleVerify('QUESTIONED')}
+                    disabled={isSubmitting || !notes.trim()}
+                  >
+                    {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                    Submit Question
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </DialogContent>
     </Dialog>

@@ -1,113 +1,101 @@
 import React from 'react';
 import { NightAuditData } from '@/types/night-audit';
-import { CheckCircle2 } from 'lucide-react';
+import { CheckCircle2, ChevronRight } from 'lucide-react';
 
 interface CashControlReviewProps {
   data: NightAuditData;
   onResolve: (action: string, item: any) => void;
-  baseCurrency: string;
 }
 
-const currency = (value: number, code = 'NGN') => 
-  new Intl.NumberFormat('en-NG', { style: 'currency', currency: code, maximumFractionDigits: 0 }).format(value);
+const formatMoney = (amount: number, currency: string = 'NGN') => {
+  return new Intl.NumberFormat('en-NG', {
+    style: 'currency',
+    currency: currency,
+    maximumFractionDigits: 0
+  }).format(amount);
+};
 
-export function CashControlReview({ data, onResolve, baseCurrency }: CashControlReviewProps) {
-  const { cashHandovers, bankDeposits, unverifiedTransactions } = data.cash;
+export function CashControlReview({ data, onResolve }: CashControlReviewProps) {
+  const { unverifiedTransactions, pendingCashDrops } = data.cash;
+  const propertyId = data.propertyId;
+  const currency = data.baseCurrency || 'NGN';
+
+  // Only consider transactions that actually need verification
+  const pendingTransactions = unverifiedTransactions?.filter((t: any) => t.verificationStatus === 'UNVERIFIED') || [];
   
-  const hasIssues = (cashHandovers?.length || 0) > 0 || 
-                    (bankDeposits?.length || 0) > 0 || 
-                    (unverifiedTransactions?.length || 0) > 0;
+  const hasIssues = pendingTransactions.length > 0 || (pendingCashDrops?.length || 0) > 0;
 
   if (!hasIssues) {
     return (
-      <div className="text-sm text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 dark:text-emerald-400 p-4 rounded-xl border border-emerald-100 dark:border-emerald-500/20 flex items-center gap-3 shadow-sm">
-        <CheckCircle2 className="h-5 w-5" /> 
-        <span>All cash handling, deposits, and transactions are verified.</span>
+      <div className="flex items-center gap-3 rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.07] p-5 text-sm text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.05)]">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-400/20 text-emerald-300">
+          <CheckCircle2 className="h-4 w-4" />
+        </span>
+        <span className="font-medium">All cash controls and payments are verified.</span>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      {cashHandovers?.length > 0 && (
-        <div>
-          <div className="mb-3">
-            <h4 className="font-semibold text-sm text-rose-700 dark:text-rose-500">Pending Cash Handovers (Blocker)</h4>
-            <p className="text-xs text-rose-600/80 dark:text-rose-500/80 mt-0.5">Cash drawers must be physically handed over and reconciled in the system before closing.</p>
-          </div>
-          <div className="space-y-2">
-            {cashHandovers.map((ch: any) => (
-              <div key={ch.id} className="text-sm p-3 bg-white dark:bg-slate-900 rounded-lg border border-rose-200 dark:border-rose-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm transition-colors hover:border-rose-300 dark:hover:border-rose-500/50">
-                <div>
-                  <p className="font-medium text-rose-900 dark:text-rose-400">{ch.drawerName || 'Pending Handover'}</p>
-                  <p className="text-xs text-rose-600 dark:text-rose-500 mt-0.5">Pending Handover</p>
-                </div>
-                <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto">
-                  <span className="font-semibold text-rose-700 dark:text-rose-400">{currency(Number(ch.amount), baseCurrency)}</span>
-                  <button 
-                    onClick={() => onResolve('CASH_HANDOVER', { ...ch, propertyId: data.property.id })}
-                    className="shrink-0 text-xs font-medium text-rose-700 dark:text-rose-400 hover:text-rose-900 dark:hover:text-rose-300 bg-rose-50 dark:bg-rose-500/10 px-3 py-1.5 rounded-md transition-colors"
-                  >
-                    Action
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
-      {bankDeposits?.length > 0 && (
+      {/* ── Transaction Verifications ───────────────────────────────────── */}
+      {pendingTransactions.length > 0 && (
         <div>
-          <div className="mb-3">
-            <h4 className="font-semibold text-sm text-amber-700 dark:text-amber-500">Pending Bank Deposits</h4>
-            <p className="text-xs text-amber-600/80 dark:text-amber-500/80 mt-0.5">Review cash drops that have not yet been batched for bank deposit.</p>
-          </div>
-          <div className="space-y-2">
-            {bankDeposits.map((bd: any) => (
-              <div key={bd.id} className="text-sm p-3 bg-white dark:bg-slate-900 rounded-lg border border-amber-200 dark:border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm transition-colors hover:border-amber-300 dark:hover:border-amber-500/50">
-                <div>
-                  <p className="font-medium text-amber-900 dark:text-amber-400">Reference: {bd.depositReference}</p>
-                </div>
-                <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto">
-                  <span className="font-semibold text-amber-700 dark:text-amber-400">{currency(Number(bd.declaredAmount || bd.expectedAmount), baseCurrency)}</span>
-                  <a 
-                    href="/finance/deposits" 
-                    target="_blank" 
-                    rel="noopener noreferrer" 
-                    className="shrink-0 text-xs font-medium text-amber-700 dark:text-amber-400 hover:text-amber-900 dark:hover:text-amber-300 bg-amber-50 dark:bg-amber-500/10 px-3 py-1.5 rounded-md transition-colors text-center block"
-                  >
-                    Review
-                  </a>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {unverifiedTransactions?.length > 0 && (
-        <div>
-          <div className="mb-3">
-            <h4 className="font-semibold text-sm text-rose-700 dark:text-rose-500">Pending Transaction Verifications (Blocker)</h4>
-            <p className="text-xs text-rose-600/80 dark:text-rose-500/80 mt-0.5">The Night Auditor must verify all POS and Bank Transfer receipts submitted to the cashier per shift.</p>
-          </div>
-          <div className="space-y-2">
-            <div className="text-sm p-3 bg-white dark:bg-slate-900 rounded-lg border border-rose-200 dark:border-rose-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm transition-colors hover:border-rose-300 dark:hover:border-rose-500/50">
-              <div>
-                <p className="font-medium text-rose-900 dark:text-rose-400">{unverifiedTransactions.length} Unverified Transactions</p>
-                <p className="text-xs text-rose-600 dark:text-rose-500 mt-0.5">Pending verification</p>
-              </div>
-              <button 
-                onClick={() => onResolve('TRANSACTION_VERIFICATION', { unverifiedTransactions, propertyId: data.property.id })}
-                className="shrink-0 text-xs font-medium text-rose-700 dark:text-rose-400 hover:text-rose-900 dark:hover:text-rose-300 bg-rose-50 dark:bg-rose-500/10 px-3 py-1.5 rounded-md transition-colors w-full sm:w-auto text-center"
-              >
-                Verify Transactions
-              </button>
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <h4 className="text-sm font-bold text-emerald-300">Transaction Verification (Blocker)</h4>
+              <p className="mt-0.5 text-xs text-emerald-400/70">Review and verify POS and Front Desk payments before close.</p>
             </div>
           </div>
+          <div className="rounded-xl border border-emerald-400/15 bg-emerald-400/[0.03] p-4 flex flex-col justify-between gap-4 shadow-sm transition-colors hover:border-emerald-400/25 sm:flex-row sm:items-center">
+            <div>
+              <p className="text-2xl font-bold tabular-nums text-white">
+                {pendingTransactions.length} <span className="text-base font-normal text-slate-400">pending receipts</span>
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                Totaling <span className="font-bold text-slate-300">{formatMoney(pendingTransactions.reduce((acc: number, val: any) => acc + Number(val.amount || 0), 0), currency)}</span>
+              </p>
+            </div>
+            <button
+              onClick={() => onResolve('TRANSACTION_VERIFICATION', { propertyId, unverifiedTransactions: pendingTransactions })}
+              className="group flex w-full shrink-0 items-center justify-center gap-2 rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-5 py-2.5 text-xs font-bold text-emerald-300 transition-all hover:bg-emerald-400/20 sm:w-auto"
+            >
+              Verify Transactions
+              <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+            </button>
+          </div>
         </div>
       )}
+
+      {/* ── Pending Cash Drops ─────────────────────────────────────────── */}
+      {pendingCashDrops?.length > 0 && (
+        <div className="pt-2">
+          <div className="mb-3">
+            <h4 className="text-sm font-bold text-amber-300">Pending Cash Drops</h4>
+            <p className="mt-0.5 text-xs text-amber-400/70">Unverified physical cash drops from POS/Front Desk shifts.</p>
+          </div>
+          <div className="space-y-2">
+            {pendingCashDrops.map((drop: any) => (
+              <div key={drop.id} className="flex flex-col justify-between gap-3 rounded-xl border border-amber-400/15 bg-amber-400/[0.03] p-4 text-sm transition-all hover:border-amber-400/25 sm:flex-row sm:items-center">
+                <div>
+                  <p className="font-bold text-white">
+                    {formatMoney(drop.amount, currency)} <span className="text-slate-400">· {drop.location}</span>
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-slate-500">Dropped by <span className="font-medium text-slate-400">{drop.cashierName}</span></p>
+                </div>
+                <button
+                  onClick={() => onResolve('CASH_DROP', drop)}
+                  className="w-full shrink-0 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-2 text-xs font-bold text-amber-300 transition-all hover:bg-amber-400/20 sm:w-auto text-center"
+                >
+                  Confirm Drop
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
