@@ -14,7 +14,7 @@ function StatCard({ label, value, detail, accent }: { label: string; value: stri
   return (
     <div className={`flex flex-col gap-3 rounded-[20px] border p-5 ${accent}`}>
       <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-500">{label}</p>
-      <p className="text-xl font-bold text-white tabular-nums">{value}</p>
+      <p className="text-xl font-bold text-slate-900 tabular-nums">{value}</p>
       <p className="text-[11px] text-slate-600">{detail}</p>
     </div>
   );
@@ -55,16 +55,16 @@ export default function FnbDashboardClient({ managerMode = false }: { managerMod
   const alerts = data?.alerts || [];
   const currency = 'NGN'; // Normally from property config
 
-  const PAGE_BG = { background: 'linear-gradient(160deg, #060b18 0%, #080e1f 60%, #0a0c22 100%)' };
+  
 
   if (loading && !data) return (
-    <div className="flex min-h-[60vh] items-center justify-center" style={PAGE_BG}>
+    <div className="flex min-h-[60vh] items-center justify-center bg-slate-50">
       <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
     </div>
   );
 
   if (error && !data) return (
-    <div className="min-h-full px-5 pb-12 pt-8" style={PAGE_BG}>
+    <div className="min-h-full px-5 pb-12 pt-8 bg-slate-50">
       <div className="mx-auto max-w-3xl rounded-2xl border border-rose-400/20 bg-rose-400/[0.07] p-5 text-sm text-rose-300">{error}</div>
     </div>
   );
@@ -72,7 +72,7 @@ export default function FnbDashboardClient({ managerMode = false }: { managerMod
   const blockClose = kpis.openOrders > 0 || kpis.openSessions > 0;
 
   return (
-    <div className="min-h-full px-4 pb-16 pt-6 sm:px-6 sm:pt-8 md:px-8" style={PAGE_BG}>
+    <div className="min-h-full px-4 pb-16 pt-6 sm:px-6 sm:pt-8 md:px-8 bg-slate-50">
       <div className="mx-auto max-w-[1540px] space-y-6">
 
         {/* ── Header ── */}
@@ -82,9 +82,9 @@ export default function FnbDashboardClient({ managerMode = false }: { managerMod
               <span className="h-1.5 w-1.5 rounded-full bg-indigo-400" />
               F&B Audit / Controls
             </div>
-            <h1 className="flex items-center gap-3 text-3xl font-bold tracking-tight text-white sm:text-4xl">
+            <h1 className="flex items-center gap-3 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
               <span className="flex h-10 w-10 items-center justify-center rounded-2xl border border-indigo-400/25"
-                style={{ background: 'linear-gradient(135deg,rgba(99,102,241,0.2),rgba(124,58,237,0.15))', boxShadow: '0 0 24px rgba(99,102,241,0.2)' }}>
+                style={{ background: '', boxShadow: '0 0 24px rgba(99,102,241,0.2)' }}>
                 <Scale className="h-5 w-5 text-indigo-300" />
               </span>
               F&B Dashboard
@@ -96,7 +96,7 @@ export default function FnbDashboardClient({ managerMode = false }: { managerMod
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => setRefreshToken((v) => v + 1)}
-              className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 text-sm font-semibold text-slate-400 transition-all hover:bg-white/[0.06] hover:text-slate-200"
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm font-semibold text-slate-500 transition-all hover:bg-slate-100 hover:text-slate-700"
             >
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
               Refresh
@@ -106,15 +106,15 @@ export default function FnbDashboardClient({ managerMode = false }: { managerMod
 
         {/* ── Hero status card ── */}
         <section
-          className="relative overflow-hidden rounded-[24px] border border-white/[0.07] p-6 sm:p-8"
-          style={{ background: 'linear-gradient(135deg,rgba(99,102,241,0.14) 0%,rgba(124,58,237,0.09) 100%)' }}
+          className="relative overflow-hidden rounded-[24px] border border-slate-200 p-6 sm:p-8"
+          
         >
           <div className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-indigo-500/15 blur-3xl" />
           <div className="pointer-events-none absolute -bottom-20 left-1/3 h-40 w-40 rounded-full bg-violet-600/10 blur-2xl" />
           <div className="relative flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-indigo-400/80">Audit Readiness</p>
-              <h2 className="mt-2 text-2xl font-bold tracking-tight text-white">
+              <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">
                 Active Business Date
               </h2>
               <p className="mt-1.5 text-sm text-slate-500">
@@ -140,8 +140,8 @@ export default function FnbDashboardClient({ managerMode = false }: { managerMod
         <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500 mt-8">Revenue & Controls</div>
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           <StatCard label="Gross Sales" value={money(kpis.grossSales, currency)} detail="Before discounts/comps" accent="border-indigo-400/20 bg-indigo-400/[0.07] text-indigo-300" />
-          <StatCard label="Discounts" value={money(kpis.discounts, currency)} detail="Applied to orders" accent="border-slate-400/20 bg-slate-400/[0.07] text-slate-300" />
-          <StatCard label="Complimentary" value={money(kpis.comps, currency)} detail="Staff & Management Comps" accent="border-slate-400/20 bg-slate-400/[0.07] text-slate-300" />
+          <StatCard label="Discounts" value={money(kpis.discounts, currency)} detail="Applied to orders" accent="border-slate-400/20 bg-slate-400/[0.07] text-slate-600" />
+          <StatCard label="Complimentary" value={money(kpis.comps, currency)} detail="Staff & Management Comps" accent="border-slate-400/20 bg-slate-400/[0.07] text-slate-600" />
           <StatCard label="Voids" value={money(kpis.voidedAmount, currency)} detail="Cancelled / Voided items" accent="border-rose-400/20 bg-rose-400/[0.07] text-rose-300" />
           <StatCard label="Net F&B Revenue" value={money(kpis.netSales, currency)} detail="Gross - Discounts/Voids" accent="border-emerald-400/20 bg-emerald-400/[0.07] text-emerald-300" />
         </section>
@@ -153,16 +153,16 @@ export default function FnbDashboardClient({ managerMode = false }: { managerMod
           <StatCard label="Refunds" value={money(kpis.refunds, currency)} detail="Returned to guests" accent="border-orange-400/20 bg-orange-400/[0.07] text-orange-300" />
           <StatCard label="Unclosed Orders" value={kpis.openOrders} detail="SUBMITTED / IN SERVICE" accent={kpis.openOrders > 0 ? "border-amber-400/20 bg-amber-400/[0.07] text-amber-300" : "border-emerald-400/20 bg-emerald-400/[0.07] text-emerald-300"} />
           <StatCard label="Open POS Sessions" value={kpis.openSessions} detail="Active tills/cashiers" accent={kpis.openSessions > 0 ? "border-violet-400/20 bg-violet-400/[0.07] text-violet-300" : "border-emerald-400/20 bg-emerald-400/[0.07] text-emerald-300"} />
-          <StatCard label="Avg Check" value={money(kpis.averageCheck, currency)} detail="Revenue per cover" accent="border-slate-600/40 bg-slate-600/10 text-slate-300" />
+          <StatCard label="Avg Check" value={money(kpis.averageCheck, currency)} detail="Revenue per cover" accent="border-slate-600/40 bg-slate-600/10 text-slate-600" />
         </section>
 
         {/* ── Main grid for exceptions/alerts ── */}
         <section className="grid gap-5 xl:grid-cols-2 mt-8">
           {/* Alerts Box */}
-          <div className="overflow-hidden rounded-[20px] border border-white/[0.06]" style={{ background: 'rgba(255,255,255,0.025)' }}>
-            <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4">
+          <div className="overflow-hidden rounded-[20px] border border-slate-200" style={{ background: '#ffffff' }}>
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
               <div>
-                <h3 className="flex items-center gap-2 text-sm font-bold text-white">
+                <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                   <AlertTriangle className="h-4 w-4 text-indigo-400" />
                   Exception Monitoring
                 </h3>

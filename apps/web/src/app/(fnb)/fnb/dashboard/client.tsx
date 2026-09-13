@@ -13,13 +13,13 @@ const money = (value: number, currency = 'NGN') =>
 
 function KPI({ label, value, subtext, icon: Icon }: any) {
   return (
-    <div className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/[0.08] dark:bg-[#111627] dark:shadow-none">
-      <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
+    <div className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex items-center justify-between text-slate-500">
         <span className="text-xs font-semibold uppercase tracking-wider">{label}</span>
         <Icon className="h-4 w-4 opacity-70" />
       </div>
-      <div className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums tracking-tight">{value}</div>
-      {subtext && <div className="text-xs text-slate-500 dark:text-slate-500">{subtext}</div>}
+      <div className="text-2xl font-bold text-slate-900 tabular-nums tracking-tight">{value}</div>
+      {subtext && <div className="text-xs text-slate-500">{subtext}</div>}
     </div>
   );
 }
@@ -59,7 +59,7 @@ export default function FnbAnalyticsClient() {
 
   if (error && !data) return (
     <div className="min-h-full px-5 pb-12 pt-8">
-      <div className="mx-auto max-w-3xl rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400">{error}</div>
+      <div className="mx-auto max-w-3xl rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-600">{error}</div>
     </div>
   );
 
@@ -67,43 +67,43 @@ export default function FnbAnalyticsClient() {
   const currency = 'NGN';
 
   return (
-    <div className="min-h-full bg-slate-50 pb-16 pt-6 dark:bg-[#0B0F19] sm:pt-8">
+    <div className="min-h-full bg-slate-50 pb-16 pt-6 sm:pt-8">
       <div className="mx-auto max-w-[1600px] px-4 sm:px-6 md:px-8 space-y-6">
 
         {/* ── Header ── */}
-        <header className="flex flex-col justify-between gap-5 border-b border-slate-200 pb-5 dark:border-white/10 lg:flex-row lg:items-end">
+        <header className="flex flex-col justify-between gap-5 border-b border-slate-200 pb-5 lg:flex-row lg:items-end">
           <div>
-            <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl">
+            <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
               F&B Sales & Analytics
             </h1>
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            <p className="mt-1 text-sm text-slate-500">
               Aggregated revenue insights, outlet performance, and operational KPIs.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center rounded-lg border border-slate-200 bg-white p-1 shadow-sm dark:border-white/10 dark:bg-[#111627]">
+            <div className="flex items-center rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
               {['TODAY', 'YESTERDAY', 'LAST_7', 'THIS_MONTH'].map((range) => (
                 <button
                   key={range}
                   onClick={() => setDateRange(range)}
                   className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                     dateRange === range 
-                      ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300' 
-                      : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-white/5'
+                      ? 'bg-indigo-50 text-indigo-700  ' 
+                      : 'text-slate-600 hover:bg-slate-100  '
                   }`}
                 >
                   {range.replace('_', ' ')}
                 </button>
               ))}
             </div>
-            <button className="flex h-8 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-600 shadow-sm hover:bg-slate-50 dark:border-white/10 dark:bg-[#111627] dark:text-slate-300 dark:hover:bg-white/5">
+            <button className="flex h-8 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-600 shadow-sm hover:bg-slate-50">
               <Filter className="h-3.5 w-3.5" /> Outlet
             </button>
           </div>
         </header>
 
         {/* ── Exception Strip ── */}
-        <div className="flex flex-wrap items-center gap-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200/90">
+        <div className="flex flex-wrap items-center gap-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <div className="flex items-center gap-1.5 font-semibold"><AlertTriangle className="h-4 w-4" /> Operations:</div>
           <div className="flex gap-4 opacity-90">
             <span>Voids: <strong>{money(operationalMetrics?.voids)}</strong> ({operationalMetrics?.voidCount})</span>
@@ -126,8 +126,8 @@ export default function FnbAnalyticsClient() {
         <div className="grid gap-6 lg:grid-cols-3">
           
           {/* Hourly Trend */}
-          <div className="col-span-2 rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/[0.08] dark:bg-[#111627]">
-            <h3 className="mb-4 text-sm font-bold text-slate-800 dark:text-slate-200">Revenue Trend (Hourly)</h3>
+          <div className="col-span-2 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h3 className="mb-4 text-sm font-bold text-slate-800">Revenue Trend (Hourly)</h3>
             <div className="h-[280px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={hourlyRevenue} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -153,8 +153,8 @@ export default function FnbAnalyticsClient() {
           </div>
 
           {/* F&B Class Split */}
-          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/[0.08] dark:bg-[#111627]">
-            <h3 className="mb-4 text-sm font-bold text-slate-800 dark:text-slate-200">Revenue by F&B Class</h3>
+          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h3 className="mb-4 text-sm font-bold text-slate-800">Revenue by F&B Class</h3>
             <div className="h-[280px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -174,23 +174,23 @@ export default function FnbAnalyticsClient() {
         {/* ── Second Section (Outlet & Payments) ── */}
         <div className="grid gap-6 lg:grid-cols-2">
           
-          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/[0.08] dark:bg-[#111627]">
-            <h3 className="mb-4 text-sm font-bold text-slate-800 dark:text-slate-200">Revenue by Outlet</h3>
+          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h3 className="mb-4 text-sm font-bold text-slate-800">Revenue by Outlet</h3>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 dark:border-white/5">
-                    <th className="pb-2 text-left font-semibold text-slate-500 dark:text-slate-400">Outlet</th>
-                    <th className="pb-2 text-right font-semibold text-slate-500 dark:text-slate-400">Covers</th>
-                    <th className="pb-2 text-right font-semibold text-slate-500 dark:text-slate-400">Net Revenue</th>
+                  <tr className="border-b border-slate-200">
+                    <th className="pb-2 text-left font-semibold text-slate-500">Outlet</th>
+                    <th className="pb-2 text-right font-semibold text-slate-500">Covers</th>
+                    <th className="pb-2 text-right font-semibold text-slate-500">Net Revenue</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                <tbody className="divide-y divide-slate-100">
                   {outletRevenue?.map((o: any, idx: number) => (
-                    <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-white/5">
-                      <td className="py-2.5 font-medium text-slate-800 dark:text-slate-200">{o.name}</td>
-                      <td className="py-2.5 text-right tabular-nums text-slate-600 dark:text-slate-300">{o.covers}</td>
-                      <td className="py-2.5 text-right font-semibold tabular-nums text-slate-800 dark:text-indigo-300">{money(o.revenue)}</td>
+                    <tr key={idx} className="hover:bg-slate-50">
+                      <td className="py-2.5 font-medium text-slate-800">{o.name}</td>
+                      <td className="py-2.5 text-right tabular-nums text-slate-600">{o.covers}</td>
+                      <td className="py-2.5 text-right font-semibold tabular-nums text-slate-800">{money(o.revenue)}</td>
                     </tr>
                   ))}
                   {outletRevenue?.length === 0 && <tr><td colSpan={3} className="py-4 text-center text-xs text-slate-500">No outlet data</td></tr>}
@@ -199,8 +199,8 @@ export default function FnbAnalyticsClient() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/[0.08] dark:bg-[#111627]">
-            <h3 className="mb-4 text-sm font-bold text-slate-800 dark:text-slate-200">Payment Method Mix</h3>
+          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h3 className="mb-4 text-sm font-bold text-slate-800">Payment Method Mix</h3>
             <div className="h-[200px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={paymentMethods} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
@@ -219,26 +219,26 @@ export default function FnbAnalyticsClient() {
         {/* ── Third Section (Top Items) ── */}
         <div className="grid gap-6 lg:grid-cols-2">
           
-          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/[0.08] dark:bg-[#111627]">
-            <h3 className="mb-4 text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h3 className="mb-4 text-sm font-bold text-slate-800 flex items-center gap-2">
               <UtensilsCrossed className="h-4 w-4 text-indigo-500" />
               Top 10 Items (By Revenue)
             </h3>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 dark:border-white/5">
-                    <th className="pb-2 text-left font-semibold text-slate-500 dark:text-slate-400">Item</th>
-                    <th className="pb-2 text-right font-semibold text-slate-500 dark:text-slate-400">Qty</th>
-                    <th className="pb-2 text-right font-semibold text-slate-500 dark:text-slate-400">Revenue</th>
+                  <tr className="border-b border-slate-200">
+                    <th className="pb-2 text-left font-semibold text-slate-500">Item</th>
+                    <th className="pb-2 text-right font-semibold text-slate-500">Qty</th>
+                    <th className="pb-2 text-right font-semibold text-slate-500">Revenue</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                <tbody className="divide-y divide-slate-100">
                   {topItems?.revenue.map((i: any, idx: number) => (
-                    <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-white/5">
-                      <td className="py-2.5 font-medium text-slate-800 dark:text-slate-200">{i.name}</td>
-                      <td className="py-2.5 text-right tabular-nums text-slate-600 dark:text-slate-400">{i.quantity}</td>
-                      <td className="py-2.5 text-right font-semibold tabular-nums text-slate-800 dark:text-indigo-300">{money(i.revenue)}</td>
+                    <tr key={idx} className="hover:bg-slate-50">
+                      <td className="py-2.5 font-medium text-slate-800">{i.name}</td>
+                      <td className="py-2.5 text-right tabular-nums text-slate-600">{i.quantity}</td>
+                      <td className="py-2.5 text-right font-semibold tabular-nums text-slate-800">{money(i.revenue)}</td>
                     </tr>
                   ))}
                   {(!topItems?.revenue || topItems.revenue.length === 0) && <tr><td colSpan={3} className="py-4 text-center text-xs text-slate-500">No items sold</td></tr>}
@@ -247,26 +247,26 @@ export default function FnbAnalyticsClient() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/[0.08] dark:bg-[#111627]">
-            <h3 className="mb-4 text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h3 className="mb-4 text-sm font-bold text-slate-800 flex items-center gap-2">
               <ListOrdered className="h-4 w-4 text-emerald-500" />
               Top 10 Items (By Quantity)
             </h3>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 dark:border-white/5">
-                    <th className="pb-2 text-left font-semibold text-slate-500 dark:text-slate-400">Item</th>
-                    <th className="pb-2 text-right font-semibold text-slate-500 dark:text-slate-400">Qty</th>
-                    <th className="pb-2 text-right font-semibold text-slate-500 dark:text-slate-400">Revenue</th>
+                  <tr className="border-b border-slate-200">
+                    <th className="pb-2 text-left font-semibold text-slate-500">Item</th>
+                    <th className="pb-2 text-right font-semibold text-slate-500">Qty</th>
+                    <th className="pb-2 text-right font-semibold text-slate-500">Revenue</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                <tbody className="divide-y divide-slate-100">
                   {topItems?.quantity.map((i: any, idx: number) => (
-                    <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-white/5">
-                      <td className="py-2.5 font-medium text-slate-800 dark:text-slate-200">{i.name}</td>
-                      <td className="py-2.5 text-right font-semibold tabular-nums text-slate-800 dark:text-emerald-300">{i.quantity}</td>
-                      <td className="py-2.5 text-right tabular-nums text-slate-600 dark:text-slate-400">{money(i.revenue)}</td>
+                    <tr key={idx} className="hover:bg-slate-50">
+                      <td className="py-2.5 font-medium text-slate-800">{i.name}</td>
+                      <td className="py-2.5 text-right font-semibold tabular-nums text-slate-800">{i.quantity}</td>
+                      <td className="py-2.5 text-right tabular-nums text-slate-600">{money(i.revenue)}</td>
                     </tr>
                   ))}
                   {(!topItems?.quantity || topItems.quantity.length === 0) && <tr><td colSpan={3} className="py-4 text-center text-xs text-slate-500">No items sold</td></tr>}
