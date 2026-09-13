@@ -74,6 +74,7 @@ export interface NightAuditData {
   businessDate: string;
   currentAudit: any;
   activeAudit: any;
+  lastCompletedAudit?: any;
   auditState: AuditState;
   auditPhase: string;
   auditInProgress: boolean;
@@ -87,4 +88,13 @@ export interface NightAuditData {
   summary: SummaryData;
   activityFeed?: any[];
   financialSnapshot?: any;
+  accounting?: {
+    period?: { id: string; name: string; status: string; periodStart: string; periodEnd: string } | null;
+    journal?: { postedEntryCount: number; debit: number; credit: number; difference: number; status: string };
+    transactionExceptions?: number;
+    refunds?: { amount: number; count: number };
+    folioActivity?: Array<{ type: string; amount: number; count: number }>;
+  };
+  closeControl?: { status: string; snapshot?: any; hasOpeningClosingBalance: boolean; balanceProofStatus?: string; linkedJournalEntryCount?: number; package?: any };
+  insights?: Array<{ severity: string; title: string; detail: string; metric: number }>;
 }

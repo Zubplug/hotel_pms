@@ -58,7 +58,7 @@ export class GeneralLedgerService {
       description: string;
       reference?: string;
       sourceModule: string; // 'MANUAL', 'PAYROLL', 'AP', 'AR', etc.
-      lines: Array<{ accountId: string; debit: number; credit: number; description?: string; reference?: string }>;
+      lines: Array<{ accountId: string; debit: number; credit: number; description?: string; reference?: string; sourceType?: string; sourceId?: string }>;
     }
   ) {
     if (!ctx.propertyIds.includes(input.propertyId)) throw new Error('Unauthorized');
@@ -105,7 +105,9 @@ export class GeneralLedgerService {
               debit: line.debit,
               credit: line.credit,
               description: line.description,
-              reference: line.reference
+              reference: line.reference,
+              sourceType: line.sourceType,
+              sourceId: line.sourceId,
             }))
           }
         },

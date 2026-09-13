@@ -88,7 +88,7 @@ export async function GET(req: NextRequest) {
       paymentWhere.frontdeskSessionId = shiftId;
     } else if (!shiftId) {
       paymentWhere.OR = [
-        { createdAt: dateFilter },
+        { businessDate: dateFilter },
         { frontdeskSessionId: { in: frontdeskSessions.map((s: any) => s.id) } }
       ];
     } else {
@@ -123,7 +123,7 @@ export async function GET(req: NextRequest) {
       refundWhere.payment = { frontdeskSessionId: shiftId };
     } else if (!shiftId) {
       refundWhere.OR = [
-        { createdAt: dateFilter },
+        { businessDate: dateFilter },
         { payment: { frontdeskSessionId: { in: frontdeskSessions.map((s: any) => s.id) } } }
       ];
     } else {

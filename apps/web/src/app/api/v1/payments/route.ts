@@ -119,6 +119,7 @@ export async function POST(req: NextRequest) {
           currency: currency,
           baseAmount: numericAmount,
           status: 'COMPLETED',
+          businessDate: folio.property.businessDate || getPropertyBusinessDate(folio.property.timezone),
           idempotencyKey,
           receiptNumber: receiptNumber as any,
           providerTransactionId,

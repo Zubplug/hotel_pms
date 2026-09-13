@@ -75,6 +75,7 @@ function Metric({ label, value, subtext, trend, icon: Icon, tone = 'default' }: 
 
 export function MetricCards({ data }: { data: NightAuditData }) {
   const baseCurrency = data.property.baseCurrency;
+  const currentSnapshot = data.financialSnapshot || data.currentAudit?.financialSnapshot;
 
   const trendData = data.analytics.trend || [];
   const lastAudit = trendData.length > 0 ? trendData[trendData.length - 1] : null;
@@ -236,6 +237,34 @@ export function MetricCards({ data }: { data: NightAuditData }) {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <Metric
+          label="Room revenue"
+          value={currency(currentSnapshot?.roomRevenue ?? (lastAudit?.financialSnapshot ? Number(lastAudit.financialSnapshot.roomRevenue) : 0), baseCurrency)}
+          subtext="Last completed audit"
+          icon={BedDouble}
+          tone="indigo"
+        />
+        <Metric
+          label="F&B / POS revenue"
+          value={currency(currentSnapshot?.fnbRevenue ?? (lastAudit?.financialSnapshot ? Number(lastAudit.financialSnapshot.fnbRevenue) : 0), baseCurrency)}
+          subtext="Food and beverage"
+          icon={Banknote}
+          tone="amber"
+        />
+        <Metric
+          label="Other revenue"
+          value={currency(currentSnapshot?.otherRevenue ?? (lastAudit?.financialSnapshot ? Number(lastAudit.financialSnapshot.otherRevenue) : 0), baseCurrency)}
+          subtext="Ancillary revenue"
+          icon={TrendingUp}
+          tone="emerald"
+        />
+        <Metric
+          label="Taxes"
+          value={currency(currentSnapshot?.taxes ?? (lastAudit?.financialSnapshot ? Number(lastAudit.financialSnapshot.taxes) : 0), baseCurrency)}
+          subtext="Posted tax total"
+          icon={Banknote}
+          tone="default"
+        />
+        <Metric
           label="Prior Audit"
           value={currency(previousAuditRevenue, baseCurrency)}
           subtext="Day before last"
@@ -248,6 +277,20 @@ export function MetricCards({ data }: { data: NightAuditData }) {
           subtext="Captured today"
           icon={Banknote}
           tone="indigo"
+        />
+        <Metric
+          label="Refunds"
+          value={currency(currentSnapshot?.refunds ?? (lastAudit?.financialSnapshot ? Number(lastAudit.financialSnapshot.refunds) : 0), baseCurrency)}
+          subtext="Posted refunds"
+          icon={ArrowDownRight}
+          tone="rose"
+        />
+        <Metric
+          label="Discounts"
+          value={currency(currentSnapshot?.discounts ?? (lastAudit?.financialSnapshot ? Number(lastAudit.financialSnapshot.discounts) : 0), baseCurrency)}
+          subtext="Applied discounts"
+          icon={ArrowDownRight}
+          tone="amber"
         />
         <Metric
           label="ADR (Last)"

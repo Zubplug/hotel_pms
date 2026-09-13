@@ -36,6 +36,14 @@ export async function isNightAuditCutoverActive(propertyId: string) {
  * protection that prevents a new caller from accidentally bypassing audit.
  */
 export async function assertNightAuditAllowsTransaction(propertyId: string, businessDate?: Date | null) {
+  const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { businessDate: true, timezone: true } });
+  const effectiveDate = businessDate || property?.businessDate || (property ? getPropertyBusinessDate(property.timezone) : null);
+  if (property?.businessDate && effectiveDate && effectiveDate.getTime() < property.businessDate.getTime()) {
+    const error = new Error('CLOSED_BUSINESS_DATE:This business date is closed. Use the controlled late-posting workflow with an approved reason.');
+    (error as Error & { code?: string; status?: number }).code = 'CLOSED_BUSINESS_DATE';
+    (error as Error & { status?: number }).status = 409;
+    throw error;
+  }
   if (await isNightAuditTransactionLocked(propertyId, businessDate)) {
     const error = new Error('NIGHT_AUDIT_IN_PROGRESS:Business-date transactions are temporarily locked while Night Audit is posting.');
     (error as Error & { code?: string; status?: number }).code = 'NIGHT_AUDIT_IN_PROGRESS';

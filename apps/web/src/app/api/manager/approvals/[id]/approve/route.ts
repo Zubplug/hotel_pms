@@ -417,11 +417,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         const current = await tx.refundRequest.findUnique({ where: { id: result.refundRequestId }, include: { payment: true } });
         if (!current || current.status !== 'PROCESSING') throw new Error('CONFLICT');
         const completed = gatewayResult.status === 'COMPLETED';
+        const property = await tx.property.findUnique({ where: { id: result.propertyId }, select: { organizationId: true, businessDate: true } });
+        const businessDate = property?.businessDate || new Date();
         const refund = await tx.refund.create({ data: {
           refundRequestId: current.id,
           paymentId: result.paymentId,
           folioId: result.folioId,
           propertyId: result.propertyId,
+          businessDate,
             amount: result.amount,
             currency: result.currency,
             method: result.method,
@@ -433,12 +436,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         } });
         if (completed) {
           await applyRefundToFolio(tx, current, result.amount, user.id);
-          await tx.folioItem.create({ data: { folioId: result.folioId, businessDate: new Date(), type: 'REFUND', source: 'MANUAL', description: `Refund request ${current.id}`, quantity: 1, unitAmount: result.amount, amount: result.amount, currency: result.currency, baseAmount: result.amount, postedBy: user.id } });
+          await tx.folioItem.create({ data: { folioId: result.folioId, businessDate, type: 'REFUND', source: 'MANUAL', description: `Refund request ${current.id}`, quantity: 1, unitAmount: result.amount, amount: result.amount, currency: result.currency, baseAmount: result.amount, postedBy: user.id } });
           const totalRefunded = result.committedRefunded + result.amount;
           await tx.payment.update({ where: { id: result.paymentId }, data: { status: totalRefunded >= Number(current.payment.amount) ? 'REFUNDED' : 'PARTIALLY_REFUNDED' } });
         }
         await tx.refundRequest.update({ where: { id: current.id }, data: { status: completed ? 'COMPLETED' : gatewayResult.status === 'FAILED' ? 'FAILED' : 'PROCESSING' } });
-        const property = await tx.property.findUnique({ where: { id: result.propertyId } });
         await tx.auditLog.create({ data: {
           organizationId: property?.organizationId || '',
           propertyId: result.propertyId,

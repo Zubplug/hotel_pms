@@ -23,12 +23,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       if (request.approvedMethod !== 'BANK_TRANSFER' || request.status !== 'APPROVED') throw new Error('CONFLICT');
       const amount = Number(request.approvedAmount || request.requestedAmount);
       await applyRefundToFolio(tx, request, amount, user.id);
-      const refund = await tx.refund.create({ data: { refundRequestId: request.id, paymentId: request.paymentId, folioId: request.folioId, propertyId: request.propertyId, amount, currency: request.currency, method: 'BANK_TRANSFER', reason: request.reason, authorizedBy: user.id, providerRefundId: `bank-transfer:${reference}`, status: 'COMPLETED', idempotencyKey: `refund-request:${request.id}` } });
-      await tx.folioItem.create({ data: { folioId: request.folioId, businessDate: (await tx.property.findUnique({ where: { id: request.propertyId }, select: { businessDate: true } }))?.businessDate || new Date(), type: 'REFUND', source: 'MANUAL', description: `Bank transfer refund ${reference}`, quantity: 1, unitAmount: amount, amount, currency: request.currency, baseAmount: amount, postedBy: user.id } });
+      const property = await tx.property.findUnique({ where: { id: request.propertyId }, select: { organizationId: true, businessDate: true, timezone: true } });
+      const businessDate = property?.businessDate || new Date();
+      const refund = await tx.refund.create({ data: { refundRequestId: request.id, paymentId: request.paymentId, folioId: request.folioId, propertyId: request.propertyId, businessDate, amount, currency: request.currency, method: 'BANK_TRANSFER', reason: request.reason, authorizedBy: user.id, providerRefundId: `bank-transfer:${reference}`, status: 'COMPLETED', idempotencyKey: `refund-request:${request.id}` } });
+      await tx.folioItem.create({ data: { folioId: request.folioId, businessDate, type: 'REFUND', source: 'MANUAL', description: `Bank transfer refund ${reference}`, quantity: 1, unitAmount: amount, amount, currency: request.currency, baseAmount: amount, postedBy: user.id } });
       const refunded = await tx.refund.aggregate({ where: { paymentId: request.paymentId, status: { not: 'FAILED' } }, _sum: { amount: true } });
       await tx.payment.update({ where: { id: request.paymentId }, data: { status: Number(refunded._sum.amount || 0) >= Number(request.payment.amount) ? 'REFUNDED' : 'PARTIALLY_REFUNDED' } });
       await tx.refundRequest.update({ where: { id: request.id }, data: { status: 'COMPLETED' } });
-      const property = await tx.property.findUnique({ where: { id: request.propertyId } });
       await tx.auditLog.create({ data: { organizationId: property?.organizationId || '', propertyId: request.propertyId, userId: user.id, action: 'SETTLE_BANK_REFUND', resource: 'RefundRequest', resourceId: request.id, newValue: { amount, refundId: refund.id, reference }, ipAddress: req.headers.get('x-forwarded-for') || '', userAgent: req.headers.get('user-agent') || '', requestId: crypto.randomUUID() } });
       return refund;
     });

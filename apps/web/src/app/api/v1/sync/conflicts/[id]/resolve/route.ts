@@ -276,6 +276,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                        currency: payload.currency || f.currency,
                        baseAmount: amount,
                        status: 'COMPLETED',
+                       businessDate: new Date(payload.businessDate || new Date()),
                        idempotencyKey: paymentIdempotencyKey,
                        receivedBy: edgeEvent.operatorId || 'SYSTEM',
                        deviceId: edgeEvent.deviceId

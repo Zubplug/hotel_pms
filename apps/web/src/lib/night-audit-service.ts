@@ -483,7 +483,10 @@ export async function getCashReconciliation(ctx: TenantContext, propertyId: stri
       propertyId,
       method: { in: ['BANK_TRANSFER', 'POS'] },
       verificationStatus: 'UNVERIFIED',
-      createdAt: { gte: businessDate, lt: nextBusinessDate }
+      OR: [
+        { originalBusinessDate: businessDate },
+        { originalBusinessDate: null, createdAt: { gte: businessDate, lt: nextBusinessDate } },
+      ],
     },
     include: {
       folio: {

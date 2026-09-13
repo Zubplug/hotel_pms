@@ -49,16 +49,37 @@ export async function GET(req: NextRequest) {
       : (typeof bDate === 'string' ? bDate.slice(0, 10) : String(bDate).slice(0, 10));
     const localToday = getPropertyBusinessDate(property.timezone);
     await reconcileRoomOccupancy(propertyId, businessDate);
-    const [currentAudit, activeAudit] = await Promise.all([
+    const [currentAudit, activeAudit, lastCompletedAudit] = await Promise.all([
       prisma.nightAudit.findUnique({ 
         where: { propertyId_businessDate: { propertyId, businessDate } },
-        include: { acknowledgements: true }
+        include: {
+          acknowledgements: true,
+          closePackage: true,
+          journalEntries: { where: { status: 'POSTED' }, select: { id: true } },
+        }
       }),
       prisma.nightAudit.findFirst({
         where: { propertyId, status: { in: ['IN_PROGRESS', 'POSTING'] } },
         orderBy: { startedAt: 'desc' }
-      })
+      }),
+      prisma.nightAudit.findFirst({
+        where: { propertyId, status: 'COMPLETED' },
+        orderBy: [{ businessDate: 'desc' }, { completedAt: 'desc' }],
+      }),
     ]);
+
+    const auditStaffIds = [currentAudit?.runBy, activeAudit?.runBy, lastCompletedAudit?.runBy].filter((id): id is string => Boolean(id));
+    const auditStaff = auditStaffIds.length
+      ? await prisma.staff.findMany({
+          where: { id: { in: auditStaffIds } },
+          select: { id: true, firstName: true, lastName: true, position: true },
+        })
+      : [];
+    const auditStaffMap = new Map(auditStaff.map((staff) => [staff.id, staff]));
+    const withAuditOwner = (audit: any) => audit ? {
+      ...audit,
+      runByStaff: audit.runBy ? auditStaffMap.get(audit.runBy) || null : null,
+    } : audit;
 
     // Run all checks in parallel for maximum performance
     const [operational, system, financial, cash] = await Promise.all([
@@ -70,7 +91,7 @@ export async function GET(req: NextRequest) {
 
     const trendStart = new Date(businessDate);
     trendStart.setUTCDate(trendStart.getUTCDate() - 6);
-    const [rooms, inHouseGuests, charges, payments, latePostings, sessions, trend, activityFeed, financialSnapshot] = await Promise.all([
+    const [rooms, inHouseGuests, charges, payments, latePostings, sessions, trend, activityFeed, financialSnapshot, journalTotals, accountingPeriod, transactionExceptions, refundTotals, folioActivity] = await Promise.all([
       prisma.room.findMany({ where: { propertyId, isActive: true }, select: { status: true } }),
       prisma.reservation.count({
         where: {
@@ -98,7 +119,30 @@ export async function GET(req: NextRequest) {
         } 
       }),
       prisma.hotelActivityEvent.findMany({ where: { propertyId, businessDate: bDate instanceof Date ? bDate : new Date(businessDate) }, orderBy: { occurredAt: 'desc' }, take: 100 }),
-      currentAudit ? prisma.nightAuditFinancialSnapshot.findUnique({ where: { nightAuditId: currentAudit.id } }) : Promise.resolve(null)
+      currentAudit ? prisma.nightAuditFinancialSnapshot.findUnique({ where: { nightAuditId: currentAudit.id } }) : Promise.resolve(null),
+      prisma.journalEntry.aggregate({
+        where: { propertyId, ...(currentAudit ? { nightAuditId: currentAudit.id } : { entryDate: businessDate }), status: 'POSTED' },
+        _sum: { totalDebit: true, totalCredit: true },
+        _count: { id: true },
+      }),
+      prisma.accountingPeriod.findFirst({
+        where: { propertyId, periodStart: { lte: businessDate }, periodEnd: { gte: businessDate } },
+        select: { id: true, name: true, status: true, periodStart: true, periodEnd: true },
+      }),
+      prisma.transactionException.count({
+        where: { propertyId, businessDate, status: { in: ['OPEN', 'PENDING_APPROVAL'] } },
+      }),
+      prisma.refund.aggregate({
+        where: { propertyId, businessDate, status: 'COMPLETED' },
+        _sum: { amount: true },
+        _count: { id: true },
+      }),
+      prisma.folioItem.groupBy({
+        by: ['type'],
+        where: { folio: { propertyId }, businessDate, voidedAt: null },
+        _sum: { amount: true },
+        _count: { id: true },
+      })
     ]);
 
     const roomAnalysis = rooms.reduce((result: Record<string, number>, room) => {
@@ -134,6 +178,17 @@ export async function GET(req: NextRequest) {
       };
     });
 
+    const snapshotTotals = financialSnapshot ? {
+      roomRevenue: Number(financialSnapshot.roomRevenue || 0),
+      fnbRevenue: Number(financialSnapshot.fnbRevenue || 0),
+      otherRevenue: Number(financialSnapshot.otherRevenue || 0),
+      taxes: Number(financialSnapshot.taxes || 0),
+      discounts: Number(financialSnapshot.discounts || 0),
+      refunds: Number(financialSnapshot.refunds || 0),
+      grossRevenue: Number(financialSnapshot.grossRevenue || 0),
+      netRevenue: Number(financialSnapshot.netRevenue || 0),
+    } : null;
+    const ledgerDifference = Number(journalTotals._sum.totalDebit || 0) - Number(journalTotals._sum.totalCredit || 0);
     // Calculate readiness score
     let blockers = 0;
     let warnings = 0;
@@ -159,6 +214,31 @@ export async function GET(req: NextRequest) {
     if (cash.cashHandovers.length > 0) blockers++;
     if (cash.unverifiedTransactions.length > 0) blockers++;
     if (cash.bankDeposits.length > 0) warnings++;
+
+    const linkedJournalCount = currentAudit?.journalEntries?.length || 0;
+    const balanceProofStatus = (currentAudit?.closePackage?.balanceProof as any)?.status || 'INCOMPLETE';
+    const balanceProofHasVariance = balanceProofStatus === 'HAS_VARIANCE';
+    const balanceProofIncomplete = balanceProofStatus === 'INCOMPLETE';
+    const missingLinkedJournal = currentAudit?.status === 'COMPLETED'
+      && Number(financialSnapshot?.grossRevenue || 0) > 0
+      && linkedJournalCount === 0;
+    const closeStatus = activeAudit
+      ? 'IN_PROGRESS'
+      : currentAudit?.status === 'FAILED'
+        ? 'FAILED'
+        : currentAudit?.status === 'COMPLETED'
+          ? (blockers > 0 || missingLinkedJournal ? 'CANNOT_CLOSE' : balanceProofHasVariance ? 'HAS_VARIANCE' : transactionExceptions > 0 || balanceProofIncomplete ? 'HAS_UNRESOLVED_EXCEPTIONS' : 'COMPLETED')
+        : blockers > 0
+            ? 'CANNOT_CLOSE'
+            : 'READY';
+    const insightCandidates = [
+      latePostings > 0 ? { severity: 'MEDIUM', title: 'Late postings detected', detail: `${latePostings} folio item${latePostings === 1 ? '' : 's'} were posted late for this business date.`, metric: latePostings } : null,
+      transactionExceptions > 0 ? { severity: 'HIGH', title: 'Financial exceptions remain open', detail: `${transactionExceptions} payment exception${transactionExceptions === 1 ? '' : 's'} require review before close.`, metric: transactionExceptions } : null,
+      Number(sessions._sum.variance || 0) !== 0 ? { severity: 'HIGH', title: 'Cashier variance requires attention', detail: `POS session variance totals ${Number(sessions._sum.variance || 0).toLocaleString()}.`, metric: Number(sessions._sum.variance || 0) } : null,
+      missingLinkedJournal ? { severity: 'HIGH', title: 'Night Audit journal package is incomplete', detail: 'Revenue was closed, but no posted journal is linked directly to this audit run for drill-down traceability.', metric: 0 } : null,
+      balanceProofHasVariance ? { severity: 'HIGH', title: 'Balance proof has variance', detail: 'One or more dated subledger balances do not agree with the expected closing balance.', metric: 0 } : null,
+      snapshotTotals && snapshotTotals.grossRevenue > 0 && snapshotTotals.fnbRevenue === 0 ? { severity: 'MEDIUM', title: 'No F&B revenue captured', detail: 'The completed snapshot contains no F&B/POS revenue for this date.', metric: 0 } : null,
+    ].filter(Boolean);
     
     // Single canonical state field — the UI should branch exclusively on this.
     type AuditState = 'IN_PROGRESS' | 'POSTING' | 'COMPLETED' | 'FAILED' | 'OVERDUE' | 'PENDING';
@@ -173,8 +253,9 @@ export async function GET(req: NextRequest) {
     return successResponse({
       property,
       businessDate: businessDateStr,
-      currentAudit,
-      activeAudit,
+      currentAudit: withAuditOwner(currentAudit),
+      activeAudit: withAuditOwner(activeAudit),
+      lastCompletedAudit: withAuditOwner(lastCompletedAudit),
       // auditState is the single canonical status field. Use this in the UI.
       auditState,
       // Legacy fields kept for backwards compatibility:
@@ -193,6 +274,28 @@ export async function GET(req: NextRequest) {
       },
       activityFeed,
       financialSnapshot,
+      accounting: {
+        period: accountingPeriod,
+        journal: {
+          postedEntryCount: journalTotals._count.id,
+          debit: Number(journalTotals._sum.totalDebit || 0),
+          credit: Number(journalTotals._sum.totalCredit || 0),
+          difference: ledgerDifference,
+          status: Math.abs(ledgerDifference) < 0.01 ? 'BALANCED' : 'OUT_OF_BALANCE',
+        },
+        transactionExceptions,
+        refunds: { amount: Number(refundTotals._sum.amount || 0), count: refundTotals._count.id },
+        folioActivity: folioActivity.map((row) => ({ type: row.type, amount: Number(row._sum.amount || 0), count: row._count.id })),
+      },
+      closeControl: {
+        status: closeStatus,
+        snapshot: snapshotTotals,
+        hasOpeningClosingBalance: balanceProofStatus === 'PROVEN',
+        balanceProofStatus,
+        package: currentAudit?.closePackage || null,
+        linkedJournalEntryCount: linkedJournalCount,
+      },
+      insights: insightCandidates,
       operational,
       system,
       financial,

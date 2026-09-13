@@ -15,6 +15,10 @@ interface StatusBannerProps {
 export function StatusBanner({ data, isAuditInProgress, onOpenWizard, refreshing, managerMode = false }: StatusBannerProps) {
   const businessDate = data.businessDate ? new Date(data.businessDate) : new Date();
   const isReady = data.summary.blockers === 0 && !isAuditInProgress && data.auditState !== 'COMPLETED';
+  const auditRecord = data.activeAudit || data.currentAudit;
+  const lastCompleted = data.lastCompletedAudit || (data.currentAudit?.status === 'COMPLETED' ? data.currentAudit : null);
+  const owner = auditRecord?.runByStaff;
+  const ownerName = owner ? `${owner.firstName || ''} ${owner.lastName || ''}`.trim() : auditRecord?.runBy ? 'Assigned auditor' : 'Automated / unassigned';
 
   let statusColor = 'bg-amber-500/15 text-amber-200 border-amber-400/30';
   let statusIcon = <Clock3 className="h-5 w-5" />;
@@ -59,9 +63,12 @@ export function StatusBanner({ data, isAuditInProgress, onOpenWizard, refreshing
             <h2 className="text-3xl font-semibold tracking-tight text-white md:text-4xl">
               {format(businessDate, 'EEEE, dd MMMM yyyy')}
             </h2>
-            <p className="mt-2 text-sm text-slate-300">
-              {data.property.name || 'Property'} • {data.auditState === 'OVERDUE' ? 'Attention required' : 'Operations online'}
-            </p>
+            <p className="mt-2 text-sm text-slate-300">{data.property.name || 'Property'} • {data.auditState === 'OVERDUE' ? 'Attention required' : 'Operations online'}</p>
+            <div className="mt-4 grid gap-2 text-xs text-slate-300 sm:grid-cols-3">
+              <span><span className="text-slate-500">Owner</span><br /><strong className="font-medium text-white">{ownerName}</strong></span>
+              <span><span className="text-slate-500">Started</span><br /><strong className="font-medium text-white">{auditRecord?.startedAt ? format(new Date(auditRecord.startedAt), 'dd MMM, HH:mm') : 'Not started'}</strong></span>
+              <span><span className="text-slate-500">Last completed</span><br /><strong className="font-medium text-white">{lastCompleted?.completedAt ? format(new Date(lastCompleted.completedAt), 'dd MMM, HH:mm') : 'Not available'}</strong></span>
+            </div>
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -81,7 +88,7 @@ export function StatusBanner({ data, isAuditInProgress, onOpenWizard, refreshing
                 disabled={isAuditInProgress || refreshing}
               >
                 <Play className="mr-2 h-4 w-4 fill-current" />
-                {isAuditInProgress ? 'Processing...' : data.auditState === 'COMPLETED' ? 'Review Audit' : isReady ? 'Run Audit' : 'Resolve Issues'}
+                {isAuditInProgress ? 'Resume audit' : data.auditState === 'COMPLETED' ? 'View completed audit' : 'Start audit'}
               </Button>
             </div>
           </div>

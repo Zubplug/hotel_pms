@@ -14,6 +14,7 @@ import { RevenueTrendChart } from '@/components/night-audit/dashboard/revenue-tr
 import { ActivityFeed } from '@/components/night-audit/dashboard/activity-feed';
 import { AttentionQueue } from '@/components/night-audit/dashboard/attention-queue';
 import { AuditPulse } from '@/components/night-audit/dashboard/audit-pulse';
+import { CloseControl } from '@/components/night-audit/dashboard/close-control';
 import { AuditWizard } from '@/components/night-audit/audit-wizard';
 import { ResolutionManager, ResolutionAction } from '@/components/night-audit/resolution-manager';
 
@@ -173,6 +174,8 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
       />
 
       <AuditPulse data={data} />
+
+      <CloseControl data={data} />
 
       {/* Primary Metrics */}
       <MetricCards data={data} />

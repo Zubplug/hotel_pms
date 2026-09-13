@@ -8,6 +8,7 @@ import { PaystackProvider } from '@/lib/payment-providers/paystack';
 import crypto from 'crypto';
 import { findActiveFrontdeskSession, isFrontdeskCashierRole } from '@/lib/frontdesk/active-session';
 import { canOverrideNightAudit, getNightAuditOverrideReason, isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
+import { getPropertyBusinessDate } from '@/lib/date-utils';
 export async function POST(req: NextRequest) {
   try {
     const session = await auth();
@@ -71,6 +72,7 @@ export async function POST(req: NextRequest) {
           currency: currency,
           baseAmount: numericAmount,
           status: 'PENDING',
+          businessDate: folio.property.businessDate || getPropertyBusinessDate(folio.property.timezone),
           idempotencyKey: providerRef, // Using providerRef as the idempotency key here
           terminalId,
           frontdeskSessionId: activeFrontdeskSession?.id,

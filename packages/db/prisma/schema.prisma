@@ -168,16 +168,18 @@ model Property {
   Event               Event[]
 
   // Enterprise Accounting Suite
-  supplierInvoices     SupplierInvoice[]
-  taxRemittances       TaxRemittance[]
-  accountingPeriods    AccountingPeriod[]
-  chartOfAccounts      ChartOfAccount[]
-  journalEntries       JournalEntry[]
-  payrollPeriods       PayrollPeriod[]
-  fixedAssetCategories FixedAssetCategory[]
-  fixedAssets          FixedAsset[]
-  assetDepreciations   AssetDepreciation[]
-  budgets              Budget[]
+  supplierInvoices           SupplierInvoice[]
+  taxRemittances             TaxRemittance[]
+  accountingPeriods          AccountingPeriod[]
+  chartOfAccounts            ChartOfAccount[]
+  journalEntries             JournalEntry[]
+  nightAuditClosePackages    NightAuditClosePackage[]
+  nightAuditBalanceSnapshots NightAuditBalanceSnapshot[]
+  payrollPeriods             PayrollPeriod[]
+  fixedAssetCategories       FixedAssetCategory[]
+  fixedAssets                FixedAsset[]
+  assetDepreciations         AssetDepreciation[]
+  budgets                    Budget[]
 
   outboxEvents       OutboxEvent[]
   channelConnections ChannelConnection[]
@@ -1109,8 +1111,9 @@ model Payment {
   exchangeRate Decimal? @db.Decimal(18, 8)
 
   status         String // 'PENDING' | 'COMPLETED' | 'FAILED' | 'REFUNDED'
-  idempotencyKey String? @unique
-  receiptNumber  String? @unique
+  businessDate   DateTime  @db.Date
+  idempotencyKey String?   @unique
+  receiptNumber  String?   @unique
 
   receivedBy String  @db.Uuid // Staff ID
   notes      String?
@@ -1137,6 +1140,7 @@ model Payment {
   updatedAt DateTime @updatedAt @db.Timestamptz
 
   @@index([frontdeskSessionId])
+  @@index([propertyId, businessDate])
 }
 
 model Refund {
@@ -1159,10 +1163,13 @@ model Refund {
   providerRefundId String?
 
   status         String // 'PENDING' | 'COMPLETED' | 'FAILED'
-  idempotencyKey String? @unique
+  businessDate   DateTime  @db.Date
+  idempotencyKey String?   @unique
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([propertyId, businessDate])
 }
 
 enum RefundRequestStatus {
@@ -1475,8 +1482,59 @@ model NightAudit {
   folioItems        FolioItem[]
   acknowledgements  NightAuditAcknowledgement[]
   financialSnapshot NightAuditFinancialSnapshot?
+  closePackage      NightAuditClosePackage?
+  journalEntries    JournalEntry[]
 
   @@unique([propertyId, businessDate])
+}
+
+// Immutable evidence bundle for a completed business-date close.
+model NightAuditClosePackage {
+  id              String    @id @default(uuid()) @db.Uuid
+  nightAuditId    String    @unique @db.Uuid
+  propertyId      String    @db.Uuid
+  businessDate    DateTime  @db.Date
+  status          String
+  sourceTotals    Json
+  balanceProof    Json
+  controlSummary  Json
+  reportManifest  Json
+  journalEntryIds Json
+  packageHash     String?   @unique
+  createdBy       String?   @db.Uuid
+  createdAt       DateTime  @default(now()) @db.Timestamptz
+  finalizedAt     DateTime? @db.Timestamptz
+
+  nightAudit      NightAudit                  @relation(fields: [nightAuditId], references: [id])
+  property        Property                    @relation(fields: [propertyId], references: [id])
+  accountBalances NightAuditBalanceSnapshot[]
+
+  @@index([propertyId, businessDate])
+  @@index([propertyId, status])
+}
+
+model NightAuditBalanceSnapshot {
+  id              String   @id @default(uuid()) @db.Uuid
+  closePackageId  String   @db.Uuid
+  propertyId      String   @db.Uuid
+  businessDate    DateTime @db.Date
+  ledgerType      String
+  accountKey      String
+  openingBalance  Decimal  @db.Decimal(18, 4)
+  activityDebit   Decimal  @default(0) @db.Decimal(18, 4)
+  activityCredit  Decimal  @default(0) @db.Decimal(18, 4)
+  expectedClosing Decimal  @db.Decimal(18, 4)
+  actualClosing   Decimal? @db.Decimal(18, 4)
+  variance        Decimal? @db.Decimal(18, 4)
+  status          String
+  resolution      String?
+  createdAt       DateTime @default(now()) @db.Timestamptz
+
+  closePackage NightAuditClosePackage @relation(fields: [closePackageId], references: [id], onDelete: Cascade)
+  property     Property               @relation(fields: [propertyId], references: [id])
+
+  @@unique([closePackageId, ledgerType, accountKey])
+  @@index([propertyId, businessDate, ledgerType])
 }
 
 model NightAuditFinancialSnapshot {
@@ -1492,6 +1550,19 @@ model NightAuditFinancialSnapshot {
   refunds      Decimal @default(0) @db.Decimal(18, 4)
   grossRevenue Decimal @default(0) @db.Decimal(18, 4)
   netRevenue   Decimal @default(0) @db.Decimal(18, 4)
+
+  paymentTotals            Json?
+  cashExpected             Decimal?  @db.Decimal(18, 4)
+  cashDeclared             Decimal?  @db.Decimal(18, 4)
+  cashVariance             Decimal?  @db.Decimal(18, 4)
+  unresolvedExceptionCount Int       @default(0)
+  latePostingCount         Int       @default(0)
+  voidCount                Int       @default(0)
+  adjustmentCount          Int       @default(0)
+  journalEntryIds          Json?
+  reconciliationStatus     String?
+  snapshotHash             String?   @unique
+  finalizedAt              DateTime? @db.Timestamptz
 
   createdAt DateTime @default(now()) @db.Timestamptz
 }
@@ -4713,8 +4784,10 @@ model JournalEntry {
   propertyId String   @db.Uuid
   property   Property @relation(fields: [propertyId], references: [id])
 
-  periodId String?           @db.Uuid
-  period   AccountingPeriod? @relation(fields: [periodId], references: [id])
+  periodId     String?           @db.Uuid
+  period       AccountingPeriod? @relation(fields: [periodId], references: [id])
+  nightAuditId String?           @db.Uuid
+  nightAudit   NightAudit?       @relation(fields: [nightAuditId], references: [id])
 
   entryNumber  String             @unique
   entryDate    DateTime           @db.Date
@@ -4736,9 +4809,11 @@ model JournalEntry {
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
 
+  @@unique([propertyId, nightAuditId])
   @@index([propertyId, entryDate])
   @@index([propertyId, status])
   @@index([propertyId, periodId])
+  @@index([propertyId, nightAuditId])
 }
 
 model JournalEntryLine {

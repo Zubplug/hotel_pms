@@ -35,7 +35,11 @@ export async function GET(req: NextRequest) {
       }),
       prisma.payment.groupBy({
         by: ['method'],
-        where: { propertyId, status: 'COMPLETED', createdAt: { gte: businessDate, lt: new Date(businessDate.getTime() + 86400000) } },
+        where: {
+          propertyId,
+          status: 'COMPLETED',
+          businessDate,
+        },
         _sum: { amount: true },
         _count: { id: true },
       }),

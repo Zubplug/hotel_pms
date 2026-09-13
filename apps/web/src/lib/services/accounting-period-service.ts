@@ -25,7 +25,7 @@ export class AccountingPeriodService {
         propertyId,
         periodStart: { lte: date },
         periodEnd: { gte: date },
-        status: 'CLOSED'
+        status: { in: ['CLOSING', 'CLOSED'] }
       }
     });
 
