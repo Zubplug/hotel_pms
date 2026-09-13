@@ -408,3 +408,82 @@ export async function getRoomAndGuestControl(propertyId: string): Promise<any> {
     unbalancedFolios,
   };
 }
+
+export async function getAccountsReceivable(propertyId: string) {
+  if (!propertyId) return [];
+  const session = await auth();
+  if (!session?.user?.id) throw new Error('UNAUTHORIZED');
+  const { requireOrganizationContext } = await import('@/lib/organization-access');
+  const ctx = await requireOrganizationContext(session.user.id);
+  if (!ctx.propertyIds.includes(propertyId)) throw new Error('FORBIDDEN');
+  
+  const folios = await prisma.folio.findMany({
+    where: { 
+      propertyId,
+      balance: { gt: 0 },
+      status: { not: 'VOID' }
+    },
+    include: {
+      guest: true,
+      reservation: {
+        include: {
+          reservationRooms: {
+            include: { room: true }
+          }
+        }
+      },
+      corporateAccount: true
+    },
+    orderBy: { balance: 'desc' }
+  });
+  return folios;
+}
+
+export async function getAccountsPayable(propertyId: string) {
+  if (!propertyId) return { negativeFolios: [], credits: [] };
+  const session = await auth();
+  if (!session?.user?.id) throw new Error('UNAUTHORIZED');
+  const { requireOrganizationContext } = await import('@/lib/organization-access');
+  const ctx = await requireOrganizationContext(session.user.id);
+  if (!ctx.propertyIds.includes(propertyId)) throw new Error('FORBIDDEN');
+  
+  const negativeFolios = await prisma.folio.findMany({
+    where: { 
+      propertyId,
+      balance: { lt: 0 },
+      status: { not: 'VOID' }
+    },
+    include: {
+      guest: true,
+      reservation: {
+        include: {
+          reservationRooms: {
+            include: { room: true }
+          }
+        }
+      },
+      corporateAccount: true
+    },
+    orderBy: { balance: 'asc' } // Most negative first
+  });
+
+  const credits = await prisma.folioCredit.findMany({
+    where: {
+      propertyId,
+      remainingAmount: { gt: 0 },
+      status: { notIn: ['EXHAUSTED', 'REFUNDED'] }
+    },
+    include: {
+      folio: {
+        include: {
+          guest: true,
+          corporateAccount: true
+        }
+      },
+      reservation: true
+    },
+    orderBy: { remainingAmount: 'desc' }
+  });
+
+  return { negativeFolios, credits };
+}

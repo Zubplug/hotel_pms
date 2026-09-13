@@ -18,6 +18,8 @@ import {
   Circle,
   BedDouble,
   Scale,
+  Wallet,
+  Banknote,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -34,8 +36,12 @@ import { PropertySelector } from '@/components/properties/PropertySelector';
 const NIGHT_AUDIT_NAV = [
   { name: 'Audit overview', href: '/night-audit', icon: MoonStar, group: 'Workspace' },
   { name: 'Audit history', href: '/night-audit/history', icon: Clock, group: 'Workspace' },
-  { name: 'Revenue reconciliation', href: '/night-audit/reconciliation', icon: Scale, group: 'Controls' },
+  { name: 'Revenue reconciliation', href: '/night-audit/reconciliation', icon: Scale,
+  Wallet,
+  Banknote, group: 'Controls' },
   { name: 'Room & guest control', href: '/night-audit/rooms', icon: BedDouble, group: 'Controls' },
+  { name: 'AR Ledger', href: '/night-audit/ar-ledger', icon: Wallet, group: 'Controls' },
+  { name: 'AP Ledger', href: '/night-audit/ap-ledger', icon: Banknote, group: 'Controls' },
   { name: 'Audit reports', href: '/night-audit/reports', icon: FileText, group: 'Insights' },
   { name: 'System & sync', href: '/night-audit/system', icon: Server, group: 'Insights' },
 ];
