@@ -80,7 +80,7 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
   if (status === 'unauthenticated' || !session?.user) return null;
 
   /* ─── Sidebar inner ─────────────────────────────────────────────────────── */
-  const SidebarContent = ({ onNavigate }: { onNavigate?: () => void }) => (
+  const renderSidebarContent = ({ onNavigate }: { onNavigate?: () => void }) => (
     <div className="relative flex h-full min-h-0 flex-col" style={{ background: '#07090f', overflow: 'hidden' }}>
 
       {/* Ambient glow blobs */}
@@ -273,14 +273,14 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
             >
               <X className="h-4 w-4" />
             </button>
-            <SidebarContent onNavigate={() => setSidebarOpen(false)} />
+            {renderSidebarContent({ onNavigate: () => setSidebarOpen(false) })}
           </div>
         </div>
       )}
 
       {/* Desktop sidebar */}
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-[260px] border-r border-white/[0.06] shadow-[12px_0_48px_rgba(0,0,0,0.5)] lg:flex lg:flex-col print:hidden">
-        <SidebarContent />
+        {renderSidebarContent({})}
       </aside>
 
       {/* Main content */}
