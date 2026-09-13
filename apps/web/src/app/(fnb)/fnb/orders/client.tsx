@@ -36,7 +36,7 @@ interface PosOrder {
   table?: { name: string };
   tableNumber?: string;
   serverStaff?: { firstName: string; lastName: string };
-  items: { id: string; name: string; quantity: number; price: number; status?: string; modifiers: any[] }[];
+  items: { id: string; productName: string; quantity: number; unitPrice: number; status?: string; modifiers: any[] }[];
   productionBatches: ProductionBatch[];
 }
 
@@ -180,13 +180,13 @@ const OrderDrawer = ({ order, onClose, onRefresh, businessDate }: { order: PosOr
                     <div>
                       <p className="text-sm font-semibold text-slate-800">
                         <span className="text-indigo-600 font-bold mr-2">{item.quantity}x</span>
-                        {item.name}
+                        {item.productName}
                       </p>
                       {item.modifiers?.map((mod: any) => (
                         <p key={mod.id} className="text-xs font-medium text-slate-500 mt-0.5 ml-6">+ {mod.name}</p>
                       ))}
                     </div>
-                    <p className="text-sm font-mono font-bold text-slate-700">{formatCurrency(item.price * item.quantity)}</p>
+                    <p className="text-sm font-mono font-bold text-slate-700">{formatCurrency(item.unitPrice * item.quantity)}</p>
                   </div>
                 </div>
               ))}
