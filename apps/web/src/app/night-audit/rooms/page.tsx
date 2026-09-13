@@ -108,7 +108,7 @@ export default function NightAuditRoomsControlPage() {
       resId: r.id,
       details: `Room ${r.reservationRooms[0]?.room?.number || 'Unassigned'} • Departs Today`,
       actionLabel: 'Open Folio',
-      actionUrl: `/frontdesk/folios/${r.folios[0]?.id}`
+      actionUrl: `/cashier/folios/${r.folios[0]?.id}`
     }));
     unassignedArrivals.forEach((r: any) => exceptionsList.push({
       type: 'Unassigned Arrival',
@@ -117,7 +117,7 @@ export default function NightAuditRoomsControlPage() {
       resId: r.id,
       details: `Arriving Today`,
       actionLabel: 'Assign Room',
-      actionUrl: `/frontdesk/reservations/${r.id}`
+      actionUrl: `/frontdesk/reservations/detail?id=${r.id}`
     }));
   }
 
@@ -129,7 +129,7 @@ export default function NightAuditRoomsControlPage() {
       resId: r.id,
       details: `Missing charge for ${format(new Date(businessDate), 'dd MMM')}`,
       actionLabel: 'Investigate',
-      actionUrl: r.folios[0] ? `/frontdesk/folios/${r.folios[0].id}` : `/frontdesk/reservations/${r.id}`
+      actionUrl: r.folios[0] ? `/cashier/folios/${r.folios[0].id}` : `/frontdesk/reservations/detail?id=${r.id}`
     }));
     folioBalanceExceptions.forEach((r: any) => exceptionsList.push({
       type: 'Departure Balance',
@@ -138,7 +138,7 @@ export default function NightAuditRoomsControlPage() {
       resId: r.id,
       details: `Departure with outstanding balance: ${formatCurrency(Number(r.folios[0]?.balance || 0), 'NGN')}`,
       actionLabel: 'Settle Balance',
-      actionUrl: `/frontdesk/folios/${r.folios[0]?.id}`
+      actionUrl: `/cashier/folios/${r.folios[0]?.id}`
     }));
     creditLimitExceptions.forEach((r: any) => exceptionsList.push({
       type: 'Credit Limit Breach',
@@ -147,7 +147,7 @@ export default function NightAuditRoomsControlPage() {
       resId: r.id,
       details: `Balance ${formatCurrency(Number(r.folios[0]?.balance || 0), 'NGN')} exceeds limit ${formatCurrency(Number(r.corporateAccount?.creditLimit || 0), 'NGN')}`,
       actionLabel: 'View Folio',
-      actionUrl: `/frontdesk/folios/${r.folios[0]?.id}`
+      actionUrl: `/cashier/folios/${r.folios[0]?.id}`
     }));
     unbalancedFolios.forEach((e: any) => exceptionsList.push({
       type: 'Unsettled Folio',
@@ -156,7 +156,7 @@ export default function NightAuditRoomsControlPage() {
       resId: e.reservation.id,
       details: e.reason,
       actionLabel: 'View Folio',
-      actionUrl: `/frontdesk/folios/${e.reservation.folios[0]?.id}`
+      actionUrl: `/cashier/folios/${e.reservation.folios[0]?.id}`
     }));
   }
 
@@ -177,7 +177,7 @@ export default function NightAuditRoomsControlPage() {
       resId: e.reservations[0]?.id,
       details: e.reason,
       actionLabel: 'Investigate',
-      actionUrl: `/frontdesk/reservations/${e.reservations[0]?.id}`
+      actionUrl: `/frontdesk/reservations/detail?id=${e.reservations[0]?.id}`
     }));
   }
 
