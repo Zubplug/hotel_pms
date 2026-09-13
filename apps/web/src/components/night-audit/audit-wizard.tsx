@@ -169,7 +169,7 @@ export function AuditWizard({ open, onOpenChange, data, onExecute, executing, on
               className="flex min-h-0 flex-col overflow-hidden border-r border-white/[0.06]"
               style={{ background: '#07090f' }}
             >
-              <div className="min-h-0 flex-1 overflow-y-auto p-4 pb-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 pb-12 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 <div className="space-y-1.5">
                   {STEPS.map((item, idx) => {
                     const { Icon } = item;
@@ -259,7 +259,7 @@ export function AuditWizard({ open, onOpenChange, data, onExecute, executing, on
               </div>
 
               {/* Step content */}
-              <div className="min-h-0 flex-1 overflow-y-auto p-7 md:p-8">
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-7 md:p-8 pb-12">
                 <div
                   className="min-h-full rounded-2xl border border-white/[0.06] p-6 md:p-8"
                   style={{ background: 'rgba(255,255,255,0.02)' }}
