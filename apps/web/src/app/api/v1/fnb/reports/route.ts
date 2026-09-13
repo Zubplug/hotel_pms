@@ -20,45 +20,51 @@ export async function GET(req: NextRequest) {
     }
 
     const propertyIdsToQuery = requestedPropertyId ? [requestedPropertyId] : allowedPropertyIds;
+    const property = await prisma.property.findUnique({
+      where: { id: propertyIdsToQuery[0] },
+      select: { businessDate: true }
+    });
 
     const now = new Date();
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfDay = property?.businessDate || new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     const paymentsAgg = await prisma.posPayment.groupBy({
       by: ['method'],
       where: {
         order: {
           propertyId: { in: propertyIdsToQuery as string[] },
+          businessDate: startOfDay
         },
-        createdAt: { gte: startOfDay }
+        status: { notIn: ['FAILED', 'REFUNDED'] }
       },
       _sum: { amount: true }
     });
 
-    const voidsCount = await prisma.posVoid.count({
+    // Subtotal of voided/cancelled orders
+    const voidsAgg = await prisma.posOrder.aggregate({
       where: {
-        order: {
-          propertyId: { in: propertyIdsToQuery as string[] },
-        },
-        createdAt: { gte: startOfDay }
-      }
-    });
-
-    const discountsAgg = await prisma.posDiscount.aggregate({
-      where: {
-        order: {
-          propertyId: { in: propertyIdsToQuery as string[] },
-        },
-        createdAt: { gte: startOfDay }
+        propertyId: { in: propertyIdsToQuery as string[] },
+        businessDate: startOfDay,
+        status: { in: ['VOIDED'] }
       },
-      _sum: { amount: true }
+      _sum: { subtotal: true }
+    });
+    
+    const discountsAgg = await prisma.posOrder.aggregate({
+      where: {
+        propertyId: { in: propertyIdsToQuery as string[] },
+        businessDate: startOfDay,
+        status: { notIn: ['VOIDED'] }
+      },
+      _sum: { discount: true, subtotal: true }
     });
 
     return successResponse({
       reports: {
         tenderBreakdown: paymentsAgg,
-        totalVoids: voidsCount,
-        totalDiscounts: discountsAgg._sum.amount || 0,
+        totalVoids: voidsAgg._sum?.subtotal || 0,
+        totalDiscounts: discountsAgg._sum?.discount || 0,
+        grossTotal: discountsAgg._sum?.subtotal || 0
       }
     }, 200);
   } catch (err: any) {

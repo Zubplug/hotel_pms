@@ -12,39 +12,96 @@ async function getKpiSummary(propertyIds: string[], outletId: string | null, sta
     ...(outletId ? { outletId } : {}),
   };
 
-  // Gross Sales from valid payments
+  // 1. Gross Sales (Total of all non-voided items before discounts)
+  // 2. Discounts
+  const ordersAgg = await prisma.posOrder.aggregate({
+    where: {
+      ...baseFilter,
+      businessDate: startOfDay,
+      status: { notIn: ['VOIDED'] }
+    },
+    _sum: {
+      subtotal: true,
+      discount: true,
+      total: true,
+      guestCount: true
+    },
+  });
+
+  const grossSales = Number(ordersAgg._sum?.subtotal || 0);
+  const discounts = Number(ordersAgg._sum?.discount || 0);
+  
+  // 3. Voids
+  const voidsAgg = await prisma.posOrder.aggregate({
+    where: {
+      ...baseFilter,
+      businessDate: startOfDay,
+      status: { in: ['VOIDED'] }
+    },
+    _sum: { subtotal: true }
+  });
+  const voidedAmount = Number(voidsAgg._sum?.subtotal || 0);
+
+  // 4. Comps
+  const compsAgg = await prisma.complimentaryRecord.aggregate({
+    where: {
+      propertyId: { in: propertyIds },
+      businessDate: startOfDay,
+      sourceModule: 'POS'
+    },
+    _sum: { complAmount: true }
+  });
+  const comps = Number(compsAgg._sum?.complAmount || 0);
+
+  // 5. Net Sales
+  const netSales = Number(ordersAgg._sum?.total || 0); // Assuming total is subtotal - discount + tax. If net excludes tax, might need to subtract taxAmount. Let's use total for now.
+
+  // 6. Payments
   const paymentsAgg = await prisma.posPayment.aggregate({
     where: {
-      order: baseFilter,
-      createdAt: { gte: startOfDay },
+      order: {
+        ...baseFilter,
+        businessDate: startOfDay
+      },
       status: { notIn: ['FAILED', 'REFUNDED'] }
     },
     _sum: { amount: true }
   });
+  const paymentsCollected = Number(paymentsAgg._sum?.amount || 0);
 
-  const grossSales = Number(paymentsAgg._sum?.amount || 0);
+  // 7. Refunds
+  const refundsAgg = await prisma.posPayment.aggregate({
+    where: {
+      order: { ...baseFilter, businessDate: startOfDay },
+      status: 'REFUNDED'
+    },
+    _sum: { amount: true }
+  });
+  const refunds = Number(refundsAgg._sum?.amount || 0);
 
-  // Active Orders (Submitted or In Service)
-  const activeOrders = await prisma.posOrder.count({
+  // 8. Open Orders
+  const openOrders = await prisma.posOrder.count({
     where: { ...baseFilter, status: { in: ['SUBMITTED', 'IN_SERVICE'] } }
   });
 
-  // Covers (from valid orders today)
-  const coversAgg = await prisma.posOrder.aggregate({
-    where: {
-      ...baseFilter,
-      businessDate: startOfDay,
-      status: { not: 'VOIDED' }
-    },
-    _sum: { guestCount: true },
+  // 9. Open Sessions
+  const openSessions = await prisma.posSession.count({
+    where: { ...baseFilter, status: 'OPEN' }
   });
-  
-  const covers = coversAgg._sum?.guestCount ? Number(coversAgg._sum.guestCount) : 0;
+
+  const covers = Number(ordersAgg._sum?.guestCount || 0);
 
   return {
     grossSales,
-    netSales: grossSales,
-    activeOrders,
+    discounts,
+    voidedAmount,
+    comps,
+    netSales,
+    paymentsCollected,
+    refunds,
+    openOrders,
+    openSessions,
+    activeOrders: openOrders, // backwards compat
     covers,
     averageCheck: covers > 0 ? (grossSales / covers) : 0,
   };
@@ -57,8 +114,8 @@ async function getSalesBreakdown(propertyIds: string[], outletId: string | null,
       order: {
         propertyId: { in: propertyIds },
         ...(outletId ? { outletId } : {}),
+        businessDate: startOfDay,
       },
-      createdAt: { gte: startOfDay },
       status: { notIn: ['FAILED', 'REFUNDED'] }
     },
     _sum: { amount: true }
@@ -144,8 +201,8 @@ async function getOperationalAlerts(propertyIds: string[], outletId: string | nu
       order: {
         propertyId: { in: propertyIds },
         ...(outletId ? { outletId } : {}),
-      },
-      createdAt: { gte: startOfDay }
+        businessDate: startOfDay,
+      }
     },
     _count: { id: true }
   });
@@ -224,9 +281,14 @@ export async function GET(req: NextRequest) {
     const propertyIdsToQuery: string[] = requestedPropertyId ? [requestedPropertyId] : [...allowedPropertyIds];
     const outletId = requestedOutletId || null;
 
+    // Use property businessDate instead of server time
+    const property = await prisma.property.findUnique({
+      where: { id: propertyIdsToQuery[0] },
+      select: { businessDate: true }
+    });
+
     const now = new Date();
-    // Using simple server timezone date boundary as requested. (Ideally use property timezone config)
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfDay = property?.businessDate || new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     const [kpis, salesBreakdown, topSellingItems, alerts] = await Promise.all([
       getKpiSummary(propertyIdsToQuery, outletId, startOfDay),

@@ -23,6 +23,8 @@ type PostingLine = {
   description: string;
   sourceType: string;
   sourceId: string;
+  departmentId?: string;
+  outletId?: string;
 };
 
 function addLine(lines: PostingLine[], line: PostingLine) {
@@ -76,7 +78,7 @@ export async function postNightAuditJournal(tx: any, input: {
   const account = (key: keyof typeof resolved) => resolved[key]!;
 
   const dateEnd = new Date(input.businessDate.getTime() + 86_400_000);
-  const [folioItems, payments, refunds, posOrders, period] = await Promise.all([
+  const [folioItems, payments, refunds, posOrders, period, fnbDepartment] = await Promise.all([
     tx.folioItem.findMany({
       where: { folio: { propertyId: input.propertyId }, businessDate: input.businessDate, voidedAt: null, type: { in: ['CHARGE', 'TAX', 'DISCOUNT', 'ADJUSTMENT'] } },
       select: { id: true, type: true, amount: true, source: true, revenueCategory: true, description: true },
@@ -91,9 +93,10 @@ export async function postNightAuditJournal(tx: any, input: {
     }),
     tx.posOrder.findMany({
       where: { propertyId: input.propertyId, businessDate: input.businessDate, status: 'CLOSED', paymentStatus: 'PAID', folioId: null },
-      select: { id: true, total: true, subtotal: true, taxAmount: true, serviceCharge: true, orderNumber: true, payments: { where: { status: 'CONFIRMED' }, select: { id: true, amount: true, method: true } } },
+      select: { id: true, total: true, subtotal: true, taxAmount: true, serviceCharge: true, orderNumber: true, outletId: true, payments: { where: { status: 'CONFIRMED' }, select: { id: true, amount: true, method: true } } },
     }),
     tx.accountingPeriod.findFirst({ where: { propertyId: input.propertyId, periodStart: { lte: input.businessDate }, periodEnd: { gte: input.businessDate }, status: { in: ['OPEN', 'CLOSING'] } }, select: { id: true } }),
+    tx.department.findFirst({ where: { propertyId: input.propertyId, name: { in: ['F&B', 'Food & Beverage', 'Food and Beverage'] } }, select: { id: true } }),
   ]);
   if (!period) return { status: 'ACCOUNTING_PERIOD_LOCKED', journalEntryId: null, missingAccounts: ['OPEN_ACCOUNTING_PERIOD'], lineCount: 0 };
 
@@ -141,16 +144,18 @@ export async function postNightAuditJournal(tx: any, input: {
     const serviceCharge = Number(order.serviceCharge);
     const revenue = Math.max(0, total - tax - serviceCharge);
     const paid = order.payments.reduce((sum: number, payment: any) => sum + Number(payment.amount), 0);
+    const departmentId = fnbDepartment?.id || undefined;
+    
     if (!paid) continue;
     for (const payment of order.payments) {
       const tender = payment.method === 'CASH' ? account('cash') : payment.method === 'POS' ? account('posClearing') : ['CARD', 'CARD_OFFLINE', 'PAYMENT_GATEWAY', 'MOBILE_PAYMENT'].includes(String(payment.method)) ? account('cardReceivable') : account('guestLedger');
-      addLine(lines, { accountId: tender.id, debit: Number(payment.amount), credit: 0, description: `POS payment for ${order.orderNumber}`, sourceType: 'POS_PAYMENT', sourceId: payment.id });
+      addLine(lines, { accountId: tender.id, debit: Number(payment.amount), credit: 0, description: `POS payment for ${order.orderNumber}`, sourceType: 'POS_PAYMENT', sourceId: payment.id, outletId: order.outletId, departmentId });
     }
-    addLine(lines, { accountId: account('fnbRevenue').id, debit: 0, credit: revenue, description: `POS order ${order.orderNumber}`, sourceType: 'POS_ORDER', sourceId: order.id });
-    addLine(lines, { accountId: account('taxPayable').id, debit: 0, credit: tax, description: `POS tax ${order.orderNumber}`, sourceType: 'POS_ORDER', sourceId: order.id });
-    addLine(lines, { accountId: account('serviceCharge').id, debit: 0, credit: serviceCharge, description: `POS service charge ${order.orderNumber}`, sourceType: 'POS_ORDER', sourceId: order.id });
+    addLine(lines, { accountId: account('fnbRevenue').id, debit: 0, credit: revenue, description: `POS order ${order.orderNumber}`, sourceType: 'POS_ORDER', sourceId: order.id, outletId: order.outletId, departmentId });
+    addLine(lines, { accountId: account('taxPayable').id, debit: 0, credit: tax, description: `POS tax ${order.orderNumber}`, sourceType: 'POS_ORDER', sourceId: order.id, outletId: order.outletId, departmentId });
+    addLine(lines, { accountId: account('serviceCharge').id, debit: 0, credit: serviceCharge, description: `POS service charge ${order.orderNumber}`, sourceType: 'POS_ORDER', sourceId: order.id, outletId: order.outletId, departmentId });
     const residual = paid - revenue - tax - serviceCharge;
-    if (residual > 0.01) addLine(lines, { accountId: account('otherRevenue').id, debit: 0, credit: residual, description: `POS settlement residual ${order.orderNumber}`, sourceType: 'POS_ORDER', sourceId: order.id });
+    if (residual > 0.01) addLine(lines, { accountId: account('otherRevenue').id, debit: 0, credit: residual, description: `POS settlement residual ${order.orderNumber}`, sourceType: 'POS_ORDER', sourceId: order.id, outletId: order.outletId, departmentId });
   }
 
   const totalDebit = lines.reduce((sum, line) => sum + line.debit, 0);

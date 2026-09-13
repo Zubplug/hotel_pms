@@ -1,19 +1,24 @@
 import { Metadata } from 'next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { CalendarDays, MapPin, Users, Plus } from 'lucide-react';
+import { CalendarDays, MapPin, Users, Plus, LayoutList } from 'lucide-react';
+import { prisma } from '@hotel-pms/db';
 
 export const metadata: Metadata = {
   title: 'Halls & Events | Event Management',
 };
 
-const mockEvents = [
-  { name: 'Tech Innovators Summit', hall: 'Grand Ballroom', date: 'Oct 24, 2026', guests: 250, status: 'CONFIRMED' },
-  { name: 'Smith Wedding Reception', hall: 'Crystal Hall', date: 'Oct 28, 2026', guests: 120, status: 'TENTATIVE' },
-  { name: 'Corporate Board Retreat', hall: 'Meeting Room A', date: 'Nov 02, 2026', guests: 15, status: 'INQUIRY' },
-];
+export default async function FnbEventsPage() {
+  const events = await prisma.event.findMany({
+    orderBy: { startDate: 'asc' },
+    include: {
+      bookings: {
+        include: { hall: true }
+      }
+    },
+    take: 50,
+  });
 
-export default function FnbEventsPage() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -26,40 +31,58 @@ export default function FnbEventsPage() {
         </Button>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {mockEvents.map((event, idx) => (
-          <Card key={idx} className="hover:shadow-md transition-shadow">
-            <CardHeader className="pb-3">
-              <div className="flex justify-between items-start">
-                <CardTitle className="text-xl">{event.name}</CardTitle>
-                <div className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                  event.status === 'CONFIRMED' ? 'bg-green-100 text-green-800' :
-                  event.status === 'TENTATIVE' ? 'bg-yellow-100 text-yellow-800' :
-                  'bg-gray-100 text-gray-800'
-                }`}>
-                  {event.status}
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3 text-sm text-muted-foreground">
-                <div className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4" />
-                  <span>{event.hall}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CalendarDays className="h-4 w-4" />
-                  <span>{event.date}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Users className="h-4 w-4" />
-                  <span>{event.guests} expected guests</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {events.length === 0 ? (
+        <div className="flex flex-col items-center justify-center border-2 border-dashed rounded-xl py-12 text-slate-500">
+          <LayoutList className="h-10 w-10 mb-4 opacity-50" />
+          <p className="font-semibold">No active events found.</p>
+          <p className="text-sm opacity-80 mt-1">Click "New Booking" to create your first event.</p>
+        </div>
+      ) : (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {events.map((event) => {
+            const hallNames = event.bookings.map(b => b.hall.name).join(', ') || 'No halls assigned';
+            
+            return (
+              <Card key={event.id} className="hover:shadow-md transition-shadow flex flex-col">
+                <CardHeader className="pb-3 flex-none">
+                  <div className="flex justify-between items-start gap-2">
+                    <CardTitle className="text-lg leading-tight">{event.name}</CardTitle>
+                    <div className={`px-2 py-1 text-[10px] font-bold tracking-wider uppercase rounded-full shrink-0 ${
+                      event.status === 'CONFIRMED' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300' :
+                      event.status === 'TENTATIVE' ? 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300' :
+                      event.status === 'COMPLETED' ? 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300' :
+                      event.status === 'CANCELLED' ? 'bg-rose-100 text-rose-800 dark:bg-rose-500/20 dark:text-rose-300' :
+                      'bg-slate-100 text-slate-800 dark:bg-slate-500/20 dark:text-slate-300'
+                    }`}>
+                      {event.status}
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="flex-1 flex flex-col justify-between">
+                  <div className="space-y-3 text-sm text-muted-foreground">
+                    <div className="flex items-start gap-3">
+                      <MapPin className="h-4 w-4 mt-0.5 shrink-0 text-slate-400" />
+                      <span className="leading-snug line-clamp-2">{hallNames}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <CalendarDays className="h-4 w-4 shrink-0 text-slate-400" />
+                      <span>{event.startDate.toLocaleDateString()} {event.startDate.getTime() !== event.endDate.getTime() && `- ${event.endDate.toLocaleDateString()}`}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Users className="h-4 w-4 shrink-0 text-slate-400" />
+                      <span>{event.expectedGuests} expected guests</span>
+                    </div>
+                  </div>
+                  <div className="mt-5 pt-4 border-t flex justify-between items-center">
+                     <span className="text-xs font-semibold text-slate-500">{event.contactName}</span>
+                     <Button variant="outline" size="sm" className="h-8 text-xs">Manage</Button>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

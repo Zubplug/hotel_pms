@@ -184,6 +184,7 @@ model Property {
   outboxEvents       OutboxEvent[]
   channelConnections ChannelConnection[]
   channelSyncEvents  ChannelSyncEvent[]
+  Department         Department[]
 }
 
 model Building {
@@ -1111,9 +1112,9 @@ model Payment {
   exchangeRate Decimal? @db.Decimal(18, 8)
 
   status         String // 'PENDING' | 'COMPLETED' | 'FAILED' | 'REFUNDED'
-  businessDate   DateTime  @db.Date
-  idempotencyKey String?   @unique
-  receiptNumber  String?   @unique
+  businessDate   DateTime @db.Date
+  idempotencyKey String?  @unique
+  receiptNumber  String?  @unique
 
   receivedBy String  @db.Uuid // Staff ID
   notes      String?
@@ -1163,8 +1164,8 @@ model Refund {
   providerRefundId String?
 
   status         String // 'PENDING' | 'COMPLETED' | 'FAILED'
-  businessDate   DateTime  @db.Date
-  idempotencyKey String?   @unique
+  businessDate   DateTime @db.Date
+  idempotencyKey String?  @unique
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -2417,6 +2418,12 @@ enum UnitOfMeasure {
   ROLL
 }
 
+enum FnbClass {
+  FOOD
+  BEVERAGE
+  OTHER
+}
+
 enum StockItemType {
   SELLABLE
   RAW_MATERIAL
@@ -2838,12 +2845,13 @@ model PosOutlet {
   createdBy String?  @db.Uuid
   updatedBy String?  @db.Uuid
 
-  devices     PosDevice[]
-  terminals   PosTerminal[]
-  staffAccess StaffPosOutletAccess[]
-  floorPlans  PosFloorPlan[]
-  CashAccount CashAccount[]
-  warehouse   Warehouse?
+  devices      PosDevice[]
+  terminals    PosTerminal[]
+  staffAccess  StaffPosOutletAccess[]
+  floorPlans   PosFloorPlan[]
+  CashAccount  CashAccount[]
+  warehouse    Warehouse?
+  journalLines JournalEntryLine[]
 }
 
 model PosFloorPlan {
@@ -2887,6 +2895,7 @@ model ProductCategory {
   isActive          Boolean           @default(true)
   sortOrder         Int               @default(0)
   productionStation ProductionStation @default(KITCHEN)
+  fnbClass          FnbClass          @default(OTHER)
 
   products PosProduct[]
 
@@ -3961,6 +3970,24 @@ model LaundryItem {
   updatedAt DateTime @updatedAt @db.Timestamptz
 }
 
+model Department {
+  id         String   @id @default(uuid()) @db.Uuid
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id])
+
+  name        String
+  code        String?
+  description String?
+  isActive    Boolean @default(true)
+
+  journalLines JournalEntryLine[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@unique([propertyId, name])
+}
+
 enum LaundryCustomerType {
   IN_HOUSE
   WALK_IN
@@ -4823,6 +4850,12 @@ model JournalEntryLine {
 
   accountId String         @db.Uuid
   account   ChartOfAccount @relation(fields: [accountId], references: [id])
+
+  departmentId String?     @db.Uuid
+  department   Department? @relation(fields: [departmentId], references: [id])
+
+  outletId String?    @db.Uuid
+  outlet   PosOutlet? @relation(fields: [outletId], references: [id])
 
   description String?
   debit       Decimal @default(0) @db.Decimal(18, 4)

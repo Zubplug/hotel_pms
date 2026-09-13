@@ -301,7 +301,7 @@ export class InventoryService {
         const currentCost = Number(existingStockItem.costPrice);
         const receivedQty = Number(item.receivedQty);
         const receivedCost = Number(item.unitCost);
-        const poItem = grn.purchaseOrder?.items.find((p: any) => p.stockItemId === stockItem.id);
+        const poItem = grn.purchaseOrder?.items.find((p: any) => p.stockItemId === existingStockItem.id);
         const conversionToBase = Number(poItem?.conversionToBase || 1);
         const receivedQtyInBase = Number(item.baseReceivedQty || receivedQty * conversionToBase);
         const receivedCostPerBase = Number(item.baseUnitCost || (conversionToBase > 0 ? receivedCost / conversionToBase : receivedCost));
@@ -335,7 +335,7 @@ export class InventoryService {
             grnId: grn.id,
             operationId: `${operationId}_${item.id}`,
             userId: actorId,
-            businessDate: new Date(),
+            businessDate: property?.businessDate || new Date(),
           }
         });
 
@@ -384,7 +384,7 @@ export class InventoryService {
       });
 
       return { success: true, grn: updatedGrn };
-    });
+    }, { maxWait: 10000, timeout: 25000 });
   }
 
   /**

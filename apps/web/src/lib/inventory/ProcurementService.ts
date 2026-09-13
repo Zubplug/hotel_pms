@@ -195,6 +195,7 @@ export class ProcurementService {
           receivedQty,
           unitOfMeasure: poItem.unitOfMeasure,
           unitCost,
+          totalCost: receivedQty * unitCost,
           baseReceivedQty: receivedQty * conversionToBase,
           baseUnitCost: conversionToBase > 0 ? unitCost / conversionToBase : unitCost,
         });
