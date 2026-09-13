@@ -40,8 +40,9 @@ export function A4ReportWrapper({
   };
 
   return (
-    <div className="min-h-screen py-10 print:bg-white print:py-0 overflow-x-auto" style={{ background: 'linear-gradient(160deg, #060b18 0%, #080e1f 60%, #0a0c22 100%)' }}>
-      
+    <div className="min-h-screen py-10 print:bg-white print:py-0 overflow-x-auto relative">
+      {/* Dark premium background (hidden during print) */}
+      <div className="fixed inset-0 pointer-events-none -z-10 print:hidden" style={{ background: 'linear-gradient(160deg, #060b18 0%, #080e1f 60%, #0a0c22 100%)' }} />
       {/* Floating Action Bar (Hidden in Print) */}
       <div className="mx-auto mb-8 flex w-[210mm] items-center justify-between print:hidden">
         <button
