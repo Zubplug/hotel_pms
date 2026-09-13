@@ -56,6 +56,7 @@ const FNB_NAV = [
       { name: 'Purchasing (POs)', href: '/fnb/purchasing', icon: ShoppingCart },
       { name: 'Receiving (GRN)', href: '/fnb/purchasing/receiving', icon: Truck },
       { name: 'Requisitions', href: '/fnb/requisitions', icon: ArrowLeftRight },
+      { name: 'Waste Log', href: '/fnb/inventory/waste', icon: ClipboardList },
     ],
   },
   {

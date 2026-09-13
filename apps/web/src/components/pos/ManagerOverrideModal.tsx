@@ -22,7 +22,25 @@ type ManagerProfile = {
 
 type Step = 'select' | 'reason' | 'pin';
 
-const AUTHORIZER_ROLES = new Set(['MANAGER', 'ADMIN', 'GENERAL_MANAGER', 'SUPER_ADMIN', 'OWNER', 'FINANCE_MANAGER']);
+const AUTHORIZER_ROLES = new Set([
+  'MANAGER',
+  'ADMIN',
+  'GENERAL_MANAGER',
+  'SUPER_ADMIN',
+  'OWNER',
+  'CEO',
+  'HOTEL_MANAGER',
+  'FNB_MANAGER',
+  'FRONT_DESK_MANAGER',
+  'FINANCE_MANAGER',
+  'GENERAL_CASHIER',
+  'NIGHT_AUDITOR',
+]);
+
+const normalizeRole = (value: unknown) => String(value || '')
+  .trim()
+  .toUpperCase()
+  .replace(/[^A-Z0-9]+/g, '_');
 
 export function ManagerOverrideModal({ isOpen, actionName, onAuthorized, onCancel }: ManagerOverrideModalProps) {
   const { provider, isDesktopMode } = useLodgeCoreProvider();
@@ -42,15 +60,16 @@ export function ManagerOverrideModal({ isOpen, actionName, onAuthorized, onCance
     try {
       let res: any;
       if (isDesktopMode) {
-        res = await provider.auth.getActiveStaff('MANAGER,ADMIN,GENERAL_MANAGER,SUPER_ADMIN,OWNER,FINANCE_MANAGER');
+        res = await provider.auth.getActiveStaff(
+          'MANAGER,ADMIN,GENERAL_MANAGER,SUPER_ADMIN,OWNER,CEO,HOTEL_MANAGER,FNB_MANAGER,FRONT_DESK_MANAGER,FINANCE_MANAGER,GENERAL_CASHIER,NIGHT_AUDITOR'
+        );
       } else if (propertyId) {
         res = await provider.pos.getActiveStaff(propertyId);
       }
       if (res?.data) {
         const fetched = res.data.filter((member: ManagerProfile) => {
-          const role = String(member.role || '').toUpperCase().replace(/[^A-Z]/g, '');
-          const position = String(member.position || '').toUpperCase().replace(/[^A-Z]/g, '');
-          return AUTHORIZER_ROLES.has(role) || AUTHORIZER_ROLES.has(position);
+          return AUTHORIZER_ROLES.has(normalizeRole(member.role))
+            || AUTHORIZER_ROLES.has(normalizeRole(member.position));
         });
         setManagers(fetched);
       } else {

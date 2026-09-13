@@ -40,9 +40,9 @@ export default async function PurchasingDashboard() {
           <Link href="/fnb/purchasing/receiving" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 transition hover:bg-emerald-500/20">
             Receiving (GRN) Desk
           </Link>
-          <button className="rounded-xl bg-indigo-500 px-4 py-2 text-sm font-bold text-slate-900 transition hover:bg-indigo-600">
+          <Link href="/fnb/purchasing/new" className="rounded-xl bg-indigo-500 px-4 py-2 text-sm font-bold text-slate-900 transition hover:bg-indigo-600">
             + New PO
-          </button>
+          </Link>
         </div>
       </header>
 

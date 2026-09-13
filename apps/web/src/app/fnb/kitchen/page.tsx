@@ -5,7 +5,7 @@ import { useProperty } from '@/components/PropertyProvider';
 import { Loader2, Clock, ChefHat, Play, Check, RotateCcw, AlertCircle, X, Maximize2 } from 'lucide-react';
 import { formatDistanceToNowStrict, differenceInMinutes } from 'date-fns';
 
-type PosProductionBatchStatus = 'PENDING' | 'PREPARING' | 'READY' | 'COMPLETED' | 'RECALLED';
+type PosProductionBatchStatus = 'PENDING' | 'PREPARING' | 'READY' | 'COMPLETED' | 'ACKNOWLEDGED';
 
 interface BatchItem {
   id: string;
@@ -60,14 +60,12 @@ function BatchCard({ batch, onTransition }: { batch: Batch, onTransition: (id: s
     if (isCritical) borderColor = 'border-rose-400';
     else if (isWarning) borderColor = 'border-amber-400';
   }
-  if (batch.status === 'RECALLED') borderColor = 'border-rose-400/80';
   if (batch.status === 'READY') borderColor = 'border-emerald-500/50';
 
   return (
     <div className={`flex flex-col overflow-hidden rounded-2xl border ${borderColor} bg-white shadow-xl transition-all`}>
       {/* Header */}
       <div className={`flex items-center justify-between border-b border-slate-200 p-3 ${
-        batch.status === 'RECALLED' ? 'bg-rose-50' : 
         batch.status === 'READY' ? 'bg-emerald-50' :
         isCritical ? 'bg-rose-50' : 
         isWarning ? 'bg-amber-50' : 'bg-slate-50'
@@ -115,28 +113,13 @@ function BatchCard({ batch, onTransition }: { batch: Batch, onTransition: (id: s
           </button>
         )}
         {batch.status === 'PREPARING' && (
-          <>
-            <button onClick={() => onTransition(batch.id, 'READY')} className="flex h-10 items-center justify-center gap-2 rounded-xl bg-emerald-100 text-sm font-bold text-emerald-700 transition-colors hover:bg-emerald-200">
-              <Check className="h-4 w-4" /> Ready
-            </button>
-            <button onClick={() => onTransition(batch.id, 'RECALLED')} className="flex h-10 items-center justify-center gap-2 rounded-xl bg-rose-100 text-sm font-bold text-rose-700 transition-colors hover:bg-rose-200">
-              <AlertCircle className="h-4 w-4" /> Recall
-            </button>
-          </>
+          <button onClick={() => onTransition(batch.id, 'READY')} className="col-span-2 flex h-10 items-center justify-center gap-2 rounded-xl bg-emerald-100 text-sm font-bold text-emerald-700 transition-colors hover:bg-emerald-200">
+            <Check className="h-4 w-4" /> Ready
+          </button>
         )}
         {batch.status === 'READY' && (
-          <>
-            <button onClick={() => onTransition(batch.id, 'COMPLETED')} className="flex h-10 items-center justify-center gap-2 rounded-xl bg-slate-200 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-300">
-              <X className="h-4 w-4" /> Bump
-            </button>
-            <button onClick={() => onTransition(batch.id, 'RECALLED')} className="flex h-10 items-center justify-center gap-2 rounded-xl bg-rose-100 text-sm font-bold text-rose-700 transition-colors hover:bg-rose-200">
-              <AlertCircle className="h-4 w-4" /> Recall
-            </button>
-          </>
-        )}
-        {batch.status === 'RECALLED' && (
-          <button onClick={() => onTransition(batch.id, 'PENDING')} className="col-span-2 flex h-10 items-center justify-center gap-2 rounded-xl bg-amber-100 text-sm font-bold text-amber-700 transition-colors hover:bg-amber-200">
-            <RotateCcw className="h-4 w-4" /> Return to Pending
+          <button onClick={() => onTransition(batch.id, 'COMPLETED')} className="col-span-2 flex h-10 items-center justify-center gap-2 rounded-xl bg-slate-200 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-300">
+            <X className="h-4 w-4" /> Bump
           </button>
         )}
       </div>
@@ -202,7 +185,7 @@ export default function KitchenDisplaySystem() {
     }
   };
 
-  const pending = batches.filter(b => b.status === 'PENDING' || b.status === 'RECALLED');
+  const pending = batches.filter(b => b.status === 'PENDING');
   const preparing = batches.filter(b => b.status === 'PREPARING');
   const ready = batches.filter(b => b.status === 'READY');
 

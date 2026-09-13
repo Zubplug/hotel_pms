@@ -21,7 +21,12 @@ export async function GET(req: NextRequest) {
 
     let staff;
 
-      const allowedPositions = ['WAITER', 'WAITRESS', 'CASHIER', 'FNB_MANAGER', 'HOTEL_MANAGER', 'ADMIN', 'SUPER_ADMIN'];
+      const allowedPositions = [
+        'WAITER', 'WAITRESS', 'CASHIER',
+        'MANAGER', 'GENERAL_MANAGER', 'FNB_MANAGER', 'HOTEL_MANAGER',
+        'FRONT_DESK_MANAGER', 'FINANCE_MANAGER', 'GENERAL_CASHIER',
+        'NIGHT_AUDITOR', 'CEO', 'OWNER', 'ADMIN', 'SUPER_ADMIN',
+      ];
       if (outletId) {
       // Outlet-scoped: only return staff explicitly assigned to this outlet.
       // Prisma to-one includes don't support `where`, so we filter in JS.

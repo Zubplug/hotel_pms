@@ -286,6 +286,7 @@ export class InventoryService {
       if (grn.status !== GRN_STATUS.APPROVED) throw new Error('GRN must be APPROVED to post to stock');
 
       const property = await tx.property.findUnique({ where: { id: grn.propertyId } });
+      if (!property?.businessDate) throw new Error('Property business date is not initialized. Cannot post receipt.');
       const currency = property?.baseCurrency || 'NGN';
       const stockItems = await tx.stockItem.findMany({ where: { id: { in: grn.items.map((item: any) => item.stockItemId) } } });
 
@@ -335,7 +336,7 @@ export class InventoryService {
             grnId: grn.id,
             operationId: `${operationId}_${item.id}`,
             userId: actorId,
-            businessDate: property?.businessDate || new Date(),
+            businessDate: property.businessDate,
           }
         });
 
@@ -484,7 +485,7 @@ export class InventoryService {
             transferId: transfer.id,
             operationId: `${operationId}_${item.id}_out`,
             userId: actorId,
-            businessDate: new Date(),
+            businessDate: property.businessDate,
           }
         });
 
@@ -509,7 +510,7 @@ export class InventoryService {
             transferId: transfer.id,
             operationId: `${operationId}_${item.id}_in`,
             userId: actorId,
-            businessDate: new Date(),
+            businessDate: property.businessDate,
           }
         });
       }
@@ -582,6 +583,7 @@ export class InventoryService {
 
       // 3. Create Audit Ledger (zero quantity, but captures value shift)
       const property = await tx.property.findUnique({ where: { id: adjustment.propertyId } });
+      if (!property?.businessDate) throw new Error('Property business date is not initialized. Cannot post adjustment.');
       const currency = property?.baseCurrency || 'NGN';
 
       await tx.stockTransaction.create({
@@ -598,7 +600,7 @@ export class InventoryService {
           warehouseId: stockItem.warehouseId,
           operationId,
           userId: actorId,
-          businessDate: new Date(),
+          businessDate: property.businessDate,
           notes: `Cost Revaluation: ${adjustment.reason}`
         }
       });
@@ -606,4 +608,80 @@ export class InventoryService {
       return { success: true };
     });
   }
+
+  /**
+   * Post an APPROVED Kitchen Waste Entry to stock.
+   * Atomically deducts quantityOnHand and creates a StockTransaction ledger entry.
+   * Ensures idempotency to prevent duplicate stock deductions.
+   */
+  static async postWaste(wasteId: string, actorId: string, operationId: string) {
+    // Ensure we don't duplicate post by checking StockTransaction
+    const existingTx = await prisma.stockTransaction.findFirst({
+      where: { operationId, source: 'WASTE' }
+    });
+    if (existingTx) {
+      return { success: true, message: 'Already processed', wasteId };
+    }
+
+    return await prisma.$transaction(async (tx: any) => {
+      const entry = await tx.kitchenWasteEntry.findUnique({
+        where: { id: wasteId },
+        include: { stockItem: true }
+      });
+      if (!entry) throw new Error('Waste entry not found');
+      
+      // Concurrency check: If already approved/posted, skip stock deduction
+      if (entry.status !== 'SUBMITTED') {
+        throw new Error('Waste entry is not in SUBMITTED state. Cannot post.');
+      }
+
+      const property = await tx.property.findUnique({ where: { id: entry.propertyId } });
+      if (!property?.businessDate) throw new Error('Property business date is not initialized. Cannot post waste.');
+      const currency = property?.baseCurrency || 'NGN';
+
+      const baseQuantity = Number(entry.baseQuantity);
+      if (baseQuantity <= 0) throw new Error('Waste quantity must be greater than zero');
+
+      // 1. Deduct Stock
+      const stockItem = await tx.stockItem.findUnique({ where: { id: entry.stockItemId } });
+      if (!stockItem) throw new Error('Stock item not found');
+
+      const updatedStock = await tx.stockItem.update({
+        where: { id: stockItem.id },
+        data: { quantityOnHand: { decrement: baseQuantity } }
+      });
+
+      // 2. Audit Ledger
+      await tx.stockTransaction.create({
+        data: {
+          propertyId: entry.propertyId,
+          stockItemId: stockItem.id,
+          source: 'WASTE',
+          quantity: baseQuantity * -1, // Negative because it's a deduction
+          unitCost: stockItem.costPrice,
+          quantityBefore: stockItem.quantityOnHand,
+          quantityAfter: updatedStock.quantityOnHand,
+          totalValue: baseQuantity * Number(stockItem.costPrice) * -1,
+          currency,
+          warehouseId: stockItem.warehouseId,
+          operationId,
+          userId: actorId,
+          businessDate: property.businessDate,
+          notes: `Waste: ${entry.reason}`
+        }
+      });
+
+      // 3. Mark Entry as APPROVED/POSTED
+      const updatedEntry = await tx.kitchenWasteEntry.update({
+        where: { id: wasteId },
+        data: {
+          status: 'APPROVED',
+          approvedBy: actorId,
+        }
+      });
+
+      return { success: true, entry: updatedEntry };
+    });
+  }
 }
+
