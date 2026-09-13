@@ -334,7 +334,7 @@ export default function NightAuditRoomsControlPage() {
                     </div>
                     <div>
                       {exc.actionUrl && (
-                        <Link href={exc.actionUrl}>
+                        <Link href={exc.actionUrl} target="_blank" rel="noopener noreferrer">
                           <Button variant="outline" className="bg-white hover:bg-slate-50">
                             {exc.actionLabel} <ChevronRight className="w-4 h-4 ml-1" />
                           </Button>
