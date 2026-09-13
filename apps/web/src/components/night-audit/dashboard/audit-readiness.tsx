@@ -1,7 +1,6 @@
 import React from 'react';
 import { NightAuditData } from '@/types/night-audit';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Building2, SlidersHorizontal, FileCheck2, Banknote, CheckCircle2, AlertTriangle, XCircle } from 'lucide-react';
+import { Building2, SlidersHorizontal, FileCheck2, Banknote, CheckCircle2, AlertTriangle, XCircle, ShieldCheck } from 'lucide-react';
 
 export function AuditReadiness({ data }: { data: NightAuditData }) {
   const { blockers } = data.summary;
@@ -20,7 +19,7 @@ export function AuditReadiness({ data }: { data: NightAuditData }) {
       icon: Building2,
       count: operationalCount,
       hasBlocker: false,
-      tone: 'amber',
+      color: '#f59e0b',
     },
     {
       title: 'System & Sync',
@@ -28,96 +27,110 @@ export function AuditReadiness({ data }: { data: NightAuditData }) {
       icon: SlidersHorizontal,
       count: systemCount,
       hasBlocker: systemCount > 0,
-      tone: 'rose',
+      color: systemCount > 0 ? '#f43f5e' : '#10b981',
     },
     {
       title: 'Financial Review',
-      description: 'Check-in bypasses, complimentary records and variances.',
+      description: 'Check-in bypasses, complimentary and variances.',
       icon: FileCheck2,
       count: financialCount,
       hasBlocker: (data.financial.pendingCheckInBypasses?.length || 0) > 0 || (data.financial.unverifiedComplimentary?.length || 0) > 0,
-      tone: 'amber',
+      color: '#f59e0b',
     },
     {
       title: 'Cash Reconciliation',
-      description: 'Unverified transactions, bank deposits and handovers.',
+      description: 'Unverified transactions, deposits and handovers.',
       icon: Banknote,
       count: cashCount,
       hasBlocker: (data.cash.cashHandovers?.length || 0) > 0 || (data.cash.unverifiedTransactions?.length || 0) > 0,
-      tone: 'rose',
+      color: cashCount > 0 ? '#f43f5e' : '#10b981',
     },
   ];
 
-  const badgeClass = isReady
-    ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+  const readinessBadge = isReady
+    ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-300'
     : data.auditState === 'COMPLETED'
-      ? 'bg-slate-100 text-slate-700 border border-slate-200'
-      : 'bg-rose-100 text-rose-700 border border-rose-200';
+      ? 'border-slate-600/40 bg-slate-600/15 text-slate-400'
+      : 'border-rose-400/30 bg-rose-400/10 text-rose-300';
+
+  const readinessLabel = isReady
+    ? 'Ready to run'
+    : data.auditState === 'COMPLETED'
+      ? 'Closed'
+      : `${blockers} blockers`;
 
   return (
-    <Card className="h-full border border-slate-200/70 bg-white/80 shadow-[0_12px_30px_rgba(15,23,42,0.04)] backdrop-blur-sm">
-      <CardHeader className="flex flex-row items-center justify-between pb-4">
-        <div>
-          <CardTitle className="text-xl font-semibold text-slate-900">Audit Readiness</CardTitle>
-          <p className="mt-1 text-sm text-slate-500">System health checks and pre-requisites.</p>
+    <div className="flex h-full flex-col rounded-[24px] border border-slate-200/[0.06] bg-white/[0.03] p-6 backdrop-blur-md sm:p-7">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-8 w-8 items-center justify-center rounded-xl border border-indigo-400/25 bg-indigo-400/10 text-indigo-400">
+            <ShieldCheck className="h-4 w-4" />
+          </span>
+          <div>
+            <h3 className="text-base font-bold text-white">Audit Readiness</h3>
+            <p className="text-[11px] text-slate-500">System health and pre-requisites</p>
+          </div>
         </div>
-        <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${badgeClass}`}>
-          {isReady ? 'Ready to run' : data.auditState === 'COMPLETED' ? 'Closed' : `${blockers} blockers`}
+        <span className={`shrink-0 rounded-full border px-3 py-1 text-[11px] font-bold ${readinessBadge}`}>
+          {readinessLabel}
         </span>
-      </CardHeader>
+      </div>
 
-      <CardContent className="space-y-3">
+      {/* Section rows */}
+      <div className="mt-5 flex-1 space-y-2.5">
         {sections.map((section) => {
           const Icon = section.icon;
           const isClear = section.count === 0;
+          const barColor = isClear ? '#10b981' : section.hasBlocker ? '#f43f5e' : '#f59e0b';
+          const barWidth = isClear ? '100%' : section.hasBlocker ? '70%' : '45%';
+
+          const iconStyle = isClear
+            ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-400'
+            : section.hasBlocker
+              ? 'border-rose-400/20 bg-rose-400/10 text-rose-400'
+              : 'border-amber-400/20 bg-amber-400/10 text-amber-400';
 
           return (
             <div
               key={section.title}
-              className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3 transition hover:border-slate-300 hover:bg-white"
+              className="group rounded-2xl border border-white/[0.05] bg-white/[0.02] p-4 transition-all duration-150 hover:border-white/[0.08] hover:bg-white/[0.04]"
             >
               <div className="flex items-start gap-3">
-                <div
-                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
-                    isClear
-                      ? 'bg-slate-200 text-slate-600'
-                      : section.hasBlocker
-                        ? 'bg-rose-100 text-rose-700'
-                        : 'bg-amber-100 text-amber-700'
-                  }`}
-                >
-                  <Icon className="h-5 w-5" />
+                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${iconStyle}`}>
+                  <Icon className="h-4.5 w-4.5 h-[18px] w-[18px]" />
                 </div>
 
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="font-semibold text-slate-900">{section.title}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-white">{section.title}</p>
                     <div className="shrink-0">
                       {isClear ? (
-                        <span className="inline-flex items-center gap-1 text-sm font-medium text-emerald-700">
-                          <CheckCircle2 className="h-4 w-4" />
+                        <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-400">
+                          <CheckCircle2 className="h-3.5 w-3.5" />
                           Clear
                         </span>
                       ) : section.hasBlocker ? (
-                        <span className="inline-flex items-center gap-1 text-sm font-medium text-rose-700">
-                          <XCircle className="h-4 w-4" />
+                        <span className="inline-flex items-center gap-1 text-xs font-bold text-rose-400">
+                          <XCircle className="h-3.5 w-3.5" />
                           {section.count} issue{section.count > 1 ? 's' : ''}
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 text-sm font-medium text-amber-700">
-                          <AlertTriangle className="h-4 w-4" />
+                        <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-400">
+                          <AlertTriangle className="h-3.5 w-3.5" />
                           {section.count} review{section.count > 1 ? 's' : ''}
                         </span>
                       )}
                     </div>
                   </div>
 
-                  <p className="mt-1 text-sm text-slate-500">{section.description}</p>
-                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-200">
+                  <p className="mt-0.5 text-[11px] text-slate-500">{section.description}</p>
+
+                  {/* Progress bar */}
+                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
                     <div
-                      className={`h-full rounded-full ${
-                        isClear ? 'w-full bg-emerald-500' : section.hasBlocker ? 'w-3/4 bg-rose-500' : 'w-1/2 bg-amber-500'
-                      }`}
+                      className="h-full rounded-full transition-all duration-700"
+                      style={{ width: barWidth, background: barColor }}
                     />
                   </div>
                 </div>
@@ -125,7 +138,7 @@ export function AuditReadiness({ data }: { data: NightAuditData }) {
             </div>
           );
         })}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

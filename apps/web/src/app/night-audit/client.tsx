@@ -3,8 +3,10 @@
 import React, { useEffect, useState } from 'react';
 import { useProperty } from '@/components/PropertyProvider';
 import { NightAuditData } from '@/types/night-audit';
-import { Loader2, MoonStar, XCircle, AlertTriangle, CheckCircle2, CalendarDays, Radio } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import {
+  Loader2, MoonStar, XCircle, AlertTriangle, CheckCircle2,
+  RefreshCcw
+} from 'lucide-react';
 
 import { StatusBanner } from '@/components/night-audit/dashboard/status-banner';
 import { MetricCards } from '@/components/night-audit/dashboard/metric-cards';
@@ -23,14 +25,13 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
   const [data, setData] = useState<NightAuditData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  
+
   const [wizardOpen, setWizardOpen] = useState(false);
   const [executing, setExecuting] = useState(false);
-  
+
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  
-  // Resolution action for items clicked directly from the Attention Queue (not in wizard)
+
   const [resolutionAction, setResolutionAction] = useState<ResolutionAction>(null);
 
   const load = async (quiet = false) => {
@@ -40,44 +41,38 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
       const response = await fetch(`/api/v1/night-audit/status?propertyId=${propertyId}`);
       const result = await response.json();
       if (!response.ok) throw new Error(result.error?.message || 'Unable to load audit status');
-      
       setData(result.data);
-      
-      // Auto-open wizard if overdue
       if (result.data.auditState === 'OVERDUE' && !quiet && !managerMode) {
         setWizardOpen(true);
       }
-    } catch (err: any) { 
-      setError(err.message); 
-    } finally { 
-      setLoading(false); 
-      setRefreshing(false); 
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  useEffect(() => { 
-    load(); 
-  }, [propertyId]);
+  useEffect(() => { load(); }, [propertyId]);
 
   const execute = async () => {
-    setExecuting(true); 
+    setExecuting(true);
     setError(null);
     try {
-      const response = await fetch('/api/v1/night-audit/execute', { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ propertyId }) 
+      const response = await fetch('/api/v1/night-audit/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ propertyId }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error?.message || 'Audit execution failed');
-      
-      setWizardOpen(false); 
-      setMessage(`Audit completed. ${result.data?.roomChargesPosted || 0} room charges posted.`); 
+      setWizardOpen(false);
+      setMessage(`Audit completed. ${result.data?.roomChargesPosted || 0} room charges posted.`);
       await load(true);
-    } catch (err: any) { 
-      setError(err.message); 
-    } finally { 
-      setExecuting(false); 
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setExecuting(false);
     }
   };
 
@@ -90,132 +85,164 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
     load(true);
   };
 
-  // Loading States
+  // ── Loading / empty states ──────────────────────────────────────────────────
+  const Shell = ({ children }: { children: React.ReactNode }) => (
+    <div className="flex min-h-screen items-center justify-center" style={{ background: '#060c18' }}>
+      {children}
+    </div>
+  );
+
   if (propertyLoading) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
-      </div>
+      <Shell>
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
+          <p className="text-sm font-medium text-slate-400">Loading workspace…</p>
+        </div>
+      </Shell>
     );
   }
-  
+
   if (!propertyId) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center text-center">
-        <div>
-          <MoonStar className="mx-auto h-10 w-10 text-indigo-500" />
-          <h2 className="mt-4 text-xl font-semibold">Select a property</h2>
-          <p className="mt-1 text-muted-foreground">Choose a property to open the audit workspace.</p>
+      <Shell>
+        <div className="text-center">
+          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl border border-indigo-400/20 bg-indigo-400/10 text-indigo-400">
+            <MoonStar className="h-8 w-8" />
+          </div>
+          <h2 className="text-xl font-bold text-white">Select a Property</h2>
+          <p className="mt-2 text-sm text-slate-500">Choose a property to open the audit workspace.</p>
         </div>
-      </div>
+      </Shell>
     );
   }
-  
+
   if (loading || !data) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
-      </div>
+      <Shell>
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
+          <p className="text-sm font-medium text-slate-400">Loading audit status…</p>
+        </div>
+      </Shell>
     );
   }
 
-  const isAuditInProgress = (data.auditState === 'IN_PROGRESS' || data.auditState === 'POSTING');
+  const isAuditInProgress = data.auditState === 'IN_PROGRESS' || data.auditState === 'POSTING';
 
   return (
-    <div className="min-h-full bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.07),transparent_28rem)] px-5 pb-12 pt-6 sm:px-8 sm:pt-8">
-      <div className="mx-auto max-w-[1540px] space-y-8">
-      <header className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
-        <div>
-          <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-indigo-600"><span className="h-1.5 w-1.5 rounded-full bg-indigo-500" /> Night audit / Control center</div>
-          <h1 className="text-3xl font-semibold tracking-[-0.035em] text-slate-950 sm:text-4xl">Good evening, keep the close moving.</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">A clear view of financial controls, room movement, and the next actions required to close today confidently.</p>
-        </div>
-        <div className="flex items-center gap-2 self-start rounded-2xl border border-slate-200/80 bg-white/80 px-3 py-2.5 shadow-sm backdrop-blur-sm lg:self-auto">
-          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600"><CalendarDays className="h-4 w-4" /></span>
-          <div><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">Business date</p><p className="text-sm font-semibold text-slate-800">{new Date(data.businessDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p></div>
-          <span className="ml-2 flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700"><Radio className="h-3 w-3" /> Synced</span>
-        </div>
-      </header>
+    <div
+      className="min-h-full px-4 pb-16 pt-6 sm:px-6 sm:pt-8 md:px-8"
+      style={{ background: 'linear-gradient(160deg, #060c18 0%, #080e1f 60%, #0a0c22 100%)' }}
+    >
+      <div className="mx-auto max-w-[1600px] space-y-6">
 
-      {/* Global Alerts */}
-      <div className="space-y-4">
-        {data.auditState === 'FAILED' && (
-          <div className="flex items-center justify-between rounded-xl bg-rose-50 p-4 border border-rose-200 shadow-sm transition-all hover:shadow-md">
-            <div className="flex items-center gap-3 text-rose-700">
-              <AlertTriangle className="h-5 w-5 shrink-0" />
-              <span className="font-medium text-sm">Last audit failed &mdash; review audit logs and retry.</span>
-            </div>
-            <Button variant="outline" size="sm" onClick={() => load(true)} className="bg-white hover:bg-rose-50 text-rose-700 border-rose-200">
-              Retry
-            </Button>
+        {/* Page header breadcrumb */}
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em]">
+            <span className="text-slate-600">General Manager</span>
+            <span className="text-slate-700">/</span>
+            <span className="text-indigo-400">Night Audit</span>
+          </div>
+          <button
+            onClick={() => load(true)}
+            disabled={refreshing}
+            className="flex items-center gap-1.5 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-1.5 text-xs font-semibold text-slate-400 transition-all hover:bg-white/[0.06] hover:text-slate-200 disabled:opacity-50"
+          >
+            <RefreshCcw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+        </div>
+
+        {/* Global Alerts */}
+        {(data.auditState === 'FAILED' || error || message) && (
+          <div className="space-y-3">
+            {data.auditState === 'FAILED' && (
+              <div className="flex items-center justify-between rounded-2xl border border-rose-400/20 bg-rose-400/[0.07] px-5 py-4">
+                <div className="flex items-center gap-3 text-rose-300">
+                  <AlertTriangle className="h-5 w-5 shrink-0" />
+                  <span className="text-sm font-semibold">Last audit failed — review audit logs and retry.</span>
+                </div>
+                <button
+                  onClick={() => load(true)}
+                  className="rounded-xl border border-rose-400/25 bg-rose-400/10 px-4 py-1.5 text-xs font-bold text-rose-300 transition-all hover:bg-rose-400/20"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+            {error && (
+              <div className="flex items-center gap-3 rounded-2xl border border-rose-400/20 bg-rose-400/[0.07] px-5 py-4 text-sm font-semibold text-rose-300">
+                <XCircle className="h-5 w-5 shrink-0" />
+                {error}
+              </div>
+            )}
+            {message && (
+              <div className="flex items-center gap-3 rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.07] px-5 py-4 text-sm font-semibold text-emerald-300">
+                <CheckCircle2 className="h-5 w-5 shrink-0" />
+                {message}
+              </div>
+            )}
           </div>
         )}
-        {error && (
-          <div className="flex items-center gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-medium text-rose-700 shadow-sm">
-            <XCircle className="h-5 w-5 shrink-0" />
-            {error}
-          </div>
-        )}
-        {message && (
-          <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-700 shadow-sm">
-            <CheckCircle2 className="h-5 w-5 shrink-0" />
-            {message}
-          </div>
-        )}
-      </div>
 
-      {/* Hero / Status Banner */}
-      <StatusBanner 
-        data={data} 
-        isAuditInProgress={isAuditInProgress}
-        onOpenWizard={() => setWizardOpen(true)}
-        refreshing={refreshing}
-        managerMode={managerMode}
-      />
+        {/* Hero Status Banner */}
+        <StatusBanner
+          data={data}
+          isAuditInProgress={isAuditInProgress}
+          onOpenWizard={() => setWizardOpen(true)}
+          refreshing={refreshing}
+          managerMode={managerMode}
+        />
 
-      <AuditPulse data={data} />
+        {/* Operational Pulse */}
+        <AuditPulse data={data} />
 
-      <CloseControl data={data} />
+        {/* Financial Close Control */}
+        <CloseControl data={data} />
 
-      {/* Primary Metrics */}
-      <MetricCards data={data} />
+        {/* Primary Metrics + Chart */}
+        <MetricCards data={data} />
 
-      {/* Charts Layout */}
-      <div className="grid gap-6 lg:grid-cols-[1fr_2fr]">
-        <OccupancyChart rooms={data.analytics.rooms} />
-        <RevenueTrendChart trend={data.analytics.trend} baseCurrency={data.property.baseCurrency} />
-      </div>
-
-      {/* Readiness & Attention Queue Layout */}
-      {data.auditState !== 'COMPLETED' && (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <AuditReadiness data={data} />
-          <AttentionQueue data={data} onResolveItem={managerMode ? undefined : handleQueueResolve} />
+        {/* Charts: Occupancy + Revenue Trend */}
+        <div className="grid gap-5 lg:grid-cols-[1fr_2fr]">
+          <OccupancyChart rooms={data.analytics.rooms} />
+          <RevenueTrendChart trend={data.analytics.trend} baseCurrency={data.property.baseCurrency} />
         </div>
-      )}
 
-      {/* Activity Feed */}
-      <div className="mt-8">
+        {/* Readiness + Attention Queue */}
+        {data.auditState !== 'COMPLETED' && (
+          <div className="grid gap-5 lg:grid-cols-2">
+            <AuditReadiness data={data} />
+            <AttentionQueue data={data} onResolveItem={managerMode ? undefined : handleQueueResolve} />
+          </div>
+        )}
+
+        {/* Activity Feed */}
         <ActivityFeed data={data} />
+
       </div>
 
       {/* Audit Wizard Modal */}
-      {!managerMode && <AuditWizard
-        open={wizardOpen} 
-        onOpenChange={setWizardOpen} 
-        data={data}
-        onExecute={execute}
-        executing={executing}
-        onRefresh={() => load(true)}
-      />}
+      {!managerMode && (
+        <AuditWizard
+          open={wizardOpen}
+          onOpenChange={setWizardOpen}
+          data={data}
+          onExecute={execute}
+          executing={executing}
+          onRefresh={() => load(true)}
+        />
+      )}
 
-      {/* Global Resolution Manager for direct queue clicks */}
-      {!managerMode && <ResolutionManager
-        action={resolutionAction} 
-        onClose={() => setResolutionAction(null)} 
-        onSuccess={handleResolutionSuccess} 
-      />}
-      </div>
+      {/* Global Resolution Manager */}
+      {!managerMode && (
+        <ResolutionManager
+          action={resolutionAction}
+          onClose={() => setResolutionAction(null)}
+          onSuccess={handleResolutionSuccess}
+        />
+      )}
     </div>
   );
 }

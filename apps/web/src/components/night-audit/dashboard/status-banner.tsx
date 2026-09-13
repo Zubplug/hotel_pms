@@ -1,8 +1,12 @@
+'use client';
 import React from 'react';
 import { format } from 'date-fns';
 import { NightAuditData } from '@/types/night-audit';
 import { Button } from '@/components/ui/button';
-import { CheckCircle2, Clock3, Loader2, MoonStar, Play, AlertTriangle, FileCheck2, Sparkles } from 'lucide-react';
+import {
+  CheckCircle2, Clock3, Loader2, MoonStar, Play,
+  AlertTriangle, FileCheck2, Sparkles, CalendarDays, Radio, ChevronRight
+} from 'lucide-react';
 
 interface StatusBannerProps {
   data: NightAuditData;
@@ -18,109 +22,159 @@ export function StatusBanner({ data, isAuditInProgress, onOpenWizard, refreshing
   const auditRecord = data.activeAudit || data.currentAudit;
   const lastCompleted = data.lastCompletedAudit || (data.currentAudit?.status === 'COMPLETED' ? data.currentAudit : null);
   const owner = auditRecord?.runByStaff;
-  const ownerName = owner ? `${owner.firstName || ''} ${owner.lastName || ''}`.trim() : auditRecord?.runBy ? 'Assigned auditor' : 'Automated / unassigned';
+  const ownerName = owner
+    ? `${owner.firstName || ''} ${owner.lastName || ''}`.trim()
+    : auditRecord?.runBy
+      ? 'Assigned auditor'
+      : 'Automated / unassigned';
 
-  let statusColor = 'bg-amber-500/15 text-amber-200 border-amber-400/30';
-  let statusIcon = <Clock3 className="h-5 w-5" />;
-  let statusText = 'Audit Pending';
-  let statusDescription = 'Awaiting daily close';
+  type StateConfig = {
+    badge: string;
+    dot: string;
+    icon: React.ReactNode;
+    text: string;
+    sub: string;
+    pulse: boolean;
+  };
+
+  let cfg: StateConfig = {
+    badge: 'border-amber-400/40 bg-amber-400/10 text-amber-200',
+    dot: 'bg-amber-400',
+    icon: <Clock3 className="h-4 w-4" />,
+    text: 'Audit Pending',
+    sub: 'Awaiting daily close',
+    pulse: false,
+  };
 
   if (data.auditState === 'COMPLETED') {
-    statusColor = 'bg-emerald-500/15 text-emerald-200 border-emerald-400/30';
-    statusIcon = <CheckCircle2 className="h-5 w-5" />;
-    statusText = 'Audit Complete';
-    statusDescription = 'Business day closed';
+    cfg = { badge: 'border-emerald-400/40 bg-emerald-400/10 text-emerald-200', dot: 'bg-emerald-400', icon: <CheckCircle2 className="h-4 w-4" />, text: 'Audit Complete', sub: 'Business day closed', pulse: false };
   } else if (isAuditInProgress) {
-    statusColor = 'bg-sky-500/15 text-sky-200 border-sky-400/30';
-    statusIcon = <Loader2 className="h-5 w-5 animate-spin" />;
-    statusText = 'Audit In Progress';
-    statusDescription = 'Processing charges...';
+    cfg = { badge: 'border-sky-400/40 bg-sky-400/10 text-sky-200', dot: 'bg-sky-400', icon: <Loader2 className="h-4 w-4 animate-spin" />, text: 'Audit In Progress', sub: 'Processing charges…', pulse: true };
   } else if (data.auditState === 'OVERDUE') {
-    statusColor = 'bg-rose-500/15 text-rose-200 border-rose-400/30';
-    statusIcon = <AlertTriangle className="h-5 w-5" />;
-    statusText = 'Audit Overdue';
-    statusDescription = 'Please close immediately';
+    cfg = { badge: 'border-rose-400/40 bg-rose-400/10 text-rose-200', dot: 'bg-rose-400', icon: <AlertTriangle className="h-4 w-4" />, text: 'Audit Overdue', sub: 'Close immediately', pulse: true };
   } else if (isReady) {
-    statusColor = 'bg-indigo-500/15 text-indigo-200 border-indigo-400/30';
-    statusIcon = <FileCheck2 className="h-5 w-5" />;
-    statusText = 'Audit Ready';
-    statusDescription = 'All clear to run';
+    cfg = { badge: 'border-indigo-400/40 bg-indigo-400/10 text-indigo-200', dot: 'bg-indigo-400', icon: <FileCheck2 className="h-4 w-4" />, text: 'Audit Ready', sub: 'All clear to run', pulse: false };
   }
 
+  const ctaLabel = isAuditInProgress ? 'Resume Audit' : data.auditState === 'COMPLETED' ? 'View Completed' : 'Begin Audit';
+
   return (
-    <div className="relative overflow-hidden rounded-[28px] border border-slate-200/70 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 p-6 text-white shadow-[0_20px_60px_rgba(15,23,42,0.42)] md:p-8">
-      <div className="absolute -top-20 -right-20 h-64 w-64 rounded-full bg-indigo-500/25 blur-3xl" />
-      <div className="absolute -bottom-20 -left-16 h-60 w-60 rounded-full bg-sky-500/20 blur-3xl" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.28),transparent_38%)]" />
+    <div className="relative overflow-hidden rounded-[32px] border border-white/[0.07] shadow-[0_40px_80px_rgba(0,0,0,0.6)]"
+      style={{ background: 'linear-gradient(135deg, #0c1220 0%, #0f172a 40%, #13103a 100%)' }}>
 
-      <div className="relative z-10 flex flex-col gap-8">
-        <div className="flex flex-col justify-between gap-6 xl:flex-row xl:items-center">
-          <div className="max-w-xl">
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-indigo-200">
-              <MoonStar className="h-3.5 w-3.5" />
-              Night Audit Workspace
-            </div>
-            <h2 className="text-3xl font-semibold tracking-tight text-white md:text-4xl">
-              {format(businessDate, 'EEEE, dd MMMM yyyy')}
-            </h2>
-            <p className="mt-2 text-sm text-slate-300">{data.property.name || 'Property'} • {data.auditState === 'OVERDUE' ? 'Attention required' : 'Operations online'}</p>
-            <div className="mt-4 grid gap-2 text-xs text-slate-300 sm:grid-cols-3">
-              <span><span className="text-slate-500">Owner</span><br /><strong className="font-medium text-white">{ownerName}</strong></span>
-              <span><span className="text-slate-500">Started</span><br /><strong className="font-medium text-white">{auditRecord?.startedAt ? format(new Date(auditRecord.startedAt), 'dd MMM, HH:mm') : 'Not started'}</strong></span>
-              <span><span className="text-slate-500">Last completed</span><br /><strong className="font-medium text-white">{lastCompleted?.completedAt ? format(new Date(lastCompleted.completedAt), 'dd MMM, HH:mm') : 'Not available'}</strong></span>
-            </div>
+      {/* Background decorative layers */}
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute -top-32 -right-32 h-80 w-80 rounded-full bg-indigo-600/20 blur-3xl" />
+        <div className="absolute -bottom-24 -left-20 h-72 w-72 rounded-full bg-violet-700/15 blur-3xl" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-96 w-96 rounded-full bg-blue-800/10 blur-3xl" />
+        {/* Subtle grid overlay */}
+        <div className="absolute inset-0 opacity-[0.03]"
+          style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)', backgroundSize: '48px 48px' }} />
+      </div>
+
+      <div className="relative z-10 p-7 md:p-10">
+        {/* Top strip */}
+        <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl border border-indigo-400/30 bg-indigo-500/15 text-indigo-300">
+              <MoonStar className="h-4 w-4" />
+            </span>
+            <span className="text-[11px] font-bold uppercase tracking-[0.22em] text-indigo-300/80">Night Audit · Command Center</span>
           </div>
-
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className={`flex items-center gap-3 rounded-2xl border bg-slate-950/20 px-4 py-3 backdrop-blur-sm ${statusColor}`}>
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10">{statusIcon}</div>
-              <div>
-                <p className="text-sm font-semibold text-white">{statusText}</p>
-                <p className="text-[11px] text-slate-300">{statusDescription}</p>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Button
-                size="lg"
-                className="flex items-center justify-center rounded-xl bg-indigo-500 px-5 font-semibold text-white shadow-lg shadow-indigo-500/20 transition hover:bg-indigo-400"
-                onClick={onOpenWizard}
-                disabled={isAuditInProgress || refreshing}
-              >
-                <Play className="mr-2 h-4 w-4 fill-current" />
-                {isAuditInProgress ? 'Resume audit' : data.auditState === 'COMPLETED' ? 'View completed audit' : 'Start audit'}
-              </Button>
-            </div>
+          <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 backdrop-blur-md">
+            <Radio className="h-3 w-3 text-emerald-400" />
+            <span className="text-[11px] font-semibold text-emerald-300">Live</span>
+            <span className="mx-1.5 h-3 w-px bg-white/15" />
+            <CalendarDays className="h-3 w-3 text-slate-400" />
+            <span className="text-[11px] font-medium text-slate-300">
+              {format(businessDate, 'dd MMM yyyy')}
+            </span>
           </div>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-3 backdrop-blur-sm">
-            <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.16em] text-slate-300">
-              <Sparkles className="h-3.5 w-3.5 text-indigo-300" />
-              Reconciliations
+        {/* Main content row */}
+        <div className="flex flex-col gap-8 xl:flex-row xl:items-end xl:justify-between">
+          <div className="max-w-2xl">
+            <h2 className="text-[2.6rem] font-bold leading-[1.1] tracking-[-0.04em] text-white md:text-5xl">
+              {format(businessDate, 'EEEE')}
+              <span className="text-white/40">,&nbsp;</span>
+              {format(businessDate, 'dd MMMM yyyy')}
+            </h2>
+            <p className="mt-3 text-base text-slate-400">
+              {data.property.name || 'Property'}&nbsp;&middot;&nbsp;
+              {data.auditState === 'OVERDUE' ? 'Immediate attention required' : 'Operations online and tracking'}
+            </p>
+
+            {/* Meta row */}
+            <div className="mt-6 grid grid-cols-3 gap-3 text-xs text-slate-400">
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Auditor</span>
+                <span className="font-medium text-white">{ownerName}</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Started</span>
+                <span className="font-medium text-white">
+                  {auditRecord?.startedAt ? format(new Date(auditRecord.startedAt), 'dd MMM, HH:mm') : 'Not started'}
+                </span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Last Closed</span>
+                <span className="font-medium text-white">
+                  {lastCompleted?.completedAt ? format(new Date(lastCompleted.completedAt), 'dd MMM, HH:mm') : '—'}
+                </span>
+              </div>
             </div>
-            <div className="mt-3 text-2xl font-semibold text-white">{data.summary.blockers}</div>
-            <div className="text-xs text-slate-400">Open blockers</div>
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-3 backdrop-blur-sm">
-            <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.16em] text-slate-300">
-              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" />
-              Warnings
+          {/* Status + CTA */}
+          <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center xl:flex-col xl:items-end">
+            {/* Status chip */}
+            <div className={`flex items-center gap-2.5 rounded-2xl border px-4 py-3 backdrop-blur-md ${cfg.badge}`}>
+              <span className="relative flex h-2.5 w-2.5">
+                {cfg.pulse && <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-75 ${cfg.dot}`} />}
+                <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${cfg.dot}`} />
+              </span>
+              <span className="flex items-center gap-1.5">
+                {cfg.icon}
+                <span className="text-sm font-semibold text-white">{cfg.text}</span>
+              </span>
+              <span className="ml-1 text-[11px] opacity-70">{cfg.sub}</span>
             </div>
-            <div className="mt-3 text-2xl font-semibold text-white">{data.summary.warnings}</div>
-            <div className="text-xs text-slate-400">Needs review</div>
-          </div>
 
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-3 backdrop-blur-sm">
-            <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.16em] text-slate-300">
-              <Clock3 className="h-3.5 w-3.5 text-amber-300" />
-              Business date
-            </div>
-            <div className="mt-3 text-xl font-semibold text-white">{format(businessDate, 'dd MMM')}</div>
-            <div className="text-xs text-slate-400">Daily cycle</div>
+            {/* CTA Button */}
+            {!managerMode && (
+              <button
+                onClick={onOpenWizard}
+                disabled={isAuditInProgress || refreshing}
+                className="group relative flex items-center gap-2.5 overflow-hidden rounded-2xl px-6 py-3.5 text-sm font-bold text-white shadow-[0_0_32px_rgba(99,102,241,0.35)] transition-all duration-200 hover:shadow-[0_0_48px_rgba(99,102,241,0.5)] disabled:cursor-not-allowed disabled:opacity-50"
+                style={{ background: 'linear-gradient(135deg, #6366f1 0%, #7c3aed 100%)' }}
+              >
+                {/* Shine effect */}
+                <span className="absolute inset-0 translate-x-[-100%] bg-gradient-to-r from-transparent via-white/15 to-transparent transition-transform duration-500 group-hover:translate-x-[100%]" />
+                <Play className="h-4 w-4 fill-current" />
+                {ctaLabel}
+                <ChevronRight className="h-4 w-4 opacity-60 transition-transform group-hover:translate-x-0.5" />
+              </button>
+            )}
           </div>
+        </div>
+
+        {/* Bottom stats strip */}
+        <div className="mt-8 grid gap-3 sm:grid-cols-3">
+          {[
+            { icon: <Sparkles className="h-3.5 w-3.5" />, label: 'Blockers', value: data.summary.blockers, tone: data.summary.blockers > 0 ? 'text-rose-300' : 'text-emerald-300' },
+            { icon: <AlertTriangle className="h-3.5 w-3.5" />, label: 'Warnings', value: data.summary.warnings, tone: data.summary.warnings > 0 ? 'text-amber-300' : 'text-emerald-300' },
+            { icon: <CalendarDays className="h-3.5 w-3.5" />, label: 'Business Date', value: format(businessDate, 'dd MMM'), tone: 'text-indigo-300' },
+          ].map((s) => (
+            <div key={s.label} className="rounded-2xl border border-white/[0.07] bg-white/[0.04] px-4 py-3.5 backdrop-blur-md transition-colors hover:bg-white/[0.06]">
+              <div className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.18em] ${s.tone}`}>
+                {s.icon}
+                {s.label}
+              </div>
+              <div className="mt-2 text-2xl font-bold tracking-tight text-white">{s.value}</div>
+              <div className="mt-0.5 text-[11px] text-slate-500">Daily cycle</div>
+            </div>
+          ))}
         </div>
       </div>
     </div>
