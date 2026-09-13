@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import {
   Hotel, Menu, MoonStar, Clock, FileText, LogOut, ChevronDown,
   Server, ShieldCheck, BedDouble, Scale, Wallet, Banknote,
-  X, ChevronRight, Radio, Zap,
+  X, ChevronRight, Radio, Zap, Utensils
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -22,6 +22,7 @@ const NIGHT_AUDIT_NAV = [
   { name: 'Audit History',           href: '/night-audit/history',           icon: Clock,       group: 'Workspace' },
   { name: 'Revenue Reconciliation',  href: '/night-audit/reconciliation',    icon: Scale,       group: 'Controls'  },
   { name: 'Room & Guest Control',    href: '/night-audit/rooms',             icon: BedDouble,   group: 'Controls'  },
+  { name: 'F&B Activity',            href: '/night-audit/fnb',               icon: Utensils,    group: 'Controls'  },
   { name: 'AR Ledger',               href: '/night-audit/ar-ledger',         icon: Wallet,      group: 'Controls'  },
   { name: 'AP Ledger',               href: '/night-audit/ap-ledger',         icon: Banknote,    group: 'Controls'  },
   { name: 'Audit Reports',           href: '/night-audit/reports',           icon: FileText,    group: 'Insights'  },

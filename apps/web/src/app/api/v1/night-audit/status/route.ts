@@ -7,7 +7,7 @@ import { resolveUser } from '@/lib/resolve-user';
 import { assertPropertyAccess } from '@/lib/property-access';
 import prisma from '@hotel-pms/db';
 import { getPropertyBusinessDate } from '@/lib/date-utils';
-import { getOperationalReview, getSystemIntegrity, getFinancialAudit, getCashReconciliation } from '@/lib/night-audit-service';
+import { getOperationalReview, getSystemIntegrity, getFinancialAudit, getCashReconciliation, getFnbControl } from '@/lib/night-audit-service';
 import { activeOccupancyWhere, reconcileRoomOccupancy } from '@/lib/room-occupancy';
 
 export async function GET(req: NextRequest) {
@@ -82,11 +82,12 @@ export async function GET(req: NextRequest) {
     } : audit;
 
     // Run all checks in parallel for maximum performance
-    const [operational, system, financial, cash] = await Promise.all([
+    const [operational, system, financial, cash, fnb] = await Promise.all([
       getOperationalReview(await requireOrganizationContext(user.id), propertyId),
       getSystemIntegrity(await requireOrganizationContext(user.id), propertyId),
       getFinancialAudit(await requireOrganizationContext(user.id), propertyId),
-      getCashReconciliation(await requireOrganizationContext(user.id), propertyId)
+      getCashReconciliation(await requireOrganizationContext(user.id), propertyId),
+      getFnbControl(await requireOrganizationContext(user.id), propertyId)
     ]);
 
     const trendStart = new Date(businessDate);
@@ -215,6 +216,12 @@ export async function GET(req: NextRequest) {
     if (cash.unverifiedTransactions.length > 0) blockers++;
     if (cash.bankDeposits.length > 0) warnings++;
 
+    // F&B blockers/warnings
+    if (fnb.exceptions.openOrders.length > 0) blockers++;
+    if (fnb.exceptions.openSessions.length > 0) blockers++;
+    if (fnb.exceptions.unreviewedVoids.length > 0) warnings++;
+    if (fnb.exceptions.cashVarianceSessions.length > 0) warnings++;
+
     const linkedJournalCount = currentAudit?.journalEntries?.length || 0;
     const balanceProofStatus = (currentAudit?.closePackage?.balanceProof as any)?.status || 'INCOMPLETE';
     const balanceProofHasVariance = balanceProofStatus === 'HAS_VARIANCE';
@@ -300,6 +307,7 @@ export async function GET(req: NextRequest) {
       system,
       financial,
       cash,
+      fnb,
       summary: { blockers, warnings }
     });
 

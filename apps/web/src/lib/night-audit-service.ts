@@ -537,3 +537,94 @@ export async function getCashReconciliation(ctx: TenantContext, propertyId: stri
     tolerance: property.cashVarianceNightAuditTolerance 
   };
 }
+
+export async function getFnbControl(ctx: TenantContext, propertyId: string) {
+  if (!ctx.propertyIds.includes(propertyId)) throw new Error('FORBIDDEN');
+  const property = await prisma.property.findUnique({ where: { id: propertyId } });
+  if (!property) throw new Error('NOT_FOUND:Property not found');
+  const businessDate = property.businessDate ?? getPropertyBusinessDate(property.timezone, new Date());
+
+  const rawOrders = await prisma.posOrder.findMany({
+    where: { propertyId, businessDate, status: { not: 'VOIDED' } },
+    include: { outlet: { select: { id: true, name: true } }, serverStaff: { select: { firstName: true, lastName: true } } }
+  });
+
+  const openOrders = rawOrders.filter(o => o.status !== 'CLOSED' && o.paymentStatus !== 'PAID');
+  
+  const rawSessions = await prisma.posSession.findMany({
+    where: { propertyId, businessDate },
+    include: { outlet: { select: { name: true } }, primaryOperator: { select: { firstName: true, lastName: true } }, device: { select: { name: true } } }
+  });
+
+  const openSessions = rawSessions.filter(s => s.status === 'OPEN' || s.status === 'RECONCILIATION_REQUIRED');
+  
+  const voids = await prisma.posVoid.findMany({
+    where: { businessDate, order: { propertyId } },
+    include: { order: { select: { orderNumber: true, outlet: { select: { name: true } } } } }
+  });
+  const unreviewedVoids = voids.filter(v => !v.authorizerId);
+
+  const discounts = await prisma.posDiscount.findMany({
+    where: { businessDate, order: { propertyId } },
+    include: { order: { select: { orderNumber: true, outlet: { select: { name: true } } } } }
+  });
+
+  const payments = await prisma.posPayment.findMany({
+    where: { businessDate, order: { propertyId }, status: { in: ['PAID', 'CONFIRMED', 'REFUNDED'] } },
+    include: { order: { select: { orderNumber: true, outlet: { select: { id: true, name: true } } } } }
+  });
+
+  const comps = payments.filter(p => p.method === 'COMPLIMENTARY');
+  const refunds = payments.filter(p => p.status === 'REFUNDED');
+  const collectedPayments = payments.filter(p => p.status === 'PAID' || p.status === 'CONFIRMED');
+
+  const grossSales = rawOrders.reduce((sum, o) => sum + Number(o.subtotal || 0), 0);
+  const totalDiscounts = discounts.reduce((sum, d) => sum + Number(d.amount || 0), 0);
+  
+  const outlets = Array.from(new Set(rawOrders.map(o => o.outlet.id))).map(outletId => {
+    const oOrders = rawOrders.filter(o => o.outlet.id === outletId);
+    const outletName = oOrders[0].outlet.name;
+    const oDiscounts = discounts.filter(d => d.order.outlet.name === outletName);
+    const oPayments = collectedPayments.filter(p => p.order.outlet.id === outletId);
+    const oComps = comps.filter(p => p.order.outlet.id === outletId);
+    const oSessions = rawSessions.filter(s => s.outletId === outletId);
+    const variance = oSessions.reduce((sum, s) => sum + Number(s.variance || 0), 0);
+
+    return {
+      outletId,
+      name: outletName,
+      orders: oOrders.length,
+      gross: oOrders.reduce((sum, o) => sum + Number(o.subtotal || 0), 0),
+      discounts: oDiscounts.reduce((sum, d) => sum + Number(d.amount || 0), 0),
+      comps: oComps.reduce((sum, c) => sum + Number(c.amount || 0), 0),
+      net: oOrders.reduce((sum, o) => sum + Number(o.total || 0), 0),
+      payments: oPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0),
+      variance
+    };
+  });
+
+  const totalComps = comps.reduce((sum, c) => sum + Number(c.amount || 0), 0);
+  const netRevenue = rawOrders.reduce((sum, o) => sum + Number(o.total || 0), 0);
+  const totalPayments = collectedPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+  const totalRefunds = refunds.reduce((sum, r) => sum + Number(r.amount || 0), 0);
+  const totalVariance = rawSessions.reduce((sum, s) => sum + Number(s.variance || 0), 0);
+
+  return {
+    metrics: { grossSales, discounts: totalDiscounts, voids: voids.length, comps: totalComps, netRevenue, payments: totalPayments, refunds: totalRefunds, variance: totalVariance },
+    exceptions: { openOrders, openSessions, unreviewedVoids, cashVarianceSessions: rawSessions.filter(s => Number(s.variance || 0) !== 0) },
+    outlets,
+    sessions: rawSessions.map(s => ({
+      id: s.id,
+      cashier: s.primaryOperator ? `${s.primaryOperator.firstName} ${s.primaryOperator.lastName}` : 'Unknown',
+      terminal: s.device?.name || 'Unknown',
+      outlet: s.outlet.name,
+      openedAt: s.openedAt,
+      closedAt: s.closedAt,
+      openingCash: Number(s.openingCash || 0),
+      expectedCash: Number(s.expectedCash || 0),
+      actualCash: Number(s.actualCash || 0),
+      variance: Number(s.variance || 0),
+      status: s.status
+    }))
+  };
+}
