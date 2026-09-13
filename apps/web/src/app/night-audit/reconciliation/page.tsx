@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useProperty } from '@/components/PropertyProvider';
-import { AlertTriangle, BarChart3, CheckCircle2, ClipboardCheck, FileText, Loader2, Scale, ShieldCheck, WalletCards } from 'lucide-react';
+import { AlertTriangle, BarChart3, CheckCircle2, ClipboardCheck, Loader2, Scale, WalletCards } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 type Reconciliation = any;
@@ -67,7 +67,6 @@ export default function ReconciliationPage() {
         <div className="space-y-6"><div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_12px_30px_rgba(15,23,42,0.04)]"><h3 className="flex items-center gap-2 font-semibold text-slate-900"><WalletCards className="h-4 w-4 text-indigo-600" /> Payment mix</h3><div className="mt-4 space-y-3">{(data?.payments || []).length ? data.payments.map((payment: any) => <div key={payment.method} className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2.5"><div><p className="text-sm font-semibold text-slate-800">{payment.method.replace(/_/g, ' ')}</p><p className="text-xs text-slate-500">{payment.count} transaction{payment.count === 1 ? '' : 's'}</p></div><span className="text-sm font-semibold text-slate-900">{money(payment.amount, currency)}</span></div>) : <p className="text-sm text-slate-500">No captured payments for this date.</p>}</div></div><div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_12px_30px_rgba(15,23,42,0.04)]"><h3 className="flex items-center gap-2 font-semibold text-slate-900"><BarChart3 className="h-4 w-4 text-indigo-600" /> Ledger control</h3><div className="mt-4 grid grid-cols-2 gap-3"><div className="rounded-xl bg-slate-50 p-3"><p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Debits</p><p className="mt-1 font-semibold text-slate-900">{money(data?.ledger?.debit, currency)}</p></div><div className="rounded-xl bg-slate-50 p-3"><p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Credits</p><p className="mt-1 font-semibold text-slate-900">{money(data?.ledger?.credit, currency)}</p></div></div><div className={`mt-3 flex items-center justify-between rounded-xl px-3 py-2.5 text-sm font-semibold ${data?.ledger?.status === 'BALANCED' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}><span>Ledger status</span><span>{data?.ledger?.status || 'NOT RUN'}</span></div><p className="mt-3 text-xs text-slate-500">{data?.ledger?.entryCount || 0} posted journal entries included.</p></div></div>
       </section>
 
-      <section className="flex flex-col gap-3 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-5 text-sm text-indigo-950 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-start gap-3"><ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-indigo-600" /><div><p className="font-semibold">Cash custody remains with General Cashier</p><p className="mt-1 text-indigo-800/70">This workspace flags pending handovers for visibility but does not receive or approve physical cash.</p></div></div><Button variant="outline" className="border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-100" onClick={() => window.location.href = '/handovers'}><FileText className="mr-2 h-4 w-4" />Open cashier workspace</Button></section>
     </div>
   </div>;
 }
