@@ -40,28 +40,40 @@ export function A4ReportWrapper({
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 py-8 print:bg-white print:py-0 overflow-x-auto">
+    <div className="min-h-screen py-10 print:bg-white print:py-0 overflow-x-auto" style={{ background: 'linear-gradient(160deg, #060b18 0%, #080e1f 60%, #0a0c22 100%)' }}>
       
       {/* Floating Action Bar (Hidden in Print) */}
-      <div className="w-[210mm] mx-auto mb-6 flex items-center justify-between print:hidden">
-        <Button variant="outline" onClick={() => router.back()} className="bg-white">
-          <ArrowLeft className="w-4 h-4 mr-2" /> Back to Reports
-        </Button>
+      <div className="mx-auto mb-8 flex w-[210mm] items-center justify-between print:hidden">
+        <button
+          onClick={() => router.back()}
+          className="flex items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-sm font-semibold text-slate-300 transition-all hover:bg-white/[0.08] hover:text-white"
+        >
+          <ArrowLeft className="h-4 w-4" /> Back to Reports
+        </button>
         <div className="flex items-center gap-3">
-          <Button variant="outline" onClick={onDownloadPdf} className="bg-white">
-            <Download className="w-4 h-4 mr-2" /> Download PDF
-          </Button>
-          <Button onClick={handlePrint} className="bg-indigo-600 hover:bg-indigo-700 text-white">
-            <Printer className="w-4 h-4 mr-2" /> Print Report
-          </Button>
+          <button
+            onClick={onDownloadPdf}
+            className="flex items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-sm font-semibold text-slate-300 transition-all hover:bg-white/[0.08] hover:text-white"
+          >
+            <Download className="h-4 w-4" /> Download PDF
+          </button>
+          <button
+            onClick={handlePrint}
+            className="flex items-center gap-2 rounded-xl border border-indigo-400/30 bg-indigo-400/10 px-6 py-2.5 text-sm font-bold text-indigo-300 shadow-[0_0_20px_rgba(99,102,241,0.2)] transition-all hover:bg-indigo-400/20"
+          >
+            <Printer className="h-4 w-4" /> Print Report
+          </button>
         </div>
       </div>
 
       {/* A4 Paper Container */}
-      <div className="w-[210mm] mx-auto bg-white shadow-xl rounded-sm print:shadow-none print:rounded-none">
+      <div className="mx-auto w-[210mm] overflow-hidden rounded-xl bg-white shadow-[0_30px_100px_-15px_rgba(0,0,0,0.8)] ring-1 ring-white/20 print:rounded-none print:shadow-none print:ring-0">
         
         {/* Report Content Wrapper */}
-        <div className="p-8 md:p-10 text-slate-900 font-sans text-[11px] leading-relaxed">
+        <div className="p-10 text-slate-900 font-sans text-[11px] leading-relaxed relative">
+          
+          {/* Subtle print watermark pattern (visible only on screen to look like paper) */}
+          <div className="absolute inset-0 pointer-events-none opacity-[0.02] print:hidden" style={{ backgroundImage: 'radial-gradient(#000 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
           
           {/* Header */}
           <div className="border-b-[3px] border-slate-900 pb-5 mb-6 flex justify-between items-start gap-4">
