@@ -2,107 +2,260 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { FileText, FileSpreadsheet } from 'lucide-react';
+import {
+  FileText, FileSpreadsheet, BarChart3, Users, ArrowUpDown,
+  CreditCard, BookOpen, AlertOctagon, ShoppingBag, BedDouble,
+  Scale, RefreshCw,
+} from 'lucide-react';
 import { useProperty } from '@/components/PropertyProvider';
+
+const PAGE_BG = { background: 'linear-gradient(160deg, #060b18 0%, #080e1f 60%, #0a0c22 100%)' };
+
+type ReportDef = {
+  title: string;
+  slug: string;
+  desc: string;
+  Icon: React.ElementType;
+  accent: string;
+  glow: string;
+  iconBg: string;
+};
+
+const REPORTS: ReportDef[] = [
+  {
+    title: "Manager's Flash Report",
+    slug: 'managers-flash',
+    desc: 'Revenue, occupancy, ADR and RevPAR overview for the business date.',
+    Icon: BarChart3,
+    accent: 'border-indigo-400/25',
+    glow: 'rgba(99,102,241,0.12)',
+    iconBg: 'rgba(99,102,241,0.15)',
+  },
+  {
+    title: 'Detailed Revenue Report',
+    slug: 'detailed-revenue',
+    desc: 'Breakdown of revenue by department, charge code and room type.',
+    Icon: FileSpreadsheet,
+    accent: 'border-emerald-400/25',
+    glow: 'rgba(16,185,129,0.10)',
+    iconBg: 'rgba(16,185,129,0.15)',
+  },
+  {
+    title: 'Trial Balance',
+    slug: 'trial-balance',
+    desc: 'Accounting trial balance: debits, credits and ledger integrity check.',
+    Icon: Scale,
+    accent: 'border-violet-400/25',
+    glow: 'rgba(139,92,246,0.10)',
+    iconBg: 'rgba(139,92,246,0.15)',
+  },
+  {
+    title: 'Cashier Shift Summary',
+    slug: 'cashier-summary',
+    desc: 'Consolidated view of all shift drops, settlements and cash variances.',
+    Icon: CreditCard,
+    accent: 'border-amber-400/25',
+    glow: 'rgba(245,158,11,0.10)',
+    iconBg: 'rgba(245,158,11,0.15)',
+  },
+  {
+    title: 'In-House Guest List',
+    slug: 'in-house-guests',
+    desc: 'Full roster of all guests currently checked in with folio balances.',
+    Icon: Users,
+    accent: 'border-rose-400/25',
+    glow: 'rgba(244,63,94,0.10)',
+    iconBg: 'rgba(244,63,94,0.15)',
+  },
+  {
+    title: 'Departures & Arrivals',
+    slug: 'departures-arrivals',
+    desc: 'Expected check-outs and check-ins for the upcoming business day.',
+    Icon: ArrowUpDown,
+    accent: 'border-purple-400/25',
+    glow: 'rgba(168,85,247,0.10)',
+    iconBg: 'rgba(168,85,247,0.15)',
+  },
+  {
+    title: 'Payment Reconciliation',
+    slug: 'payment-reconciliation',
+    desc: 'All payments and refunds grouped by method for the business date.',
+    Icon: CreditCard,
+    accent: 'border-teal-400/25',
+    glow: 'rgba(20,184,166,0.10)',
+    iconBg: 'rgba(20,184,166,0.15)',
+  },
+  {
+    title: 'Transaction Journal',
+    slug: 'transaction-journal',
+    desc: 'Chronological ledger of all charge postings and financial entries.',
+    Icon: BookOpen,
+    accent: 'border-sky-400/25',
+    glow: 'rgba(14,165,233,0.10)',
+    iconBg: 'rgba(14,165,233,0.15)',
+  },
+  {
+    title: 'Exceptions Report',
+    slug: 'exceptions-report',
+    desc: 'Voids, manual refunds, complimentaries and rate discounts.',
+    Icon: AlertOctagon,
+    accent: 'border-red-400/25',
+    glow: 'rgba(239,68,68,0.10)',
+    iconBg: 'rgba(239,68,68,0.15)',
+  },
+  {
+    title: 'POS Reconciliation',
+    slug: 'pos-reconciliation',
+    desc: 'Point-of-sale totals, variances and room-charge transfer summary.',
+    Icon: ShoppingBag,
+    accent: 'border-orange-400/25',
+    glow: 'rgba(249,115,22,0.10)',
+    iconBg: 'rgba(249,115,22,0.15)',
+  },
+  {
+    title: 'Room-Charge Detail',
+    slug: 'room-charge-detail',
+    desc: 'All ancillary charges posted to guest folios from POS and services.',
+    Icon: BedDouble,
+    accent: 'border-cyan-400/25',
+    glow: 'rgba(6,182,212,0.10)',
+    iconBg: 'rgba(6,182,212,0.15)',
+  },
+];
 
 export default function ReportsGeneratorPage({ managerMode = false }: { managerMode?: boolean }) {
   const { propertyId } = useProperty();
-  
-  const [businessDate, setBusinessDate] = useState<string | null>(null);
+  const [businessDate, setBusinessDate] = useState<string>('');
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
   useEffect(() => {
-    if (propertyId) {
-      fetch(`/api/v1/night-audit/status?propertyId=${propertyId}`)
-        .then(res => res.json())
-        .then(res => {
-          if (res.data?.analytics?.trend?.length > 0) {
-            const trend = res.data.analytics.trend;
-            const lastAudit = trend[trend.length - 1];
-            setBusinessDate(String(lastAudit.businessDate).slice(0, 10));
-          } else if (res.data?.businessDate) {
-            setBusinessDate(String(res.data.businessDate).slice(0, 10));
-          } else {
-            setBusinessDate(new Date().toISOString().slice(0, 10));
-          }
-        })
-        .catch(err => {
-          console.error('Failed to fetch business date:', err);
+    if (!propertyId) return;
+    fetch(`/api/v1/night-audit/status?propertyId=${propertyId}`)
+      .then(r => r.json())
+      .then(res => {
+        if (res.data?.analytics?.trend?.length > 0) {
+          const trend = res.data.analytics.trend;
+          setBusinessDate(String(trend[trend.length - 1].businessDate).slice(0, 10));
+        } else if (res.data?.businessDate) {
+          setBusinessDate(String(res.data.businessDate).slice(0, 10));
+        } else {
           setBusinessDate(new Date().toISOString().slice(0, 10));
-        });
-    }
+        }
+      })
+      .catch(() => setBusinessDate(new Date().toISOString().slice(0, 10)));
   }, [propertyId]);
 
-  const reports = [
-    { title: "Daily Manager's Report", slug: 'managers-flash', desc: "Overview of revenue, occupancy, and ADR.", icon: FileText, color: "text-blue-500", bg: "bg-blue-100 dark:bg-blue-900/30" },
-    { title: "Detailed Revenue Report", slug: 'detailed-revenue', desc: "Breakdown of revenue by department and code.", icon: FileSpreadsheet, color: "text-emerald-500", bg: "bg-emerald-100 dark:bg-emerald-900/30" },
-    { title: "Trial Balance", slug: 'trial-balance', desc: "Accounting trial balance for the business date.", icon: FileText, color: "text-indigo-500", bg: "bg-indigo-100 dark:bg-indigo-900/30" },
-    { title: "Cashier Shift Summary", slug: 'cashier-summary', desc: "Consolidated view of all shift drops and variances.", icon: FileText, color: "text-amber-500", bg: "bg-amber-100 dark:bg-amber-900/30" },
-    { title: "In-House Guest List", slug: 'in-house-guests', desc: "Roster of all guests currently checked in.", icon: FileText, color: "text-rose-500", bg: "bg-rose-100 dark:bg-rose-900/30" },
-    { title: "Departures & Arrivals", slug: 'departures-arrivals', desc: "Expected movements for the upcoming day.", icon: FileText, color: "text-purple-500", bg: "bg-purple-100 dark:bg-purple-900/30" },
-    { title: "Payment Reconciliation", slug: 'payment-reconciliation', desc: "All payments and refunds by method.", icon: FileSpreadsheet, color: "text-teal-500", bg: "bg-teal-100 dark:bg-teal-900/30" },
-    { title: "Transaction Journal", slug: 'transaction-journal', desc: "Chronological ledger of all postings.", icon: FileText, color: "text-slate-500", bg: "bg-slate-100 dark:bg-slate-800" },
-    { title: "Exceptions Report", slug: 'exceptions-report', desc: "Voids, refunds, discounts, and comps.", icon: FileText, color: "text-red-500", bg: "bg-red-100 dark:bg-red-900/30" },
-    { title: "POS Reconciliation", slug: 'pos-reconciliation', desc: "POS sales, variances, and room charges.", icon: FileSpreadsheet, color: "text-orange-500", bg: "bg-orange-100 dark:bg-orange-900/30" },
-    { title: "Room-Charge Detail", slug: 'room-charge-detail', desc: "All ancillary charges posted to guest folios.", icon: FileText, color: "text-cyan-500", bg: "bg-cyan-100 dark:bg-cyan-900/30" },
-  ];
+  const openReport = (slug: string) => {
+    if (!businessDate) { alert('Business date is required to view reports.'); return; }
+    const base = managerMode ? '/general-manager/night-audit/reports/print' : '/night-audit/reports/print';
+    window.location.href = `${base}/${slug}?propertyId=${propertyId}&businessDate=${businessDate}`;
+  };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-emerald-600 to-emerald-400 bg-clip-text text-transparent">
-            Reports Generator
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Generate and export daily audit reports.
-          </p>
-        </div>
-        <Link href="/night-audit/reconciliation">
-          <Button className="bg-indigo-600 hover:bg-indigo-700 gap-2">
-            <FileSpreadsheet className="h-4 w-4" />
-            Open reconciliation
-          </Button>
-        </Link>
-      </div>
+    <div className="min-h-full px-4 pb-16 pt-6 sm:px-6 sm:pt-8 md:px-8" style={PAGE_BG}>
+      <div className="mx-auto max-w-[1540px] space-y-7">
 
-      <div className="w-full">
-          <div className="mb-5 rounded-2xl border border-indigo-100 bg-indigo-50/60 px-5 py-4 text-sm text-indigo-950">
-            <p className="font-semibold">Night audit report pack</p>
-            <p className="mt-1 text-indigo-800/70">Use the standard reports below for the close review. Custom and scheduled reporting belongs in the management reporting workspace.</p>
+        {/* ── Header ── */}
+        <header className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
+          <div>
+            <div className="mb-3 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-indigo-400/80">
+              <span className="h-1.5 w-1.5 rounded-full bg-indigo-400" />
+              Night Audit / Insights
+            </div>
+            <h1 className="flex items-center gap-3 text-3xl font-bold tracking-tight text-white sm:text-4xl">
+              <span
+                className="flex h-10 w-10 items-center justify-center rounded-2xl border border-indigo-400/25"
+                style={{ background: 'linear-gradient(135deg,rgba(99,102,241,0.2),rgba(124,58,237,0.15))', boxShadow: '0 0 24px rgba(99,102,241,0.2)' }}
+              >
+                <FileText className="h-5 w-5 text-indigo-300" />
+              </span>
+              Audit Reports
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-500">
+              Generate, view and print the full night-audit report pack for any business date.
+            </p>
           </div>
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {reports.map((report, idx) => (
-              <Card key={idx} className="hover:shadow-md transition-shadow">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center gap-4">
-                    <div className={`h-12 w-12 rounded-lg flex items-center justify-center ${report.bg}`}>
-                      <report.icon className={`h-6 w-6 ${report.color}`} />
-                    </div>
-                    <div>
-                      <CardTitle className="text-lg">{report.title}</CardTitle>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <CardDescription>{report.desc}</CardDescription>
-                </CardContent>
-                <CardFooter className="pt-2 flex gap-2 border-t mt-4 bg-muted/10 rounded-b-xl">
-                  <Button variant="ghost" size="sm" className="flex-1 text-muted-foreground hover:text-foreground" onClick={() => {
-                    if (businessDate) {
-                      const reportBasePath = managerMode ? '/general-manager/night-audit/reports/print' : '/night-audit/reports/print';
-                      window.location.href = `${reportBasePath}/${report.slug}?propertyId=${propertyId}&businessDate=${businessDate}`;
-                    } else {
-                      alert('Business date is required to view reports.');
-                    }
-                  }}>
-                    <FileText className="h-4 w-4 mr-2" /> View Report
-                  </Button>
-                </CardFooter>
-              </Card>
-            ))}
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="date"
+              value={businessDate}
+              onChange={e => setBusinessDate(e.target.value)}
+              className="h-10 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 text-sm font-medium text-slate-200 outline-none focus:border-indigo-400/50"
+            />
+            <Link href="/night-audit/reconciliation">
+              <button className="inline-flex h-10 items-center gap-2 rounded-xl border border-indigo-400/30 bg-indigo-400/10 px-4 text-sm font-semibold text-indigo-300 transition-all hover:bg-indigo-400/20 hover:text-indigo-200">
+                <Scale className="h-4 w-4" />
+                Reconciliation
+              </button>
+            </Link>
           </div>
+        </header>
+
+        {/* ── Info banner ── */}
+        <div
+          className="flex items-start gap-3 rounded-2xl border border-indigo-400/15 px-5 py-4 text-sm"
+          style={{ background: 'rgba(99,102,241,0.07)' }}
+        >
+          <RefreshCw className="mt-0.5 h-4 w-4 shrink-0 text-indigo-400/70" />
+          <div>
+            <p className="font-semibold text-indigo-200">Night audit report pack</p>
+            <p className="mt-0.5 text-indigo-400/70">Use the standard reports below for the close review. Custom and scheduled reporting belongs in the management reporting workspace.</p>
+          </div>
+        </div>
+
+        {/* ── Report cards grid ── */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {REPORTS.map((report, idx) => {
+            const { Icon } = report;
+            const isHovered = hoveredIdx === idx;
+            return (
+              <div
+                key={idx}
+                className={`group relative flex cursor-pointer flex-col overflow-hidden rounded-[20px] border transition-all duration-200 ${report.accent} ${isHovered ? 'ring-1 ring-white/[0.1] -translate-y-0.5 shadow-2xl' : ''}`}
+                style={{
+                  background: isHovered
+                    ? `rgba(255,255,255,0.04)`
+                    : `rgba(255,255,255,0.025)`,
+                  boxShadow: isHovered ? `0 8px 40px ${report.glow}` : 'none',
+                }}
+                onMouseEnter={() => setHoveredIdx(idx)}
+                onMouseLeave={() => setHoveredIdx(null)}
+                onClick={() => openReport(report.slug)}
+              >
+                {/* Icon header */}
+                <div className="px-5 pt-5">
+                  <span
+                    className="flex h-11 w-11 items-center justify-center rounded-2xl border transition-all duration-200"
+                    style={{
+                      background: report.iconBg,
+                      borderColor: report.accent.replace('border-', '').replace('/25', '/30'),
+                      boxShadow: isHovered ? `0 0 20px ${report.glow}` : 'none',
+                    }}
+                  >
+                    <Icon className="h-5 w-5 text-slate-300 group-hover:text-white transition-colors" />
+                  </span>
+                </div>
+
+                {/* Text */}
+                <div className="flex flex-1 flex-col px-5 pt-4 pb-5">
+                  <h3 className="text-sm font-bold text-white group-hover:text-white">{report.title}</h3>
+                  <p className="mt-1.5 flex-1 text-xs leading-relaxed text-slate-500">{report.desc}</p>
+                </div>
+
+                {/* Footer action */}
+                <div className="flex items-center justify-between border-t border-white/[0.05] px-5 py-3">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-600">
+                    {businessDate || '—'}
+                  </span>
+                  <span className="flex items-center gap-1.5 rounded-lg border border-white/[0.07] bg-white/[0.04] px-2.5 py-1 text-[11px] font-semibold text-slate-400 transition-all group-hover:border-indigo-400/30 group-hover:bg-indigo-400/10 group-hover:text-indigo-300">
+                    <FileText className="h-3 w-3" /> View
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
       </div>
     </div>
   );

@@ -81,7 +81,7 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
 
   /* ─── Sidebar inner ─────────────────────────────────────────────────────── */
   const SidebarContent = ({ onNavigate }: { onNavigate?: () => void }) => (
-    <div className="relative flex h-full min-h-0 flex-col overflow-hidden" style={{ background: '#07090f' }}>
+    <div className="relative flex h-full min-h-0 flex-col" style={{ background: '#07090f', overflow: 'hidden' }}>
 
       {/* Ambient glow blobs */}
       <div className="pointer-events-none absolute -top-32 -right-24 h-72 w-72 rounded-full bg-indigo-600/10 blur-3xl" />
@@ -135,7 +135,7 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* ── Navigation ── */}
-      <nav className="relative flex flex-1 flex-col gap-5 overflow-y-auto px-3 py-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <nav className="relative min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-3 py-5 pb-6 flex [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {GROUPS.map((group) => {
           const items = NIGHT_AUDIT_NAV.filter(i => i.group === group);
           if (!items.length) return null;
