@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { RefreshCw, Activity, CheckCircle2, AlertCircle, Loader2, ServerCrash, ArrowRight, ShieldAlert, Server } from 'lucide-react';
+import { RefreshCw, Activity, CheckCircle2, AlertCircle, Loader2, ServerCrash, ArrowRight, ShieldAlert, Server, Clock, Database, HardDrive, AlertTriangle, HelpCircle } from 'lucide-react';
 import { useProperty } from '@/components/PropertyProvider';
 import { getSystemHealth } from '@/lib/night-audit-actions';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
@@ -232,6 +232,67 @@ export default function SystemSyncPage() {
                   data?.syncConflicts > 0 ? "bg-gradient-to-r from-amber-400 to-orange-500 w-[45%]" : "bg-gradient-to-r from-emerald-400 to-emerald-500 w-full"
                 )} />
               </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Integration Health Metrics */}
+        <Card className="overflow-hidden border-0 shadow-lg ring-1 ring-slate-200/50 dark:ring-slate-800/50 rounded-2xl">
+          <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Database className="h-5 w-5 text-indigo-500" />
+              Integration Health
+            </CardTitle>
+            <CardDescription>Metrics for pending financial operations and system syncs</CardDescription>
+          </CardHeader>
+          <CardContent className="pt-6 p-0">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-slate-100 dark:divide-slate-800">
+              
+              <div className="p-6 flex flex-col gap-2">
+                <div className="flex items-center gap-2 text-sm font-medium text-slate-500">
+                  <RefreshCw className="h-4 w-4" /> Last Sync
+                </div>
+                <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">
+                  {data?.lastSync ? new Date(data.lastSync).toLocaleTimeString() : 'Never'}
+                </div>
+              </div>
+              
+              <div className="p-6 flex flex-col gap-2">
+                <div className="flex items-center gap-2 text-sm font-medium text-slate-500">
+                  <AlertTriangle className="h-4 w-4" /> Open POS Orders
+                </div>
+                <div className={cn(
+                  "text-xl font-semibold", 
+                  data?.posOrdersOpen > 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"
+                )}>
+                  {data?.posOrdersOpen || 0}
+                </div>
+              </div>
+              
+              <div className="p-6 flex flex-col gap-2">
+                <div className="flex items-center gap-2 text-sm font-medium text-slate-500">
+                  <ServerCrash className="h-4 w-4" /> Failed Events
+                </div>
+                <div className={cn(
+                  "text-xl font-semibold", 
+                  (data?.outboxFailed > 0 || data?.integrationErrors > 0) ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"
+                )}>
+                  {(data?.outboxFailed || 0) + (data?.integrationErrors || 0)}
+                </div>
+              </div>
+
+              <div className="p-6 flex flex-col gap-2">
+                <div className="flex items-center gap-2 text-sm font-medium text-slate-500">
+                  <Clock className="h-4 w-4" /> Retrying / Pending
+                </div>
+                <div className={cn(
+                  "text-xl font-semibold", 
+                  (data?.outboxPending > 0 || data?.retryStatus > 0) ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"
+                )}>
+                  {data?.outboxPending || 0} ({data?.retryStatus || 0} Retrying)
+                </div>
+              </div>
+
             </div>
           </CardContent>
         </Card>

@@ -90,7 +90,48 @@ export async function getSystemHealth(propertyId: string) {
     where: { propertyId, status: 'PENDING' }
   });
   
-  return { hardware, syncConflicts };
+  const property = await prisma.property.findUnique({ where: { id: propertyId } });
+  
+  const posOrdersOpen = await prisma.posOrder.count({
+    where: { 
+      propertyId, 
+      status: { in: ['SUBMITTED', 'IN_SERVICE'] },
+      businessDate: property?.businessDate || new Date()
+    }
+  });
+
+  const outboxPending = await prisma.outboxEvent.count({
+    where: { propertyId, status: 'PENDING' }
+  });
+
+  const outboxFailed = await prisma.outboxEvent.count({
+    where: { propertyId, status: 'FAILED' }
+  });
+
+  const integrationErrors = await prisma.webhookEvent.count({
+    where: { status: 'failed' } // webhook events might not have propertyId easily accessible
+  });
+
+  const retryStatus = await prisma.outboxEvent.count({
+    where: { propertyId, status: 'PENDING', attemptCount: { gt: 0 } }
+  });
+
+  const lastSyncResult = await prisma.outboxEvent.findFirst({
+    where: { propertyId, status: 'COMPLETED' },
+    orderBy: { processedAt: 'desc' },
+    select: { processedAt: true }
+  });
+  
+  return { 
+    hardware, 
+    syncConflicts,
+    posOrdersOpen,
+    outboxPending,
+    outboxFailed,
+    integrationErrors,
+    retryStatus,
+    lastSync: lastSyncResult?.processedAt || null
+  };
 }
 
 export async function getNightAuditRoomCharges(propertyId: string, auditId: string) {
