@@ -7,6 +7,7 @@ const ALLOWED_TRANSITIONS: Record<PosProductionBatchStatus, PosProductionBatchSt
   READY: ['COMPLETED'],
   COMPLETED: [],
   ACKNOWLEDGED: ['PREPARING', 'COMPLETED'],
+  CANCELLED: [],
 };
 
 export async function POST(req: Request, { params }: { params: Promise<{ batchId: string }> }) {

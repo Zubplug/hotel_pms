@@ -3460,6 +3460,7 @@ enum PosOrderStatus {
   IN_SERVICE
   CLOSED
   VOIDED
+  CANCELLED
 }
 
 enum ProductionStation {
@@ -3475,6 +3476,7 @@ enum PosProductionBatchStatus {
   PREPARING
   READY
   COMPLETED
+  CANCELLED
 }
 
 enum PosOrderPaymentStatus {

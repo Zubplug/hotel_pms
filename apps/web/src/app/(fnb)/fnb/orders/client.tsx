@@ -72,11 +72,73 @@ const LiveElapsedTimer = memo(({ startTime, slaWarningMin = 15, slaDangerMin = 2
 });
 LiveElapsedTimer.displayName = 'LiveElapsedTimer';
 
-const OrderDrawer = ({ order, onClose }: { order: PosOrder; onClose: () => void }) => {
+const OrderDrawer = ({ order, onClose, onRefresh, businessDate }: { order: PosOrder; onClose: () => void; onRefresh: () => void; businessDate: string }) => {
+  const [cancelling, setCancelling] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+
   if (!order) return null;
+
+  const handleCancel = async () => {
+    if (!cancelReason) return alert('Reason is required');
+    setCancelling(true);
+    try {
+      const res = await fetch(`/api/v1/fnb/orders/${order.id}/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: cancelReason, businessDate })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || 'Failed to cancel order');
+      setShowCancelModal(false);
+      onClose();
+      onRefresh();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   return (
     <>
+      {showCancelModal && (
+        <div className="fixed inset-0 z-[60] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 max-w-md w-full overflow-hidden">
+            <div className="p-6 border-b border-slate-100 bg-slate-50/50">
+              <h3 className="text-xl font-bold text-rose-600">Cancel Order #{order.orderNumber}</h3>
+            </div>
+            <div className="p-6">
+              <p className="text-sm font-medium text-slate-600 mb-4">
+                This will stop active kitchen production. Inventory already consumed may require waste approval. This action cannot be undone.
+              </p>
+              <label className="block text-xs font-bold text-slate-900 uppercase tracking-wider mb-2">Reason for Cancellation</label>
+              <Input
+                autoFocus
+                placeholder="e.g. Guest changed mind, Output Error..."
+                value={cancelReason}
+                onChange={e => setCancelReason(e.target.value)}
+                className="bg-white border-slate-300"
+              />
+            </div>
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+              <Button variant="ghost" onClick={() => setShowCancelModal(false)} className="text-slate-600 hover:text-slate-900 font-bold">
+                Back
+              </Button>
+              <Button 
+                variant="destructive" 
+                onClick={handleCancel} 
+                disabled={cancelling || !cancelReason}
+                className="bg-rose-600 hover:bg-rose-700 font-bold"
+              >
+                {cancelling ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : null}
+                Confirm Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-sm transition-opacity" onClick={onClose} />
       <div className="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-white shadow-2xl border-l border-slate-200 flex flex-col animate-in slide-in-from-right duration-200">
         <div className="flex items-center justify-between p-6 border-b border-slate-100 bg-slate-50/50">
@@ -155,10 +217,20 @@ const OrderDrawer = ({ order, onClose }: { order: PosOrder; onClose: () => void 
             <span className="text-sm text-slate-500 font-bold uppercase tracking-wider">Subtotal</span>
             <span className="text-base text-slate-700 font-mono font-semibold">{formatCurrency(Number(order.total))}</span>
           </div>
-          <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+          <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm mb-4">
             <span className="text-lg font-bold text-slate-900">Total</span>
             <span className="text-xl font-bold text-slate-900 font-mono">{formatCurrency(Number(order.total))}</span>
           </div>
+          
+          {['SUBMITTED', 'IN_SERVICE'].includes(order.status) && (
+            <Button 
+              variant="outline" 
+              className="w-full border-rose-200 text-rose-600 hover:bg-rose-50 hover:border-rose-300 font-bold shadow-sm"
+              onClick={() => setShowCancelModal(true)}
+            >
+              Cancel Order
+            </Button>
+          )}
         </div>
       </div>
     </>
@@ -174,6 +246,7 @@ export function FnbOrdersClient() {
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
   const [selectedOrder, setSelectedOrder] = useState<PosOrder | null>(null);
   const [isTabVisible, setIsTabVisible] = useState(true);
+  const [businessDate, setBusinessDate] = useState(new Date().toISOString().slice(0, 10));
 
   // Polling logic respecting visibility
   useEffect(() => {
@@ -189,6 +262,7 @@ export function FnbOrdersClient() {
       if (!res.ok) throw new Error('Failed to fetch orders');
       const data = await res.json();
       setOrders(data.data?.orders || []);
+      setBusinessDate(data.data?.businessDate || new Date().toISOString().slice(0, 10));
       setError('');
     } catch (err: any) {
       console.error(err);
@@ -433,7 +507,7 @@ export function FnbOrdersClient() {
       )}
 
       {/* Drawer */}
-      <OrderDrawer order={selectedOrder as PosOrder} onClose={() => setSelectedOrder(null)} />
+      <OrderDrawer order={selectedOrder as PosOrder} onClose={() => setSelectedOrder(null)} onRefresh={() => fetchOrders(true)} businessDate={businessDate} />
     </div>
   );
 }
