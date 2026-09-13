@@ -32,7 +32,12 @@ import {
   ShieldCheck,
   TimerReset,
   BarChart3,
-  ListTree
+  ListTree,
+  AlertTriangle,
+  DownloadCloud,
+  FileCheck2,
+  Lock,
+  ArrowRight
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { useProperty } from '@/components/PropertyProvider';
@@ -157,6 +162,33 @@ export default function AuditHistoryPage() {
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(amount);
+  };
+
+  const downloadAuditPack = (audit: any) => {
+    if (!audit.closePackage) return;
+    const pack = {
+      propertyId: audit.propertyId,
+      businessDate: audit.businessDate,
+      auditor: audit.auditorName,
+      status: audit.status,
+      startedAt: audit.startedAt,
+      completedAt: audit.completedAt,
+      financialSnapshot: audit.financialSnapshot,
+      closePackage: audit.closePackage,
+      acknowledgements: audit.acknowledgements,
+      occupancy: {
+        rate: audit.occupancy,
+        adr: audit.adr,
+        revpar: audit.revpar
+      }
+    };
+    const blob = new Blob([JSON.stringify(pack, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `audit_pack_${audit.propertyId}_${new Date(audit.businessDate).toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -342,7 +374,19 @@ export default function AuditHistoryPage() {
                   </p>
                 </div>
               </div>
-              {selectedAudit && getStatusBadge(selectedAudit.status)}
+              <div className="flex flex-col items-end gap-3">
+                {selectedAudit && getStatusBadge(selectedAudit.status)}
+                {selectedAudit?.closePackage && (
+                  <Button 
+                    size="sm" 
+                    variant="secondary" 
+                    className="bg-white/10 text-white hover:bg-white/20 border-white/20"
+                    onClick={() => downloadAuditPack(selectedAudit)}
+                  >
+                    <DownloadCloud className="mr-2 h-4 w-4" /> Download Sealed Pack
+                  </Button>
+                )}
+              </div>
               </div>
             </div>
             
@@ -448,6 +492,84 @@ export default function AuditHistoryPage() {
                     </div>
                   </div>
                 </div>
+
+                {/* Occupancy Snapshot */}
+                <div className="relative overflow-hidden rounded-3xl border border-slate-200/70 bg-white p-6 shadow-sm sm:p-7">
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Occupancy Snapshot</h3>
+                    <BedDouble className="h-5 w-5 text-indigo-400" />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                    <div>
+                      <p className="text-xs font-bold uppercase text-slate-400 mb-1">Occupancy</p>
+                      <p className="text-2xl font-black text-slate-900">{selectedAudit.occupancy || 0}%</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold uppercase text-slate-400 mb-1">ADR</p>
+                      <p className="text-2xl font-black text-slate-900">{formatCurrency(selectedAudit.adr || 0)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold uppercase text-slate-400 mb-1">RevPAR</p>
+                      <p className="text-2xl font-black text-slate-900">{formatCurrency(selectedAudit.revpar || 0)}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Exceptions & Late Postings */}
+                {(selectedAudit.exceptions || (selectedAudit.financialSnapshot?.latePostingCount || 0) > 0) && (
+                  <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 shadow-sm sm:p-7">
+                    <div className="flex items-center gap-2 text-amber-700 mb-4">
+                      <AlertTriangle className="h-5 w-5" />
+                      <h3 className="text-sm font-bold uppercase tracking-wider">Exceptions & Late Postings</h3>
+                    </div>
+                    <div className="space-y-4">
+                      {(selectedAudit.financialSnapshot?.latePostingCount || 0) > 0 && (
+                        <div className="flex items-start gap-3 bg-white/60 p-4 rounded-xl border border-amber-100">
+                          <Clock className="h-5 w-5 text-amber-600 mt-0.5" />
+                          <div>
+                            <p className="font-semibold text-amber-900">{selectedAudit.financialSnapshot.latePostingCount} items posted late</p>
+                            <p className="text-sm text-amber-700 mt-1">Folio items were posted to this business date after the audit was fully closed.</p>
+                          </div>
+                        </div>
+                      )}
+                      {selectedAudit.exceptions && Array.isArray(selectedAudit.exceptions) && selectedAudit.exceptions.map((ex: any, idx: number) => (
+                        <div key={idx} className="flex items-start gap-3 bg-white/60 p-4 rounded-xl border border-amber-100">
+                          <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5" />
+                          <div>
+                            <p className="font-semibold text-amber-900">{ex.type || 'Exception'}</p>
+                            <p className="text-sm text-amber-700 mt-1">{ex.message || JSON.stringify(ex)}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Acknowledgements */}
+                {selectedAudit.acknowledgements && selectedAudit.acknowledgements.length > 0 && (
+                  <div className="rounded-3xl border border-slate-200/70 bg-white p-6 shadow-sm sm:p-7">
+                    <div className="flex items-center gap-2 text-slate-700 mb-6">
+                      <FileCheck2 className="h-5 w-5 text-indigo-500" />
+                      <h3 className="text-sm font-bold uppercase tracking-wider">Override Acknowledgements</h3>
+                    </div>
+                    <div className="relative border-l-2 border-slate-100 ml-3 space-y-8 pb-4">
+                      {selectedAudit.acknowledgements.map((ack: any) => (
+                        <div key={ack.id} className="relative pl-6">
+                          <div className="absolute -left-[9px] top-1 h-4 w-4 rounded-full border-2 border-white bg-indigo-500 shadow-sm" />
+                          <p className="text-sm font-semibold text-slate-900">
+                            {ack.warningType.replace(/_/g, ' ')} overridden
+                          </p>
+                          <p className="mt-1 text-sm text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-100 italic">
+                            "{ack.reason}" {ack.comment ? `- ${ack.comment}` : ''}
+                          </p>
+                          <p className="mt-2 text-xs font-medium text-slate-400 flex items-center gap-1.5">
+                            <User className="h-3.5 w-3.5" /> Acknowledged by auditor
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
               </div>
             )}

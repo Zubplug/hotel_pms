@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import { requireOrganizationContext } from '@/lib/organization-access';
 import prisma from '@hotel-pms/db';
 import { errorResponse, successResponse } from '@/lib/api-response';
+import { buildNightAuditBalanceProof } from '@/lib/night-audit-accounting';
 
 const round = (value: number) => Math.round(value * 100) / 100;
 
@@ -117,6 +118,8 @@ export async function GET(req: NextRequest) {
     const credit = Number(journalEntries._sum.totalCredit || 0);
     const ledgerDifference = round(debit - credit);
 
+    const balanceProof = await buildNightAuditBalanceProof(prisma, { propertyId, businessDate });
+
     return successResponse({
       property,
       businessDate: dateValue,
@@ -126,6 +129,7 @@ export async function GET(req: NextRequest) {
       variance: { grossRevenue: grossVariance, status: grossVariance === null ? 'NOT_RUN' : Math.abs(grossVariance) < 0.01 ? 'BALANCED' : 'REVIEW' },
       payments: [...payments.entries()].map(([method, value]) => ({ method, amount: round(value.amount), count: value.count })).sort((a, b) => b.amount - a.amount),
       ledger: { debit: round(debit), credit: round(credit), difference: ledgerDifference, entryCount: journalEntries._count.id, status: Math.abs(ledgerDifference) < 0.01 ? 'BALANCED' : 'REVIEW' },
+      balanceProof,
       coverage: { folioItems: items.length, paidPosOrders: posOrders.length, directPosOrders: posOrders.filter((order) => !representedPosOrders.has(order.id)).length },
     });
   } catch (error: any) {

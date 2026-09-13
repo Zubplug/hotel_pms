@@ -15,7 +15,17 @@ export async function getNightAuditHistory(propertyId: string) {
     where: { propertyId },
     orderBy: { createdAt: 'desc' },
     take: 50,
-    include: { financialSnapshot: true }
+    include: {
+      financialSnapshot: true,
+      closePackage: {
+        include: {
+          accountBalances: true,
+        },
+      },
+      acknowledgements: {
+        orderBy: { acknowledgedAt: 'desc' },
+      },
+    }
   });
 
   const roomRevenueByAudit = audits.length > 0
@@ -61,6 +71,9 @@ export async function getNightAuditHistory(propertyId: string) {
 
   return audits.map(audit => ({
     ...audit,
+    occupancy: Number(audit.occupancy || 0),
+    adr: Number(audit.adr || 0),
+    revpar: Number(audit.revpar || 0),
     financialSnapshot: audit.financialSnapshot && roomRevenueMap.has(audit.id)
       ? { ...audit.financialSnapshot, roomRevenue: roomRevenueMap.get(audit.id) }
       : audit.financialSnapshot,
