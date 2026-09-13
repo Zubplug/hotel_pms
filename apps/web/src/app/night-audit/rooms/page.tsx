@@ -406,13 +406,13 @@ export default function NightAuditRoomsControlPage() {
       />
 
       <Dialog open={!!viewingFolioId} onOpenChange={(open) => !open && setViewingFolioId(null)}>
-        <DialogContent className="max-w-5xl h-[90vh] p-0 overflow-y-auto">
+        <DialogContent className="sm:max-w-5xl max-w-5xl h-[90vh] p-0 overflow-y-auto">
           {viewingFolioId && <FolioDetailView folioId={viewingFolioId} onBack={() => setViewingFolioId(null)} />}
         </DialogContent>
       </Dialog>
 
       <Dialog open={!!viewingReservationId} onOpenChange={(open) => !open && setViewingReservationId(null)}>
-        <DialogContent className="max-w-5xl h-[90vh] p-0 overflow-y-auto">
+        <DialogContent className="sm:max-w-5xl max-w-5xl h-[90vh] p-0 overflow-y-auto">
           {viewingReservationId && <ReservationDetailModalContent reservationId={viewingReservationId} onClose={() => setViewingReservationId(null)} />}
         </DialogContent>
       </Dialog>
