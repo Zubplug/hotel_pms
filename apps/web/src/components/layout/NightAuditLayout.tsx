@@ -34,8 +34,8 @@ import { PropertySelector } from '@/components/properties/PropertySelector';
 const NIGHT_AUDIT_NAV = [
   { name: 'Audit overview', href: '/night-audit', icon: MoonStar, group: 'Workspace' },
   { name: 'Audit history', href: '/night-audit/history', icon: Clock, group: 'Workspace' },
-  { name: 'Room status', href: '/night-audit/rooms', icon: BedDouble, group: 'Controls' },
   { name: 'Revenue reconciliation', href: '/night-audit/reconciliation', icon: Scale, group: 'Controls' },
+  { name: 'Room & guest control', href: '/night-audit/rooms', icon: BedDouble, group: 'Controls' },
   { name: 'Audit reports', href: '/night-audit/reports', icon: FileText, group: 'Insights' },
   { name: 'System & sync', href: '/night-audit/system', icon: Server, group: 'Insights' },
 ];
