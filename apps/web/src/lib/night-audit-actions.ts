@@ -207,3 +207,204 @@ export async function getNightAuditRoomCharges(propertyId: string, auditId: stri
     };
   });
 }
+
+export async function getRoomAndGuestControl(propertyId: string): Promise<any> {
+  if (!propertyId) throw new Error('Property ID required');
+  const property = await prisma.property.findUnique({
+    where: { id: propertyId },
+  });
+  if (!property) throw new Error('Property not found');
+  
+  const businessDate = property.businessDate || new Date();
+  const businessDateStr = businessDate.toISOString().split('T')[0];
+
+  const pendingArrivals = await prisma.reservation.findMany({
+    where: {
+      propertyId,
+      status: { in: ['CONFIRMED', 'PENDING', 'INQUIRY'] },
+      checkIn: { lte: businessDate }
+    },
+    include: {
+      primaryGuest: true,
+      reservationRooms: { include: { room: true } }
+    }
+  });
+
+  const pendingDepartures = await prisma.reservation.findMany({
+    where: {
+      propertyId,
+      status: 'CHECKED_IN',
+      checkOut: { lte: businessDate }
+    },
+    include: {
+      primaryGuest: true,
+      reservationRooms: { include: { room: true } },
+      folios: { where: { type: 'ROOM' } }
+    }
+  });
+
+  const noShows = await prisma.reservation.findMany({
+    where: {
+      propertyId,
+      status: 'NO_SHOW',
+      checkIn: { lte: businessDate },
+    },
+    include: {
+      primaryGuest: true,
+      reservationRooms: { include: { room: true } }
+    }
+  });
+
+  const inHouseReservations = await prisma.reservation.findMany({
+    where: { propertyId, status: 'CHECKED_IN' },
+    include: {
+      primaryGuest: true,
+      reservationRooms: { include: { room: true } },
+      folios: {
+        where: { type: 'ROOM' },
+        include: {
+          items: {
+            where: {
+              source: 'ROOM_CHARGE',
+              businessDate: businessDate
+            }
+          }
+        }
+      },
+      corporateAccount: true
+    }
+  });
+
+  let inHouseGuestCount = 0;
+  let missingRoomCharges = [];
+  let folioBalanceExceptions = [];
+  let creditLimitExceptions = [];
+  
+  const unassignedArrivals = pendingArrivals.filter(r => r.reservationRooms.length === 0 || r.reservationRooms.every(rr => !rr.roomId));
+
+  for (const res of inHouseReservations) {
+    inHouseGuestCount += (res.adults || 0) + (res.children || 0);
+
+    const primaryFolio = res.folios[0];
+    if (primaryFolio) {
+      if (res.checkOut.getTime() !== businessDate.getTime()) {
+        const hasRoomCharge = primaryFolio.items.length > 0;
+        if (!hasRoomCharge && !res.corporateAccountId) {
+           missingRoomCharges.push(res);
+        }
+      }
+
+      if (Number(primaryFolio.balance) > 0 && res.checkOut.getTime() <= businessDate.getTime()) {
+        folioBalanceExceptions.push(res);
+      }
+
+      const creditLimit = Number(res.corporateAccount?.creditLimit || 0);
+      if (creditLimit > 0 && Number(primaryFolio.balance) > creditLimit) {
+        creditLimitExceptions.push(res);
+      }
+    }
+  }
+  
+  if (inHouseReservations.some(r => r.corporateAccountId)) {
+     const corporateRes = inHouseReservations.filter(r => r.corporateAccountId);
+     const corporateChargeKeys = corporateRes.map(r => `ROOM_CHARGE_${r.id}_${businessDateStr}`);
+     const existingCorporateCharges = await prisma.folioItem.findMany({
+       where: { folio: { propertyId }, operationId: { in: corporateChargeKeys } },
+       select: { operationId: true }
+     });
+     const foundKeys = new Set(existingCorporateCharges.map(c => c.operationId));
+     for (const r of corporateRes) {
+       if (r.checkOut.getTime() > businessDate.getTime() && !foundKeys.has(`ROOM_CHARGE_${r.id}_${businessDateStr}`)) {
+         missingRoomCharges.push(r);
+       }
+     }
+  }
+
+  const allRooms = await prisma.room.findMany({
+    where: { propertyId },
+    include: {
+      reservationRooms: {
+        where: { status: 'ACTIVE', reservation: { status: 'CHECKED_IN' } },
+        include: { reservation: true }
+      },
+      roomType: true
+    }
+  });
+
+  let roomStatusMismatches = [];
+  let assignmentIntegrity = [];
+
+  for (const room of allRooms) {
+    const activeResRooms = room.reservationRooms.filter(rr => rr.status === 'ACTIVE' && rr.reservation.status === 'CHECKED_IN');
+    const hasActiveCheckedIn = activeResRooms.length > 0;
+    
+    if (room.status === 'OCCUPIED' && !hasActiveCheckedIn) {
+      roomStatusMismatches.push({ room, type: 'OCCUPIED_NO_GUEST', reason: 'Room is OCCUPIED but has no checked-in reservation.' });
+    } else if (room.status === 'AVAILABLE' && hasActiveCheckedIn) {
+      roomStatusMismatches.push({ room, type: 'AVAILABLE_WITH_GUEST', reason: 'Room is AVAILABLE but has a checked-in guest.' });
+    }
+
+    if (activeResRooms.length > 1) {
+      assignmentIntegrity.push({
+        room,
+        type: 'MULTIPLE_GUESTS',
+        reason: 'Multiple checked-in reservations are assigned to this room.',
+        reservations: activeResRooms.map(rr => rr.reservation)
+      });
+    }
+
+    // Stale assignments check
+    const staleResRooms = room.reservationRooms.filter(rr => rr.status === 'ACTIVE' && ['CANCELLED', 'NO_SHOW', 'CHECKED_OUT'].includes(rr.reservation.status));
+    if (staleResRooms.length > 0) {
+      assignmentIntegrity.push({
+        room,
+        type: 'STALE_ASSIGNMENT',
+        reason: 'Room has an active assignment for a cancelled, no-show, or checked-out reservation.',
+        reservations: staleResRooms.map(rr => rr.reservation)
+      });
+    }
+  }
+
+  // Active checked-in without room assignment
+  for (const res of inHouseReservations) {
+    if (res.reservationRooms.length === 0 || res.reservationRooms.every(rr => !rr.roomId)) {
+      assignmentIntegrity.push({
+        type: 'CHECKED_IN_NO_ROOM',
+        reason: 'Guest is checked in but has no room assigned.',
+        reservations: [res]
+      });
+    }
+  }
+
+  // Unbalanced folios check
+  let unbalancedFolios = [];
+  for (const res of inHouseReservations) {
+    const primaryFolio = res.folios[0];
+    if (primaryFolio) {
+      const balance = Number(primaryFolio.balance || 0);
+      if (balance < 0) {
+        unbalancedFolios.push({
+          reservation: res,
+          type: 'NEGATIVE_BALANCE',
+          reason: 'Folio has a negative balance (payments exceed charges).'
+        });
+      }
+    }
+  }
+
+  return {
+    businessDate,
+    pendingArrivals,
+    pendingDepartures,
+    noShows,
+    unassignedArrivals,
+    inHouseGuestCount,
+    inHouseReservationCount: inHouseReservations.length,
+    missingRoomCharges,
+    folioBalanceExceptions,
+    creditLimitExceptions,
+    roomStatusMismatches,
+    assignmentIntegrity,
+    unbalancedFolios,
+  };
+}

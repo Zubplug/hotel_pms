@@ -1,89 +1,194 @@
 'use client';
 
-import React, { useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import React, { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useProperty } from '@/components/PropertyProvider';
-import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Search, Key, Sparkles, Wind, AlertTriangle, ShieldCheck, DoorOpen } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, ShieldCheck, DoorOpen, Users, LogOut, CheckCircle2, ChevronRight, FileText } from 'lucide-react';
 import { format } from 'date-fns';
-import { formatRoomNumber } from '@/lib/format-room';
-import { FrontDeskRoomStatusDialog } from '@/components/frontdesk/FrontDeskRoomStatusDialog';
+import { getRoomAndGuestControl } from '@/lib/night-audit-actions';
+import { formatCurrency } from '@/lib/utils';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { FrontDeskOccupiedRoomDialog } from '@/components/frontdesk/FrontDeskOccupiedRoomDialog';
+import { formatRoomNumber } from '@/lib/format-room';
+import Link from 'next/link';
 
-interface Room {
-  id: string;
-  number: string;
-  status: string;
-  housekeepingStatus: string;
-  roomType: { name: string; code: string };
-  floor: { name: string; number: number };
-  building: { name: string };
-}
-
-export default function FrontDeskRoomsPage() {
+export default function NightAuditRoomsControlPage() {
   const router = useRouter();
   const { propertyId } = useProperty();
-  const queryClient = useQueryClient();
-  const [search, setSearch] = useState('');
-  const [activeFilter, setActiveFilter] = useState('ALL');
-  const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
-
+  const [activeTab, setActiveTab] = useState<'ALL' | 'PENDING' | 'FINANCIAL' | 'STATUS'>('ALL');
+  
+  // For the Full Property View
   const { provider } = useLodgeCoreProvider();
+  const [selectedRoom, setSelectedRoom] = useState<any | null>(null);
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['frontdesk', 'rooms', propertyId, { filter: activeFilter }],
-    queryFn: async () => {
-      const params: any = {
-        page: '1',
-        pageSize: '100', // API limit is 100
-        ...(activeFilter !== 'ALL' && activeFilter !== 'DIRTY' && activeFilter !== 'CLEAN' ? { status: activeFilter } : {}),
-        ...(activeFilter === 'DIRTY' ? { housekeepingStatus: 'DIRTY' } : {}),
-        ...(activeFilter === 'CLEAN' ? { housekeepingStatus: 'CLEAN' } : {}),
-      };
-      return await provider.rooms.list(propertyId, params);
-    },
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['night-audit', 'rooms-control', propertyId],
+    queryFn: () => getRoomAndGuestControl(propertyId),
+    enabled: !!propertyId,
+    refetchInterval: 60000,
+  });
+
+  const { data: allRoomsData } = useQuery({
+    queryKey: ['frontdesk', 'rooms', propertyId],
+    queryFn: () => provider.rooms.list(propertyId, { page: '1', pageSize: '200' } as any),
     enabled: !!propertyId,
   });
 
-  const rawData = data as any;
-  const rooms: Room[] = Array.isArray(rawData) ? rawData : (rawData?.data ?? []);
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="animate-spin h-8 w-8 rounded-full border-4 border-indigo-600 border-t-transparent"></div>
+      </div>
+    );
+  }
 
-  const filteredRooms = rooms.filter(room => {
-    if (search) {
-      const q = search.toLowerCase();
-      return room.number.toLowerCase().includes(q) || 
-             (room.roomType?.name ?? 'Unknown Room Type').toLowerCase().includes(q);
-    }
-    return true;
-  });
+  if (error || !data) {
+    return (
+      <div className="p-8 max-w-7xl mx-auto">
+        <div className="bg-red-50 text-red-800 p-4 rounded-xl border border-red-200">
+          Failed to load room control data. Please try again.
+        </div>
+      </div>
+    );
+  }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'AVAILABLE': return 'bg-emerald-100 text-emerald-800 border-emerald-200';
-      case 'OCCUPIED': return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'OUT_OF_ORDER': return 'bg-red-100 text-red-800 border-red-200';
-      case 'MAINTENANCE': return 'bg-amber-100 text-amber-800 border-amber-200';
-      default: return 'bg-slate-100 text-slate-800 border-slate-200';
-    }
+  const {
+    businessDate,
+    pendingArrivals,
+    pendingDepartures,
+    noShows,
+    unassignedArrivals,
+    inHouseGuestCount,
+    inHouseReservationCount,
+    missingRoomCharges,
+    folioBalanceExceptions,
+    creditLimitExceptions,
+    roomStatusMismatches,
+    assignmentIntegrity,
+    unbalancedFolios,
+  } = data as any;
+
+  const exceptionCount = 
+    pendingDepartures.length + 
+    missingRoomCharges.length + 
+    folioBalanceExceptions.length + 
+    roomStatusMismatches.length + 
+    unassignedArrivals.length + 
+    creditLimitExceptions.length + 
+    assignmentIntegrity.length + 
+    unbalancedFolios.length;
+
+  const totalChecks = inHouseReservationCount + exceptionCount; // simplistic denominator
+  const percentClear = totalChecks > 0 ? Math.round(((totalChecks - exceptionCount) / totalChecks) * 100) : 100;
+
+  const renderExceptionCard = (title: string, count: number, isCritical = false) => {
+    if (count === 0) return null;
+    return (
+      <div className="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-xl shadow-sm mb-2">
+        <div className="flex items-center gap-3">
+          {isCritical ? <AlertTriangle className="w-5 h-5 text-red-500" /> : <AlertTriangle className="w-5 h-5 text-amber-500" />}
+          <span className="font-semibold text-slate-800">{title}</span>
+        </div>
+        <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${isCritical ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+          {count}
+        </span>
+      </div>
+    );
   };
 
-  const getHousekeepingIcon = (status: string) => {
-    switch (status) {
-      case 'CLEAN': return <Sparkles className="w-4 h-4 text-emerald-500" />;
-      case 'DIRTY': return <Wind className="w-4 h-4 text-red-500" />;
-      case 'IN_PROGRESS': return <AlertTriangle className="w-4 h-4 text-amber-500" />;
-      case 'INSPECTED': return <ShieldCheck className="w-4 h-4 text-blue-500" />;
-      default: return <Sparkles className="w-4 h-4 text-slate-400" />;
-    }
-  };
+  const exceptionsList: any[] = [];
+  
+  if (activeTab === 'ALL' || activeTab === 'PENDING') {
+    pendingDepartures.forEach((r: any) => exceptionsList.push({
+      type: 'Pending Departure',
+      critical: true,
+      guest: `${r.primaryGuest.firstName} ${r.primaryGuest.lastName}`,
+      resId: r.id,
+      details: `Room ${r.reservationRooms[0]?.room?.number || 'Unassigned'} • Departs Today`,
+      actionLabel: 'Open Folio',
+      actionUrl: `/frontdesk/folios/${r.folios[0]?.id}`
+    }));
+    unassignedArrivals.forEach((r: any) => exceptionsList.push({
+      type: 'Unassigned Arrival',
+      critical: false,
+      guest: `${r.primaryGuest.firstName} ${r.primaryGuest.lastName}`,
+      resId: r.id,
+      details: `Arriving Today`,
+      actionLabel: 'Assign Room',
+      actionUrl: `/frontdesk/reservations/${r.id}`
+    }));
+  }
+
+  if (activeTab === 'ALL' || activeTab === 'FINANCIAL') {
+    missingRoomCharges.forEach((r: any) => exceptionsList.push({
+      type: 'Unposted Room Charge',
+      critical: true,
+      guest: `${r.primaryGuest.firstName} ${r.primaryGuest.lastName}`,
+      resId: r.id,
+      details: `Missing charge for ${format(new Date(businessDate), 'dd MMM')}`,
+      actionLabel: 'Investigate',
+      actionUrl: r.folios[0] ? `/frontdesk/folios/${r.folios[0].id}` : `/frontdesk/reservations/${r.id}`
+    }));
+    folioBalanceExceptions.forEach((r: any) => exceptionsList.push({
+      type: 'Departure Balance',
+      critical: true,
+      guest: `${r.primaryGuest.firstName} ${r.primaryGuest.lastName}`,
+      resId: r.id,
+      details: `Departure with outstanding balance: ${formatCurrency(Number(r.folios[0]?.balance || 0), 'NGN')}`,
+      actionLabel: 'Settle Balance',
+      actionUrl: `/frontdesk/folios/${r.folios[0]?.id}`
+    }));
+    creditLimitExceptions.forEach((r: any) => exceptionsList.push({
+      type: 'Credit Limit Breach',
+      critical: false,
+      guest: `${r.primaryGuest.firstName} ${r.primaryGuest.lastName}`,
+      resId: r.id,
+      details: `Balance ${formatCurrency(Number(r.folios[0]?.balance || 0), 'NGN')} exceeds limit ${formatCurrency(Number(r.corporateAccount?.creditLimit || 0), 'NGN')}`,
+      actionLabel: 'View Folio',
+      actionUrl: `/frontdesk/folios/${r.folios[0]?.id}`
+    }));
+    unbalancedFolios.forEach((e: any) => exceptionsList.push({
+      type: 'Unsettled Folio',
+      critical: true,
+      guest: `${e.reservation.primaryGuest.firstName} ${e.reservation.primaryGuest.lastName}`,
+      resId: e.reservation.id,
+      details: e.reason,
+      actionLabel: 'View Folio',
+      actionUrl: `/frontdesk/folios/${e.reservation.folios[0]?.id}`
+    }));
+  }
+
+  if (activeTab === 'ALL' || activeTab === 'STATUS') {
+    roomStatusMismatches.forEach((e: any) => exceptionsList.push({
+      type: 'Room Status Mismatch',
+      critical: false,
+      guest: `Room ${e.room.number}`,
+      resId: e.room.id,
+      details: e.reason,
+      actionLabel: 'View Room',
+      actionUrl: `/frontdesk/rooms` // or open a dialog
+    }));
+    assignmentIntegrity.forEach((e: any) => exceptionsList.push({
+      type: 'Assignment Integrity',
+      critical: false,
+      guest: e.room ? `Room ${e.room.number}` : 'Guest without room',
+      resId: e.reservations[0]?.id,
+      details: e.reason,
+      actionLabel: 'Investigate',
+      actionUrl: `/frontdesk/reservations/${e.reservations[0]?.id}`
+    }));
+  }
+
+  const rawData = allRoomsData as any;
+  const rooms: any[] = Array.isArray(rawData) ? rawData : (rawData?.data ?? []);
 
   return (
     <div className="p-8 max-w-7xl mx-auto min-h-screen pb-24">
       
       {/* Header */}
-      <div className="flex justify-between items-start mb-8 animate-in slide-in-from-top-4 duration-500">
+      <div className="flex justify-between items-start mb-8">
         <div>
           <Button 
             variant="outline" 
@@ -92,113 +197,183 @@ export default function FrontDeskRoomsPage() {
           >
             <ArrowLeft className="mr-2 h-4 w-4" /> Back to Dashboard
           </Button>
+          <div className="flex items-center gap-3 text-indigo-600 font-semibold mb-2 text-sm tracking-widest uppercase">
+            Night Audit
+          </div>
           <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 flex items-center gap-3">
-            <DoorOpen className="w-8 h-8 text-blue-600" />
-            Rooms Overview
+            Room & Guest Control
           </h1>
-          <p className="text-slate-500 mt-1 font-medium">Real-time status of all rooms in the property.</p>
+          <p className="text-slate-500 mt-2 font-medium flex items-center gap-2">
+            Business Date: <strong className="text-slate-800">{format(new Date(businessDate), 'dd MMM yyyy')}</strong>
+          </p>
+        </div>
+        
+        <div className="text-right">
+          <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
+            <div className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-1">Status</div>
+            <div className="flex items-center gap-3">
+              <span className={`text-3xl font-black ${exceptionCount > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                {exceptionCount}
+              </span>
+              <span className="text-slate-600 font-medium">Exceptions</span>
+              <div className="h-6 w-px bg-slate-200 mx-1"></div>
+              <span className={`text-xl font-bold ${percentClear === 100 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                {percentClear}% Clear
+              </span>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Filters and Search */}
-      <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 mb-8 animate-in fade-in duration-700 delay-100">
-        <div className="relative mb-6">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-6 w-6 text-slate-400" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by room number or type..."
-            className="w-full pl-14 pr-6 py-4 text-lg font-medium rounded-2xl border-2 border-slate-100 bg-slate-50 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-400"
-          />
+      {/* Summary Stats Ribbon */}
+      <div className="grid grid-cols-4 gap-4 mb-8">
+        <div className="bg-slate-900 text-white p-5 rounded-2xl shadow-md border border-slate-800">
+          <div className="text-slate-400 font-medium text-sm mb-1">In-House Guests</div>
+          <div className="flex items-end justify-between">
+            <span className="text-3xl font-black">{inHouseGuestCount}</span>
+            <Users className="w-8 h-8 text-slate-600" />
+          </div>
         </div>
-
-        <div className="flex flex-wrap gap-2">
-          {[
-            { id: 'ALL', label: 'All Rooms' },
-            { id: 'AVAILABLE', label: 'Available' },
-            { id: 'OCCUPIED', label: 'Occupied' },
-            { id: 'DIRTY', label: 'Dirty' },
-            { id: 'CLEAN', label: 'Clean' },
-            { id: 'OUT_OF_ORDER', label: 'Out of Order' },
-          ].map(filter => (
-            <button
-              key={filter.id}
-              onClick={() => setActiveFilter(filter.id)}
-              className={`px-5 py-2.5 rounded-full text-sm font-bold transition-all ${
-                activeFilter === filter.id 
-                  ? 'bg-slate-900 text-white shadow-md' 
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              {filter.label}
-            </button>
-          ))}
+        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+          <div className="text-slate-500 font-medium text-sm mb-1">Arrivals Pending</div>
+          <div className="flex items-end justify-between">
+            <span className="text-3xl font-black text-slate-900">{pendingArrivals.length}</span>
+            <DoorOpen className="w-8 h-8 text-blue-100" />
+          </div>
+        </div>
+        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+          <div className="text-slate-500 font-medium text-sm mb-1">Departures Pending</div>
+          <div className="flex items-end justify-between">
+            <span className="text-3xl font-black text-slate-900">{pendingDepartures.length}</span>
+            <LogOut className="w-8 h-8 text-amber-100" />
+          </div>
+        </div>
+        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+          <div className="text-slate-500 font-medium text-sm mb-1">Unposted Room Charges</div>
+          <div className="flex items-end justify-between">
+            <span className={`text-3xl font-black ${missingRoomCharges.length > 0 ? 'text-red-600' : 'text-slate-900'}`}>{missingRoomCharges.length}</span>
+            <FileText className="w-8 h-8 text-red-100" />
+          </div>
         </div>
       </div>
 
-      {/* Room Grid */}
-      {isLoading ? (
-        <div className="flex justify-center p-12">
-          <div className="w-10 h-10 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin"></div>
-        </div>
-      ) : filteredRooms.length === 0 ? (
-        <div className="text-center p-12 bg-slate-50 rounded-3xl border border-slate-100">
-          <Key className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-          <h3 className="text-lg font-bold text-slate-900">No rooms found</h3>
-          <p className="text-slate-500">Try adjusting your filters or search query.</p>
-        </div>
-      ) : (
-        <div className="space-y-12 animate-in fade-in slide-in-from-bottom-8 duration-700">
-          {Object.entries(
-            filteredRooms.reduce((acc, room) => {
-              const key = `${room.building?.name || 'Main Building'} • Floor ${room.floor?.number || room.floor?.name || 'N/A'}`;
-              if (!acc[key]) acc[key] = { floorNumber: room.floor?.number || 0, rooms: [] };
-              acc[key].rooms.push(room);
-              return acc;
-            }, {} as Record<string, { floorNumber: number; rooms: Room[] }>)
-          )
-          .sort((a, b) => a[1].floorNumber - b[1].floorNumber)
-          .map(([groupName, group]) => (
-            <div key={groupName} className="space-y-5">
-              <div className="flex items-center gap-4">
-                <div className="bg-slate-100 text-slate-700 font-bold px-4 py-1.5 rounded-full text-sm border border-slate-200">
-                  {groupName}
-                </div>
-                <div className="h-px bg-slate-200 flex-1"></div>
+      <div className="grid grid-cols-12 gap-8 mb-12">
+        {/* Left Column: Exception Summaries */}
+        <div className="col-span-4 space-y-8">
+          <div>
+            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">Critical Exceptions</h3>
+            {renderExceptionCard('Pending Departures', pendingDepartures.length, true)}
+            {renderExceptionCard('Unposted Room Charges', missingRoomCharges.length, true)}
+            {renderExceptionCard('Folio Balance Exceptions', folioBalanceExceptions.length, true)}
+            {renderExceptionCard('Unsettled Folios', unbalancedFolios.length, true)}
+            
+            {(pendingDepartures.length + missingRoomCharges.length + folioBalanceExceptions.length + unbalancedFolios.length) === 0 && (
+              <div className="flex items-center gap-2 p-3 bg-emerald-50 text-emerald-700 rounded-xl border border-emerald-100">
+                <CheckCircle2 className="w-5 h-5" /> <span className="font-medium text-sm">No critical exceptions.</span>
               </div>
-              
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                {group.rooms.sort((a, b) => a.number.localeCompare(b.number, undefined, { numeric: true })).map((room) => (
-                  <div 
-                    key={room.id}
-                    onClick={() => setSelectedRoom(room)}
-                    className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-xl hover:border-blue-400 transition-all p-4 flex flex-col group cursor-pointer hover:-translate-y-1"
-                  >
-                    <div className="flex justify-between items-start mb-3">
-                      <span className={`px-2 py-1 text-[10px] uppercase font-bold rounded-md border ${getStatusColor(room.status)}`}>
-                        {room.status}
-                      </span>
-                      <div title={room.housekeepingStatus} className="bg-slate-50 p-1.5 rounded-full border border-slate-100 group-hover:bg-blue-50 group-hover:border-blue-100 transition-colors">
-                        {getHousekeepingIcon(room.housekeepingStatus)}
-                      </div>
-                    </div>
+            )}
+          </div>
 
-                    <div className="mt-auto">
-                      <h3 className="text-3xl font-black text-slate-900 tracking-tight group-hover:text-blue-600 transition-colors">
-                        {formatRoomNumber(room.number)}
-                      </h3>
-                      <div className="text-xs text-slate-500 font-medium tracking-wide">
-                        {room.roomType?.name ?? 'Unknown Room Type'}
+          <div>
+            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">Warnings</h3>
+            {renderExceptionCard('Room Status Mismatches', roomStatusMismatches.length)}
+            {renderExceptionCard('Unassigned Arrivals', unassignedArrivals.length)}
+            {renderExceptionCard('Credit Limit Breaches', creditLimitExceptions.length)}
+            {renderExceptionCard('Assignment Integrity', assignmentIntegrity.length)}
+            
+            {(roomStatusMismatches.length + unassignedArrivals.length + creditLimitExceptions.length + assignmentIntegrity.length) === 0 && (
+              <div className="flex items-center gap-2 p-3 bg-emerald-50 text-emerald-700 rounded-xl border border-emerald-100">
+                <CheckCircle2 className="w-5 h-5" /> <span className="font-medium text-sm">No warnings.</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right Column: Detailed List */}
+        <div className="col-span-8 bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col">
+          <div className="flex items-center border-b border-slate-100 px-2">
+            {[
+              { id: 'ALL', label: 'All Exceptions' },
+              { id: 'PENDING', label: 'Pending Actions' },
+              { id: 'FINANCIAL', label: 'Financial' },
+              { id: 'STATUS', label: 'Status' }
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`px-4 py-4 text-sm font-bold border-b-2 transition-colors ${
+                  activeTab === tab.id 
+                    ? 'border-indigo-600 text-indigo-600' 
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          
+          <div className="p-4 flex-1 overflow-y-auto max-h-[600px]">
+            {exceptionsList.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-center py-12">
+                <ShieldCheck className="w-16 h-16 text-emerald-200 mb-4" />
+                <h4 className="text-lg font-bold text-slate-800">Everything looks good</h4>
+                <p className="text-slate-500 mt-1">No exceptions found in this category.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {exceptionsList.map((exc, i) => (
+                  <div key={i} className={`flex items-center justify-between p-4 rounded-xl border ${exc.critical ? 'bg-red-50/50 border-red-100' : 'bg-slate-50 border-slate-200'}`}>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full ${exc.critical ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'}`}>
+                          {exc.type}
+                        </span>
                       </div>
+                      <h4 className="font-bold text-slate-900">{exc.guest}</h4>
+                      <p className="text-sm text-slate-500 font-medium">{exc.details}</p>
+                    </div>
+                    <div>
+                      {exc.actionUrl && (
+                        <Link href={exc.actionUrl}>
+                          <Button variant="outline" className="bg-white hover:bg-slate-50">
+                            {exc.actionLabel} <ChevronRight className="w-4 h-4 ml-1" />
+                          </Button>
+                        </Link>
+                      )}
                     </div>
                   </div>
                 ))}
               </div>
-            </div>
-          ))}
+            )}
+          </div>
         </div>
-      )}
+      </div>
+
+      {/* Full Property View (Collapsible or bottom section) */}
+      <div className="mt-16 pt-12 border-t border-slate-200">
+        <h2 className="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2 uppercase tracking-widest">
+          Full Property View
+        </h2>
+        {rooms.length === 0 ? (
+           <div className="text-slate-500">No rooms configured for this property.</div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-8 gap-3">
+            {rooms.sort((a, b) => a.number.localeCompare(b.number, undefined, { numeric: true })).map(room => (
+              <div 
+                key={room.id}
+                onClick={() => setSelectedRoom(room)}
+                className={`p-3 rounded-xl border shadow-sm cursor-pointer hover:border-indigo-400 transition-colors ${
+                  room.status === 'OCCUPIED' ? 'bg-blue-50 border-blue-200' : 
+                  room.status === 'AVAILABLE' ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200'
+                }`}
+              >
+                <div className="text-[10px] font-bold text-slate-500 uppercase">{room.status}</div>
+                <div className="text-xl font-black text-slate-900">{formatRoomNumber(room.number)}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       <FrontDeskOccupiedRoomDialog
         room={selectedRoom}
