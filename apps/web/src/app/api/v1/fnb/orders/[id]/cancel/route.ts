@@ -9,9 +9,10 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
 
@@ -21,10 +22,10 @@ export async function POST(
     }
 
     // Ensure idempotency: an order can only be cancelled once.
-    const operationId = `cancel-order-${params.id}`;
+    const operationId = `cancel-order-${id}`;
 
     const result = await PosOrderService.cancelOrder({
-      orderId: params.id,
+      orderId: id,
       reason,
       authorizerId: session.user.id,
       operationId,
