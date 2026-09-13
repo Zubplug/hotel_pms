@@ -34,7 +34,7 @@ const ReservationDetailModalContent = ({ reservationId, onClose }: { reservation
   if (!res) return <div className="p-8 text-center text-sm text-rose-400">Failed to load reservation details.</div>;
   return (
     <div className="max-h-[85vh] overflow-y-auto p-1">
-      <FrontDeskReservationDetail reservation={res.data || res} />
+      <FrontDeskReservationDetail reservation={res.data || res} darkMode />
     </div>
   );
 };
@@ -438,7 +438,7 @@ export default function NightAuditRoomsControlPage() {
 
       <Dialog open={!!viewingFolioId} onOpenChange={(open) => !open && setViewingFolioId(null)}>
         <DialogContent className="w-[95vw] sm:max-w-[1400px] max-w-[1400px] h-[90vh] p-0 overflow-y-auto">
-          {viewingFolioId && <FolioDetailView folioId={viewingFolioId} onBack={() => setViewingFolioId(null)} readOnly={true} />}
+          {viewingFolioId && <FolioDetailView folioId={viewingFolioId} onBack={() => setViewingFolioId(null)} readOnly={true} darkMode />}
         </DialogContent>
       </Dialog>
 
