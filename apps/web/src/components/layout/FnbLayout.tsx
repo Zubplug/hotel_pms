@@ -74,6 +74,7 @@ const FNB_NAV = [
 
 export function FnbLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [hasMultipleProperties, setHasMultipleProperties] = useState(true);
   const pathname = usePathname();
   const { data: session, status } = useLodgeCoreSession();
   const router = useRouter();
@@ -219,23 +220,40 @@ export function FnbLayout({ children }: { children: React.ReactNode }) {
 
       {/* Main */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden min-w-0">
-        {/* Top header */}
-        <header className="h-14 shrink-0 border-b border-slate-200 bg-white flex items-center px-4 justify-between sticky top-0 z-30 shadow-sm">
-          <div className="flex items-center gap-3">
+        {/* Top header - Conditionally hidden for single property to improve UI */}
+        {hasMultipleProperties ? (
+          <header className="h-14 shrink-0 border-b border-slate-200 bg-white flex items-center px-4 justify-between sticky top-0 z-30 shadow-sm">
+            <div className="flex items-center gap-3">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="lg:hidden h-8 w-8"
+                onClick={() => setSidebarOpen(true)}
+              >
+                <Menu className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="flex items-center gap-3">
+              <PropertySelector onMultiplePropertiesChange={setHasMultipleProperties} />
+            </div>
+          </header>
+        ) : (
+          <div className="lg:hidden h-14 shrink-0 flex items-center px-4 sticky top-0 z-30">
+            {/* Mobile menu button when header is hidden */}
             <Button
-              variant="ghost"
+              variant="outline"
               size="icon"
-              className="lg:hidden h-8 w-8"
+              className="h-8 w-8 bg-white/80 backdrop-blur-sm"
               onClick={() => setSidebarOpen(true)}
             >
               <Menu className="h-4 w-4" />
             </Button>
-
+            {/* We still mount PropertySelector hidden so it fires onMultiplePropertiesChange */}
+            <div className="hidden">
+              <PropertySelector onMultiplePropertiesChange={setHasMultipleProperties} />
+            </div>
           </div>
-          <div className="flex items-center gap-3">
-            <PropertySelector />
-          </div>
-        </header>
+        )}
 
         {/* Page content */}
         <div className="flex-1 overflow-y-auto bg-slate-50">

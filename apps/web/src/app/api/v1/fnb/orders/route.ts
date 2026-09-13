@@ -31,8 +31,19 @@ export async function GET(req: NextRequest) {
       },
       include: {
         table: true,
-        items: true,
+        items: {
+          include: {
+            modifiers: true
+          }
+        },
         kots: true,
+        productionBatches: {
+          include: {
+            events: {
+              orderBy: { createdAt: 'asc' }
+            }
+          }
+        },
         serverStaff: {
           select: { firstName: true, lastName: true }
         }
