@@ -58,7 +58,7 @@ export function AttentionQueue({ data, onResolveItem }: { data: NightAuditData; 
     });
 
     (data.cash.cashHandovers || []).forEach((item: Record<string, unknown>) => {
-      items.push({ id: getStableQueueId('handover', item), label: 'Pending Cash Handover', description: String((item.drawerName as string | undefined) ?? 'Drawer'), type: 'blocker', actionType: 'CASH_HANDOVER', payload: { ...item, propertyId: data.property.id } as Record<string, unknown> });
+      items.push({ id: getStableQueueId('handover', item), label: 'Pending Cash Handover', description: `${String((item.drawerName as string | undefined) ?? 'Drawer')} · General Cashier action`, type: 'blocker', actionType: 'CASH_HANDOVER_NOTICE', payload: { ...item, propertyId: data.property.id } as Record<string, unknown> });
     });
     (data.cash.unverifiedTransactions || []).forEach((item: Record<string, unknown>) => {
       items.push({ id: getStableQueueId('trans', item), label: 'Unverified Transaction', description: `${String((item.method as string | undefined) === 'BANK_TRANSFER' ? 'Transfer' : 'POS')} - ${String(item.amount ?? '')}`, type: 'blocker', actionType: 'TRANSACTION_VERIFICATION', payload: { unverifiedTransactions: [item], propertyId: data.property.id } as Record<string, unknown> });
@@ -156,7 +156,7 @@ export function AttentionQueue({ data, onResolveItem }: { data: NightAuditData; 
                     </div>
                   </div>
 
-                  {onResolveItem && (
+                  {onResolveItem && item.actionType !== 'CASH_HANDOVER_NOTICE' && (
                     <button
                       onClick={() => {
                         onResolveItem(item.actionType, item.payload);
@@ -167,6 +167,7 @@ export function AttentionQueue({ data, onResolveItem }: { data: NightAuditData; 
                       <ChevronRight className="h-3.5 w-3.5" />
                     </button>
                   )}
+                  {item.actionType === 'CASH_HANDOVER_NOTICE' && <span className="shrink-0 rounded-lg bg-slate-100 px-2.5 py-1.5 text-[11px] font-medium text-slate-500">Read only</span>}
                 </div>
               ))}
             </div>

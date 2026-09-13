@@ -7,7 +7,6 @@ import { Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { FolioDetailView } from '@/components/finance/FolioDetailView';
-import { CashHandoverResolution } from './cash-handover-resolution';
 import { TransactionVerificationResolution } from './transaction-verification-resolution';
 import { ComplimentaryVerificationResolution } from './complimentary-verification-resolution';
 
@@ -19,7 +18,6 @@ export type ResolutionAction =
   | { type: 'FRONTDESK_SHIFT'; item: any }
   | { type: 'FOLIO_PREVIEW'; item: any }
   | { type: 'SYNC_CONFLICT'; item: any }
-  | { type: 'CASH_HANDOVER'; item: any }
   | { type: 'TRANSACTION_VERIFICATION'; item: any }
   | { type: 'DISCOUNT_APPROVAL'; item: any }
   | { type: 'COMPLIMENTARY_VERIFICATION'; item: any }
@@ -45,7 +43,6 @@ export function ResolutionManager({ action, onClose, onSuccess }: Props) {
         {action.type === 'FRONTDESK_SHIFT' && <FrontdeskShiftResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
         {action.type === 'FOLIO_PREVIEW' && <FolioPreview item={action.item} onClose={onClose} />}
         {action.type === 'SYNC_CONFLICT' && <FinancialSyncResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
-        {action.type === 'CASH_HANDOVER' && <CashHandoverResolution propertyId={action.item.propertyId} baseCurrency="NGN" handover={action.item} onSuccess={onSuccess} onClose={onClose} />}
         {action.type === 'TRANSACTION_VERIFICATION' && <TransactionVerificationResolution propertyId={action.item.propertyId} transactions={action.item.unverifiedTransactions} onOpenChange={(open) => !open && onClose()} onSuccess={onSuccess} open={true} />}
         {action.type === 'DISCOUNT_APPROVAL' && <DiscountApprovalResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
         {action.type === 'COMPLIMENTARY_VERIFICATION' && <ComplimentaryVerificationResolution propertyId={action.item.propertyId} records={action.item.records} onOpenChange={(open) => !open && onClose()} open={true} onSuccess={onSuccess} />}

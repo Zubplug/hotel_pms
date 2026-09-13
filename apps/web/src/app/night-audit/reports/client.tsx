@@ -1,19 +1,16 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { FileText, Clock as Clock3, Download, Printer, Share2, FileSpreadsheet } from 'lucide-react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { FileText, FileSpreadsheet } from 'lucide-react';
 import { useProperty } from '@/components/PropertyProvider';
 
 export default function ReportsGeneratorPage({ managerMode = false }: { managerMode?: boolean }) {
   const { propertyId } = useProperty();
   
   const [businessDate, setBusinessDate] = useState<string | null>(null);
-  const [flashReport, setFlashReport] = useState<any>(null);
-  const [showFlashReport, setShowFlashReport] = useState(false);
 
   useEffect(() => {
     if (propertyId) {
@@ -57,20 +54,20 @@ export default function ReportsGeneratorPage({ managerMode = false }: { managerM
             Generate and export daily audit reports.
           </p>
         </div>
-        <Button className="bg-emerald-600 hover:bg-emerald-700 gap-2">
-          <Download className="h-4 w-4" />
-          Download Night Audit Pack
-        </Button>
+        <Link href="/night-audit/reconciliation">
+          <Button className="bg-indigo-600 hover:bg-indigo-700 gap-2">
+            <FileSpreadsheet className="h-4 w-4" />
+            Open reconciliation
+          </Button>
+        </Link>
       </div>
 
-      <Tabs defaultValue="standard" className="w-full">
-        <TabsList className="mb-4">
-          <TabsTrigger value="standard">Standard Reports</TabsTrigger>
-          <TabsTrigger value="custom">Custom Reports</TabsTrigger>
-          <TabsTrigger value="scheduled">Scheduled</TabsTrigger>
-        </TabsList>
-        <TabsContent value="standard">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="w-full">
+          <div className="mb-5 rounded-2xl border border-indigo-100 bg-indigo-50/60 px-5 py-4 text-sm text-indigo-950">
+            <p className="font-semibold">Night audit report pack</p>
+            <p className="mt-1 text-indigo-800/70">Use the standard reports below for the close review. Custom and scheduled reporting belongs in the management reporting workspace.</p>
+          </div>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
             {reports.map((report, idx) => (
               <Card key={idx} className="hover:shadow-md transition-shadow">
                 <CardHeader className="pb-3">
@@ -101,20 +98,7 @@ export default function ReportsGeneratorPage({ managerMode = false }: { managerM
               </Card>
             ))}
           </div>
-        </TabsContent>
-        <TabsContent value="custom">
-          <div className="py-12 text-center text-muted-foreground bg-muted/20 rounded-xl border border-dashed">
-            <FileText className="mx-auto h-8 w-8 mb-2 opacity-20" />
-            <p>Custom reports coming soon</p>
-          </div>
-        </TabsContent>
-        <TabsContent value="scheduled">
-          <div className="py-12 text-center text-muted-foreground bg-muted/20 rounded-xl border border-dashed">
-            <Clock3 className="mx-auto h-8 w-8 mb-2 opacity-20" />
-            <p>Scheduled reports coming soon</p>
-          </div>
-        </TabsContent>
-      </Tabs>
+      </div>
     </div>
   );
 }
