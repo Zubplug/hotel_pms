@@ -135,7 +135,7 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* ── Navigation ── */}
-      <nav className="relative min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-3 py-5 pb-6 flex [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <nav className="relative min-h-0 flex-1 flex-col gap-5 overflow-y-auto overscroll-contain px-3 py-5 pb-12 flex [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {GROUPS.map((group) => {
           const items = NIGHT_AUDIT_NAV.filter(i => i.group === group);
           if (!items.length) return null;
