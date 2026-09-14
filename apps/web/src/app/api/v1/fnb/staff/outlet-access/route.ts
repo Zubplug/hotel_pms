@@ -48,6 +48,9 @@ export async function PUT(req: NextRequest) {
   await prisma.$transaction(async (tx) => {
     await tx.staffPosOutletAccess.deleteMany({ where: { staffId, outlet: { propertyId } } });
     if (outletIds.length) await tx.staffPosOutletAccess.createMany({ data: outletIds.map((outletId) => ({ staffId, outletId, assignedBy: user.id })) });
+    // Outlet access is embedded in the Staff sync projection. Touch the staff
+    // record so incremental desktop syncs cannot miss an access-only change.
+    await tx.staff.update({ where: { id: staffId }, data: { updatedAt: new Date() } });
   });
   return successResponse({ staffId, outletIds });
 }
