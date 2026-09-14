@@ -14,7 +14,7 @@ function groupProducts(rows: AnyRecord[]) {
   const groups = new Map<string, AnyRecord>();
   for (const row of rows) {
     const key = row.itemCode || `${String(row.name).trim().toLowerCase()}|${Number(row.price)}|${Number(row.taxRate || 0)}`;
-    const location = { id: row.id, categoryId: row.categoryId, category: row.category?.name || 'Uncategorized', outlet: row.category?.outlet?.name || 'Outlet' };
+    const location = { id: row.id, categoryId: row.categoryId, outletId: row.category?.outlet?.id, category: row.category?.name || 'Uncategorized', outlet: row.category?.outlet?.name || 'Outlet' };
     const targets = (row.modifiers || []).map((modifier: AnyRecord) => ({ ...modifier, productId: row.id }));
     const existing = groups.get(key);
     if (!existing) {
@@ -79,11 +79,28 @@ export function FnbMenuClient() {
   const filteredProducts = useMemo(() => products.filter((product) => {
     const q = search.toLowerCase();
     const matchesSearch = !q || [product.itemCode, product.name, ...(product.locations || []).map((location: AnyRecord) => `${location.category} ${location.outlet}`)].some((value) => String(value || '').toLowerCase().includes(q));
-    const matchesCategory = categoryFilter === 'ALL' || (product.locations || []).some((location: AnyRecord) => location.categoryId === categoryFilter);
+    const matchesCategory = categoryFilter === 'ALL' || (product.locations || []).some((location: AnyRecord) => String(location.category || '').trim().toLowerCase() === categoryFilter);
     const matchesAvailability = availabilityFilter === 'ALL' || (availabilityFilter === 'ACTIVE' ? product.isActive : !product.isActive);
     const matchesInventory = inventoryFilter === 'ALL' || product.inventoryMode === inventoryFilter;
     return matchesSearch && matchesCategory && matchesAvailability && matchesInventory;
   }), [products, search, categoryFilter, availabilityFilter, inventoryFilter]);
+
+  const categoryGroups = useMemo(() => {
+    const grouped = new Map<string, AnyRecord>();
+    for (const category of categories) {
+      const key = category.name.trim().toLowerCase();
+      const current = grouped.get(key);
+      if (current) {
+        current.categoryIds.push(category.id);
+        current.outletNames.push(category.outlet?.name || 'Outlet');
+      } else {
+        grouped.set(key, { ...category, categoryIds: [category.id], outletNames: [category.outlet?.name || 'Outlet'] });
+      }
+    }
+    return [...grouped.values()];
+  }, [categories]);
+
+  const categoryOptions = useMemo(() => categoryGroups.filter((category) => category.isActive), [categoryGroups]);
 
   const request = async (url: string, method: string, body: AnyRecord) => {
     const response = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -93,8 +110,8 @@ export function FnbMenuClient() {
   };
   const productIds = (product: AnyRecord) => (product.locations || [{ id: product.id }]).map((location: AnyRecord) => location.id);
 
-  const openAdd = () => { setEditing(null); setItem({ name: '', price: '', taxRate: '0', categoryId: categories.find((category) => category.isActive)?.id || '', inventoryMode: 'NON_STOCK' }); setDialog('item'); };
-  const openEdit = (product: AnyRecord) => { setEditing(product); setItem({ name: product.name, price: String(product.price), taxRate: String(product.taxRate || 0), categoryId: product.categoryId, inventoryMode: product.inventoryMode }); setDialog('item'); };
+  const openAdd = () => { setEditing(null); setItem({ name: '', price: '', taxRate: '0', categoryId: categoryOptions[0]?.id || '', inventoryMode: 'NON_STOCK' }); setDialog('item'); };
+  const openEdit = (product: AnyRecord) => { const productCategory = categories.find((category) => category.id === product.categoryId); const groupedCategory = productCategory ? categoryOptions.find((category) => category.name.trim().toLowerCase() === productCategory.name.trim().toLowerCase()) : null; setEditing(product); setItem({ name: product.name, price: String(product.price), taxRate: String(product.taxRate || 0), categoryId: groupedCategory?.id || product.categoryId, inventoryMode: product.inventoryMode }); setDialog('item'); };
   const openModifiers = (product: AnyRecord) => { setModifierProduct(product); setModifierEditing(null); setModifier({ name: '', price: '0', quantity: '1', unitOfMeasure: '' }); setDialog('modifier'); };
 
   const saveItem = async () => {
@@ -102,12 +119,18 @@ export function FnbMenuClient() {
     try {
       if (!item.name.trim() || !item.categoryId) throw new Error('Name and category are required');
       if (editing) {
-        await request(`/api/v1/pos/products/${editing.id}`, 'PATCH', { name: item.name, categoryId: item.categoryId, taxRate: Number(item.taxRate), inventoryMode: item.inventoryMode });
+        const selectedCategory = categoryOptions.find((category) => category.id === item.categoryId);
+        for (const location of editing.locations || [{ id: editing.id, outletId: undefined }]) {
+          const targetCategory = selectedCategory?.categoryIds
+            .map((categoryId: string) => categories.find((category) => category.id === categoryId))
+            .find((category: AnyRecord | undefined) => !location.outletId || category?.outletId === location.outletId);
+          await request(`/api/v1/pos/products/${location.id}`, 'PATCH', { name: item.name, categoryId: targetCategory?.id || item.categoryId, taxRate: Number(item.taxRate), inventoryMode: item.inventoryMode });
+        }
         if (Number(item.price) !== Number(editing.price)) await request(`/api/v1/pos/products/${editing.id}/price-request`, 'POST', { price: Number(item.price), reason: 'Price change submitted from menu management' });
         setMessage(Number(item.price) !== Number(editing.price) ? 'Details saved; price is awaiting approval.' : 'Menu item updated.');
       } else {
         const selectedCategory = categories.find((category) => category.id === item.categoryId);
-        const categoryIds = selectedCategory ? categories.filter((category) => category.isActive && category.name.trim().toLowerCase() === selectedCategory.name.trim().toLowerCase()).map((category) => category.id) : [item.categoryId];
+        const categoryIds = selectedCategory?.categoryIds || [item.categoryId];
         await request('/api/v1/pos/products/menu-request', 'POST', { propertyId, name: item.name, price: Number(item.price), taxRate: Number(item.taxRate), categoryId: item.categoryId, categoryIds, inventoryMode: item.inventoryMode });
         setMessage('New item submitted for approval.');
       }
@@ -137,8 +160,8 @@ export function FnbMenuClient() {
 
   const toggleActive = async (product: AnyRecord) => { try { for (const id of productIds(product)) await request(`/api/v1/pos/products/${id}`, 'PATCH', { isActive: !product.isActive }); setMessage(product.isActive ? 'Item 86’d across outlets.' : 'Item made available across outlets.'); await load(); } catch (err: any) { setMessage(err.message); } };
   const saveCategory = async () => { setSaving(true); try { const result = await request('/api/v1/pos/categories', 'POST', { propertyId, ...categoryDraft, allOutlets: categoryAllOutlets }); const count = result.data?.createdCount ?? 0; setMessage(categoryAllOutlets ? `Category created for ${count} active outlet${count === 1 ? '' : 's'}.` : 'Category created.'); await load(); } catch (err: any) { setMessage(err.message); } finally { setSaving(false); } };
-  const updateCategory = async (category: AnyRecord) => { try { await request(`/api/v1/pos/categories/${category.id}`, 'PATCH', { propertyId, name: categoryEdits[category.id] ?? category.name }); setMessage('Category updated.'); await load(); } catch (err: any) { setMessage(err.message); } };
-  const toggleCategory = async (category: AnyRecord) => { try { await request(`/api/v1/pos/categories/${category.id}`, 'PATCH', { propertyId, isActive: !category.isActive }); setMessage(category.isActive ? 'Category deactivated.' : 'Category activated.'); await load(); } catch (err: any) { setMessage(err.message); } };
+  const updateCategory = async (category: AnyRecord) => { try { const name = categoryEdits[category.id] ?? category.name; await Promise.all(category.categoryIds.map((categoryId: string) => request(`/api/v1/pos/categories/${categoryId}`, 'PATCH', { propertyId, name }))); setMessage(`Category updated across ${category.categoryIds.length} outlet${category.categoryIds.length === 1 ? '' : 's'}.`); await load(); } catch (err: any) { setMessage(err.message); } };
+  const toggleCategory = async (category: AnyRecord) => { try { await Promise.all(category.categoryIds.map((categoryId: string) => request(`/api/v1/pos/categories/${categoryId}`, 'PATCH', { propertyId, isActive: !category.isActive }))); setMessage(category.isActive ? 'Category deactivated across outlets.' : 'Category activated across outlets.'); await load(); } catch (err: any) { setMessage(err.message); } };
 
   // UI Redesign Start
   return (
@@ -197,7 +220,7 @@ export function FnbMenuClient() {
                 onChange={(e) => setCategoryFilter(e.target.value)}
               >
                 <option value="ALL">All Categories</option>
-                {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+                {categoryOptions.map((category) => <option key={category.id} value={category.name.trim().toLowerCase()}>{category.name} ({category.outletNames.length} outlet{category.outletNames.length === 1 ? '' : 's'})</option>)}
               </select>
 
               <select 
@@ -443,8 +466,8 @@ export function FnbMenuClient() {
                         onChange={(e) => setItem({ ...item, categoryId: e.target.value })}
                       >
                         <option value="" disabled>Select category...</option>
-                        {categories.filter((category) => category.isActive).map((category) => (
-                          <option key={category.id} value={category.id}>{category.name} ({category.outlet?.name || 'Outlet'})</option>
+                        {categoryOptions.map((category) => (
+                          <option key={category.id} value={category.id}>{category.name} ({category.outletNames.length} outlet{category.outletNames.length === 1 ? '' : 's'})</option>
                         ))}
                       </select>
                     </div>
@@ -643,7 +666,7 @@ export function FnbMenuClient() {
                     <div className="space-y-3">
                       <h3 className="text-sm font-medium text-slate-900 border-b border-slate-100 pb-2">Manage Categories</h3>
                       <div className="max-h-[40vh] overflow-y-auto space-y-2 pr-2 custom-scrollbar">
-                        {categories.map((category) => (
+                        {categoryGroups.map((category) => (
                           <div key={category.id} className="flex items-center gap-3 bg-white p-2 rounded-lg border border-slate-200 shadow-sm hover:border-slate-300 transition-colors">
                             <Input 
                               className="h-9 flex-1 bg-transparent border-transparent hover:border-slate-200 focus-visible:bg-white focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20 px-2 transition-all font-medium text-sm"
@@ -671,7 +694,7 @@ export function FnbMenuClient() {
                             </div>
                           </div>
                         ))}
-                        {categories.length === 0 && (
+                        {categoryGroups.length === 0 && (
                           <p className="text-sm text-slate-500 text-center py-4">No categories created yet.</p>
                         )}
                       </div>

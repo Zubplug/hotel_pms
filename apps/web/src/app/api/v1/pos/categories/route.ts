@@ -34,6 +34,7 @@ export async function GET(req: NextRequest) {
 
     const categories = await prisma.productCategory.findMany({
       where: { outletId: { in: outletIdsToQuery }, ...(new URL(req.url).searchParams.get('all') === 'true' ? {} : { isActive: true }) },
+      include: { outlet: { select: { id: true, name: true, propertyId: true } } },
       orderBy: { sortOrder: 'asc' }
     });
 
