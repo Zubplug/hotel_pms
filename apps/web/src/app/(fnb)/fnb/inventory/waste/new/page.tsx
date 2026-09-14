@@ -31,7 +31,7 @@ export default function NewWasteEntryPage() {
     fetch('/api/v1/inventory/stock-items')
       .then(res => res.json())
       .then(res => {
-        setStockItems(res.data || []);
+        setStockItems(res.data?.items || []);
       })
       .finally(() => setFetching(false));
   }, []);

@@ -24,5 +24,19 @@ export async function GET(req: NextRequest) {
     },
     orderBy: { createdAt: 'desc' }, take: 200,
   });
-  return successResponse(approvals);
+  const seen = new Set<string>();
+  const deduplicated = approvals.filter((approval) => {
+    const details = (approval.details || {}) as Record<string, any>;
+    const ids = Array.isArray(details.productIds) ? [...details.productIds].sort().join(',') : details.productId || '';
+    // The grouped F&B menu previously created one request per outlet copy.
+    // For the requester's history, identical item/price requests are one action;
+    // approver queues retain their individual records for legacy auditability.
+    const key = onlyMine && approval.type === 'POS_PRICE_CHANGE'
+      ? `${approval.requestedBy}:${approval.type}:${details.productName || ''}:${details.oldPrice || ''}:${details.newPrice || ''}`
+      : `${approval.requestedBy}:${approval.type}:${details.productName || details.name || ''}:${details.newPrice || details.price || ''}:${ids}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return successResponse(deduplicated);
 }

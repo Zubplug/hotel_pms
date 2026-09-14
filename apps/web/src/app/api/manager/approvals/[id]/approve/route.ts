@@ -42,13 +42,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         if (!details.accountantApprovedBy) throw new Error('ACCOUNTANT_APPROVAL_REQUIRED');
         if (details.stage !== 'MANAGER_REVIEW') throw new Error('MANAGER_REVIEW_REQUIRED');
         const newPrice = Number(details.newPrice);
-        if (!details.productId || !Number.isFinite(newPrice) || newPrice < 0) throw new Error('INVALID_PRICE_REQUEST');
-        const product = await tx.posProduct.findFirst({ where: { id: details.productId, propertyId: approval.propertyId } });
-        if (!product) throw new Error('NOT_FOUND');
-        await tx.posProduct.update({ where: { id: product.id }, data: { price: newPrice, updatedBy: user.id } });
+        const productIds = Array.isArray(details.productIds) && details.productIds.length ? details.productIds : [details.productId];
+        if (!productIds.length || !Number.isFinite(newPrice) || newPrice < 0) throw new Error('INVALID_PRICE_REQUEST');
+        const products = await tx.posProduct.findMany({ where: { id: { in: productIds }, propertyId: approval.propertyId } });
+        if (products.length !== productIds.length) throw new Error('NOT_FOUND');
+        await tx.posProduct.updateMany({ where: { id: { in: productIds }, propertyId: approval.propertyId }, data: { price: newPrice, updatedBy: user.id } });
+        const product = products[0];
         const updated = await tx.approvalRequest.update({ where: { id: approval.id }, data: { status: 'APPROVED', reviewedBy: user.id, reviewedAt: new Date(), details: { ...details, stage: 'LIVE', managerApprovedBy: user.id, managerApprovedAt: new Date().toISOString() } } });
         await tx.auditLog.create({ data: { organizationId: (await tx.property.findUnique({ where: { id: approval.propertyId } }))?.organizationId || '', propertyId: approval.propertyId, userId: user.id, action: 'POS_PRICE_PUBLISHED', resource: 'PosProduct', resourceId: product.id, newValue: { oldPrice: details.oldPrice, newPrice }, ipAddress: req.headers.get('x-forwarded-for') || '', userAgent: req.headers.get('user-agent') || '', requestId: crypto.randomUUID() } });
-        return { status: 'EXECUTED', approval: updated, productId: product.id, price: newPrice };
+        return { status: 'EXECUTED', approval: updated, productIds, price: newPrice };
       }
 
       if (approval.type === 'POS_MENU_CREATE') {

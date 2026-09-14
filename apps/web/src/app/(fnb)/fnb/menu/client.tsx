@@ -148,7 +148,7 @@ export function FnbMenuClient() {
   const changePrice = async () => {
     if (!priceProduct) return;
     setSaving(true);
-    try { for (const id of productIds(priceProduct)) await request(`/api/v1/pos/products/${id}/price-request`, 'POST', { price: Number(newPrice), reason: 'Grouped outlet price change' }); setDialog(null); setMessage('Price request submitted for all outlet copies: General Cashier → Accountant → General Manager.'); await load(); }
+    try { const ids = productIds(priceProduct); await request(`/api/v1/pos/products/${ids[0]}/price-request`, 'POST', { productIds: ids, price: Number(newPrice), reason: 'Grouped outlet price change' }); setDialog(null); setMessage('One price request submitted for all outlet copies: General Cashier → Accountant → General Manager.'); await load(); }
     catch (err: any) { setMessage(err.message); }
     finally { setSaving(false); }
   };
