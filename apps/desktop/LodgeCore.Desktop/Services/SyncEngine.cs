@@ -2118,11 +2118,21 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                         .FirstOrDefaultAsync(x => x.Id == id, stoppingToken);
 
                     var incomingUpdatedAt = el.TryGetProperty("updatedAt", out var u) && u.ValueKind != System.Text.Json.JsonValueKind.Null ? u.GetDateTime() : DateTime.MinValue;
+                    var incomingStatus = el.TryGetProperty("status", out var incomingStatusElement) && incomingStatusElement.ValueKind != System.Text.Json.JsonValueKind.Null
+                        ? incomingStatusElement.GetString() ?? ""
+                        : "";
+                    var isAuthoritativeTerminalStatus = incomingStatus.Equals("CANCELLED", StringComparison.OrdinalIgnoreCase)
+                        || incomingStatus.Equals("VOIDED", StringComparison.OrdinalIgnoreCase)
+                        || incomingStatus.Equals("CLOSED", StringComparison.OrdinalIgnoreCase);
                     
                     // Dirty protection! Check if local has been updated more recently or has changes pending sync
                     // Wait, we don't have IsDirty on PosOrders yet? LocalPosOrder does not have IsDirty.
-                    // But if it was updated locally, its UpdatedAt might be > incomingUpdatedAt
-                    if (order != null && (order.UpdatedAt >= incomingUpdatedAt || await HasPendingPosEventAsync(id))) continue;
+                    // But if it was updated locally, its UpdatedAt might be > incomingUpdatedAt.
+                    // A cloud cancellation/void/close is authoritative, however. If it is
+                    // blocked by a pending local event, the waiter can remain stuck with
+                    // an order that is already resolved on the manager's dashboard.
+                    if (order != null && !isAuthoritativeTerminalStatus
+                        && (order.UpdatedAt >= incomingUpdatedAt || await HasPendingPosEventAsync(id))) continue;
 
                     if (order == null)
                     {

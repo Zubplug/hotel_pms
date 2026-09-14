@@ -6,7 +6,7 @@ import { requireOrganizationContext } from '@/lib/organization-access';
 /**
  * GET /api/v1/pos/sessions/[sessionId]/open-orders
  *
- * Returns all open (UNPAID, not VOIDED) PosOrders linked to the session.
+ * Returns all open (UNPAID, not VOIDED/CANCELLED/CLOSED) PosOrders linked to the session.
  * Used by the Night Audit wizard to block shift-close when orders are pending.
  */
 export async function GET(
