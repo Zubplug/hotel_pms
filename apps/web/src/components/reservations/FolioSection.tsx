@@ -11,6 +11,7 @@ import { RefundDialog } from './RefundDialog';
 import { FrontDeskAddPaymentDialog } from '../frontdesk/FrontDeskAddPaymentDialog';
 import { FrontDeskRefundDialog } from '../frontdesk/FrontDeskRefundDialog';
 import { FrontDeskQuickCheckoutDialog } from '../frontdesk/FrontDeskQuickCheckoutDialog';
+import { CheckOutDialog } from './CheckOutDialog';
 import { FrontDeskDiscountModal } from '../frontdesk/FrontDeskDiscountModal';
 import { usePathname } from 'next/navigation';
 import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
@@ -379,12 +380,21 @@ export function FolioSection({ reservation, readOnly = false }: { reservation: a
           />
         )
       )}
-      <FrontDeskQuickCheckoutDialog
-        open={isCheckOutOpen}
-        onOpenChange={setIsCheckOutOpen}
-        propertyId={reservation.propertyId}
-        initialReservation={reservation}
-      />
+      {pathname.startsWith('/frontdesk') ? (
+        <FrontDeskQuickCheckoutDialog
+          open={isCheckOutOpen}
+          onOpenChange={setIsCheckOutOpen}
+          propertyId={reservation.propertyId}
+          initialReservation={reservation}
+        />
+      ) : (
+        <CheckOutDialog
+          open={isCheckOutOpen}
+          onOpenChange={setIsCheckOutOpen}
+          reservation={reservation}
+          folio={folio}
+        />
+      )}
       
       {discountTarget && (
         <FrontDeskDiscountModal
