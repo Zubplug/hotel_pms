@@ -57,15 +57,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         const details = (approval.details || {}) as Record<string, any>;
         if (!details.accountantApprovedBy) throw new Error('ACCOUNTANT_APPROVAL_REQUIRED');
         if (details.stage !== 'MANAGER_REVIEW') throw new Error('MANAGER_REVIEW_REQUIRED');
-        const category = await tx.productCategory.findFirst({ where: { id: details.categoryId, isActive: true, outlet: { propertyId: approval.propertyId, isActive: true } } });
-        if (!category || !details.name || !Number.isFinite(Number(details.price))) throw new Error('INVALID_MENU_REQUEST');
-        const product = await tx.posProduct.create({ data: { propertyId: approval.propertyId, categoryId: category.id, name: details.name, price: Number(details.price), taxRate: Number(details.taxRate || 0), inventoryMode: details.inventoryMode === 'STOCK' ? 'STOCK' : 'NON_STOCK', productionStation: details.productionStation || null, createdBy: user.id } });
+        const categoryIds = Array.isArray(details.categoryIds) && details.categoryIds.length ? details.categoryIds : [details.categoryId];
+        const categories = await tx.productCategory.findMany({ where: { id: { in: categoryIds }, isActive: true, outlet: { propertyId: approval.propertyId, isActive: true } } });
+        if (!categories.length || categories.length !== categoryIds.length || !details.name || !Number.isFinite(Number(details.price))) throw new Error('INVALID_MENU_REQUEST');
+        const products = [];
+        for (const category of categories) {
+          products.push(await tx.posProduct.create({ data: { propertyId: approval.propertyId, categoryId: category.id, name: details.name, price: Number(details.price), taxRate: Number(details.taxRate || 0), inventoryMode: details.inventoryMode === 'STOCK' ? 'STOCK' : 'NON_STOCK', productionStation: details.productionStation || null, createdBy: user.id } }));
+        }
         if (details.stockItemId) {
-          const linked = await tx.stockItem.updateMany({ where: { id: details.stockItemId, propertyId: approval.propertyId, isActive: true, posProductId: null }, data: { posProductId: product.id } });
+          const linked = await tx.stockItem.updateMany({ where: { id: details.stockItemId, propertyId: approval.propertyId, isActive: true, posProductId: null }, data: { posProductId: products[0].id } });
           if (linked.count !== 1) throw new Error('STOCK_ITEM_ALREADY_LINKED');
         }
-        const updated = await tx.approvalRequest.update({ where: { id: approval.id }, data: { status: 'APPROVED', reviewedBy: user.id, reviewedAt: new Date(), details: { ...details, stage: 'LIVE', managerApprovedBy: user.id, managerApprovedAt: new Date().toISOString(), productId: product.id } } });
-        return { status: 'EXECUTED', approval: updated, productId: product.id };
+        const updated = await tx.approvalRequest.update({ where: { id: approval.id }, data: { status: 'APPROVED', reviewedBy: user.id, reviewedAt: new Date(), details: { ...details, stage: 'LIVE', managerApprovedBy: user.id, managerApprovedAt: new Date().toISOString(), productIds: products.map((product) => product.id), productId: products[0].id } } });
+        return { status: 'EXECUTED', approval: updated, productIds: products.map((product) => product.id) };
       }
 
       if (approval.type === 'POS_MODIFIER_CREATE' || approval.type === 'POS_MODIFIER_UPDATE') {

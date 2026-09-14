@@ -54,14 +54,32 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const propertyId = String(body.propertyId || '');
     const outletId = String(body.outletId || '');
+    const allOutlets = body.allOutlets === true;
     const name = String(body.name || '').trim();
-    if (!propertyId || !ctx.propertyIds.includes(propertyId) || !outletId || !name) return errorResponse('BAD_REQUEST', 'Property, outlet, and category name are required', 400);
-    const outlet = await prisma.posOutlet.findFirst({ where: { id: outletId, propertyId, isActive: true }, select: { id: true } });
-    if (!outlet) return errorResponse('BAD_REQUEST', 'Select a valid outlet for this property', 400);
-    const duplicate = await prisma.productCategory.findFirst({ where: { outletId, name: { equals: name, mode: 'insensitive' } } });
-    if (duplicate) return errorResponse('CONFLICT', 'A category with this name already exists', 409);
-    const category = await prisma.productCategory.create({ data: { outletId, name, productionStation: body.productionStation || 'KITCHEN', fnbClass: body.fnbClass || 'OTHER' } });
-    return successResponse(category, 201);
+    if (!propertyId || !ctx.propertyIds.includes(propertyId) || (!allOutlets && !outletId) || !name) return errorResponse('BAD_REQUEST', 'Property, outlet, and category name are required', 400);
+    const outlets = await prisma.posOutlet.findMany({
+      where: { propertyId, isActive: true, ...(allOutlets ? {} : { id: outletId }) },
+      select: { id: true },
+    });
+    if (!outlets.length) return errorResponse('BAD_REQUEST', 'Select a valid active outlet for this property', 400);
+
+    const categories = await prisma.$transaction(async (tx) => {
+      const created = [];
+      for (const outlet of outlets) {
+        const duplicate = await tx.productCategory.findFirst({ where: { outletId: outlet.id, name: { equals: name, mode: 'insensitive' } } });
+        if (duplicate) {
+          if (!allOutlets) throw new Error('DUPLICATE_CATEGORY');
+          continue;
+        }
+        created.push(await tx.productCategory.create({ data: { outletId: outlet.id, name, productionStation: body.productionStation || 'KITCHEN', fnbClass: body.fnbClass || 'OTHER' } }));
+      }
+      return created;
+    }).catch((error: any) => {
+      if (error?.message === 'DUPLICATE_CATEGORY') return null;
+      throw error;
+    });
+    if (!categories) return errorResponse('CONFLICT', 'A category with this name already exists for this outlet', 409);
+    return successResponse({ categories, createdCount: categories.length, existingOutletsSkipped: outlets.length - categories.length }, 201);
   } catch (err) {
     console.error('[POS Categories POST]', err);
     return errorResponse('INTERNAL_ERROR', 'Unable to create category', 500);

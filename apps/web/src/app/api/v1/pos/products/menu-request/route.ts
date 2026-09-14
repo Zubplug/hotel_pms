@@ -29,6 +29,13 @@ export async function POST(req: NextRequest) {
     include: { outlet: true }
   });
   if (!category) return errorResponse('BAD_REQUEST', 'Select a valid active category', 400);
+  const requestedCategoryIds: string[] = Array.isArray(body.categoryIds) ? body.categoryIds.map((id: unknown) => String(id)).filter(Boolean) : [];
+  requestedCategoryIds.push(category.id);
+  const categories = await prisma.productCategory.findMany({
+    where: { id: { in: [...new Set(requestedCategoryIds)] }, isActive: true, outlet: { propertyId: category.outlet.propertyId, isActive: true } },
+    include: { outlet: { select: { id: true, name: true, propertyId: true } } },
+  });
+  if (!categories.some((candidate) => candidate.id === category.id)) return errorResponse('BAD_REQUEST', 'One or more selected categories are invalid for this property', 400);
   let stockItemId: string | null = null;
   if (body.stockItemId) {
     const stockItem = await prisma.stockItem.findFirst({ where: { id: String(body.stockItemId), propertyId: category.outlet.propertyId, isActive: true, posProductId: null }, select: { id: true } });
@@ -37,6 +44,6 @@ export async function POST(req: NextRequest) {
   }
   const duplicate = await prisma.approvalRequest.findFirst({ where: { propertyId: category.outlet.propertyId, type: 'POS_MENU_CREATE', status: 'PENDING', details: { path: ['name'], equals: name } } });
   if (duplicate) return errorResponse('CONFLICT', 'A menu request with this name is already pending', 409);
-  const approval = await prisma.approvalRequest.create({ data: { propertyId: category.outlet.propertyId, type: 'POS_MENU_CREATE', status: 'PENDING', requestedBy: user.id, amount: price, currency: 'NGN', reason: String(body.reason || `New menu item requested: ${name}`), details: { stage: 'ACCOUNTANT_REVIEW', name, categoryId: category.id, categoryName: category.name, price, taxRate, inventoryMode: body.inventoryMode === 'STOCK' ? 'STOCK' : 'NON_STOCK', stockItemId, productionStation: body.productionStation || null } } });
+  const approval = await prisma.approvalRequest.create({ data: { propertyId: category.outlet.propertyId, type: 'POS_MENU_CREATE', status: 'PENDING', requestedBy: user.id, amount: price, currency: 'NGN', reason: String(body.reason || `New menu item requested: ${name}`), details: { stage: 'ACCOUNTANT_REVIEW', name, categoryId: category.id, categoryIds: categories.map((candidate) => candidate.id), categoryName: category.name, price, taxRate, inventoryMode: body.inventoryMode === 'STOCK' ? 'STOCK' : 'NON_STOCK', stockItemId, productionStation: body.productionStation || null } } });
   return successResponse(approval, 201);
 }
