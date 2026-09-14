@@ -11,7 +11,7 @@ import { useRouter } from 'next/navigation';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { toast } from 'react-hot-toast';
+import { toast } from 'sonner';
 
 export function CityLedgerDetailClient({ account, openInvoices, recentEntries, totalOutstanding }: { account: any; openInvoices: any[]; recentEntries: any[]; totalOutstanding: number }) {
   const router = useRouter();
