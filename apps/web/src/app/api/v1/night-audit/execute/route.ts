@@ -96,10 +96,12 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (err: any) {
-    if (err.message && err.message.includes(':')) {
-      const [code, msg] = err.message.split(':');
-      const statusCode = code === 'NOT_FOUND' ? 404 : (code === 'FORBIDDEN' ? 403 : 409);
-      return errorResponse(code, msg, statusCode);
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    const domainError = errorMessage.match(/^(NOT_FOUND|FORBIDDEN|BAD_REQUEST|CONFLICT|BLOCKER):\s*([\s\S]*)$/);
+    if (domainError) {
+      const [, code, message] = domainError;
+      const statusCode = code === 'NOT_FOUND' ? 404 : code === 'FORBIDDEN' ? 403 : code === 'BAD_REQUEST' ? 400 : 409;
+      return errorResponse(code, message, statusCode);
     }
     
     console.error('[Night Audit POST]', err);
@@ -125,6 +127,6 @@ export async function POST(req: NextRequest) {
        console.error('[Night Audit POST] Failed to emit failure notification', e);
     }
 
-    return errorResponse('INTERNAL_ERROR', err.message, 500);
+    return errorResponse('INTERNAL_ERROR', errorMessage, 500);
   }
 }
