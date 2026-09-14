@@ -488,6 +488,11 @@ export async function executeNightAudit(
                 });
               
               totalRoomChargesPosted++;
+            } else {
+              // Recovery runs are idempotent: the failed attempt may already
+              // have created this charge. Count it as processed without
+              // creating a duplicate folio line.
+              totalRoomChargesPosted++;
             }
           }
 
@@ -574,7 +579,10 @@ export async function executeNightAudit(
       prisma.room.count({ where: { propertyId, isActive: true } }),
       prisma.room.count({ where: { propertyId, isActive: true, status: 'OCCUPIED' } }),
       prisma.posOrder.findMany({
-        where: { propertyId, businessDate, status: 'CLOSED', paymentStatus: 'PAID' },
+        // Offline POS orders can have confirmed payments while their header
+        // paymentStatus remains UNPAID. Count closed orders with confirmed
+        // payments so F&B revenue is not omitted from the audit snapshot.
+        where: { propertyId, businessDate, status: 'CLOSED', payments: { some: { status: 'CONFIRMED' } } },
         select: {
           id: true,
           total: true,

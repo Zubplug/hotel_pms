@@ -15,10 +15,10 @@ const pct = (value: number) =>
 
 function StatCard({ label, value, detail, accent }: { label: string; value: string; detail: string; accent: string }) {
   return (
-    <div className={`stat-card flex flex-col gap-3 rounded-[20px] border p-5 ${accent} print:border-slate-200 print:bg-white print:text-black print:rounded-2xl`}>
-      <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-500 print:text-slate-500">{label}</p>
-      <p className="text-xl font-bold tabular-nums print:text-black print:text-xl">{value}</p>
-      <p className="text-[11px] text-slate-600 print:text-slate-600">{detail}</p>
+    <div className={`stat-card flex flex-col gap-3 rounded-[20px] border p-5 ${accent}`}>
+      <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-500">{label}</p>
+      <p className="text-xl font-bold tabular-nums">{value}</p>
+      <p className="text-[11px] text-slate-600">{detail}</p>
     </div>
   );
 }
@@ -33,6 +33,16 @@ function VarianceBadge({ variance }: { variance: number | null }) {
       {ok ? <CheckCircle2 className="h-2.5 w-2.5" /> : <AlertTriangle className="h-2.5 w-2.5" />}
       {money(variance)}
     </span>
+  );
+}
+
+// Print specific sub-components
+function PrintMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="border border-slate-200 p-4 rounded-lg">
+      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">{label}</p>
+      <p className="text-lg font-bold text-slate-900 tabular-nums">{value}</p>
+    </div>
   );
 }
 
@@ -117,41 +127,235 @@ export default function FnbReportsPage() {
   return (
     <>
       <style dangerouslySetInnerHTML={{__html: `
+        @media screen {
+          .print-only { display: none !important; }
+        }
         @media print {
-          @page { size: landscape; margin: 0; }
-          body { padding: 15mm 15mm 15mm 15mm !important; }
-          body, html, * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-          .no-print { display: none !important; }
+          @page { margin: 0; size: A4 portrait; }
+          body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; background: white !important; font-family: 'Inter', system-ui, sans-serif !important; }
+          .screen-only { display: none !important; }
+          .print-only { display: block !important; padding: 15mm; background: white; color: black; }
           
-          /* Keep exact UI look, just hide unselected sections */
-          .print-dss .print-only-inventory { display: none !important; }
-          .print-inventory .print-only-dss { display: none !important; }
-          
-          .report-header { display: block !important; padding-bottom: 12px; margin-bottom: 24px; border-bottom: 2px solid #e2e8f0; }
-          .report-header h1 { font-size: 20px; font-weight: bold; margin: 0 0 4px 0; color: #0f172a; }
-          .report-header p { font-size: 11px; color: #64748b; margin: 0; }
-          
-          .print-section { page-break-inside: avoid; }
+          /* Utility classes to ensure A4 dimensions and page breaking */
+          .page-break-before { page-break-before: always; }
+          .avoid-break { page-break-inside: avoid; }
         }
       `}} />
-      <div className={`min-h-full bg-slate-50/50 px-4 pb-16 pt-6 sm:px-6 sm:pt-8 md:px-8 print:bg-slate-50/50 print:p-0 print:m-0 ${printMode === 'dss' ? 'print-dss' : ''} ${printMode === 'inventory' ? 'print-inventory' : ''}`}>
-        <div className="mx-auto max-w-[1540px] space-y-6 print:space-y-6">
 
-          {/* ── Professional Print Header ── */}
-          <div className="report-header hidden">
-            <h1>{printMode === 'inventory' ? 'F&B Stock Reconciliation Ledger' : 'F&B Daily Sales Summary (DSS)'}</h1>
-            <div className="flex justify-between">
-              <p>Property: {propertyName}</p>
-              <p>Date Range: {displayDate}</p>
+      {/* ────────────────────────────────────────────────────────── */}
+      {/* ── PRINT-ONLY VIEW: PROFESSIONAL A4 REPORT DESIGN       ── */}
+      {/* ────────────────────────────────────────────────────────── */}
+      
+      {printMode === 'dss' && data && (
+        <div className="print-only text-slate-900">
+          {/* Document Header */}
+          <div className="flex justify-between items-end border-b-2 border-slate-900 pb-4 mb-6">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900">DAILY SALES SUMMARY</h1>
+              <p className="text-xs font-semibold text-slate-500 mt-1 uppercase tracking-widest">{propertyName}</p>
             </div>
-            <div className="flex justify-between mt-1">
-              <p>Location: {printMode === 'inventory' ? selectedWarehouseName : selectedOutletName}</p>
-              <p>Generated: {new Date().toLocaleString()}</p>
+            <div className="text-right text-[11px] text-slate-600 space-y-0.5">
+              <p><span className="font-semibold text-slate-900">Date Range:</span> {displayDate}</p>
+              <p><span className="font-semibold text-slate-900">Outlet:</span> {selectedOutletName}</p>
+              <p><span className="font-semibold text-slate-900">Printed:</span> {new Date().toLocaleString()}</p>
             </div>
           </div>
 
+          {/* Key Metrics */}
+          <div className="grid grid-cols-4 gap-4 mb-8">
+            <PrintMetric label="Net Revenue" value={money(data.summary.netRevenue)} />
+            <PrintMetric label="Total Covers" value={String(data.statistics.totalCovers)} />
+            <PrintMetric label="Average Check" value={money(data.statistics.averageCheck)} />
+            <PrintMetric label="Spend / Cover" value={money(data.statistics.spendPerCover)} />
+          </div>
+
+          {/* Revenue & Tax Table */}
+          <div className="mb-8 avoid-break">
+            <h2 className="text-sm font-bold uppercase tracking-wider text-slate-900 mb-3 border-b border-slate-300 pb-2">Revenue Breakdown</h2>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-300">
+                  <th className="py-2 text-left font-bold text-slate-700 uppercase text-[10px] tracking-wider w-2/5">Category</th>
+                  <th className="py-2 text-right font-bold text-slate-700 uppercase text-[10px] tracking-wider">Gross Sales</th>
+                  <th className="py-2 text-right font-bold text-slate-700 uppercase text-[10px] tracking-wider">Allowances</th>
+                  <th className="py-2 text-right font-bold text-slate-700 uppercase text-[10px] tracking-wider">Net Revenue</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {[
+                  ['Food', data.summary.foodGross, data.summary.foodDiscounts, data.summary.foodGross - data.summary.foodDiscounts],
+                  ['Beverage', data.summary.bevGross, data.summary.bevDiscounts, data.summary.bevGross - data.summary.bevDiscounts],
+                  ['Other F&B', data.summary.otherGross, data.summary.otherDiscounts, data.summary.otherGross - data.summary.otherDiscounts],
+                ].map(([label, gross, disc, net]) => (
+                  <tr key={String(label)}>
+                    <td className="py-2 font-medium text-slate-700">{label}</td>
+                    <td className="py-2 text-right tabular-nums text-slate-900">{money(Number(gross))}</td>
+                    <td className="py-2 text-right tabular-nums text-rose-600">{money(Number(disc))}</td>
+                    <td className="py-2 text-right tabular-nums text-slate-900 font-semibold">{money(Number(net))}</td>
+                  </tr>
+                ))}
+                {/* Subtotals & Taxes */}
+                <tr className="border-t-2 border-slate-300 bg-slate-50">
+                  <td className="py-3 font-bold text-slate-900 text-[11px] uppercase tracking-wider">Total Net F&B Revenue</td>
+                  <td className="py-3 text-right tabular-nums text-slate-900 font-bold">{money(data.summary.grossRevenue)}</td>
+                  <td className="py-3 text-right tabular-nums text-rose-600 font-bold">{money(data.summary.totalDiscounts)}</td>
+                  <td className="py-3 text-right tabular-nums text-indigo-700 font-bold">{money(data.summary.netRevenue)}</td>
+                </tr>
+                <tr>
+                  <td colSpan={3} className="py-2 text-right text-[10px] font-bold uppercase tracking-wider text-slate-500">Taxes Collected</td>
+                  <td className="py-2 text-right tabular-nums text-slate-700 font-semibold">{money(data.summary.totalTax)}</td>
+                </tr>
+                <tr>
+                  <td colSpan={3} className="py-2 text-right text-[10px] font-bold uppercase tracking-wider text-slate-500">Service Charge</td>
+                  <td className="py-2 text-right tabular-nums text-slate-700 font-semibold">{money(data.summary.totalServiceCharge)}</td>
+                </tr>
+                <tr className="border-t-2 border-slate-900 border-b-4 border-slate-900 border-double">
+                  <td colSpan={3} className="py-4 text-right font-bold text-slate-900 uppercase tracking-widest text-xs">Total Guest Charge</td>
+                  <td className="py-4 text-right tabular-nums text-slate-900 font-bold text-lg">{money(data.summary.totalGuestCharge)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div className="grid grid-cols-2 gap-8 avoid-break">
+            {/* Tender / Payment Mix */}
+            <div>
+              <h2 className="text-sm font-bold uppercase tracking-wider text-slate-900 mb-3 border-b border-slate-300 pb-2">Settlement Mix</h2>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200">
+                    <th className="py-2 text-left font-bold text-slate-700 uppercase text-[10px] tracking-wider">Payment Method</th>
+                    <th className="py-2 text-right font-bold text-slate-700 uppercase text-[10px] tracking-wider">Amount</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {(data.tenderBreakdown || []).length ? data.tenderBreakdown.map((p: any) => (
+                    <tr key={p.method}>
+                      <td className="py-2 font-medium text-slate-700">{p.method.replace(/_/g, ' ')}</td>
+                      <td className="py-2 text-right tabular-nums font-semibold text-slate-900">{money(p.amount)}</td>
+                    </tr>
+                  )) : <tr><td colSpan={2} className="py-4 text-center text-slate-500">No captured payments.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+
+            {/* COGS & Profitability */}
+            <div>
+              <h2 className="text-sm font-bold uppercase tracking-wider text-slate-900 mb-3 border-b border-slate-300 pb-2">Cost of Goods Sold</h2>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200">
+                    <th className="py-2 text-left font-bold text-slate-700 uppercase text-[10px] tracking-wider">Metric</th>
+                    <th className="py-2 text-right font-bold text-slate-700 uppercase text-[10px] tracking-wider">Amount</th>
+                    <th className="py-2 text-right font-bold text-slate-700 uppercase text-[10px] tracking-wider">% of Net</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  <tr>
+                    <td className="py-2 font-medium text-slate-700">Actual COGS (Depleted)</td>
+                    <td className="py-2 text-right tabular-nums font-semibold text-rose-700">{money(data.profitability.actualCogs)}</td>
+                    <td className="py-2 text-right tabular-nums text-slate-600">{pct(data.profitability.actualCostPct)}</td>
+                  </tr>
+                  <tr>
+                    <td className="py-2 font-medium text-slate-700">Theoretical COGS (Recipe)</td>
+                    <td className="py-2 text-right tabular-nums font-semibold text-slate-900">{money(data.profitability.theoreticalCogs)}</td>
+                    <td className="py-2 text-right tabular-nums text-slate-600">{pct(data.profitability.theoreticalCostPct)}</td>
+                  </tr>
+                  <tr className="border-t-2 border-slate-300">
+                    <td className="py-3 font-bold text-slate-900 text-[11px] uppercase tracking-wider">COGS Variance</td>
+                    <td className={`py-3 text-right tabular-nums font-bold ${data.profitability.cogsVariance > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
+                      {data.profitability.cogsVariance > 0 ? '+' : ''}{money(data.profitability.cogsVariance)}
+                    </td>
+                    <td className="py-3"></td>
+                  </tr>
+                  <tr className="bg-slate-50 border-t border-b-2 border-slate-900">
+                    <td className="py-3 font-bold text-slate-900 text-[11px] uppercase tracking-wider">Gross F&B Margin</td>
+                    <td className="py-3 text-right tabular-nums font-bold text-indigo-700">{money(data.summary.netRevenue - data.profitability.actualCogs)}</td>
+                    <td className="py-3 text-right tabular-nums font-bold text-indigo-700">{pct(data.profitability.grossMarginPct)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {printMode === 'inventory' && data && (
+        <div className="print-only text-slate-900">
+          <style dangerouslySetInnerHTML={{__html: `@media print { @page { size: A4 landscape; margin: 0; } }`}} />
+          
+          {/* Document Header */}
+          <div className="flex justify-between items-end border-b-2 border-slate-900 pb-4 mb-6">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900">INVENTORY LEDGER PROOF</h1>
+              <p className="text-xs font-semibold text-slate-500 mt-1 uppercase tracking-widest">{propertyName}</p>
+            </div>
+            <div className="text-right text-[11px] text-slate-600 space-y-0.5">
+              <p><span className="font-semibold text-slate-900">Date Range:</span> {displayDate}</p>
+              <p><span className="font-semibold text-slate-900">Warehouse:</span> {selectedWarehouseName}</p>
+              <p><span className="font-semibold text-slate-900">Printed:</span> {new Date().toLocaleString()}</p>
+            </div>
+          </div>
+
+          {!selectedWarehouse ? (
+            <div className="text-center py-10 text-slate-500 font-medium">Please select a warehouse on the screen before printing the inventory ledger.</div>
+          ) : (
+            <div className="avoid-break">
+              <table className="w-full text-[10px]">
+                <thead>
+                  <tr className="border-b-2 border-slate-900">
+                    <th className="py-2 text-left font-bold text-slate-900 uppercase tracking-wider">Stock Item</th>
+                    <th className="py-2 text-right font-bold text-slate-900 uppercase tracking-wider">Open</th>
+                    <th className="py-2 text-right font-bold text-slate-900 uppercase tracking-wider">+In</th>
+                    <th className="py-2 text-right font-bold text-slate-900 uppercase tracking-wider">-Out</th>
+                    <th className="py-2 text-right font-bold text-slate-900 uppercase tracking-wider">-Sold</th>
+                    <th className="py-2 text-right font-bold text-slate-900 uppercase tracking-wider">-Waste</th>
+                    <th className="py-2 text-right font-bold text-slate-900 uppercase tracking-wider">Adj</th>
+                    <th className="py-2 text-right font-bold text-slate-900 uppercase tracking-wider">Expected</th>
+                    <th className="py-2 text-right font-bold text-slate-900 uppercase tracking-wider">Actual</th>
+                    <th className="py-2 text-right font-bold text-slate-900 uppercase tracking-wider">Variance</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {data.inventoryMovement.map((row: any) => (
+                    <tr key={row.stockItemId} className="hover:bg-slate-50">
+                      <td className="py-2">
+                        <span className="font-bold text-slate-800 block">{row.name}</span>
+                        <span className="text-[9px] text-slate-500">{row.sku} • {row.unitOfMeasure}</span>
+                      </td>
+                      <td className="py-2 text-right tabular-nums text-slate-600">{row.opening}</td>
+                      <td className="py-2 text-right tabular-nums text-slate-900 font-semibold">{row.receipts + row.transferIn || '-'}</td>
+                      <td className="py-2 text-right tabular-nums text-slate-900 font-semibold">{row.transferOut || '-'}</td>
+                      <td className="py-2 text-right tabular-nums text-rose-700 font-bold">{row.sales || '-'}</td>
+                      <td className="py-2 text-right tabular-nums text-amber-700 font-semibold">{row.waste || '-'}</td>
+                      <td className="py-2 text-right tabular-nums text-slate-600">{row.adjustments || '-'}</td>
+                      <td className="py-2 text-right tabular-nums text-slate-800 font-semibold">{row.expectedClosing}</td>
+                      <td className="py-2 text-right tabular-nums text-slate-900 font-bold">{row.actualClosing}</td>
+                      <td className={`py-2 text-right tabular-nums font-bold ${row.variance !== 0 ? 'text-rose-700' : 'text-slate-400'}`}>
+                        {row.variance !== 0 ? row.variance : 'BALANCED'}
+                      </td>
+                    </tr>
+                  ))}
+                  {data.inventoryMovement.length === 0 && (
+                    <tr>
+                      <td colSpan={10} className="py-8 text-center text-slate-500 font-medium">No stock movement recorded for this period.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ────────────────────────────────────────────────────────── */}
+      {/* ── SCREEN-ONLY VIEW: BEAUTIFUL INTERACTIVE DASHBOARD    ── */}
+      {/* ────────────────────────────────────────────────────────── */}
+
+      <div className="screen-only min-h-full bg-slate-50/50 px-4 pb-16 pt-6 sm:px-6 sm:pt-8 md:px-8">
+        <div className="mx-auto max-w-[1540px] space-y-6">
           {/* ── UI Header ── */}
-          <header className="no-print flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
+          <header className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
             <div>
               <div className="mb-3 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-indigo-600">
                 <span className="h-1.5 w-1.5 rounded-full bg-indigo-600" />
@@ -230,7 +434,7 @@ export default function FnbReportsPage() {
           {data && (
             <>
               {/* ── Hero status card ── */}
-              <section className="no-print relative overflow-hidden rounded-[24px] border border-indigo-100 bg-white p-6 sm:p-8 shadow-sm">
+              <section className="relative overflow-hidden rounded-[24px] border border-indigo-100 bg-white p-6 sm:p-8 shadow-sm">
                 <div className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-indigo-50 blur-3xl" />
                 <div className="relative flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
                   <div>
@@ -260,38 +464,37 @@ export default function FnbReportsPage() {
               </section>
 
               {/* ── Stat cards ── */}
-              <section className="print-only-dss print-section grid gap-3 sm:grid-cols-2 xl:grid-cols-5 print:grid-cols-5">
+              <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                 <StatCard label="Total Covers" value={String(data.statistics.totalCovers)} detail={`Across ${data.statistics.totalChecks} checks`} accent="bg-white text-slate-900 border-slate-200 shadow-sm" />
                 <StatCard label="Average Check" value={money(data.statistics.averageCheck)} detail="Per Table / Order" accent="bg-white text-slate-900 border-slate-200 shadow-sm" />
                 <StatCard label="Spend per Cover" value={money(data.statistics.spendPerCover)} detail="Per Guest" accent="bg-white text-slate-900 border-slate-200 shadow-sm" />
-                <StatCard label="Net F&B Revenue" value={money(data.summary.netRevenue)} detail="Excl. Taxes & Voids" accent="bg-indigo-50/50 text-indigo-950 border-indigo-100 shadow-sm print:bg-indigo-50" />
-                <StatCard label="Gross Margin" value={pct(data.profitability.grossMarginPct)} detail={`Actual COGS: ${money(data.profitability.actualCogs)}`} accent="bg-emerald-50/50 text-emerald-950 border-emerald-100 shadow-sm print:bg-emerald-50" />
+                <StatCard label="Net F&B Revenue" value={money(data.summary.netRevenue)} detail="Excl. Taxes & Voids" accent="bg-indigo-50/50 text-indigo-950 border-indigo-100 shadow-sm" />
+                <StatCard label="Gross Margin" value={pct(data.profitability.grossMarginPct)} detail={`Actual COGS: ${money(data.profitability.actualCogs)}`} accent="bg-emerald-50/50 text-emerald-950 border-emerald-100 shadow-sm" />
               </section>
 
               {/* ── Main grid (DSS) ── */}
-              <section className="print-only-dss print-section grid gap-5 xl:grid-cols-[1.4fr_0.6fr] print:grid-cols-[1.4fr_0.6fr]">
+              <section className="grid gap-5 xl:grid-cols-[1.4fr_0.6fr]">
                 
-                {/* Source vs Snapshot equivalent (DSS) */}
-                <div className="overflow-hidden rounded-[20px] border bg-white shadow-sm print:border-slate-200 print:shadow-none">
-                  <div className="flex items-center justify-between border-b px-5 py-4 print:border-slate-200">
+                <div className="overflow-hidden rounded-[20px] border bg-white shadow-sm">
+                  <div className="flex items-center justify-between border-b px-5 py-4">
                     <div>
                       <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                         <ClipboardCheck className="h-4 w-4 text-indigo-500" />
                         Daily Sales Summary
                       </h3>
-                      <p className="no-print mt-0.5 text-[11px] text-slate-500">Gross sales, allowances, and collected taxes.</p>
+                      <p className="mt-0.5 text-[11px] text-slate-500">Gross sales, allowances, and collected taxes.</p>
                     </div>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full">
                       <thead>
-                        <tr className="border-b bg-slate-50/50 print:bg-slate-50 print:border-slate-200">
+                        <tr className="border-b bg-slate-50/50">
                           {['Category', 'Gross Sales', 'Allowances', 'Net Revenue'].map((h, i) => (
                             <th key={h} className={`px-5 py-3 text-[9px] font-bold uppercase tracking-[0.16em] text-slate-500 ${i > 0 ? 'text-right' : 'text-left'}`}>{h}</th>
                           ))}
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-100 print:divide-slate-100">
+                      <tbody className="divide-y divide-slate-100">
                         {[
                           ['Food', data.summary.foodGross, data.summary.foodDiscounts, data.summary.foodGross - data.summary.foodDiscounts],
                           ['Beverage', data.summary.bevGross, data.summary.bevDiscounts, data.summary.bevGross - data.summary.bevDiscounts],
@@ -304,7 +507,7 @@ export default function FnbReportsPage() {
                             <td className="px-5 py-3.5 text-right text-sm font-bold tabular-nums text-slate-900">{money(Number(net))}</td>
                           </tr>
                         ))}
-                        <tr className="bg-slate-50/50 border-t-2 border-slate-100 print:bg-slate-50 print:border-slate-200">
+                        <tr className="bg-slate-50/50 border-t-2 border-slate-100">
                           <td className="px-5 py-4 text-sm font-bold text-slate-900">Net F&B Revenue</td>
                           <td className="px-5 py-4 text-right text-sm font-bold tabular-nums text-slate-900">{money(data.summary.grossRevenue)}</td>
                           <td className="px-5 py-4 text-right text-sm font-bold tabular-nums text-rose-600">{money(data.summary.totalDiscounts)}</td>
@@ -318,7 +521,7 @@ export default function FnbReportsPage() {
                           <td colSpan={3} className="px-5 py-2 text-right text-[11px] font-bold uppercase tracking-wider text-slate-500">Service Charge</td>
                           <td className="px-5 py-2 text-right text-sm tabular-nums text-slate-600">{money(data.summary.totalServiceCharge)}</td>
                         </tr>
-                        <tr className="bg-indigo-50/50 border-t-2 border-indigo-100 print:bg-indigo-50 print:border-indigo-200">
+                        <tr className="bg-indigo-50/50 border-t-2 border-indigo-100">
                           <td colSpan={3} className="px-5 py-4 text-right text-sm font-bold text-indigo-900">Total Guest Charge</td>
                           <td className="px-5 py-4 text-right text-lg font-bold tabular-nums text-indigo-900">{money(data.summary.totalGuestCharge)}</td>
                         </tr>
@@ -330,14 +533,14 @@ export default function FnbReportsPage() {
                 {/* Right column */}
                 <div className="flex flex-col gap-4">
                   {/* Payment mix */}
-                  <div className="rounded-[20px] border bg-white p-5 shadow-sm print:border-slate-200 print:shadow-none">
+                  <div className="rounded-[20px] border bg-white p-5 shadow-sm">
                     <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                       <WalletCards className="h-4 w-4 text-indigo-500" />
                       Payment Mix
                     </h3>
                     <div className="mt-4 space-y-2">
                         {(data.tenderBreakdown || []).length ? data.tenderBreakdown.map((p: any) => (
-                          <div key={p.method} className="flex items-center justify-between rounded-xl border bg-slate-50/50 px-3 py-2.5 print:bg-slate-50 print:border-slate-200">
+                          <div key={p.method} className="flex items-center justify-between rounded-xl border bg-slate-50/50 px-3 py-2.5">
                             <p className="text-sm font-semibold text-slate-700">{p.method.replace(/_/g, ' ')}</p>
                             <span className="text-sm font-bold tabular-nums text-slate-900">{money(p.amount)}</span>
                           </div>
@@ -346,18 +549,18 @@ export default function FnbReportsPage() {
                   </div>
 
                   {/* COGS Control */}
-                  <div className="rounded-[20px] border bg-white p-5 shadow-sm print:border-slate-200 print:shadow-none">
+                  <div className="rounded-[20px] border bg-white p-5 shadow-sm">
                     <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                       <BarChart3 className="h-4 w-4 text-indigo-500" />
                       Cost of Goods Sold (COGS)
                     </h3>
                     <div className="mt-4 grid grid-cols-2 gap-3">
-                      <div className="rounded-xl border bg-slate-50/50 p-3 print:bg-slate-50 print:border-slate-200">
+                      <div className="rounded-xl border bg-slate-50/50 p-3">
                         <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-slate-500">Actual (Depleted)</p>
                         <p className="mt-1.5 text-sm font-bold tabular-nums text-rose-600">{money(data.profitability.actualCogs)}</p>
                         <p className="text-[10px] text-slate-500 mt-0.5">{pct(data.profitability.actualCostPct)} of Net</p>
                       </div>
-                      <div className="rounded-xl border bg-slate-50/50 p-3 print:bg-slate-50 print:border-slate-200">
+                      <div className="rounded-xl border bg-slate-50/50 p-3">
                         <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-slate-500">Theoretical</p>
                         <p className="mt-1.5 text-sm font-bold tabular-nums text-slate-700">{money(data.profitability.theoreticalCogs)}</p>
                         <p className="text-[10px] text-slate-500 mt-0.5">{pct(data.profitability.theoreticalCostPct)} of Net</p>
@@ -366,8 +569,8 @@ export default function FnbReportsPage() {
                     
                     <div className={`mt-3 flex items-center justify-between rounded-xl border px-3 py-2.5 text-sm font-bold ${
                       data.profitability.cogsVariance > 0
-                        ? 'border-rose-200 bg-rose-50 text-rose-700 print:border-rose-200 print:bg-rose-50 print:text-rose-700'
-                        : 'border-emerald-200 bg-emerald-50 text-emerald-700 print:border-emerald-200 print:bg-emerald-50 print:text-emerald-700'
+                        ? 'border-rose-200 bg-rose-50 text-rose-700'
+                        : 'border-emerald-200 bg-emerald-50 text-emerald-700'
                     }`}>
                       <span>COGS Variance</span>
                       <span>{data.profitability.cogsVariance > 0 ? '+' : ''}{money(data.profitability.cogsVariance)}</span>
@@ -377,17 +580,17 @@ export default function FnbReportsPage() {
               </section>
 
               {/* ── Balance Proof equivalent (Inventory Movement) ── */}
-              <section className="print-only-inventory print-section overflow-hidden rounded-[20px] border bg-white shadow-sm print:border-slate-200 print:shadow-none">
-                <div className="border-b px-5 py-4 flex justify-between items-center print:border-slate-200">
+              <section className="overflow-hidden rounded-[20px] border bg-white shadow-sm mt-6">
+                <div className="border-b px-5 py-4 flex justify-between items-center">
                   <div>
                     <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                       <Scale className="h-4 w-4 text-indigo-500" />
                       Stock Ledger Proof
                     </h3>
-                    <p className="no-print mt-0.5 text-[11px] text-slate-500">Industry-standard proof: Opening stock + activity = closing stock.</p>
+                    <p className="mt-0.5 text-[11px] text-slate-500">Industry-standard proof: Opening stock + activity = closing stock.</p>
                   </div>
                   {!selectedWarehouse && (
-                    <span className="no-print rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-700">
+                    <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-700">
                       Select Warehouse
                     </span>
                   )}
@@ -396,13 +599,13 @@ export default function FnbReportsPage() {
                   <div className="overflow-x-auto">
                     <table className="w-full">
                       <thead>
-                        <tr className="border-b bg-slate-50/50 print:bg-slate-50 print:border-slate-200">
+                        <tr className="border-b bg-slate-50/50">
                           {['Stock Item', 'Opening', '+ In', '- Out', '- Sold', '- Waste', 'Adj', 'Expected', 'Actual', 'Variance', 'Status'].map((h, i) => (
                             <th key={h} className={`px-5 py-3 text-[9px] font-bold uppercase tracking-[0.16em] text-slate-500 ${i > 0 && i < 10 ? 'text-right' : 'text-left'}`}>{h}</th>
                           ))}
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-100 print:divide-slate-100">
+                      <tbody className="divide-y divide-slate-100">
                         {data.inventoryMovement.map((row: any) => {
                           const isBalanced = row.variance === 0;
                           return (
@@ -424,7 +627,7 @@ export default function FnbReportsPage() {
                               </td>
                               <td className="px-5 py-4 text-left">
                                 <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
-                                  isBalanced ? 'border-emerald-200 bg-emerald-50 text-emerald-700 print:border-emerald-200 print:bg-emerald-50 print:text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700 print:border-rose-200 print:bg-rose-50 print:text-rose-700'
+                                  isBalanced ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'
                                 }`}>
                                   {isBalanced ? 'BALANCED' : 'VARIANCE'}
                                 </span>
@@ -443,14 +646,13 @@ export default function FnbReportsPage() {
                     </table>
                   </div>
                 ) : (
-                  <div className="no-print p-12 text-center text-slate-500 text-sm bg-slate-50/30">
+                  <div className="p-12 text-center text-slate-500 text-sm bg-slate-50/30">
                     Please select a warehouse from the filters above to generate the inventory ledger proof.
                   </div>
                 )}
               </section>
             </>
           )}
-
         </div>
       </div>
     </>

@@ -97,7 +97,10 @@ export async function postNightAuditJournal(tx: any, input: {
       select: { id: true, method: true, amount: true, reason: true, payment: { select: { method: true } } },
     }),
     tx.posOrder.findMany({
-      where: { propertyId: input.propertyId, businessDate: input.businessDate, status: 'CLOSED', paymentStatus: 'PAID', folioId: null },
+      // Some legacy/offline orders retain paymentStatus=UNPAID even when a
+      // confirmed POS payment exists. Use the confirmed payment as the
+      // accounting source of truth for closed orders.
+      where: { propertyId: input.propertyId, businessDate: input.businessDate, status: 'CLOSED', folioId: null, payments: { some: { status: 'CONFIRMED' } } },
       select: { id: true, total: true, subtotal: true, taxAmount: true, serviceCharge: true, orderNumber: true, outletId: true, payments: { where: { status: 'CONFIRMED' }, select: { id: true, amount: true, method: true } } },
     }),
     tx.accountingPeriod.findFirst({ where: { propertyId: input.propertyId, periodStart: { lte: input.businessDate }, periodEnd: { gte: input.businessDate }, status: { in: ['OPEN', 'CLOSING'] } }, select: { id: true } }),
