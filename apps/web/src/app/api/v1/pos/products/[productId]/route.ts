@@ -30,6 +30,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ pr
   if (body.isActive !== undefined) data.isActive = Boolean(body.isActive);
   if (!Object.keys(data).length) return errorResponse('BAD_REQUEST', 'No editable fields supplied', 400);
   data.updatedBy = user.id;
-  const updated = await prisma.posProduct.update({ where: { id: productId }, data });
+  const updated = await prisma.$transaction(async (tx) => {
+    const saved = await tx.posProduct.update({ where: { id: productId }, data });
+    if (body.name !== undefined) {
+      await tx.stockItem.updateMany({
+        where: { propertyId: product.propertyId, posProductId: productId, warehouse: { posOutletId: null, isActive: true } },
+        data: { name: String(body.name).trim() },
+      });
+    }
+    return saved;
+  });
   return successResponse(updated);
 }

@@ -9,6 +9,7 @@ import { Search, Plus, Filter, MoreHorizontal, Loader2, Tags, ShieldCheck, Check
 
 type AnyRecord = Record<string, any>;
 const money = (amount: number) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
+const categoryKey = (name: unknown) => String(name || '').normalize('NFKC').replace(/\s+/g, ' ').trim().toLowerCase();
 
 function groupProducts(rows: AnyRecord[]) {
   const groups = new Map<string, AnyRecord>();
@@ -34,6 +35,7 @@ export function FnbMenuClient() {
   const { propertyId } = useProperty();
   const [products, setProducts] = useState<AnyRecord[]>([]);
   const [categories, setCategories] = useState<AnyRecord[]>([]);
+  const [inventoryItems, setInventoryItems] = useState<AnyRecord[]>([]);
   const [outlets, setOutlets] = useState<AnyRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -48,7 +50,7 @@ export function FnbMenuClient() {
   const [priceProduct, setPriceProduct] = useState<AnyRecord | null>(null);
   const [modifierProduct, setModifierProduct] = useState<AnyRecord | null>(null);
   const [modifierEditing, setModifierEditing] = useState<AnyRecord | null>(null);
-  const [item, setItem] = useState({ name: '', price: '', taxRate: '0', categoryId: '', inventoryMode: 'NON_STOCK' });
+  const [item, setItem] = useState({ name: '', price: '', taxRate: '0', categoryId: '', inventoryMode: 'NON_STOCK', stockItemId: '' });
   const [newPrice, setNewPrice] = useState('');
   const [modifier, setModifier] = useState({ name: '', price: '0', quantity: '1', unitOfMeasure: '' });
   const [categoryDraft, setCategoryDraft] = useState({ name: '', outletId: '', productionStation: 'KITCHEN' });
@@ -60,16 +62,18 @@ export function FnbMenuClient() {
     if (!propertyId) return;
     setLoading(true); setError('');
     try {
-      const [productsResponse, categoriesResponse, outletsResponse] = await Promise.all([
+      const [productsResponse, categoriesResponse, outletsResponse, inventoryResponse] = await Promise.all([
         fetch(`/api/v1/pos/products?all=true&propertyId=${encodeURIComponent(propertyId)}`),
         fetch(`/api/v1/pos/categories?all=true&propertyId=${encodeURIComponent(propertyId)}`),
         fetch(`/api/v1/pos/outlets?propertyId=${encodeURIComponent(propertyId)}`),
+        fetch(`/api/v1/pos/inventory-items?propertyId=${encodeURIComponent(propertyId)}`),
       ]);
-      if (!productsResponse.ok || !categoriesResponse.ok || !outletsResponse.ok) throw new Error('Unable to load menu configuration');
-      const [productsBody, categoriesBody, outletsBody] = await Promise.all([productsResponse.json(), categoriesResponse.json(), outletsResponse.json()]);
+      if (!productsResponse.ok || !categoriesResponse.ok || !outletsResponse.ok || !inventoryResponse.ok) throw new Error('Unable to load menu configuration');
+      const [productsBody, categoriesBody, outletsBody, inventoryBody] = await Promise.all([productsResponse.json(), categoriesResponse.json(), outletsResponse.json(), inventoryResponse.json()]);
       setProducts(groupProducts(productsBody.data || []));
       setCategories(categoriesBody.data || []);
       setOutlets((outletsBody.data || []).filter((outlet: AnyRecord) => outlet.propertyId === propertyId));
+      setInventoryItems(inventoryBody.data || []);
     } catch (err: any) { setError(err.message || 'Could not load menu items'); }
     finally { setLoading(false); }
   }, [propertyId]);
@@ -79,7 +83,7 @@ export function FnbMenuClient() {
   const filteredProducts = useMemo(() => products.filter((product) => {
     const q = search.toLowerCase();
     const matchesSearch = !q || [product.itemCode, product.name, ...(product.locations || []).map((location: AnyRecord) => `${location.category} ${location.outlet}`)].some((value) => String(value || '').toLowerCase().includes(q));
-    const matchesCategory = categoryFilter === 'ALL' || (product.locations || []).some((location: AnyRecord) => String(location.category || '').trim().toLowerCase() === categoryFilter);
+    const matchesCategory = categoryFilter === 'ALL' || (product.locations || []).some((location: AnyRecord) => categoryKey(location.category) === categoryFilter);
     const matchesAvailability = availabilityFilter === 'ALL' || (availabilityFilter === 'ACTIVE' ? product.isActive : !product.isActive);
     const matchesInventory = inventoryFilter === 'ALL' || product.inventoryMode === inventoryFilter;
     return matchesSearch && matchesCategory && matchesAvailability && matchesInventory;
@@ -88,11 +92,12 @@ export function FnbMenuClient() {
   const categoryGroups = useMemo(() => {
     const grouped = new Map<string, AnyRecord>();
     for (const category of categories) {
-      const key = category.name.trim().toLowerCase();
+      const key = categoryKey(category.name);
       const current = grouped.get(key);
       if (current) {
         current.categoryIds.push(category.id);
         current.outletNames.push(category.outlet?.name || 'Outlet');
+        current.isActive = current.isActive || category.isActive;
       } else {
         grouped.set(key, { ...category, categoryIds: [category.id], outletNames: [category.outlet?.name || 'Outlet'] });
       }
@@ -110,14 +115,15 @@ export function FnbMenuClient() {
   };
   const productIds = (product: AnyRecord) => (product.locations || [{ id: product.id }]).map((location: AnyRecord) => location.id);
 
-  const openAdd = () => { setEditing(null); setItem({ name: '', price: '', taxRate: '0', categoryId: categoryOptions[0]?.id || '', inventoryMode: 'NON_STOCK' }); setDialog('item'); };
-  const openEdit = (product: AnyRecord) => { const productCategory = categories.find((category) => category.id === product.categoryId); const groupedCategory = productCategory ? categoryOptions.find((category) => category.name.trim().toLowerCase() === productCategory.name.trim().toLowerCase()) : null; setEditing(product); setItem({ name: product.name, price: String(product.price), taxRate: String(product.taxRate || 0), categoryId: groupedCategory?.id || product.categoryId, inventoryMode: product.inventoryMode }); setDialog('item'); };
+  const openAdd = () => { setEditing(null); setItem({ name: '', price: '', taxRate: '0', categoryId: categoryOptions[0]?.id || '', inventoryMode: 'NON_STOCK', stockItemId: '' }); setDialog('item'); };
+  const openEdit = (product: AnyRecord) => { const productCategory = categories.find((category) => category.id === product.categoryId); const groupedCategory = productCategory ? categoryOptions.find((category) => categoryKey(category.name) === categoryKey(productCategory.name)) : null; const linkedStock = (product.stockItems || []).find((stock: AnyRecord) => stock.warehouse?.posOutletId == null) || product.stockItems?.[0]; setEditing(product); setItem({ name: product.name, price: String(product.price), taxRate: String(product.taxRate || 0), categoryId: groupedCategory?.id || product.categoryId, inventoryMode: product.inventoryMode, stockItemId: linkedStock?.id || '' }); setDialog('item'); };
   const openModifiers = (product: AnyRecord) => { setModifierProduct(product); setModifierEditing(null); setModifier({ name: '', price: '0', quantity: '1', unitOfMeasure: '' }); setDialog('modifier'); };
 
   const saveItem = async () => {
     setSaving(true); setMessage('');
     try {
       if (!item.name.trim() || !item.categoryId) throw new Error('Name and category are required');
+      if (!editing && item.inventoryMode === 'STOCK' && !item.stockItemId) throw new Error('Select a main-warehouse inventory item for stock-controlled products');
       if (editing) {
         const selectedCategory = categoryOptions.find((category) => category.id === item.categoryId);
         for (const location of editing.locations || [{ id: editing.id, outletId: undefined }]) {
@@ -131,7 +137,7 @@ export function FnbMenuClient() {
       } else {
         const selectedCategory = categories.find((category) => category.id === item.categoryId);
         const categoryIds = selectedCategory?.categoryIds || [item.categoryId];
-        await request('/api/v1/pos/products/menu-request', 'POST', { propertyId, name: item.name, price: Number(item.price), taxRate: Number(item.taxRate), categoryId: item.categoryId, categoryIds, inventoryMode: item.inventoryMode });
+        await request('/api/v1/pos/products/menu-request', 'POST', { propertyId, name: item.name, price: Number(item.price), taxRate: Number(item.taxRate), categoryId: item.categoryId, categoryIds, inventoryMode: item.inventoryMode, stockItemId: item.stockItemId || undefined });
         setMessage('New item submitted for approval.');
       }
       setDialog(null); await load();
@@ -220,7 +226,7 @@ export function FnbMenuClient() {
                 onChange={(e) => setCategoryFilter(e.target.value)}
               >
                 <option value="ALL">All Categories</option>
-                {categoryOptions.map((category) => <option key={category.id} value={category.name.trim().toLowerCase()}>{category.name} ({category.outletNames.length} outlet{category.outletNames.length === 1 ? '' : 's'})</option>)}
+                {categoryOptions.map((category) => <option key={category.id} value={categoryKey(category.name)}>{category.name} ({category.outletNames.length} outlet{category.outletNames.length === 1 ? '' : 's'})</option>)}
               </select>
 
               <select 
@@ -471,6 +477,23 @@ export function FnbMenuClient() {
                         ))}
                       </select>
                     </div>
+
+                    {!editing && <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-medium text-slate-700">Inventory Control</label>
+                        <select className="w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm" value={item.inventoryMode} onChange={(e) => setItem({ ...item, inventoryMode: e.target.value, stockItemId: e.target.value === 'STOCK' ? item.stockItemId : '' })}>
+                          <option value="NON_STOCK">Non-stock</option>
+                          <option value="STOCK">Stock-controlled</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-medium text-slate-700">Main Warehouse Item</label>
+                        <select className="w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm" value={item.stockItemId} disabled={item.inventoryMode !== 'STOCK'} onChange={(e) => setItem({ ...item, stockItemId: e.target.value })}>
+                          <option value="">Select inventory item...</option>
+                          {inventoryItems.map((stock) => <option key={stock.id} value={stock.id}>{stock.name}{stock.sku ? ` · ${stock.sku}` : ''} · {stock.warehouse?.name || 'Main warehouse'}</option>)}
+                        </select>
+                      </div>
+                    </div>}
 
                     <div className="pt-4 flex justify-end gap-3">
                       <Button variant="ghost" onClick={() => setDialog(null)} className="text-slate-600">Cancel</Button>
