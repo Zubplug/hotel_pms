@@ -22,10 +22,16 @@ export async function POST(
     const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
 
     const { id } = await params;
+    const body = await req.json().catch(() => ({}));
+    const forceSkipper = body.forceSkipper === true;
 
     const reservation = await prisma.reservation.findUnique({
       where: { id },
-      select: { id: true, status: true, propertyId: true, corporateAccountId: true, primaryGuestId: true, confirmationNumber: true, checkIn: true, checkOut: true, reservationRooms: { include: { room: true } } },
+      select: { 
+        id: true, status: true, propertyId: true, corporateAccountId: true, primaryGuestId: true, confirmationNumber: true, checkIn: true, checkOut: true, 
+        primaryGuest: { select: { firstName: true, lastName: true, phone: true } },
+        reservationRooms: { include: { room: true } } 
+      },
     });
 
     if (!reservation) return errorResponse('NOT_FOUND', 'Reservation not found', 404);
@@ -132,14 +138,35 @@ export async function POST(
         : folios;
       const totalBalance = checkoutFolios.reduce((sum: number, folio: any) => sum + Number(folio.balance), 0);
 
-      if (reservation.corporateAccountId && Math.abs(totalBalance) > 0.01) {
+      let routeToSkipper = false;
+      let targetAccountId: string | undefined;
+
+      if (!reservation.corporateAccountId && totalBalance > 0 && forceSkipper) {
+        const allowedRoles = ['MANAGER', 'ACCOUNTANT', 'NIGHT_AUDITOR', 'ADMIN', 'SUPER_ADMIN'];
+        if (!allowedRoles.includes(userRole)) {
+          throw new Error('FORBIDDEN_SKIPPER_CHECKOUT');
+        }
+        const skipperAccount = await tx.cityLedgerAccount.findFirst({
+          where: { propertyId: reservation.propertyId, type: 'SKIPPER', status: 'ACTIVE' }
+        });
+        if (!skipperAccount) {
+          throw new Error('NO_SKIPPER_ACCOUNT');
+        }
+        targetAccountId = skipperAccount.id;
+        routeToSkipper = true;
+      }
+
+      if ((reservation.corporateAccountId || routeToSkipper) && Math.abs(totalBalance) > 0.01) {
         await routeFoliosToCityLedger({
           tx,
           folios: checkoutFolios,
           reservationId: reservation.id,
           guestId: reservation.primaryGuestId,
           propertyId: reservation.propertyId,
-          corporateAccountId: reservation.corporateAccountId,
+          corporateAccountId: reservation.corporateAccountId || undefined,
+          targetAccountId,
+          guestName: routeToSkipper && reservation.primaryGuest ? `${reservation.primaryGuest.firstName} ${reservation.primaryGuest.lastName}` : undefined,
+          guestPhone: routeToSkipper && reservation.primaryGuest?.phone ? reservation.primaryGuest.phone : undefined,
           confirmationNumber: reservation.confirmationNumber,
           createdBy: session.user.id,
           keepFolioOpen: Boolean(reservation.corporateAccountId),
@@ -281,6 +308,12 @@ export async function POST(
     }
     if (message === 'REFUND_REQUIRED') {
       return errorResponse('PAYMENT_REQUIRED', 'Guest has a credit balance. Please process a refund before check-out.', 402);
+    }
+    if (message === 'FORBIDDEN_SKIPPER_CHECKOUT') {
+      return errorResponse('FORBIDDEN', 'Only Managers and Accountants can check out guests as Skippers.', 403);
+    }
+    if (message === 'NO_SKIPPER_ACCOUNT') {
+      return errorResponse('BAD_REQUEST', 'No active City Ledger account found for Skippers. Please create one first.', 400);
     }
 
     return errorResponse('INTERNAL_ERROR', message, 500);

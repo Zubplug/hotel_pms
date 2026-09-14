@@ -13,7 +13,10 @@ type RouteInput = {
   reservationId: string;
   guestId?: string;
   propertyId: string;
-  corporateAccountId: string;
+  corporateAccountId?: string;
+  targetAccountId?: string;
+  guestName?: string;
+  guestPhone?: string;
   confirmationNumber: string;
   createdBy: string;
   keepFolioOpen?: boolean;
@@ -25,14 +28,19 @@ type RouteInput = {
  * credit and is recorded as a city-ledger payment/credit.
  */
 export async function routeFoliosToCityLedger(input: RouteInput) {
-  const { tx, folios, reservationId, propertyId, corporateAccountId, confirmationNumber, createdBy } = input;
-  const corporateAccount = await tx.corporateAccount.findUnique({
-    where: { id: corporateAccountId },
-    select: { cityLedgerAccountId: true },
-  });
+  const { tx, folios, reservationId, propertyId, corporateAccountId, targetAccountId, guestName, guestPhone, confirmationNumber, createdBy } = input;
+  
+  let accountId = targetAccountId;
+  
+  if (!accountId && corporateAccountId) {
+    const corporateAccount = await tx.corporateAccount.findUnique({
+      where: { id: corporateAccountId },
+      select: { cityLedgerAccountId: true },
+    });
+    accountId = corporateAccount?.cityLedgerAccountId;
+  }
 
-  if (!corporateAccount?.cityLedgerAccountId) throw new Error('PAYMENT_REQUIRED');
-  const accountId = corporateAccount.cityLedgerAccountId;
+  if (!accountId) throw new Error('PAYMENT_REQUIRED');
   let transferredDebit = 0;
   let transferredCredit = 0;
 
@@ -47,6 +55,10 @@ export async function routeFoliosToCityLedger(input: RouteInput) {
       const dueDate = new Date(issueDate);
       dueDate.setUTCDate(dueDate.getUTCDate() + 30);
       const invoiceNumber = `AR-${confirmationNumber}-${String(folio.id).slice(0, 8).toUpperCase()}`;
+      const description = guestName 
+        ? `Walk-out/Skipper folio ${folio.id} for reservation ${confirmationNumber} (Guest: ${guestName}${guestPhone ? ` - ${guestPhone}` : ''})`
+        : `Corporate folio ${folio.id} for reservation ${confirmationNumber}`;
+
       const invoice = await tx.cityLedgerInvoice.create({
         data: {
           propertyId,
@@ -54,7 +66,7 @@ export async function routeFoliosToCityLedger(input: RouteInput) {
           invoiceNumber,
           issueDate,
           dueDate,
-          description: `Corporate folio ${folio.id} for reservation ${confirmationNumber}`,
+          description,
           amount,
           outstandingAmount: amount,
           currency,

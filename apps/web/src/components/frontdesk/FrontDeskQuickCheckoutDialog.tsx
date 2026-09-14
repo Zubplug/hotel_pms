@@ -329,8 +329,11 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
                   <div className="bg-red-50 rounded-xl p-4 border border-red-100 flex items-start gap-3">
                     <Wallet className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-red-900 font-bold">Outstanding Balance</p>
+                      <p className="text-red-900 font-bold">Outstanding balance — Manager action required</p>
                       <p className="text-red-700 text-sm mt-1 mb-2">Guest must pay {formatCurrency(balance)} before checkout can be processed.</p>
+                      <div className="mb-3 p-3 bg-red-100/50 rounded-lg text-xs text-red-800 font-medium border border-red-200">
+                        This reservation cannot be checked out with an unpaid balance. If the guest has walked out, contact a manager to process the guest as a Skipper from the back-office checkout workflow.
+                      </div>
                       <Button size="sm" variant="destructive" className="w-full rounded-lg" onClick={() => onOpenChange(false)}>
                         Cancel & View Folio
                       </Button>
