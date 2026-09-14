@@ -630,10 +630,11 @@ export async function executeNightAudit(
     const occupancy = roomCount ? (occupiedCount / roomCount) * 100 : 0;
     const adr = occupiedCount ? totalRoomRevenue / occupiedCount : 0;
   const revpar = roomCount ? totalRoomRevenue / roomCount : 0;
+  const journalBusinessDate = new Date(businessDate.getTime());
 
   const journalPosting = await prisma.$transaction((tx) => postNightAuditJournal(tx, {
     propertyId,
-    businessDate,
+    businessDate: journalBusinessDate,
     auditId: auditRun.id,
     createdBy: userId,
   }));

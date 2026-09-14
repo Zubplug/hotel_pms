@@ -43,6 +43,10 @@ export async function postNightAuditJournal(tx: any, input: {
   auditId: string;
   createdBy: string | null;
 }) {
+  if (!(input.businessDate instanceof Date) || Number.isNaN(input.businessDate.getTime())) {
+    return { status: 'INVALID_BUSINESS_DATE', journalEntryId: null, missingAccounts: ['BUSINESS_DATE'], lineCount: 0 };
+  }
+
   const existing = await tx.journalEntry.findUnique({
     where: { propertyId_nightAuditId: { propertyId: input.propertyId, nightAuditId: input.auditId } },
     select: { id: true, totalDebit: true, totalCredit: true },
