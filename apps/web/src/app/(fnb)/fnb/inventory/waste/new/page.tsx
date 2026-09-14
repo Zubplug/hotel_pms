@@ -2,9 +2,16 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Trash2, Loader2, ArrowLeft, Save } from 'lucide-react';
+import { Trash2, Loader2, ArrowLeft, Save, AlertCircle, FileText } from 'lucide-react';
 import Link from 'next/link';
 import { UnitOfMeasure, KitchenWasteReason } from '@hotel-pms/db';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function NewWasteEntryPage() {
   const router = useRouter();
@@ -50,104 +57,139 @@ export default function NewWasteEntryPage() {
     }
   };
 
+  const selectedItem = stockItems.find(i => i.id === formData.stockItemId);
+
   return (
-    <div className="min-h-screen bg-slate-50 p-6 sm:p-8 font-sans">
-      <div className="max-w-2xl mx-auto">
-        <header className="mb-8">
-          <Link href="/fnb/inventory/waste" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-slate-900 transition mb-4">
-            <ArrowLeft className="h-4 w-4" /> Back to Waste Log
-          </Link>
-          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-rose-600 mb-2">
-            <Trash2 className="h-4 w-4" /> Log Waste
-          </div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">New Waste Entry</h1>
-        </header>
+    <div className="p-6 md:p-8 space-y-8 bg-slate-50/50 dark:bg-slate-950/20 min-h-screen">
+      <div className="max-w-3xl mx-auto space-y-6">
+        <Link href="/fnb/inventory/waste" className="inline-flex items-center text-sm font-medium text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors">
+          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Waste Log
+        </Link>
+        
+        <PageHeader 
+          title="Log Waste & Spoilage" 
+          description="Record discarded items to ensure accurate inventory valuation and cost control."
+        />
 
-        <form onSubmit={handleSubmit} className="space-y-6 rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 shadow-sm">
-          
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-bold text-slate-700 mb-1.5">Stock Item</label>
-              <select
-                required
-                disabled={fetching}
-                value={formData.stockItemId}
-                onChange={e => setFormData({ ...formData, stockItemId: e.target.value })}
-                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm outline-none transition focus:border-rose-500 focus:ring-1 focus:ring-rose-500 disabled:opacity-50"
-              >
-                <option value="" disabled>Select a stock item...</option>
-                {stockItems.map(item => (
-                  <option key={item.id} value={item.id}>{item.name} ({item.quantityOnHand} {item.baseUnit} available)</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1.5">Quantity</label>
-                <input
-                  type="number"
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <Card className="border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900">
+            <CardHeader className="border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Trash2 className="h-5 w-5 text-emerald-600 dark:text-emerald-500" />
+                Item Details & Quantity
+              </CardTitle>
+              <CardDescription>Select the stock item and the exact amount being discarded.</CardDescription>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-6">
+              <div className="space-y-2.5">
+                <Label>Stock Item</Label>
+                <Select 
+                  disabled={fetching} 
+                  value={formData.stockItemId} 
+                  onValueChange={(val) => setFormData(prev => ({ ...prev, stockItemId: val || '' }))}
                   required
-                  min="0.01"
-                  step="0.01"
-                  value={formData.quantity}
-                  onChange={e => setFormData({ ...formData, quantity: e.target.value })}
-                  placeholder="0.00"
-                  className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm outline-none transition focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
+                >
+                  <SelectTrigger className="w-full h-11 bg-slate-50/50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-700">
+                    <SelectValue placeholder={fetching ? "Loading items..." : "Search or select a stock item..."} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {stockItems.map(item => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {item.name} <span className="text-slate-400 text-xs ml-2">({item.quantityOnHand} {item.baseUnit} available)</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-2.5">
+                  <Label>Quantity</Label>
+                  <Input
+                    type="number"
+                    required
+                    min="0.01"
+                    step="0.01"
+                    value={formData.quantity}
+                    onChange={e => setFormData({ ...formData, quantity: e.target.value })}
+                    placeholder="0.00"
+                    className="h-11 bg-slate-50/50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-700 font-mono"
+                  />
+                </div>
+                <div className="space-y-2.5">
+                  <Label>Unit of Measure</Label>
+                  <Select 
+                    value={formData.unitOfMeasure} 
+                    onValueChange={(val) => setFormData(prev => ({ ...prev, unitOfMeasure: val || '' }))}
+                    required
+                  >
+                    <SelectTrigger className="h-11 bg-slate-50/50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-700 font-mono">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.keys(UnitOfMeasure).map(unit => (
+                        <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900">
+            <CardHeader className="border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <FileText className="h-5 w-5 text-emerald-600 dark:text-emerald-500" />
+                Reason & Evidence
+              </CardTitle>
+              <CardDescription>Provide operational context for why this item is being discarded.</CardDescription>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-6">
+              <div className="space-y-2.5">
+                <Label>Reason Code</Label>
+                <Select 
+                  value={formData.reason} 
+                  onValueChange={(val) => setFormData(prev => ({ ...prev, reason: val as KitchenWasteReason }))}
+                  required
+                >
+                  <SelectTrigger className="w-full h-11 bg-slate-50/50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-700">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.keys(KitchenWasteReason).map(reason => (
+                      <SelectItem key={reason} value={reason}>{reason.replace(/_/g, ' ')}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2.5">
+                <Label>Notes & Operational Context (Optional)</Label>
+                <Textarea
+                  value={formData.notes}
+                  onChange={e => setFormData({ ...formData, notes: e.target.value })}
+                  placeholder="E.g. Dropped during service, found expired in walk-in..."
+                  className="min-h-[120px] bg-slate-50/50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-700 resize-none"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1.5">Unit</label>
-                <select
-                  required
-                  value={formData.unitOfMeasure}
-                  onChange={e => setFormData({ ...formData, unitOfMeasure: e.target.value })}
-                  className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm outline-none transition focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
-                >
-                  {Object.keys(UnitOfMeasure).map(unit => (
-                    <option key={unit} value={unit}>{unit}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
+            </CardContent>
+          </Card>
 
-            <div>
-              <label className="block text-sm font-bold text-slate-700 mb-1.5">Reason Code</label>
-              <select
-                required
-                value={formData.reason}
-                onChange={e => setFormData({ ...formData, reason: e.target.value as KitchenWasteReason })}
-                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm outline-none transition focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
-              >
-                {Object.keys(KitchenWasteReason).map(reason => (
-                  <option key={reason} value={reason}>{reason.replace(/_/g, ' ')}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-bold text-slate-700 mb-1.5">Notes & Evidence (Optional)</label>
-              <textarea
-                value={formData.notes}
-                onChange={e => setFormData({ ...formData, notes: e.target.value })}
-                placeholder="E.g. Dropped during service, found expired in walk-in..."
-                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm outline-none transition focus:border-rose-500 focus:ring-1 focus:ring-rose-500 min-h-[100px]"
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
-            <Link href="/fnb/inventory/waste" className="px-5 py-2.5 text-sm font-bold text-slate-600 hover:text-slate-900 transition">
-              Cancel
+          <div className="flex items-center justify-end gap-4 pt-2">
+            <Link href="/fnb/inventory/waste">
+              <Button variant="ghost" className="text-slate-500 hover:text-slate-900 dark:hover:text-slate-100">
+                Cancel
+              </Button>
             </Link>
-            <button
+            <Button
               type="submit"
-              disabled={loading}
-              className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-6 py-2.5 text-sm font-bold text-white transition hover:bg-rose-700 disabled:opacity-50"
+              disabled={loading || !formData.stockItemId || !formData.quantity}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm border border-emerald-700/50 px-8 h-11"
             >
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
               Submit for Approval
-            </button>
+            </Button>
           </div>
         </form>
       </div>

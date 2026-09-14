@@ -1,10 +1,21 @@
 import { Metadata } from 'next';
 import prisma from '@hotel-pms/db';
-import { format } from 'date-fns';
-import { Trash2, AlertCircle, Calendar } from 'lucide-react';
+import { Trash2, Plus, Calendar, AlertCircle } from 'lucide-react';
+import Link from 'next/link';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
 
 export const metadata: Metadata = {
-  title: 'Waste Log | F&B Controls',
+  title: 'Waste Log | LodgeCore F&B',
 };
 
 const money = (value: number, currency = 'NGN') =>
@@ -17,90 +28,112 @@ export default async function WasteLogPage() {
 
   const wasteEntries = await prisma.kitchenWasteEntry.findMany({
     where: { propertyId: property.id },
-    orderBy: { id: 'desc' }, // Fallback to id since there is no createdAt in this model? 
-    // Wait, let's just fetch them
+    orderBy: { id: 'desc' },
     include: {
       stockItem: true,
     }
   });
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6 sm:p-8 font-sans">
-      <header className="mb-8 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-rose-600 mb-3">
-            <Trash2 className="h-4 w-4" /> Inventory Controls
-          </div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Waste Log</h1>
-          <p className="mt-1 text-sm text-slate-500 max-w-xl">
-            Review logged kitchen waste, spoilage, and production losses affecting inventory valuation.
-          </p>
-        </div>
-        <div className="flex gap-3">
-          <button className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-rose-700 shadow-sm">
-            + Log Waste
-          </button>
-        </div>
-      </header>
+    <div className="p-6 md:p-8 space-y-8 bg-slate-50/50 dark:bg-slate-950/20 min-h-screen">
+      <PageHeader 
+        title="Waste & Spoilage Log" 
+        description="Review logged kitchen waste, spoilage, and production losses affecting inventory valuation."
+        actions={
+          <Link href="/fnb/inventory/waste/new">
+            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-colors border border-emerald-700/50">
+              <Plus className="mr-2 h-4 w-4" /> Log Waste
+            </Button>
+          </Link>
+        }
+      />
 
-      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 border-b border-slate-200 text-xs font-bold uppercase tracking-wider text-slate-500">
-              <tr>
-                <th className="px-6 py-4">Item</th>
-                <th className="px-6 py-4 text-right">Quantity</th>
-                <th className="px-6 py-4 text-right">Unit Cost</th>
-                <th className="px-6 py-4 text-right">Total Value</th>
-                <th className="px-6 py-4">Reason</th>
-                <th className="px-6 py-4">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {wasteEntries.map(entry => (
-                <tr key={entry.id} className="transition-colors hover:bg-slate-50/50">
-                  <td className="px-6 py-4">
-                    <p className="font-bold text-slate-900">{entry.stockItem?.name}</p>
-                    {entry.notes && <p className="text-xs text-slate-500 mt-0.5">{entry.notes}</p>}
-                  </td>
-                  <td className="px-6 py-4 text-right font-mono font-medium text-slate-900">
-                    {Number(entry.quantity)} {entry.unitOfMeasure}
-                  </td>
-                  <td className="px-6 py-4 text-right font-mono text-slate-500">
-                    {money(Number(entry.unitCost), currency)}
-                  </td>
-                  <td className="px-6 py-4 text-right font-mono font-bold text-rose-600">
-                    {money(Number(entry.totalValue), currency)}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
-                      {entry.reason.replace(/_/g, ' ')}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md ${
-                      entry.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-700' :
-                      entry.status === 'SUBMITTED' ? 'bg-amber-100 text-amber-700' :
-                      'bg-slate-100 text-slate-700'
-                    }`}>
-                      {entry.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-              
-              {wasteEntries.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center">
-                    <Trash2 className="h-10 w-10 mx-auto text-slate-300 mb-3" />
-                    <p className="text-sm font-semibold text-slate-600">No waste logged yet.</p>
-                  </td>
-                </tr>
+      <Card className="border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col h-[calc(100vh-12rem)]">
+        <CardHeader className="py-4 px-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex flex-row items-center justify-between">
+          <div className="flex items-center gap-2 text-sm font-semibold text-slate-600 dark:text-slate-300">
+            <Trash2 className="h-4 w-4 text-emerald-600 dark:text-emerald-500" /> Recent Entries
+          </div>
+        </CardHeader>
+        <CardContent className="p-0 flex-1 overflow-auto relative">
+          <Table>
+            <TableHeader className="sticky top-0 z-10 bg-slate-50/95 dark:bg-slate-900/95 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800 shadow-sm">
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="pl-6 font-semibold text-slate-600 dark:text-slate-300 h-11">Stock Item</TableHead>
+                <TableHead className="font-semibold text-slate-600 dark:text-slate-300 h-11 text-right">Quantity</TableHead>
+                <TableHead className="font-semibold text-slate-600 dark:text-slate-300 h-11 text-right">Unit Cost</TableHead>
+                <TableHead className="font-semibold text-slate-600 dark:text-slate-300 h-11 text-right">Financial Impact</TableHead>
+                <TableHead className="font-semibold text-slate-600 dark:text-slate-300 h-11 text-center">Reason</TableHead>
+                <TableHead className="pr-6 font-semibold text-slate-600 dark:text-slate-300 h-11 text-right">Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {wasteEntries.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="h-64 text-center">
+                    <div className="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 space-y-3">
+                      <Trash2 className="h-10 w-10 opacity-20" />
+                      <p className="text-sm font-medium">No waste entries logged.</p>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                wasteEntries.map(entry => {
+                  const statusBg = entry.status === 'APPROVED' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' :
+                                   entry.status === 'REJECTED' ? 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20' :
+                                   entry.status === 'SUBMITTED' ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20' :
+                                   'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20';
+
+                  return (
+                    <TableRow key={entry.id} className="group hover:bg-slate-50/50 dark:hover:bg-slate-900/50 transition-colors border-b border-slate-100 dark:border-slate-800/50">
+                      <TableCell className="pl-6 py-3">
+                        <div className="flex flex-col">
+                          <span className="font-medium text-slate-800 dark:text-slate-200">{entry.stockItem?.name || 'Unknown Item'}</span>
+                          {entry.notes && (
+                            <span className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 truncate max-w-[250px]">
+                              {entry.notes}
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
+                      
+                      <TableCell className="text-right py-3">
+                        <div className="font-semibold text-slate-800 dark:text-slate-200">
+                          {Number(entry.quantity)}
+                        </div>
+                        <div className="text-[11px] text-slate-400 mt-0.5 uppercase tracking-wider">{entry.unitOfMeasure}</div>
+                      </TableCell>
+                      
+                      <TableCell className="text-right py-3">
+                        <div className="font-medium text-slate-500 dark:text-slate-400">
+                          {money(Number(entry.unitCost), currency)}
+                        </div>
+                      </TableCell>
+
+                      <TableCell className="text-right py-3">
+                        <span className="font-semibold text-red-600 dark:text-red-400">
+                          {money(Number(entry.totalValue), currency)}
+                        </span>
+                      </TableCell>
+                      
+                      <TableCell className="text-center py-3">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                          {entry.reason.replace(/_/g, ' ')}
+                        </span>
+                      </TableCell>
+                      
+                      <TableCell className="pr-6 text-right py-3">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded border text-[11px] font-bold uppercase tracking-wider ${statusBg}`}>
+                          {entry.status}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
     </div>
   );
 }

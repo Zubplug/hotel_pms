@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, Filter, AlertCircle, Percent, ArrowUpRight, ArrowDownRight, RefreshCw, Loader2 } from 'lucide-react';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { Search, Filter, AlertCircle, Percent, ArrowUpRight, ArrowDownRight, RefreshCw, Loader2, PackageSearch } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -39,6 +40,25 @@ function buildHierarchy(warehouses: any[]) {
   };
   roots.forEach(r => traverse(r, 0));
   return flattened;
+}
+
+function VarianceVisualBar({ variance, maxVariance }: { variance: number; maxVariance: number }) {
+  if (maxVariance === 0) return <div className="w-24 mx-auto" />;
+  const percentage = Math.min(Math.abs(variance) / maxVariance, 1) * 100;
+  const isOverage = variance > 0;
+  const isShortage = variance < 0;
+
+  return (
+    <div className="flex items-center w-24 mx-auto opacity-90 group-hover:opacity-100 transition-opacity">
+      <div className="flex-1 flex justify-end pr-1">
+        {isShortage && <div className="h-1.5 bg-red-500/80 rounded-l-full" style={{ width: `${percentage}%` }} />}
+      </div>
+      <div className="w-px h-3 bg-slate-300 dark:bg-slate-700" />
+      <div className="flex-1 flex justify-start pl-1">
+        {isOverage && <div className="h-1.5 bg-emerald-500/80 rounded-r-full" style={{ width: `${percentage}%` }} />}
+      </div>
+    </div>
+  );
 }
 
 export function FnbInventoryClient() {
@@ -93,127 +113,162 @@ export function FnbInventoryClient() {
   const items = data?.items || [];
   const summary = data?.summary || { totalItems: 0, itemsCounted: 0, shortageValue: 0, overageValue: 0, netVarianceValue: 0 };
   
-  const filteredItems = items.filter((item: any) => {
+  const filteredItems = useMemo(() => {
     const q = search.toLowerCase();
-    return (
+    return items.filter((item: any) => 
       item.itemCode.toLowerCase().includes(q) ||
       item.name.toLowerCase().includes(q) ||
       item.category.toLowerCase().includes(q)
     );
-  });
+  }, [items, search]);
+
+  const maxVariance = useMemo(() => {
+    return Math.max(...filteredItems.map((i: any) => Math.abs(i.varianceQuantity || 0)), 1);
+  }, [filteredItems]);
+
+  const countedPercentage = summary.totalItems > 0 ? (summary.itemsCounted / summary.totalItems) * 100 : 0;
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Physical vs Book Stock</h1>
-          <p className="text-muted-foreground mt-1">Compare actual counts to system quantities for {data?.warehouse?.name || 'the selected outlet'}.</p>
-        </div>
-        <div className="flex items-center gap-4">
-          <Select value={selectedWarehouseId} onValueChange={(v) => setSelectedWarehouseId(v || '')}>
-            <SelectTrigger className="w-[280px]">
-              <SelectValue placeholder="Select Warehouse..." />
-            </SelectTrigger>
-            <SelectContent>
-              {warehouses.map(w => (
-                <SelectItem key={w.id} value={w.id}>
-                  {'\u00A0'.repeat(w.depth * 4)}
-                  {w.depth > 0 ? '├─ ' : ''}
-                  {w.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button variant="outline" onClick={fetchReport} disabled={loading || !selectedWarehouseId}>
-            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
-          </Button>
-        </div>
-      </div>
+    <div className="p-6 md:p-8 space-y-8 bg-slate-50/50 dark:bg-slate-950/20 min-h-screen">
+      <PageHeader 
+        title="Physical vs Book Stock" 
+        description={`Inventory variance analysis for ${data?.warehouse?.name || 'the selected outlet'}.`}
+        actions={
+          <div className="flex items-center gap-3">
+            <Select value={selectedWarehouseId} onValueChange={(v) => setSelectedWarehouseId(v || '')}>
+              <SelectTrigger className="w-[280px] bg-background/60 backdrop-blur-md border-slate-200 dark:border-slate-800 shadow-sm">
+                <SelectValue placeholder="Select Warehouse..." />
+              </SelectTrigger>
+              <SelectContent>
+                {warehouses.map(w => (
+                  <SelectItem key={w.id} value={w.id}>
+                    {'\u00A0'.repeat(w.depth * 4)}
+                    {w.depth > 0 ? '├─ ' : ''}
+                    {w.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button 
+              variant="outline" 
+              onClick={fetchReport} 
+              disabled={loading || !selectedWarehouseId}
+              className="bg-background/60 backdrop-blur-md border-slate-200 dark:border-slate-800 shadow-sm hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            >
+              <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
+            </Button>
+          </div>
+        }
+      />
 
       <div className="grid gap-4 md:grid-cols-4">
-        <Card>
+        {/* Net Variance */}
+        <Card className="border-slate-200 dark:border-slate-800/60 shadow-sm bg-gradient-to-b from-background to-slate-50/50 dark:from-background dark:to-slate-900/20">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-sm font-medium">Net Variance Value</CardTitle>
-            <AlertCircle className="w-4 h-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium text-slate-500 dark:text-slate-400">Net Variance Value</CardTitle>
+            <div className={`p-1.5 rounded-md ${summary.netVarianceValue < 0 ? 'bg-red-500/10 text-red-500' : summary.netVarianceValue > 0 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-slate-500/10 text-slate-500'}`}>
+              <AlertCircle className="w-4 h-4" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold ${summary.netVarianceValue < 0 ? 'text-red-500' : summary.netVarianceValue > 0 ? 'text-blue-500' : ''}`}>
+            <div className={`text-2xl font-bold tracking-tight ${summary.netVarianceValue < 0 ? 'text-red-600 dark:text-red-400' : summary.netVarianceValue > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-300'}`}>
               {formatCurrency(summary.netVarianceValue)}
             </div>
-            <p className="text-xs text-muted-foreground">Overall financial impact</p>
+            <p className="text-xs text-muted-foreground mt-1 font-medium">Overall financial impact</p>
           </CardContent>
         </Card>
-        <Card>
+
+        {/* Shortage */}
+        <Card className="border-red-100 dark:border-red-900/30 shadow-sm bg-red-50/30 dark:bg-red-950/10">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-sm font-medium">Shortage Value</CardTitle>
-            <ArrowDownRight className="w-4 h-4 text-red-500" />
+            <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-300">Shortage Value</CardTitle>
+            <div className="p-1.5 rounded-md bg-red-500/10 text-red-600 dark:text-red-400">
+              <ArrowDownRight className="w-4 h-4" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-500">{formatCurrency(summary.shortageValue)}</div>
-            <p className="text-xs text-muted-foreground">Loss / Shrinkage</p>
+            <div className="text-2xl font-bold tracking-tight text-red-600 dark:text-red-400">{formatCurrency(summary.shortageValue)}</div>
+            <p className="text-xs text-red-600/70 dark:text-red-400/70 mt-1 font-medium">Loss / Shrinkage</p>
           </CardContent>
         </Card>
-        <Card>
+
+        {/* Overage */}
+        <Card className="border-emerald-100 dark:border-emerald-900/30 shadow-sm bg-emerald-50/30 dark:bg-emerald-950/10">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-sm font-medium">Overage Value</CardTitle>
-            <ArrowUpRight className="w-4 h-4 text-blue-500" />
+            <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-300">Overage Value</CardTitle>
+            <div className="p-1.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+              <ArrowUpRight className="w-4 h-4" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-500">{formatCurrency(summary.overageValue)}</div>
-            <p className="text-xs text-muted-foreground">Found / Unrecorded Stock</p>
+            <div className="text-2xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">{formatCurrency(summary.overageValue)}</div>
+            <p className="text-xs text-emerald-600/70 dark:text-emerald-400/70 mt-1 font-medium">Found / Unrecorded Stock</p>
           </CardContent>
         </Card>
-        <Card>
+
+        {/* Items Counted */}
+        <Card className="border-slate-200 dark:border-slate-800/60 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-sm font-medium">Items Counted</CardTitle>
-            <Percent className="w-4 h-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium text-slate-500 dark:text-slate-400">Audit Progress</CardTitle>
+            <div className="p-1.5 rounded-md bg-slate-500/10 text-slate-500">
+              <Percent className="w-4 h-4" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{summary.itemsCounted} / {summary.totalItems}</div>
-            <p className="text-xs text-muted-foreground">
-              {summary.totalItems > 0 ? ((summary.itemsCounted / summary.totalItems) * 100).toFixed(1) : 0}% of items audited
-            </p>
+            <div className="text-2xl font-bold tracking-tight text-slate-700 dark:text-slate-300">
+              {summary.itemsCounted} <span className="text-lg text-slate-400 dark:text-slate-500 font-medium">/ {summary.totalItems}</span>
+            </div>
+            <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 mt-3 rounded-full overflow-hidden">
+              <div 
+                className="bg-emerald-500 h-full rounded-full transition-all duration-500 ease-out" 
+                style={{ width: `${countedPercentage}%` }}
+              />
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      <Card>
-        <CardHeader className="py-4">
+      <Card className="border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col h-[600px]">
+        <CardHeader className="py-4 px-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
           <div className="flex justify-between items-center">
-            <div className="flex items-center space-x-2">
-              <div className="relative w-64">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <div className="flex items-center space-x-3">
+              <div className="relative w-72">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <Input 
                   placeholder="Search stock items..." 
-                  className="pl-8" 
+                  className="pl-9 bg-background border-slate-200 dark:border-slate-700 focus-visible:ring-emerald-500/20 shadow-sm" 
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
               </div>
-              <Button variant="outline" size="icon"><Filter className="h-4 w-4" /></Button>
+              <Button variant="outline" size="icon" className="border-slate-200 dark:border-slate-700 shadow-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
+                <Filter className="h-4 w-4" />
+              </Button>
             </div>
-            {loading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+            {loading && <div className="flex items-center text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin mr-2" /> Syncing data</div>}
           </div>
         </CardHeader>
-        <CardContent className="p-0">
+        <CardContent className="p-0 flex-1 overflow-auto relative">
           <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="pl-6">Stock Code</TableHead>
-                <TableHead>Item Name</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead className="text-right">Physical Stock</TableHead>
-                <TableHead className="text-right">Book Stock</TableHead>
-                <TableHead className="text-right">Variance</TableHead>
-                <TableHead className="text-right">Var %</TableHead>
-                <TableHead className="text-right">Var Value</TableHead>
+            <TableHeader className="sticky top-0 z-10 bg-slate-50/95 dark:bg-slate-900/95 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800 shadow-sm">
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="pl-6 font-semibold text-slate-600 dark:text-slate-300 h-11">Stock Item</TableHead>
+                <TableHead className="font-semibold text-slate-600 dark:text-slate-300 h-11 text-right">Physical</TableHead>
+                <TableHead className="font-semibold text-slate-600 dark:text-slate-300 h-11 text-right">Book</TableHead>
+                <TableHead className="font-semibold text-slate-600 dark:text-slate-300 h-11 text-center w-32">Visual Var</TableHead>
+                <TableHead className="font-semibold text-slate-600 dark:text-slate-300 h-11 text-right">Var Qty</TableHead>
+                <TableHead className="font-semibold text-slate-600 dark:text-slate-300 h-11 text-right">Var %</TableHead>
+                <TableHead className="pr-6 font-semibold text-slate-600 dark:text-slate-300 h-11 text-right">Var Value</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredItems.length === 0 && !loading && (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-6 text-muted-foreground">
-                    No items found for this warehouse.
+                  <TableCell colSpan={7} className="h-64 text-center">
+                    <div className="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 space-y-3">
+                      <PackageSearch className="h-10 w-10 opacity-20" />
+                      <p className="text-sm font-medium">No items found matching your criteria</p>
+                    </div>
                   </TableCell>
                 </TableRow>
               )}
@@ -225,31 +280,55 @@ export function FnbInventoryClient() {
                 const isOverage = hasCount && item.varianceQuantity > 0;
                 
                 return (
-                  <TableRow key={item.stockItemId}>
-                    <TableCell className="pl-6 font-medium text-muted-foreground">{item.itemCode}</TableCell>
-                    <TableCell className="font-semibold">
-                      {item.name}
-                      {item.lastStocktakeAt && (
-                        <div className="text-[10px] text-muted-foreground font-normal mt-0.5">
-                          Counted: {format(new Date(item.lastStocktakeAt), 'dd MMM yyyy')}
+                  <TableRow key={item.stockItemId} className="group hover:bg-slate-50/50 dark:hover:bg-slate-900/50 transition-colors border-b border-slate-100 dark:border-slate-800/50">
+                    <TableCell className="pl-6 py-3">
+                      <div className="flex flex-col">
+                        <span className="font-medium text-slate-800 dark:text-slate-200">{item.name}</span>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-[11px] font-mono text-slate-500 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded-sm">
+                            {item.itemCode}
+                          </span>
+                          <span className="text-xs text-slate-400 dark:text-slate-500">
+                            {item.category}
+                          </span>
                         </div>
-                      )}
+                      </div>
                     </TableCell>
-                    <TableCell>{item.category}</TableCell>
-                    <TableCell className="text-right font-medium">
-                      {hasCount ? `${item.physicalQuantity} ${item.unit}` : '--'}
+                    
+                    <TableCell className="text-right py-3">
+                      <div className="font-semibold text-slate-800 dark:text-slate-200">
+                        {hasCount ? item.physicalQuantity : <span className="text-slate-300 dark:text-slate-600">--</span>}
+                      </div>
+                      <div className="text-[11px] text-slate-400 mt-0.5 uppercase tracking-wider">{item.unit}</div>
                     </TableCell>
-                    <TableCell className="text-right text-muted-foreground">
-                      {item.bookQuantity} {item.unit}
+                    
+                    <TableCell className="text-right py-3">
+                      <div className="font-medium text-slate-500 dark:text-slate-400">
+                        {item.bookQuantity}
+                      </div>
+                      <div className="text-[11px] text-slate-400 mt-0.5 uppercase tracking-wider">{item.unit}</div>
                     </TableCell>
-                    <TableCell className={`text-right font-semibold ${isShortage ? 'text-red-500' : isOverage ? 'text-blue-500' : ''}`}>
-                      {varianceLabel}
+
+                    <TableCell className="text-center py-3">
+                       {hasCount && <VarianceVisualBar variance={item.varianceQuantity} maxVariance={maxVariance} />}
                     </TableCell>
-                    <TableCell className={`text-right ${isShortage ? 'text-red-500' : isOverage ? 'text-blue-500' : ''}`}>
-                      {percentLabel}
+
+                    <TableCell className="text-right py-3">
+                      <span className={`inline-flex items-center justify-end font-semibold text-sm ${isShortage ? 'text-red-600 dark:text-red-400' : isOverage ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-400'}`}>
+                        {varianceLabel}
+                      </span>
                     </TableCell>
-                    <TableCell className={`text-right ${isShortage ? 'text-red-500' : isOverage ? 'text-blue-500' : ''}`}>
-                      {hasCount ? formatCurrency(item.varianceValue) : '--'}
+                    
+                    <TableCell className="text-right py-3">
+                      <span className={`text-sm ${isShortage ? 'text-red-500 dark:text-red-400/80' : isOverage ? 'text-emerald-500 dark:text-emerald-400/80' : 'text-slate-400'}`}>
+                        {percentLabel}
+                      </span>
+                    </TableCell>
+                    
+                    <TableCell className="pr-6 text-right py-3">
+                      <span className={`text-sm font-medium ${isShortage ? 'text-red-600 dark:text-red-400' : isOverage ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-300'}`}>
+                        {hasCount ? formatCurrency(item.varianceValue) : '--'}
+                      </span>
                     </TableCell>
                   </TableRow>
                 );
