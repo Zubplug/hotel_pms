@@ -3730,13 +3730,26 @@ public class LocalRepository
 
     public async Task<string?> GetPendingPosShiftStatusAsync(string propertyId, string outletId, string bankType, string userId)
     {
-        var pending = await _dbContext.PosSessions
-            .Where(s => s.PropertyId == propertyId && s.OutletId == outletId
-                && (bankType == "SERVER"
-                    ? (s.PrimaryOperatorId == userId || s.StaffId == userId || s.UserId == userId) && s.BankType == "SERVER"
-                    : s.BankType == "CENTRAL" && s.BankingModel == "CENTRAL_CASHIER")
-                && ((s.ControlStatus != null && new[] { "SUBMITTED", "UNDER_REVIEW", "RETURNED", "HANDOVER_PENDING" }.Contains(s.ControlStatus))
-                    || (string.IsNullOrEmpty(s.ControlStatus) && (s.Status == "RECONCILIATION_REQUIRED" || s.Status == "CLOSING"))))
+        var query = _dbContext.PosSessions
+            .Where(s => s.PropertyId == propertyId && s.OutletId == outletId);
+
+        if (bankType == "SERVER")
+        {
+            query = query.Where(s => s.BankType == "SERVER"
+                && (s.PrimaryOperatorId == userId || s.StaffId == userId || s.UserId == userId));
+        }
+        else
+        {
+            query = query.Where(s => s.BankType == "CENTRAL" && s.BankingModel == "CENTRAL_CASHIER");
+        }
+
+        var pending = await query
+            .Where(s => s.ControlStatus == "SUBMITTED"
+                || s.ControlStatus == "UNDER_REVIEW"
+                || s.ControlStatus == "RETURNED"
+                || s.ControlStatus == "HANDOVER_PENDING"
+                || (string.IsNullOrEmpty(s.ControlStatus)
+                    && (s.Status == "RECONCILIATION_REQUIRED" || s.Status == "CLOSING")))
             .OrderByDescending(s => s.UpdatedAt)
             .FirstOrDefaultAsync();
 
