@@ -9,6 +9,7 @@ export type PosOperatorStep =
   | 'select'       // staff grid
   | 'pin'          // PIN entry
   | 'shift'        // opening float for SERVER_BANKING or first CENTRAL cashier
+  | 'shift_blocked' // prior shift is awaiting approval
   | 'error_central'; // central cashier model — till not open for this operator
 
 export interface UsePosOperatorAuthResult {
@@ -21,6 +22,7 @@ export interface UsePosOperatorAuthResult {
   error: string | null;
   isLoading: boolean;
   openingFloat: string;
+  shiftBlockStatus: string;
   verifiedOperator: StaffProfile | null;
 
   // Actions
@@ -71,6 +73,7 @@ export function usePosOperatorAuth({
   const [openingFloat, setOpeningFloat] = useState('0');
   const [verifiedOperator, setVerifiedOperator] = useState<StaffProfile | null>(null);
   const [pendingToken, setPendingToken] = useState<string>('');
+  const [shiftBlockStatus, setShiftBlockStatus] = useState<string>('');
 
   const loadStaff = async () => {
     setStaffLoading(true);
@@ -119,6 +122,7 @@ export function usePosOperatorAuth({
     setOpeningFloat('0');
     setVerifiedOperator(null);
     setPendingToken('');
+    setShiftBlockStatus('');
     loadStaff();
   }, [isOpen, propertyId, outletId]);
 
@@ -134,7 +138,7 @@ export function usePosOperatorAuth({
     setPin('');
     if (step === 'pin') {
       setStep('select');
-    } else if (step === 'shift' || step === 'error_central') {
+    } else if (step === 'shift' || step === 'shift_blocked' || step === 'error_central') {
       setStep('pin');
     }
   };
@@ -156,6 +160,11 @@ export function usePosOperatorAuth({
     setError(null);
 
     try {
+      // Refresh the local POS session projection before PIN authentication so
+      // a closed/submitted shift cannot be reopened from stale offline state.
+      if (isDesktopMode) {
+        await provider.system?.forceSync?.();
+      }
       const existingSessionId =
         localStorage.getItem('lodgecore_pos_session_id') ||
         (session as any)?.sessionId ||
@@ -208,6 +217,14 @@ export function usePosOperatorAuth({
         localStorage.setItem('lodgecore_pos_session_id', sessionId);
         if (token) localStorage.setItem('lodgecore_pos_operator_token', token);
         onAuthenticated(operator, token, auth);
+        return;
+      }
+
+      if (auth.shiftBlocked) {
+        setVerifiedOperator(operator);
+        setPendingToken(token);
+        setShiftBlockStatus(String(auth.shiftBlockStatus || 'PENDING_APPROVAL'));
+        setStep('shift_blocked');
         return;
       }
 
@@ -316,6 +333,7 @@ export function usePosOperatorAuth({
     error,
     isLoading,
     openingFloat,
+    shiftBlockStatus,
     verifiedOperator,
     selectStaff,
     pressKey,

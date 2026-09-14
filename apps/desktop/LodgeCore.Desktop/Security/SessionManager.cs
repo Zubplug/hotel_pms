@@ -51,23 +51,6 @@ public class SessionManager
         if (outlet == null)
             throw new Exception("The provisioned POS outlet is unavailable. Re-provision the desktop terminal or activate its outlet.");
 
-        // Find if there's an active POS session for this specific operator or terminal
-        // Prefer the session ID retained by the desktop across restarts when
-        // it is still an open session owned by this operator. This avoids
-        // forcing a waiter to open a second shift after reopening offline.
-        LocalPosSession? activeSession = null;
-        if (!string.IsNullOrWhiteSpace(preferredSessionId))
-        {
-            var preferred = await _dbContext.PosSessions.FirstOrDefaultAsync(s =>
-                s.Id == preferredSessionId &&
-                s.PropertyId == property.Id &&
-                s.OutletId == outlet.Id &&
-                s.Status == PosConstants.SessionStatus.Open &&
-                (s.PrimaryOperatorId == staff.Id || s.StaffId == staff.Id || s.UserId == staff.Id));
-            activeSession = preferred;
-        }
-        activeSession ??= await FindBankingSessionAsync(property, staff, deviceId, outlet.Id);
-
         // Invalidate previous contexts
         var oldContexts = await _dbContext.OperatorContexts.Where(c => c.IsActive).ToListAsync();
         foreach (var c in oldContexts)
@@ -83,7 +66,10 @@ public class SessionManager
             PropertyId = property.Id,
             OutletId = outlet.Id,
             StaffId = staff.Id,
-            SessionId = activeSession?.Id ?? string.Empty,
+            // Authentication establishes identity only. A shift must be
+            // selected/opened explicitly after the switch screen; never
+            // restore the last waiter's shift from local storage.
+            SessionId = string.Empty,
             OperatorTokenVersion = Guid.NewGuid().ToString(),
             AuthenticatedAt = DateTime.UtcNow,
             ExpiresAt = DateTime.MaxValue,
@@ -115,8 +101,6 @@ public class SessionManager
             o.Id == terminal.OutletId && o.PropertyId == property.Id && o.IsActive);
         if (outlet == null)
             throw new Exception("The provisioned POS outlet is unavailable. Re-provision the desktop terminal or activate its outlet.");
-        var activeSession = await FindBankingSessionAsync(property, staff, deviceId, outlet.Id);
-
         var oldContexts = await _dbContext.OperatorContexts.Where(c => c.IsActive).ToListAsync();
         foreach (var context in oldContexts)
             context.IsActive = false;
@@ -128,7 +112,7 @@ public class SessionManager
             PropertyId = property.Id,
             OutletId = outlet.Id,
             StaffId = staff.Id,
-            SessionId = activeSession?.Id ?? string.Empty,
+            SessionId = string.Empty,
             OperatorTokenVersion = Guid.NewGuid().ToString(),
             AuthenticatedAt = DateTime.UtcNow,
             ExpiresAt = DateTime.MaxValue,
@@ -180,17 +164,24 @@ public class SessionManager
         if (context == null)
             throw new UnauthorizedAccessException("No active operator session found on this terminal.");
 
-        // Check if POS Session changed
-        var property = await _dbContext.Properties.FirstOrDefaultAsync(p => p.Id == context.PropertyId);
-        var staff = await _dbContext.Staff.FirstOrDefaultAsync(s => s.Id == context.StaffId);
-        var activePosSession = property != null && staff != null
-            ? await FindBankingSessionAsync(property, staff, context.DeviceId, context.OutletId)
-            : null;
-            
-        if (activePosSession != null && context.SessionId != activePosSession.Id)
+        // An empty SessionId is intentional after login. Do not discover and
+        // attach an arbitrary open shift; AttachSessionAsync is the explicit
+        // transition used by the shift screen. If a previously attached shift
+        // is no longer open, invalidate the context instead of switching it
+        // to another operator's or terminal's shift.
+        if (!string.IsNullOrWhiteSpace(context.SessionId))
         {
-            context.SessionId = activePosSession.Id;
-            await _dbContext.SaveChangesAsync();
+            var attachedSession = await _dbContext.PosSessions.FirstOrDefaultAsync(s =>
+                s.Id == context.SessionId
+                && s.PropertyId == context.PropertyId
+                && s.OutletId == context.OutletId
+                && s.Status == PosConstants.SessionStatus.Open
+                && (string.IsNullOrEmpty(s.ControlStatus) || s.ControlStatus == "OPEN"));
+            if (attachedSession == null)
+            {
+                context.SessionId = string.Empty;
+                await _dbContext.SaveChangesAsync();
+            }
         }
 
         return context;

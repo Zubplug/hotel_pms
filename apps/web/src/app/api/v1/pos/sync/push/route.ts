@@ -90,6 +90,7 @@ export async function POST(req: NextRequest) {
         idempotencyKey: rawEvent.operationId,
         propertyId: propertyId,
         deviceId: rawEvent.terminalId,
+        sessionId: rawEvent.sessionId,
         operatorId: rawEvent.operatorId,
         aggregateType: rawEvent.entityType,
         aggregateId: rawEvent.entityId,
@@ -103,6 +104,7 @@ export async function POST(req: NextRequest) {
         idempotencyKey: rawEvent.idempotencyKey,
         propertyId: rawEvent.propertyId || propertyId,
         deviceId: rawEvent.deviceId,
+        sessionId: rawEvent.sessionId,
         operatorId: rawEvent.operatorId,
         aggregateType: rawEvent.aggregateType,
         aggregateId: rawEvent.aggregateId,
@@ -151,6 +153,32 @@ export async function POST(req: NextRequest) {
              const e = new Error('IDEMPOTENCY_DUPLICATE');
              (e as any).existingEvent = existingEvent;
              throw e;
+          }
+
+          // Offline transactions are accepted only while their server-side
+          // POS shift is still OPEN. A terminal may have gone offline before
+          // an auditor submitted the shift, so local state is not authoritative.
+          const transactionEventTypes = new Set([
+            'ORDER_CREATED', 'ORDER_UPDATED', 'ORDER_ITEMS_ADDED', 'ORDER_COMPLETED',
+            'ORDER_CLOSED', 'ORDER_CHECK_SPLIT', 'CHECK_PAID', 'PAYMENT_RECORDED',
+            'POS_PAYMENT', 'POS_ORDER_ITEM', 'POS_KOT', 'POS_VOID', 'POS_CASH_MOVEMENT',
+            'CASH_MOVEMENT', 'REFUND_REQUESTED', 'DISCOUNT_APPLIED',
+          ]);
+          if (transactionEventTypes.has(String(event.eventType))) {
+            let sessionId = payload.SessionId || payload.sessionId || payload.PosSessionId || payload.posSessionId || event.sessionId;
+            const orderId = payload.OrderId || payload.orderId || payload.kot?.OrderId || payload.kot?.orderId || (event.aggregateType === 'POS_ORDER' ? event.aggregateId : null);
+            if (!sessionId && orderId) {
+              const order = await tx.posOrder.findUnique({ where: { id: orderId }, select: { sessionId: true } });
+              sessionId = order?.sessionId;
+            }
+            if (!sessionId) throw new Error('SHIFT_LOCKED: offline transaction has no POS shift');
+            const currentSession = await tx.posSession.findUnique({
+              where: { id: sessionId },
+              select: { status: true, controlStatus: true },
+            });
+            if (!currentSession || currentSession.status !== 'OPEN' || currentSession.controlStatus !== 'OPEN') {
+              throw new Error('SHIFT_LOCKED: POS shift is no longer open; open a new approved shift');
+            }
           }
           
           // Legacy desktop SyncEvents do not carry aggregate versions. They
@@ -877,8 +905,8 @@ export async function POST(req: NextRequest) {
                     include: { payments: true, cashMovements: true }
                   });
                   if (!settlementSession) throw new Error(`RETRYABLE_SESSION_NOT_FOUND: POS session ${session.id} is unavailable`);
-                  const protectedControlStates = ['APPROVED', 'APPROVED_WITH_VARIANCE', 'HANDOVER_PENDING', 'DEPOSITED', 'RECONCILED', 'HANDED_OVER'];
-                  if (protectedControlStates.includes(String(settlementSession.controlStatus))) {
+                  const protectedControlStates = ['SUBMITTED', 'UNDER_REVIEW', 'RETURNED', 'APPROVED', 'APPROVED_WITH_VARIANCE', 'HANDOVER_PENDING', 'DEPOSITED', 'RECONCILED', 'HANDED_OVER'];
+                  if (settlementSession.status !== 'OPEN' || protectedControlStates.includes(String(settlementSession.controlStatus))) {
                     const conflict = new Error('CONCURRENCY_CONFLICT: settlement cannot be appended to a financially controlled shift');
                     (conflict as any).currentVersion = settlementSession.controlStatus;
                     throw conflict;
@@ -977,7 +1005,7 @@ export async function POST(req: NextRequest) {
               if (!currentSession) {
                 throw new Error(`RETRYABLE_SESSION_NOT_FOUND: POS operator session ${event.aggregateId} has not reached the cloud yet`);
               }
-              const finalControlStates = ['APPROVED', 'APPROVED_WITH_VARIANCE', 'HANDOVER_PENDING', 'DEPOSITED', 'RECONCILED', 'HANDED_OVER'];
+              const finalControlStates = ['SUBMITTED', 'UNDER_REVIEW', 'RETURNED', 'APPROVED', 'APPROVED_WITH_VARIANCE', 'HANDOVER_PENDING', 'DEPOSITED', 'RECONCILED', 'HANDED_OVER'];
               if (finalControlStates.includes(String(currentSession.controlStatus)) && status && status !== currentSession.status) {
                 const conflict = new Error('CONCURRENCY_CONFLICT: controlled shift cannot be overwritten by a late offline status event');
                 (conflict as any).currentVersion =  currentSession.controlStatus;

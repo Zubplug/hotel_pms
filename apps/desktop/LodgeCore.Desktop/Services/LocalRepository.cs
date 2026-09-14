@@ -28,6 +28,16 @@ public class LocalRepository
             throw new InvalidOperationException("NIGHT_AUDIT_IN_PROGRESS: This business date is temporarily locked while Night Audit is posting.");
     }
 
+    private async Task AssertPosSessionOpenAsync(string? sessionId)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+            throw new InvalidOperationException("An open POS shift is required before posting a transaction.");
+
+        var session = await _dbContext.PosSessions.FirstOrDefaultAsync(s => s.Id == sessionId);
+        if (session == null || session.Status != "OPEN" || (!string.IsNullOrEmpty(session.ControlStatus) && session.ControlStatus != "OPEN"))
+            throw new InvalidOperationException("This POS shift is closed or pending approval. Open a new approved shift before posting transactions.");
+    }
+
     public async Task<LocalReservation> CreateReservationAsync(LocalReservation reservation, string userId, string deviceId)
     {
         await AssertNightAuditAllowsAsync(reservation.PropertyId);
@@ -2809,6 +2819,7 @@ public class LocalRepository
         var session = string.IsNullOrWhiteSpace(order.SessionId)
             ? null
             : await _dbContext.PosSessions.FindAsync(order.SessionId);
+        await AssertPosSessionOpenAsync(order.SessionId);
         order.BusinessDate = session?.BusinessDate.Date ?? property.BusinessDate.Date;
         await AssertNightAuditAllowsAsync(order.PropertyId, order.BusinessDate);
         
@@ -3444,6 +3455,7 @@ public class LocalRepository
             .FirstOrDefaultAsync(o => o.Id == orderId);
         if (order == null) throw new Exception("Order not found");
         await AssertNightAuditAllowsAsync(order.PropertyId, order.BusinessDate);
+        await AssertPosSessionOpenAsync(order.SessionId);
 
         if ((status == "CANCELLED" || status == "VOIDED") && order.Status != "CANCELLED" && order.Status != "VOIDED")
         {
@@ -3484,6 +3496,7 @@ public class LocalRepository
         if (order == null) throw new Exception("Order not found");
 
         await AssertNightAuditAllowsAsync(order.PropertyId, order.BusinessDate);
+        await AssertPosSessionOpenAsync(order.SessionId);
 
         var itemsToFire = order.Items.Where(i => itemIds.Contains(i.Id)).ToList();
         if (!itemsToFire.Any()) throw new Exception("No valid items selected for KOT");
@@ -3554,6 +3567,7 @@ public class LocalRepository
         if (order != null) await AssertNightAuditAllowsAsync(order.PropertyId);
 
         if (order == null) throw new Exception("Order not found");
+        await AssertPosSessionOpenAsync(order.SessionId);
 
         var itemsToSplit = order.Items.Where(i => orderItemIds.Contains(i.Id)).ToList();
         if (!itemsToSplit.Any()) throw new Exception("No valid items selected for split");
@@ -3665,6 +3679,16 @@ public class LocalRepository
     public async Task<LocalPosSession> OpenPosSessionAsync(string propertyId, string outletId, string bankType, string bankingModel, decimal openingBalance, string userId, string deviceId)
     {
         await AssertNightAuditAllowsAsync(propertyId);
+        var pendingReview = await _dbContext.PosSessions.FirstOrDefaultAsync(s =>
+            s.PropertyId == propertyId && s.OutletId == outletId &&
+            (bankType == "SERVER"
+                ? (s.PrimaryOperatorId == userId || s.StaffId == userId || s.UserId == userId) && s.BankType == "SERVER"
+                : s.BankType == "CENTRAL" && s.BankingModel == "CENTRAL_CASHIER") &&
+            ((s.ControlStatus != null && new[] { "SUBMITTED", "UNDER_REVIEW", "RETURNED", "HANDOVER_PENDING" }.Contains(s.ControlStatus)) ||
+             (string.IsNullOrEmpty(s.ControlStatus) && (s.Status == "RECONCILIATION_REQUIRED" || s.Status == "CLOSING"))));
+        if (pendingReview != null)
+            throw new InvalidOperationException("The previous shift must be approved before a new shift can be opened.");
+
         // 1. Idempotency check: if there is already an active session for this specific context, return it.
         if (bankType == "SERVER")
         {
@@ -3702,6 +3726,21 @@ public class LocalRepository
 
         await _dbContext.SaveChangesAsync();
         return session;
+    }
+
+    public async Task<string?> GetPendingPosShiftStatusAsync(string propertyId, string outletId, string bankType, string userId)
+    {
+        var pending = await _dbContext.PosSessions
+            .Where(s => s.PropertyId == propertyId && s.OutletId == outletId
+                && (bankType == "SERVER"
+                    ? (s.PrimaryOperatorId == userId || s.StaffId == userId || s.UserId == userId) && s.BankType == "SERVER"
+                    : s.BankType == "CENTRAL" && s.BankingModel == "CENTRAL_CASHIER")
+                && ((s.ControlStatus != null && new[] { "SUBMITTED", "UNDER_REVIEW", "RETURNED", "HANDOVER_PENDING" }.Contains(s.ControlStatus))
+                    || (string.IsNullOrEmpty(s.ControlStatus) && (s.Status == "RECONCILIATION_REQUIRED" || s.Status == "CLOSING"))))
+            .OrderByDescending(s => s.UpdatedAt)
+            .FirstOrDefaultAsync();
+
+        return pending == null ? null : (pending.ControlStatus ?? pending.Status);
     }
 
     public async Task<LocalPosOrder?> GetOrderAsync(string orderId)
@@ -3900,6 +3939,7 @@ public class LocalRepository
 
         if (order == null) throw new Exception("Order not found");
         await AssertNightAuditAllowsAsync(order.PropertyId, order.BusinessDate);
+        await AssertPosSessionOpenAsync(order.SessionId);
 
         var newItems = new List<LocalPosOrderItem>();
 
@@ -4155,6 +4195,7 @@ public class LocalRepository
             .Include(o => o.Items)
             .FirstOrDefaultAsync(o => o.Id == orderId);
         if (order == null) throw new Exception("Order not found");
+        await AssertPosSessionOpenAsync(order.SessionId);
 
         var payment = new LocalPosPayment
         {
@@ -4720,6 +4761,7 @@ public class LocalRepository
             .FirstOrDefaultAsync(o => o.Id == orderId);
         if (order == null) throw new Exception("Order not found");
         await AssertNightAuditAllowsAsync(order.PropertyId, order.BusinessDate);
+        await AssertPosSessionOpenAsync(order.SessionId);
 
         if (order.Status == "VOIDED" || order.Status == "CANCELLED")
             throw new Exception("Order is already voided or cancelled.");
@@ -4871,6 +4913,7 @@ public class LocalRepository
         var order = await _dbContext.PosOrders.FindAsync(orderId);
         if (order == null) throw new Exception("Order not found");
         await AssertNightAuditAllowsAsync(order.PropertyId, order.BusinessDate);
+        await AssertPosSessionOpenAsync(order.SessionId);
         string operationId = $"op_refund_{deviceId}_{DateTime.UtcNow.Ticks}";
         
         var payment = new LocalPosPayment
@@ -4908,6 +4951,7 @@ public class LocalRepository
         string operationId = $"op_cashmvt_{deviceId}_{DateTime.UtcNow.Ticks}";
         
         var prop = await _dbContext.Properties.FindAsync(propertyId);
+        await AssertPosSessionOpenAsync(sessionId);
         await AssertNightAuditAllowsAsync(propertyId);
         string currency = prop?.Currency ?? "NGN";
 
@@ -5965,6 +6009,15 @@ public class LocalRepository
 
     public async Task<string> EnsureActiveServerBankAsync(string staffId, string propertyId, string outletId, string deviceId, string bankingModel = "SERVER_BANKING", string bankType = "SERVER")
     {
+        var pendingReview = await _dbContext.PosSessions.FirstOrDefaultAsync(s =>
+            s.PropertyId == propertyId && s.OutletId == outletId &&
+            (s.PrimaryOperatorId == staffId || s.StaffId == staffId || s.UserId == staffId) &&
+            s.BankType == "SERVER" &&
+            ((s.ControlStatus != null && new[] { "SUBMITTED", "UNDER_REVIEW", "RETURNED", "HANDOVER_PENDING" }.Contains(s.ControlStatus)) ||
+             (string.IsNullOrEmpty(s.ControlStatus) && (s.Status == "RECONCILIATION_REQUIRED" || s.Status == "CLOSING"))));
+        if (pendingReview != null)
+            throw new InvalidOperationException("The previous shift must be approved before a new shift can be opened.");
+
         var activeSession = await GetActiveServerBankAsync(staffId, propertyId, outletId);
         if (activeSession != null)
         {

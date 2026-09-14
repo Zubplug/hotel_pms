@@ -99,6 +99,25 @@ export async function POST(req: NextRequest) {
 
     // 6. Transaction to check for existing OPEN session and create new
     const result = await prisma.$transaction(async (tx: any) => {
+      const pendingReview = await tx.posSession.findFirst({
+        where: {
+          propertyId,
+          outletId: outlet.id,
+          ...(bankingModel === 'SERVER_BANKING'
+            ? { primaryOperatorId: staffId, bankType: 'SERVER' }
+            : { bankType: 'CENTRAL', bankingModel: 'CENTRAL_CASHIER' }),
+          OR: [
+            { controlStatus: { in: ['SUBMITTED', 'UNDER_REVIEW', 'RETURNED', 'HANDOVER_PENDING'] } },
+            { status: { in: ['RECONCILIATION_REQUIRED', 'CLOSING'] }, controlStatus: null },
+          ],
+        },
+        orderBy: { openedAt: 'desc' },
+        select: { id: true, controlStatus: true, status: true },
+      });
+      if (pendingReview) {
+        throw new Error(`SHIFT_PENDING_APPROVAL:${pendingReview.id}`);
+      }
+
       if (bankingModel === 'SERVER_BANKING') {
         const existingBank = await tx.posSession.findFirst({
           where: { propertyId, outletId, primaryOperatorId: staffId, status: 'OPEN', controlStatus: 'OPEN', bankType: 'SERVER' }
@@ -148,6 +167,9 @@ export async function POST(req: NextRequest) {
     // If it's our transaction throw
     if (error.message.includes('already has an OPEN')) {
       return NextResponse.json({ error: error.message }, { status: 409 });
+    }
+    if (error.message.startsWith('SHIFT_PENDING_APPROVAL:')) {
+      return NextResponse.json({ error: 'The previous shift must be approved before a new shift can be opened.' }, { status: 409 });
     }
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }

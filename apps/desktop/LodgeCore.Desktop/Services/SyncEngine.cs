@@ -2093,6 +2093,24 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     if (el.TryGetProperty("depositedAt", out var depositedAtPos) && depositedAtPos.ValueKind != System.Text.Json.JsonValueKind.Null) posSession.DepositedAt = depositedAtPos.GetDateTime();
                     
                     if (el.TryGetProperty("businessDate", out var bd) && bd.ValueKind != System.Text.Json.JsonValueKind.Null) posSession.BusinessDate = bd.GetDateTime();
+
+                    // Pulling a closed/submitted shift is also a security
+                    // boundary: invalidate the desktop operator context so
+                    // the next POS use cannot continue under the old waiter.
+                    var sessionIsOpen = string.Equals(posSession.Status, "OPEN", StringComparison.OrdinalIgnoreCase)
+                        && (string.IsNullOrWhiteSpace(posSession.ControlStatus)
+                            || string.Equals(posSession.ControlStatus, "OPEN", StringComparison.OrdinalIgnoreCase));
+                    if (!sessionIsOpen)
+                    {
+                        var staleContexts = await dbContext.OperatorContexts
+                            .Where(c => c.IsActive && c.SessionId == id)
+                            .ToListAsync(stoppingToken);
+                        foreach (var staleContext in staleContexts)
+                        {
+                            staleContext.IsActive = false;
+                            staleContext.ExpiresAt = DateTime.UtcNow;
+                        }
+                    }
                     posSession.OpenedBy = el.TryGetProperty("openedBy", out var ob) && ob.ValueKind != System.Text.Json.JsonValueKind.Null ? ob.GetString() : null;
                     posSession.ClosedBy = el.TryGetProperty("closedBy", out var cb) && cb.ValueKind != System.Text.Json.JsonValueKind.Null ? cb.GetString() : null;
                     

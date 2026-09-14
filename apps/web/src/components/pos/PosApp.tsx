@@ -209,12 +209,20 @@ export default function PosApp() {
           })));
         }
 
-        // A desktop terminal owns one provisioned POS scope. Restore its
-        // saved session before operator login so a restart does not turn an
-        // open shift into a false "no session open" state.
+        // Browser sessions may restore their own context. Desktop POS must
+        // always reopen on the operator switch screen; never restore the last
+        // waiter or session after the application is closed/restarted.
+        if (isDesktopMode) {
+          localStorage.removeItem('lodgecore_pos_session_id');
+          localStorage.removeItem('lodgecore_pos_operator_token');
+          setPosSessionId('');
+          setActiveOperator(null);
+          setOperatorToken(null);
+          setSessionContext(null);
+        }
         const activeSessionId = !isDesktopMode
           ? ((session as any)?.sessionId || localStorage.getItem('lodgecore_pos_session_id'))
-          : localStorage.getItem('lodgecore_pos_session_id');
+          : null;
         if (activeSessionId) setPosSessionId(activeSessionId);
 
         if (activeSessionId) {
@@ -246,7 +254,7 @@ export default function PosApp() {
           }
         }
 
-        const savedToken = localStorage.getItem('lodgecore_pos_operator_token');
+        const savedToken = !isDesktopMode ? localStorage.getItem('lodgecore_pos_operator_token') : null;
         if (savedToken) {
            try {
              // Fetch operator independently of the cash bank

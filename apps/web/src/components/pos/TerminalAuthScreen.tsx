@@ -171,12 +171,14 @@ function PosOperatorAuthShell(props: TerminalAuthScreenPosProps) {
     auth.step === 'select'        ? 'Who is working today?' :
     auth.step === 'pin'           ? `Enter PIN — ${auth.selectedStaff?.firstName}` :
     auth.step === 'shift'         ? 'Open POS Cash Bank' :
+    auth.step === 'shift_blocked' ? 'Shift Awaiting Approval' :
     auth.step === 'error_central' ? 'Central POS Bank Not Open' :
     '';
 
   const showBack =
     auth.step === 'pin' ||
     auth.step === 'shift' ||
+    auth.step === 'shift_blocked' ||
     auth.step === 'error_central';
 
   return (
@@ -242,6 +244,14 @@ function PosOperatorAuthShell(props: TerminalAuthScreenPosProps) {
             error={auth.error}
             isLoading={auth.isLoading}
             onConfirm={auth.confirmStartShift}
+          />
+        )}
+
+        {auth.step === 'shift_blocked' && (
+          <ShiftApprovalBlockedPanel
+            operator={auth.verifiedOperator}
+            status={auth.shiftBlockStatus}
+            onBack={auth.goBack}
           />
         )}
 
@@ -603,6 +613,37 @@ function CentralCashierError({ onBack }: { onBack: () => void }) {
         <h3 className="text-base font-black text-slate-800">Central POS Bank Not Open</h3>
         <p className="text-sm text-slate-500 mt-1 max-w-xs leading-relaxed">
           A POS cashier must log in and open the central bank before servers can process orders. You can return to the staff list and ask the POS cashier to open it.
+        </p>
+      </div>
+      <button
+        onClick={onBack}
+        className="px-5 py-2 rounded-xl border-2 border-slate-200 text-slate-600 font-bold text-sm hover:bg-slate-50 transition-colors touch-manipulation"
+      >
+        Back to Staff List
+      </button>
+    </div>
+  );
+}
+
+function ShiftApprovalBlockedPanel({
+  operator,
+  status,
+  onBack,
+}: {
+  operator: StaffProfile | null;
+  status: string;
+  onBack: () => void;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center p-8 text-center gap-4 flex-1">
+      <div className="w-14 h-14 rounded-full bg-amber-50 flex items-center justify-center">
+        <Lock className="w-7 h-7 text-amber-600" />
+      </div>
+      <div>
+        <h3 className="text-base font-black text-slate-800">Previous Shift Awaiting Approval</h3>
+        <p className="text-sm text-slate-500 mt-1 max-w-xs leading-relaxed">
+          {operator?.firstName} {operator?.lastName}, your previous shift is {status.replaceAll('_', ' ').toLowerCase()}.
+          You cannot open another shift until an auditor approves or completes it.
         </p>
       </div>
       <button

@@ -281,7 +281,11 @@ public class OfflinePMSInterop
             );
             if (staff.HasPosAccess)
             {
+                // Login authenticates the operator but does not restore a
+                // prior POS shift. The switch screen must explicitly open or
+                // attach the shift after current state has been synchronized.
                 await _sessionManager.EstablishOperatorContextAsync(staff.Id);
+                SyncEngine.Instance?.TriggerManualSync();
             }
 
             var property = await _repo.GetPropertyAsync(propertyId);
@@ -2250,6 +2254,17 @@ public class OfflinePMSInterop
                 throw new Exception("General Cashier cannot open the POS bank. A POS cashier must open it.");
             }
 
+            // Central cashiers may explicitly continue the shared till after
+            // PIN verification. Server-banking waiters never inherit another
+            // waiter's shift; they must open their own approved shift.
+            if (string.IsNullOrEmpty(posSessionId)
+                && actualBankingModel == "CENTRAL_CASHIER"
+                && !string.Equals(currentStaff?.Role, "WAITER", StringComparison.OrdinalIgnoreCase))
+            {
+                var centralSession = await _repo.GetActiveCentralBankAsync(propertyId, outletId ?? string.Empty);
+                if (centralSession != null) posSessionId = centralSession.Id;
+            }
+
             if (string.IsNullOrEmpty(posSessionId) && !string.IsNullOrEmpty(deviceId))
             {
                 if (actualBankingModel == "SERVER_BANKING")
@@ -2288,6 +2303,40 @@ public class OfflinePMSInterop
                         bankOwner = "POS_CASHIER";
                     }
                 }
+            }
+
+            if (string.IsNullOrWhiteSpace(posSessionId))
+            {
+                var pendingStatus = await _repo.GetPendingPosShiftStatusAsync(
+                    propertyId,
+                    outletId ?? string.Empty,
+                    actualBankingModel == "SERVER_BANKING" ? "SERVER" : "CENTRAL",
+                    staffId);
+                if (!string.IsNullOrWhiteSpace(pendingStatus))
+                {
+                    return JsonSerializer.Serialize(new
+                    {
+                        success = true,
+                        data = new
+                        {
+                            operatorToken = ctx.OperatorTokenVersion,
+                            staff,
+                            permissions = new[] { staff.Role },
+                            bankingModel = actualBankingModel,
+                            shiftBlocked = true,
+                            shiftBlockStatus = pendingStatus
+                        }
+                    }, _jsonOptions);
+                }
+            }
+
+            // Login is the explicit operator choice after the restart/switch
+            // screen. If synchronization/local state confirms that this
+            // operator already owns an OPEN shift, resume that same shift;
+            // do not ask the operator to open a duplicate shift.
+            if (!string.IsNullOrWhiteSpace(posSessionId))
+            {
+                await _sessionManager.AttachSessionAsync(posSessionId);
             }
 
             // Return the OperatorTokenVersion as the secure token to React
@@ -2462,20 +2511,8 @@ public class OfflinePMSInterop
                 }
             }
 
-            if (posSession == null)
-            {
-                posSession = await _repo.GetActiveServerBankAsync(operatorContext.StaffId, operatorContext.PropertyId, terminal?.OutletId ?? string.Empty);
-            }
-
-            if (posSession == null && !string.Equals(property?.BankingModel, "SERVER_BANKING", StringComparison.OrdinalIgnoreCase))
-            {
-                posSession = await _repo.GetActiveSessionForDeviceAsync(operatorContext.DeviceId);
-            }
-
-            if (posSession == null && !string.Equals(property?.BankingModel, "SERVER_BANKING", StringComparison.OrdinalIgnoreCase))
-            {
-                posSession = await _repo.GetActiveCentralBankAsync(operatorContext.PropertyId, terminal?.OutletId ?? string.Empty);
-            }
+            // Do not fall back to whichever bank happens to be open. The
+            // operator must explicitly open or attach a shift after login.
             
             // Fallback outlet to the session's outlet if terminal doesn't provide it
             if (outlet == null && posSession != null && !string.IsNullOrEmpty(posSession.OutletId))
@@ -2586,19 +2623,7 @@ public class OfflinePMSInterop
                 return contextSession.Id;
         }
 
-        var propertyForFallback = await _repo.GetPropertyAsync(posCtx.PropertyId);
-        if (string.Equals(propertyForFallback?.BankingModel, "SERVER_BANKING", StringComparison.OrdinalIgnoreCase))
-        {
-            var serverSession = await _repo.GetActiveServerBankAsync(posCtx.StaffId, posCtx.PropertyId, posCtx.OutletId ?? string.Empty);
-            if (serverSession != null) return serverSession.Id;
-        }
-        else
-        {
-            var centralSession = await _repo.GetActiveCentralBankAsync(posCtx.PropertyId, posCtx.OutletId ?? string.Empty);
-            if (centralSession != null) return centralSession.Id;
-        }
-
-        throw new InvalidOperationException("No active POS session is available for this operator.");
+        throw new InvalidOperationException("No POS shift is attached to this operator. Open or select a shift first.");
     }
 
     public async Task<string> GetCashMovementsAsync(string sessionId)
