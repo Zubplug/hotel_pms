@@ -9,7 +9,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
   if (user.role !== 'GENERAL_CASHIER' && !user.isSuperAdmin) return errorResponse('FORBIDDEN', 'General Cashier approval required', 403);
   const approval = await prisma.approvalRequest.findUnique({ where: { id: (await params).id } });
-  if (!approval || approval.type !== 'POS_PRICE_CHANGE') return errorResponse('NOT_FOUND', 'Price approval not found', 404);
+  if (!approval || !['POS_PRICE_CHANGE', 'POS_MODIFIER_CREATE', 'POS_MODIFIER_UPDATE'].includes(approval.type)) return errorResponse('NOT_FOUND', 'Price approval not found', 404);
   const ctx = await requireOrganizationContext(user.id);
   if (!ctx.propertyIds.includes(approval.propertyId)) return errorResponse('FORBIDDEN', 'No access to this property', 403);
   const details = (approval.details || {}) as Record<string, any>;
