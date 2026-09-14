@@ -10,6 +10,7 @@ import crypto from 'crypto';
 import { NotificationEngine } from '@/lib/notification-engine';
 import { requireOrganizationContext } from "@/lib/organization-access";
 import { upsertCheckoutHousekeepingTask } from '@/lib/housekeeping-task';
+import { routeFoliosToCityLedger } from '@/lib/finance/route-folio-to-city-ledger';
 
 export async function POST(
   req: NextRequest,
@@ -24,7 +25,7 @@ export async function POST(
 
     const reservation = await prisma.reservation.findUnique({
       where: { id },
-      select: { id: true, status: true, propertyId: true, corporateAccountId: true, confirmationNumber: true, checkIn: true, checkOut: true, reservationRooms: { include: { room: true } } },
+      select: { id: true, status: true, propertyId: true, corporateAccountId: true, primaryGuestId: true, confirmationNumber: true, checkIn: true, checkOut: true, reservationRooms: { include: { room: true } } },
     });
 
     if (!reservation) return errorResponse('NOT_FOUND', 'Reservation not found', 404);
@@ -45,7 +46,7 @@ export async function POST(
     const txResult = await prisma.$transaction(async (tx: any) => {
       // 1. Verify and Lock Financial State (Check Folios)
       // Note: In Postgres, FOR UPDATE ensures that concurrent transactions modifying these folios are blocked.
-      const folios = await tx.$queryRaw<any[]>`
+      let folios = await tx.$queryRaw<any[]>`
         SELECT id, balance, version, currency
         FROM "Folio" 
         WHERE "reservationId" = ${id}::uuid 
@@ -62,9 +63,9 @@ export async function POST(
             AND "status" = 'OPEN'
           FOR UPDATE
         `;
-        for (const sharedFolio of sharedCorporateFolios) {
-          if (!folios.some((folio: { id: string }) => folio.id === sharedFolio.id)) folios.push(sharedFolio);
-        }
+        // Corporate guests do not have personal folios. Their charges live only
+        // on the company's shared CITY_LEDGER folio.
+        folios = sharedCorporateFolios;
       }
 
       // Day-use/same-day stays must be charged at checkout because they will
@@ -120,76 +121,31 @@ export async function POST(
         }
       }
 
-      let totalBalance = 0;
-      for (const folio of folios) {
-        totalBalance += Number(folio.balance);
-      }
+      const checkoutFolios = reservation.corporateAccountId
+        ? await Promise.all(folios.map(async (folio: any) => {
+            const items = await tx.folioItem.findMany({
+              where: { folioId: folio.id, reservationId: reservation.id, voidedAt: null },
+              select: { amount: true },
+            });
+            return { ...folio, balance: items.reduce((sum: number, item: any) => sum + Number(item.amount), 0) };
+          }))
+        : folios;
+      const totalBalance = checkoutFolios.reduce((sum: number, folio: any) => sum + Number(folio.balance), 0);
 
-      if (totalBalance > 0) {
-        if (reservation.corporateAccountId) {
-          const corporateAccount = await tx.corporateAccount.findUnique({
-            where: { id: reservation.corporateAccountId }
-          });
-          if (!corporateAccount || !corporateAccount.cityLedgerAccountId) {
-            throw new Error('PAYMENT_REQUIRED');
-          }
-          
-          // Automatically route balance to City Ledger
-          for (const folio of folios) {
-            const amount = Number(folio.balance);
-            if (amount > 0) {
-              const issueDate = new Date();
-              issueDate.setUTCHours(0, 0, 0, 0);
-              const dueDate = new Date(issueDate);
-              dueDate.setUTCDate(dueDate.getUTCDate() + 30);
-              const invoiceNumber = `AR-${reservation.confirmationNumber}-${String(folio.id).slice(0, 8).toUpperCase()}`;
-              const invoice = await tx.cityLedgerInvoice.create({
-                data: {
-                  propertyId: reservation.propertyId,
-                  accountId: corporateAccount.cityLedgerAccountId,
-                  invoiceNumber,
-                  issueDate,
-                  dueDate,
-                  description: `Corporate folio ${folio.id} for reservation ${reservation.confirmationNumber}`,
-                  amount,
-                  outstandingAmount: amount,
-                  currency: folio.currency || 'NGN',
-                  createdBy: session.user.id,
-                },
-              });
-              await tx.cityLedgerEntry.create({
-                data: {
-                  accountId: corporateAccount.cityLedgerAccountId,
-                  propertyId: reservation.propertyId,
-                  reservationId: reservation.id,
-                  folioId: folio.id,
-                  amount,
-                  currency: folio.currency || 'NGN',
-                  type: 'TRANSFER_IN',
-                  reason: 'Auto-routed to City Ledger upon checkout',
-                  reference: invoiceNumber,
-                  invoiceId: invoice.id,
-                  createdBy: session.user.id
-                }
-              });
-              await tx.cityLedgerAccount.update({
-                where: { id: corporateAccount.cityLedgerAccountId },
-                data: { balance: { increment: amount } },
-              });
-
-              await tx.folio.update({
-                where: { id: folio.id },
-                data: {
-                  balance: 0,
-                  totalPayments: { increment: amount },
-                  version: { increment: 1 }
-                }
-              });
-            }
-          }
-        } else {
-          throw new Error('PAYMENT_REQUIRED');
-        }
+      if (reservation.corporateAccountId && Math.abs(totalBalance) > 0.01) {
+        await routeFoliosToCityLedger({
+          tx,
+          folios: checkoutFolios,
+          reservationId: reservation.id,
+          guestId: reservation.primaryGuestId,
+          propertyId: reservation.propertyId,
+          corporateAccountId: reservation.corporateAccountId,
+          confirmationNumber: reservation.confirmationNumber,
+          createdBy: session.user.id,
+          keepFolioOpen: Boolean(reservation.corporateAccountId),
+        });
+      } else if (totalBalance > 0) {
+        throw new Error('PAYMENT_REQUIRED');
       } else if (totalBalance < 0) {
         throw new Error('REFUND_REQUIRED');
       }
@@ -256,7 +212,7 @@ export async function POST(
       }
 
       // 4. Close the Folios
-      for (const folio of folios) {
+      for (const folio of reservation.corporateAccountId ? [] : folios) {
         await tx.folio.update({
           where: { id: folio.id, version: folio.version },
           data: {

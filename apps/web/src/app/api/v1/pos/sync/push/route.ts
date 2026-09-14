@@ -332,12 +332,30 @@ export async function POST(req: NextRequest) {
                  }
                  
                  const orderItems = payload.Items || payload.items || [];
+                 const sessionId = isUuid(payload.SessionId) ? payload.SessionId : null;
+                 const linkedSession = sessionId
+                   ? await tx.posSession.findUnique({
+                       where: { id: sessionId },
+                       select: { id: true, propertyId: true, outletId: true, businessDate: true, status: true }
+                     })
+                   : null;
+                 if (linkedSession && linkedSession.propertyId !== propertyId) {
+                     throw new Error(`POS session ${sessionId} belongs to a different property`);
+                 }
+                 // The cloud must not trust a stale BusinessDate from an
+                 // offline terminal. A valid session owns the date; otherwise
+                 // fall back to the property's current business date.
+                 const propertyDate = await tx.property.findUnique({
+                   where: { id: propertyId },
+                   select: { businessDate: true }
+                 });
+                 const authoritativeBusinessDate = linkedSession?.businessDate ?? propertyDate?.businessDate ?? new Date();
                  const createdOrder = await tx.posOrder.create({
                      data: {
                          id: event.aggregateId,
                          propertyId: propertyId,
-                         outletId: payload.OutletId || terminal.outletId,
-                         sessionId: isUuid(payload.SessionId) ? payload.SessionId : null,
+                         outletId: linkedSession?.outletId || payload.OutletId || terminal.outletId,
+                         sessionId: linkedSession?.id || sessionId,
                          orderNumber: payload.OrderNumber || `ORD-${event.aggregateId.split('-')[0].toUpperCase()}`,
                          status: payload.Status || 'SUBMITTED',
                          subtotal: payload.Subtotal || 0,
@@ -345,7 +363,7 @@ export async function POST(req: NextRequest) {
                          total: payload.Total || 0,
                          orderType: payload.OrderType || payload.orderType || 'DINE_IN',
                          tableId: tableId,
-                         businessDate: new Date(payload.BusinessDate || new Date()),
+                         businessDate: authoritativeBusinessDate,
                          serverStaffId: operatorId,
                          createdAt: new Date(event.occurredAt),
                          items: {
@@ -479,7 +497,7 @@ export async function POST(req: NextRequest) {
           else if (event.eventType === 'PAYMENT_RECORDED') {
               const method = payload.Method || payload.method || 'CASH';
               const orderId = payload.OrderId || payload.orderId || event.aggregateId;
-              const order = await tx.posOrder.findUnique({ where: { id: orderId }, select: { id: true, total: true, status: true } });
+              const order = await tx.posOrder.findUnique({ where: { id: orderId }, select: { id: true, total: true, status: true, businessDate: true, sessionId: true } });
               if (!order) {
                   // A payment cannot be applied safely until ORDER_CREATED has
                   // been accepted. Leave it retryable instead of dead-lettering
@@ -495,8 +513,8 @@ export async function POST(req: NextRequest) {
                       currency: payload.Currency || payload.currency || 'NGN',
                       status: "CONFIRMED",
                       operationId: event.idempotencyKey,
-                      businessDate: new Date(payload.BusinessDate || payload.businessDate || new Date()),
-                      sessionId: isUuid(payload.SessionId || payload.sessionId) ? (payload.SessionId || payload.sessionId) : null,
+                      businessDate: order.businessDate,
+                      sessionId: order.sessionId,
                       processedById: isUuid(payload.processedById) ? payload.processedById : operatorId,
                       createdAt: new Date(event.occurredAt)
                   }

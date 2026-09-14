@@ -886,7 +886,9 @@ public class LocalRepository
                 creditApplicationAmount,
                 creditApplicationKey = creditApplicationAmount > 0 ? $"CREDIT_APPLICATION:{idempotencyKey ?? newItem.id}" : null,
                 frontdeskSessionId = frontdeskSession?.Id,
-                frontdeskTransaction = requireFrontdeskSession
+                frontdeskTransaction = requireFrontdeskSession,
+                reservationId = folio.ReservationId,
+                guestId = reservation?.GuestId
             })
         });
 
@@ -2800,7 +2802,14 @@ public class LocalRepository
         order.Id = Guid.NewGuid().ToString();
         var property = await _dbContext.Properties.FindAsync(order.PropertyId);
         if (property == null) throw new InvalidOperationException("Property is not available offline.");
-        if (order.BusinessDate == default) order.BusinessDate = property.BusinessDate.Date;
+        // The local POS session is the source of truth for an order's
+        // business date. Do not trust a stale date carried by an offline
+        // payload; this is what keeps the order, payment, KOT and audit date
+        // aligned when the property rolls over to a new business day.
+        var session = string.IsNullOrWhiteSpace(order.SessionId)
+            ? null
+            : await _dbContext.PosSessions.FindAsync(order.SessionId);
+        order.BusinessDate = session?.BusinessDate.Date ?? property.BusinessDate.Date;
         await AssertNightAuditAllowsAsync(order.PropertyId, order.BusinessDate);
         
         // Mark everything with the operation ID and device attribution
@@ -5658,11 +5667,15 @@ public class LocalRepository
         var query = _dbContext.PosOrders
             .Include(o => o.Items)
             .Include(o => o.Payments)
-            .Where(o => o.PropertyId == propertyId && o.ServerStaffId == staffId);
+            .Where(o => o.PropertyId == propertyId);
 
         if (!string.IsNullOrEmpty(sessionId))
         {
             query = query.Where(o => o.SessionId == sessionId);
+        }
+        else
+        {
+            query = query.Where(o => o.ServerStaffId == staffId);
         }
 
         if (statusFilter != "all" && !string.IsNullOrEmpty(statusFilter))
@@ -6375,6 +6388,7 @@ public class LocalRepository
         
         // Find reservation folio
         var folio = await _dbContext.Folios.FirstOrDefaultAsync(f => f.ReservationId == order.ReservationId);
+        var reservation = await _dbContext.Reservations.FirstOrDefaultAsync(r => r.Id == order.ReservationId);
         if (folio != null && order.TotalAmount > 0)
         {
             if (!CheckFolioIdempotency(folio, idempotencyKey))
@@ -6434,7 +6448,9 @@ public class LocalRepository
                         idempotencyKey = idempotencyKey,
                         creditApplicationAmount,
                         creditApplicationKey = creditApplicationAmount > 0 ? $"CREDIT_APPLICATION:{idempotencyKey}" : null,
-                        frontdeskSessionId = frontdeskSession.Id
+                        frontdeskSessionId = frontdeskSession.Id,
+                        reservationId = folio.ReservationId,
+                        guestId = reservation?.GuestId
                     })
                 });
             }

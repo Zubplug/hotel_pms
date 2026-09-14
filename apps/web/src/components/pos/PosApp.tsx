@@ -1433,6 +1433,7 @@ export default function PosApp() {
           isOpen={showMyOrders}
           onClose={() => setShowMyOrders(false)}
           operatorToken={operatorToken}
+          sessionId={posSessionId}
           staffName={`${activeOperator.firstName} ${activeOperator.lastName}`}
           refreshKey={tableRefreshTrigger}
           onOrderSelect={handleOrderResume}

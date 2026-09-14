@@ -44,6 +44,9 @@ export async function POST(req: NextRequest) {
     if (!folio) {
       return errorResponse('NOT_FOUND', 'Folio not found', 404);
     }
+    if (folio.type === 'CITY_LEDGER') {
+      return errorResponse('BAD_REQUEST', 'Direct payments to corporate folios are not permitted via this endpoint.', 400);
+    }
     const overrideReason = getNightAuditOverrideReason(nightAuditOverrideReason);
     const auditLocked = await isNightAuditTransactionLocked(folio.propertyId);
     if (auditLocked && (!canOverrideNightAudit((session.user as any).role) || !overrideReason)) {

@@ -23,6 +23,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const dateRange = searchParams.get('range') || 'today';
     const statusFilter = searchParams.get('status') || 'all';
+    const sessionId = searchParams.get('sessionId');
 
     let dateFilter = {};
     const now = new Date();
@@ -59,10 +60,25 @@ export async function GET(req: NextRequest) {
       statusCondition = { status: { in: statuses } };
     }
 
+    let scopeCondition: Record<string, string> = { serverStaffId: staffId };
+    if (sessionId) {
+      const session = await prisma.posSession.findFirst({
+        where: { id: sessionId, propertyId },
+        select: { id: true },
+      });
+      if (!session) {
+        return NextResponse.json({ error: 'Invalid POS session' }, { status: 400 });
+      }
+      // Shift history belongs to the active shift, not the waiter who
+      // originally entered an order. This lets a reassigned waiter see all
+      // orders moved into their shift.
+      scopeCondition = { sessionId: session.id };
+    }
+
     const orders = await prisma.posOrder.findMany({
       where: {
         propertyId,
-        serverStaffId: staffId,
+        ...scopeCondition,
         ...dateFilter,
         ...statusCondition
       },

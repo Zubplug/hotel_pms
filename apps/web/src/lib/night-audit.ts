@@ -429,6 +429,8 @@ export async function executeNightAudit(
                   nightAuditRunId: auditRun.id,
                   operationId: roomChargeKey,
                   discountApprovalId: null,
+                  reservationId: reservation.id,
+                  guestId: reservation.primaryGuestId,
                 }
               });
 
@@ -452,6 +454,8 @@ export async function executeNightAudit(
                     nightAuditRunId: auditRun.id,
                     operationId: `${roomChargeKey}:CONCESSION`,
                     discountApprovalId: discountApprovalId,
+                    reservationId: reservation.id,
+                    guestId: reservation.primaryGuestId,
                   }
                 });
 

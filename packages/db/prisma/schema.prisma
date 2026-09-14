@@ -590,6 +590,7 @@ model Guest {
   deletedAt       DateTime?         @db.Timestamptz
   laundryOrders   LaundryOrder[]
   CityLedgerEntry CityLedgerEntry[]
+  folioItems      FolioItem[]
 
   @@index([propertyId])
   @@index([propertyId, email])
@@ -738,6 +739,7 @@ model Reservation {
   deletedAt       DateTime?         @db.Timestamptz
   laundryOrders   LaundryOrder[]
   CityLedgerEntry CityLedgerEntry[]
+  folioItems      FolioItem[]
 }
 
 model ReservationGuest {
@@ -1030,6 +1032,12 @@ model FolioItem {
   id      String @id @default(uuid()) @db.Uuid
   folioId String @db.Uuid
   folio   Folio  @relation(fields: [folioId], references: [id])
+
+  reservationId String? @db.Uuid
+  reservation   Reservation? @relation(fields: [reservationId], references: [id])
+
+  guestId       String? @db.Uuid
+  guest         Guest?  @relation(fields: [guestId], references: [id])
 
   businessDate    DateTime        @db.Date
   type            String // 'CHARGE' | 'PAYMENT' | 'REFUND' | 'DISCOUNT' | 'ADJUSTMENT' | 'TAX'
@@ -4359,6 +4367,7 @@ model CityLedgerInvoice {
   property Property          @relation(fields: [propertyId], references: [id])
   account  CityLedgerAccount @relation(fields: [accountId], references: [id])
   entries  CityLedgerEntry[]
+  allocations CityLedgerAllocation[] @relation("InvoiceAllocations")
 
   @@unique([propertyId, invoiceNumber])
   @@index([propertyId, dueDate])
@@ -4388,9 +4397,24 @@ model CityLedgerEntry {
   reservation Reservation?       @relation(fields: [reservationId], references: [id])
   folio       Folio?             @relation(fields: [folioId], references: [id])
   invoice     CityLedgerInvoice? @relation(fields: [invoiceId], references: [id])
+  allocations CityLedgerAllocation[] @relation("PaymentAllocations")
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
+}
+
+model CityLedgerAllocation {
+  id           String @id @default(uuid()) @db.Uuid
+  paymentId    String @db.Uuid // Refers to the CityLedgerEntry of type PAYMENT
+  invoiceId    String @db.Uuid
+  amount       Decimal @db.Decimal(18, 4)
+  currency     String
+
+  payment      CityLedgerEntry   @relation("PaymentAllocations", fields: [paymentId], references: [id])
+  invoice      CityLedgerInvoice @relation("InvoiceAllocations", fields: [invoiceId], references: [id])
+
+  createdBy    String @db.Uuid
+  createdAt    DateTime @default(now()) @db.Timestamptz
 }
 
 enum CheckInBypassStatus {

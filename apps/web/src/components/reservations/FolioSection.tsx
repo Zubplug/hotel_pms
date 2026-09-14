@@ -206,7 +206,7 @@ export function FolioSection({ reservation, readOnly = false }: { reservation: a
             </Badge>
           </div>
           {!readOnly && <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto lg:justify-end">
-            {!isClosed && (
+            {!isClosed && folio.type !== 'CITY_LEDGER' && (
               <>
                 <Button
                   size="sm"

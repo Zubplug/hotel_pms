@@ -12,6 +12,7 @@ import { applyAvailableFolioCredit } from "@/lib/finance/apply-folio-credit";
 import { isNightAuditCutoverActive } from "@/lib/night-audit-guard";
 import { getPropertyBusinessDate } from "@/lib/date-utils";
 import { InventoryService } from "@/lib/inventory/InventoryService";
+import { routeFoliosToCityLedger } from "@/lib/finance/route-folio-to-city-ledger";
 
 const parseLocalDateString = (dateString: string | Date | undefined): Date | undefined => {
   if (!dateString) return undefined;
@@ -1142,16 +1143,50 @@ export async function POST(req: NextRequest) {
             // Desktop checkouts are queued while offline, so enforce the same
             // financial rule again when the event reaches the cloud. This must
             // happen inside the transaction before changing reservation/room state.
-            const folios = await tx.folio.findMany({
-              where: { reservationId: aggregateId, propertyId },
-              select: { balance: true },
+            const reservation = await tx.reservation.findUnique({
+              where: { id: aggregateId },
+              select: { confirmationNumber: true, corporateAccountId: true, primaryGuestId: true },
             });
-            const totalBalance = folios.reduce(
+            if (!reservation) throw new Error(`Reservation ${aggregateId} not found`);
+            let folios = await tx.folio.findMany({
+              where: { reservationId: aggregateId, propertyId },
+              select: { id: true, balance: true, version: true, currency: true },
+            });
+            if (reservation.corporateAccountId) {
+              const shared = await tx.folio.findMany({
+                where: { corporateAccountId: reservation.corporateAccountId, propertyId, type: "CITY_LEDGER", status: "OPEN" },
+                select: { id: true, balance: true, version: true, currency: true },
+              });
+              // Corporate guests use the company's shared folio only.
+              folios = shared;
+            }
+            const checkoutFolios = reservation.corporateAccountId
+              ? await Promise.all(folios.map(async (folio: any) => {
+                  const items = await tx.folioItem.findMany({
+                    where: { folioId: folio.id, operationId: { startsWith: `ROOM_CHARGE_${aggregateId}_` }, voidedAt: null },
+                    select: { amount: true },
+                  });
+                  return { ...folio, balance: items.reduce((sum: number, item: any) => sum + Number(item.amount), 0) };
+                }))
+              : folios;
+            const totalBalance = checkoutFolios.reduce(
               (sum: number, folio: any) => sum + Number(folio.balance),
               0,
             );
-            if (totalBalance > 0.01) throw new Error("PAYMENT_REQUIRED");
-            if (totalBalance < -0.01) throw new Error("REFUND_REQUIRED");
+            if (reservation.corporateAccountId && Math.abs(totalBalance) > 0.01) {
+              await routeFoliosToCityLedger({
+                tx,
+                folios: checkoutFolios,
+                reservationId: aggregateId,
+                guestId: reservation.primaryGuestId,
+                propertyId,
+                corporateAccountId: reservation.corporateAccountId,
+                confirmationNumber: reservation.confirmationNumber,
+                createdBy: actorId,
+                keepFolioOpen: true,
+              });
+            } else if (totalBalance > 0.01) throw new Error("PAYMENT_REQUIRED");
+            else if (totalBalance < -0.01) throw new Error("REFUND_REQUIRED");
 
             const today = new Date(new Date().setHours(0, 0, 0, 0));
             await tx.reservation.update({
@@ -1250,6 +1285,14 @@ export async function POST(req: NextRequest) {
               where: { id: aggregateId, propertyId },
             });
             if (!folio) throw new Error("Folio not found or unauthorized");
+
+            const chargeReservationId = folio.type === "CITY_LEDGER" ? payload.reservationId : folio.reservationId;
+            const chargeGuestId = folio.type === "CITY_LEDGER" ? payload.guestId : folio.guestId;
+
+            if (folio.type === "CITY_LEDGER" && (!chargeReservationId || !chargeGuestId)) {
+              throw new Error("Corporate room charge requires a valid reservationId and guestId");
+            }
+
             await tx.folioItem.create({
               data: {
                 folioId: aggregateId,
@@ -1266,6 +1309,8 @@ export async function POST(req: NextRequest) {
                 deviceId: device.id,
                 isLatePosting: true,
                 posTransactionId: idempotencyKey,
+                reservationId: chargeReservationId,
+                guestId: chargeGuestId,
               },
             });
 

@@ -25,8 +25,6 @@ export async function POST(
 
     const entry = await prisma.$transaction(async tx => {
       const locked = await tx.$queryRaw<Array<{ balance: number }>>`SELECT balance FROM "CityLedgerAccount" WHERE id = ${accountId}::uuid FOR UPDATE`;
-      const balance = Number(locked[0]?.balance || 0);
-      if (amount > balance) throw new Error('PAYMENT_EXCEEDS_BALANCE');
 
       const created = await tx.cityLedgerEntry.create({
         data: {
@@ -35,9 +33,9 @@ export async function POST(
           amount,
           currency: account.currency,
           type: 'PAYMENT',
-          status: 'SETTLED',
+          status: 'OPEN', // Starts as OPEN, will be SETTLED if fully allocated below
           reference,
-          reason: 'Matched city ledger payment',
+          reason: 'City ledger payment',
           createdBy: session.user.id,
         },
       });
@@ -58,6 +56,16 @@ export async function POST(
             status: outstandingAmount <= 0.01 ? 'PAID' : 'PARTIALLY_PAID'
           }
         });
+        
+        await tx.cityLedgerAllocation.create({
+          data: {
+            paymentId: created.id,
+            invoiceId: invoice.id,
+            amount: applied,
+            currency: account.currency,
+            createdBy: session.user.id
+          }
+        });
         if (outstandingAmount <= 0.01) {
           await tx.cityLedgerEntry.updateMany({
             where: { invoiceId: invoice.id, type: 'TRANSFER_IN', status: 'OPEN' },
@@ -66,6 +74,14 @@ export async function POST(
         }
         remaining -= applied;
       }
+      
+      if (remaining <= 0.01) {
+        await tx.cityLedgerEntry.update({
+          where: { id: created.id },
+          data: { status: 'SETTLED', reason: 'Matched city ledger payment' }
+        });
+      }
+      
       await tx.cityLedgerAccount.update({ where: { id: accountId }, data: { balance: { decrement: amount } } });
       return created;
     });

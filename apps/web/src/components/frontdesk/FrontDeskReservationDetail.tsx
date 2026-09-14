@@ -76,7 +76,7 @@ export function FrontDeskReservationDetail({ reservation, darkMode = false }: Fr
   const isPaid = balance <= 0;
   const canCheckIn = reservation.status === 'CONFIRMED' && room;
   const canCheckOut = reservation.status === 'CHECKED_IN';
-  const canAddPayment = ['CONFIRMED', 'CHECKED_IN'].includes(reservation.status) && !!folio;
+  const canAddPayment = ['CONFIRMED', 'CHECKED_IN'].includes(reservation.status) && !!folio && folio.type !== 'CITY_LEDGER';
   const canExtendStay = reservation.status === 'CHECKED_IN';
   const canReassignRoom = ['CONFIRMED', 'CHECKED_IN'].includes(reservation.status);
   const canEditReservation = reservation.status === 'CONFIRMED';

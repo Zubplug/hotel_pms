@@ -27,6 +27,7 @@ interface MyOrdersModalProps {
   isOpen: boolean;
   onClose: () => void;
   operatorToken: string;
+  sessionId?: string;
   staffName: string;
   refreshKey?: number;
   onOrderSelect?: (order: any) => void;
@@ -70,7 +71,7 @@ const STATUS_FILTERS = [
   { value: 'voided',    label: 'Voided' },
 ];
 
-export function MyOrdersModal({ isOpen, onClose, operatorToken, staffName, refreshKey = 0, onOrderSelect }: MyOrdersModalProps) {
+export function MyOrdersModal({ isOpen, onClose, operatorToken, sessionId, staffName, refreshKey = 0, onOrderSelect }: MyOrdersModalProps) {
   const { provider } = useLodgeCoreProvider();
   const [orders, setOrders]               = useState<any[]>([]);
   const [isLoading, setIsLoading]         = useState(true);
@@ -122,7 +123,7 @@ export function MyOrdersModal({ isOpen, onClose, operatorToken, staffName, refre
   const fetchOrders = async () => {
     setIsLoading(true);
     try {
-      const res = await provider.pos.getServerOrders(dateRange, statusFilter, undefined, operatorToken);
+      const res = await provider.pos.getServerOrders(dateRange, statusFilter, sessionId, operatorToken);
       if (res.error) throw new Error(res.error);
       setOrders((res.data || []).map((order: any) => {
         const id = String(order.id ?? order.Id ?? '');
@@ -170,7 +171,7 @@ export function MyOrdersModal({ isOpen, onClose, operatorToken, staffName, refre
 
   useEffect(() => {
     if (isOpen && operatorToken) fetchOrders();
-  }, [isOpen, operatorToken, dateRange, statusFilter, refreshKey]);
+  }, [isOpen, operatorToken, sessionId, dateRange, statusFilter, refreshKey]);
 
   const resumeOrder = async (order: any) => {
     if (!onOrderSelect || !['SUBMITTED', 'IN_SERVICE'].includes(String(order.status).toUpperCase())) return;
