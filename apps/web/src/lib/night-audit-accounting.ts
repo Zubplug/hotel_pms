@@ -83,10 +83,19 @@ export async function postNightAuditJournal(tx: any, input: {
 
   const dateEnd = new Date(input.businessDate.getTime() + 86_400_000);
   const [folioItems, payments, refunds, posOrders, period, fnbDepartment] = await Promise.all([
-    tx.folioItem.findMany({
-      where: { folio: { propertyId: input.propertyId }, businessDate: input.businessDate, voidedAt: null, type: { in: ['CHARGE', 'TAX', 'DISCOUNT', 'ADJUSTMENT'] } },
-      select: { id: true, type: true, amount: true, source: true, revenueCategory: true, description: true },
-    }),
+    // Use the transaction's parameterized SQL path for dated folio rows.
+    // This avoids a Prisma runtime validation issue on businessDate while
+    // keeping the journal source set inside the same database transaction.
+    tx.$queryRaw`
+      SELECT fi.id, fi.type, fi.amount, fi.source,
+             fi."revenueCategory" AS "revenueCategory", fi.description
+      FROM "FolioItem" fi
+      INNER JOIN "Folio" f ON f.id = fi."folioId"
+      WHERE f."propertyId" = ${input.propertyId}::uuid
+        AND fi."businessDate" = ${input.businessDate}::date
+        AND fi."voidedAt" IS NULL
+        AND fi.type IN ('CHARGE', 'TAX', 'DISCOUNT', 'ADJUSTMENT')
+    `,
     tx.payment.findMany({
       where: { propertyId: input.propertyId, status: { in: ['COMPLETED', 'PARTIALLY_REFUNDED'] }, OR: [{ businessDate: input.businessDate }, { businessDate: null, createdAt: { gte: input.businessDate, lt: dateEnd } }] },
       select: { id: true, method: true, amount: true, reference: true },
