@@ -3679,14 +3679,8 @@ public class LocalRepository
     public async Task<LocalPosSession> OpenPosSessionAsync(string propertyId, string outletId, string bankType, string bankingModel, decimal openingBalance, string userId, string deviceId)
     {
         await AssertNightAuditAllowsAsync(propertyId);
-        var pendingReview = await _dbContext.PosSessions.FirstOrDefaultAsync(s =>
-            s.PropertyId == propertyId && s.OutletId == outletId &&
-            (bankType == "SERVER"
-                ? (s.PrimaryOperatorId == userId || s.StaffId == userId || s.UserId == userId) && s.BankType == "SERVER"
-                : s.BankType == "CENTRAL" && s.BankingModel == "CENTRAL_CASHIER") &&
-            ((s.ControlStatus != null && new[] { "SUBMITTED", "UNDER_REVIEW", "RETURNED", "HANDOVER_PENDING" }.Contains(s.ControlStatus)) ||
-             (string.IsNullOrEmpty(s.ControlStatus) && (s.Status == "RECONCILIATION_REQUIRED" || s.Status == "CLOSING"))));
-        if (pendingReview != null)
+        var pendingStatus = await GetPendingPosShiftStatusAsync(propertyId, outletId, bankType, userId);
+        if (!string.IsNullOrWhiteSpace(pendingStatus))
             throw new InvalidOperationException("The previous shift must be approved before a new shift can be opened.");
 
         // 1. Idempotency check: if there is already an active session for this specific context, return it.
