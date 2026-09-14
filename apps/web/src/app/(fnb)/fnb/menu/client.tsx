@@ -157,9 +157,9 @@ export function FnbMenuClient() {
               Categories
             </Button>
             <Button variant="outline" asChild className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900 shadow-sm transition-all duration-200">
-              <a href="/admin/pos/price-approvals">
+              <a href="/fnb/requests">
                 <ShieldCheck className="mr-2 h-4 w-4 text-emerald-600" />
-                Approvals
+                My Requests
               </a>
             </Button>
             <Button onClick={openAdd} className="bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm transition-all duration-200">

@@ -10,9 +10,18 @@ export async function GET(req: NextRequest) {
   const user = await resolveUser(req);
   if (!user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
   if (!ROLES.includes(user.role) && !user.isSuperAdmin) return errorResponse('FORBIDDEN', 'Approval access required', 403);
+  
+  const mine = req.nextUrl.searchParams.get('mine') === 'true';
   const isCashier = ['CASHIER', 'FRONT_DESK_CASHIER'].includes(user.role);
+  const onlyMine = isCashier || mine;
+
   const approvals = await prisma.approvalRequest.findMany({
-    where: { propertyId: { in: user.allowedProperties }, type: { in: ['POS_PRICE_CHANGE', 'POS_MENU_CREATE', 'POS_MODIFIER_CREATE', 'POS_MODIFIER_UPDATE'] }, ...(isCashier ? { requestedBy: user.id } : {}), ...(isCashier ? {} : { status: 'PENDING' }) },
+    where: { 
+      propertyId: { in: user.allowedProperties }, 
+      type: { in: ['POS_PRICE_CHANGE', 'POS_MENU_CREATE', 'POS_MODIFIER_CREATE', 'POS_MODIFIER_UPDATE'] }, 
+      ...(onlyMine ? { requestedBy: user.id } : {}), 
+      ...(onlyMine ? {} : { status: 'PENDING' }) 
+    },
     orderBy: { createdAt: 'desc' }, take: 200,
   });
   return successResponse(approvals);
