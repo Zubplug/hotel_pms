@@ -26,8 +26,12 @@ export function CityLedgerDetailClient({ account, openInvoices, recentEntries, t
   
   const formatLedgerBalance = (amount: number | string) => {
     const num = Number(amount);
-    if (Math.abs(num) < 0.01) return formatCurrency(0);
-    return num > 0 ? `${formatCurrency(num)} DR` : `${formatCurrency(Math.abs(num))} CR`;
+    if (Math.abs(num) < 0.01) return <span className="text-white">{formatCurrency(0)}</span>;
+    return num > 0 ? (
+      <span className="text-rose-500">{formatCurrency(num)} DR</span>
+    ) : (
+      <span className="text-emerald-400">{formatCurrency(Math.abs(num))} CR</span>
+    );
   };
 
   const handlePayment = async (e: React.FormEvent) => {
@@ -94,7 +98,7 @@ export function CityLedgerDetailClient({ account, openInvoices, recentEntries, t
             <CardTitle className="text-sm font-medium text-slate-300 uppercase tracking-wider">Open Invoices Total</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-white">{formatCurrency(totalOutstanding)}</div>
+            <div className="text-3xl font-bold text-rose-500">{formatCurrency(totalOutstanding)}</div>
             <p className="text-sm text-slate-400 mt-1">{openInvoices.length} active invoices</p>
           </CardContent>
         </Card>
@@ -134,7 +138,7 @@ export function CityLedgerDetailClient({ account, openInvoices, recentEntries, t
                     <div className="text-right sm:text-left flex flex-row sm:flex-col justify-between sm:justify-center items-end sm:items-end w-full sm:w-auto">
                       <div className="flex flex-col items-end">
                         <span className="text-xs uppercase tracking-wider font-semibold text-slate-500 mb-1">Outstanding</span>
-                        <span className="text-lg font-bold text-slate-200">{formatCurrency(inv.outstandingAmount)}</span>
+                        <span className="text-lg font-bold text-rose-500">{formatCurrency(inv.outstandingAmount)}</span>
                       </div>
                     </div>
                   </div>

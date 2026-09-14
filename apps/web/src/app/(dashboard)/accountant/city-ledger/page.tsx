@@ -13,8 +13,12 @@ import { prisma } from '@hotel-pms/db';
 const formatDate = (date: Date) => new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium' }).format(date);
 const formatCurrency = (amount: number, currency: string) => new Intl.NumberFormat('en-NG', { style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
 const formatLedgerBalance = (amount: number, currency: string) => {
-  if (Math.abs(amount) < 0.01) return formatCurrency(0, currency);
-  return amount > 0 ? `${formatCurrency(amount, currency)} DR` : `${formatCurrency(Math.abs(amount), currency)} CR`;
+  if (Math.abs(amount) < 0.01) return <span className="text-slate-200">{formatCurrency(0, currency)}</span>;
+  return amount > 0 ? (
+    <span className="text-rose-500">{formatCurrency(amount, currency)} DR</span>
+  ) : (
+    <span className="text-emerald-400">{formatCurrency(Math.abs(amount), currency)} CR</span>
+  );
 };
 
 export default async function CityLedgerPage() {
@@ -57,7 +61,7 @@ export default async function CityLedgerPage() {
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">
-        <Card className="border-emerald-500/20 bg-white/5"><CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm text-slate-300">Total outstanding</CardTitle><TrendingUp className="h-4 w-4 text-emerald-400" /></CardHeader><CardContent><div className="text-3xl font-bold">{formatCurrency(totalOutstanding, currency)}</div><p className="mt-1 text-xs text-slate-400">{totalCredit > 0 ? `Unallocated Credit: ${formatCurrency(totalCredit, currency)} CR` : `${accountsWithBalance.length} account${accountsWithBalance.length === 1 ? '' : 's'} with a balance`}</p></CardContent></Card>
+        <Card className="border-emerald-500/20 bg-white/5"><CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm text-slate-300">Total outstanding</CardTitle><TrendingUp className="h-4 w-4 text-emerald-400" /></CardHeader><CardContent><div className="text-3xl font-bold text-rose-500">{formatCurrency(totalOutstanding, currency)}</div><p className="mt-1 text-xs text-slate-400">{totalCredit > 0 ? `Unallocated Credit: ${formatCurrency(totalCredit, currency)} CR` : `${accountsWithBalance.length} account${accountsWithBalance.length === 1 ? '' : 's'} with a balance`}</p></CardContent></Card>
         <Card className="border-white/10 bg-white/5"><CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm text-slate-300">Overdue invoices</CardTitle><AlertCircle className="h-4 w-4 text-rose-400" /></CardHeader><CardContent><div className="text-3xl font-bold text-rose-400">{formatCurrency(overdueAmount, currency)}</div><p className="mt-1 text-xs text-slate-400">{overdueInvoices.length} open invoice{overdueInvoices.length === 1 ? '' : 's'} past due</p></CardContent></Card>
         <Card className="border-white/10 bg-white/5"><CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm text-slate-300">Unmatched payments</CardTitle><ArrowRightLeft className="h-4 w-4 text-indigo-400" /></CardHeader><CardContent><div className="text-3xl font-bold text-indigo-400">{unmatchedPayments.length}</div><p className="mt-1 text-xs text-slate-400">Payments requiring reconciliation</p></CardContent></Card>
       </div>
