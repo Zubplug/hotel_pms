@@ -249,6 +249,7 @@ export async function GET(req: NextRequest) {
     const snapshotTotals = financialSnapshot ? {
       roomRevenue: Number(financialSnapshot.roomRevenue || 0),
       fnbRevenue: Number(financialSnapshot.fnbRevenue || 0),
+      poolRevenue: Number((financialSnapshot.paymentTotals as any)?.poolRevenue || 0),
       otherRevenue: Number(financialSnapshot.otherRevenue || 0),
       taxes: Number(financialSnapshot.taxes || 0),
       discounts: Number(financialSnapshot.discounts || 0),

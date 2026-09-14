@@ -85,6 +85,7 @@ export default function ReconciliationPage() {
   const TABLE_ROWS: [string, string][] = [
     ['Room Revenue', 'roomRevenue'],
     ['F&B / POS', 'fnbRevenue'],
+    ['Pool Revenue', 'poolRevenue'],
     ['Other Revenue', 'otherRevenue'],
     ['Taxes', 'taxes'],
     ['Discounts', 'discounts'],
@@ -171,9 +172,10 @@ export default function ReconciliationPage() {
         </section>
 
         {/* ── Stat cards ── */}
-        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
           <StatCard label="Room Revenue" value={money(source?.roomRevenue, currency)} detail="Posted accommodation charges" accent="border-indigo-400/20 bg-indigo-400/[0.07] text-indigo-300" />
           <StatCard label="F&B / POS" value={money(source?.fnbRevenue, currency)} detail="Includes direct paid POS orders" accent="border-emerald-400/20 bg-emerald-400/[0.07] text-emerald-300" />
+          <StatCard label="Pool Revenue" value={money(source?.poolRevenue, currency)} detail="Pool passes and recreation" accent="border-cyan-400/20 bg-cyan-400/[0.07] text-cyan-300" />
           <StatCard label="Other Revenue" value={money(source?.otherRevenue, currency)} detail="Ancillary and miscellaneous" accent="border-slate-600/40 bg-slate-600/10 text-slate-300" />
           <StatCard label="Gross Revenue" value={money(source?.grossRevenue, currency)} detail="Before discounts and refunds" accent="border-violet-400/20 bg-violet-400/[0.07] text-violet-300" />
           <StatCard label="Payments Captured" value={money(paymentTotal, currency)} detail={`${data?.payments?.length || 0} payment methods`} accent="border-amber-400/20 bg-amber-400/[0.07] text-amber-300" />

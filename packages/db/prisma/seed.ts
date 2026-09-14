@@ -253,6 +253,22 @@ async function main() {
     }
   })
 
+  const pool = await prisma.posOutlet.create({
+    data: {
+      propertyId: propLagos.id,
+      name: 'Swimming Pool',
+      type: 'RECREATION',
+    }
+  })
+
+  const poolBar = await prisma.posOutlet.create({
+    data: {
+      propertyId: propLagos.id,
+      name: 'Pool Bar',
+      type: 'BAR',
+    }
+  })
+
   const catMains = await prisma.productCategory.create({
     data: {
       outletId: restaurant.id,
@@ -284,6 +300,64 @@ async function main() {
         stockItemId: stockBun.id,
         quantity: 1,
         unitOfMeasure: 'PIECE'
+      }
+    ]
+  })
+
+  const catPoolPasses = await prisma.productCategory.create({
+    data: {
+      outletId: pool.id,
+      name: 'Pool Passes',
+      sortOrder: 1,
+    }
+  })
+
+  await prisma.posProduct.createMany({
+    data: [
+      {
+        propertyId: propLagos.id,
+        categoryId: catPoolPasses.id,
+        name: 'Adult Pool Pass — Day',
+        itemCode: 'REC-POOL-SWIM-ADULT',
+        price: 15000,
+        taxRate: 7.5,
+      },
+      {
+        propertyId: propLagos.id,
+        categoryId: catPoolPasses.id,
+        name: 'Child Pool Pass — Day',
+        itemCode: 'REC-POOL-SWIM-CHILD',
+        price: 7500,
+        taxRate: 7.5,
+      }
+    ]
+  })
+
+  const catPoolBarPasses = await prisma.productCategory.create({
+    data: {
+      outletId: poolBar.id,
+      name: 'Pool Passes',
+      sortOrder: 2,
+    }
+  })
+
+  await prisma.posProduct.createMany({
+    data: [
+      {
+        propertyId: propLagos.id,
+        categoryId: catPoolBarPasses.id,
+        name: 'Adult Pool Pass — Day',
+        itemCode: 'REC-POOL-BAR-ADULT',
+        price: 15000,
+        taxRate: 7.5,
+      },
+      {
+        propertyId: propLagos.id,
+        categoryId: catPoolBarPasses.id,
+        name: 'Child Pool Pass — Day',
+        itemCode: 'REC-POOL-BAR-CHILD',
+        price: 7500,
+        taxRate: 7.5,
       }
     ]
   })

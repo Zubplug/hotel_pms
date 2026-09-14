@@ -9,6 +9,7 @@ const ACCOUNT_CODES = {
   cityLedger: '1140',
   roomsRevenue: '4050',
   fnbRevenue: '4250',
+  poolRevenue: '4100',
   otherRevenue: '4400',
   taxPayable: '2200',
   discounts: '4900',
@@ -71,6 +72,7 @@ export async function postNightAuditJournal(tx: any, input: {
     cityLedger: byCode.get(ACCOUNT_CODES.cityLedger),
     roomsRevenue: byCode.get(ACCOUNT_CODES.roomsRevenue),
     fnbRevenue: byCode.get(ACCOUNT_CODES.fnbRevenue),
+    poolRevenue: byCode.get(ACCOUNT_CODES.poolRevenue),
     otherRevenue: byCode.get(ACCOUNT_CODES.otherRevenue),
     taxPayable: byCode.get(ACCOUNT_CODES.taxPayable),
     discounts: byCode.get(ACCOUNT_CODES.discounts),
@@ -101,12 +103,15 @@ export async function postNightAuditJournal(tx: any, input: {
       // confirmed POS payment exists. Use the confirmed payment as the
       // accounting source of truth for closed orders.
       where: { propertyId: input.propertyId, businessDate: input.businessDate, status: 'CLOSED', folioId: null, payments: { some: { status: 'CONFIRMED' } } },
-      select: { id: true, total: true, subtotal: true, taxAmount: true, serviceCharge: true, orderNumber: true, outletId: true, payments: { where: { status: 'CONFIRMED' }, select: { id: true, amount: true, method: true } } },
+      select: { id: true, total: true, subtotal: true, taxAmount: true, serviceCharge: true, orderNumber: true, outletId: true, payments: { where: { status: 'CONFIRMED' }, select: { id: true, amount: true, method: true } }, items: { select: { subtotal: true, product: { select: { itemCode: true } } } } },
     }),
     tx.accountingPeriod.findFirst({ where: { propertyId: input.propertyId, periodStart: { lte: input.businessDate }, periodEnd: { gte: input.businessDate }, status: { in: ['OPEN', 'CLOSING'] } }, select: { id: true } }),
     tx.department.findFirst({ where: { propertyId: input.propertyId, name: { in: ['F&B', 'Food & Beverage', 'Food and Beverage'] } }, select: { id: true } }),
+    tx.department.findFirst({ where: { propertyId: input.propertyId, name: { in: ['Recreation', 'Pool'] } }, select: { id: true } }),
+    tx.posOutlet.findMany({ where: { propertyId: input.propertyId }, select: { id: true, type: true } }),
   ]);
   if (!period) return { status: 'ACCOUNTING_PERIOD_LOCKED', journalEntryId: null, missingAccounts: ['OPEN_ACCOUNTING_PERIOD'], lineCount: 0 };
+  const outletTypes = new Map(posOutlets.map((o: any) => [o.id, o.type]));
 
   const lines: PostingLine[] = [];
   for (const item of folioItems) {
@@ -150,7 +155,6 @@ export async function postNightAuditJournal(tx: any, input: {
     const total = Number(order.total);
     const tax = Number(order.taxAmount);
     const serviceCharge = Number(order.serviceCharge);
-    const revenue = Math.max(0, total - tax - serviceCharge);
     const paid = order.payments.reduce((sum: number, payment: any) => sum + Number(payment.amount), 0);
     const departmentId = fnbDepartment?.id || undefined;
     
@@ -159,11 +163,39 @@ export async function postNightAuditJournal(tx: any, input: {
       const tender = payment.method === 'CASH' ? account('cash') : payment.method === 'POS' ? account('posClearing') : ['CARD', 'CARD_OFFLINE', 'PAYMENT_GATEWAY', 'MOBILE_PAYMENT'].includes(String(payment.method)) ? account('cardReceivable') : account('guestLedger');
       addLine(lines, { accountId: tender.id, debit: Number(payment.amount), credit: 0, description: `POS payment for ${order.orderNumber}`, sourceType: 'POS_PAYMENT', sourceId: payment.id, outletId: order.outletId, departmentId });
     }
-    addLine(lines, { accountId: account('fnbRevenue').id, debit: 0, credit: revenue, description: `POS order ${order.orderNumber}`, sourceType: 'POS_ORDER', sourceId: order.id, outletId: order.outletId, departmentId });
-    addLine(lines, { accountId: account('taxPayable').id, debit: 0, credit: tax, description: `POS tax ${order.orderNumber}`, sourceType: 'POS_ORDER', sourceId: order.id, outletId: order.outletId, departmentId });
-    addLine(lines, { accountId: account('serviceCharge').id, debit: 0, credit: serviceCharge, description: `POS service charge ${order.orderNumber}`, sourceType: 'POS_ORDER', sourceId: order.id, outletId: order.outletId, departmentId });
-    const residual = paid - revenue - tax - serviceCharge;
-    if (residual > 0.01) addLine(lines, { accountId: account('otherRevenue').id, debit: 0, credit: residual, description: `POS settlement residual ${order.orderNumber}`, sourceType: 'POS_ORDER', sourceId: order.id, outletId: order.outletId, departmentId });
+
+    const outletType = order.outletId ? outletTypes.get(order.outletId) : null;
+    const defaultRevenueAccount = outletType === 'RECREATION' ? account('poolRevenue') : account('fnbRevenue');
+    const defaultDeptId = outletType === 'RECREATION' ? recreationDepartment?.id : fnbDepartment?.id;
+    
+    let allocatedRevenue = 0;
+    
+    for (const item of (order.items || [])) {
+      const itemSubtotal = Number(item.subtotal);
+      if (itemSubtotal <= 0) continue;
+      allocatedRevenue += itemSubtotal;
+      
+      const isPoolPass = item.product?.itemCode?.startsWith('REC-POOL');
+      const itemRevenueAccount = isPoolPass ? account('poolRevenue') : defaultRevenueAccount;
+      const itemDeptId = isPoolPass ? recreationDepartment?.id : defaultDeptId;
+      
+      addLine(lines, { accountId: itemRevenueAccount.id, debit: 0, credit: itemSubtotal, description: `POS order item ${order.orderNumber}`, sourceType: 'POS_ORDER', sourceId: order.id, outletId: order.outletId, departmentId: itemDeptId });
+    }
+    
+    // Tax and service charge are booked entirely based on the default outlet context
+    if (tax > 0) {
+      addLine(lines, { accountId: account('taxPayable').id, debit: 0, credit: tax, description: `POS tax ${order.orderNumber}`, sourceType: 'POS_ORDER', sourceId: order.id, outletId: order.outletId, departmentId: defaultDeptId });
+    }
+    if (serviceCharge > 0) {
+      addLine(lines, { accountId: account('serviceCharge').id, debit: 0, credit: serviceCharge, description: `POS service charge ${order.orderNumber}`, sourceType: 'POS_ORDER', sourceId: order.id, outletId: order.outletId, departmentId: defaultDeptId });
+    }
+    
+    const residual = paid - allocatedRevenue - tax - serviceCharge;
+    if (residual > 0.01) {
+      addLine(lines, { accountId: account('otherRevenue').id, debit: 0, credit: residual, description: `POS settlement residual ${order.orderNumber}`, sourceType: 'POS_ORDER', sourceId: order.id, outletId: order.outletId, departmentId: defaultDeptId });
+    } else if (residual < -0.01) {
+      addLine(lines, { accountId: account('otherRevenue').id, debit: Math.abs(residual), credit: 0, description: `POS settlement over-allocation ${order.orderNumber}`, sourceType: 'POS_ORDER', sourceId: order.id, outletId: order.outletId, departmentId: defaultDeptId });
+    }
   }
 
   const totalDebit = lines.reduce((sum, line) => sum + line.debit, 0);
