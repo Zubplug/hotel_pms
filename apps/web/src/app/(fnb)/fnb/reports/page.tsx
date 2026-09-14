@@ -118,7 +118,8 @@ export default function FnbReportsPage() {
     <>
       <style dangerouslySetInnerHTML={{__html: `
         @media print {
-          @page { size: landscape; margin: 10mm; }
+          @page { size: landscape; margin: 0; }
+          body { padding: 15mm 15mm 15mm 15mm !important; }
           body, html, * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
           .no-print { display: none !important; }
           

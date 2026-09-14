@@ -33,7 +33,7 @@ export async function GET(
       where: {
         sessionId,
         paymentStatus: { not: 'PAID' },
-        status: { notIn: ['VOIDED', 'CLOSED'] },
+        status: { notIn: ['VOIDED', 'CANCELLED', 'CLOSED'] },
       },
       select: {
         id: true,

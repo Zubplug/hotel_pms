@@ -149,7 +149,7 @@ export async function getSystemIntegrity(ctx: TenantContext, propertyId: string)
       outlet: { propertyId },
       businessDate,
       paymentStatus: { not: 'PAID' },
-      status: { notIn: ['VOIDED', 'CLOSED'] },
+      status: { notIn: ['VOIDED', 'CANCELLED', 'CLOSED'] },
     },
     select: {
       id: true,
@@ -550,7 +550,7 @@ export async function getFnbControl(ctx: TenantContext, propertyId: string) {
   const businessDate = property.businessDate ?? getPropertyBusinessDate(property.timezone, new Date());
 
   const rawOrders = await prisma.posOrder.findMany({
-    where: { propertyId, businessDate, status: { not: 'VOIDED' } },
+    where: { propertyId, businessDate, status: { notIn: ['VOIDED', 'CANCELLED'] } },
     include: {
       outlet: { select: { id: true, name: true } },
       serverStaff: { select: { firstName: true, lastName: true } },
