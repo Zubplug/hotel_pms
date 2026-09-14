@@ -479,7 +479,7 @@ export async function POST(req: NextRequest) {
           else if (event.eventType === 'PAYMENT_RECORDED') {
               const method = payload.Method || payload.method || 'CASH';
               const orderId = payload.OrderId || payload.orderId || event.aggregateId;
-              const order = await tx.posOrder.findUnique({ where: { id: orderId }, select: { id: true } });
+              const order = await tx.posOrder.findUnique({ where: { id: orderId }, select: { id: true, total: true, status: true } });
               if (!order) {
                   // A payment cannot be applied safely until ORDER_CREATED has
                   // been accepted. Leave it retryable instead of dead-lettering
@@ -501,6 +501,28 @@ export async function POST(req: NextRequest) {
                       createdAt: new Date(event.occurredAt)
                   }
               });
+              // Offline terminals persist the payment and order events
+              // separately. Keep the cloud order header authoritative as soon
+              // as confirmed payments cover the order, even if the later
+              // ORDER_COMPLETED event is delayed or lost.
+              if (!['CANCELLED', 'VOIDED'].includes(order.status)) {
+                  const confirmed = await tx.posPayment.aggregate({
+                      where: { orderId, status: { in: ['CONFIRMED', 'PAID'] } },
+                      _sum: { amount: true },
+                  });
+                  const confirmedTotal = Number(confirmed._sum.amount || 0);
+                  if (confirmedTotal >= Number(order.total)) {
+                      await tx.posOrder.update({
+                          where: { id: orderId },
+                          data: { paymentStatus: 'PAID', updatedAt: new Date() },
+                      });
+                  } else if (confirmedTotal > 0) {
+                      await tx.posOrder.update({
+                          where: { id: orderId },
+                          data: { paymentStatus: 'PARTIALLY_PAID', updatedAt: new Date() },
+                      });
+                  }
+              }
               // Note: SERVER_BANKING logic runs separately (e.g. at end of shift/cash drop),
               // but we ensure non-cash doesn't increment cash balances.
           }

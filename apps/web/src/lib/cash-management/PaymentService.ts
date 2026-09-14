@@ -97,14 +97,17 @@ export class PaymentService {
       const allPayments = await tx.posPayment.findMany({
         where: { orderId: order.id, status: 'CONFIRMED' }
       });
-      const totalPaid = allPayments.reduce((sum: number, p: any) => sum + Number(p.amount), 0) + params.amount;
+      // The newly-created payment is already included in this query. Do not
+      // add params.amount a second time, or a partial payment can be marked
+      // fully paid prematurely.
+      const totalPaid = allPayments.reduce((sum: number, p: any) => sum + Number(p.amount), 0);
 
       const isFullyPaid = totalPaid >= Number(order.total);
       
       await tx.posOrder.update({
         where: { id: order.id },
         data: {
-          paymentStatus: isFullyPaid ? 'PAID' : 'PARTIAL',
+          paymentStatus: isFullyPaid ? 'PAID' : 'PARTIALLY_PAID',
           folioId: params.method === 'ROOM_CHARGE' ? params.folioId : order.folioId,
           // Optional: we can auto-close if fully paid
           status: isFullyPaid ? 'CLOSED' : order.status,
