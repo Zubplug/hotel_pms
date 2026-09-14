@@ -5,6 +5,7 @@ import prisma from '@hotel-pms/db';
 import { requireOrganizationContext } from '@/lib/organization-access';
 import { auth } from '@/lib/auth';
 import { format } from 'date-fns';
+import { OutletStaffAssignment } from './outlet-assignment';
 
 export const metadata: Metadata = {
   title: 'Staff Performance | F&B Management',
@@ -218,6 +219,7 @@ export default async function FnbStaffPage() {
           </p>
         </div>
       </div>
+      <OutletStaffAssignment />
 
       {staffPerformance.length === 0 ? (
         <Card>
