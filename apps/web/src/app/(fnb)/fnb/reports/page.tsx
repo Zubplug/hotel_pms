@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { BarChart3, Download, RefreshCcw, Loader2, ArrowUpRight, ArrowDownRight, Store, Box, Calendar, Calculator, TrendingUp } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import {
+  BarChart3, RefreshCw, Loader2, Store, Box, Calendar, Calculator, Printer, CheckCircle2, AlertTriangle
+} from 'lucide-react';
 import { useProperty } from '@/components/PropertyProvider';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 
@@ -12,6 +12,31 @@ const money = (value: number, currency = 'NGN') =>
 
 const pct = (value: number) =>
   new Intl.NumberFormat('en-US', { style: 'percent', maximumFractionDigits: 1 }).format(Number(value || 0) / 100);
+
+const PAGE_BG = { background: 'linear-gradient(160deg, #060b18 0%, #080e1f 60%, #0a0c22 100%)' };
+
+function StatCard({ label, value, detail, accent }: { label: string; value: string; detail: string; accent: string }) {
+  return (
+    <div className={`flex flex-col gap-3 rounded-[20px] border p-5 ${accent}`}>
+      <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-500">{label}</p>
+      <p className="text-xl font-bold text-white tabular-nums">{value}</p>
+      <p className="text-[11px] text-slate-600">{detail}</p>
+    </div>
+  );
+}
+
+function VarianceBadge({ variance }: { variance: number | null }) {
+  if (variance === null) return <span className="text-slate-600">—</span>;
+  const ok = Math.abs(variance) < 0.01;
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold tabular-nums ${
+      ok ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-300' : 'border-rose-400/30 bg-rose-400/10 text-rose-300'
+    }`}>
+      {ok ? <CheckCircle2 className="h-2.5 w-2.5" /> : <AlertTriangle className="h-2.5 w-2.5" />}
+      {money(variance)}
+    </span>
+  );
+}
 
 export default function FnbReportsPage() {
   const { propertyId } = useProperty();
@@ -26,10 +51,10 @@ export default function FnbReportsPage() {
   const [selectedOutlet, setSelectedOutlet] = useState<string>('');
   const [selectedWarehouse, setSelectedWarehouse] = useState<string>('');
   const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [refreshToken, setRefreshToken] = useState(0);
 
   useEffect(() => {
     if (propertyId) {
-      // Fetch outlets and warehouses for filters
       fetch(`/api/v1/fnb/outlets?propertyId=${propertyId}`).then(res => res.json()).then(res => setOutlets(res.data || []));
       fetch(`/api/v1/inventory/warehouses?propertyId=${propertyId}`).then(res => res.json()).then(res => setWarehouses(res.data?.warehouses || []));
       
@@ -41,7 +66,7 @@ export default function FnbReportsPage() {
     }
   }, [propertyId]);
 
-  const fetchReports = () => {
+  useEffect(() => {
     if (!session?.user || !propertyId || !dateRange.start || !dateRange.end) return;
     setLoading(true);
     setError(null);
@@ -59,286 +84,276 @@ export default function FnbReportsPage() {
       .then(setData)
       .catch(err => setError(err.message))
       .finally(() => setLoading(false));
-  };
+  }, [session, propertyId, dateRange, selectedOutlet, selectedWarehouse, refreshToken]);
 
-  useEffect(() => {
-    fetchReports();
-  }, [session, propertyId, dateRange, selectedOutlet, selectedWarehouse]);
+  if (loading && !data) return (
+    <div className="flex min-h-[60vh] items-center justify-center" style={PAGE_BG}>
+      <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
+    </div>
+  );
 
-  const StatCard = ({ title, value, icon: Icon, subtitle, className = '' }: any) => (
-    <div className={`rounded-xl border bg-white p-5 shadow-sm ${className}`}>
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">{title}</h3>
-        <Icon className="h-5 w-5 text-slate-400" />
-      </div>
-      <p className="text-2xl font-bold text-slate-900">{value}</p>
-      {subtitle && <p className="text-xs text-slate-500 mt-1 font-medium">{subtitle}</p>}
+  if (error && !data) return (
+    <div className="min-h-full px-5 pb-12 pt-8" style={PAGE_BG}>
+      <div className="mx-auto max-w-3xl rounded-2xl border border-rose-400/20 bg-rose-400/[0.07] p-5 text-sm text-rose-300">{error}</div>
     </div>
   );
 
   return (
-    <div className="min-h-full bg-slate-50/50 p-6 md:p-8 space-y-8">
-      {/* ── Header ── */}
-      <header className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 flex items-center gap-2">
-            <Calculator className="h-7 w-7 text-indigo-600" />
-            F&B Operations Report
-          </h1>
-          <p className="text-sm text-slate-500 mt-2 max-w-2xl">
-            Authoritative Daily Sales Summary (DSS), operating statistics, and inventory reconciliation.
-          </p>
-        </div>
+    <>
+      <style dangerouslySetInnerHTML={{__html: `
+        @media print {
+          body, html, * { background: white !important; color: black !important; -webkit-print-color-adjust: exact; }
+          .no-print { display: none !important; }
+          .print-border { border-color: #e2e8f0 !important; }
+          table { width: 100%; border-collapse: collapse; }
+          th, td { border-bottom: 1px solid #e2e8f0; }
+        }
+      `}} />
+      <div className="min-h-full px-4 pb-16 pt-6 sm:px-6 sm:pt-8 md:px-8 print:bg-white print:p-0 print:m-0" style={PAGE_BG}>
+        <div className="mx-auto max-w-[1540px] space-y-6">
 
-        {/* Filters */}
-        <div className="flex flex-wrap items-center gap-3 bg-white p-2 rounded-xl shadow-sm border">
-          <div className="flex items-center gap-2 px-3 py-1.5 border-r">
-            <Calendar className="h-4 w-4 text-slate-400" />
-            <input type="date" value={dateRange.start} onChange={e => setDateRange({...dateRange, start: e.target.value})} className="text-sm border-none bg-transparent outline-none font-medium text-slate-700" />
-            <span className="text-slate-400">to</span>
-            <input type="date" value={dateRange.end} onChange={e => setDateRange({...dateRange, end: e.target.value})} className="text-sm border-none bg-transparent outline-none font-medium text-slate-700" />
-          </div>
-          <div className="flex items-center gap-2 px-3 py-1.5 border-r">
-            <Store className="h-4 w-4 text-slate-400" />
-            <select value={selectedOutlet} onChange={e => setSelectedOutlet(e.target.value)} className="text-sm border-none bg-transparent outline-none font-medium text-slate-700">
-              <option value="">All Outlets</option>
-              {outlets.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
-            </select>
-          </div>
-          <div className="flex items-center gap-2 px-3 py-1.5">
-            <Box className="h-4 w-4 text-slate-400" />
-            <select value={selectedWarehouse} onChange={e => setSelectedWarehouse(e.target.value)} className="text-sm border-none bg-transparent outline-none font-medium text-slate-700">
-              <option value="">All Warehouses</option>
-              {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-            </select>
-          </div>
-          <Button onClick={fetchReports} disabled={loading} size="sm" className="ml-2 bg-indigo-600 hover:bg-indigo-700 shadow-sm">
-            <RefreshCcw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Update
-          </Button>
-        </div>
-      </header>
-
-      {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-800 shadow-sm">{error}</div>
-      )}
-
-      {loading && !data ? (
-        <div className="flex min-h-[40vh] items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
-        </div>
-      ) : data && (
-        <div className="space-y-8">
-          
-          {/* ── Section A & B: DSS & Operating Stats ── */}
-          <div className="grid gap-6 lg:grid-cols-[1fr_350px]">
-            {/* DSS */}
-            <div className="rounded-2xl border bg-white shadow-sm overflow-hidden">
-              <div className="bg-slate-50 border-b px-6 py-4">
-                <h2 className="text-lg font-bold text-slate-800">A. Daily Sales Summary</h2>
+          {/* ── Header ── */}
+          <header className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
+            <div>
+              <div className="mb-3 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-indigo-400/80 print:hidden">
+                <span className="h-1.5 w-1.5 rounded-full bg-indigo-400" />
+                F&B Enterprise Operations
               </div>
-              <div className="p-0">
-                <table className="w-full text-sm">
-                  <thead className="bg-slate-50/50 text-slate-500">
-                    <tr>
-                      <th className="px-6 py-3 text-left font-semibold">Category</th>
-                      <th className="px-6 py-3 text-right font-semibold">Gross Sales</th>
-                      <th className="px-6 py-3 text-right font-semibold">Discounts</th>
-                      <th className="px-6 py-3 text-right font-semibold">Net Revenue</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    <tr>
-                      <td className="px-6 py-4 font-medium text-slate-700">Food</td>
-                      <td className="px-6 py-4 text-right font-mono">{money(data.summary.foodGross)}</td>
-                      <td className="px-6 py-4 text-right text-red-600 font-mono">- {money(data.summary.foodDiscounts)}</td>
-                      <td className="px-6 py-4 text-right font-bold font-mono">{money(data.summary.foodGross - data.summary.foodDiscounts)}</td>
-                    </tr>
-                    <tr>
-                      <td className="px-6 py-4 font-medium text-slate-700">Beverage</td>
-                      <td className="px-6 py-4 text-right font-mono">{money(data.summary.bevGross)}</td>
-                      <td className="px-6 py-4 text-right text-red-600 font-mono">- {money(data.summary.bevDiscounts)}</td>
-                      <td className="px-6 py-4 text-right font-bold font-mono">{money(data.summary.bevGross - data.summary.bevDiscounts)}</td>
-                    </tr>
-                    <tr>
-                      <td className="px-6 py-4 font-medium text-slate-700">Other F&B</td>
-                      <td className="px-6 py-4 text-right font-mono">{money(data.summary.otherGross)}</td>
-                      <td className="px-6 py-4 text-right text-red-600 font-mono">- {money(data.summary.otherDiscounts)}</td>
-                      <td className="px-6 py-4 text-right font-bold font-mono">{money(data.summary.otherGross - data.summary.otherDiscounts)}</td>
-                    </tr>
-                    <tr className="bg-slate-50/50 border-t-2 border-slate-200">
-                      <td className="px-6 py-4 font-bold text-slate-900">Net F&B Revenue</td>
-                      <td className="px-6 py-4 text-right font-bold font-mono text-slate-900">{money(data.summary.grossRevenue)}</td>
-                      <td className="px-6 py-4 text-right font-bold text-red-600 font-mono">- {money(data.summary.totalDiscounts)}</td>
-                      <td className="px-6 py-4 text-right font-bold font-mono text-indigo-700 text-lg">{money(data.summary.netRevenue)}</td>
-                    </tr>
-                    <tr>
-                      <td colSpan={3} className="px-6 py-3 text-right font-medium text-slate-500">+ Taxes</td>
-                      <td className="px-6 py-3 text-right font-mono text-slate-700">{money(data.summary.totalTax)}</td>
-                    </tr>
-                    <tr>
-                      <td colSpan={3} className="px-6 py-3 text-right font-medium text-slate-500">+ Service Charge</td>
-                      <td className="px-6 py-3 text-right font-mono text-slate-700">{money(data.summary.totalServiceCharge)}</td>
-                    </tr>
-                    <tr className="bg-indigo-50/50 border-t-2 border-indigo-100">
-                      <td colSpan={3} className="px-6 py-4 text-right font-bold text-indigo-900">Total Guest Charge</td>
-                      <td className="px-6 py-4 text-right font-bold font-mono text-indigo-900 text-lg">{money(data.summary.totalGuestCharge)}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <div className="bg-amber-50/50 px-6 py-3 border-t flex justify-between text-sm">
-                <span className="text-amber-700 font-medium">Informational: Voided/Cancelled Orders</span>
-                <span className="font-mono text-amber-700 font-bold">{money(data.summary.totalVoids)}</span>
-              </div>
+              <h1 className="flex items-center gap-3 text-3xl font-bold tracking-tight text-white sm:text-4xl print:text-black">
+                <span className="flex h-10 w-10 items-center justify-center rounded-2xl border border-indigo-400/25 print:hidden"
+                  style={{ background: 'linear-gradient(135deg,rgba(99,102,241,0.2),rgba(124,58,237,0.15))', boxShadow: '0 0 24px rgba(99,102,241,0.2)' }}>
+                  <Calculator className="h-5 w-5 text-indigo-300" />
+                </span>
+                Operations Monitor (DSS)
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-500 print:hidden">
+                Authoritative Daily Sales Summary (DSS), operating statistics, and inventory reconciliation.
+              </p>
             </div>
 
-            {/* Operating Stats */}
-            <div className="space-y-6">
-              <StatCard title="B. Operating Stats" value={`${data.statistics.totalCovers} Covers`} subtitle={`Across ${data.statistics.totalChecks} checks`} icon={BarChart3} className="bg-gradient-to-br from-indigo-500 to-violet-600 text-white border-none shadow-md [&_h3]:text-indigo-100 [&_p]:text-white [&_svg]:text-indigo-200" />
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div className="rounded-xl border bg-white p-4 shadow-sm">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Avg Check</p>
-                  <p className="text-lg font-bold text-slate-900 mt-1 font-mono">{money(data.statistics.averageCheck)}</p>
-                  <p className="text-[10px] text-slate-400 mt-1">Per Order</p>
-                </div>
-                <div className="rounded-xl border bg-white p-4 shadow-sm">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Spend / Cover</p>
-                  <p className="text-lg font-bold text-slate-900 mt-1 font-mono">{money(data.statistics.spendPerCover)}</p>
-                  <p className="text-[10px] text-slate-400 mt-1">Per Guest</p>
-                </div>
+            {/* Filters (No print) */}
+            <div className="no-print flex flex-wrap items-center gap-2 rounded-2xl border border-white/[0.08] bg-white/[0.02] p-2">
+              <div className="flex items-center gap-2 px-3">
+                <Calendar className="h-4 w-4 text-slate-500" />
+                <input type="date" value={dateRange.start} onChange={e => setDateRange({...dateRange, start: e.target.value})} className="h-8 bg-transparent text-sm font-medium text-slate-300 outline-none" />
+                <span className="text-slate-600">to</span>
+                <input type="date" value={dateRange.end} onChange={e => setDateRange({...dateRange, end: e.target.value})} className="h-8 bg-transparent text-sm font-medium text-slate-300 outline-none" />
               </div>
+              <div className="h-6 w-px bg-white/[0.1]"></div>
+              <div className="flex items-center gap-2 px-3">
+                <Store className="h-4 w-4 text-slate-500" />
+                <select value={selectedOutlet} onChange={e => setSelectedOutlet(e.target.value)} className="h-8 bg-transparent text-sm font-medium text-slate-300 outline-none">
+                  <option value="" className="text-black">All Outlets</option>
+                  {outlets.map(o => <option key={o.id} value={o.id} className="text-black">{o.name}</option>)}
+                </select>
+              </div>
+              <div className="h-6 w-px bg-white/[0.1]"></div>
+              <div className="flex items-center gap-2 px-3">
+                <Box className="h-4 w-4 text-slate-500" />
+                <select value={selectedWarehouse} onChange={e => setSelectedWarehouse(e.target.value)} className="h-8 bg-transparent text-sm font-medium text-slate-300 outline-none">
+                  <option value="" className="text-black">All Warehouses</option>
+                  {warehouses.map(w => <option key={w.id} value={w.id} className="text-black">{w.name}</option>)}
+                </select>
+              </div>
+              <button
+                onClick={() => setRefreshToken(v => v + 1)}
+                className="inline-flex h-9 items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 text-sm font-semibold text-slate-400 transition-all hover:bg-white/[0.06] hover:text-slate-200"
+              >
+                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              </button>
+              <button onClick={() => window.print()} className="inline-flex h-9 items-center gap-2 rounded-xl border border-indigo-400/20 bg-indigo-500/10 px-3 text-sm font-semibold text-indigo-300 transition-all hover:bg-indigo-500/20 hover:text-indigo-200">
+                <Printer className="h-4 w-4" /> Print
+              </button>
+            </div>
+          </header>
 
-              {/* Tenders */}
-              <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
-                <div className="bg-slate-50 border-b px-4 py-3">
-                  <h3 className="text-sm font-bold text-slate-800">E. Settlement (Tender)</h3>
+          {data && (
+            <>
+              {/* ── Stat cards ── */}
+              <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5 print:grid-cols-5 print:gap-4">
+                <StatCard label="Total Covers" value={String(data.statistics.totalCovers)} detail={`Across ${data.statistics.totalChecks} checks`} accent="border-indigo-400/20 bg-indigo-400/[0.07] text-indigo-300 print-border" />
+                <StatCard label="Average Check" value={money(data.statistics.averageCheck)} detail="Per Table / Order" accent="border-emerald-400/20 bg-emerald-400/[0.07] text-emerald-300 print-border" />
+                <StatCard label="Spend per Cover" value={money(data.statistics.spendPerCover)} detail="Per Guest" accent="border-slate-600/40 bg-slate-600/10 text-slate-300 print-border" />
+                <StatCard label="Net F&B Revenue" value={money(data.summary.netRevenue)} detail="Excl. Taxes & Voids" accent="border-violet-400/20 bg-violet-400/[0.07] text-violet-300 print-border" />
+                <StatCard label="Gross Profit Margin" value={pct(data.profitability.grossMarginPct)} detail={`Actual COGS: ${money(data.profitability.actualCogs)}`} accent="border-amber-400/20 bg-amber-400/[0.07] text-amber-300 print-border" />
+              </section>
+
+              {/* ── Main grid ── */}
+              <section className="grid gap-5 xl:grid-cols-[1.4fr_0.6fr] print:flex print:flex-col print:gap-8">
+                
+                {/* DSS Table */}
+                <div className="overflow-hidden rounded-[20px] border border-white/[0.06] print:border-none print-border" style={{ background: 'rgba(255,255,255,0.025)' }}>
+                  <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4 print-border">
+                    <div>
+                      <h3 className="flex items-center gap-2 text-sm font-bold text-white print:text-black">
+                        <BarChart3 className="h-4 w-4 text-indigo-400 print:text-black" />
+                        A. Daily Sales Summary (DSS)
+                      </h3>
+                      <p className="mt-0.5 text-[11px] text-slate-500">Gross sales, allowances, and collected taxes.</p>
+                    </div>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr style={{ background: 'rgba(255,255,255,0.03)' }} className="border-b border-white/[0.06] print-border">
+                          {['Category', 'Gross Sales', 'Allowances', 'Net Revenue'].map((h, i) => (
+                            <th key={h} className={`px-5 py-3 text-[9px] font-bold uppercase tracking-[0.16em] text-slate-500 ${i > 0 ? 'text-right' : 'text-left'}`}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/[0.04]">
+                        {[
+                          ['Food', data.summary.foodGross, data.summary.foodDiscounts, data.summary.foodGross - data.summary.foodDiscounts],
+                          ['Beverage', data.summary.bevGross, data.summary.bevDiscounts, data.summary.bevGross - data.summary.bevDiscounts],
+                          ['Other F&B', data.summary.otherGross, data.summary.otherDiscounts, data.summary.otherGross - data.summary.otherDiscounts],
+                        ].map(([label, gross, disc, net]) => (
+                          <tr key={String(label)} className="transition-colors hover:bg-white/[0.02]">
+                            <td className="px-5 py-3.5 text-sm font-medium text-slate-300 print:text-black">{label}</td>
+                            <td className="px-5 py-3.5 text-right text-sm font-semibold tabular-nums text-white print:text-black">{money(Number(gross))}</td>
+                            <td className="px-5 py-3.5 text-right text-sm tabular-nums text-rose-400 print:text-black">{money(Number(disc))}</td>
+                            <td className="px-5 py-3.5 text-right text-sm font-bold tabular-nums text-white print:text-black">{money(Number(net))}</td>
+                          </tr>
+                        ))}
+                        <tr className="bg-white/[0.02] border-t border-white/[0.1] print-border">
+                          <td className="px-5 py-4 text-sm font-bold text-white print:text-black">Net F&B Revenue</td>
+                          <td className="px-5 py-4 text-right text-sm font-bold tabular-nums text-white print:text-black">{money(data.summary.grossRevenue)}</td>
+                          <td className="px-5 py-4 text-right text-sm font-bold tabular-nums text-rose-400 print:text-black">{money(data.summary.totalDiscounts)}</td>
+                          <td className="px-5 py-4 text-right text-lg font-bold tabular-nums text-indigo-300 print:text-black">{money(data.summary.netRevenue)}</td>
+                        </tr>
+                        <tr>
+                          <td colSpan={3} className="px-5 py-2 text-right text-[11px] font-bold uppercase tracking-wider text-slate-500">+ Taxes Collected</td>
+                          <td className="px-5 py-2 text-right text-sm tabular-nums text-slate-400 print:text-black">{money(data.summary.totalTax)}</td>
+                        </tr>
+                        <tr>
+                          <td colSpan={3} className="px-5 py-2 text-right text-[11px] font-bold uppercase tracking-wider text-slate-500">+ Service Charge</td>
+                          <td className="px-5 py-2 text-right text-sm tabular-nums text-slate-400 print:text-black">{money(data.summary.totalServiceCharge)}</td>
+                        </tr>
+                        <tr className="bg-indigo-500/[0.05] border-t border-indigo-500/20 print-border">
+                          <td colSpan={3} className="px-5 py-4 text-right text-sm font-bold text-indigo-200 print:text-black">Total Guest Charge</td>
+                          <td className="px-5 py-4 text-right text-lg font-bold tabular-nums text-white print:text-black">{money(data.summary.totalGuestCharge)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-                <div className="p-4 space-y-3">
-                  {data.tenderBreakdown.length === 0 ? (
-                    <p className="text-sm text-slate-500 text-center py-2">No settlements</p>
-                  ) : (
-                    data.tenderBreakdown.map((t: any) => (
-                      <div key={t.method} className="flex justify-between items-center text-sm">
-                        <span className="font-medium text-slate-700">{t.method.replace(/_/g, ' ')}</span>
-                        <span className="font-mono font-bold text-slate-900">{money(t.amount)}</span>
+
+                {/* Right column */}
+                <div className="flex flex-col gap-4">
+                  {/* Payment mix */}
+                  <div className="rounded-[20px] border border-white/[0.06] p-5 print:border-none print-border" style={{ background: 'rgba(255,255,255,0.025)' }}>
+                    <h3 className="flex items-center gap-2 text-sm font-bold text-white print:text-black">
+                      <Calculator className="h-4 w-4 text-indigo-400 print:text-black" />
+                      E. Settlement
+                    </h3>
+                    <div className="mt-4 space-y-2">
+                      {(data.tenderBreakdown || []).length ? data.tenderBreakdown.map((p: any) => (
+                        <div key={p.method} className="flex items-center justify-between rounded-xl border border-white/[0.05] bg-white/[0.03] px-3 py-2.5 print-border">
+                          <p className="text-sm font-semibold text-slate-200 print:text-black">{p.method.replace(/_/g, ' ')}</p>
+                          <span className="text-sm font-bold tabular-nums text-white print:text-black">{money(p.amount)}</span>
+                        </div>
+                      )) : <p className="text-sm text-slate-600">No captured payments.</p>}
+                    </div>
+                  </div>
+
+                  {/* COGS & Profitability */}
+                  <div className="rounded-[20px] border border-white/[0.06] p-5 print:border-none print-border" style={{ background: 'rgba(255,255,255,0.025)' }}>
+                    <h3 className="flex items-center gap-2 text-sm font-bold text-white print:text-black">
+                      <Store className="h-4 w-4 text-indigo-400 print:text-black" />
+                      C. Profitability
+                    </h3>
+                    <div className="mt-4 grid gap-3">
+                      <div className="rounded-xl border border-white/[0.05] bg-white/[0.03] p-3 print-border">
+                        <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-slate-500">Actual COGS (Depleted)</p>
+                        <p className="mt-1.5 text-lg font-bold tabular-nums text-rose-300 print:text-black">{money(data.profitability.actualCogs)}</p>
+                        <p className="text-[10px] text-slate-500">{pct(data.profitability.actualCostPct)} of Net Revenue</p>
                       </div>
-                    ))
+                      <div className="rounded-xl border border-white/[0.05] bg-white/[0.03] p-3 print-border">
+                        <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-slate-500">Theoretical COGS (Recipe)</p>
+                        <p className="mt-1.5 text-lg font-bold tabular-nums text-slate-300 print:text-black">{money(data.profitability.theoreticalCogs)}</p>
+                        <p className="text-[10px] text-slate-500">{pct(data.profitability.theoreticalCostPct)} expected</p>
+                      </div>
+                    </div>
+                    <div className={`mt-3 flex items-center justify-between rounded-xl border px-3 py-2.5 text-sm font-bold print-border ${
+                      data.profitability.cogsVariance > 0
+                        ? 'border-rose-400/25 bg-rose-400/10 text-rose-300 print:text-black'
+                        : 'border-emerald-400/25 bg-emerald-400/10 text-emerald-300 print:text-black'
+                    }`}>
+                      <span>COGS Variance</span>
+                      <span>{data.profitability.cogsVariance > 0 ? '+' : ''}{money(data.profitability.cogsVariance)}</span>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* ── Inventory Movement Table ── */}
+              <section className="overflow-hidden rounded-[20px] border border-white/[0.06] print:border-none print-border" style={{ background: 'rgba(255,255,255,0.025)' }}>
+                <div className="border-b border-white/[0.06] px-5 py-4 flex justify-between items-center print-border">
+                  <div>
+                    <h3 className="flex items-center gap-2 text-sm font-bold text-white print:text-black">
+                      <Box className="h-4 w-4 text-indigo-400 print:text-black" />
+                      D. Stock Reconciliation
+                    </h3>
+                    <p className="mt-0.5 text-[11px] text-slate-500">Operational ledger mapping physical stock to revenue.</p>
+                  </div>
+                  {!selectedWarehouse && (
+                    <span className="no-print rounded-full border border-amber-400/30 bg-amber-400/10 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-300">
+                      Select Warehouse
+                    </span>
                   )}
                 </div>
-              </div>
-            </div>
-          </div>
-
-          {/* ── Section C: Profitability ── */}
-          <div className="rounded-2xl border bg-white shadow-sm overflow-hidden">
-            <div className="bg-slate-50 border-b px-6 py-4 flex justify-between items-center">
-              <h2 className="text-lg font-bold text-slate-800">C. Profitability & COGS</h2>
-              <span className="px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-xs font-bold tracking-wide">
-                Margin: {pct(data.profitability.grossMarginPct)}
-              </span>
-            </div>
-            <div className="grid sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x border-b">
-              <div className="p-6">
-                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Net F&B Revenue</p>
-                <p className="text-3xl font-extrabold text-slate-900 font-mono">{money(data.summary.netRevenue)}</p>
-              </div>
-              <div className="p-6 bg-slate-50/30">
-                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Actual COGS (Depleted)</p>
-                <div className="flex items-baseline gap-3">
-                  <p className="text-3xl font-extrabold text-rose-600 font-mono">{money(data.profitability.actualCogs)}</p>
-                  <p className="text-sm font-semibold text-rose-500">{pct(data.profitability.actualCostPct)}</p>
-                </div>
-              </div>
-              <div className="p-6">
-                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Gross Profit</p>
-                <p className="text-3xl font-extrabold text-emerald-600 font-mono">{money(data.profitability.grossProfit)}</p>
-              </div>
-            </div>
-            <div className="p-6 bg-slate-50 flex items-center justify-between text-sm">
-              <div className="flex items-center gap-6">
-                <div>
-                  <span className="text-slate-500 font-medium mr-2">Theoretical COGS (Recipe):</span>
-                  <span className="font-mono font-bold text-slate-800">{money(data.profitability.theoreticalCogs)} ({pct(data.profitability.theoreticalCostPct)})</span>
-                </div>
-                <div>
-                  <span className="text-slate-500 font-medium mr-2">Variance:</span>
-                  <span className={`font-mono font-bold ${data.profitability.cogsVariance > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                    {data.profitability.cogsVariance > 0 ? '+' : ''}{money(data.profitability.cogsVariance)}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* ── Section D: Inventory Control ── */}
-          <div className="rounded-2xl border bg-white shadow-sm overflow-hidden">
-            <div className="bg-slate-50 border-b px-6 py-4 flex justify-between items-center">
-              <h2 className="text-lg font-bold text-slate-800">D. Inventory Control Ledger</h2>
-              {!selectedWarehouse && (
-                <span className="text-xs font-medium text-amber-600 bg-amber-100 px-3 py-1 rounded-full">
-                  Select a Warehouse to view Stock Reconciliation
-                </span>
-              )}
-            </div>
-            {selectedWarehouse ? (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-slate-50/50 text-slate-600 border-b">
-                    <tr>
-                      <th className="px-4 py-3 text-left font-semibold">Stock Item</th>
-                      <th className="px-4 py-3 text-right font-semibold">Opening</th>
-                      <th className="px-4 py-3 text-right font-semibold text-emerald-600">Receipts</th>
-                      <th className="px-4 py-3 text-right font-semibold text-indigo-600">Transfer In</th>
-                      <th className="px-4 py-3 text-right font-semibold text-rose-600">Transfer Out</th>
-                      <th className="px-4 py-3 text-right font-semibold text-amber-600">POS Sales</th>
-                      <th className="px-4 py-3 text-right font-semibold text-rose-600">Waste</th>
-                      <th className="px-4 py-3 text-right font-semibold">Adjust</th>
-                      <th className="px-4 py-3 text-right font-semibold border-l bg-slate-50">Expected</th>
-                      <th className="px-4 py-3 text-right font-semibold bg-slate-50">Actual Closing</th>
-                      <th className="px-4 py-3 text-right font-semibold bg-slate-50">Variance</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {data.inventoryMovement.map((item: any) => (
-                      <tr key={item.stockItemId} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="px-4 py-3">
-                          <p className="font-bold text-slate-800">{item.name}</p>
-                          <p className="text-[10px] text-slate-500">{item.sku} • {item.unitOfMeasure}</p>
-                        </td>
-                        <td className="px-4 py-3 text-right font-mono font-medium text-slate-600">{item.opening}</td>
-                        <td className="px-4 py-3 text-right font-mono font-medium text-emerald-600">{item.receipts || '-'}</td>
-                        <td className="px-4 py-3 text-right font-mono font-medium text-indigo-600">{item.transferIn || '-'}</td>
-                        <td className="px-4 py-3 text-right font-mono font-medium text-rose-600">{item.transferOut || '-'}</td>
-                        <td className="px-4 py-3 text-right font-mono font-medium text-amber-600">{item.sales || '-'}</td>
-                        <td className="px-4 py-3 text-right font-mono font-medium text-rose-600">{item.waste || '-'}</td>
-                        <td className="px-4 py-3 text-right font-mono font-medium text-slate-600">{item.adjustments || '-'}</td>
-                        
-                        <td className="px-4 py-3 text-right font-mono font-semibold border-l bg-slate-50/50">{item.expectedClosing}</td>
-                        <td className="px-4 py-3 text-right font-mono font-bold bg-slate-50/50 text-indigo-900">{item.actualClosing}</td>
-                        <td className={`px-4 py-3 text-right font-mono font-bold bg-slate-50/50 ${item.variance !== 0 ? 'text-rose-600' : 'text-slate-400'}`}>
-                          {item.variance !== 0 ? item.variance : '-'}
-                        </td>
-                      </tr>
-                    ))}
-                    {data.inventoryMovement.length === 0 && (
-                      <tr>
-                        <td colSpan={11} className="px-4 py-8 text-center text-slate-500">No stock movement recorded for this period.</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="p-12 text-center text-slate-500">
-                <Box className="h-12 w-12 mx-auto text-slate-300 mb-4" />
-                <p>Use the filters above to select a warehouse.</p>
-              </div>
-            )}
-          </div>
+                {selectedWarehouse ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr style={{ background: 'rgba(255,255,255,0.03)' }} className="border-b border-white/[0.06] print-border">
+                          {['Item', 'Open', '+ In', '- Out', '- Sold', '- Waste', 'Adj', 'Expected', 'Actual', 'Var'].map((h, i) => (
+                            <th key={h} className={`px-4 py-3 text-[9px] font-bold uppercase tracking-[0.16em] text-slate-500 ${i > 0 ? 'text-right' : 'text-left'}`}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/[0.04]">
+                        {data.inventoryMovement.map((row: any) => {
+                          return (
+                            <tr key={row.stockItemId} className="transition-colors hover:bg-white/[0.02]">
+                              <td className="px-4 py-3">
+                                <p className="text-sm font-semibold text-white print:text-black">{row.name}</p>
+                                <p className="mt-0.5 text-[10px] text-slate-500">{row.sku} • {row.unitOfMeasure}</p>
+                              </td>
+                              <td className="px-4 py-3 text-right text-xs tabular-nums text-slate-400 print:text-black">{row.opening}</td>
+                              <td className="px-4 py-3 text-right text-xs tabular-nums text-emerald-400 print:text-black">{row.receipts + row.transferIn || '-'}</td>
+                              <td className="px-4 py-3 text-right text-xs tabular-nums text-rose-400 print:text-black">{row.transferOut || '-'}</td>
+                              <td className="px-4 py-3 text-right text-xs tabular-nums text-amber-300 font-bold print:text-black">{row.sales || '-'}</td>
+                              <td className="px-4 py-3 text-right text-xs tabular-nums text-rose-400 print:text-black">{row.waste || '-'}</td>
+                              <td className="px-4 py-3 text-right text-xs tabular-nums text-slate-500 print:text-black">{row.adjustments || '-'}</td>
+                              <td className="px-4 py-3 text-right text-xs tabular-nums text-slate-300 font-semibold print:text-black">{row.expectedClosing}</td>
+                              <td className="px-4 py-3 text-right text-xs tabular-nums text-white font-bold print:text-black">{row.actualClosing}</td>
+                              <td className="px-4 py-3 text-right">
+                                <VarianceBadge variance={row.variance} />
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {data.inventoryMovement.length === 0 && (
+                          <tr>
+                            <td colSpan={10} className="px-5 py-8 text-center text-sm text-slate-500">
+                              No stock movement recorded.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="p-12 text-center text-slate-500 text-sm">
+                    Please select a warehouse from the filters above to generate the inventory ledger.
+                  </div>
+                )}
+              </section>
+            </>
+          )}
 
         </div>
-      )}
-    </div>
+      </div>
+    </>
   );
 }
