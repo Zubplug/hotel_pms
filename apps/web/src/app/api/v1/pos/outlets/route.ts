@@ -18,8 +18,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'propertyId is required' }, { status: 400 });
     }
 
+    if (!ctx.propertyIds.includes(String(propertyId))) return NextResponse.json({ error: 'Forbidden property' }, { status: 403 });
     const outlets = await prisma.posOutlet.findMany({
-      where: { propertyId: { in: ctx.propertyIds as string[] } },
+      where: { propertyId: String(propertyId) },
       orderBy: { name: 'asc' }
     });
 

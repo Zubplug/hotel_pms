@@ -4,6 +4,8 @@ import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { requireOrganizationContext } from "@/lib/organization-access";
 
+const MENU_ROLES = ['FNB_MANAGER', 'RESTAURANT_MANAGER', 'BANQUET_MANAGER', 'EVENT_MANAGER', 'GENERAL_MANAGER', 'HOTEL_MANAGER', 'ADMIN', 'CEO', 'SUPER_ADMIN'];
+
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ categoryId: string }> }
@@ -12,6 +14,7 @@ export async function PATCH(
     const { categoryId } = await params;
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Unauthorized', 401);
+    if (!MENU_ROLES.includes((session.user as any).role) && !(session.user as any).isSuperAdmin) return errorResponse('FORBIDDEN', 'F&B management access required', 403);
     const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
     if (!categoryId) return errorResponse('BAD_REQUEST', 'Category ID is required', 400);
 
@@ -21,6 +24,8 @@ export async function PATCH(
         let reqOutletId = body?.outletId;
         if (reqOutletId && !ctx.outletIds.includes(reqOutletId)) return NextResponse.json({ error: 'Forbidden outlet' }, { status: 403 });
     const { productionStation, name, isActive } = body;
+    const category = await prisma.productCategory.findUnique({ where: { id: categoryId }, include: { outlet: { select: { propertyId: true } } } });
+    if (!category || !ctx.propertyIds.includes(category.outlet.propertyId)) return errorResponse('NOT_FOUND', 'Category not found', 404);
 
     // Validate productionStation if provided
     const validStations = ['KITCHEN', 'BAR', 'DIRECT', 'NONE'];

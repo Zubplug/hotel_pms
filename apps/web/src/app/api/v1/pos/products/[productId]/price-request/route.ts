@@ -4,12 +4,12 @@ import { successResponse, errorResponse } from '@/lib/api-response';
 import { resolveUser } from '@/lib/resolve-user';
 import { requireOrganizationContext } from '@/lib/organization-access';
 
-const CASHIER_ROLES = ['GENERAL_CASHIER', 'CASHIER', 'FRONT_DESK_CASHIER'];
+const REQUEST_ROLES = ['FNB_MANAGER', 'RESTAURANT_MANAGER', 'BANQUET_MANAGER', 'EVENT_MANAGER', 'GENERAL_CASHIER', 'CASHIER', 'FRONT_DESK_CASHIER'];
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ productId: string }> }) {
   const user = await resolveUser(req);
   if (!user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
-  if (!CASHIER_ROLES.includes(user.role) && !user.isSuperAdmin) return errorResponse('FORBIDDEN', 'Only cashiers can submit price requests', 403);
+  if (!REQUEST_ROLES.includes(user.role) && !user.isSuperAdmin) return errorResponse('FORBIDDEN', 'F&B menu access required', 403);
   const { productId } = await params;
   const body = await req.json();
   const newPrice = Number(body.price);
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
   const approval = await prisma.approvalRequest.create({ data: {
     propertyId: product.propertyId, type: 'POS_PRICE_CHANGE', status: 'PENDING', requestedBy: user.id,
     amount: newPrice, currency: 'NGN', reason: String(body.reason || 'Selling price change requested by cashier'),
-    details: { productId, productName: product.name, oldPrice: Number(product.price), newPrice, stage: 'ACCOUNTANT_REVIEW' },
+    details: { productId, productName: product.name, oldPrice: Number(product.price), newPrice, stage: 'GENERAL_CASHIER_REVIEW' },
     idempotencyKey: body.idempotencyKey || undefined,
   } });
   return successResponse(approval, 201);

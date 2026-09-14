@@ -37,9 +37,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
       if (approval.type === 'POS_PRICE_CHANGE') {
         if (approval.status !== 'PENDING') throw new Error('CONFLICT');
-        if (!['MANAGER', 'HOTEL_MANAGER', 'ADMIN', 'CEO', 'SUPER_ADMIN'].includes(user.role) && !user.isSuperAdmin) throw new Error('MANAGER_APPROVAL_REQUIRED');
+        if (!['GENERAL_MANAGER', 'HOTEL_MANAGER', 'ADMIN', 'CEO', 'SUPER_ADMIN'].includes(user.role) && !user.isSuperAdmin) throw new Error('MANAGER_APPROVAL_REQUIRED');
         const details = (approval.details || {}) as Record<string, any>;
         if (!details.accountantApprovedBy) throw new Error('ACCOUNTANT_APPROVAL_REQUIRED');
+        if (details.stage !== 'MANAGER_REVIEW') throw new Error('MANAGER_REVIEW_REQUIRED');
         const newPrice = Number(details.newPrice);
         if (!details.productId || !Number.isFinite(newPrice) || newPrice < 0) throw new Error('INVALID_PRICE_REQUEST');
         const product = await tx.posProduct.findFirst({ where: { id: details.productId, propertyId: approval.propertyId } });
