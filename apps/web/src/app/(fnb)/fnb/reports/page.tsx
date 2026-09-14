@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import {
-  BarChart3, RefreshCw, Loader2, Store, Box, Calendar, Calculator, Printer, CheckCircle2, AlertTriangle, WalletCards, ClipboardCheck, Scale
+  BarChart3, RefreshCw, Loader2, Store, Box, Calendar, Calculator, Printer, CheckCircle2, AlertTriangle, WalletCards, ClipboardCheck, Scale, ChevronDown
 } from 'lucide-react';
 import { useProperty } from '@/components/PropertyProvider';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
@@ -15,10 +15,10 @@ const pct = (value: number) =>
 
 function StatCard({ label, value, detail, accent }: { label: string; value: string; detail: string; accent: string }) {
   return (
-    <div className={`flex flex-col gap-3 rounded-[20px] border p-5 ${accent} print:border-slate-200 print:bg-white print:text-black`}>
-      <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-500">{label}</p>
-      <p className="text-xl font-bold tabular-nums print:text-black">{value}</p>
-      <p className="text-[11px] text-slate-600 print:text-slate-500">{detail}</p>
+    <div className={`stat-card flex flex-col gap-3 rounded-[20px] border p-5 ${accent} print:border-slate-300 print:bg-white print:text-black print:rounded-lg print:p-3`}>
+      <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-500 print:text-slate-700">{label}</p>
+      <p className="text-xl font-bold tabular-nums print:text-black print:text-lg">{value}</p>
+      <p className="text-[11px] text-slate-600 print:text-slate-600">{detail}</p>
     </div>
   );
 }
@@ -30,7 +30,7 @@ function VarianceBadge({ variance }: { variance: number | null }) {
     <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold tabular-nums print:border-none print:p-0 ${
       ok ? 'border-emerald-200 bg-emerald-50 text-emerald-700 print:text-black' : 'border-rose-200 bg-rose-50 text-rose-700 print:text-black'
     }`}>
-      {ok ? <CheckCircle2 className="h-2.5 w-2.5" /> : <AlertTriangle className="h-2.5 w-2.5" />}
+      {ok ? <CheckCircle2 className="h-2.5 w-2.5 print:hidden" /> : <AlertTriangle className="h-2.5 w-2.5 print:hidden" />}
       {money(variance)}
     </span>
   );
@@ -50,6 +50,10 @@ export default function FnbReportsPage() {
   const [selectedWarehouse, setSelectedWarehouse] = useState<string>('');
   const [warehouses, setWarehouses] = useState<any[]>([]);
   const [refreshToken, setRefreshToken] = useState(0);
+
+  // Print Mode State
+  const [printMode, setPrintMode] = useState<'dss' | 'inventory' | null>(null);
+  const [showPrintMenu, setShowPrintMenu] = useState(false);
 
   useEffect(() => {
     if (propertyId) {
@@ -84,6 +88,15 @@ export default function FnbReportsPage() {
       .finally(() => setLoading(false));
   }, [session, propertyId, dateRange, selectedOutlet, selectedWarehouse, refreshToken]);
 
+  const handlePrint = (mode: 'dss' | 'inventory') => {
+    setShowPrintMenu(false);
+    setPrintMode(mode);
+    setTimeout(() => {
+      window.print();
+      setPrintMode(null);
+    }, 150);
+  };
+
   if (loading && !data) return (
     <div className="flex min-h-[60vh] items-center justify-center bg-slate-50/50">
       <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
@@ -97,42 +110,82 @@ export default function FnbReportsPage() {
   );
 
   const selectedOutletName = selectedOutlet ? outlets.find(o => o.id === selectedOutlet)?.name : 'All Outlets';
+  const selectedWarehouseName = selectedWarehouse ? warehouses.find(w => w.id === selectedWarehouse)?.name : 'All Warehouses';
   const displayDate = dateRange.start === dateRange.end ? dateRange.start : `${dateRange.start} to ${dateRange.end}`;
+  const propertyName = (session?.user as any)?.organizationName || 'Hotel Property';
 
   return (
     <>
       <style dangerouslySetInnerHTML={{__html: `
         @media print {
+          @page { size: portrait; margin: 10mm 15mm; }
           body, html, * { background: white !important; color: black !important; -webkit-print-color-adjust: exact; }
           .no-print { display: none !important; }
-          .print-border { border-color: #e2e8f0 !important; }
-          table { width: 100%; border-collapse: collapse; }
-          th, td { border-bottom: 1px solid #e2e8f0; padding-top: 8px; padding-bottom: 8px; }
+          
+          /* Print Visibility Triggers */
+          .print-dss .print-only-inventory { display: none !important; }
+          .print-inventory .print-only-dss { display: none !important; }
+          
+          /* Typography & Layout */
+          body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; }
+          .report-header { display: block !important; padding-bottom: 12px; margin-bottom: 24px; border-bottom: 2px solid #000; }
+          .report-header h1 { font-size: 20px; font-weight: bold; margin: 0 0 4px 0; text-transform: uppercase; letter-spacing: 1px; }
+          .report-header p { font-size: 11px; color: #555 !important; margin: 0; font-family: monospace; }
+          
+          /* Grids & Borders */
+          .print-grid { display: grid; gap: 16px; }
+          .print-col-dss { grid-template-columns: 1fr 1fr; }
+          .print-section { border: none !important; box-shadow: none !important; page-break-inside: avoid; margin-bottom: 24px; }
+          .print-section-header { font-size: 13px !important; font-weight: bold !important; border-bottom: 1px solid #ccc !important; padding: 0 0 4px 0 !important; margin-bottom: 12px !important; text-transform: uppercase; }
+          
+          /* Tables */
+          table { width: 100%; border-collapse: collapse; font-size: 10px; }
+          th { border-bottom: 1px solid #000; padding: 6px 4px; color: #000 !important; text-transform: uppercase; font-weight: bold; }
+          td { border-bottom: 1px solid #eee; padding: 6px 4px; color: #333 !important; }
+          .total-row td { border-top: 1px solid #000 !important; border-bottom: 2px double #000 !important; font-weight: bold; font-size: 11px; }
+          .sub-total-row td { font-weight: bold; border-top: 1px solid #000 !important; }
+          
+          /* Icons & Badges */
+          .print-icon { display: none !important; }
+          .variance-text { font-family: monospace; font-weight: bold; }
         }
       `}} />
-      <div className="min-h-full bg-slate-50/50 px-4 pb-16 pt-6 sm:px-6 sm:pt-8 md:px-8 print:bg-white print:p-0 print:m-0">
-        <div className="mx-auto max-w-[1540px] space-y-6">
+      <div className={`min-h-full bg-slate-50/50 px-4 pb-16 pt-6 sm:px-6 sm:pt-8 md:px-8 print:bg-white print:p-0 print:m-0 ${printMode === 'dss' ? 'print-dss' : ''} ${printMode === 'inventory' ? 'print-inventory' : ''}`}>
+        <div className="mx-auto max-w-[1540px] space-y-6 print:space-y-0">
 
-          {/* ── Header ── */}
-          <header className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
+          {/* ── Professional Print Header ── */}
+          <div className="report-header hidden">
+            <h1>{printMode === 'inventory' ? 'F&B Stock Reconciliation Report' : 'F&B Daily Sales Summary (DSS)'}</h1>
+            <div className="flex justify-between">
+              <p>Property: {propertyName}</p>
+              <p>Date Range: {displayDate}</p>
+            </div>
+            <div className="flex justify-between mt-1">
+              <p>Location: {printMode === 'inventory' ? selectedWarehouseName : selectedOutletName}</p>
+              <p>Generated: {new Date().toLocaleString()}</p>
+            </div>
+          </div>
+
+          {/* ── UI Header ── */}
+          <header className="no-print flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
             <div>
-              <div className="mb-3 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-indigo-600 print:hidden">
+              <div className="mb-3 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-indigo-600">
                 <span className="h-1.5 w-1.5 rounded-full bg-indigo-600" />
                 F&B Operations / DSS
               </div>
-              <h1 className="flex items-center gap-3 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl print:text-black">
-                <span className="flex h-10 w-10 items-center justify-center rounded-2xl border border-indigo-100 bg-indigo-50/50 print:hidden text-indigo-600 shadow-sm">
+              <h1 className="flex items-center gap-3 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+                <span className="flex h-10 w-10 items-center justify-center rounded-2xl border border-indigo-100 bg-indigo-50/50 text-indigo-600 shadow-sm">
                   <Calculator className="h-5 w-5" />
                 </span>
                 F&B Reconciliation
               </h1>
-              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-500 print:hidden">
+              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-500">
                 Validate posted departmental revenue, operating statistics, and inventory control.
               </p>
             </div>
 
-            {/* Filters (No print) */}
-            <div className="no-print flex flex-wrap items-center gap-2 rounded-2xl border bg-white p-2 shadow-sm">
+            {/* Filters */}
+            <div className="flex flex-wrap items-center gap-2 rounded-2xl border bg-white p-2 shadow-sm relative">
               <div className="flex items-center gap-2 px-3">
                 <Calendar className="h-4 w-4 text-slate-400" />
                 <input type="date" value={dateRange.start} onChange={e => setDateRange({...dateRange, start: e.target.value})} className="h-8 bg-transparent text-sm font-medium text-slate-700 outline-none" />
@@ -161,24 +214,47 @@ export default function FnbReportsPage() {
               >
                 <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
               </button>
-              <button onClick={() => window.print()} className="inline-flex h-9 items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3 text-sm font-semibold text-indigo-700 transition-all hover:bg-indigo-100">
-                <Printer className="h-4 w-4" /> Print
-              </button>
+              
+              {/* Print Dropdown */}
+              <div className="relative">
+                <button 
+                  onClick={() => setShowPrintMenu(!showPrintMenu)} 
+                  className="inline-flex h-9 items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3 text-sm font-semibold text-indigo-700 transition-all hover:bg-indigo-100"
+                >
+                  <Printer className="h-4 w-4" /> Print Reports <ChevronDown className="h-3 w-3 opacity-50" />
+                </button>
+                
+                {showPrintMenu && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setShowPrintMenu(false)}></div>
+                    <div className="absolute right-0 top-full mt-2 w-56 rounded-xl border bg-white shadow-lg z-20 overflow-hidden py-1">
+                      <button onClick={() => handlePrint('dss')} className="w-full px-4 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2">
+                        <ClipboardCheck className="h-4 w-4 text-indigo-500" />
+                        Daily Sales Summary (DSS)
+                      </button>
+                      <button onClick={() => handlePrint('inventory')} className="w-full px-4 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2">
+                        <Scale className="h-4 w-4 text-emerald-500" />
+                        Stock Reconciliation Ledger
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </header>
 
           {data && (
             <>
               {/* ── Hero status card ── */}
-              <section className="relative overflow-hidden rounded-[24px] border border-indigo-100 bg-white p-6 sm:p-8 shadow-sm print:border-none print:p-0 print:shadow-none">
-                <div className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-indigo-50 blur-3xl print:hidden" />
+              <section className="no-print relative overflow-hidden rounded-[24px] border border-indigo-100 bg-white p-6 sm:p-8 shadow-sm">
+                <div className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-indigo-50 blur-3xl" />
                 <div className="relative flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-indigo-600 print:hidden">DSS Summary</p>
-                    <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 print:text-black">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-indigo-600">DSS Summary</p>
+                    <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">
                       {selectedOutletName}
-                      <span className="mx-2 text-slate-300 print:text-black">·</span>
-                      <span className="font-mono text-indigo-600 print:text-black">{displayDate}</span>
+                      <span className="mx-2 text-slate-300">·</span>
+                      <span className="font-mono text-indigo-600">{displayDate}</span>
                     </h2>
                     <p className="mt-1.5 text-sm text-slate-500">
                       {data.statistics.totalChecks} processed checks
@@ -190,8 +266,8 @@ export default function FnbReportsPage() {
                   </div>
                   <span className={`inline-flex items-center gap-2 self-start rounded-full border px-4 py-2 text-xs font-bold ${
                     data.summary.netRevenue > 0
-                      ? 'border-emerald-200 bg-emerald-50 text-emerald-700 print:border-none print:p-0 print:text-black'
-                      : 'border-slate-200 bg-slate-50 text-slate-600 print:border-none print:p-0 print:text-black'
+                      ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                      : 'border-slate-200 bg-slate-50 text-slate-600'
                   }`}>
                     <CheckCircle2 className="h-4 w-4" />
                     {data.summary.netRevenue > 0 ? 'Active Trade Day' : 'No Trade Data'}
@@ -200,7 +276,7 @@ export default function FnbReportsPage() {
               </section>
 
               {/* ── Stat cards ── */}
-              <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5 print:grid-cols-5 print:gap-4">
+              <section className="print-only-dss grid gap-3 sm:grid-cols-2 xl:grid-cols-5 print:grid-cols-5 print:gap-4 print:mb-6">
                 <StatCard label="Total Covers" value={String(data.statistics.totalCovers)} detail={`Across ${data.statistics.totalChecks} checks`} accent="bg-white text-slate-900 border-slate-200 shadow-sm" />
                 <StatCard label="Average Check" value={money(data.statistics.averageCheck)} detail="Per Table / Order" accent="bg-white text-slate-900 border-slate-200 shadow-sm" />
                 <StatCard label="Spend per Cover" value={money(data.statistics.spendPerCover)} detail="Per Guest" accent="bg-white text-slate-900 border-slate-200 shadow-sm" />
@@ -208,57 +284,65 @@ export default function FnbReportsPage() {
                 <StatCard label="Gross Margin" value={pct(data.profitability.grossMarginPct)} detail={`Actual COGS: ${money(data.profitability.actualCogs)}`} accent="bg-emerald-50/50 text-emerald-950 border-emerald-100 shadow-sm" />
               </section>
 
-              {/* ── Main grid ── */}
-              <section className="grid gap-5 xl:grid-cols-[1.4fr_0.6fr] print:flex print:flex-col print:gap-8">
+              {/* ── Main grid (DSS) ── */}
+              <section className="print-only-dss grid gap-5 xl:grid-cols-[1.4fr_0.6fr] print:print-grid print:print-col-dss">
                 
                 {/* Source vs Snapshot equivalent (DSS) */}
-                <div className="overflow-hidden rounded-[20px] border bg-white shadow-sm print:border-none print:shadow-none">
-                  <div className="flex items-center justify-between border-b px-5 py-4 print:border-b">
+                <div className="print-section overflow-hidden rounded-[20px] border bg-white shadow-sm">
+                  <div className="flex items-center justify-between border-b px-5 py-4 print:p-0 print:border-none">
                     <div>
-                      <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900 print:text-black">
-                        <ClipboardCheck className="h-4 w-4 text-indigo-500 print:text-black" />
+                      <h3 className="print-section-header flex items-center gap-2 text-sm font-bold text-slate-900">
+                        <ClipboardCheck className="print-icon h-4 w-4 text-indigo-500" />
                         Daily Sales Summary
                       </h3>
-                      <p className="mt-0.5 text-[11px] text-slate-500">Gross sales, allowances, and collected taxes.</p>
+                      <p className="no-print mt-0.5 text-[11px] text-slate-500">Gross sales, allowances, and collected taxes.</p>
                     </div>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full">
-                      <thead>
-                        <tr className="border-b bg-slate-50/50 print:bg-white print:border-b">
+                      <thead className="no-print">
+                        <tr className="border-b bg-slate-50/50">
                           {['Category', 'Gross Sales', 'Allowances', 'Net Revenue'].map((h, i) => (
                             <th key={h} className={`px-5 py-3 text-[9px] font-bold uppercase tracking-[0.16em] text-slate-500 ${i > 0 ? 'text-right' : 'text-left'}`}>{h}</th>
                           ))}
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-100">
+                      <thead className="hidden print:table-header-group">
+                        <tr>
+                          <th className="text-left">Category</th>
+                          <th className="text-right">Gross Sales</th>
+                          <th className="text-right">Allowances</th>
+                          <th className="text-right">Net Revenue</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 print:divide-none">
                         {[
                           ['Food', data.summary.foodGross, data.summary.foodDiscounts, data.summary.foodGross - data.summary.foodDiscounts],
                           ['Beverage', data.summary.bevGross, data.summary.bevDiscounts, data.summary.bevGross - data.summary.bevDiscounts],
                           ['Other F&B', data.summary.otherGross, data.summary.otherDiscounts, data.summary.otherGross - data.summary.otherDiscounts],
                         ].map(([label, gross, disc, net]) => (
                           <tr key={String(label)} className="transition-colors hover:bg-slate-50/50">
-                            <td className="px-5 py-3.5 text-sm font-medium text-slate-700 print:text-black">{label}</td>
-                            <td className="px-5 py-3.5 text-right text-sm font-semibold tabular-nums text-slate-900 print:text-black">{money(Number(gross))}</td>
-                            <td className="px-5 py-3.5 text-right text-sm tabular-nums text-rose-600 print:text-black">{money(Number(disc))}</td>
-                            <td className="px-5 py-3.5 text-right text-sm font-bold tabular-nums text-slate-900 print:text-black">{money(Number(net))}</td>
+                            <td className="px-5 py-3.5 text-sm font-medium text-slate-700">{label}</td>
+                            <td className="px-5 py-3.5 text-right text-sm font-semibold tabular-nums text-slate-900">{money(Number(gross))}</td>
+                            <td className="px-5 py-3.5 text-right text-sm tabular-nums text-rose-600">{money(Number(disc))}</td>
+                            <td className="px-5 py-3.5 text-right text-sm font-bold tabular-nums text-slate-900">{money(Number(net))}</td>
                           </tr>
                         ))}
-                        <tr className="bg-slate-50/50 border-t-2 border-slate-100 print:bg-white print:border-t-2">
-                          <td className="px-5 py-4 text-sm font-bold text-slate-900 print:text-black">Net F&B Revenue</td>
-                          <td className="px-5 py-4 text-right text-sm font-bold tabular-nums text-slate-900 print:text-black">{money(data.summary.grossRevenue)}</td>
-                          <td className="px-5 py-4 text-right text-sm font-bold tabular-nums text-rose-600 print:text-black">{money(data.summary.totalDiscounts)}</td>
+                        <tr className="sub-total-row bg-slate-50/50 border-t-2 border-slate-100">
+                          <td className="px-5 py-4 text-sm font-bold text-slate-900">Net F&B Revenue</td>
+                          <td className="px-5 py-4 text-right text-sm font-bold tabular-nums text-slate-900">{money(data.summary.grossRevenue)}</td>
+                          <td className="px-5 py-4 text-right text-sm font-bold tabular-nums text-rose-600">{money(data.summary.totalDiscounts)}</td>
                           <td className="px-5 py-4 text-right text-lg font-bold tabular-nums text-indigo-700 print:text-black">{money(data.summary.netRevenue)}</td>
                         </tr>
                         <tr>
-                          <td colSpan={3} className="px-5 py-2 text-right text-[11px] font-bold uppercase tracking-wider text-slate-500">+ Taxes Collected</td>
-                          <td className="px-5 py-2 text-right text-sm tabular-nums text-slate-600 print:text-black">{money(data.summary.totalTax)}</td>
+                          <td colSpan={3} className="px-5 py-2 text-right text-[11px] font-bold uppercase tracking-wider text-slate-500">Taxes Collected</td>
+                          <td className="px-5 py-2 text-right text-sm tabular-nums text-slate-600">{money(data.summary.totalTax)}</td>
                         </tr>
                         <tr>
-                          <td colSpan={3} className="px-5 py-2 text-right text-[11px] font-bold uppercase tracking-wider text-slate-500">+ Service Charge</td>
-                          <td className="px-5 py-2 text-right text-sm tabular-nums text-slate-600 print:text-black">{money(data.summary.totalServiceCharge)}</td>
+                          <td colSpan={3} className="px-5 py-2 text-right text-[11px] font-bold uppercase tracking-wider text-slate-500">Service Charge</td>
+                          <td className="px-5 py-2 text-right text-sm tabular-nums text-slate-600">{money(data.summary.totalServiceCharge)}</td>
                         </tr>
-                        <tr className="bg-indigo-50/50 border-t-2 border-indigo-100 print:bg-white print:border-t-2">
+                        <tr className="total-row bg-indigo-50/50 border-t-2 border-indigo-100">
                           <td colSpan={3} className="px-5 py-4 text-right text-sm font-bold text-indigo-900 print:text-black">Total Guest Charge</td>
                           <td className="px-5 py-4 text-right text-lg font-bold tabular-nums text-indigo-900 print:text-black">{money(data.summary.totalGuestCharge)}</td>
                         </tr>
@@ -268,45 +352,77 @@ export default function FnbReportsPage() {
                 </div>
 
                 {/* Right column */}
-                <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-4 print:gap-6">
                   {/* Payment mix */}
-                  <div className="rounded-[20px] border bg-white p-5 shadow-sm print:border-none print:shadow-none">
-                    <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900 print:text-black">
-                      <WalletCards className="h-4 w-4 text-indigo-500 print:text-black" />
+                  <div className="print-section rounded-[20px] border bg-white p-5 shadow-sm print:p-0">
+                    <h3 className="print-section-header flex items-center gap-2 text-sm font-bold text-slate-900">
+                      <WalletCards className="print-icon h-4 w-4 text-indigo-500" />
                       Payment Mix
                     </h3>
                     <div className="mt-4 space-y-2">
-                      {(data.tenderBreakdown || []).length ? data.tenderBreakdown.map((p: any) => (
-                        <div key={p.method} className="flex items-center justify-between rounded-xl border bg-slate-50/50 px-3 py-2.5 print:border print:bg-white">
-                          <p className="text-sm font-semibold text-slate-700 print:text-black">{p.method.replace(/_/g, ' ')}</p>
-                          <span className="text-sm font-bold tabular-nums text-slate-900 print:text-black">{money(p.amount)}</span>
-                        </div>
-                      )) : <p className="text-sm text-slate-500">No captured payments.</p>}
+                      <table className="hidden print:table w-full">
+                         <tbody>
+                           {(data.tenderBreakdown || []).length ? data.tenderBreakdown.map((p: any) => (
+                             <tr key={p.method}>
+                                <td className="text-left font-medium">{p.method.replace(/_/g, ' ')}</td>
+                                <td className="text-right tabular-nums font-bold">{money(p.amount)}</td>
+                             </tr>
+                           )) : <tr><td colSpan={2}>No captured payments.</td></tr>}
+                         </tbody>
+                      </table>
+                      <div className="no-print">
+                        {(data.tenderBreakdown || []).length ? data.tenderBreakdown.map((p: any) => (
+                          <div key={p.method} className="flex items-center justify-between rounded-xl border bg-slate-50/50 px-3 py-2.5">
+                            <p className="text-sm font-semibold text-slate-700">{p.method.replace(/_/g, ' ')}</p>
+                            <span className="text-sm font-bold tabular-nums text-slate-900">{money(p.amount)}</span>
+                          </div>
+                        )) : <p className="text-sm text-slate-500">No captured payments.</p>}
+                      </div>
                     </div>
                   </div>
 
                   {/* COGS Control */}
-                  <div className="rounded-[20px] border bg-white p-5 shadow-sm print:border-none print:shadow-none">
-                    <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900 print:text-black">
-                      <BarChart3 className="h-4 w-4 text-indigo-500 print:text-black" />
+                  <div className="print-section rounded-[20px] border bg-white p-5 shadow-sm print:p-0">
+                    <h3 className="print-section-header flex items-center gap-2 text-sm font-bold text-slate-900">
+                      <BarChart3 className="print-icon h-4 w-4 text-indigo-500" />
                       Cost of Goods Sold (COGS)
                     </h3>
-                    <div className="mt-4 grid grid-cols-2 gap-3">
-                      <div className="rounded-xl border bg-slate-50/50 p-3 print:border print:bg-white">
+                    <div className="no-print mt-4 grid grid-cols-2 gap-3">
+                      <div className="rounded-xl border bg-slate-50/50 p-3">
                         <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-slate-500">Actual (Depleted)</p>
-                        <p className="mt-1.5 text-sm font-bold tabular-nums text-rose-600 print:text-black">{money(data.profitability.actualCogs)}</p>
+                        <p className="mt-1.5 text-sm font-bold tabular-nums text-rose-600">{money(data.profitability.actualCogs)}</p>
                         <p className="text-[10px] text-slate-500 mt-0.5">{pct(data.profitability.actualCostPct)} of Net</p>
                       </div>
-                      <div className="rounded-xl border bg-slate-50/50 p-3 print:border print:bg-white">
+                      <div className="rounded-xl border bg-slate-50/50 p-3">
                         <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-slate-500">Theoretical</p>
-                        <p className="mt-1.5 text-sm font-bold tabular-nums text-slate-700 print:text-black">{money(data.profitability.theoreticalCogs)}</p>
+                        <p className="mt-1.5 text-sm font-bold tabular-nums text-slate-700">{money(data.profitability.theoreticalCogs)}</p>
                         <p className="text-[10px] text-slate-500 mt-0.5">{pct(data.profitability.theoreticalCostPct)} of Net</p>
                       </div>
                     </div>
-                    <div className={`mt-3 flex items-center justify-between rounded-xl border px-3 py-2.5 text-sm font-bold print:border ${
+                    
+                    <table className="hidden print:table w-full mt-2">
+                       <tbody>
+                          <tr>
+                            <td className="text-left">Actual COGS (Depleted)</td>
+                            <td className="text-right font-bold">{money(data.profitability.actualCogs)}</td>
+                            <td className="text-right text-slate-500">{pct(data.profitability.actualCostPct)}</td>
+                          </tr>
+                          <tr>
+                            <td className="text-left">Theoretical COGS (Recipe)</td>
+                            <td className="text-right font-bold">{money(data.profitability.theoreticalCogs)}</td>
+                            <td className="text-right text-slate-500">{pct(data.profitability.theoreticalCostPct)}</td>
+                          </tr>
+                          <tr className="sub-total-row">
+                            <td colSpan={2} className="text-left">COGS Variance</td>
+                            <td className="text-right variance-text">{data.profitability.cogsVariance > 0 ? '+' : ''}{money(data.profitability.cogsVariance)}</td>
+                          </tr>
+                       </tbody>
+                    </table>
+
+                    <div className={`no-print mt-3 flex items-center justify-between rounded-xl border px-3 py-2.5 text-sm font-bold ${
                       data.profitability.cogsVariance > 0
-                        ? 'border-rose-200 bg-rose-50 text-rose-700 print:text-black'
-                        : 'border-emerald-200 bg-emerald-50 text-emerald-700 print:text-black'
+                        ? 'border-rose-200 bg-rose-50 text-rose-700'
+                        : 'border-emerald-200 bg-emerald-50 text-emerald-700'
                     }`}>
                       <span>COGS Variance</span>
                       <span>{data.profitability.cogsVariance > 0 ? '+' : ''}{money(data.profitability.cogsVariance)}</span>
@@ -316,14 +432,14 @@ export default function FnbReportsPage() {
               </section>
 
               {/* ── Balance Proof equivalent (Inventory Movement) ── */}
-              <section className="overflow-hidden rounded-[20px] border bg-white shadow-sm print:border-none print:shadow-none">
-                <div className="border-b px-5 py-4 flex justify-between items-center print:border-b">
+              <section className="print-only-inventory print-section overflow-hidden rounded-[20px] border bg-white shadow-sm print:p-0 print:border-none print:shadow-none print:mt-6">
+                <div className="border-b px-5 py-4 flex justify-between items-center print:border-none print:p-0">
                   <div>
-                    <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900 print:text-black">
-                      <Scale className="h-4 w-4 text-indigo-500 print:text-black" />
+                    <h3 className="print-section-header flex items-center gap-2 text-sm font-bold text-slate-900">
+                      <Scale className="print-icon h-4 w-4 text-indigo-500" />
                       Stock Ledger Proof
                     </h3>
-                    <p className="mt-0.5 text-[11px] text-slate-500">Industry-standard proof: Opening stock + activity = closing stock.</p>
+                    <p className="no-print mt-0.5 text-[11px] text-slate-500">Industry-standard proof: Opening stock + activity = closing stock.</p>
                   </div>
                   {!selectedWarehouse && (
                     <span className="no-print rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-700">
@@ -333,37 +449,52 @@ export default function FnbReportsPage() {
                 </div>
                 {selectedWarehouse ? (
                   <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b bg-slate-50/50 print:bg-white print:border-b">
+                    <table className="w-full print:text-[9px]">
+                      <thead className="no-print">
+                        <tr className="border-b bg-slate-50/50">
                           {['Stock Item', 'Opening', '+ In', '- Out', '- Sold', '- Waste', 'Adj', 'Expected', 'Actual', 'Variance', 'Status'].map((h, i) => (
                             <th key={h} className={`px-5 py-3 text-[9px] font-bold uppercase tracking-[0.16em] text-slate-500 ${i > 0 && i < 10 ? 'text-right' : 'text-left'}`}>{h}</th>
                           ))}
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-100">
+                      <thead className="hidden print:table-header-group">
+                        <tr>
+                          <th className="text-left">Stock Item</th>
+                          <th className="text-right">Open</th>
+                          <th className="text-right">+In</th>
+                          <th className="text-right">-Out</th>
+                          <th className="text-right">-Sold</th>
+                          <th className="text-right">-Waste</th>
+                          <th className="text-right">Adj</th>
+                          <th className="text-right">Exp</th>
+                          <th className="text-right">Act</th>
+                          <th className="text-right">Var</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 print:divide-none">
                         {data.inventoryMovement.map((row: any) => {
                           const isBalanced = row.variance === 0;
                           return (
                             <tr key={row.stockItemId} className="transition-colors hover:bg-slate-50/50">
-                              <td className="px-5 py-4">
-                                <p className="text-sm font-semibold text-slate-900 print:text-black">{row.name}</p>
-                                <p className="mt-0.5 text-[10px] text-slate-500">{row.sku} • {row.unitOfMeasure}</p>
+                              <td className="px-5 py-4 print:py-2">
+                                <p className="text-sm font-semibold text-slate-900 print:text-[10px] print:leading-tight">{row.name}</p>
+                                <p className="mt-0.5 text-[10px] text-slate-500 print:text-[8px] print:mt-0">{row.sku} • {row.unitOfMeasure}</p>
                               </td>
-                              <td className="px-5 py-4 text-right text-sm tabular-nums text-slate-600 print:text-black">{row.opening}</td>
-                              <td className="px-5 py-4 text-right text-sm tabular-nums text-emerald-600 print:text-black">{row.receipts + row.transferIn || '-'}</td>
-                              <td className="px-5 py-4 text-right text-sm tabular-nums text-rose-600 print:text-black">{row.transferOut || '-'}</td>
-                              <td className="px-5 py-4 text-right text-sm tabular-nums text-amber-600 font-bold print:text-black">{row.sales || '-'}</td>
-                              <td className="px-5 py-4 text-right text-sm tabular-nums text-rose-600 print:text-black">{row.waste || '-'}</td>
-                              <td className="px-5 py-4 text-right text-sm tabular-nums text-slate-500 print:text-black">{row.adjustments || '-'}</td>
-                              <td className="px-5 py-4 text-right text-sm tabular-nums text-slate-700 font-semibold print:text-black">{row.expectedClosing}</td>
-                              <td className="px-5 py-4 text-right text-sm tabular-nums text-slate-900 font-bold print:text-black">{row.actualClosing}</td>
-                              <td className="px-5 py-4 text-right">
-                                <VarianceBadge variance={row.variance} />
+                              <td className="px-5 py-4 print:py-2 text-right text-sm tabular-nums text-slate-600 print:text-[10px] print:text-black">{row.opening}</td>
+                              <td className="px-5 py-4 print:py-2 text-right text-sm tabular-nums text-emerald-600 print:text-[10px] print:text-black">{row.receipts + row.transferIn || '-'}</td>
+                              <td className="px-5 py-4 print:py-2 text-right text-sm tabular-nums text-rose-600 print:text-[10px] print:text-black">{row.transferOut || '-'}</td>
+                              <td className="px-5 py-4 print:py-2 text-right text-sm tabular-nums text-amber-600 font-bold print:text-[10px] print:text-black">{row.sales || '-'}</td>
+                              <td className="px-5 py-4 print:py-2 text-right text-sm tabular-nums text-rose-600 print:text-[10px] print:text-black">{row.waste || '-'}</td>
+                              <td className="px-5 py-4 print:py-2 text-right text-sm tabular-nums text-slate-500 print:text-[10px] print:text-black">{row.adjustments || '-'}</td>
+                              <td className="px-5 py-4 print:py-2 text-right text-sm tabular-nums text-slate-700 font-semibold print:text-[10px] print:text-black">{row.expectedClosing}</td>
+                              <td className="px-5 py-4 print:py-2 text-right text-sm tabular-nums text-slate-900 font-bold print:text-[10px] print:text-black">{row.actualClosing}</td>
+                              <td className="px-5 py-4 print:py-2 text-right variance-text print:text-[10px]">
+                                <span className="no-print"><VarianceBadge variance={row.variance} /></span>
+                                <span className="hidden print:inline">{row.variance}</span>
                               </td>
-                              <td className="px-5 py-4 text-left">
-                                <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider print:border-none print:p-0 ${
-                                  isBalanced ? 'border-emerald-200 bg-emerald-50 text-emerald-700 print:text-black' : 'border-rose-200 bg-rose-50 text-rose-700 print:text-black'
+                              <td className="px-5 py-4 print:py-2 text-left no-print">
+                                <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
+                                  isBalanced ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'
                                 }`}>
                                   {isBalanced ? 'BALANCED' : 'VARIANCE'}
                                 </span>
@@ -382,7 +513,7 @@ export default function FnbReportsPage() {
                     </table>
                   </div>
                 ) : (
-                  <div className="p-12 text-center text-slate-500 text-sm bg-slate-50/30">
+                  <div className="no-print p-12 text-center text-slate-500 text-sm bg-slate-50/30">
                     Please select a warehouse from the filters above to generate the inventory ledger proof.
                   </div>
                 )}
