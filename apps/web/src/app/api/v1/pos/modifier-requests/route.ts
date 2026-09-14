@@ -4,12 +4,12 @@ import { errorResponse, successResponse } from '@/lib/api-response';
 import { resolveUser } from '@/lib/resolve-user';
 import { requireOrganizationContext } from '@/lib/organization-access';
 
-const CASHIER_ROLES = ['GENERAL_CASHIER', 'CASHIER', 'FRONT_DESK_CASHIER'];
+const REQUEST_ROLES = ['FNB_MANAGER', 'RESTAURANT_MANAGER', 'BANQUET_MANAGER', 'EVENT_MANAGER', 'GENERAL_CASHIER', 'CASHIER', 'FRONT_DESK_CASHIER'];
 
 export async function GET(req: NextRequest) {
   const user = await resolveUser(req);
   if (!user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
-  if (!CASHIER_ROLES.includes(user.role) && !user.isSuperAdmin) return errorResponse('FORBIDDEN', 'Modifier access required', 403);
+  if (!REQUEST_ROLES.includes(user.role) && !user.isSuperAdmin) return errorResponse('FORBIDDEN', 'Modifier access required', 403);
   const items = await prisma.stockItem.findMany({ where: { propertyId: { in: [...(await requireOrganizationContext(user.id)).propertyIds] }, isActive: true }, select: { id: true, name: true, baseUnit: true, stockUnits: true }, orderBy: { name: 'asc' }, take: 500 });
   return successResponse(items);
 }
@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const user = await resolveUser(req);
   if (!user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
-  if (!CASHIER_ROLES.includes(user.role) && !user.isSuperAdmin) return errorResponse('FORBIDDEN', 'Only cashiers can submit modifier requests', 403);
+  if (!REQUEST_ROLES.includes(user.role) && !user.isSuperAdmin) return errorResponse('FORBIDDEN', 'F&B menu access required', 403);
   const body = await req.json();
   const productId = String(body.productId || '');
   const modifierId = body.modifierId ? String(body.modifierId) : null;

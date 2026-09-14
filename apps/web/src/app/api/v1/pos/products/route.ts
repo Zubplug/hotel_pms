@@ -36,9 +36,9 @@ export async function GET(req: NextRequest) {
       orderBy: [{ name: 'asc' }, { id: 'asc' }],
       include: {
         category: {
-          select: { id: true, name: true, productionStation: true },
+          select: { id: true, name: true, productionStation: true, outlet: { select: { id: true, name: true } } },
         },
-        modifiers: { select: { id: true } },
+        modifiers: { select: { id: true, name: true, price: true, isActive: true, quantity: true, unitOfMeasure: true, groupName: true, groupRequired: true, groupMaxSelect: true } },
         stockItems: { where: { isActive: true, ...(outletWarehouse ? { warehouseId: outletWarehouse.id } : {}) }, select: { id: true, name: true, sku: true, barcode: true, posProductId: true, quantityOnHand: true, baseUnit: true, isActive: true } },
         recipe: { include: { versions: { where: { isActive: true }, include: { ingredients: { include: { stockItem: { select: { id: true, name: true, sku: true, barcode: true, posProductId: true, quantityOnHand: true, isActive: true } } } } } } } },
       },
@@ -73,7 +73,9 @@ export async function GET(req: NextRequest) {
       stockStatus: !isStockControlled ? 'NON_STOCK' : !hasInventoryMapping ? 'UNMAPPED' : outOfStock ? 'OUT_OF_STOCK' : availableStock! <= 5 ? 'LOW_STOCK' : 'IN_STOCK',
       // Product-level override wins; fall back to category default
       resolvedStation: p.productionStation ?? p.category?.productionStation ?? 'KITCHEN',
-      modifiers: undefined, // strip raw modifier list — only expose flag
+      // Keep modifier details available to the menu-management screen. POS
+      // clients already receive the same product projection and use these
+      // fields when building modifier choices.
       recipe: undefined,
       stockItems: undefined,
       };

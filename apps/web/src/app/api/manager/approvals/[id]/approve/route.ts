@@ -53,7 +53,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
       if (approval.type === 'POS_MENU_CREATE') {
         if (approval.status !== 'PENDING') throw new Error('CONFLICT');
-        if (!['MANAGER', 'HOTEL_MANAGER', 'ADMIN', 'CEO', 'SUPER_ADMIN'].includes(user.role) && !user.isSuperAdmin) throw new Error('MANAGER_APPROVAL_REQUIRED');
+        if (!['GENERAL_MANAGER', 'MANAGER', 'HOTEL_MANAGER', 'ADMIN', 'CEO', 'SUPER_ADMIN'].includes(user.role) && !user.isSuperAdmin) throw new Error('MANAGER_APPROVAL_REQUIRED');
         const details = (approval.details || {}) as Record<string, any>;
         if (!details.accountantApprovedBy) throw new Error('ACCOUNTANT_APPROVAL_REQUIRED');
         const category = await tx.productCategory.findFirst({ where: { id: details.categoryId, isActive: true, outlet: { propertyId: approval.propertyId, isActive: true } } });
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
       if (approval.type === 'POS_MODIFIER_CREATE' || approval.type === 'POS_MODIFIER_UPDATE') {
         if (approval.status !== 'PENDING') throw new Error('CONFLICT');
-        if (!['MANAGER', 'HOTEL_MANAGER', 'ADMIN', 'CEO', 'SUPER_ADMIN'].includes(user.role) && !user.isSuperAdmin) throw new Error('MANAGER_APPROVAL_REQUIRED');
+        if (!['GENERAL_MANAGER', 'MANAGER', 'HOTEL_MANAGER', 'ADMIN', 'CEO', 'SUPER_ADMIN'].includes(user.role) && !user.isSuperAdmin) throw new Error('MANAGER_APPROVAL_REQUIRED');
         const details = (approval.details || {}) as Record<string, any>;
         if (!details.accountantApprovedBy) throw new Error('ACCOUNTANT_APPROVAL_REQUIRED');
         const product = await tx.posProduct.findFirst({ where: { id: details.productId, propertyId: approval.propertyId, isActive: true } });
