@@ -213,7 +213,7 @@ export async function buildNightAuditBalanceProof(tx: any, input: {
     tx.frontdeskSession.aggregate({ where: { propertyId: input.propertyId, businessDate: input.businessDate }, _sum: { systemExpectedCash: true, declaredCash: true, variance: true } }),
     tx.journalEntry.findMany({
       where: { propertyId: input.propertyId, status: 'POSTED', entryDate: { lte: input.businessDate } },
-      select: { entryDate: true, lines: { select: { debit: true, credit: true, account: { select: { code: true } } } } },
+      select: { entryDate: true, createdAt: true, lines: { select: { debit: true, credit: true, account: { select: { code: true } } } } },
     }),
   ]);
   const activity = Number(folioActivity._sum.amount || 0);
@@ -221,11 +221,22 @@ export async function buildNightAuditBalanceProof(tx: any, input: {
     const before = postedEntries.reduce((sum: number, entry: any) => entry.entryDate < input.businessDate
       ? sum + journalNet(code, entry.lines)
       : sum, 0);
+    // A controlled correction may be posted after the prior close package was
+    // finalized while retaining the prior business date. Carry that activity
+    // into the next day's opening balance instead of reporting a false
+    // variance against the immutable package snapshot.
+    const postCloseCorrection = previous
+      ? postedEntries.reduce((sum: number, entry: any) => {
+        const isPriorDate = entry.entryDate <= previous.businessDate;
+        const isAfterPackage = entry.createdAt > (previous.finalizedAt || previous.createdAt);
+        return isPriorDate && isAfterPackage ? sum + journalNet(code, entry.lines) : sum;
+      }, 0)
+      : 0;
     const daily = postedEntries.reduce((sum: number, entry: any) => entry.entryDate.getTime() === input.businessDate.getTime()
       ? sum + journalNet(code, entry.lines)
       : sum, 0);
     const through = before + daily;
-    return { code, before, daily, through };
+    return { code, before, daily, through, postCloseCorrection };
   });
   const accountBalance = (code: string) => journalAccounts.find((row) => row.code === code)!;
   const rows = [
@@ -263,8 +274,10 @@ function makeCashBalanceRow(previous: any, cashClosing: any, frontdeskCashClosin
   return { ledgerType: 'CASH', accountKey: 'CASH_ACCOUNTS', openingBalance: opening, activityDebit: Math.max(activity, 0), activityCredit: Math.max(-activity, 0), expectedClosing: expected, actualClosing: actualCash, variance: actualCash - expected, status: Math.abs(actualCash - expected) < 0.01 ? 'PROVEN' : 'HAS_VARIANCE', resolution: 'Cash expected and declared balances are sourced from dated POS and front-desk sessions and checked against the posted GL activity.' };
 }
 
-function makeJournalBalanceRow(ledgerType: string, accountKey: string, previous: any, current: { before: number; daily: number; through: number }, resolution: string) {
-  const opening = previous ? Number(previous.expectedClosing) : current.before;
+function makeJournalBalanceRow(ledgerType: string, accountKey: string, previous: any, current: { before: number; daily: number; through: number; postCloseCorrection?: number }, resolution: string) {
+  const opening = previous
+    ? Number(previous.expectedClosing) + Number(current.postCloseCorrection || 0)
+    : current.before;
   const expected = opening + current.daily;
   const actual = current.through;
   return { ledgerType, accountKey, openingBalance: opening, activityDebit: Math.max(current.daily, 0), activityCredit: Math.max(-current.daily, 0), expectedClosing: expected, actualClosing: actual, variance: actual - expected, status: Math.abs(actual - expected) < 0.01 ? 'PROVEN' : 'HAS_VARIANCE', resolution };
