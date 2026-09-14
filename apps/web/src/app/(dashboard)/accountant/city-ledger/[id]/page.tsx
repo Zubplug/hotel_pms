@@ -36,13 +36,15 @@ export default async function CityLedgerDetailPage(props: { params: Promise<{ id
   const totalOutstanding = account.invoices.reduce((sum, inv) => sum + Number(inv.outstandingAmount), 0);
 
   return (
-    <div className="mx-auto max-w-7xl">
-      <CityLedgerDetailClient 
-        account={account as any} 
-        openInvoices={account.invoices as any} 
-        recentEntries={account.entries as any} 
-        totalOutstanding={totalOutstanding}
-      />
+    <div className="min-h-screen bg-slate-950 p-6 text-slate-50 md:p-8">
+      <div className="mx-auto max-w-7xl">
+        <CityLedgerDetailClient 
+          account={account as any} 
+          openInvoices={account.invoices as any} 
+          recentEntries={account.entries as any} 
+          totalOutstanding={totalOutstanding}
+        />
+      </div>
     </div>
   );
 }

@@ -68,39 +68,39 @@ export function CityLedgerDetailClient({ account, openInvoices, recentEntries, t
     <div className="space-y-6 pb-10">
       <div className="flex items-center gap-4">
         <Link href="/accountant/city-ledger">
-          <Button variant="ghost" size="icon" className="rounded-full">
+          <Button variant="ghost" size="icon" className="rounded-full text-slate-400 hover:text-white hover:bg-white/10">
             <ArrowLeft className="h-5 w-5" />
           </Button>
         </Link>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">{account.CorporateAccount?.[0]?.name || 'Corporate Account'}</h1>
-          <p className="text-sm text-slate-500">City Ledger Account • {account.status}</p>
+          <h1 className="text-2xl font-bold tracking-tight text-emerald-400">{account.CorporateAccount?.[0]?.name || 'Corporate Account'}</h1>
+          <p className="text-sm text-slate-400">City Ledger Account • {account.status}</p>
         </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">
-        <Card className="bg-gradient-to-br from-slate-900 to-slate-800 text-white shadow-lg">
+        <Card className="border-emerald-500/20 bg-white/5">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-slate-300 uppercase tracking-wider">Total Ledger Balance</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-4xl font-bold tracking-tight">{formatLedgerBalance(account.balance)}</div>
+            <div className="text-4xl font-bold tracking-tight text-white">{formatLedgerBalance(account.balance)}</div>
             <p className="text-sm text-slate-400 mt-1">{Number(account.balance) < 0 ? 'Corporate credit available for future invoices' : 'Total outstanding debt'}</p>
           </CardContent>
         </Card>
         
-        <Card className="shadow-sm">
+        <Card className="border-white/10 bg-white/5">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500 uppercase tracking-wider">Open Invoices Total</CardTitle>
+            <CardTitle className="text-sm font-medium text-slate-300 uppercase tracking-wider">Open Invoices Total</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-slate-900">{formatCurrency(totalOutstanding)}</div>
-            <p className="text-sm text-slate-500 mt-1">{openInvoices.length} active invoices</p>
+            <div className="text-3xl font-bold text-white">{formatCurrency(totalOutstanding)}</div>
+            <p className="text-sm text-slate-400 mt-1">{openInvoices.length} active invoices</p>
           </CardContent>
         </Card>
         
-        <Card className="shadow-sm flex items-center justify-center p-6 bg-slate-50/50">
-          <Button size="lg" className="w-full h-16 text-lg shadow-md" onClick={() => setIsPaymentModalOpen(true)}>
+        <Card className="border-emerald-500/10 bg-emerald-500/5 flex items-center justify-center p-6">
+          <Button size="lg" className="w-full h-16 text-lg bg-emerald-600 hover:bg-emerald-700 text-white border-0 shadow-md" onClick={() => setIsPaymentModalOpen(true)}>
             <CreditCard className="mr-2 h-5 w-5" />
             Receive Corporate Payment
           </Button>
@@ -108,33 +108,33 @@ export function CityLedgerDetailClient({ account, openInvoices, recentEntries, t
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card className="shadow-sm">
+        <Card className="border-white/10 bg-slate-900/50">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg"><FileText className="h-5 w-5 text-slate-500" /> Open AR Invoices</CardTitle>
-            <CardDescription>Invoices generated from guest checkouts awaiting payment.</CardDescription>
+            <CardTitle className="flex items-center gap-2 text-lg text-slate-100"><FileText className="h-5 w-5 text-slate-400" /> Open AR Invoices</CardTitle>
+            <CardDescription className="text-slate-400">Invoices generated from guest checkouts awaiting payment.</CardDescription>
           </CardHeader>
           <CardContent>
             {openInvoices.length === 0 ? (
-              <div className="text-center py-10 border rounded-xl border-dashed">
+              <div className="text-center py-10 border border-white/5 rounded-xl border-dashed bg-white/5">
                 <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-500 mb-3" />
-                <p className="text-slate-500 font-medium">All invoices are settled.</p>
+                <p className="text-slate-400 font-medium">All invoices are settled.</p>
               </div>
             ) : (
               <div className="space-y-4">
                 {openInvoices.map((inv) => (
-                  <div key={inv.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border border-slate-200 bg-white shadow-sm gap-4">
+                  <div key={inv.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border border-white/10 bg-white/5 gap-4 hover:bg-white/10 transition-colors">
                     <div>
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="font-bold text-slate-900">{inv.invoiceNumber}</span>
-                        <Badge variant="outline" className="text-[10px] uppercase bg-amber-50 text-amber-700 border-amber-200">{inv.status}</Badge>
+                        <span className="font-bold text-slate-200">{inv.invoiceNumber}</span>
+                        <Badge variant="outline" className="text-[10px] uppercase border-amber-500/20 bg-amber-500/10 text-amber-400">{inv.status}</Badge>
                       </div>
-                      <p className="text-sm text-slate-500">{inv.description}</p>
-                      <p className="text-xs text-slate-400 mt-1">Issued: {format(new Date(inv.issueDate), 'MMM d, yyyy')} • Due: {format(new Date(inv.dueDate), 'MMM d, yyyy')}</p>
+                      <p className="text-sm text-slate-400">{inv.description}</p>
+                      <p className="text-xs text-slate-500 mt-1">Issued: {format(new Date(inv.issueDate), 'MMM d, yyyy')} • Due: {format(new Date(inv.dueDate), 'MMM d, yyyy')}</p>
                     </div>
                     <div className="text-right sm:text-left flex flex-row sm:flex-col justify-between sm:justify-center items-end sm:items-end w-full sm:w-auto">
                       <div className="flex flex-col items-end">
                         <span className="text-xs uppercase tracking-wider font-semibold text-slate-500 mb-1">Outstanding</span>
-                        <span className="text-lg font-bold text-slate-900">{formatCurrency(inv.outstandingAmount)}</span>
+                        <span className="text-lg font-bold text-slate-200">{formatCurrency(inv.outstandingAmount)}</span>
                       </div>
                     </div>
                   </div>
@@ -144,10 +144,10 @@ export function CityLedgerDetailClient({ account, openInvoices, recentEntries, t
           </CardContent>
         </Card>
 
-        <Card className="shadow-sm">
+        <Card className="border-white/10 bg-slate-900/50">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg"><Building2 className="h-5 w-5 text-slate-500" /> Recent Ledger Activity</CardTitle>
-            <CardDescription>Latest transfers and payments on this corporate account.</CardDescription>
+            <CardTitle className="flex items-center gap-2 text-lg text-slate-100"><Building2 className="h-5 w-5 text-slate-400" /> Recent Ledger Activity</CardTitle>
+            <CardDescription className="text-slate-400">Latest transfers and payments on this corporate account.</CardDescription>
           </CardHeader>
           <CardContent>
             {recentEntries.length === 0 ? (
@@ -155,16 +155,16 @@ export function CityLedgerDetailClient({ account, openInvoices, recentEntries, t
             ) : (
               <div className="space-y-3">
                 {recentEntries.map((entry) => (
-                  <div key={entry.id} className="flex justify-between items-center py-3 border-b last:border-0 border-slate-100">
+                  <div key={entry.id} className="flex justify-between items-center py-3 border-b border-white/5 last:border-0">
                     <div>
-                      <p className="font-medium text-slate-900 text-sm flex items-center gap-2">
+                      <p className="font-medium text-slate-200 text-sm flex items-center gap-2">
                         {entry.type === 'TRANSFER_IN' ? 'Invoice Transfer' : 'Corporate Payment'}
-                        {entry.type === 'PAYMENT' && <Badge variant="secondary" className="text-[10px] bg-emerald-100 text-emerald-800">PAID</Badge>}
+                        {entry.type === 'PAYMENT' && <Badge variant="secondary" className="text-[10px] border-emerald-500/20 bg-emerald-500/10 text-emerald-400">PAID</Badge>}
                       </p>
-                      <p className="text-xs text-slate-500 mt-0.5">{entry.reference || entry.reason}</p>
-                      <p className="text-[10px] text-slate-400 mt-0.5">{format(new Date(entry.createdAt), 'MMM d, h:mm a')}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">{entry.reference || entry.reason}</p>
+                      <p className="text-[10px] text-slate-500 mt-0.5">{format(new Date(entry.createdAt), 'MMM d, h:mm a')}</p>
                     </div>
-                    <div className={`font-bold tabular-nums ${entry.type === 'TRANSFER_IN' ? 'text-slate-900' : 'text-emerald-600'}`}>
+                    <div className={`font-bold tabular-nums ${entry.type === 'TRANSFER_IN' ? 'text-slate-200' : 'text-emerald-400'}`}>
                       {entry.type === 'TRANSFER_IN' ? '+' : '-'}{formatCurrency(entry.amount)}
                     </div>
                   </div>
@@ -176,17 +176,17 @@ export function CityLedgerDetailClient({ account, openInvoices, recentEntries, t
       </div>
 
       <Dialog open={isPaymentModalOpen} onOpenChange={setIsPaymentModalOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[425px] border-white/10 bg-slate-950 text-slate-100">
           <form onSubmit={handlePayment}>
             <DialogHeader>
-              <DialogTitle>Receive Corporate Payment</DialogTitle>
-              <DialogDescription>
+              <DialogTitle className="text-slate-100">Receive Corporate Payment</DialogTitle>
+              <DialogDescription className="text-slate-400">
                 Record a bulk payment from {account.CorporateAccount?.[0]?.name}. This will automatically be allocated to the oldest open invoices first. Excess funds will be kept on the account as unallocated credit.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
-                <Label htmlFor="amount">Payment Amount ({account.currency})</Label>
+                <Label htmlFor="amount" className="text-slate-300">Payment Amount ({account.currency})</Label>
                 <Input
                   id="amount"
                   type="number"
@@ -196,24 +196,26 @@ export function CityLedgerDetailClient({ account, openInvoices, recentEntries, t
                   value={paymentAmount}
                   onChange={(e) => setPaymentAmount(e.target.value)}
                   disabled={isSubmitting}
+                  className="bg-white/5 border-white/10 text-slate-100 placeholder:text-slate-500 focus-visible:ring-emerald-500"
                   required
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="reference">Payment Reference</Label>
+                <Label htmlFor="reference" className="text-slate-300">Payment Reference</Label>
                 <Input
                   id="reference"
                   placeholder="e.g. Bank Transfer TXN-123"
                   value={paymentReference}
                   onChange={(e) => setPaymentReference(e.target.value)}
                   disabled={isSubmitting}
+                  className="bg-white/5 border-white/10 text-slate-100 placeholder:text-slate-500 focus-visible:ring-emerald-500"
                   required
                 />
               </div>
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsPaymentModalOpen(false)} disabled={isSubmitting}>Cancel</Button>
-              <Button type="submit" disabled={isSubmitting}>
+              <Button type="button" variant="outline" className="border-white/10 bg-transparent text-slate-300 hover:bg-white/5 hover:text-white" onClick={() => setIsPaymentModalOpen(false)} disabled={isSubmitting}>Cancel</Button>
+              <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white border-0" disabled={isSubmitting}>
                 {isSubmitting ? 'Processing...' : 'Apply Payment'}
               </Button>
             </DialogFooter>
