@@ -14,7 +14,7 @@ export default async function CityLedgerDetailPage(props: { params: Promise<{ id
   const account = await prisma.cityLedgerAccount.findUnique({
     where: { id: params.id },
     include: {
-      corporateAccount: true,
+      CorporateAccount: true,
       invoices: {
         where: {
           status: { in: ['OPEN', 'PARTIALLY_PAID'] },

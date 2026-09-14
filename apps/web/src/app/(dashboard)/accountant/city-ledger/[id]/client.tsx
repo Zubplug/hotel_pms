@@ -73,7 +73,7 @@ export function CityLedgerDetailClient({ account, openInvoices, recentEntries, t
           </Button>
         </Link>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">{account.corporateAccount?.companyName || 'Corporate Account'}</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">{account.CorporateAccount?.[0]?.name || 'Corporate Account'}</h1>
           <p className="text-sm text-slate-500">City Ledger Account • {account.status}</p>
         </div>
       </div>
@@ -181,7 +181,7 @@ export function CityLedgerDetailClient({ account, openInvoices, recentEntries, t
             <DialogHeader>
               <DialogTitle>Receive Corporate Payment</DialogTitle>
               <DialogDescription>
-                Record a bulk payment from {account.corporateAccount?.companyName}. This will automatically be allocated to the oldest open invoices first. Excess funds will be kept on the account as unallocated credit.
+                Record a bulk payment from {account.CorporateAccount?.[0]?.name}. This will automatically be allocated to the oldest open invoices first. Excess funds will be kept on the account as unallocated credit.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
