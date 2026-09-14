@@ -54,12 +54,20 @@ export async function executeNightAudit(
 
   const propertyBusinessDate = property.businessDate ?? getPropertyBusinessDate(property.timezone, new Date());
   const failedAudit = await prisma.nightAudit.findFirst({
-    where: { propertyId, status: 'FAILED', businessDate: { lt: propertyBusinessDate } },
+    // A failed run normally remains on the current business date. The
+    // `lt` case is retained for properties that were already rolled forward
+    // by the pre-fix cutover flow and need to be recovered safely.
+    where: { propertyId, status: 'FAILED', businessDate: { lte: propertyBusinessDate } },
     orderBy: { businessDate: 'desc' }
   });
   const isRecovery = Boolean(failedAudit);
   const businessDate = failedAudit?.businessDate || propertyBusinessDate;
   const nextBusinessDate = getNextBusinessDate(businessDate);
+  const legacyRolloverDetected = Boolean(
+    failedAudit &&
+    businessDate.getTime() < propertyBusinessDate.getTime() &&
+    nextBusinessDate.getTime() === propertyBusinessDate.getTime()
+  );
   const cutoffAt = new Date();
   const runReference = `NA-${propertyId}-${businessDate.toISOString().split('T')[0]}`;
 
@@ -103,8 +111,18 @@ export async function executeNightAudit(
     await tx.$queryRaw`SELECT id FROM "Property" WHERE id = ${propertyId}::uuid FOR UPDATE`;
     const current = await tx.property.findUnique({ where: { id: propertyId } });
     if (!current) throw new Error('NOT_FOUND:Property not found');
-    if ((!isRecovery && current.businessDate?.getTime() !== businessDate.getTime()) ||
-        (isRecovery && current.businessDate?.getTime() !== nextBusinessDate.getTime())) {
+    // Older versions advanced the property date before posting. Restore that
+    // state before recovery so the failed date is again the active business
+    // date. New runs never advance the date in this opening transaction.
+    if (legacyRolloverDetected) {
+      await tx.property.update({
+        where: { id: propertyId },
+        data: { businessDate, auditStatus: 'FAILED' },
+      });
+      current.businessDate = businessDate;
+    }
+
+    if (current.businessDate?.getTime() !== businessDate.getTime()) {
       throw new Error('CONFLICT:Business date changed before Night Audit started.');
     }
 
@@ -148,15 +166,9 @@ export async function executeNightAudit(
     });
 
     await tx.nightAudit.update({ where: { id: run.id }, data: { status: 'POSTING' } });
-    if (!isRecovery) {
-      const rollover = await tx.property.updateMany({
-        where: { id: propertyId, businessDate },
-        data: { businessDate: nextBusinessDate, auditStatus: 'POSTING' }
-      });
-      if (rollover.count !== 1) throw new Error('CONFLICT:Business date changed while Night Audit was starting.');
-    } else {
-      await tx.property.update({ where: { id: propertyId }, data: { auditStatus: 'POSTING' } });
-    }
+    // Keep the current business date unchanged while posting. It is advanced
+    // only in the final atomic completion transaction below.
+    await tx.property.update({ where: { id: propertyId }, data: { auditStatus: 'POSTING' } });
 
     // Activate rooms for reservations starting on the new business date
     const nextBusinessDateStr = nextBusinessDate.toISOString().split('T')[0];
@@ -797,6 +809,10 @@ export async function executeNightAudit(
     prisma.property.update({
       where: { id: propertyId },
       data: {
+        // The business date is part of the success commit. A failed posting,
+        // journal, snapshot, or close-package write therefore leaves the
+        // property on the date that still needs to be audited.
+        businessDate: nextBusinessDate,
         lastAuditAt: new Date(),
         auditStatus: errors > 0 ? 'COMPLETED_WITH_EXCEPTIONS' : 'COMPLETED'
       }

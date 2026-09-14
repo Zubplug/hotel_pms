@@ -20,6 +20,7 @@ import { CloseControl } from '@/components/night-audit/dashboard/close-control';
 import { AuditWizard } from '@/components/night-audit/audit-wizard';
 import { ResolutionManager, ResolutionAction } from '@/components/night-audit/resolution-manager';
 import { AuditSuccessModal } from '@/components/night-audit/audit-success-modal';
+import { AuditFailureModal } from '@/components/night-audit/audit-failure-modal';
 
 export default function NightAuditDashboard({ managerMode = false }: { managerMode?: boolean }) {
   const { propertyId, isLoading: propertyLoading } = useProperty();
@@ -33,6 +34,7 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [successResult, setSuccessResult] = useState<any>(null);
+  const [failureMessage, setFailureMessage] = useState<string | null>(null);
 
   const [resolutionAction, setResolutionAction] = useState<ResolutionAction>(null);
 
@@ -73,6 +75,7 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
       await load(true);
     } catch (err: any) {
       setError(err.message);
+      setFailureMessage(err.message || 'The Night Audit could not be completed.');
     } finally {
       setExecuting(false);
     }
@@ -252,6 +255,13 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
         onOpenChange={(open) => !open && setSuccessResult(null)} 
         result={successResult}
         businessDate={data.businessDate}
+      />
+
+      <AuditFailureModal
+        open={!!failureMessage}
+        onOpenChange={(open) => !open && setFailureMessage(null)}
+        message={failureMessage || ''}
+        onRetry={execute}
       />
     </div>
   );
