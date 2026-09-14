@@ -26,7 +26,7 @@ export default function NewPurchaseOrderPage() {
       fetch('/api/v1/inventory/stock-items').then(r => r.json())
     ]).then(([supRes, stockRes]) => {
       setSuppliers(supRes.data || []);
-      setStockItems(stockRes.data || []);
+      setStockItems(stockRes.data?.items || []);
     });
   }, []);
 
