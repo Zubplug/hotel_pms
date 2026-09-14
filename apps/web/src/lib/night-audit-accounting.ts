@@ -83,7 +83,7 @@ export async function postNightAuditJournal(tx: any, input: {
   if (missingAccounts.length) return { status: 'MISSING_MAPPING', journalEntryId: null, missingAccounts, lineCount: 0 };
   const account = (key: keyof typeof resolved) => resolved[key]!;
 
-  const [folioItems, payments, refunds, posOrders, period, fnbDepartment] = await Promise.all([
+  const [folioItems, payments, refunds, posOrders, period, fnbDepartment, recreationDepartment, posOutlets] = await Promise.all([
     tx.folioItem.findMany({
       where: { folio: { propertyId: input.propertyId }, businessDate: input.businessDate, voidedAt: null, type: { in: ['CHARGE', 'TAX', 'DISCOUNT', 'ADJUSTMENT'] } },
       select: { id: true, type: true, amount: true, source: true, revenueCategory: true, description: true },
