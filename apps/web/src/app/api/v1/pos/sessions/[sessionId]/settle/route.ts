@@ -34,7 +34,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       where: {
         sessionId,
         paymentStatus: { not: 'PAID' },
-        status: { notIn: ['VOIDED', 'CLOSED'] },
+        status: { notIn: ['VOIDED', 'CANCELLED', 'CLOSED'] },
       },
       select: { id: true, orderNumber: true, tableNumber: true, total: true, status: true },
     });
