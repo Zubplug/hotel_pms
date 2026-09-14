@@ -212,13 +212,20 @@ export async function GET(req: NextRequest) {
     if (financial.pendingCheckInBypasses?.length > 0) blockers++;
     
     // Cash blockers/warnings
-    if (cash.cashHandovers.length > 0) blockers++;
+    // Cash handovers are informational for the auditor and must not prevent close.
+    if (cash.cashHandovers.length > 0) warnings++;
     if (cash.unverifiedTransactions.length > 0) blockers++;
     if (cash.bankDeposits.length > 0) warnings++;
 
     // F&B blockers/warnings
-    if (fnb.exceptions.openOrders.length > 0) blockers++;
-    if (fnb.exceptions.openSessions.length > 0) blockers++;
+    // F&B checks overlap with the system POS checks for the same records.
+    // Count only records not already represented there, avoiding duplicate blockers.
+    const systemOrderIds = new Set((system.openPosOrders || []).map((order: any) => order.id));
+    const systemSessionIds = new Set((system.openPosSessions || []).map((session: any) => session.id));
+    const additionalFnbOpenOrders = fnb.exceptions.openOrders.filter((order: any) => !systemOrderIds.has(order.id));
+    const additionalFnbOpenSessions = fnb.exceptions.openSessions.filter((session: any) => !systemSessionIds.has(session.id));
+    if (additionalFnbOpenOrders.length > 0) blockers++;
+    if (additionalFnbOpenSessions.length > 0) blockers++;
     if (fnb.exceptions.unreviewedVoids.length > 0) warnings++;
     if (fnb.exceptions.cashVarianceSessions.length > 0) warnings++;
 

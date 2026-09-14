@@ -68,7 +68,7 @@ export function AttentionQueue({ data, onResolveItem }: { data: NightAuditData; 
       items.push({ id: getStableQueueId('bypass', item), label: 'Check-In Bypass', description: `Reservation: ${String((item.reservation as Record<string, unknown> | undefined)?.confirmationNumber ?? '')}`, type: 'blocker', actionType: 'CHECKIN_BYPASS', payload: { ...item, propertyId: data.property.id } as Record<string, unknown> });
     });
     (data.cash.cashHandovers || []).forEach((item: Record<string, unknown>) => {
-      items.push({ id: getStableQueueId('handover', item), label: 'Pending Cash Handover', description: `${String((item.drawerName as string | undefined) ?? 'Drawer')} · General Cashier action`, type: 'blocker', actionType: 'CASH_HANDOVER_NOTICE', payload: { ...item, propertyId: data.property.id } as Record<string, unknown> });
+      items.push({ id: getStableQueueId('handover', item), label: 'Pending Cash Handover', description: `${String((item.drawerName as string | undefined) ?? 'Drawer')} · General Cashier action`, type: 'warning', actionType: 'CASH_HANDOVER_NOTICE', payload: { ...item, propertyId: data.property.id } as Record<string, unknown> });
     });
     (data.cash.unverifiedTransactions || []).forEach((item: Record<string, unknown>) => {
       items.push({ id: getStableQueueId('trans', item), label: 'Unverified Transaction', description: `${String((item.method as string | undefined) === 'BANK_TRANSFER' ? 'Transfer' : 'POS')} — ${String(item.amount ?? '')}`, type: 'blocker', actionType: 'TRANSACTION_VERIFICATION', payload: { unverifiedTransactions: [item], propertyId: data.property.id } as Record<string, unknown> });

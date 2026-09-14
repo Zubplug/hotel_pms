@@ -66,6 +66,18 @@ export interface CashData {
   pendingCashDrops?: any[];
 }
 
+export interface FnbData {
+  metrics: Record<string, any>;
+  exceptions: {
+    openOrders: any[];
+    openSessions: any[];
+    unreviewedVoids: any[];
+    cashVarianceSessions: any[];
+  };
+  outlets: any[];
+  sessions: any[];
+}
+
 export interface SummaryData {
   blockers: number;
   warnings: number;
@@ -87,6 +99,7 @@ export interface NightAuditData {
   system: SystemData;
   financial: FinancialData;
   cash: CashData;
+  fnb?: FnbData;
   summary: SummaryData;
   activityFeed?: any[];
   financialSnapshot?: any;

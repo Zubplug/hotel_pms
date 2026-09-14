@@ -11,11 +11,17 @@ const GLASS = { background: 'rgba(255,255,255,0.025)' };
 
 export function SystemControlReview({ data, onResolve }: SystemControlReviewProps) {
   const { openPosSessions, openFrontdeskSessions, financialSyncConflicts, openPosOrders } = data.system;
+  const systemOrderIds = new Set((openPosOrders || []).map((order: any) => order.id));
+  const systemSessionIds = new Set((openPosSessions || []).map((session: any) => session.id));
+  const fnbOpenOrders = (data.fnb?.exceptions?.openOrders || []).filter((order: any) => !systemOrderIds.has(order.id));
+  const fnbOpenSessions = (data.fnb?.exceptions?.openSessions || []).filter((session: any) => !systemSessionIds.has(session.id));
   const hasIssues =
     (openPosSessions?.length || 0) > 0 ||
     (openFrontdeskSessions?.length || 0) > 0 ||
     (financialSyncConflicts?.length || 0) > 0 ||
-    (openPosOrders?.length || 0) > 0;
+    (openPosOrders?.length || 0) > 0 ||
+    fnbOpenOrders.length > 0 ||
+    fnbOpenSessions.length > 0;
 
   if (!hasIssues) {
     return (
@@ -87,6 +93,50 @@ export function SystemControlReview({ data, onResolve }: SystemControlReviewProp
                     {order.paymentStatus}
                   </span>
                 </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── F&B Open Orders ────────────────────────────────────────────── */}
+      {fnbOpenOrders.length > 0 && (
+        <div className="pt-2">
+          <div className="mb-3">
+            <h4 className="text-sm font-bold text-rose-300">F&amp;B Open Orders (Blocker)</h4>
+            <p className="mt-0.5 text-xs text-rose-400/70">Food and beverage orders must be settled or voided by the responsible waiter before close.</p>
+          </div>
+          <div className="space-y-2">
+            {fnbOpenOrders.map((order: any) => (
+              <div key={order.id} className="flex flex-col justify-between gap-3 rounded-xl border border-rose-400/20 bg-rose-400/[0.04] p-4 text-sm sm:flex-row sm:items-center">
+                <div>
+                  <p className="font-bold text-rose-200">Order #{order.orderNumber || order.id}</p>
+                  <p className="mt-0.5 text-xs text-rose-300/80">
+                    {order.outlet?.name || 'F&amp;B outlet'} · Waiter: {order.serverStaff ? `${order.serverStaff.firstName} ${order.serverStaff.lastName}` : 'Assigned waiter'}
+                  </p>
+                </div>
+                <span className="rounded-md border border-rose-400/30 bg-rose-400/10 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-rose-300">Waiter action</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── F&B Open Sessions ──────────────────────────────────────────── */}
+      {fnbOpenSessions.length > 0 && (
+        <div className="pt-2">
+          <div className="mb-3">
+            <h4 className="text-sm font-bold text-rose-300">F&amp;B Open Sessions (Blocker)</h4>
+            <p className="mt-0.5 text-xs text-rose-400/70">F&amp;B cashier sessions must be closed and reconciled before the business day can end.</p>
+          </div>
+          <div className="space-y-2">
+            {fnbOpenSessions.map((session: any) => (
+              <div key={session.id} className="flex flex-col justify-between gap-3 rounded-xl border border-rose-400/20 bg-rose-400/[0.04] p-4 text-sm sm:flex-row sm:items-center">
+                <div>
+                  <p className="font-bold text-rose-200">{session.outlet?.name || session.outlet || 'F&amp;B outlet'}</p>
+                  <p className="mt-0.5 text-xs text-rose-300/80">Opened by {session.primaryOperator ? `${session.primaryOperator.firstName} ${session.primaryOperator.lastName}` : 'Assigned cashier'}</p>
+                </div>
+                <span className="rounded-md border border-rose-400/30 bg-rose-400/10 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-rose-300">Cashier action</span>
               </div>
             ))}
           </div>

@@ -568,7 +568,9 @@ export async function getFnbControl(ctx: TenantContext, propertyId: string) {
     include: { outlet: { select: { name: true } }, primaryOperator: { select: { firstName: true, lastName: true } }, device: { select: { name: true } } }
   });
 
-  const openSessions = rawSessions.filter(s => s.status === 'OPEN' || s.status === 'RECONCILIATION_REQUIRED');
+  // RECONCILIATION_REQUIRED sessions have already been submitted by the cashier
+  // and are handled through cashier reconciliation, not by the auditor.
+  const openSessions = rawSessions.filter(s => s.status === 'OPEN');
   
   const voids = await prisma.posVoid.findMany({
     where: { businessDate, order: { propertyId } },

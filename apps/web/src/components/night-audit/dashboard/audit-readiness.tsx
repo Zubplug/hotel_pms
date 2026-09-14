@@ -42,7 +42,7 @@ export function AuditReadiness({ data }: { data: NightAuditData }) {
       description: 'Unverified transactions, deposits and handovers.',
       icon: Banknote,
       count: cashCount,
-      hasBlocker: (data.cash.cashHandovers?.length || 0) > 0 || (data.cash.unverifiedTransactions?.length || 0) > 0,
+      hasBlocker: (data.cash.unverifiedTransactions?.length || 0) > 0,
       color: cashCount > 0 ? '#f43f5e' : '#10b981',
     },
   ];

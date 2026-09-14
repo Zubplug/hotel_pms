@@ -16,13 +16,13 @@ const formatMoney = (amount: number, currency: string = 'NGN') => {
 };
 
 export function FinancialReview({ data, onResolve }: FinancialReviewProps) {
-  const { pendingNightAuditPostings = [], unverifiedComplimentary, pendingDiscounts } = data.financial;
+  const { pendingNightAuditPostings = [], unverifiedComplimentary, pendingDiscounts, pendingCheckInBypasses } = data.financial;
   const propertyId = data.property.id;
   const currency = data.property.baseCurrency || 'NGN';
 
   const unverifiedCompl = unverifiedComplimentary?.filter((c: any) => c.status === 'PENDING_NIGHT_AUDIT') || [];
 
-  const hasIssues = (pendingNightAuditPostings?.length || 0) > 0 || unverifiedCompl.length > 0 || (pendingDiscounts?.length || 0) > 0;
+  const hasIssues = (pendingNightAuditPostings?.length || 0) > 0 || unverifiedCompl.length > 0 || (pendingDiscounts?.length || 0) > 0 || (pendingCheckInBypasses?.length || 0) > 0;
 
   if (!hasIssues) {
     return (
@@ -91,6 +91,42 @@ export function FinancialReview({ data, onResolve }: FinancialReviewProps) {
               Verify all
               <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Check-In Bypass Reviews ─────────────────────────────────────── */}
+      {pendingCheckInBypasses?.length > 0 && (
+        <div className="pt-2">
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <h4 className="text-sm font-bold text-rose-300">Check-In Bypasses (Blocker)</h4>
+              <p className="mt-0.5 text-xs text-rose-400/70">Guests checked in without the required deposit must be reviewed before closing the day.</p>
+            </div>
+            <span className="rounded-full border border-rose-400/20 bg-rose-400/10 px-3 py-1 text-xs font-bold text-rose-300">
+              {pendingCheckInBypasses.length} pending
+            </span>
+          </div>
+          <div className="space-y-2">
+            {pendingCheckInBypasses.map((bypass: any) => (
+              <div key={bypass.id} className="flex flex-col justify-between gap-3 rounded-xl border border-rose-400/15 bg-rose-400/[0.03] p-4 text-sm transition-all hover:border-rose-400/25 sm:flex-row sm:items-center">
+                <div>
+                  <p className="font-bold text-rose-200">
+                    {bypass.reservation?.primaryGuest?.firstName} {bypass.reservation?.primaryGuest?.lastName}
+                  </p>
+                  <p className="mt-0.5 text-xs text-rose-300/80">
+                    Confirmation: <span className="font-medium text-rose-200">{bypass.reservation?.confirmationNumber || 'Unavailable'}</span>
+                    {bypass.reason ? ` · ${bypass.reason}` : ''}
+                  </p>
+                </div>
+                <button
+                  onClick={() => onResolve('CHECKIN_BYPASS', { ...bypass, propertyId })}
+                  className="w-full shrink-0 rounded-xl border border-rose-400/30 bg-rose-400/10 px-4 py-2 text-xs font-bold text-rose-300 transition-all hover:bg-rose-400/20 sm:w-auto"
+                >
+                  Review
+                </button>
+              </div>
+            ))}
           </div>
         </div>
       )}

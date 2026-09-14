@@ -16,14 +16,14 @@ const formatMoney = (amount: number, currency: string = 'NGN') => {
 };
 
 export function CashControlReview({ data, onResolve }: CashControlReviewProps) {
-  const { unverifiedTransactions, pendingCashDrops = [] } = data.cash;
+  const { cashHandovers, unverifiedTransactions, pendingCashDrops = [] } = data.cash;
   const propertyId = data.property.id;
   const currency = data.property.baseCurrency || 'NGN';
 
   // Only consider transactions that actually need verification
   const pendingTransactions = unverifiedTransactions?.filter((t: any) => t.verificationStatus === 'UNVERIFIED') || [];
   
-  const hasIssues = pendingTransactions.length > 0 || (pendingCashDrops?.length || 0) > 0;
+  const hasIssues = (cashHandovers?.length || 0) > 0 || pendingTransactions.length > 0 || (pendingCashDrops?.length || 0) > 0;
 
   if (!hasIssues) {
     return (
@@ -38,6 +38,32 @@ export function CashControlReview({ data, onResolve }: CashControlReviewProps) {
 
   return (
     <div className="space-y-6">
+
+      {/* ── Pending Cash Handovers ──────────────────────────────────────── */}
+      {cashHandovers?.length > 0 && (
+        <div>
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <h4 className="text-sm font-bold text-amber-300">Pending Cash Handovers (Notice)</h4>
+              <p className="mt-0.5 text-xs text-amber-400/70">Cash handovers should be accepted by the General Cashier; they do not prevent the auditor from closing the day.</p>
+            </div>
+              <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-xs font-bold text-amber-300">
+              {cashHandovers.length} pending
+            </span>
+          </div>
+          <div className="space-y-2">
+            {cashHandovers.map((handover: any) => (
+              <div key={handover.id} className="flex flex-col justify-between gap-3 rounded-xl border border-amber-400/15 bg-amber-400/[0.03] p-4 text-sm sm:flex-row sm:items-center">
+                <div>
+                  <p className="font-bold text-amber-200">{handover.drawerName || handover.location || 'Cash drawer'}</p>
+                  <p className="mt-0.5 text-xs text-amber-300/80">Handed over by {handover.handedOverBy ? `${handover.handedOverBy.firstName} ${handover.handedOverBy.lastName}` : 'Assigned cashier'}</p>
+                </div>
+                <span className="rounded-md border border-amber-400/30 bg-amber-400/10 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-amber-300">General Cashier action</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── Transaction Verifications ───────────────────────────────────── */}
       {pendingTransactions.length > 0 && (

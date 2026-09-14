@@ -37,6 +37,21 @@ export function AuditWizard({ open, onOpenChange, data, onExecute, executing, on
 
   const businessDate = data.businessDate ? new Date(data.businessDate) : new Date();
   const blockers = data.summary?.blockers || 0;
+  const systemOrderIds = new Set((data.system.openPosOrders || []).map((order: any) => order.id));
+  const systemSessionIds = new Set((data.system.openPosSessions || []).map((session: any) => session.id));
+  const additionalFnbOpenOrders = (data.fnb?.exceptions?.openOrders || []).filter((order: any) => !systemOrderIds.has(order.id));
+  const additionalFnbOpenSessions = (data.fnb?.exceptions?.openSessions || []).filter((session: any) => !systemSessionIds.has(session.id));
+  const blockerLabels = [
+    data.system.openPosSessions?.length ? `Open POS sessions (${data.system.openPosSessions.length})` : null,
+    data.system.openFrontdeskSessions?.length ? `Open Front Desk shifts (${data.system.openFrontdeskSessions.length})` : null,
+    data.system.financialSyncConflicts?.length ? `Financial sync conflicts (${data.system.financialSyncConflicts.length})` : null,
+    data.system.openPosOrders?.length ? `Open POS orders (${data.system.openPosOrders.length})` : null,
+    data.financial.unverifiedComplimentary?.length ? `Unverified complimentary records (${data.financial.unverifiedComplimentary.length})` : null,
+    data.financial.pendingCheckInBypasses?.length ? `Pending check-in bypasses (${data.financial.pendingCheckInBypasses.length})` : null,
+    data.cash.unverifiedTransactions?.length ? `Unverified transactions (${data.cash.unverifiedTransactions.length})` : null,
+    additionalFnbOpenOrders.length ? `Additional F&B open orders (${additionalFnbOpenOrders.length})` : null,
+    additionalFnbOpenSessions.length ? `Additional F&B open sessions (${additionalFnbOpenSessions.length})` : null,
+  ].filter(Boolean) as string[];
   const isLastStep = step === STEPS.length - 1;
   const progress = ((step + 1) / STEPS.length) * 100;
 
@@ -78,6 +93,11 @@ export function AuditWizard({ open, onOpenChange, data, onExecute, executing, on
                 <p className="mt-1 text-sm text-rose-300/80">
                   There are <strong>{blockers}</strong> unresolved blocking controls. Resolve them in the previous steps before continuing.
                 </p>
+                {blockerLabels.length > 0 && (
+                  <ul className="mt-3 space-y-1 text-xs text-rose-200/80">
+                    {blockerLabels.map((label) => <li key={label}>• {label}</li>)}
+                  </ul>
+                )}
               </div>
             </div>
           ) : (
