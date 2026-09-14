@@ -570,7 +570,10 @@ export async function executeNightAudit(
         },
       }),
       prisma.folioItem.findMany({
-        where: { folio: { propertyId }, businessDate, type: 'CHARGE', source: 'POS', voidedAt: null },
+        // POS folio items are identified by their POS transaction link. Avoid
+        // filtering on the source enum here because older generated Prisma
+        // clients may not contain the current POS enum value.
+        where: { folio: { propertyId }, businessDate, type: 'CHARGE', posTransactionId: { not: null }, voidedAt: null },
         select: { posTransactionId: true },
       })
     ]);
