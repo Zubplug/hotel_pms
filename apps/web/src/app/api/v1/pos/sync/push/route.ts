@@ -774,8 +774,16 @@ export async function POST(req: NextRequest) {
                   }
                   const remainingItems = await tx.posOrderItem.findMany({ where: { orderId }, select: { total: true, voidReason: true } });
                   const orderTotal = remainingItems.reduce((sum: number, candidate: any) => sum + Number(candidate.total || 0), 0);
-                  await tx.posOrder.update({ where: { id: orderId }, data: { subtotal: orderTotal, total: orderTotal, updatedAt: new Date() } });
                   const allItemsVoided = remainingItems.length > 0 && remainingItems.every((candidate: any) => candidate.voidReason || Number(candidate.total || 0) === 0);
+                  await tx.posOrder.update({
+                      where: { id: orderId },
+                      data: {
+                          subtotal: orderTotal,
+                          total: orderTotal,
+                          ...(allItemsVoided ? { status: 'VOIDED' } : {}),
+                          updatedAt: new Date(),
+                      },
+                  });
                   if (allItemsVoided) {
                       await InventoryService.restoreSale(orderId, operatorId || 'SYSTEM', `pos_void_restore_${operationId}`, tx);
                   }

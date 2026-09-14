@@ -15,9 +15,9 @@ const pct = (value: number) =>
 
 function StatCard({ label, value, detail, accent }: { label: string; value: string; detail: string; accent: string }) {
   return (
-    <div className={`stat-card flex flex-col gap-3 rounded-[20px] border p-5 ${accent} print:border-slate-300 print:bg-white print:text-black print:rounded-lg print:p-3`}>
-      <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-500 print:text-slate-700">{label}</p>
-      <p className="text-xl font-bold tabular-nums print:text-black print:text-lg">{value}</p>
+    <div className={`stat-card flex flex-col gap-3 rounded-[20px] border p-5 ${accent} print:border-slate-200 print:bg-white print:text-black print:rounded-2xl`}>
+      <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-500 print:text-slate-500">{label}</p>
+      <p className="text-xl font-bold tabular-nums print:text-black print:text-xl">{value}</p>
       <p className="text-[11px] text-slate-600 print:text-slate-600">{detail}</p>
     </div>
   );
@@ -27,10 +27,10 @@ function VarianceBadge({ variance }: { variance: number | null }) {
   if (variance === null) return <span className="text-slate-500">—</span>;
   const ok = Math.abs(variance) < 0.01;
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold tabular-nums print:border-none print:p-0 ${
-      ok ? 'border-emerald-200 bg-emerald-50 text-emerald-700 print:text-black' : 'border-rose-200 bg-rose-50 text-rose-700 print:text-black'
+    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold tabular-nums ${
+      ok ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'
     }`}>
-      {ok ? <CheckCircle2 className="h-2.5 w-2.5 print:hidden" /> : <AlertTriangle className="h-2.5 w-2.5 print:hidden" />}
+      {ok ? <CheckCircle2 className="h-2.5 w-2.5" /> : <AlertTriangle className="h-2.5 w-2.5" />}
       {money(variance)}
     </span>
   );
@@ -118,44 +118,27 @@ export default function FnbReportsPage() {
     <>
       <style dangerouslySetInnerHTML={{__html: `
         @media print {
-          @page { size: portrait; margin: 10mm 15mm; }
-          body, html, * { background: white !important; color: black !important; -webkit-print-color-adjust: exact; }
+          @page { size: landscape; margin: 10mm; }
+          body, html, * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
           .no-print { display: none !important; }
           
-          /* Print Visibility Triggers */
+          /* Keep exact UI look, just hide unselected sections */
           .print-dss .print-only-inventory { display: none !important; }
           .print-inventory .print-only-dss { display: none !important; }
           
-          /* Typography & Layout */
-          body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; }
-          .report-header { display: block !important; padding-bottom: 12px; margin-bottom: 24px; border-bottom: 2px solid #000; }
-          .report-header h1 { font-size: 20px; font-weight: bold; margin: 0 0 4px 0; text-transform: uppercase; letter-spacing: 1px; }
-          .report-header p { font-size: 11px; color: #555 !important; margin: 0; font-family: monospace; }
+          .report-header { display: block !important; padding-bottom: 12px; margin-bottom: 24px; border-bottom: 2px solid #e2e8f0; }
+          .report-header h1 { font-size: 20px; font-weight: bold; margin: 0 0 4px 0; color: #0f172a; }
+          .report-header p { font-size: 11px; color: #64748b; margin: 0; }
           
-          /* Grids & Borders */
-          .print-grid { display: grid; gap: 16px; }
-          .print-col-dss { grid-template-columns: 1fr 1fr; }
-          .print-section { border: none !important; box-shadow: none !important; page-break-inside: avoid; margin-bottom: 24px; }
-          .print-section-header { font-size: 13px !important; font-weight: bold !important; border-bottom: 1px solid #ccc !important; padding: 0 0 4px 0 !important; margin-bottom: 12px !important; text-transform: uppercase; }
-          
-          /* Tables */
-          table { width: 100%; border-collapse: collapse; font-size: 10px; }
-          th { border-bottom: 1px solid #000; padding: 6px 4px; color: #000 !important; text-transform: uppercase; font-weight: bold; }
-          td { border-bottom: 1px solid #eee; padding: 6px 4px; color: #333 !important; }
-          .total-row td { border-top: 1px solid #000 !important; border-bottom: 2px double #000 !important; font-weight: bold; font-size: 11px; }
-          .sub-total-row td { font-weight: bold; border-top: 1px solid #000 !important; }
-          
-          /* Icons & Badges */
-          .print-icon { display: none !important; }
-          .variance-text { font-family: monospace; font-weight: bold; }
+          .print-section { page-break-inside: avoid; }
         }
       `}} />
-      <div className={`min-h-full bg-slate-50/50 px-4 pb-16 pt-6 sm:px-6 sm:pt-8 md:px-8 print:bg-white print:p-0 print:m-0 ${printMode === 'dss' ? 'print-dss' : ''} ${printMode === 'inventory' ? 'print-inventory' : ''}`}>
-        <div className="mx-auto max-w-[1540px] space-y-6 print:space-y-0">
+      <div className={`min-h-full bg-slate-50/50 px-4 pb-16 pt-6 sm:px-6 sm:pt-8 md:px-8 print:bg-slate-50/50 print:p-0 print:m-0 ${printMode === 'dss' ? 'print-dss' : ''} ${printMode === 'inventory' ? 'print-inventory' : ''}`}>
+        <div className="mx-auto max-w-[1540px] space-y-6 print:space-y-6">
 
           {/* ── Professional Print Header ── */}
           <div className="report-header hidden">
-            <h1>{printMode === 'inventory' ? 'F&B Stock Reconciliation Report' : 'F&B Daily Sales Summary (DSS)'}</h1>
+            <h1>{printMode === 'inventory' ? 'F&B Stock Reconciliation Ledger' : 'F&B Daily Sales Summary (DSS)'}</h1>
             <div className="flex justify-between">
               <p>Property: {propertyName}</p>
               <p>Date Range: {displayDate}</p>
@@ -276,23 +259,23 @@ export default function FnbReportsPage() {
               </section>
 
               {/* ── Stat cards ── */}
-              <section className="print-only-dss grid gap-3 sm:grid-cols-2 xl:grid-cols-5 print:grid-cols-5 print:gap-4 print:mb-6">
+              <section className="print-only-dss print-section grid gap-3 sm:grid-cols-2 xl:grid-cols-5 print:grid-cols-5">
                 <StatCard label="Total Covers" value={String(data.statistics.totalCovers)} detail={`Across ${data.statistics.totalChecks} checks`} accent="bg-white text-slate-900 border-slate-200 shadow-sm" />
                 <StatCard label="Average Check" value={money(data.statistics.averageCheck)} detail="Per Table / Order" accent="bg-white text-slate-900 border-slate-200 shadow-sm" />
                 <StatCard label="Spend per Cover" value={money(data.statistics.spendPerCover)} detail="Per Guest" accent="bg-white text-slate-900 border-slate-200 shadow-sm" />
-                <StatCard label="Net F&B Revenue" value={money(data.summary.netRevenue)} detail="Excl. Taxes & Voids" accent="bg-indigo-50/50 text-indigo-950 border-indigo-100 shadow-sm" />
-                <StatCard label="Gross Margin" value={pct(data.profitability.grossMarginPct)} detail={`Actual COGS: ${money(data.profitability.actualCogs)}`} accent="bg-emerald-50/50 text-emerald-950 border-emerald-100 shadow-sm" />
+                <StatCard label="Net F&B Revenue" value={money(data.summary.netRevenue)} detail="Excl. Taxes & Voids" accent="bg-indigo-50/50 text-indigo-950 border-indigo-100 shadow-sm print:bg-indigo-50" />
+                <StatCard label="Gross Margin" value={pct(data.profitability.grossMarginPct)} detail={`Actual COGS: ${money(data.profitability.actualCogs)}`} accent="bg-emerald-50/50 text-emerald-950 border-emerald-100 shadow-sm print:bg-emerald-50" />
               </section>
 
               {/* ── Main grid (DSS) ── */}
-              <section className="print-only-dss grid gap-5 xl:grid-cols-[1.4fr_0.6fr] print:print-grid print:print-col-dss">
+              <section className="print-only-dss print-section grid gap-5 xl:grid-cols-[1.4fr_0.6fr] print:grid-cols-[1.4fr_0.6fr]">
                 
                 {/* Source vs Snapshot equivalent (DSS) */}
-                <div className="print-section overflow-hidden rounded-[20px] border bg-white shadow-sm">
-                  <div className="flex items-center justify-between border-b px-5 py-4 print:p-0 print:border-none">
+                <div className="overflow-hidden rounded-[20px] border bg-white shadow-sm print:border-slate-200 print:shadow-none">
+                  <div className="flex items-center justify-between border-b px-5 py-4 print:border-slate-200">
                     <div>
-                      <h3 className="print-section-header flex items-center gap-2 text-sm font-bold text-slate-900">
-                        <ClipboardCheck className="print-icon h-4 w-4 text-indigo-500" />
+                      <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                        <ClipboardCheck className="h-4 w-4 text-indigo-500" />
                         Daily Sales Summary
                       </h3>
                       <p className="no-print mt-0.5 text-[11px] text-slate-500">Gross sales, allowances, and collected taxes.</p>
@@ -300,22 +283,14 @@ export default function FnbReportsPage() {
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full">
-                      <thead className="no-print">
-                        <tr className="border-b bg-slate-50/50">
+                      <thead>
+                        <tr className="border-b bg-slate-50/50 print:bg-slate-50 print:border-slate-200">
                           {['Category', 'Gross Sales', 'Allowances', 'Net Revenue'].map((h, i) => (
                             <th key={h} className={`px-5 py-3 text-[9px] font-bold uppercase tracking-[0.16em] text-slate-500 ${i > 0 ? 'text-right' : 'text-left'}`}>{h}</th>
                           ))}
                         </tr>
                       </thead>
-                      <thead className="hidden print:table-header-group">
-                        <tr>
-                          <th className="text-left">Category</th>
-                          <th className="text-right">Gross Sales</th>
-                          <th className="text-right">Allowances</th>
-                          <th className="text-right">Net Revenue</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 print:divide-none">
+                      <tbody className="divide-y divide-slate-100 print:divide-slate-100">
                         {[
                           ['Food', data.summary.foodGross, data.summary.foodDiscounts, data.summary.foodGross - data.summary.foodDiscounts],
                           ['Beverage', data.summary.bevGross, data.summary.bevDiscounts, data.summary.bevGross - data.summary.bevDiscounts],
@@ -328,11 +303,11 @@ export default function FnbReportsPage() {
                             <td className="px-5 py-3.5 text-right text-sm font-bold tabular-nums text-slate-900">{money(Number(net))}</td>
                           </tr>
                         ))}
-                        <tr className="sub-total-row bg-slate-50/50 border-t-2 border-slate-100">
+                        <tr className="bg-slate-50/50 border-t-2 border-slate-100 print:bg-slate-50 print:border-slate-200">
                           <td className="px-5 py-4 text-sm font-bold text-slate-900">Net F&B Revenue</td>
                           <td className="px-5 py-4 text-right text-sm font-bold tabular-nums text-slate-900">{money(data.summary.grossRevenue)}</td>
                           <td className="px-5 py-4 text-right text-sm font-bold tabular-nums text-rose-600">{money(data.summary.totalDiscounts)}</td>
-                          <td className="px-5 py-4 text-right text-lg font-bold tabular-nums text-indigo-700 print:text-black">{money(data.summary.netRevenue)}</td>
+                          <td className="px-5 py-4 text-right text-lg font-bold tabular-nums text-indigo-700">{money(data.summary.netRevenue)}</td>
                         </tr>
                         <tr>
                           <td colSpan={3} className="px-5 py-2 text-right text-[11px] font-bold uppercase tracking-wider text-slate-500">Taxes Collected</td>
@@ -342,9 +317,9 @@ export default function FnbReportsPage() {
                           <td colSpan={3} className="px-5 py-2 text-right text-[11px] font-bold uppercase tracking-wider text-slate-500">Service Charge</td>
                           <td className="px-5 py-2 text-right text-sm tabular-nums text-slate-600">{money(data.summary.totalServiceCharge)}</td>
                         </tr>
-                        <tr className="total-row bg-indigo-50/50 border-t-2 border-indigo-100">
-                          <td colSpan={3} className="px-5 py-4 text-right text-sm font-bold text-indigo-900 print:text-black">Total Guest Charge</td>
-                          <td className="px-5 py-4 text-right text-lg font-bold tabular-nums text-indigo-900 print:text-black">{money(data.summary.totalGuestCharge)}</td>
+                        <tr className="bg-indigo-50/50 border-t-2 border-indigo-100 print:bg-indigo-50 print:border-indigo-200">
+                          <td colSpan={3} className="px-5 py-4 text-right text-sm font-bold text-indigo-900">Total Guest Charge</td>
+                          <td className="px-5 py-4 text-right text-lg font-bold tabular-nums text-indigo-900">{money(data.summary.totalGuestCharge)}</td>
                         </tr>
                       </tbody>
                     </table>
@@ -352,77 +327,46 @@ export default function FnbReportsPage() {
                 </div>
 
                 {/* Right column */}
-                <div className="flex flex-col gap-4 print:gap-6">
+                <div className="flex flex-col gap-4">
                   {/* Payment mix */}
-                  <div className="print-section rounded-[20px] border bg-white p-5 shadow-sm print:p-0">
-                    <h3 className="print-section-header flex items-center gap-2 text-sm font-bold text-slate-900">
-                      <WalletCards className="print-icon h-4 w-4 text-indigo-500" />
+                  <div className="rounded-[20px] border bg-white p-5 shadow-sm print:border-slate-200 print:shadow-none">
+                    <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                      <WalletCards className="h-4 w-4 text-indigo-500" />
                       Payment Mix
                     </h3>
                     <div className="mt-4 space-y-2">
-                      <table className="hidden print:table w-full">
-                         <tbody>
-                           {(data.tenderBreakdown || []).length ? data.tenderBreakdown.map((p: any) => (
-                             <tr key={p.method}>
-                                <td className="text-left font-medium">{p.method.replace(/_/g, ' ')}</td>
-                                <td className="text-right tabular-nums font-bold">{money(p.amount)}</td>
-                             </tr>
-                           )) : <tr><td colSpan={2}>No captured payments.</td></tr>}
-                         </tbody>
-                      </table>
-                      <div className="no-print">
                         {(data.tenderBreakdown || []).length ? data.tenderBreakdown.map((p: any) => (
-                          <div key={p.method} className="flex items-center justify-between rounded-xl border bg-slate-50/50 px-3 py-2.5">
+                          <div key={p.method} className="flex items-center justify-between rounded-xl border bg-slate-50/50 px-3 py-2.5 print:bg-slate-50 print:border-slate-200">
                             <p className="text-sm font-semibold text-slate-700">{p.method.replace(/_/g, ' ')}</p>
                             <span className="text-sm font-bold tabular-nums text-slate-900">{money(p.amount)}</span>
                           </div>
                         )) : <p className="text-sm text-slate-500">No captured payments.</p>}
-                      </div>
                     </div>
                   </div>
 
                   {/* COGS Control */}
-                  <div className="print-section rounded-[20px] border bg-white p-5 shadow-sm print:p-0">
-                    <h3 className="print-section-header flex items-center gap-2 text-sm font-bold text-slate-900">
-                      <BarChart3 className="print-icon h-4 w-4 text-indigo-500" />
+                  <div className="rounded-[20px] border bg-white p-5 shadow-sm print:border-slate-200 print:shadow-none">
+                    <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                      <BarChart3 className="h-4 w-4 text-indigo-500" />
                       Cost of Goods Sold (COGS)
                     </h3>
-                    <div className="no-print mt-4 grid grid-cols-2 gap-3">
-                      <div className="rounded-xl border bg-slate-50/50 p-3">
+                    <div className="mt-4 grid grid-cols-2 gap-3">
+                      <div className="rounded-xl border bg-slate-50/50 p-3 print:bg-slate-50 print:border-slate-200">
                         <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-slate-500">Actual (Depleted)</p>
                         <p className="mt-1.5 text-sm font-bold tabular-nums text-rose-600">{money(data.profitability.actualCogs)}</p>
                         <p className="text-[10px] text-slate-500 mt-0.5">{pct(data.profitability.actualCostPct)} of Net</p>
                       </div>
-                      <div className="rounded-xl border bg-slate-50/50 p-3">
+                      <div className="rounded-xl border bg-slate-50/50 p-3 print:bg-slate-50 print:border-slate-200">
                         <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-slate-500">Theoretical</p>
                         <p className="mt-1.5 text-sm font-bold tabular-nums text-slate-700">{money(data.profitability.theoreticalCogs)}</p>
                         <p className="text-[10px] text-slate-500 mt-0.5">{pct(data.profitability.theoreticalCostPct)} of Net</p>
                       </div>
                     </div>
                     
-                    <table className="hidden print:table w-full mt-2">
-                       <tbody>
-                          <tr>
-                            <td className="text-left">Actual COGS (Depleted)</td>
-                            <td className="text-right font-bold">{money(data.profitability.actualCogs)}</td>
-                            <td className="text-right text-slate-500">{pct(data.profitability.actualCostPct)}</td>
-                          </tr>
-                          <tr>
-                            <td className="text-left">Theoretical COGS (Recipe)</td>
-                            <td className="text-right font-bold">{money(data.profitability.theoreticalCogs)}</td>
-                            <td className="text-right text-slate-500">{pct(data.profitability.theoreticalCostPct)}</td>
-                          </tr>
-                          <tr className="sub-total-row">
-                            <td colSpan={2} className="text-left">COGS Variance</td>
-                            <td className="text-right variance-text">{data.profitability.cogsVariance > 0 ? '+' : ''}{money(data.profitability.cogsVariance)}</td>
-                          </tr>
-                       </tbody>
-                    </table>
-
-                    <div className={`no-print mt-3 flex items-center justify-between rounded-xl border px-3 py-2.5 text-sm font-bold ${
+                    <div className={`mt-3 flex items-center justify-between rounded-xl border px-3 py-2.5 text-sm font-bold ${
                       data.profitability.cogsVariance > 0
-                        ? 'border-rose-200 bg-rose-50 text-rose-700'
-                        : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                        ? 'border-rose-200 bg-rose-50 text-rose-700 print:border-rose-200 print:bg-rose-50 print:text-rose-700'
+                        : 'border-emerald-200 bg-emerald-50 text-emerald-700 print:border-emerald-200 print:bg-emerald-50 print:text-emerald-700'
                     }`}>
                       <span>COGS Variance</span>
                       <span>{data.profitability.cogsVariance > 0 ? '+' : ''}{money(data.profitability.cogsVariance)}</span>
@@ -432,11 +376,11 @@ export default function FnbReportsPage() {
               </section>
 
               {/* ── Balance Proof equivalent (Inventory Movement) ── */}
-              <section className="print-only-inventory print-section overflow-hidden rounded-[20px] border bg-white shadow-sm print:p-0 print:border-none print:shadow-none print:mt-6">
-                <div className="border-b px-5 py-4 flex justify-between items-center print:border-none print:p-0">
+              <section className="print-only-inventory print-section overflow-hidden rounded-[20px] border bg-white shadow-sm print:border-slate-200 print:shadow-none">
+                <div className="border-b px-5 py-4 flex justify-between items-center print:border-slate-200">
                   <div>
-                    <h3 className="print-section-header flex items-center gap-2 text-sm font-bold text-slate-900">
-                      <Scale className="print-icon h-4 w-4 text-indigo-500" />
+                    <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                      <Scale className="h-4 w-4 text-indigo-500" />
                       Stock Ledger Proof
                     </h3>
                     <p className="no-print mt-0.5 text-[11px] text-slate-500">Industry-standard proof: Opening stock + activity = closing stock.</p>
@@ -449,52 +393,37 @@ export default function FnbReportsPage() {
                 </div>
                 {selectedWarehouse ? (
                   <div className="overflow-x-auto">
-                    <table className="w-full print:text-[9px]">
-                      <thead className="no-print">
-                        <tr className="border-b bg-slate-50/50">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b bg-slate-50/50 print:bg-slate-50 print:border-slate-200">
                           {['Stock Item', 'Opening', '+ In', '- Out', '- Sold', '- Waste', 'Adj', 'Expected', 'Actual', 'Variance', 'Status'].map((h, i) => (
                             <th key={h} className={`px-5 py-3 text-[9px] font-bold uppercase tracking-[0.16em] text-slate-500 ${i > 0 && i < 10 ? 'text-right' : 'text-left'}`}>{h}</th>
                           ))}
                         </tr>
                       </thead>
-                      <thead className="hidden print:table-header-group">
-                        <tr>
-                          <th className="text-left">Stock Item</th>
-                          <th className="text-right">Open</th>
-                          <th className="text-right">+In</th>
-                          <th className="text-right">-Out</th>
-                          <th className="text-right">-Sold</th>
-                          <th className="text-right">-Waste</th>
-                          <th className="text-right">Adj</th>
-                          <th className="text-right">Exp</th>
-                          <th className="text-right">Act</th>
-                          <th className="text-right">Var</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 print:divide-none">
+                      <tbody className="divide-y divide-slate-100 print:divide-slate-100">
                         {data.inventoryMovement.map((row: any) => {
                           const isBalanced = row.variance === 0;
                           return (
                             <tr key={row.stockItemId} className="transition-colors hover:bg-slate-50/50">
-                              <td className="px-5 py-4 print:py-2">
-                                <p className="text-sm font-semibold text-slate-900 print:text-[10px] print:leading-tight">{row.name}</p>
-                                <p className="mt-0.5 text-[10px] text-slate-500 print:text-[8px] print:mt-0">{row.sku} • {row.unitOfMeasure}</p>
+                              <td className="px-5 py-4">
+                                <p className="text-sm font-semibold text-slate-900">{row.name}</p>
+                                <p className="mt-0.5 text-[10px] text-slate-500">{row.sku} • {row.unitOfMeasure}</p>
                               </td>
-                              <td className="px-5 py-4 print:py-2 text-right text-sm tabular-nums text-slate-600 print:text-[10px] print:text-black">{row.opening}</td>
-                              <td className="px-5 py-4 print:py-2 text-right text-sm tabular-nums text-emerald-600 print:text-[10px] print:text-black">{row.receipts + row.transferIn || '-'}</td>
-                              <td className="px-5 py-4 print:py-2 text-right text-sm tabular-nums text-rose-600 print:text-[10px] print:text-black">{row.transferOut || '-'}</td>
-                              <td className="px-5 py-4 print:py-2 text-right text-sm tabular-nums text-amber-600 font-bold print:text-[10px] print:text-black">{row.sales || '-'}</td>
-                              <td className="px-5 py-4 print:py-2 text-right text-sm tabular-nums text-rose-600 print:text-[10px] print:text-black">{row.waste || '-'}</td>
-                              <td className="px-5 py-4 print:py-2 text-right text-sm tabular-nums text-slate-500 print:text-[10px] print:text-black">{row.adjustments || '-'}</td>
-                              <td className="px-5 py-4 print:py-2 text-right text-sm tabular-nums text-slate-700 font-semibold print:text-[10px] print:text-black">{row.expectedClosing}</td>
-                              <td className="px-5 py-4 print:py-2 text-right text-sm tabular-nums text-slate-900 font-bold print:text-[10px] print:text-black">{row.actualClosing}</td>
-                              <td className="px-5 py-4 print:py-2 text-right variance-text print:text-[10px]">
-                                <span className="no-print"><VarianceBadge variance={row.variance} /></span>
-                                <span className="hidden print:inline">{row.variance}</span>
+                              <td className="px-5 py-4 text-right text-sm tabular-nums text-slate-600">{row.opening}</td>
+                              <td className="px-5 py-4 text-right text-sm tabular-nums text-emerald-600">{row.receipts + row.transferIn || '-'}</td>
+                              <td className="px-5 py-4 text-right text-sm tabular-nums text-rose-600">{row.transferOut || '-'}</td>
+                              <td className="px-5 py-4 text-right text-sm tabular-nums text-amber-600 font-bold">{row.sales || '-'}</td>
+                              <td className="px-5 py-4 text-right text-sm tabular-nums text-rose-600">{row.waste || '-'}</td>
+                              <td className="px-5 py-4 text-right text-sm tabular-nums text-slate-500">{row.adjustments || '-'}</td>
+                              <td className="px-5 py-4 text-right text-sm tabular-nums text-slate-700 font-semibold">{row.expectedClosing}</td>
+                              <td className="px-5 py-4 text-right text-sm tabular-nums text-slate-900 font-bold">{row.actualClosing}</td>
+                              <td className="px-5 py-4 text-right">
+                                <VarianceBadge variance={row.variance} />
                               </td>
-                              <td className="px-5 py-4 print:py-2 text-left no-print">
+                              <td className="px-5 py-4 text-left">
                                 <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
-                                  isBalanced ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'
+                                  isBalanced ? 'border-emerald-200 bg-emerald-50 text-emerald-700 print:border-emerald-200 print:bg-emerald-50 print:text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700 print:border-rose-200 print:bg-rose-50 print:text-rose-700'
                                 }`}>
                                   {isBalanced ? 'BALANCED' : 'VARIANCE'}
                                 </span>

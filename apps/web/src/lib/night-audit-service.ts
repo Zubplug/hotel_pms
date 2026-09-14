@@ -164,11 +164,16 @@ export async function getSystemIntegrity(ctx: TenantContext, propertyId: string)
       session: { select: { id: true } },
       serverStaff: { select: { firstName: true, lastName: true } },
       outlet: { select: { name: true } },
+      items: { select: { total: true, voidReason: true } },
     },
     orderBy: { createdAt: 'asc' },
   });
 
-  const openPosOrders = rawOpenPosOrders.map(o => ({
+  const openPosOrders = rawOpenPosOrders
+    // Older POS_VOID sync events could zero every line without updating the
+    // order header. Do not keep those stale fully-voided orders as blockers.
+    .filter(o => o.items.length === 0 || o.items.some(item => !item.voidReason && Number(item.total || 0) > 0))
+    .map(o => ({
     id: o.id,
     orderNumber: o.orderNumber,
     displayName: o.displayName,
@@ -183,7 +188,7 @@ export async function getSystemIntegrity(ctx: TenantContext, propertyId: string)
       : 'Unknown',
     sessionId: o.session?.id ?? null,
     createdAt: o.createdAt,
-  }));
+    }));
 
   return { openPosSessions, openFrontdeskSessions, syncConflicts, financialSyncConflicts, openPosOrders };
 }
@@ -546,10 +551,17 @@ export async function getFnbControl(ctx: TenantContext, propertyId: string) {
 
   const rawOrders = await prisma.posOrder.findMany({
     where: { propertyId, businessDate, status: { not: 'VOIDED' } },
-    include: { outlet: { select: { id: true, name: true } }, serverStaff: { select: { firstName: true, lastName: true } } }
+    include: {
+      outlet: { select: { id: true, name: true } },
+      serverStaff: { select: { firstName: true, lastName: true } },
+      items: { select: { total: true, voidReason: true } },
+    }
   });
 
-  const openOrders = rawOrders.filter(o => o.status !== 'CLOSED' && o.paymentStatus !== 'PAID');
+  const openOrders = rawOrders.filter(o =>
+    (o.status !== 'CLOSED' && o.paymentStatus !== 'PAID')
+    && (o.items.length === 0 || o.items.some(item => !item.voidReason && Number(item.total || 0) > 0))
+  );
   
   const rawSessions = await prisma.posSession.findMany({
     where: { propertyId, businessDate },
