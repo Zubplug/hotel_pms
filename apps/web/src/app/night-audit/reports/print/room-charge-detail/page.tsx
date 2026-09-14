@@ -66,7 +66,7 @@ export default function RoomChargeDetailReportPage() {
 
   return (
     <A4ReportWrapper
-      title="Room-Charge Detail (Ancillary Revenue)"
+      title="Guest Folio Postings (POS / External)"
       propertyName={data.propertyName || 'LodgeCore Hotel'}
       propertyEmail={data.propertyEmail}
       propertyPhone={data.propertyPhone}
@@ -77,7 +77,7 @@ export default function RoomChargeDetailReportPage() {
     >
       {!hasRecords ? (
         <div className="py-20 text-center text-slate-500 italic text-sm">
-          No ancillary room charges posted for this business date.
+          No POS/External charges were posted to guest folios for this business date.
         </div>
       ) : (
         <div className="w-full space-y-6">
@@ -122,11 +122,11 @@ export default function RoomChargeDetailReportPage() {
           ))}
 
           <div className="mt-8 pt-4 border-t-2 border-slate-800">
-            <h3 className="font-bold text-sm uppercase mb-3">Room-Charge Summary</h3>
+            <h3 className="font-bold text-sm uppercase mb-3">Postings Summary</h3>
             <table className="w-1/2 text-[10px]">
               <tbody>
                 <tr className="bg-slate-100 font-bold border-b-2 border-slate-800">
-                  <td className="py-2 uppercase tracking-wider">Total Ancillary Charges to Rooms</td>
+                  <td className="py-2 uppercase tracking-wider">Total POS/External Folio Postings</td>
                   <td className="py-2 text-right">{formatCurrency(totals.totalCharges, currencyCode)}</td>
                 </tr>
               </tbody>

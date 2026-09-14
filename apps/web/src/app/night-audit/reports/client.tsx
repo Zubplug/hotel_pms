@@ -113,7 +113,7 @@ const REPORTS: ReportDef[] = [
     iconBg: 'rgba(249,115,22,0.15)',
   },
   {
-    title: 'Room-Charge Detail',
+    title: 'Guest Folio Postings',
     slug: 'room-charge-detail',
     desc: 'All ancillary charges posted to guest folios from POS and services.',
     Icon: BedDouble,
