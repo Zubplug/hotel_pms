@@ -119,7 +119,74 @@ export async function GET(req: NextRequest) {
           financialSnapshot: true 
         } 
       }),
-      prisma.hotelActivityEvent.findMany({ where: { propertyId, businessDate: bDate instanceof Date ? bDate : new Date(businessDate) }, orderBy: { occurredAt: 'desc' }, take: 100 }),
+      (async () => {
+        const bd = bDate instanceof Date ? bDate : new Date(businessDate);
+        const [dbEvents, voidItems, exceptions, posSessions] = await Promise.all([
+          prisma.hotelActivityEvent.findMany({ where: { propertyId, businessDate: bd }, orderBy: { occurredAt: 'desc' }, take: 100 }),
+          prisma.folioItem.findMany({ where: { folio: { propertyId }, businessDate: bd, voidedAt: { not: null } }, select: { id: true, voidedAt: true, voidReason: true, description: true, amount: true, currency: true, type: true }, take: 20, orderBy: { voidedAt: 'desc' } }),
+          prisma.transactionException.findMany({ where: { propertyId, businessDate: bd }, select: { id: true, questionedAt: true, status: true, questionReason: true }, take: 20, orderBy: { questionedAt: 'desc' } }),
+          prisma.posSession.findMany({ where: { propertyId, businessDate: bd, status: 'CLOSED' }, select: { id: true, closedAt: true, variance: true, outlet: { select: { name: true } } }, take: 20, orderBy: { closedAt: 'desc' } }),
+        ]);
+
+        const events = [...dbEvents];
+
+        for (const v of voidItems) {
+          if (v.voidedAt) {
+            events.push({
+              id: `void-${v.id}`,
+              propertyId,
+              businessDate: bd,
+              occurredAt: v.voidedAt,
+              category: 'FINANCIAL',
+              eventType: 'VOID',
+              actorName: 'System',
+              title: `${v.type} Voided`,
+              description: v.voidReason || `Voided: ${v.description}`,
+              amount: Number(v.amount),
+              currency: v.currency,
+              severity: 'WARNING',
+            } as any);
+          }
+        }
+
+        for (const e of exceptions) {
+          events.push({
+            id: `exc-${e.id}`,
+            propertyId,
+            businessDate: bd,
+            occurredAt: e.questionedAt,
+            category: 'FINANCIAL',
+            eventType: 'EXCEPTION',
+            actorName: 'System',
+            title: `Exception: ${e.status}`,
+            description: e.questionReason,
+            amount: 0,
+            currency: property.baseCurrency,
+            severity: 'WARNING',
+          } as any);
+        }
+
+        for (const s of posSessions) {
+          if (s.closedAt) {
+            events.push({
+              id: `sess-${s.id}`,
+              propertyId,
+              businessDate: bd,
+              occurredAt: s.closedAt,
+              category: 'FRONT_DESK',
+              eventType: 'SESSION_CLOSED',
+              actorName: s.outlet?.name || 'POS',
+              title: 'POS Session Closed',
+              description: `Session closed with ${Number(s.variance) !== 0 ? 'a variance of ' + Number(s.variance) : 'no variance'}.`,
+              amount: Number(s.variance),
+              currency: property.baseCurrency,
+              severity: Number(s.variance) !== 0 ? 'WARNING' : 'INFO',
+            } as any);
+          }
+        }
+
+        return events.sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime()).slice(0, 100);
+      })(),
       currentAudit ? prisma.nightAuditFinancialSnapshot.findUnique({ where: { nightAuditId: currentAudit.id } }) : Promise.resolve(null),
       prisma.journalEntry.aggregate({
         where: { propertyId, ...(currentAudit ? { nightAuditId: currentAudit.id } : { entryDate: businessDate }), status: 'POSTED' },
