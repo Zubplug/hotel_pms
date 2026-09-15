@@ -590,6 +590,11 @@ export async function executeNightAudit(
         select: {
           id: true,
           total: true,
+          subtotal: true,
+          taxAmount: true,
+          serviceCharge: true,
+          outletId: true,
+          items: { select: { subtotal: true, product: { select: { itemCode: true } } } },
           payments: { where: { status: 'CONFIRMED' }, select: { amount: true, method: true } },
         },
       }),
@@ -602,7 +607,7 @@ export async function executeNightAudit(
       })
     ]);
 
-    let roomRevenueVal = 0, fnbRevenueVal = 0, otherRevenueVal = 0, taxesVal = 0, discountsVal = 0, refundsVal = 0;
+    let roomRevenueVal = 0, fnbRevenueVal = 0, poolRevenueVal = 0, otherRevenueVal = 0, taxesVal = 0, serviceChargeVal = 0, discountsVal = 0, refundsVal = 0;
 
     for (const group of revenueByCategory) {
       const amt = Number(group._sum?.amount || 0);
@@ -618,13 +623,54 @@ export async function executeNightAudit(
     // POS orders paid directly by cash/card are not represented by folio
     // items. Add them to F&B revenue, while excluding room-charge orders that
     // already have a POS folio item so the same sale is never counted twice.
+    const posOutlets = await prisma.posOutlet.findMany({ where: { propertyId }, select: { id: true, type: true } });
+    const outletTypes = new Map(posOutlets.map((o: any) => [o.id, o.type]));
+
     const posFolioOrderIds = new Set(posFolioItems.map((item) => item.posTransactionId).filter(Boolean));
     for (const order of posOrders) {
       if (posFolioOrderIds.has(order.id)) continue;
       const complimentary = order.payments
         .filter((payment) => String(payment.method).toUpperCase() === 'COMPLIMENTARY')
         .reduce((sum, payment) => sum + Number(payment.amount), 0);
-      fnbRevenueVal += Math.max(0, Number(order.total) - complimentary);
+      
+      const netPaid = Math.max(0, Number(order.total) - complimentary);
+      const outletType = order.outletId ? outletTypes.get(order.outletId) : null;
+      
+      let allocatedRevenue = 0;
+      let orderPool = 0;
+      let orderFnb = 0;
+      
+      for (const item of (order.items || [])) {
+        const itemSubtotal = Number(item.subtotal);
+        if (itemSubtotal <= 0) continue;
+        allocatedRevenue += itemSubtotal;
+        
+        const isPoolPass = item.product?.itemCode?.startsWith('REC-POOL');
+        if (isPoolPass || outletType === 'RECREATION') {
+          orderPool += itemSubtotal;
+        } else {
+          orderFnb += itemSubtotal;
+        }
+      }
+      
+      const tax = Number(order.taxAmount || 0);
+      const serviceCharge = Number(order.serviceCharge || 0);
+      
+      // If the POS payment covers the entire bill (normal case)
+      if (netPaid >= (allocatedRevenue + tax + serviceCharge - 0.01)) {
+         fnbRevenueVal += orderFnb;
+         poolRevenueVal += orderPool;
+         taxesVal += tax;
+         serviceChargeVal += serviceCharge;
+         
+         const residual = netPaid - allocatedRevenue - tax - serviceCharge;
+         if (residual > 0.01) {
+            otherRevenueVal += residual;
+         }
+      } else {
+         // Partial payments / under-allocations fall entirely to other/fnb (fallback)
+         fnbRevenueVal += netPaid; 
+      }
     }
 
     for (const group of otherItemsByType) {
@@ -634,7 +680,14 @@ export async function executeNightAudit(
       else if (group.type === 'REFUND') refundsVal += amt;
     }
 
-    const grossRevenueVal = roomRevenueVal + fnbRevenueVal + otherRevenueVal;
+    }
+
+    // Since NightAuditFinancialSnapshot schema does not have a pool or service charge bucket,
+    // we logically fold them into otherRevenueVal and taxes for the gross calculations.
+    // The departmentReconciliation accurately reflects their GL split.
+    const schemaOtherRevenue = otherRevenueVal + poolRevenueVal + serviceChargeVal;
+
+    const grossRevenueVal = roomRevenueVal + fnbRevenueVal + schemaOtherRevenue;
     const netRevenueVal = grossRevenueVal - discountsVal - refundsVal;
 
     const totalRoomRevenue = roomRevenueVal;
@@ -667,8 +720,10 @@ export async function executeNightAudit(
   const departmentReconciliation = [
     { department: 'Rooms', source: roomRevenueVal, gl: glCredit('4050') },
     { department: 'F&B/POS', source: fnbRevenueVal, gl: glCredit('4250') },
+    { department: 'Recreation/Pool', source: poolRevenueVal, gl: glCredit('4100') },
     { department: 'Other', source: otherRevenueVal, gl: glCredit('4400') },
     { department: 'Taxes', source: taxesVal, gl: glCredit('2200') },
+    { department: 'Service Charge', source: serviceChargeVal, gl: glCredit('2210') },
   ].map((row) => ({ ...row, difference: row.source - row.gl, status: Math.abs(row.source - row.gl) < 0.01 ? 'MATCHED' : 'VARIANCE' }));
   const hasDepartmentVariance = departmentReconciliation.some((row) => row.status === 'VARIANCE');
   const balanceRows = (await prisma.$transaction((tx) => buildNightAuditBalanceProof(tx, { propertyId, businessDate }))).map((row) => ({
@@ -692,7 +747,7 @@ export async function executeNightAudit(
   const closeSourceTotals = {
     roomRevenue: roomRevenueVal,
     fnbRevenue: fnbRevenueVal,
-    otherRevenue: otherRevenueVal,
+    otherRevenue: schemaOtherRevenue,
     taxes: taxesVal,
     discounts: discountsVal,
     refunds: refundsVal,
@@ -779,7 +834,7 @@ export async function executeNightAudit(
         nightAuditId: auditRun.id,
         roomRevenue: roomRevenueVal,
         fnbRevenue: fnbRevenueVal,
-        otherRevenue: otherRevenueVal,
+        otherRevenue: schemaOtherRevenue,
         taxes: taxesVal,
         discounts: discountsVal,
         refunds: refundsVal,
