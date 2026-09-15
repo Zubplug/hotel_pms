@@ -7,7 +7,7 @@ import { postNightAuditJournal, buildNightAuditBalanceProof } from './night-audi
 
 const BATCH_SIZE = 50;
 
-import { getOperationalReview, getSystemIntegrity, getFinancialAudit, getCashReconciliation } from './night-audit-service';
+import { getOperationalReview, getSystemIntegrity, getFinancialAudit, getCashReconciliation, getFnbControl } from './night-audit-service';
 
 export async function getNightAuditPreview(ctx: any, propertyId: string) {
   const [operational, system, financial, cash] = await Promise.all([
@@ -74,13 +74,19 @@ export async function executeNightAudit(
   // Preparation checks happen before the short cutover lock. Existing shifts
   // must be reconciled before the old business date can be closed.
   if (!isRecovery) {
-    const { openPosSessions, openFrontdeskSessions, financialSyncConflicts } = await getSystemIntegrity(ctx, propertyId);
-    const { unverifiedComplimentary, pendingDiscounts } = await getFinancialAudit(ctx, propertyId);
+    const { openPosSessions, openFrontdeskSessions, financialSyncConflicts, openPosOrders } = await getSystemIntegrity(ctx, propertyId);
+    const { unverifiedComplimentary, pendingCheckInBypasses } = await getFinancialAudit(ctx, propertyId);
+    const { unverifiedTransactions } = await getCashReconciliation(ctx, propertyId);
+    const { exceptions: { openOrders: additionalFnbOpenOrders, openSessions: additionalFnbOpenSessions } } = await getFnbControl(ctx, propertyId);
     
     if (unverifiedComplimentary.length > 0) throw new Error('BLOCKER:Cannot execute audit. Unverified complimentary transactions must be resolved.');
-    if (pendingDiscounts.length > 0) throw new Error('BLOCKER:Cannot execute audit. Pending discount approvals must be resolved.');
-    if (openPosSessions.length > 0) throw new Error('BLOCKER:Cannot execute audit. There are open POS sessions.');
+    if (pendingCheckInBypasses.length > 0) throw new Error('BLOCKER:Cannot execute audit. Pending check-in bypasses must be resolved.');
+    if (unverifiedTransactions.length > 0) throw new Error('BLOCKER:Cannot execute audit. Unverified cash/bank transactions exist.');
+    
+    if (openPosSessions.length > 0 || additionalFnbOpenSessions.length > 0) throw new Error('BLOCKER:Cannot execute audit. There are open POS sessions.');
     if (openFrontdeskSessions.length > 0) throw new Error('BLOCKER:Cannot execute audit. There are open front-desk cashier shifts.');
+    if (openPosOrders.length > 0 || additionalFnbOpenOrders.length > 0) throw new Error('BLOCKER:Cannot execute audit. There are open POS orders.');
+    
     if (financialSyncConflicts.length > 0) throw new Error('BLOCKER:Cannot execute audit. There are unresolved financial sync conflicts.');
 
     // Auto-close RECONCILIATION_REQUIRED POS sessions with zero expected cash.
