@@ -2,6 +2,8 @@
 
 import { prisma } from '@hotel-pms/db';
 import { revalidatePath } from 'next/cache';
+import { toZonedTime, fromZonedTime } from 'date-fns-tz';
+import { addDays, getDay } from 'date-fns';
 
 export type BookingConflictResult = {
   hasConflict: boolean;
@@ -85,7 +87,7 @@ export async function createFullEventBooking(data: {
       throw new Error(`Expected guests (${data.expectedGuests}) exceeds hall capacity (${hall.capacity}).`);
     }
 
-    // 2. Generate Occurrences
+    // 2. Generate Occurrences preserving local property time
     const occurrences: { startTime: Date, endTime: Date }[] = [];
     const baseStart = data.startTime;
     const baseEnd = data.endTime;
@@ -94,30 +96,37 @@ export async function createFullEventBooking(data: {
     occurrences.push({ startTime: baseStart, endTime: baseEnd });
 
     if (data.recurrenceRule && data.recurrenceRule.frequency !== 'NONE') {
+      const propertyTimezone = hall.property.timezone;
       const untilDate = new Date(data.recurrenceRule.until);
       untilDate.setHours(23, 59, 59, 999);
       
-      let currentStart = new Date(baseStart);
-      currentStart.setDate(currentStart.getDate() + 1); // start from next day
+      // Convert the initial start time to the property's local time context
+      let currentLocalStart = toZonedTime(baseStart, propertyTimezone);
+      
+      // We start adding from the next day
+      currentLocalStart = addDays(currentLocalStart, 1);
 
-      while (currentStart <= untilDate) {
+      while (fromZonedTime(currentLocalStart, propertyTimezone) <= untilDate) {
         let add = false;
         
         if (data.recurrenceRule.frequency === 'DAILY') {
           add = true;
         } else if (data.recurrenceRule.frequency === 'WEEKLY') {
-          if (data.recurrenceRule.daysOfWeek?.includes(currentStart.getDay())) {
+          // getDay() on the ZonedTime object safely returns the local day of the week
+          if (data.recurrenceRule.daysOfWeek?.includes(getDay(currentLocalStart))) {
             add = true;
           }
         }
 
         if (add) {
+          // Convert the local time back to a valid UTC Date
+          const nextUtcStart = fromZonedTime(currentLocalStart, propertyTimezone);
           occurrences.push({
-            startTime: new Date(currentStart),
-            endTime: new Date(currentStart.getTime() + durationMs)
+            startTime: nextUtcStart,
+            endTime: new Date(nextUtcStart.getTime() + durationMs)
           });
         }
-        currentStart.setDate(currentStart.getDate() + 1);
+        currentLocalStart = addDays(currentLocalStart, 1);
       }
     }
 
