@@ -242,7 +242,7 @@ export function CityLedgerDetailClient({ account, openInvoices, recentEntries, t
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
                 <Label htmlFor="method" className="text-slate-300">Payment Method</Label>
-                <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                <Select value={paymentMethod} onValueChange={(val) => val && setPaymentMethod(val)}>
                   <SelectTrigger className="bg-white/5 border-white/10 text-slate-100">
                     <SelectValue placeholder="Select method" />
                   </SelectTrigger>
