@@ -71,62 +71,109 @@ export async function createFullEventBooking(data: {
   setupBufferMinutes: number;
   teardownBufferMinutes: number;
   packageIds: string[];
+  recurrenceRule?: {
+    frequency: string;
+    daysOfWeek?: number[];
+    until: string;
+  };
 }) {
   return await prisma.$transaction(async (tx) => {
     // 1. Verify Hall
-    const hall = await tx.hall.findUnique({ where: { id: data.hallId } });
+    const hall = await tx.hall.findUnique({ where: { id: data.hallId }, include: { property: true } });
     if (!hall) throw new Error("Hall not found");
     if (data.expectedGuests > hall.capacity) {
       throw new Error(`Expected guests (${data.expectedGuests}) exceeds hall capacity (${hall.capacity}).`);
     }
 
-    // 2. Check conflicts strictly
-    const newEffectiveStart = new Date(data.startTime.getTime() - data.setupBufferMinutes * 60000);
-    const newEffectiveEnd = new Date(data.endTime.getTime() + data.teardownBufferMinutes * 60000);
-    
-    const potentialConflicts = await tx.eventBooking.findMany({
-      where: {
-        hallId: data.hallId,
-        startTime: { gte: new Date(newEffectiveStart.getTime() - 24 * 60 * 60 * 1000) },
-        endTime: { lte: new Date(newEffectiveEnd.getTime() + 24 * 60 * 60 * 1000) },
-      },
-      include: { event: { select: { status: true } } }
-    });
+    // 2. Generate Occurrences
+    const occurrences: { startTime: Date, endTime: Date }[] = [];
+    const baseStart = data.startTime;
+    const baseEnd = data.endTime;
+    const durationMs = baseEnd.getTime() - baseStart.getTime();
 
-    for (const booking of potentialConflicts) {
-      if (booking.event?.status === 'CANCELLED') continue;
+    occurrences.push({ startTime: baseStart, endTime: baseEnd });
 
-      const existingEffectiveStart = new Date(booking.startTime.getTime() - booking.setupBufferMinutes * 60000);
-      const existingEffectiveEnd = new Date(booking.endTime.getTime() + booking.teardownBufferMinutes * 60000);
-      if (existingEffectiveStart < newEffectiveEnd && existingEffectiveEnd > newEffectiveStart) {
-        throw new Error("Double booking detected. The hall is not available for the requested time frame including buffers.");
+    if (data.recurrenceRule && data.recurrenceRule.frequency !== 'NONE') {
+      const untilDate = new Date(data.recurrenceRule.until);
+      untilDate.setHours(23, 59, 59, 999);
+      
+      let currentStart = new Date(baseStart);
+      currentStart.setDate(currentStart.getDate() + 1); // start from next day
+
+      while (currentStart <= untilDate) {
+        let add = false;
+        
+        if (data.recurrenceRule.frequency === 'DAILY') {
+          add = true;
+        } else if (data.recurrenceRule.frequency === 'WEEKLY') {
+          if (data.recurrenceRule.daysOfWeek?.includes(currentStart.getDay())) {
+            add = true;
+          }
+        }
+
+        if (add) {
+          occurrences.push({
+            startTime: new Date(currentStart),
+            endTime: new Date(currentStart.getTime() + durationMs)
+          });
+        }
+        currentStart.setDate(currentStart.getDate() + 1);
       }
     }
 
-    // 3. Create the Base Event
+    // 3. Strict Conflict Checking (All-or-Nothing)
+    for (const occ of occurrences) {
+      const newEffectiveStart = new Date(occ.startTime.getTime() - data.setupBufferMinutes * 60000);
+      const newEffectiveEnd = new Date(occ.endTime.getTime() + data.teardownBufferMinutes * 60000);
+      
+      const potentialConflicts = await tx.eventBooking.findMany({
+        where: {
+          hallId: data.hallId,
+          startTime: { gte: new Date(newEffectiveStart.getTime() - 24 * 60 * 60 * 1000) },
+          endTime: { lte: new Date(newEffectiveEnd.getTime() + 24 * 60 * 60 * 1000) },
+          status: { not: 'CANCELLED' }
+        }
+      });
+
+      for (const booking of potentialConflicts) {
+        const existingEffectiveStart = new Date(booking.startTime.getTime() - booking.setupBufferMinutes * 60000);
+        const existingEffectiveEnd = new Date(booking.endTime.getTime() + booking.teardownBufferMinutes * 60000);
+        if (existingEffectiveStart < newEffectiveEnd && existingEffectiveEnd > newEffectiveStart) {
+          throw new Error(`Double booking detected for ${occ.startTime.toLocaleDateString()}. The hall is not available.`);
+        }
+      }
+    }
+
+    const finalEndDate = occurrences[occurrences.length - 1].endTime;
+
+    // 4. Create the Base Event
     const event = await tx.event.create({
       data: {
-        propertyId: hall.propertyId, // Inherit from hall for safety
+        propertyId: hall.propertyId,
         name: `Event for ${data.contactName}`,
         contactName: data.contactName,
         contactPhone: data.contactPhone,
         expectedGuests: data.expectedGuests,
-        startDate: data.startTime,
-        endDate: data.endTime,
+        startDate: occurrences[0].startTime,
+        endDate: finalEndDate,
         status: 'TENTATIVE',
+        recurrenceRule: data.recurrenceRule ? data.recurrenceRule : undefined,
       }
     });
 
-    // 4. Create Booking
-    await tx.eventBooking.create({
-      data: {
-        eventId: event.id,
-        hallId: data.hallId,
-        startTime: data.startTime,
-        endTime: data.endTime,
-        setupBufferMinutes: data.setupBufferMinutes,
-        teardownBufferMinutes: data.teardownBufferMinutes,
-      }
+    // 5. Create All Bookings
+    const bookingRecords = occurrences.map(occ => ({
+      eventId: event.id,
+      hallId: data.hallId,
+      startTime: occ.startTime,
+      endTime: occ.endTime,
+      setupBufferMinutes: data.setupBufferMinutes,
+      teardownBufferMinutes: data.teardownBufferMinutes,
+      status: 'ACTIVE'
+    }));
+
+    await tx.eventBooking.createMany({
+      data: bookingRecords
     });
 
     // 5. Attach Package

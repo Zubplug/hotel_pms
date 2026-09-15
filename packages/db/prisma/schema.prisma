@@ -4619,6 +4619,8 @@ model Event {
   banquetPackageId String?         @db.Uuid
   banquetPackage   BanquetPackage? @relation(fields: [banquetPackageId], references: [id])
 
+  recurrenceRule Json? // Structured JSON: { frequency: "WEEKLY", daysOfWeek: [2,6], until: "2026-12-31" }
+
   bookings     EventBooking[]
   invoices     EventInvoice[]
   beos         BanquetEventOrder[]
@@ -4642,6 +4644,10 @@ model EventBooking {
   // Buffers to prevent setup/teardown conflicts
   setupBufferMinutes    Int @default(0)
   teardownBufferMinutes Int @default(0)
+
+  status             String  @default("ACTIVE") // ACTIVE, CANCELLED
+  isException        Boolean @default(false)
+  cancellationReason String?
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz

@@ -40,7 +40,10 @@ export function EventWizard({ initialHalls, initialPackages, bookingType = 'full
     endTime: '',
     setupBufferMinutes: 60,
     teardownBufferMinutes: 60,
-    packageId: ''
+    packageId: '',
+    repeatFrequency: 'NONE',
+    repeatDaysOfWeek: [] as number[],
+    repeatUntil: ''
   });
 
   const currentStep = steps[currentStepIndex].id;
@@ -59,6 +62,15 @@ export function EventWizard({ initialHalls, initialPackages, bookingType = 'full
     }));
   };
 
+  const toggleDayOfWeek = (day: number) => {
+    setFormData(prev => {
+      const days = prev.repeatDaysOfWeek.includes(day)
+        ? prev.repeatDaysOfWeek.filter(d => d !== day)
+        : [...prev.repeatDaysOfWeek, day];
+      return { ...prev, repeatDaysOfWeek: days };
+    });
+  };
+
   const handleSubmit = async () => {
     try {
       setIsSubmitting(true);
@@ -66,6 +78,19 @@ export function EventWizard({ initialHalls, initialPackages, bookingType = 'full
       if (!formData.hallId) throw new Error("Please select a hall.");
       if (!formData.startTime || !formData.endTime) throw new Error("Please set start and end times.");
       
+      let recurrenceRule = undefined;
+      if (formData.repeatFrequency !== 'NONE') {
+        if (!formData.repeatUntil) throw new Error("Please select an end date for the recurrence.");
+        if (formData.repeatFrequency === 'WEEKLY' && formData.repeatDaysOfWeek.length === 0) {
+          throw new Error("Please select at least one day of the week.");
+        }
+        recurrenceRule = {
+          frequency: formData.repeatFrequency,
+          daysOfWeek: formData.repeatFrequency === 'WEEKLY' ? formData.repeatDaysOfWeek : undefined,
+          until: formData.repeatUntil
+        };
+      }
+
       await createFullEventBooking({
         contactName: formData.contactName,
         contactPhone: formData.contactPhone,
@@ -75,7 +100,8 @@ export function EventWizard({ initialHalls, initialPackages, bookingType = 'full
         endTime: new Date(formData.endTime),
         setupBufferMinutes: Number(formData.setupBufferMinutes),
         teardownBufferMinutes: Number(formData.teardownBufferMinutes),
-        packageIds: formData.packageId ? [formData.packageId] : []
+        packageIds: formData.packageId ? [formData.packageId] : [],
+        recurrenceRule
       });
 
       toast.success("Event successfully created!");
@@ -168,6 +194,57 @@ export function EventWizard({ initialHalls, initialPackages, bookingType = 'full
                   <Input id="teardownBufferMinutes" name="teardownBufferMinutes" type="number" value={formData.teardownBufferMinutes} onChange={handleChange} />
                 </div>
               </div>
+
+              {/* Recurrence Block */}
+              <div className="pt-4 border-t space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="repeatFrequency">Repeat Booking?</Label>
+                  <select 
+                    id="repeatFrequency" 
+                    name="repeatFrequency" 
+                    value={formData.repeatFrequency} 
+                    onChange={handleChange}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="NONE">Does not repeat</option>
+                    <option value="DAILY">Daily</option>
+                    <option value="WEEKLY">Weekly</option>
+                  </select>
+                </div>
+
+                {formData.repeatFrequency === 'WEEKLY' && (
+                  <div className="space-y-2">
+                    <Label>Days of the Week</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { val: 1, label: 'Mo' }, { val: 2, label: 'Tu' }, { val: 3, label: 'We' },
+                        { val: 4, label: 'Th' }, { val: 5, label: 'Fr' }, { val: 6, label: 'Sa' },
+                        { val: 0, label: 'Su' }
+                      ].map(day => (
+                        <button
+                          key={day.val}
+                          onClick={() => toggleDayOfWeek(day.val)}
+                          type="button"
+                          className={`w-10 h-10 rounded-full text-xs font-medium border flex items-center justify-center transition-colors ${
+                            formData.repeatDaysOfWeek.includes(day.val) 
+                              ? 'bg-primary text-primary-foreground border-primary' 
+                              : 'bg-background hover:bg-muted'
+                          }`}
+                        >
+                          {day.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {formData.repeatFrequency !== 'NONE' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="repeatUntil">Repeat Until</Label>
+                    <Input id="repeatUntil" name="repeatUntil" type="date" value={formData.repeatUntil} onChange={handleChange} />
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -213,6 +290,12 @@ export function EventWizard({ initialHalls, initialPackages, bookingType = 'full
                 <div>
                   <span className="text-muted-foreground">End: </span> {formData.endTime ? new Date(formData.endTime).toLocaleString() : 'N/A'}
                 </div>
+                {formData.repeatFrequency !== 'NONE' && (
+                  <div className="col-span-2">
+                    <span className="text-muted-foreground">Recurrence: </span> 
+                    {formData.repeatFrequency} until {formData.repeatUntil}
+                  </div>
+                )}
               </div>
             </div>
           )}
