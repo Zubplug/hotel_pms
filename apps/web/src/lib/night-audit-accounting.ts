@@ -143,7 +143,7 @@ export async function postNightAuditJournal(tx: any, input: {
     } else if (item.type === 'TAX') {
       addLine(lines, { accountId: account('guestLedger').id, debit: amount, credit: 0, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
       addLine(lines, { accountId: account('taxPayable').id, debit: 0, credit: amount, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
-    } else if (item.type === 'DISCOUNT' || item.type === 'ADJUSTMENT' && Number(item.amount) < 0) {
+    } else if (item.type === 'DISCOUNT' || item.type === 'COMPLIMENTARY' || (item.type === 'ADJUSTMENT' && Number(item.amount) < 0)) {
       addLine(lines, { accountId: account('discounts').id, debit: amount, credit: 0, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
       addLine(lines, { accountId: account('guestLedger').id, debit: 0, credit: amount, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
     } else {
@@ -157,7 +157,7 @@ export async function postNightAuditJournal(tx: any, input: {
     if (!amount) continue;
     const isReceivablesPayment = payment.collectionSource === 'RECEIVABLES' && payment.folio?.type === 'CITY_LEDGER';
     const isUnappliedAdvance = isReceivablesPayment && payment.notes === 'Unapplied corporate advance';
-    const tender = payment.method === 'CITY_LEDGER' ? account('cityLedger') : payment.method === 'CASH' ? account('cash') : payment.method === 'POS' ? account('posClearing') : ['CARD', 'CARD_OFFLINE', 'PAYMENT_GATEWAY', 'MOBILE_PAYMENT'].includes(String(payment.method)) ? account('cardReceivable') : payment.method === 'BANK_TRANSFER' ? account('bankTransfer') : account('guestLedger');
+    const tender = payment.method === 'CITY_LEDGER' ? account('cityLedger') : payment.method === 'CASH' ? account('cash') : payment.method === 'POS' ? account('posClearing') : ['CARD', 'CARD_OFFLINE', 'PAYMENT_GATEWAY', 'MOBILE_PAYMENT'].includes(String(payment.method)) ? account('cardReceivable') : payment.method === 'BANK_TRANSFER' ? account('bankTransfer') : payment.method === 'COMPLIMENTARY' ? account('discounts') : account('guestLedger');
     const creditAccount = isUnappliedAdvance ? account('advancedDeposits') : isReceivablesPayment ? account('cityLedger') : account('guestLedger');
     addLine(lines, { accountId: tender.id, debit: amount, credit: 0, description: `Payment ${payment.reference || payment.id}`, sourceType: 'PAYMENT', sourceId: payment.id });
     addLine(lines, { accountId: creditAccount.id, debit: 0, credit: amount, description: `Payment ${payment.reference || payment.id}`, sourceType: 'PAYMENT', sourceId: payment.id });
@@ -186,7 +186,7 @@ export async function postNightAuditJournal(tx: any, input: {
     
     if (!paid) continue;
     for (const payment of order.payments) {
-      const tender = payment.method === 'CASH' ? account('cash') : payment.method === 'POS' ? account('posClearing') : ['CARD', 'CARD_OFFLINE', 'PAYMENT_GATEWAY', 'MOBILE_PAYMENT'].includes(String(payment.method)) ? account('cardReceivable') : account('guestLedger');
+      const tender = payment.method === 'CASH' ? account('cash') : payment.method === 'POS' ? account('posClearing') : payment.method === 'COMPLIMENTARY' ? account('discounts') : ['CARD', 'CARD_OFFLINE', 'PAYMENT_GATEWAY', 'MOBILE_PAYMENT'].includes(String(payment.method)) ? account('cardReceivable') : account('guestLedger');
       addLine(lines, { accountId: tender.id, debit: Number(payment.amount), credit: 0, description: `POS payment for ${order.orderNumber}`, sourceType: 'POS_PAYMENT', sourceId: payment.id, outletId: order.outletId, departmentId });
     }
 
