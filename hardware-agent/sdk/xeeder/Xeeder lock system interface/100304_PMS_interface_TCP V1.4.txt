@@ -1,0 +1,323 @@
+Overview of Hotel Lock System Interface Specification  
+1.1 Classification 
+ Hotel Lock system interface supplies Socket Interface for hotel management software developer. 
+1.1.1 Socket Interface 
+The usage is that sends data and instructions by Socket Client according to a certain format. Hotel lock system (Socket Server) responds it in real time. The data is transferred by network with TCP/IP protocol. 
+ Suitable Software 
+This interface specification is suitable for Hotel Lock System and higher version. 
+1.3 Interface Network System 
+The interface for networking includes two parts, client and server. The server realizes communication management, parameters setting, client management, etc. The interface network must has only one server, that’s to say, the server is only installed in one computer. The client is used to issue card. It is installed at the station for issuing cards. Each station should be installed an encoder. The quantity of the client is not limited. It can be installed at all the stations needing issuing cards. Different stations can share a same client to issue cards. The hotel management system communicates with the interface of the server. The interface server receives the instructions and assigns them to the specified client to perform. The running status will feed to the server after the client performs the instructions. Then the server will transfer the performed status into the answer information to the hotel management. 
+
+TCP/IP Protocol Application Solutions: TCP/IP provides communication between server and client, to support multi-computer to transfer information each other.
+1.4 Running Environment 
+Windows 98, Window NT 4.0 ,Windows 2000, Windows XP
+
+
+
+
+
+
+Specification for File Interface/Socket Interface  
+2.1 TCP/IP System Structure
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+2.2 Data Protocol 
+2.2.1 Control Character 
+STX (0x02): It’s used to label the start of data records. 
+ETX (0x03): It’s used to label the end of data records. 
+RS (0x7C): It’s used to label the start of new field (region). The field label code follows it. 
+2.2.2 Information Format 
+Information format: <STX>ddssff[data]<ETX> 
+Information Field 
+Description 
+dd 
+00
+ss 
+00
+ff
+command or answer code 
+[data] 
+data region (optional) 
+Target address: dd
+2 numeric characters, now it is ’00’
+Source address: ss
+2 numeric characters, , now it is ’00’
+Command code: ff
+2 characters, ASCII code, specify the performing command. 
+
+0B  –  guest check out (erase card) 0X42
+
+0E  –  read card 0X45
+
+0I   –  guest check in (issue card) 0X49
+
+0L  – Write control data of lift 0X4C
+
+0F  – Read control data of lift 0X46
+
+
+Answer code: ff
+2 numeric characters, ASCII code, specify the result of performance. 
+ 
+00  ok
+ 
+01  No card!
+ 
+02  No encoder found
+ 
+03  Invalid card
+ 
+04  Card type error
+ 
+05  Card read/write error
+ 
+06  Com Port is not open
+ 
+07  Read Query card ok
+ 
+08  Invalid parameter
+ 
+09  Operating not support
+
+10  Other error
+
+11  Port is in using
+
+12  Communication error
+
+13  Card is not empty, revoke it firstly
+
+14  Failed! Card Encryption is unknown
+
+15  Operating failed
+
+16  Unknown error
+
+17  The room is occupied
+
+18  Invalid room number
+
+20  The card is blank card
+
+
+Data region (data): 
+The data region gives different data according to the requirement. The format is <RS><FI>data. 
+ 
+<RS> - 0 x 7C, ‘|’, to label the start of region 
+ 
+<FI> - field label, 1 byte, ASCII code, to label the region data’s meaning 
+Field (ID) 
+Description 
+Data length 
+Format 
+Sample  
+R(0x52) 
+Room number 
+changeable
+ Each room No. is composed by 1 numeric character to 5 numeric characters, the room No. is separated by ‘,’, 8 room No. in max.. 
+101,102,103
+
+D(0x44) 
+Check in time 
+12 numeric characters
+yyyymmddhhmm 
+200901141300
+O(0x4F) 
+Check out time 
+12 numeric characters
+yyyymmddhhmm 
+200901171800
+T(0x54) 
+Card type
+2 numeric characters
+Card type range 01-15
+04,guest card
+L(0x4c)
+Lift reader information
+changeable
+bbssee,bbssee,bbssee,bbssee
+bb:Building 
+ss:start floor
+ee:end floor
+011015
+
+2.3 Detailed Explanation of Commands 
+Note: In the following sample, XHLS (Hotel Lock System) means interface system, PMS means hotel management system interface. 
+2.3.1 Guest Check-in/Check-out 
+New Guest Check-in (I): The command issues guest card according to the specified guest room 
+Necessary field: R, T, D, O; 
+Optional field: None 
+Sample: 
+PMS:<STX>00000I<RS>Room No.<RS>Card type<RS>Begin date<RS>End date<EXT> 
+<STX>00000I|R101,102,103|T04| D200901141300| O200901141300<EXT>
+Card type:T04，T is card type, one byte of following is card type. 4: Guest card
+
+Begin date: D200901141300,D indicates the begin time is 2009 1 14,13:00
+
+End date:O200901171800,O indicates the end time is 2009 1 17,18:00
+
+XHLS: <STX>000000 <ETX> 8 characters including execute returned information. Refer to: Answer code
+
+Guest Check-out (B): The command checks out the rooms in the specified room. 
+Necessary field: R 
+Optional field: N 
+PMS: <STX>00000B<ETX> 
+XHLS: <STX>000000<ETX>8 characters including execute returned information. Refer to: Answer code
+
+2.3.2 Verify Card/Read Guest Card 
+
+Command code (E). This command is used to read the information in guest card and index the card’s information from the database. If the index is successful, return the relative information (R, N, D, O). The sample is as follows: 
+PMS: <STX>01030E<ETX> 
+XHLS: <STX>000000<RS>Room No.<RS>Card type<RS>Begin date<RS>End date<ETX> 
+
+The returned room No. information is the same as the check-in information. 
+Card type:T04，T is card type, the following byte is card type. 04: Guest card
+
+Begin date: D200901141300,D indicates the begin time is 2009 1 14,13:00
+
+End date:O200901171800,O indicates the end time is 2009 1 17,18:00
+
+
+2.4 Data transferring specification for Socket interface 
+(1) The interface system is Socket Server, the hotel system (PMS) is Socket Client. 
+(2) The same port number should be set by the two systems. 
+(3) The interface system should responds to each request and checks the responding information to confirm whether the request is completed successfully or no
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Interface Guide 
+3.1 Component
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+3.2 Start up
+1. Install HOTEL LOCK SYSTEM normally and register it.
+2. Building all room ID same as in your PMS(hotel management system interface). 
+
+3. Open the “PMS interface” folder, there are two components in it, one is PMSif_TCP_Client_r, another is PMSif_TCP_DEMO_EXE.
+
+4. Firstly open the client and make it run. Then run the DEMO.
+
+IP Address: The LockInterfaceClient IP 
+If the LockInterfaceClient is installed on the same PC with the DEMO, here use the default IP 127.0.0.1.
+If the LockInterfaceClient is installed on other PC, you should find IP and fill in here.
+4. Connect
+Click Connection to connect the DEMO with the client. 
+Double click the client shortcut on the right corner of PC to check if connection succeed.
+
+
+
+4. Send command to Issue card. 
+Select room No. Click Get check in string to get the check in data, then you will see information data of check in these rooms including room No., check in date and check out date:                       00000I|R101,102,103,104|T04|D201003060944|O201003091800
+Also, these data can be written in or changed here by yourself as the data information format defined by xeeder. 
+
+
+Then click Send button to send these command to interface client to issue card.
+Executing the command, also can get the received string.
+
+5. Send command to read card information.
+Place the card on the encoder.
+Click Read card string button to get command data: 00000E. 
+
+
+Then send the command to interface client to read card information.
+
+
+6. Send command to check out.
+Click Check out string button to get the check out command data: 00000B.
+Then send the command to check out.
+ 
+
+
+
+
+
+
+
+
+
+
+
+ILockInterfaceClient- This is the Client program that should be running on each PC for issue cards.
+ILockInterfaceClient.exe function：1. Receive command comes from PMS. 2. Send feedback data to PMS.
+
+InterFaceDemo-It likes your PMS, which is used to send command to xeeder interface client when issue card.
+
+
+
+
+
+
+
+Keycard
+
+
+
+PMS (Demo)
+
+Issue card
+
+TCP/IP Protocol
+
+Send command
+
+
+
+
+
+
+
+PMSif_TCP_Client
+
+
+
+

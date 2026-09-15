@@ -21,15 +21,28 @@ public static class MauiProgram
         builder.Services.AddSingleton<ILockProvider>(sp =>
         {
             var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
-            // Retrieve configured provider, defaulting to the Deluns encoder.
-            var providerType = Microsoft.Maui.Storage.Preferences.Default.Get("LockProviderType", "deluns");
+            // Retrieve configured provider, defaulting to the Xeeder encoder.
+            var providerType = Microsoft.Maui.Storage.Preferences.Default.Get("LockProviderType", "xeeder");
             
             return providerType.ToLowerInvariant() switch
             {
                 "deluns" => new DelunsLockProvider(loggerFactory.CreateLogger<DelunsLockProvider>()),
                 "hslock" => new HsLockProvider(loggerFactory.CreateLogger<HsLockProvider>()),
                 "rfv2016" => new Rfv2016LockProvider(loggerFactory.CreateLogger<Rfv2016LockProvider>()),
-                _        => new DelunsLockProvider(loggerFactory.CreateLogger<DelunsLockProvider>())
+                "xeeder" => new XeederLockProvider(
+                    loggerFactory.CreateLogger<XeederLockProvider>(),
+                    Microsoft.Maui.Storage.Preferences.Default.Get("XeederHost", "127.0.0.1"),
+                    Microsoft.Maui.Storage.Preferences.Default.Get("XeederPort", 7800),
+                    Microsoft.Maui.Storage.Preferences.Default.Get("XeederConnectTimeoutMs", 3000),
+                    Microsoft.Maui.Storage.Preferences.Default.Get("XeederCommandTimeoutMs", 5000)
+                ),
+                _        => new XeederLockProvider(
+                    loggerFactory.CreateLogger<XeederLockProvider>(),
+                    Microsoft.Maui.Storage.Preferences.Default.Get("XeederHost", "127.0.0.1"),
+                    Microsoft.Maui.Storage.Preferences.Default.Get("XeederPort", 7800),
+                    Microsoft.Maui.Storage.Preferences.Default.Get("XeederConnectTimeoutMs", 3000),
+                    Microsoft.Maui.Storage.Preferences.Default.Get("XeederCommandTimeoutMs", 5000)
+                )
             };
         });
         builder.Services.AddSingleton<HardwareInterop>();
