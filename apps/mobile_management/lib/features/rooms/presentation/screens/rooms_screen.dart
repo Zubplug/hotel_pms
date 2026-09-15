@@ -120,8 +120,14 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen>
   Widget _buildBody(RoomDashboardData data) {
     final rooms = _filtered(data.rooms);
 
-    return CustomScrollView(
-      physics: const BouncingScrollPhysics(),
+    return RefreshIndicator(
+      onRefresh: () async => ref.refresh(roomsDataProvider),
+      color: _gold,
+      backgroundColor: _surfaceRaised,
+      child: CustomScrollView(
+      physics: const AlwaysScrollableScrollPhysics(
+        parent: BouncingScrollPhysics(),
+      ),
       slivers: [
         // ── Sticky App Bar ────────────────────────────────────────────────────
         SliverAppBar(
@@ -138,7 +144,6 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen>
             viewMode: _viewMode,
             pulseAnim: _pulseAnim,
             onViewModeChanged: (m) => setState(() => _viewMode = m),
-            onRefresh: () => ref.refresh(roomsDataProvider),
           ),
           titleSpacing: 0,
         ),
@@ -211,6 +216,7 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen>
 
         const SliverToBoxAdapter(child: SizedBox(height: 80)),
       ],
+    ),
     );
   }
 
@@ -385,14 +391,12 @@ class _RoomsHeaderContent extends StatelessWidget {
   final _ViewMode viewMode;
   final Animation<double> pulseAnim;
   final ValueChanged<_ViewMode> onViewModeChanged;
-  final VoidCallback onRefresh;
 
   const _RoomsHeaderContent({
     required this.data,
     required this.viewMode,
     required this.pulseAnim,
     required this.onViewModeChanged,
-    required this.onRefresh,
   });
 
   @override
@@ -485,23 +489,6 @@ class _RoomsHeaderContent extends StatelessWidget {
                   onTap: () => onViewModeChanged(_ViewMode.grid),
                 ),
               ],
-            ),
-          ),
-
-          const SizedBox(width: 8),
-
-          // Refresh button
-          GestureDetector(
-            onTap: onRefresh,
-            child: Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: _surfaceRaised,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: _border),
-              ),
-              child: const Icon(Icons.refresh_rounded, color: _textSecondary, size: 18),
             ),
           ),
         ],
