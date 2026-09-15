@@ -7,25 +7,24 @@ import 'package:intl/intl.dart';
 import '../providers/rooms_provider.dart';
 import '../models/room_data.dart';
 
-// ─── Design System ────────────────────────────────────────────────────────────
-const _bg           = Color(0xFF060B14);
-const _bgGradTop    = Color(0xFF0B1526);
-const _surface      = Color(0xFF0D1422);
-const _surfaceRaised = Color(0xFF111D30);
-const _surfaceHigh  = Color(0xFF172038);
-const _border       = Color(0xFF1E2D42);
+// ─── Design Tokens ────────────────────────────────────────────────────────────
+const _bg            = Color(0xFF090D14);
+const _surface       = Color(0xFF111722);
+const _surfaceRaised = Color(0xFF161E2C);
+const _border        = Color(0xFF263346);
 
-const _gold         = Color(0xFFD4AF37);
-const _textPrimary  = Color(0xFFF0F4FF);
-const _textSecondary= Color(0xFF8B95B0);
-const _textMuted    = Color(0xFF4A5468);
-const _green        = Color(0xFF10B981);
-const _blue         = Color(0xFF3B82F6);
-const _orange       = Color(0xFFF59E0B);
-const _red          = Color(0xFFEF4444);
-const _violet       = Color(0xFF8B5CF6);
+const _gold          = Color(0xFFE2C873);
+const _textPrimary   = Color(0xFFF8FAFC);
+const _textSecondary = Color(0xFF94A3B8);
+const _textMuted     = Color(0xFF475569);
 
-// ─── Room Details Screen ─────────────────────────────────────────────────────
+const _green         = Color(0xFF10B981);
+const _blue          = Color(0xFF3B82F6);
+const _orange        = Color(0xFFF59E0B);
+const _red           = Color(0xFFEF4444);
+const _violet        = Color(0xFF8B5CF6);
+
+// ─── Room Details Screen ──────────────────────────────────────────────────────
 class RoomDetailsScreen extends ConsumerStatefulWidget {
   final String roomId;
   const RoomDetailsScreen({super.key, required this.roomId});
@@ -38,7 +37,6 @@ class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabCtrl;
   bool _timelineExpanded = false;
-
 
   @override
   void initState() {
@@ -55,7 +53,6 @@ class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(roomDetailsProvider(widget.roomId));
-
     return Scaffold(
       backgroundColor: _bg,
       extendBodyBehindAppBar: true,
@@ -73,7 +70,6 @@ class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
 
     return Column(
       children: [
-        // ── Hero Header ───────────────────────────────────────────────────
         _HeroHeader(
           data: data,
           statusMeta: statusMeta,
@@ -81,28 +77,45 @@ class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
           onBack: () => Navigator.of(context).pop(),
         ),
 
-        // ── Tab Bar ───────────────────────────────────────────────────────
+        // ── Tab Bar ───────────────────────────────────────────
         Container(
-          color: _surface,
-          child: TabBar(
-            controller: _tabCtrl,
-            labelColor: _gold,
-            unselectedLabelColor: _textMuted,
-            indicatorColor: _gold,
-            indicatorWeight: 2,
-            labelStyle: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.5,
-            ),
-            tabs: const [
-              Tab(text: 'ROOM STATUS'),
-              Tab(text: 'HISTORY'),
+          color: _bg,
+          child: Stack(
+            children: [
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: Container(height: 1, color: _border),
+              ),
+              TabBar(
+                controller: _tabCtrl,
+                indicatorWeight: 3,
+                indicatorColor: _gold,
+                indicatorSize: TabBarIndicatorSize.label,
+                labelColor: _gold,
+                unselectedLabelColor: _textSecondary,
+                labelStyle: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.2,
+                ),
+                unselectedLabelStyle: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 1.2,
+                ),
+                overlayColor: WidgetStateProperty.all(Colors.transparent),
+                dividerColor: Colors.transparent,
+                tabs: const [
+                  Tab(text: 'OVERVIEW'),
+                  Tab(text: 'ACTIVITY'),
+                ],
+              ),
             ],
           ),
         ),
 
-        // ── Tab Views ─────────────────────────────────────────────────────
         Expanded(
           child: TabBarView(
             controller: _tabCtrl,
@@ -121,68 +134,55 @@ class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
     );
   }
 
-  Widget _buildLoading() {
-    return const Center(
+  Widget _buildLoading() => const Center(
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: 36,
+          height: 36,
+          child: CircularProgressIndicator(
+            color: _gold,
+            strokeWidth: 2,
+            backgroundColor: Color(0xFF1C2D42),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _buildError(Object e) => Center(
+    child: Padding(
+      padding: const EdgeInsets.all(32),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          CircularProgressIndicator(color: _gold, strokeWidth: 2),
-          SizedBox(height: 16),
-          Text('Loading room data…', style: TextStyle(color: _textSecondary, fontSize: 13)),
+          const Icon(Icons.error_outline_rounded, color: _red, size: 38),
+          const SizedBox(height: 16),
+          const Text(
+            'Failed to load room',
+            style: TextStyle(color: _textPrimary, fontSize: 17, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          Text(e.toString(), style: const TextStyle(color: _textSecondary, fontSize: 12), textAlign: TextAlign.center),
+          const SizedBox(height: 24),
+          TextButton(
+            onPressed: () => ref.refresh(roomDetailsProvider(widget.roomId)),
+            child: const Text('Try Again', style: TextStyle(color: _gold, fontWeight: FontWeight.w700)),
+          ),
         ],
       ),
-    );
-  }
+    ),
+  );
 
-  Widget _buildError(Object e) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: _red.withValues(alpha: 0.08),
-                shape: BoxShape.circle,
-                border: Border.all(color: _red.withValues(alpha: 0.25)),
-              ),
-              child: const Icon(Icons.error_outline_rounded, color: _red, size: 40),
-            ),
-            const SizedBox(height: 20),
-            const Text('Failed to load room', style: TextStyle(color: _textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 8),
-            Text(e.toString(), style: const TextStyle(color: _textSecondary, fontSize: 12), textAlign: TextAlign.center),
-            const SizedBox(height: 28),
-            GestureDetector(
-              onTap: () => ref.refresh(roomDetailsProvider(widget.roomId)),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
-                decoration: BoxDecoration(
-                  color: _surfaceRaised,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: _gold),
-                ),
-                child: const Text('Retry', style: TextStyle(color: _gold, fontWeight: FontWeight.w700, fontSize: 14)),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  _StatusMeta _statusMeta(String status) {
-    switch (status) {
-      case 'OCCUPIED':       return _StatusMeta(_blue, Icons.person_rounded, 'Occupied');
-      case 'READY':          return _StatusMeta(_green, Icons.check_circle_rounded, 'Vacant · Ready');
-      case 'DIRTY':          return _StatusMeta(_orange, Icons.cleaning_services_rounded, 'Vacant · Dirty');
-      case 'OUT_OF_ORDER':   return _StatusMeta(_red, Icons.block_rounded, 'Out of Order');
-      case 'OUT_OF_SERVICE': return _StatusMeta(_violet, Icons.engineering_rounded, 'Out of Service');
-      default:               return _StatusMeta(_textMuted, Icons.help_outline_rounded, status.replaceAll('_', ' '));
-    }
-  }
+  _StatusMeta _statusMeta(String status) => switch (status) {
+    'OCCUPIED'       => _StatusMeta(_blue,   Icons.person_rounded,           'Occupied'),
+    'READY'          => _StatusMeta(_green,  Icons.check_circle_rounded,     'Vacant · Ready'),
+    'DIRTY'          => _StatusMeta(_orange, Icons.cleaning_services_rounded,'Vacant · Dirty'),
+    'OUT_OF_ORDER'   => _StatusMeta(_red,    Icons.block_rounded,            'Out of Order'),
+    'OUT_OF_SERVICE' => _StatusMeta(_violet, Icons.engineering_rounded,      'Out of Service'),
+    _                => _StatusMeta(_textSecondary, Icons.help_outline_rounded, status.replaceAll('_', ' ')),
+  };
 
   String _parseRoomNumber(String number) {
     if (number.contains('.')) {
@@ -219,25 +219,26 @@ class _HeroHeader extends StatelessWidget {
     }
 
     return Container(
-      padding: EdgeInsets.fromLTRB(20, topPad + 12, 20, 20),
+      width: double.infinity,
+      padding: EdgeInsets.fromLTRB(20, topPad + 10, 20, 24),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+        color: _bg,
+        // Radial glowing effect behind the room number
+        gradient: RadialGradient(
+          center: Alignment.topRight,
+          radius: 1.2,
           colors: [
-            _bgGradTop,
-            statusMeta.color.withValues(alpha: 0.08),
+            statusMeta.color.withValues(alpha: 0.15),
+            _bg,
           ],
-        ),
-        border: Border(
-          bottom: BorderSide(color: statusMeta.color.withValues(alpha: 0.2)),
         ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Back + title row
+          // ── Nav Row ─────────────────────────────────────────────────────
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               GestureDetector(
                 onTap: () {
@@ -245,169 +246,124 @@ class _HeroHeader extends StatelessWidget {
                   onBack();
                 },
                 child: Container(
-                  width: 36,
-                  height: 36,
+                  width: 40,
+                  height: 40,
                   decoration: BoxDecoration(
-                    color: _surfaceHigh,
-                    borderRadius: BorderRadius.circular(10),
+                    color: _surface,
+                    shape: BoxShape.circle,
                     border: Border.all(color: _border),
                   ),
-                  child: const Icon(Icons.arrow_back_ios_new_rounded, color: _textSecondary, size: 15),
+                  child: const Icon(Icons.arrow_back_rounded, color: _textPrimary, size: 18),
                 ),
               ),
-              const SizedBox(width: 12),
-              const Text(
-                'ROOM PROFILE',
-                style: TextStyle(
-                  color: _textMuted,
-                  fontSize: 10,
-                  letterSpacing: 2,
-                  fontWeight: FontWeight.w700,
+              if (data.managementAttention != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: _red.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: _red.withValues(alpha: 0.4)),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.warning_amber_rounded, color: _red, size: 14),
+                      SizedBox(width: 6),
+                      Text('ALERT', style: TextStyle(color: _red, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1)),
+                    ],
+                  ),
                 ),
-              ),
             ],
           ),
+          const SizedBox(height: 24),
 
-          const SizedBox(height: 16),
-
-          // Room number + type
+          // ── Room number block ────────────────────────────────────────────
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
+              // Left: location + type
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (locationText != null) ...[
                       Text(
-                        locationText,
+                        locationText.toUpperCase(),
                         style: const TextStyle(
                           color: _textSecondary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.5,
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 6),
                     ],
                     Text(
-                      data.room.roomType.name.toUpperCase(),
+                      data.room.roomType.name,
                       style: const TextStyle(
-                        color: _textSecondary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  const Text(
-                    'ROOM',
-                    style: TextStyle(
-                      color: _textMuted,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 2.5,
-                    ),
-                  ),
-                  Text(
-                    displayNumber,
-                    style: TextStyle(
-                      color: _textPrimary,
-                      fontSize: 52,
-                      fontWeight: FontWeight.w900,
-                      height: 1,
-                      letterSpacing: -1,
-                      shadows: [
-                        Shadow(
-                          color: statusMeta.color.withValues(alpha: 0.4),
-                          blurRadius: 20,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 14),
-
-          // Status + sellability row
-          Row(
-            children: [
-              // Status badge
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: statusMeta.color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: statusMeta.color.withValues(alpha: 0.4)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(statusMeta.icon, color: statusMeta.color, size: 12),
-                    const SizedBox(width: 6),
-                    Text(
-                      statusMeta.label,
-                      style: TextStyle(
-                        color: statusMeta.color,
-                        fontSize: 11,
+                        color: _textPrimary,
+                        fontSize: 22,
                         fontWeight: FontWeight.w700,
-                        letterSpacing: 0.3,
+                        letterSpacing: -0.5,
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
-              // Sellability badge
-              _SellabilityBadge(sellability: data.sellability),
-              const Spacer(),
-              // Management attention indicator
-              if (data.managementAttention != null)
-                Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: _red.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: _red.withValues(alpha: 0.3)),
-                  ),
-                  child: const Icon(
-                    Icons.warning_amber_rounded,
-                    color: _red,
-                    size: 16,
-                  ),
+
+              // Right: big room number
+              Text(
+                displayNumber,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 64,
+                  fontWeight: FontWeight.w800,
+                  height: 1,
+                  letterSpacing: -2.5,
+                  shadows: [
+                    Shadow(color: statusMeta.color.withValues(alpha: 0.4), blurRadius: 24),
+                  ],
                 ),
+              ),
             ],
           ),
 
-          // Management attention banner
+          const SizedBox(height: 24),
+
+          // ── Status row ───────────────────────────────────────────────────
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _StatusPill(
+                icon: statusMeta.icon,
+                label: statusMeta.label,
+                color: statusMeta.color,
+                solid: true,
+              ),
+              _SellabilityBadge(sellability: data.sellability),
+            ],
+          ),
+
+          // ── Management attention banner ───────────────────────────────────
           if (data.managementAttention != null) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             Container(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 color: _red.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: _red.withValues(alpha: 0.25)),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: _red.withValues(alpha: 0.2)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.warning_amber_rounded, color: _red, size: 14),
-                  const SizedBox(width: 8),
+                  const Icon(Icons.info_outline_rounded, color: _red, size: 16),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Text(
                       data.managementAttention!.message,
-                      style: const TextStyle(
-                        color: _red,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: const TextStyle(color: _red, fontSize: 13, fontWeight: FontWeight.w600, height: 1.4),
                     ),
                   ),
                 ],
@@ -418,6 +374,41 @@ class _HeroHeader extends StatelessWidget {
       ),
     );
   }
+}
+
+class _StatusPill extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final bool solid;
+
+  const _StatusPill({required this.icon, required this.label, required this.color, this.solid = false});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    decoration: BoxDecoration(
+      color: solid ? color.withValues(alpha: 0.15) : _surface,
+      borderRadius: BorderRadius.circular(24),
+      border: Border.all(color: solid ? color.withValues(alpha: 0.4) : _border),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: color, size: 12),
+        const SizedBox(width: 6),
+        Text(
+          label.toUpperCase(),
+          style: TextStyle(
+            color: solid ? color : _textPrimary,
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.8,
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _SellabilityBadge extends StatelessWidget {
@@ -431,31 +422,7 @@ class _SellabilityBadge extends StatelessWidget {
       'NOT_SELLABLE'  => (_red, Icons.block_rounded, 'NOT SELLABLE'),
       _               => (_orange, Icons.pending_outlined, 'NOT READY'),
     };
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: color, size: 11),
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 9,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.5,
-            ),
-          ),
-        ],
-      ),
-    );
+    return _StatusPill(icon: icon, label: label, color: color, solid: false);
   }
 }
 
@@ -467,15 +434,16 @@ class _OverviewTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 80),
+      physics: const BouncingScrollPhysics(),
       children: [
         _CurrentGuestCard(guest: data.currentGuest),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
         _NextArrivalCard(arrival: data.nextArrival),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
         _HousekeepingCard(hk: data.housekeeping),
         if (data.maintenance != null) ...[
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           _MaintenanceCard(maintenance: data.maintenance!),
         ],
       ],
@@ -483,7 +451,7 @@ class _OverviewTab extends StatelessWidget {
   }
 }
 
-// ─── History Tab ─────────────────────────────────────────────────────────────
+// ─── History Tab ──────────────────────────────────────────────────────────────
 class _HistoryTab extends StatelessWidget {
   final RoomDetailsData data;
   final bool timelineExpanded;
@@ -497,107 +465,54 @@ class _HistoryTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const previewCount = 3;
+    const previewCount = 4;
     final hasMore = data.timeline.length > previewCount;
-    final displayed = timelineExpanded
-        ? data.timeline
-        : data.timeline.take(previewCount).toList();
+    final displayed = timelineExpanded ? data.timeline : data.timeline.take(previewCount).toList();
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 80),
+      physics: const BouncingScrollPhysics(),
       children: [
-        _SectionHeader(
-          icon: Icons.timeline_rounded,
-          title: 'ROOM ACTIVITY',
-          subtitle: '${data.timeline.length} events',
-        ),
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: _surfaceRaised,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: _border),
-          ),
-          child: Column(
-            children: [
-              if (displayed.isEmpty)
-                const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(20),
-                    child: Text(
-                      'No recent activity recorded',
-                      style: TextStyle(color: _textMuted, fontSize: 13),
-                    ),
-                  ),
-                )
-              else
-                ...displayed.asMap().entries.map(
-                  (e) => _TimelineEntry(
-                    event: e.value,
-                    isLast: e.key == displayed.length - 1,
-                  ),
-                ),
-
-              if (hasMore) ...[
-                const SizedBox(height: 4),
-                Divider(color: _border, height: 1),
-                const SizedBox(height: 4),
-                GestureDetector(
-                  onTap: onToggleTimeline,
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          timelineExpanded
-                              ? 'Show less'
-                              : 'View ${data.timeline.length - previewCount} more events',
-                          style: const TextStyle(
-                            color: _blue,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Icon(
-                          timelineExpanded
-                              ? Icons.keyboard_arrow_up_rounded
-                              : Icons.keyboard_arrow_down_rounded,
-                          color: _blue,
-                          size: 16,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-
-        // Business date footnote
-        const SizedBox(height: 20),
         Row(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.calendar_today_outlined, color: _textMuted, size: 12),
-            const SizedBox(width: 6),
-            Text(
-              'Business Date: ${DateFormat('EEE, MMM d · yyyy').format(data.businessDate)}',
-              style: const TextStyle(color: _textMuted, fontSize: 11),
+            const Text(
+              'Recent Activity',
+              style: TextStyle(color: _textPrimary, fontSize: 16, fontWeight: FontWeight.w700),
+            ),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(color: _surfaceRaised, borderRadius: BorderRadius.circular(12)),
+              child: Text('${data.timeline.length} events', style: const TextStyle(color: _textSecondary, fontSize: 11)),
             ),
           ],
         ),
+        const SizedBox(height: 24),
+        if (displayed.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 40),
+            child: Center(child: Text('No activity recorded', style: TextStyle(color: _textMuted))),
+          )
+        else
+          ...displayed.asMap().entries.map(
+            (e) => _TimelineEntry(event: e.value, isLast: e.key == displayed.length - 1),
+          ),
+        if (hasMore) ...[
+          const SizedBox(height: 16),
+          Center(
+            child: TextButton.icon(
+              onPressed: onToggleTimeline,
+              icon: Icon(timelineExpanded ? Icons.expand_less : Icons.expand_more, size: 16, color: _blue),
+              label: Text(timelineExpanded ? 'Show Less' : 'View All', style: const TextStyle(color: _blue)),
+            ),
+          ),
+        ],
       ],
     );
   }
 }
 
-// ─── Cards ───────────────────────────────────────────────────────────────────
-
+// ─── Current Guest Card ───────────────────────────────────────────────────────
 class _CurrentGuestCard extends StatelessWidget {
   final CurrentGuestInfo? guest;
   const _CurrentGuestCard({required this.guest});
@@ -605,12 +520,13 @@ class _CurrentGuestCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (guest == null) {
-      return _InfoCard(
+      return _PremiumCard(
         icon: Icons.person_outline_rounded,
-        iconColor: _textMuted,
         title: 'CURRENT GUEST',
-        trailing: null,
-        child: const _EmptyState(message: 'Room is unoccupied'),
+        child: const Padding(
+          padding: EdgeInsets.only(top: 8),
+          child: Text('Room is unoccupied', style: TextStyle(color: _textMuted, fontSize: 14)),
+        ),
       );
     }
 
@@ -618,65 +534,58 @@ class _CurrentGuestCard extends StatelessWidget {
     final nights = guest!.checkOut.difference(guest!.checkIn).inDays;
     final now = DateTime.now();
     final daysLeft = guest!.checkOut.difference(now).inDays;
+    final isOverdue = daysLeft < 0;
+    final isDepartingToday = daysLeft == 0;
 
-    return _InfoCard(
+    return _PremiumCard(
       icon: Icons.person_rounded,
       iconColor: _blue,
       title: 'CURRENT GUEST',
       trailing: guest!.vipLevel != null
-          ? _Chip(label: guest!.vipLevel!, color: _gold)
+          ? Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(color: _gold.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
+              child: Text(guest!.vipLevel!, style: const TextStyle(color: _gold, fontSize: 9, fontWeight: FontWeight.w800)),
+            )
           : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          const SizedBox(height: 12),
           Text(
             guest!.name ?? '🔒 Restricted',
-            style: const TextStyle(
-              color: _textPrimary,
-              fontSize: 17,
-              fontWeight: FontWeight.w700,
-            ),
+            style: const TextStyle(color: _textPrimary, fontSize: 20, fontWeight: FontWeight.w700, letterSpacing: -0.5),
           ),
-          const SizedBox(height: 12),
-          // Check-in / Check-out
-          _InfoGrid(items: [
-            _InfoItem(Icons.login_rounded, 'Check-In', fmt.format(guest!.checkIn)),
-            _InfoItem(Icons.logout_rounded, 'Check-Out', fmt.format(guest!.checkOut)),
-            _InfoItem(Icons.nights_stay_rounded, 'Nights', '$nights'),
-            _InfoItem(
-              Icons.timer_outlined,
-              'Remaining',
-              daysLeft < 0
-                  ? 'Overdue'
-                  : daysLeft == 0
-                      ? 'Departing today'
-                      : '$daysLeft day${daysLeft == 1 ? '' : 's'}',
-            ),
-          ]),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              _StatBlock(label: 'CHECK-IN', value: fmt.format(guest!.checkIn), icon: Icons.login_rounded),
+              _StatBlock(label: 'CHECK-OUT', value: fmt.format(guest!.checkOut), icon: Icons.logout_rounded, isAlert: isOverdue),
+              _StatBlock(label: 'NIGHTS', value: '$nights', icon: Icons.nights_stay_rounded),
+              _StatBlock(label: 'REMAINING', value: isOverdue ? 'OVR' : isDepartingToday ? 'TODAY' : '${daysLeft}d', icon: Icons.timer_outlined, highlightColor: isDepartingToday ? _orange : null),
+            ],
+          ),
           if (guest!.folioBalance != null) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 24),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: _surfaceHigh,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: _border),
+                color: _bg,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: guest!.folioBalance! > 0 ? _orange.withValues(alpha: 0.3) : _border),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.receipt_long_rounded, size: 14, color: _textMuted),
-                  const SizedBox(width: 8),
-                  const Text(
-                    'Folio Balance',
-                    style: TextStyle(color: _textSecondary, fontSize: 12),
-                  ),
+                  const Icon(Icons.receipt_long_rounded, size: 16, color: _textSecondary),
+                  const SizedBox(width: 12),
+                  const Text('Folio Balance', style: TextStyle(color: _textSecondary, fontSize: 14)),
                   const Spacer(),
                   Text(
-                    '₦${guest!.folioBalance!.toStringAsFixed(2)}',
+                    '₦${_fmtBalance(guest!.folioBalance!)}',
                     style: TextStyle(
                       color: guest!.folioBalance! > 0 ? _orange : _green,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ],
@@ -687,8 +596,51 @@ class _CurrentGuestCard extends StatelessWidget {
       ),
     );
   }
+
+  static String _fmtBalance(double v) {
+    if (v >= 1000000) return '${(v / 1000000).toStringAsFixed(1)}M';
+    if (v >= 1000)    return '${(v / 1000).toStringAsFixed(1)}K';
+    return v.toStringAsFixed(0);
+  }
 }
 
+class _StatBlock extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final bool isAlert;
+  final Color? highlightColor;
+
+  const _StatBlock({required this.label, required this.value, required this.icon, this.isAlert = false, this.highlightColor});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isAlert ? _red : highlightColor ?? _textPrimary;
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 12, color: _textSecondary),
+              const SizedBox(width: 4),
+              Text(label, style: const TextStyle(color: _textSecondary, fontSize: 9, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.w700),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Next Arrival Card ────────────────────────────────────────────────────────
 class _NextArrivalCard extends StatelessWidget {
   final NextArrivalInfo? arrival;
   const _NextArrivalCard({required this.arrival});
@@ -696,12 +648,13 @@ class _NextArrivalCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (arrival == null) {
-      return _InfoCard(
-        icon: Icons.flight_land_outlined,
-        iconColor: _textMuted,
+      return _PremiumCard(
+        icon: Icons.flight_land_rounded,
         title: 'NEXT ARRIVAL',
-        trailing: null,
-        child: const _EmptyState(message: 'No upcoming arrivals scheduled'),
+        child: const Padding(
+          padding: EdgeInsets.only(top: 8),
+          child: Text('No upcoming arrivals', style: TextStyle(color: _textMuted, fontSize: 14)),
+        ),
       );
     }
 
@@ -710,38 +663,45 @@ class _NextArrivalCard extends StatelessWidget {
     final isToday = arrival!.arrivalDate.year == now.year &&
         arrival!.arrivalDate.month == now.month &&
         arrival!.arrivalDate.day == now.day;
-    final dateStr = isToday ? 'Today' : dateFmt.format(arrival!.arrivalDate);
 
-    return _InfoCard(
+    return _PremiumCard(
       icon: Icons.flight_land_rounded,
       iconColor: _green,
       title: 'NEXT ARRIVAL',
-      trailing: isToday ? _Chip(label: 'TODAY', color: _orange) : null,
+      trailing: isToday
+          ? Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(color: _orange.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
+              child: const Text('TODAY', style: TextStyle(color: _orange, fontSize: 9, fontWeight: FontWeight.w800)),
+            )
+          : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          const SizedBox(height: 12),
           Text(
             arrival!.guestName ?? '🔒 Restricted',
-            style: const TextStyle(
-              color: _textPrimary,
-              fontSize: 17,
-              fontWeight: FontWeight.w700,
-            ),
+            style: const TextStyle(color: _textPrimary, fontSize: 18, fontWeight: FontWeight.w700, letterSpacing: -0.5),
           ),
-          const SizedBox(height: 12),
-          _InfoGrid(items: [
-            _InfoItem(Icons.calendar_today_outlined, 'Arrival', dateStr),
-            if (arrival!.arrivalTime != null)
-              _InfoItem(Icons.schedule_rounded, 'ETA', arrival!.arrivalTime!),
-            _InfoItem(Icons.nights_stay_rounded, 'Nights', '${arrival!.nights}'),
-            _InfoItem(Icons.info_outline_rounded, 'Status', _capitalize(arrival!.status)),
-          ]),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              _InfoRow(icon: Icons.calendar_today_outlined, label: isToday ? 'Today' : dateFmt.format(arrival!.arrivalDate)),
+              if (arrival!.arrivalTime != null)
+                _InfoRow(icon: Icons.schedule_rounded, label: arrival!.arrivalTime!),
+              _InfoRow(icon: Icons.nights_stay_rounded, label: '${arrival!.nights} nights'),
+              _InfoRow(icon: Icons.info_outline_rounded, label: _capitalize(arrival!.status)),
+            ],
+          ),
         ],
       ),
     );
   }
 }
 
+// ─── Housekeeping Card ────────────────────────────────────────────────────────
 class _HousekeepingCard extends StatelessWidget {
   final HousekeepingInfo hk;
   const _HousekeepingCard({required this.hk});
@@ -751,99 +711,148 @@ class _HousekeepingCard extends StatelessWidget {
     final isClean = hk.status == 'CLEAN' || hk.status == 'INSPECTED';
     final color = isClean ? _green : _orange;
 
-    return _InfoCard(
+    return _PremiumCard(
       icon: Icons.cleaning_services_rounded,
       iconColor: color,
       title: 'HOUSEKEEPING',
-      trailing: _Chip(label: hk.status, color: color),
+      trailing: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
+        child: Text(hk.status, style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.w800)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          const SizedBox(height: 12),
           if (hk.lastUpdatedAt != null)
-            _DetailRow(
+            _InfoRow(
               icon: Icons.update_rounded,
-              label: hk.status == 'INSPECTED' ? 'Last Inspected' : 'Last Updated',
-              value: timeago.format(hk.lastUpdatedAt!),
+              label: '${hk.status == 'INSPECTED' ? 'Inspected' : 'Updated'}: ${timeago.format(hk.lastUpdatedAt!)}',
             ),
           if (hk.assignedTo != null) ...[
             const SizedBox(height: 8),
-            _DetailRow(
-              icon: Icons.badge_rounded,
-              label: 'Assigned To',
-              value: hk.assignedTo!,
-            ),
+            _InfoRow(icon: Icons.badge_rounded, label: 'Assigned to ${hk.assignedTo!}'),
           ],
           if (hk.lastUpdatedAt == null && hk.assignedTo == null)
-            const _EmptyState(message: 'No housekeeping activity recorded'),
+            const Text('No recent activity', style: TextStyle(color: _textMuted, fontSize: 14)),
         ],
       ),
     );
   }
 }
 
+// ─── Maintenance Card ─────────────────────────────────────────────────────────
 class _MaintenanceCard extends StatelessWidget {
   final MaintenanceInfo maintenance;
   const _MaintenanceCard({required this.maintenance});
 
   @override
   Widget build(BuildContext context) {
-    return _InfoCard(
+    return _PremiumCard(
       icon: Icons.build_rounded,
       iconColor: _red,
       title: 'MAINTENANCE',
-      trailing: _Chip(
-        label: maintenance.status.replaceAll('_', ' '),
-        color: _red,
+      trailing: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(color: _red.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
+        child: Text(maintenance.status.replaceAll('_', ' '), style: const TextStyle(color: _red, fontSize: 9, fontWeight: FontWeight.w800)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Reason banner
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: _red.withValues(alpha: 0.07),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: _red.withValues(alpha: 0.2)),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.report_problem_rounded, color: _red, size: 15),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    maintenance.reason,
-                    style: const TextStyle(color: _textPrimary, fontSize: 13),
-                  ),
-                ),
-              ],
-            ),
+          const SizedBox(height: 16),
+          Text(
+            maintenance.reason,
+            style: const TextStyle(color: _textPrimary, fontSize: 15, fontWeight: FontWeight.w500, height: 1.4),
           ),
-          const SizedBox(height: 12),
-          if (maintenance.priority.isNotEmpty)
-            _DetailRow(
-              icon: Icons.flag_rounded,
-              label: 'Priority',
-              value: maintenance.priority,
-            ),
-          if (maintenance.reportedAt != null) ...[
-            const SizedBox(height: 8),
-            _DetailRow(
-              icon: Icons.schedule_rounded,
-              label: 'Reported',
-              value: timeago.format(maintenance.reportedAt!),
-            ),
-          ],
-          if (maintenance.expectedResolutionAt != null) ...[
-            const SizedBox(height: 8),
-            _DetailRow(
-              icon: Icons.event_available_rounded,
-              label: 'Expected Resolution',
-              value: DateFormat('MMM d · HH:mm').format(maintenance.expectedResolutionAt!),
-            ),
-          ],
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 16,
+            runSpacing: 12,
+            children: [
+              if (maintenance.priority.isNotEmpty)
+                _InfoRow(icon: Icons.flag_rounded, label: 'Priority: ${maintenance.priority}', color: _red),
+              if (maintenance.reportedAt != null)
+                _InfoRow(icon: Icons.schedule_rounded, label: 'Reported ${timeago.format(maintenance.reportedAt!)}'),
+            ],
+          ),
         ],
       ),
+    );
+  }
+}
+
+// ─── Shared Primitives ────────────────────────────────────────────────────────
+class _PremiumCard extends StatelessWidget {
+  final IconData icon;
+  final Color? iconColor;
+  final String title;
+  final Widget? trailing;
+  final Widget child;
+
+  const _PremiumCard({
+    required this.icon,
+    this.iconColor,
+    required this.title,
+    this.trailing,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: _border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.15),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 16, color: iconColor ?? _textSecondary),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: const TextStyle(color: _textSecondary, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.2),
+              ),
+              const Spacer(),
+              ?trailing,
+            ],
+          ),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color? color;
+
+  const _InfoRow({required this.icon, required this.label, this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: color ?? _textSecondary),
+        const SizedBox(width: 6),
+        Text(label, style: TextStyle(color: color ?? _textSecondary, fontSize: 13, fontWeight: FontWeight.w500)),
+      ],
     );
   }
 }
@@ -852,93 +861,84 @@ class _MaintenanceCard extends StatelessWidget {
 class _TimelineEntry extends StatelessWidget {
   final TimelineEvent event;
   final bool isLast;
-
   const _TimelineEntry({required this.event, required this.isLast});
 
-  Color _color() {
-    switch (event.type) {
-      case 'MAINTENANCE':  return _red;
-      case 'HOUSEKEEPING': return _orange;
-      case 'RESERVATION':  return _blue;
-      default:             return _textSecondary;
-    }
-  }
+  Color _color() => switch (event.type) {
+    'MAINTENANCE'  => _red,
+    'HOUSEKEEPING' => _orange,
+    'RESERVATION'  => _blue,
+    _              => _textSecondary,
+  };
 
-  IconData _icon() {
-    switch (event.type) {
-      case 'MAINTENANCE':  return Icons.build_rounded;
-      case 'HOUSEKEEPING': return Icons.cleaning_services_rounded;
-      case 'RESERVATION':  return Icons.hotel_rounded;
-      default:             return Icons.info_outline_rounded;
-    }
-  }
+  IconData _icon() => switch (event.type) {
+    'MAINTENANCE'  => Icons.build_rounded,
+    'HOUSEKEEPING' => Icons.cleaning_services_rounded,
+    'RESERVATION'  => Icons.hotel_rounded,
+    _              => Icons.info_outline_rounded,
+  };
 
   @override
   Widget build(BuildContext context) {
     final color = _color();
-    final icon = _icon();
-    final fmt = DateFormat('MMM d · HH:mm');
-
     return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Dot + line
           Column(
             children: [
               Container(
-                width: 30,
-                height: 30,
+                width: 36,
+                height: 36,
                 decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.12),
+                  color: _surfaceRaised,
                   shape: BoxShape.circle,
-                  border: Border.all(color: color.withValues(alpha: 0.3)),
+                  border: Border.all(color: _border),
                 ),
-                child: Icon(icon, color: color, size: 14),
+                child: Icon(_icon(), color: color, size: 16),
               ),
               if (!isLast)
-                Expanded(
-                  child: Container(
-                    width: 1.5,
-                    margin: const EdgeInsets.symmetric(vertical: 4),
-                    color: _border,
-                  ),
-                ),
+                Expanded(child: Container(width: 2, color: _border, margin: const EdgeInsets.symmetric(vertical: 8))),
             ],
           ),
-          const SizedBox(width: 12),
-          // Content
+          const SizedBox(width: 16),
           Expanded(
             child: Padding(
-              padding: EdgeInsets.only(bottom: isLast ? 0 : 16),
+              padding: EdgeInsets.only(bottom: isLast ? 0 : 32),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    fmt.format(event.timestamp),
-                    style: TextStyle(
-                      color: color,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.3,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    event.title,
-                    style: const TextStyle(
-                      color: _textPrimary,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          event.title,
+                          style: const TextStyle(color: _textPrimary, fontSize: 15, fontWeight: FontWeight.w600),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        DateFormat('HH:mm').format(event.timestamp),
+                        style: const TextStyle(color: _textMuted, fontSize: 12, fontWeight: FontWeight.w600),
+                      ),
+                    ],
                   ),
                   if (event.subtitle.isNotEmpty) ...[
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 6),
                     Text(
                       event.subtitle,
-                      style: const TextStyle(color: _textSecondary, fontSize: 12),
+                      style: const TextStyle(color: _textSecondary, fontSize: 13, height: 1.4),
                     ),
                   ],
+                  const SizedBox(height: 8),
+                  Text(
+                    DateFormat('MMM d, yyyy').format(event.timestamp),
+                    style: const TextStyle(color: _textMuted, fontSize: 11, fontWeight: FontWeight.w500),
+                  ),
                 ],
               ),
             ),
@@ -949,248 +949,11 @@ class _TimelineEntry extends StatelessWidget {
   }
 }
 
-// ─── Shared building blocks ───────────────────────────────────────────────────
-
-class _SectionHeader extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String? subtitle;
-
-  const _SectionHeader({
-    required this.icon,
-    required this.title,
-    this.subtitle,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(6),
-          decoration: BoxDecoration(
-            color: _surfaceHigh,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: _border),
-          ),
-          child: Icon(icon, color: _textSecondary, size: 14),
-        ),
-        const SizedBox(width: 10),
-        Text(
-          title,
-          style: const TextStyle(
-            color: _textSecondary,
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.2,
-          ),
-        ),
-        if (subtitle != null) ...[
-          const SizedBox(width: 8),
-          Text(
-            subtitle!,
-            style: const TextStyle(color: _textMuted, fontSize: 11),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-class _InfoCard extends StatelessWidget {
-  final IconData icon;
-  final Color iconColor;
-  final String title;
-  final Widget? trailing;
-  final Widget child;
-
-  const _InfoCard({
-    required this.icon,
-    required this.iconColor,
-    required this.title,
-    required this.trailing,
-    required this.child,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: _surfaceRaised,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Header
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: iconColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(icon, color: iconColor, size: 14),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: _textSecondary,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-                const Spacer(),
-                ?trailing,
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            child: Divider(height: 1, color: _border),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: child,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InfoGrid extends StatelessWidget {
-  final List<_InfoItem> items;
-  const _InfoGrid({required this.items});
-
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: items.map((item) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: _surfaceHigh,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: _border),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(item.icon, color: _textMuted, size: 13),
-            const SizedBox(width: 6),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(item.label, style: const TextStyle(color: _textMuted, fontSize: 10)),
-                Text(
-                  item.value,
-                  style: const TextStyle(
-                    color: _textPrimary,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      )).toList(),
-    );
-  }
-}
-
-class _DetailRow extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-
-  const _DetailRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  @override
-  Widget build(BuildContext context) => Row(
-    children: [
-      Icon(icon, color: _textMuted, size: 14),
-      const SizedBox(width: 8),
-      Text('$label:', style: const TextStyle(color: _textSecondary, fontSize: 13)),
-      const SizedBox(width: 6),
-      Expanded(
-        child: Text(
-          value,
-          style: const TextStyle(
-            color: _textPrimary,
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-    ],
-  );
-}
-
-class _EmptyState extends StatelessWidget {
-  final String message;
-  const _EmptyState({required this.message});
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 8),
-    child: Text(
-      message,
-      style: const TextStyle(color: _textMuted, fontSize: 13),
-    ),
-  );
-}
-
-class _Chip extends StatelessWidget {
-  final String label;
-  final Color color;
-  const _Chip({required this.label, required this.color});
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-    decoration: BoxDecoration(
-      color: color.withValues(alpha: 0.12),
-      borderRadius: BorderRadius.circular(6),
-      border: Border.all(color: color.withValues(alpha: 0.35)),
-    ),
-    child: Text(
-      label,
-      style: TextStyle(
-        color: color,
-        fontSize: 9,
-        fontWeight: FontWeight.w800,
-        letterSpacing: 0.5,
-      ),
-    ),
-  );
-}
-
-// ─── Data helpers ─────────────────────────────────────────────────────────────
 class _StatusMeta {
   final Color color;
   final IconData icon;
   final String label;
   const _StatusMeta(this.color, this.icon, this.label);
-}
-
-class _InfoItem {
-  final IconData icon;
-  final String label;
-  final String value;
-  const _InfoItem(this.icon, this.label, this.value);
 }
 
 String _capitalize(String s) {
