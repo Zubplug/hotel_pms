@@ -77,7 +77,12 @@ export async function POST(
           orderBy: [{ dueDate: 'asc' }, { issueDate: 'asc' }]
         });
         const totalOutstanding = invoicesToPay.reduce((sum, inv) => sum + Number(inv.outstandingAmount), 0);
-        if (amount > totalOutstanding) throw new Error('PAYMENT_EXCEEDS_BALANCE');
+        // Corporate accounts may receive an unapplied advance when there are
+        // no invoices. Do not mix an invoice settlement and an advance in one
+        // payment: one payment must have one accounting classification.
+        if (amount > totalOutstanding && (account.type !== 'CORPORATE' || invoicesToPay.length > 0)) {
+          throw new Error('PAYMENT_EXCEEDS_BALANCE');
+        }
       }
 
       // 4. Find or create Master CITY_LEDGER folio for AR Collections
@@ -116,7 +121,11 @@ export async function POST(
           receiptNumber,
           reference: reference || undefined,
           receivedBy: session.user.id,
-          notes: invoiceId ? `AR Collection for Invoice ${invoiceId}` : 'Bulk AR Collection'
+          notes: invoiceId
+            ? `AR Collection for Invoice ${invoiceId}`
+            : invoicesToPay.length
+              ? 'Bulk AR Collection'
+              : 'Unapplied corporate advance'
         } as any
       });
 
@@ -130,7 +139,11 @@ export async function POST(
           type: 'PAYMENT',
           status: 'OPEN', // Will be SETTLED if fully allocated below
           reference: reference || payment.receiptNumber,
-          reason: invoiceId ? `Settlement for specific invoice` : 'Bulk city ledger payment',
+          reason: invoiceId
+            ? `Settlement for specific invoice`
+            : invoicesToPay.length
+              ? 'Bulk city ledger payment'
+              : 'Unapplied corporate advance',
           createdBy: session.user.id,
         },
       });

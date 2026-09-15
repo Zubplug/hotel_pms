@@ -7,6 +7,7 @@ const ACCOUNT_CODES = {
   bankTransfer: '1130',
   posClearing: '1120',
   cityLedger: '1140',
+  advancedDeposits: '2300',
   roomsRevenue: '4050',
   fnbRevenue: '4250',
   poolRevenue: '4100',
@@ -70,6 +71,7 @@ export async function postNightAuditJournal(tx: any, input: {
     bankTransfer: byCode.get(ACCOUNT_CODES.bankTransfer),
     posClearing: byCode.get(ACCOUNT_CODES.posClearing),
     cityLedger: byCode.get(ACCOUNT_CODES.cityLedger),
+    advancedDeposits: byCode.get(ACCOUNT_CODES.advancedDeposits),
     roomsRevenue: byCode.get(ACCOUNT_CODES.roomsRevenue),
     fnbRevenue: byCode.get(ACCOUNT_CODES.fnbRevenue),
     poolRevenue: byCode.get(ACCOUNT_CODES.poolRevenue),
@@ -85,14 +87,22 @@ export async function postNightAuditJournal(tx: any, input: {
 
   const [folioItems, payments, refunds, posOrders, period, fnbDepartment, recreationDepartment, posOutlets] = await Promise.all([
     tx.folioItem.findMany({
-      where: { folio: { propertyId: input.propertyId }, businessDate: input.businessDate, voidedAt: null, type: { in: ['CHARGE', 'TAX', 'DISCOUNT', 'ADJUSTMENT'] } },
+      where: { folio: { propertyId: input.propertyId }, businessDate: input.businessDate, voidedAt: null, type: { in: ['CHARGE', 'TAX', 'DISCOUNT', 'ADJUSTMENT', 'PAYMENT'] } },
       select: { id: true, type: true, amount: true, source: true, revenueCategory: true, description: true },
     }),
     tx.payment.findMany({
       // Payment.businessDate is required by the schema, so there is no valid
       // null-date fallback branch here.
       where: { propertyId: input.propertyId, businessDate: input.businessDate, status: { in: ['COMPLETED', 'PARTIALLY_REFUNDED'] } },
-      select: { id: true, method: true, amount: true, reference: true },
+      select: {
+        id: true,
+        method: true,
+        amount: true,
+        reference: true,
+        collectionSource: true,
+        notes: true,
+        folio: { select: { type: true } },
+      },
     }),
     tx.refund.findMany({
       where: { propertyId: input.propertyId, businessDate: input.businessDate, status: 'COMPLETED' },
@@ -117,7 +127,20 @@ export async function postNightAuditJournal(tx: any, input: {
   for (const item of folioItems) {
     const amount = Math.abs(Number(item.amount));
     if (!amount) continue;
-    if (item.type === 'TAX') {
+    if (item.type === 'PAYMENT' && item.source === 'CITY_LEDGER') {
+      // Checkout reclassifies the individual folio balance to the shared
+      // corporate folio. A debit balance becomes City Ledger AR; a credit is
+      // an advance owed to the corporate account. The folio item is the
+      // source-linked, idempotent accounting event for that reclassification.
+      const isCredit = /credit/i.test(item.description || '');
+      if (isCredit) {
+        addLine(lines, { accountId: account('guestLedger').id, debit: amount, credit: 0, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
+        addLine(lines, { accountId: account('advancedDeposits').id, debit: 0, credit: amount, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
+      } else {
+        addLine(lines, { accountId: account('cityLedger').id, debit: amount, credit: 0, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
+        addLine(lines, { accountId: account('guestLedger').id, debit: 0, credit: amount, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
+      }
+    } else if (item.type === 'TAX') {
       addLine(lines, { accountId: account('guestLedger').id, debit: amount, credit: 0, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
       addLine(lines, { accountId: account('taxPayable').id, debit: 0, credit: amount, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
     } else if (item.type === 'DISCOUNT' || item.type === 'ADJUSTMENT' && Number(item.amount) < 0) {
@@ -132,9 +155,12 @@ export async function postNightAuditJournal(tx: any, input: {
   for (const payment of payments) {
     const amount = Number(payment.amount);
     if (!amount) continue;
+    const isReceivablesPayment = payment.collectionSource === 'RECEIVABLES' && payment.folio?.type === 'CITY_LEDGER';
+    const isUnappliedAdvance = isReceivablesPayment && payment.notes === 'Unapplied corporate advance';
     const tender = payment.method === 'CITY_LEDGER' ? account('cityLedger') : payment.method === 'CASH' ? account('cash') : payment.method === 'POS' ? account('posClearing') : ['CARD', 'CARD_OFFLINE', 'PAYMENT_GATEWAY', 'MOBILE_PAYMENT'].includes(String(payment.method)) ? account('cardReceivable') : payment.method === 'BANK_TRANSFER' ? account('bankTransfer') : account('guestLedger');
+    const creditAccount = isUnappliedAdvance ? account('advancedDeposits') : isReceivablesPayment ? account('cityLedger') : account('guestLedger');
     addLine(lines, { accountId: tender.id, debit: amount, credit: 0, description: `Payment ${payment.reference || payment.id}`, sourceType: 'PAYMENT', sourceId: payment.id });
-    addLine(lines, { accountId: account('guestLedger').id, debit: 0, credit: amount, description: `Payment ${payment.reference || payment.id}`, sourceType: 'PAYMENT', sourceId: payment.id });
+    addLine(lines, { accountId: creditAccount.id, debit: 0, credit: amount, description: `Payment ${payment.reference || payment.id}`, sourceType: 'PAYMENT', sourceId: payment.id });
   }
   for (const refund of refunds) {
     const amount = Number(refund.amount);
@@ -249,7 +275,7 @@ export async function buildNightAuditBalanceProof(tx: any, input: {
     }),
   ]);
   const activity = Number(folioActivity._sum.amount || 0);
-  const journalAccounts = ['1000', '1100', '1110', '1120', '1130', '1140', '2200'].map((code) => {
+  const journalAccounts = ['1000', '1100', '1110', '1120', '1130', '1140', '2200', '2300'].map((code) => {
     const before = postedEntries.reduce((sum: number, entry: any) => entry.entryDate < input.businessDate
       ? sum + journalNet(code, entry.lines)
       : sum, 0);
@@ -279,6 +305,7 @@ export async function buildNightAuditBalanceProof(tx: any, input: {
     makeJournalBalanceRow('SETTLEMENT', 'POS_CLEARING', previousByKey.get('SETTLEMENT:POS_CLEARING'), accountBalance('1120'), 'POS clearing is sourced from dated posted POS payment and refund journals.'),
     makeJournalBalanceRow('SETTLEMENT', 'BANK_TRANSFER', previousByKey.get('SETTLEMENT:BANK_TRANSFER'), accountBalance('1130'), 'Bank transfer receivable is sourced from dated posted payment and refund journals.'),
     makeJournalBalanceRow('LIABILITY', 'TAX_PAYABLE', previousByKey.get('LIABILITY:TAX_PAYABLE'), accountBalance('2200'), 'Tax payable is sourced from dated posted tax journals.'),
+    makeJournalBalanceRow('LIABILITY', 'ADVANCED_DEPOSITS', previousByKey.get('LIABILITY:ADVANCED_DEPOSITS'), accountBalance('2300'), 'Corporate and guest advance payments are sourced from dated posted advance journals.'),
   ];
   return rows;
 }
@@ -288,7 +315,7 @@ function journalNet(code: string, lines: any[]) {
     if (line.account.code !== code) return sum;
     const debit = Number(line.debit || 0);
     const credit = Number(line.credit || 0);
-    return sum + (['2200'].includes(code) ? credit - debit : debit - credit);
+    return sum + (['2200', '2300'].includes(code) ? credit - debit : debit - credit);
   }, 0);
 }
 
@@ -316,13 +343,20 @@ function makeJournalBalanceRow(ledgerType: string, accountKey: string, previous:
 }
 
 function makeBalanceRow(ledgerType: string, accountKey: string, previous: any, activity: number, actual: number, resolution: string) {
-  // When the first close has no prior immutable package, establish the
-  // opening balance from the dated subledger closing balance less the day's
-  // canonical GL activity. Subsequent closes use the prior package opening.
-  const opening = previous ? Number(previous.expectedClosing) : actual - activity;
+  // A subledger's next opening balance is the prior *actual* closing balance.
+  // Using the prior expected closing balance replays an old unresolved
+  // variance as a new variance every day (for example, 345,500 expected vs
+  // 450,000 actual). Preserve that historical exception in the explanation,
+  // but measure today's movement from the amount that actually carried into
+  // the business date.
+  const opening = previous ? Number(previous.actualClosing ?? previous.expectedClosing) : actual - activity;
   const expected = opening + activity;
   const variance = actual - expected;
-  return { ledgerType, accountKey, openingBalance: opening, activityDebit: Math.max(activity, 0), activityCredit: Math.max(-activity, 0), expectedClosing: expected, actualClosing: actual, variance, status: Math.abs(variance) < 0.01 ? 'PROVEN' : 'HAS_VARIANCE', resolution: previous ? resolution : `${resolution} Opening balance was established from the first dated close subledger.` };
+  const priorVariance = previous ? Number(previous.variance || 0) : 0;
+  const historicalNote = Math.abs(priorVariance) > 0.01
+    ? ` Prior close carried an unresolved variance of ${priorVariance.toFixed(2)}; it is retained historically and is not counted as today's movement.`
+    : '';
+  return { ledgerType, accountKey, openingBalance: opening, activityDebit: Math.max(activity, 0), activityCredit: Math.max(-activity, 0), expectedClosing: expected, actualClosing: actual, variance, status: Math.abs(variance) < 0.01 ? 'PROVEN' : 'HAS_VARIANCE', resolution: previous ? `${resolution}${historicalNote}` : `${resolution} Opening balance was established from the first dated close subledger.` };
 }
 
 function makeUnavailableBalanceRow(ledgerType: string, accountKey: string, previous: any, resolution: string) {
