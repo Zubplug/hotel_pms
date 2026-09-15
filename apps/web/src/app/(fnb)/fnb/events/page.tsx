@@ -1,88 +1,162 @@
 import { Metadata } from 'next';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { CalendarDays, MapPin, Users, Plus, LayoutList } from 'lucide-react';
+import { CalendarDays, Users, LayoutList, CheckCircle2, TrendingUp, Clock, AlertCircle } from 'lucide-react';
 import { prisma } from '@hotel-pms/db';
+import Link from 'next/link';
 
 export const metadata: Metadata = {
-  title: 'Halls & Events | Event Management',
+  title: 'Events Dashboard | LodgeCore',
 };
 
-export default async function FnbEventsPage() {
-  const events = await prisma.event.findMany({
-    orderBy: { startDate: 'asc' },
-    include: {
-      bookings: {
-        include: { hall: true }
+export default async function FnbEventsDashboard() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Fetch quick metrics
+  const activeEventsCount = await prisma.event.count({
+    where: {
+      status: { in: ['CONFIRMED', 'IN_SERVICE'] },
+      startDate: { gte: today }
+    }
+  });
+
+  const pendingLeads = await prisma.eventLead.count({
+    where: { status: 'NEW' }
+  });
+
+  const pipelineAggregation = await prisma.eventLead.aggregate({
+    _sum: { estimatedValue: true },
+    where: { status: { in: ['PROPOSAL', 'NEGOTIATION', 'WON'] } }
+  });
+  const pipelineValue = pipelineAggregation._sum.estimatedValue?.toNumber() || 0;
+
+  const pendingBEOs = await prisma.banquetEventOrder.count({
+    where: { status: 'DRAFT' }
+  });
+
+  // Today's Operational Run-sheet
+  const todaysBookings = await prisma.eventBooking.findMany({
+    where: {
+      startTime: {
+        gte: today,
+        lt: new Date(today.getTime() + 24 * 60 * 60 * 1000)
       }
     },
-    take: 50,
+    include: {
+      hall: true,
+      event: true
+    },
+    orderBy: { startTime: 'asc' }
   });
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-8">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Halls & Events</h1>
-          <p className="text-muted-foreground mt-1">Manage banquet halls, event bookings, and packages.</p>
+          <h1 className="text-3xl font-bold tracking-tight">Events & Banquets</h1>
+          <p className="text-muted-foreground mt-1">Operational visibility and revenue intelligence.</p>
         </div>
-        <Button>
-          <Plus className="mr-2 h-4 w-4" /> New Booking
-        </Button>
+        <div className="flex gap-2">
+          <Button asChild variant="outline">
+            <Link href="/fnb/events/crm">View Pipeline</Link>
+          </Button>
+          <Button asChild>
+            <Link href="/fnb/events/bookings/create">New Booking</Link>
+          </Button>
+        </div>
       </div>
 
-      {events.length === 0 ? (
-        <div className="flex flex-col items-center justify-center border-2 border-dashed rounded-xl py-12 text-slate-500">
-          <LayoutList className="h-10 w-10 mb-4 opacity-50" />
-          <p className="font-semibold">No active events found.</p>
-          <p className="text-sm opacity-80 mt-1">Click "New Booking" to create your first event.</p>
-        </div>
-      ) : (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {events.map((event) => {
-            const hallNames = event.bookings.map(b => b.hall.name).join(', ') || 'No halls assigned';
-            
-            return (
-              <Card key={event.id} className="hover:shadow-md transition-shadow flex flex-col">
-                <CardHeader className="pb-3 flex-none">
-                  <div className="flex justify-between items-start gap-2">
-                    <CardTitle className="text-lg leading-tight">{event.name}</CardTitle>
-                    <div className={`px-2 py-1 text-[10px] font-bold tracking-wider uppercase rounded-full shrink-0 ${
-                      event.status === 'CONFIRMED' ? 'bg-emerald-100 text-emerald-800  ' :
-                      event.status === 'TENTATIVE' ? 'bg-amber-100 text-amber-800  ' :
-                      event.status === 'COMPLETED' ? 'bg-blue-100 text-blue-800  ' :
-                      event.status === 'CANCELLED' ? 'bg-rose-100 text-rose-800  ' :
-                      'bg-slate-100 text-slate-800  '
-                    }`}>
-                      {event.status}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-sm font-medium">Active Bookings</CardTitle>
+            <CalendarDays className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{activeEventsCount}</div>
+            <p className="text-xs text-muted-foreground">Upcoming confirmed events</p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-sm font-medium">New Leads</CardTitle>
+            <AlertCircle className="h-4 w-4 text-amber-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{pendingLeads}</div>
+            <p className="text-xs text-muted-foreground">Require immediate follow-up</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-sm font-medium">Revenue Pipeline</CardTitle>
+            <TrendingUp className="h-4 w-4 text-emerald-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{pipelineValue > 0 ? `NGN ${pipelineValue.toLocaleString()}` : '0'}</div>
+            <p className="text-xs text-muted-foreground">Active proposals & won deals</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-sm font-medium">Pending BEOs</CardTitle>
+            <LayoutList className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{pendingBEOs}</div>
+            <p className="text-xs text-muted-foreground">Require approval or issuance</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Operational Run-sheet */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Today's Run-sheet</CardTitle>
+          <CardDescription>Operational schedule for all halls and event spaces.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {todaysBookings.length === 0 ? (
+            <div className="py-8 text-center text-muted-foreground flex flex-col items-center">
+              <CheckCircle2 className="h-8 w-8 mb-2 opacity-20" />
+              <p>No bookings scheduled for today.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {todaysBookings.map(booking => (
+                <div key={booking.id} className="flex items-center gap-4 p-4 border rounded-lg">
+                  <div className="flex flex-col items-center justify-center w-20 shrink-0 text-center">
+                    <span className="text-sm font-semibold">{booking.startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    <span className="text-xs text-muted-foreground">to</span>
+                    <span className="text-sm font-semibold">{booking.endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
+                  <div className="w-px h-12 bg-border"></div>
+                  <div className="flex-1">
+                    <h4 className="font-semibold">{booking.event.name}</h4>
+                    <p className="text-sm text-muted-foreground">{booking.hall.name}</p>
+                  </div>
+                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-1">
+                      <Users className="h-4 w-4" /> {booking.event.expectedGuests}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Clock className="h-4 w-4" /> 
+                      Setup: {booking.setupBufferMinutes}m
                     </div>
                   </div>
-                </CardHeader>
-                <CardContent className="flex-1 flex flex-col justify-between">
-                  <div className="space-y-3 text-sm text-muted-foreground">
-                    <div className="flex items-start gap-3">
-                      <MapPin className="h-4 w-4 mt-0.5 shrink-0 text-slate-400" />
-                      <span className="leading-snug line-clamp-2">{hallNames}</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <CalendarDays className="h-4 w-4 shrink-0 text-slate-400" />
-                      <span>{event.startDate.toLocaleDateString()} {event.startDate.getTime() !== event.endDate.getTime() && `- ${event.endDate.toLocaleDateString()}`}</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <Users className="h-4 w-4 shrink-0 text-slate-400" />
-                      <span>{event.expectedGuests} expected guests</span>
-                    </div>
-                  </div>
-                  <div className="mt-5 pt-4 border-t flex justify-between items-center">
-                     <span className="text-xs font-semibold text-slate-500">{event.contactName}</span>
-                     <Button variant="outline" size="sm" className="h-8 text-xs">Manage</Button>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href={`/fnb/events/bookings/${booking.eventId}`}>View BEO</Link>
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
