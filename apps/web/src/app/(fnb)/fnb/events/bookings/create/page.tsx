@@ -7,7 +7,9 @@ export const metadata: Metadata = {
   title: 'Create Booking | LodgeCore',
 };
 
-export default async function CreateEventBookingPage() {
+export default async function CreateEventBookingPage({ searchParams }: { searchParams: { type?: string } }) {
+  const type = searchParams.type || 'full';
+  
   const halls = await prisma.hall.findMany({ orderBy: { name: 'asc' } });
   const packages = await prisma.banquetPackage.findMany({ orderBy: { name: 'asc' } });
 
@@ -18,7 +20,7 @@ export default async function CreateEventBookingPage() {
         <p className="text-muted-foreground mt-1">Wizard for creating a new booking, assigning halls, and generating BEOs.</p>
       </div>
 
-      <EventWizard initialHalls={halls} initialPackages={packages} />
+      <EventWizard initialHalls={halls} initialPackages={packages} bookingType={type} />
     </div>
   );
 }

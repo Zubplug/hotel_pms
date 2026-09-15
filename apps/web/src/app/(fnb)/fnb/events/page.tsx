@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { CalendarDays, Users, LayoutList, CheckCircle2, TrendingUp, Clock, AlertCircle } from 'lucide-react';
 import { prisma } from '@hotel-pms/db';
 import Link from 'next/link';
+import { NewBookingDialog } from '@/components/events/NewBookingDialog';
 
 export const metadata: Metadata = {
   title: 'Events Dashboard | LodgeCore',
@@ -59,9 +60,7 @@ export default async function FnbEventsDashboard() {
           <Button asChild variant="outline">
             <Link href="/fnb/events/crm">View Pipeline</Link>
           </Button>
-          <Button asChild>
-            <Link href="/fnb/events/bookings/create">New Booking</Link>
-          </Button>
+          <NewBookingDialog />
         </div>
       </div>
 

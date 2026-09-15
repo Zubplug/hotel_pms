@@ -1,9 +1,11 @@
 import { Metadata } from 'next';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, ListFilter, Calendar } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Plus, ListFilter, Calendar, Search } from 'lucide-react';
 import { prisma } from '@hotel-pms/db';
 import Link from 'next/link';
+import { NewBookingDialog } from '@/components/events/NewBookingDialog';
 import { EventTimeline } from '@/components/events/EventTimeline';
 
 export const metadata: Metadata = {
@@ -49,7 +51,13 @@ export default async function EventBookingsPage({ searchParams }: { searchParams
           ) : (
             <Button variant="outline" asChild><Link href="/fnb/events/bookings?view=timeline"><Calendar className="mr-2 h-4 w-4" /> Timeline View</Link></Button>
           )}
-          <Button asChild><Link href="/fnb/events/bookings/create"><Plus className="mr-2 h-4 w-4" /> New Booking</Link></Button>
+          <div className="flex gap-2 w-full sm:w-auto">
+            <div className="relative flex-1 sm:flex-none">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input type="search" placeholder="Search bookings..." className="pl-8" />
+            </div>
+            <NewBookingDialog />
+          </div>
         </div>
       </div>
 

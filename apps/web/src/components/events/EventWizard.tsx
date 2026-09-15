@@ -10,16 +10,25 @@ import { createFullEventBooking } from '@/lib/events/booking-actions';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
-const steps = [
+const allSteps = [
   { id: 1, title: 'Client Info', icon: User },
   { id: 2, title: 'Schedule & Hall', icon: CalendarDays },
   { id: 3, title: 'Packages', icon: Box },
   { id: 4, title: 'Summary', icon: FileText }
 ];
 
-export function EventWizard({ initialHalls, initialPackages }: { initialHalls: any[], initialPackages: any[] }) {
+export function EventWizard({ initialHalls, initialPackages, bookingType = 'full' }: { initialHalls: any[], initialPackages: any[], bookingType?: string }) {
   const router = useRouter();
-  const [currentStep, setCurrentStep] = useState(1);
+  
+  // Adjust steps based on booking type
+  const steps = allSteps.map(step => {
+    if (bookingType === 'hall_only' && step.id === 3) {
+      return { ...step, title: 'Add-ons & Equipment' };
+    }
+    return step;
+  });
+
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -34,8 +43,10 @@ export function EventWizard({ initialHalls, initialPackages }: { initialHalls: a
     packageId: ''
   });
 
-  const handleNext = () => setCurrentStep(prev => Math.min(prev + 1, steps.length));
-  const handleBack = () => setCurrentStep(prev => Math.max(prev - 1, 1));
+  const currentStep = steps[currentStepIndex].id;
+
+  const handleNext = () => setCurrentStepIndex(prev => Math.min(prev + 1, steps.length - 1));
+  const handleBack = () => setCurrentStepIndex(prev => Math.max(prev - 1, 0));
   
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -79,10 +90,10 @@ export function EventWizard({ initialHalls, initialPackages }: { initialHalls: a
   return (
     <div className="w-full">
       <div className="flex items-center justify-between mb-8">
-        {steps.map((step) => {
+        {steps.map((step, index) => {
           const Icon = step.icon;
-          const isActive = currentStep === step.id;
-          const isCompleted = currentStep > step.id;
+          const isActive = currentStepIndex === index;
+          const isCompleted = currentStepIndex > index;
           
           return (
             <div key={step.id} className="flex flex-col items-center relative z-10 flex-1">
@@ -100,7 +111,7 @@ export function EventWizard({ initialHalls, initialPackages }: { initialHalls: a
 
       <Card>
         <CardHeader>
-          <CardTitle>{steps[currentStep - 1].title}</CardTitle>
+          <CardTitle>{steps[currentStepIndex].title}</CardTitle>
           <CardDescription>Enter the details for this booking phase.</CardDescription>
         </CardHeader>
         <CardContent className="min-h-[300px]">
@@ -162,7 +173,9 @@ export function EventWizard({ initialHalls, initialPackages }: { initialHalls: a
 
           {currentStep === 3 && (
             <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">Select Banquet Package</p>
+              <p className="text-sm text-muted-foreground">
+                {bookingType === 'hall_only' ? 'Select Equipment Rentals & Add-ons' : 'Select Banquet Package'}
+              </p>
               <div className="grid grid-cols-2 gap-4">
                 {initialPackages.map(pkg => (
                   <div 
@@ -205,10 +218,10 @@ export function EventWizard({ initialHalls, initialPackages }: { initialHalls: a
           )}
         </CardContent>
         <CardFooter className="flex justify-between border-t p-4">
-          <Button variant="outline" onClick={handleBack} disabled={currentStep === 1 || isSubmitting}>
+          <Button variant="outline" onClick={handleBack} disabled={currentStepIndex === 0 || isSubmitting}>
             Back
           </Button>
-          {currentStep < steps.length ? (
+          {currentStepIndex < steps.length - 1 ? (
             <Button onClick={handleNext}>Next Step <ChevronRight className="w-4 h-4 ml-2" /></Button>
           ) : (
             <Button onClick={handleSubmit} disabled={isSubmitting}>
