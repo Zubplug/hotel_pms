@@ -1,23 +1,33 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/rooms_provider.dart';
 import '../models/room_data.dart';
-import 'package:timeago/timeago.dart' as timeago;
+
 import 'room_details_screen.dart';
 
-// ─── Design Tokens ─────────────────────────────────────────────────────────────
-const _bg           = Color(0xFF08090E);
-const _surface      = Color(0xFF111318);
-const _border       = Color(0xFF252A35);
-const _gold         = Color(0xFFD4AF37);
-const _textPrimary  = Color(0xFFF0F4FF);
-const _textSecondary= Color(0xFF8B92A5);
-const _textMuted    = Color(0xFF4E5566);
-const _green        = Color(0xFF22C55E);
-const _blue         = Color(0xFF3B82F6);
-const _orange       = Color(0xFFF97316);
-const _red          = Color(0xFFEF4444);
+// ─── Design System ────────────────────────────────────────────────────────────
+const _bg           = Color(0xFF060B14);
+const _surface      = Color(0xFF0D1422);
+const _surfaceRaised = Color(0xFF111927);
 
+const _border       = Color(0xFF1E2D40);
+const _borderHigh   = Color(0xFF263548);
+const _gold         = Color(0xFFD4AF37);
+
+const _textPrimary  = Color(0xFFF0F4FF);
+const _textSecondary= Color(0xFF8B95B0);
+const _textMuted    = Color(0xFF4A5468);
+
+// Status colors
+const _statusOccupied   = Color(0xFF3B82F6);
+const _statusReady      = Color(0xFF10B981);
+const _statusDirty      = Color(0xFFF97316);
+const _statusOOO        = Color(0xFFEF4444);
+const _statusOOS        = Color(0xFF8B5CF6);
+const _statusStayDirty  = Color(0xFFF59E0B);
+
+// ─── Rooms Screen ─────────────────────────────────────────────────────────────
 class RoomsScreen extends ConsumerStatefulWidget {
   const RoomsScreen({super.key});
 
@@ -26,12 +36,12 @@ class RoomsScreen extends ConsumerStatefulWidget {
 }
 
 class _RoomsScreenState extends ConsumerState<RoomsScreen>
-    with SingleTickerProviderStateMixin {
-  String _filter = 'All';
+    with TickerProviderStateMixin {
+  String _filter = 'ALL';
+  _ViewMode _viewMode = _ViewMode.list;
+
   late AnimationController _pulseCtrl;
   late Animation<double> _pulseAnim;
-
-  final _filters = ['All', 'Occupied', 'Ready', 'Dirty', 'OOO', 'OOS'];
 
   @override
   void initState() {
@@ -40,7 +50,7 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen>
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat(reverse: true);
-    _pulseAnim = Tween<double>(begin: 0.4, end: 1.0).animate(
+    _pulseAnim = Tween<double>(begin: 0.35, end: 1.0).animate(
       CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
     );
   }
@@ -51,7 +61,6 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen>
     super.dispose();
   }
 
-  // ── Status helpers ────────────────────────────────────────────────────────────
   static const _dirtyHKStatuses = {'DIRTY', 'PENDING', 'ASSIGNED', 'CLEANING'};
 
   bool _isStayoverDirty(RoomItem room) =>
@@ -59,36 +68,34 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen>
       _dirtyHKStatuses.contains(room.housekeepingStatus.toUpperCase());
 
   Color _statusColor(RoomItem room) {
-    if (_isStayoverDirty(room)) return const Color(0xFFF97316); // orange for occupied+dirty
+    if (_isStayoverDirty(room)) return _statusStayDirty;
     switch (room.displayStatus) {
-      case 'OCCUPIED':        return _blue;
-      case 'READY':           return _green;
-      case 'DIRTY':           return _orange;
-      case 'OUT_OF_ORDER':    return _red;
-      case 'OUT_OF_SERVICE':  return _red;
-      default:                return _textMuted;
+      case 'OCCUPIED':       return _statusOccupied;
+      case 'READY':          return _statusReady;
+      case 'DIRTY':          return _statusDirty;
+      case 'OUT_OF_ORDER':   return _statusOOO;
+      case 'OUT_OF_SERVICE': return _statusOOS;
+      default:               return _textMuted;
     }
   }
 
   String _statusLabel(RoomItem room) {
-    if (_isStayoverDirty(room)) return 'OCCUPIED · DIRTY';
+    if (_isStayoverDirty(room)) return 'STAY · DIRTY';
     switch (room.displayStatus) {
-      case 'OCCUPIED':        return 'OCCUPIED';
-      case 'READY':           return 'VACANT · READY';
-      case 'DIRTY':           return 'VACANT · DIRTY';
-      case 'OUT_OF_ORDER':    return 'OUT OF ORDER';
-      case 'OUT_OF_SERVICE':  return 'OUT OF SERVICE';
-      default:                return room.displayStatus.replaceAll('_', ' ');
+      case 'OCCUPIED':       return 'OCCUPIED';
+      case 'READY':          return 'VACANT · READY';
+      case 'DIRTY':          return 'VACANT · DIRTY';
+      case 'OUT_OF_ORDER':   return 'OUT OF ORDER';
+      case 'OUT_OF_SERVICE': return 'OUT OF SERVICE';
+      default:               return room.displayStatus.replaceAll('_', ' ');
     }
   }
 
-  // ── Filter logic ─────────────────────────────────────────────────────────────
   List<RoomItem> _filtered(List<RoomItem> rooms) {
     switch (_filter) {
-      case 'Occupied': return rooms.where((r) => r.displayStatus == 'OCCUPIED').toList();
-      case 'Ready':    return rooms.where((r) => r.displayStatus == 'READY').toList();
-      // 'Dirty' shows BOTH vacant-dirty AND occupied rooms with dirty housekeeping
-      case 'Dirty':    return rooms.where((r) =>
+      case 'OCCUPIED': return rooms.where((r) => r.displayStatus == 'OCCUPIED').toList();
+      case 'READY':    return rooms.where((r) => r.displayStatus == 'READY').toList();
+      case 'DIRTY':    return rooms.where((r) =>
           r.displayStatus == 'DIRTY' || _isStayoverDirty(r)).toList();
       case 'OOO':      return rooms.where((r) => r.displayStatus == 'OUT_OF_ORDER').toList();
       case 'OOS':      return rooms.where((r) => r.displayStatus == 'OUT_OF_SERVICE').toList();
@@ -104,7 +111,7 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen>
       backgroundColor: _bg,
       body: async.when(
         data: _buildBody,
-        loading: () => const Center(child: CircularProgressIndicator(color: _gold)),
+        loading: () => _buildSkeleton(),
         error: (err, _) => _buildError(err),
       ),
     );
@@ -114,99 +121,48 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen>
     final rooms = _filtered(data.rooms);
 
     return CustomScrollView(
+      physics: const BouncingScrollPhysics(),
       slivers: [
-        // ── App Bar ────────────────────────────────────────────────────────────
+        // ── Sticky App Bar ────────────────────────────────────────────────────
         SliverAppBar(
           pinned: true,
+          floating: false,
           backgroundColor: _bg,
-          elevation: 0,
           surfaceTintColor: Colors.transparent,
-          flexibleSpace: Container(
-            decoration: BoxDecoration(
-              color: _bg,
-              border: Border(bottom: BorderSide(color: _border, width: 0.5)),
-            ),
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          toolbarHeight: 58,
+          automaticallyImplyLeading: false,
+          title: _RoomsHeaderContent(
+            data: data,
+            viewMode: _viewMode,
+            pulseAnim: _pulseAnim,
+            onViewModeChanged: (m) => setState(() => _viewMode = m),
+            onRefresh: () => ref.refresh(roomsDataProvider),
           ),
-          title: Row(
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    data.property.name.toUpperCase(),
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.5,
-                      color: _textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Row(
-                    children: [
-                      AnimatedBuilder(
-                        animation: _pulseAnim,
-                        builder: (context, child) => Container(
-                          width: 6, height: 6,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: _green.withValues(alpha: _pulseAnim.value),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 5),
-                      Text(
-                        'Live · ${timeago.format(data.generatedAt)}',
-                        style: const TextStyle(fontSize: 10, color: _textMuted),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              const Spacer(),
-              // Business date badge
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: _gold.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: _gold.withValues(alpha: 0.3)),
-                ),
-                child: Text(
-                  '${data.businessDate.day} ${_monthName(data.businessDate.month)}',
-                  style: const TextStyle(
-                    fontSize: 10, fontWeight: FontWeight.w700,
-                    color: _gold, letterSpacing: 0.5,
-                  ),
-                ),
-              ),
-            ],
-          ),
+          titleSpacing: 0,
         ),
 
         SliverToBoxAdapter(
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 16),
 
-              // ── Occupancy Banner ─────────────────────────────────────────────
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: _OccupancyBanner(overview: data.overview),
-              ),
+              // ── Analytics Mini Bar ───────────────────────────────────────
+              _AnalyticsMiniBar(overview: data.overview, snapshot: data),
               const SizedBox(height: 16),
 
-              // ── Filter Bar ───────────────────────────────────────────────────
+              // ── Filter Bar ───────────────────────────────────────────────
               _FilterBar(
-                filters: _filters,
                 selected: _filter,
-                onSelect: (f) => setState(() => _filter = f),
                 overview: data.overview,
+                onSelect: (f) => setState(() => _filter = f),
+                rooms: data.rooms,
+                isStayoverDirty: _isStayoverDirty,
               ),
               const SizedBox(height: 16),
 
-              // ── Room count ───────────────────────────────────────────────────
+              // ── Results label ────────────────────────────────────────────
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Row(
@@ -224,11 +180,15 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen>
                       rooms.length == 1 ? 'room' : 'rooms',
                       style: const TextStyle(color: _textMuted, fontSize: 13),
                     ),
-                    if (_filter != 'All') ...[
+                    if (_filter != 'ALL') ...[
                       const SizedBox(width: 6),
                       Text(
-                        '· $_filter',
-                        style: const TextStyle(color: _gold, fontSize: 13, fontWeight: FontWeight.w600),
+                        '· ${_filterLabel(_filter)}',
+                        style: const TextStyle(
+                          color: _gold,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ],
                   ],
@@ -239,44 +199,128 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen>
           ),
         ),
 
-        // ── Room List ──────────────────────────────────────────────────────────
-        rooms.isEmpty
-            ? SliverFillRemaining(
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.bed_rounded, color: _textMuted, size: 48),
-                      const SizedBox(height: 12),
-                      Text(
-                        'No $_filter rooms',
-                        style: const TextStyle(color: _textSecondary, fontSize: 15),
-                      ),
-                    ],
-                  ),
-                ),
-              )
-            : SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (ctx, i) => Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                    child: _RoomCard(
-                      room: rooms[i],
-                      statusColor: _statusColor(rooms[i]),
-                      statusLabel: _statusLabel(rooms[i]),
-                      isStayoverDirty: _isStayoverDirty(rooms[i]),
-                      onTap: () => Navigator.of(ctx).push(
-                        MaterialPageRoute(
-                          builder: (_) => RoomDetailsScreen(roomId: rooms[i].id),
-                        ),
-                      ),
-                    ),
-                  ),
-                  childCount: rooms.length,
-                ),
-              ),
+        // ── Room List / Grid ──────────────────────────────────────────────
+        if (rooms.isEmpty)
+          SliverFillRemaining(
+            child: _buildEmptyState(),
+          )
+        else if (_viewMode == _ViewMode.grid)
+          _buildGridSliver(rooms)
+        else
+          _buildListSliver(rooms),
 
-        const SliverToBoxAdapter(child: SizedBox(height: 60)),
+        const SliverToBoxAdapter(child: SizedBox(height: 80)),
+      ],
+    );
+  }
+
+  Widget _buildListSliver(List<RoomItem> rooms) {
+    return SliverList(
+      delegate: SliverChildBuilderDelegate(
+        (ctx, i) => Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+          child: _PremiumRoomCard(
+            room: rooms[i],
+            statusColor: _statusColor(rooms[i]),
+            statusLabel: _statusLabel(rooms[i]),
+            isStayoverDirty: _isStayoverDirty(rooms[i]),
+            onTap: () => _openDetails(ctx, rooms[i].id),
+          ),
+        ),
+        childCount: rooms.length,
+      ),
+    );
+  }
+
+  Widget _buildGridSliver(List<RoomItem> rooms) {
+    return SliverPadding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      sliver: SliverGrid(
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3,
+          crossAxisSpacing: 10,
+          mainAxisSpacing: 10,
+          childAspectRatio: 0.85,
+        ),
+        delegate: SliverChildBuilderDelegate(
+          (ctx, i) => _RoomGridTile(
+            room: rooms[i],
+            statusColor: _statusColor(rooms[i]),
+            statusLabel: _statusLabel(rooms[i]),
+            isStayoverDirty: _isStayoverDirty(rooms[i]),
+            onTap: () => _openDetails(ctx, rooms[i].id),
+          ),
+          childCount: rooms.length,
+        ),
+      ),
+    );
+  }
+
+  void _openDetails(BuildContext ctx, String roomId) {
+    HapticFeedback.selectionClick();
+    Navigator.of(ctx).push(
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) => RoomDetailsScreen(roomId: roomId),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(1, 0),
+              end: Offset.zero,
+            ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOut)),
+            child: child,
+          );
+        },
+        transitionDuration: const Duration(milliseconds: 320),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              color: _surface,
+              shape: BoxShape.circle,
+              border: Border.all(color: _border),
+            ),
+            child: const Icon(Icons.bed_rounded, color: _textMuted, size: 34),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No ${_filterLabel(_filter).toLowerCase()} rooms',
+            style: const TextStyle(
+              color: _textSecondary,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'All rooms in this category are clear.',
+            style: TextStyle(color: _textMuted, fontSize: 13),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSkeleton() {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 100, 16, 80),
+      children: [
+        _SkeletonBar(height: 80),
+        const SizedBox(height: 14),
+        _SkeletonBar(height: 52),
+        const SizedBox(height: 20),
+        for (int i = 0; i < 6; i++) ...[
+          _SkeletonBar(height: 90),
+          const SizedBox(height: 10),
+        ],
       ],
     );
   }
@@ -286,26 +330,33 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.wifi_off_rounded, color: _textMuted, size: 48),
-          const SizedBox(height: 16),
-          const Text(
-            'Could not load rooms',
-            style: TextStyle(color: _textPrimary, fontSize: 16, fontWeight: FontWeight.w600),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1A0F0F),
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFF3D1F1F)),
+            ),
+            child: const Icon(Icons.wifi_off_rounded, color: _statusOOO, size: 36),
           ),
-          const SizedBox(height: 6),
-          Text('$err',
-              style: const TextStyle(color: _textSecondary, fontSize: 12),
-              textAlign: TextAlign.center),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
+          const Text('Could not load rooms', style: TextStyle(color: _textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 40),
+            child: Text('$err', style: const TextStyle(color: _textSecondary, fontSize: 12), textAlign: TextAlign.center),
+          ),
+          const SizedBox(height: 28),
           GestureDetector(
             onTap: () => ref.refresh(roomsDataProvider),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
               decoration: BoxDecoration(
-                color: _gold, borderRadius: BorderRadius.circular(8),
+                color: _surfaceRaised,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: _gold),
               ),
-              child: const Text('Retry',
-                  style: TextStyle(color: _bg, fontWeight: FontWeight.bold)),
+              child: const Text('Retry', style: TextStyle(color: _gold, fontWeight: FontWeight.w700, fontSize: 14)),
             ),
           ),
         ],
@@ -313,130 +364,145 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen>
     );
   }
 
-  String _monthName(int m) =>
-      ['', 'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m];
+  String _filterLabel(String f) {
+    switch (f) {
+      case 'OCCUPIED': return 'Occupied';
+      case 'READY':    return 'Vacant · Ready';
+      case 'DIRTY':    return 'Needs Cleaning';
+      case 'OOO':      return 'Out of Order';
+      case 'OOS':      return 'Out of Service';
+      default:         return 'All Rooms';
+    }
+  }
 }
 
-// ─── Occupancy Banner ──────────────────────────────────────────────────────────
-class _OccupancyBanner extends StatelessWidget {
-  final RoomOverview overview;
-  const _OccupancyBanner({required this.overview});
+enum _ViewMode { list, grid }
+
+// ─── Header Content Widget ────────────────────────────────────────────────────
+// Used inside SliverAppBar which handles safe area automatically.
+class _RoomsHeaderContent extends StatelessWidget {
+  final RoomDashboardData data;
+  final _ViewMode viewMode;
+  final Animation<double> pulseAnim;
+  final ValueChanged<_ViewMode> onViewModeChanged;
+  final VoidCallback onRefresh;
+
+  const _RoomsHeaderContent({
+    required this.data,
+    required this.viewMode,
+    required this.pulseAnim,
+    required this.onViewModeChanged,
+    required this.onRefresh,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final occupancy = overview.total > 0
-        ? (overview.occupied / overview.total * 100).toStringAsFixed(0)
-        : '0';
-    final oooOos = overview.outOfOrder + overview.outOfService;
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF161A24), Color(0xFF0F1219)],
-        ),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFF252A35)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.3),
-            blurRadius: 20,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Column(
+    return Padding(
+      padding: const EdgeInsets.only(right: 4),
+      child: Row(
         children: [
-          // Top: occupancy % + total rooms
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                '$occupancy%',
-                style: const TextStyle(
-                  fontSize: 44,
-                  fontWeight: FontWeight.w800,
-                  color: _textPrimary,
-                  letterSpacing: -1,
+          // Left: property label + title row
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  data.property.name.toUpperCase(),
+                  style: const TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.8,
+                    color: _textMuted,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                const SizedBox(height: 3),
+                Row(
                   children: [
-                    const Text('Occupancy', style: TextStyle(color: _textSecondary, fontSize: 13)),
-                    Text(
-                      '${overview.total} rooms total',
-                      style: const TextStyle(color: _textMuted, fontSize: 11),
-                    ),
-                  ],
-                ),
-              ),
-              const Spacer(),
-              // Occupied count highlight
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: _blue.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: _blue.withValues(alpha: 0.25)),
-                ),
-                child: Column(
-                  children: [
-                    Text(
-                      '${overview.occupied}',
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: _blue,
+                    AnimatedBuilder(
+                      animation: pulseAnim,
+                      builder: (context, child) => Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: _statusReady.withValues(alpha: pulseAnim.value),
+                        ),
                       ),
                     ),
-                    const Text('In House',
-                        style: TextStyle(fontSize: 9, color: _textMuted, letterSpacing: 0.5)),
+                    const SizedBox(width: 6),
+                    const Text(
+                      'ROOMS',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: _textPrimary,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: _gold.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: _gold.withValues(alpha: 0.3)),
+                      ),
+                      child: Text(
+                        '${data.overview.total} total',
+                        style: const TextStyle(
+                          color: _gold,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 16),
-
-          // Occupancy bar
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: overview.total > 0 ? overview.occupied / overview.total : 0,
-              backgroundColor: const Color(0xFF252A35),
-              valueColor: AlwaysStoppedAnimation<Color>(
-                overview.occupied / (overview.total > 0 ? overview.total : 1) > 0.8
-                    ? _green
-                    : _blue,
-              ),
-              minHeight: 6,
+              ],
             ),
           ),
 
-          const SizedBox(height: 16),
-          Divider(color: const Color(0xFF252A35).withValues(alpha: 0.8), height: 1),
-          const SizedBox(height: 16),
-
-          // Stat pills row
-          Row(
-            children: [
-              _StatPill(value: overview.ready, label: 'Ready', color: _green),
-              const SizedBox(width: 8),
-              _StatPill(value: overview.dirty, label: 'Dirty (Vac)', color: _orange),
-              const SizedBox(width: 8),
-              if (overview.occupiedDirty > 0) ...[
-                _StatPill(value: overview.occupiedDirty, label: 'Stay Dirty', color: const Color(0xFFF59E0B)),
-                const SizedBox(width: 8),
+          // View mode toggle
+          Container(
+            decoration: BoxDecoration(
+              color: _surfaceRaised,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: _border),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _ViewToggleBtn(
+                  icon: Icons.view_list_rounded,
+                  selected: viewMode == _ViewMode.list,
+                  onTap: () => onViewModeChanged(_ViewMode.list),
+                ),
+                Container(width: 1, height: 24, color: _border),
+                _ViewToggleBtn(
+                  icon: Icons.grid_view_rounded,
+                  selected: viewMode == _ViewMode.grid,
+                  onTap: () => onViewModeChanged(_ViewMode.grid),
+                ),
               ],
-              _StatPill(value: oooOos, label: 'OOO/OOS', color: _red),
-            ],
+            ),
+          ),
+
+          const SizedBox(width: 8),
+
+          // Refresh button
+          GestureDetector(
+            onTap: onRefresh,
+            child: Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: _surfaceRaised,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: _border),
+              ),
+              child: const Icon(Icons.refresh_rounded, color: _textSecondary, size: 18),
+            ),
           ),
         ],
       ),
@@ -444,64 +510,291 @@ class _OccupancyBanner extends StatelessWidget {
   }
 }
 
-class _StatPill extends StatelessWidget {
-  final int value;
-  final String label;
-  final Color color;
-  const _StatPill({required this.value, required this.label, required this.color});
+class _ViewToggleBtn extends StatelessWidget {
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ViewToggleBtn({
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      width: 36,
+      height: 36,
+      decoration: BoxDecoration(
+        color: selected ? _gold.withValues(alpha: 0.12) : Colors.transparent,
+        borderRadius: BorderRadius.circular(9),
+      ),
+      child: Icon(icon, color: selected ? _gold : _textMuted, size: 18),
+    ),
+  );
+}
+
+// ─── Analytics Mini Bar ───────────────────────────────────────────────────────
+class _AnalyticsMiniBar extends StatelessWidget {
+  final RoomOverview overview;
+  final RoomDashboardData snapshot;
+
+  const _AnalyticsMiniBar({required this.overview, required this.snapshot});
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
+    final occPct = overview.total > 0
+        ? (overview.occupied / overview.total * 100)
+        : 0.0;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: color.withValues(alpha: 0.2)),
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF0F1B2D), Color(0xFF0A1320)],
+          ),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: _borderHigh),
+          boxShadow: [
+            BoxShadow(
+              color: _gold.withValues(alpha: 0.04),
+              blurRadius: 20,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: Column(
           children: [
-            Text(
-              '$value',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                color: color,
+            // Occupancy big number + stats
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Big occupancy %
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'OCCUPANCY',
+                      style: TextStyle(
+                        color: _textMuted,
+                        fontSize: 9,
+                        letterSpacing: 1.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          '${occPct.toStringAsFixed(0)}%',
+                          style: const TextStyle(
+                            color: _textPrimary,
+                            fontSize: 38,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -1,
+                            height: 1,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Text(
+                            '${overview.occupied}/${overview.total} rooms',
+                            style: const TextStyle(
+                              color: _textMuted,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                // Quick stat pills
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    _QuickStatPill(
+                      label: 'Available',
+                      value: '${overview.ready}',
+                      color: _statusReady,
+                    ),
+                    const SizedBox(height: 6),
+                    _QuickStatPill(
+                      label: 'OOO/OOS',
+                      value: '${overview.outOfOrder + overview.outOfService}',
+                      color: _statusOOO,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 14),
+
+            // Occupancy bar
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: Stack(
+                children: [
+                  Container(height: 8, color: _surface),
+                  FractionallySizedBox(
+                    widthFactor: overview.total > 0 ? overview.occupied / overview.total : 0,
+                    child: Container(
+                      height: 8,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: occPct >= 80
+                              ? [_statusReady, const Color(0xFF059669)]
+                              : occPct >= 50
+                                  ? [_statusOccupied, const Color(0xFF2563EB)]
+                                  : [_statusDirty, const Color(0xFFEA580C)],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 2),
-            Text(label,
-                style: TextStyle(fontSize: 9, color: color.withValues(alpha: 0.7), letterSpacing: 0.3)),
+
+            const SizedBox(height: 14),
+
+            // Status breakdown row
+            Row(
+              children: [
+                _StatusStat(value: overview.occupied, label: 'Occupied', color: _statusOccupied),
+                _vDivider(),
+                _StatusStat(value: overview.ready, label: 'Ready', color: _statusReady),
+                _vDivider(),
+                _StatusStat(value: overview.dirty + overview.occupiedDirty, label: 'Dirty', color: _statusDirty),
+                _vDivider(),
+                _StatusStat(value: overview.outOfOrder + overview.outOfService, label: 'OOO/OOS', color: _statusOOO),
+              ],
+            ),
           ],
         ),
       ),
     );
   }
+
+  Widget _vDivider() => Container(
+    width: 1,
+    height: 32,
+    color: _border,
+    margin: const EdgeInsets.symmetric(horizontal: 8),
+  );
+}
+
+class _QuickStatPill extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+  const _QuickStatPill({required this.label, required this.value, required this.color});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.1),
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: color.withValues(alpha: 0.25)),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+            color: color,
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(width: 5),
+        Text(
+          label,
+          style: TextStyle(
+            color: color.withValues(alpha: 0.7),
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _StatusStat extends StatelessWidget {
+  final int value;
+  final String label;
+  final Color color;
+  const _StatusStat({required this.value, required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) => Expanded(
+    child: Column(
+      children: [
+        Text(
+          '$value',
+          style: TextStyle(
+            color: color,
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: const TextStyle(color: _textMuted, fontSize: 9, letterSpacing: 0.3),
+          textAlign: TextAlign.center,
+        ),
+      ],
+    ),
+  );
 }
 
 // ─── Filter Bar ───────────────────────────────────────────────────────────────
 class _FilterBar extends StatelessWidget {
-  final List<String> filters;
   final String selected;
-  final ValueChanged<String> onSelect;
   final RoomOverview overview;
+  final ValueChanged<String> onSelect;
+  final List<RoomItem> rooms;
+  final bool Function(RoomItem) isStayoverDirty;
+
   const _FilterBar({
-    required this.filters,
     required this.selected,
-    required this.onSelect,
     required this.overview,
+    required this.onSelect,
+    required this.rooms,
+    required this.isStayoverDirty,
   });
 
-  int _count(String f, RoomOverview o) {
+  static const _filters = [
+    ('ALL',      'All',       null),
+    ('OCCUPIED', 'Occupied',  _statusOccupied),
+    ('READY',    'Ready',     _statusReady),
+    ('DIRTY',    'Dirty',     _statusDirty),
+    ('OOO',      'OOO',       _statusOOO),
+    ('OOS',      'OOS',       _statusOOS),
+  ];
+
+  int _count(String f) {
     switch (f) {
-      case 'Occupied': return o.occupied;
-      case 'Ready':    return o.ready;
-      // Dirty filter: show vacant-dirty + occupied-dirty (stayover dirty) total
-      case 'Dirty':    return o.dirty + o.occupiedDirty;
-      case 'OOO':      return o.outOfOrder;
-      case 'OOS':      return o.outOfService;
-      default:         return o.total;
+      case 'OCCUPIED': return overview.occupied;
+      case 'READY':    return overview.ready;
+      case 'DIRTY':    return overview.dirty + overview.occupiedDirty;
+      case 'OOO':      return overview.outOfOrder;
+      case 'OOS':      return overview.outOfService;
+      default:         return overview.total;
     }
   }
 
@@ -511,40 +804,58 @@ class _FilterBar extends StatelessWidget {
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
-        children: filters.map((f) {
-          final isSelected = f == selected;
-          final count = _count(f, overview);
+        children: _filters.map((rec) {
+          final (id, label, color) = rec;
+          final isSelected = id == selected;
+          final count = _count(id);
+          final activeColor = color ?? _gold;
+
           return Padding(
             padding: const EdgeInsets.only(right: 8),
             child: GestureDetector(
-              onTap: () => onSelect(f),
+              onTap: () => onSelect(id),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
                 decoration: BoxDecoration(
-                  color: isSelected ? _gold.withValues(alpha: 0.12) : _surface,
-                  borderRadius: BorderRadius.circular(20),
+                  color: isSelected
+                      ? activeColor.withValues(alpha: 0.12)
+                      : _surfaceRaised,
+                  borderRadius: BorderRadius.circular(22),
                   border: Border.all(
-                    color: isSelected ? _gold : const Color(0xFF252A35),
+                    color: isSelected ? activeColor : _border,
                     width: isSelected ? 1.5 : 1,
                   ),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    if (color != null) ...[
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: isSelected ? color : _textMuted,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                    ],
                     Text(
-                      f,
+                      label,
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                        color: isSelected ? _gold : _textSecondary,
+                        color: isSelected ? activeColor : _textSecondary,
                       ),
                     ),
                     const SizedBox(width: 6),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: isSelected ? _gold.withValues(alpha: 0.2) : const Color(0xFF252A35),
+                        color: isSelected
+                            ? activeColor.withValues(alpha: 0.2)
+                            : _surface,
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Text(
@@ -552,7 +863,7 @@ class _FilterBar extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
-                          color: isSelected ? _gold : _textMuted,
+                          color: isSelected ? activeColor : _textMuted,
                         ),
                       ),
                     ),
@@ -567,14 +878,15 @@ class _FilterBar extends StatelessWidget {
   }
 }
 
-// ─── Room Card ────────────────────────────────────────────────────────────────
-class _RoomCard extends StatelessWidget {
+// ─── Premium Room Card (List View) ────────────────────────────────────────────
+class _PremiumRoomCard extends StatelessWidget {
   final RoomItem room;
   final Color statusColor;
   final String statusLabel;
   final bool isStayoverDirty;
   final VoidCallback onTap;
-  const _RoomCard({
+
+  const _PremiumRoomCard({
     required this.room,
     required this.statusColor,
     required this.statusLabel,
@@ -584,14 +896,13 @@ class _RoomCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Parse room number parts
     String displayNumber = room.number;
     String? locationText;
     if (room.number.contains('.')) {
       final parts = room.number.split('.');
       if (parts.length >= 3) {
         displayNumber = parts.last;
-        locationText = 'Building ${parts[0]} · Floor ${parts[1]}';
+        locationText = 'Bldg ${parts[0]} · Flr ${parts[1]}';
       }
     }
 
@@ -599,32 +910,46 @@ class _RoomCard extends StatelessWidget {
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
-          color: const Color(0xFF111318),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: statusColor.withValues(alpha: 0.2)),
+          color: _surfaceRaised,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: statusColor.withValues(alpha: 0.18)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.25),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         clipBehavior: Clip.antiAlias,
         child: IntrinsicHeight(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // ── Status stripe ──────────────────────────────────────────────
+              // ── Left status stripe
               Container(
                 width: 4,
-                color: statusColor,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [statusColor, statusColor.withValues(alpha: 0.4)],
+                  ),
+                ),
               ),
 
-              // ── Card body ─────────────────────────────────────────────────
+              // ── Card content
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
+                  padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
                   child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      // Left: room number + type
+                      // Room number + type + location
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Row(
                               crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -633,99 +958,111 @@ class _RoomCard extends StatelessWidget {
                                 Text(
                                   displayNumber,
                                   style: const TextStyle(
-                                    fontSize: 28,
-                                    fontWeight: FontWeight.w800,
+                                    fontSize: 30,
+                                    fontWeight: FontWeight.w900,
                                     color: _textPrimary,
                                     letterSpacing: -0.5,
+                                    height: 1,
                                   ),
                                 ),
                                 if (locationText != null) ...[
-                                  const SizedBox(width: 8),
+                                  const SizedBox(width: 10),
                                   Text(
                                     locationText,
                                     style: const TextStyle(
-                                      fontSize: 11,
+                                      fontSize: 10,
                                       color: _textMuted,
                                     ),
                                   ),
                                 ],
                               ],
                             ),
-                            const SizedBox(height: 4),
+                            const SizedBox(height: 5),
                             Text(
                               room.roomType.name,
-                              style: const TextStyle(fontSize: 13, color: _textSecondary),
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: _textSecondary,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                             if (room.contextualNote != null &&
                                 room.contextualNote!.isNotEmpty) ...[
-                              const SizedBox(height: 6),
-                              Text(
-                                room.contextualNote!,
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: statusColor.withValues(alpha: 0.8),
-                                  fontStyle: FontStyle.italic,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                              const SizedBox(height: 5),
+                              Row(
+                                children: [
+                                  Icon(
+                                    isStayoverDirty
+                                        ? Icons.cleaning_services_rounded
+                                        : Icons.info_outline_rounded,
+                                    size: 11,
+                                    color: statusColor.withValues(alpha: 0.7),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Expanded(
+                                    child: Text(
+                                      room.contextualNote!,
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: statusColor.withValues(alpha: 0.8),
+                                        fontStyle: FontStyle.italic,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ],
                         ),
                       ),
 
-                      // Right: status badge + chevron
+                      // Right: status badge + HK badge
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          // Status badge pill
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              // Housekeeping dirty icon badge for stayover-dirty occupied rooms
-                              if (isStayoverDirty) ...[
-                                Container(
-                                  padding: const EdgeInsets.all(4),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                        color: const Color(0xFFF59E0B).withValues(alpha: 0.4)),
-                                  ),
-                                  child: const Icon(
-                                    Icons.cleaning_services_rounded,
-                                    size: 11,
-                                    color: Color(0xFFF59E0B),
-                                  ),
-                                ),
-                                const SizedBox(width: 5),
-                              ],
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: statusColor.withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(color: statusColor.withValues(alpha: 0.35)),
-                                ),
-                                child: Text(
-                                  statusLabel,
-                                  style: TextStyle(
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w800,
-                                    color: statusColor,
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
+                          // Status badge
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: statusColor.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: statusColor.withValues(alpha: 0.35)),
+                            ),
+                            child: Text(
+                              statusLabel,
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w800,
+                                color: statusColor,
+                                letterSpacing: 0.5,
                               ),
-                            ],
+                            ),
                           ),
                           const SizedBox(height: 8),
-                          Icon(
-                            Icons.chevron_right_rounded,
-                            color: _textMuted,
-                            size: 20,
-                          ),
+                          // HK badge for stayover dirty
+                          if (isStayoverDirty)
+                            Container(
+                              padding: const EdgeInsets.all(5),
+                              decoration: BoxDecoration(
+                                color: _statusStayDirty.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: _statusStayDirty.withValues(alpha: 0.3)),
+                              ),
+                              child: const Icon(
+                                Icons.cleaning_services_rounded,
+                                size: 11,
+                                color: _statusStayDirty,
+                              ),
+                            )
+                          else
+                            const Icon(
+                              Icons.chevron_right_rounded,
+                              color: _textMuted,
+                              size: 20,
+                            ),
                         ],
                       ),
                     ],
@@ -738,4 +1075,153 @@ class _RoomCard extends StatelessWidget {
       ),
     );
   }
+}
+
+// ─── Grid Tile ────────────────────────────────────────────────────────────────
+class _RoomGridTile extends StatelessWidget {
+  final RoomItem room;
+  final Color statusColor;
+  final String statusLabel;
+  final bool isStayoverDirty;
+  final VoidCallback onTap;
+
+  const _RoomGridTile({
+    required this.room,
+    required this.statusColor,
+    required this.statusLabel,
+    required this.isStayoverDirty,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    String displayNumber = room.number;
+    if (room.number.contains('.')) {
+      final parts = room.number.split('.');
+      if (parts.length >= 3) displayNumber = parts.last;
+    }
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: _surfaceRaised,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: statusColor.withValues(alpha: 0.3)),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Status dot
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: statusColor,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: statusColor.withValues(alpha: 0.5),
+                    blurRadius: 6,
+                    spreadRadius: 1,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            // Room number
+            Text(
+              displayNumber,
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                color: _textPrimary,
+                letterSpacing: -0.5,
+              ),
+            ),
+            const SizedBox(height: 4),
+            // Type (truncated)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Text(
+                room.roomType.name,
+                style: const TextStyle(fontSize: 9, color: _textMuted),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(height: 8),
+            // Status label
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 6),
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              decoration: BoxDecoration(
+                color: statusColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Center(
+                child: Text(
+                  statusLabel.split(' · ').last,
+                  style: TextStyle(
+                    fontSize: 8,
+                    fontWeight: FontWeight.w800,
+                    color: statusColor,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
+class _SkeletonBar extends StatefulWidget {
+  final double height;
+  const _SkeletonBar({required this.height});
+
+  @override
+  State<_SkeletonBar> createState() => _SkeletonBarState();
+}
+
+class _SkeletonBarState extends State<_SkeletonBar>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<Color?> _colorAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat(reverse: true);
+    _colorAnim = ColorTween(
+      begin: const Color(0xFF0D1422),
+      end: const Color(0xFF172030),
+    ).animate(_ctrl);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _colorAnim,
+    builder: (ctx, child) => Container(
+      height: widget.height,
+      decoration: BoxDecoration(
+        color: _colorAnim.value,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _border),
+      ),
+    ),
+  );
 }
