@@ -78,7 +78,7 @@ export async function GET(req: NextRequest) {
 
     // --- 1. Order Aggregation (Summary KPIs) ---
     const ordersAgg = await prisma.posOrder.aggregate({
-      where: { ...baseFilter, status: { notIn: ['VOIDED'] } },
+      where: { ...baseFilter, status: { notIn: ['VOIDED', 'CANCELLED'] } },
       _sum: { total: true, subtotal: true, discount: true, taxAmount: true, serviceCharge: true, guestCount: true },
       _count: { id: true }
     });
@@ -97,7 +97,7 @@ export async function GET(req: NextRequest) {
     // --- 2. Hourly Revenue (Trend) ---
     // In PostgreSQL/Prisma, grouping by date-part is complex. We'll pull raw sums and aggregate in memory.
     const allValidOrders = await prisma.posOrder.findMany({
-      where: { ...baseFilter, status: { notIn: ['VOIDED'] } },
+      where: { ...baseFilter, status: { notIn: ['VOIDED', 'CANCELLED'] } },
       select: { total: true, createdAt: true }
     });
     
@@ -117,7 +117,7 @@ export async function GET(req: NextRequest) {
     // --- 3. Category & Top Items & Exceptions ---
     const allValidItems = await prisma.posOrderItem.findMany({
       where: { 
-        order: { ...baseFilter, status: { not: 'VOIDED' } },
+        order: { ...baseFilter, status: { notIn: ['VOIDED', 'CANCELLED'] } },
         voidReason: null 
       },
       select: { 
@@ -151,7 +151,7 @@ export async function GET(req: NextRequest) {
     // --- 4. Outlet Revenue ---
     const outletGroups = await prisma.posOrder.groupBy({
       by: ['outletId'],
-      where: { ...baseFilter, status: { notIn: ['VOIDED'] } },
+      where: { ...baseFilter, status: { notIn: ['VOIDED', 'CANCELLED'] } },
       _sum: { total: true, guestCount: true }
     });
 
@@ -185,13 +185,13 @@ export async function GET(req: NextRequest) {
 
     // --- 6. Exceptions (Operational Metrics) ---
     const voidsAgg = await prisma.posOrder.aggregate({
-      where: { ...baseFilter, status: 'VOIDED' },
+      where: { ...baseFilter, status: { in: ['VOIDED', 'CANCELLED'] } },
       _sum: { subtotal: true },
       _count: { id: true }
     });
     
     const discountsAgg = await prisma.posOrder.aggregate({
-      where: { ...baseFilter, status: { notIn: ['VOIDED'] } },
+      where: { ...baseFilter, status: { notIn: ['VOIDED', 'CANCELLED'] } },
       _sum: { discount: true }
     });
 
@@ -201,7 +201,7 @@ export async function GET(req: NextRequest) {
     });
 
     const unsettledOrders = await prisma.posOrder.count({
-      where: { ...baseFilter, paymentStatus: { in: ['UNPAID', 'PARTIALLY_PAID'] }, status: { notIn: ['VOIDED'] } }
+      where: { ...baseFilter, paymentStatus: { in: ['UNPAID', 'PARTIALLY_PAID'] }, status: { notIn: ['VOIDED', 'CANCELLED'] } }
     });
 
     const openSessions = await prisma.posSession.count({
