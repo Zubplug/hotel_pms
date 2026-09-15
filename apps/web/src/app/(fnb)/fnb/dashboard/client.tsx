@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useProperty } from '@/components/PropertyProvider';
 import {
-  AlertCircle, BarChart3, Loader2, Calendar, Filter, Users, DollarSign, ListOrdered, UtensilsCrossed, AlertTriangle, RefreshCw
+  AlertCircle, BarChart3, Loader2, Calendar, Filter, Users, DollarSign, ListOrdered, UtensilsCrossed, AlertTriangle, RefreshCw, Percent
 } from 'lucide-react';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, Legend } from 'recharts';
@@ -115,11 +115,12 @@ export default function FnbAnalyticsClient() {
         </div>
 
         {/* ── KPI Row ── */}
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <KPI label="Net Revenue" value={money(summary?.netRevenue)} subtext="Total finalized sales" icon={DollarSign} />
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <KPI label="Gross Revenue" value={money(summary?.grossRevenue)} subtext="Incl. tax & svc" icon={DollarSign} />
+          <KPI label="Net Revenue" value={money(summary?.netRevenue)} subtext="Excl. tax" icon={BarChart3} />
+          <KPI label="Taxes & Svc" value={money((summary?.taxes || 0) + (summary?.serviceCharge || 0))} subtext="Total liabilities" icon={Percent} />
           <KPI label="Covers" value={summary?.covers} subtext="Total guests served" icon={Users} />
-          <KPI label="Average Check" value={money(summary?.averageCheck)} subtext="Revenue per cover" icon={BarChart3} />
-          <KPI label="Total Orders" value={summary?.orders} subtext="Submitted & closed" icon={ListOrdered} />
+          <KPI label="Avg Check" value={money(summary?.averageCheck)} subtext="Gross per cover" icon={ListOrdered} />
         </section>
 
         {/* ── Main Section ── */}

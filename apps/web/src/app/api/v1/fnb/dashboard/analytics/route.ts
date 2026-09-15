@@ -79,14 +79,20 @@ export async function GET(req: NextRequest) {
     // --- 1. Order Aggregation (Summary KPIs) ---
     const ordersAgg = await prisma.posOrder.aggregate({
       where: { ...baseFilter, status: { notIn: ['VOIDED'] } },
-      _sum: { total: true, guestCount: true },
+      _sum: { total: true, subtotal: true, discount: true, taxAmount: true, serviceCharge: true, guestCount: true },
       _count: { id: true }
     });
 
-    const netRevenue = Number(ordersAgg._sum.total || 0);
+    const grossRevenue = Number(ordersAgg._sum.total || 0);
+    const subtotal = Number(ordersAgg._sum.subtotal || 0);
+    const discount = Number(ordersAgg._sum.discount || 0);
+    const taxAmount = Number(ordersAgg._sum.taxAmount || 0);
+    const serviceCharge = Number(ordersAgg._sum.serviceCharge || 0);
+
+    const netRevenue = subtotal - discount;
     const covers = Number(ordersAgg._sum.guestCount || 0);
     const orders = Number(ordersAgg._count.id || 0);
-    const averageCheck = covers > 0 ? netRevenue / covers : 0;
+    const averageCheck = covers > 0 ? grossRevenue / covers : 0;
 
     // --- 2. Hourly Revenue (Trend) ---
     // In PostgreSQL/Prisma, grouping by date-part is complex. We'll pull raw sums and aggregate in memory.
@@ -203,7 +209,15 @@ export async function GET(req: NextRequest) {
     });
 
     return successResponse({
-      summary: { netRevenue, covers, averageCheck, orders },
+      summary: { 
+        grossRevenue,
+        netRevenue,
+        taxes: taxAmount,
+        serviceCharge,
+        covers, 
+        averageCheck, 
+        orders 
+      },
       hourlyRevenue,
       categoryRevenue,
       outletRevenue,
