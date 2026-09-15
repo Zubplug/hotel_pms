@@ -26,6 +26,11 @@ export interface NotificationPolicy {
   notifyOnReservationCreated?: boolean;
   notifyOnReservationCancelled?: boolean;
   notifyOnStayExtended?: boolean;
+  notifyOnPosSale?: boolean;
+  posSaleThreshold?: number;
+  notifyOnComplimentary?: boolean;
+  notifyOnDiscount?: boolean;
+  notifyOnCheckinBypass?: boolean;
 }
 
 export const NotificationEngine = {
@@ -205,6 +210,11 @@ async function fetchPolicy(
     notifyOnReservationCreated: np.notifyOnReservationCreated ?? true,
     notifyOnReservationCancelled: np.notifyOnReservationCancelled ?? true,
     notifyOnStayExtended: np.notifyOnStayExtended ?? true,
+    notifyOnPosSale: np.notifyOnPosSale ?? true, // Temporarily enabled for all sales per user request
+    posSaleThreshold: np.posSaleThreshold ?? 0,
+    notifyOnComplimentary: np.notifyOnComplimentary ?? true,
+    notifyOnDiscount: np.notifyOnDiscount ?? true,
+    notifyOnCheckinBypass: np.notifyOnCheckinBypass ?? true,
   };
 }
 
@@ -764,6 +774,65 @@ async function evaluateEvent(
         body: `Folio balance has crossed the credit limit threshold. Current Balance: ₦${event.metadata?.newBalance}.`,
         category: "Finance",
         priority: "Critical",
+      };
+    }
+
+    case "POS_SALE_SYNCED": {
+      if (!policy.notifyOnPosSale) return null;
+      const amount = Number(event.metadata?.total || 0);
+      if (policy.posSaleThreshold && policy.posSaleThreshold > 0 && amount < policy.posSaleThreshold) {
+        return null; // Below threshold
+      }
+
+      return {
+        subject: `POS Sale Synced — ${event.metadata?.outletName || "Outlet"}`,
+        body: `🧾 Order #${event.metadata?.orderNumber || event.entityId}\n💰 Amount: ${event.metadata?.currency || "NGN"} ${amount.toLocaleString()}\n👨‍💼 Operator: ${event.metadata?.operatorName || "Staff"}`,
+        category: "Operations",
+        priority: "Normal",
+      };
+    }
+
+    case "COMPLIMENTARY_RECORDED": {
+      if (!policy.notifyOnComplimentary) return null;
+
+      const amount = Number(event.metadata?.amount || 0);
+      const reason = event.metadata?.reason || "No reason provided";
+      const target = event.metadata?.target || "Guest/Room";
+
+      return {
+        subject: `Complimentary Applied`,
+        body: `A complimentary of ${event.metadata?.currency || "NGN"} ${amount.toLocaleString()} was applied to ${target}.\n📝 Reason: ${reason}\n📅 Business Date: ${event.metadata?.businessDate || "N/A"}\n👨‍💼 Operator: ${event.metadata?.operatorName || "Staff"}`,
+        category: "Operations",
+        priority: "High",
+      };
+    }
+
+    case "DISCOUNT_APPLIED": {
+      if (!policy.notifyOnDiscount) return null;
+
+      const amount = Number(event.metadata?.amount || 0);
+      const percent = event.metadata?.percentage ? ` (${event.metadata?.percentage}%)` : "";
+      const reason = event.metadata?.reason || "No reason provided";
+      const target = event.metadata?.target || "Reservation/Order";
+
+      return {
+        subject: `Discount Applied`,
+        body: `A discount of ${event.metadata?.currency || "NGN"} ${amount.toLocaleString()}${percent} was applied to ${target}.\n📝 Reason: ${reason}\n📅 Business Date: ${event.metadata?.businessDate || "N/A"}\n👨‍💼 Operator: ${event.metadata?.operatorName || "Staff"}`,
+        category: "Operations",
+        priority: "Normal",
+      };
+    }
+
+    case "CHECKIN_BYPASS_CREATED": {
+      if (!policy.notifyOnCheckinBypass) return null;
+
+      const reason = event.metadata?.reason || "No reason provided";
+
+      return {
+        subject: `Check-in Bypass Used`,
+        body: `A check-in was bypassed for ${event.metadata?.guestName || "Guest"}.\n📋 Conf: ${event.metadata?.confirmationNumber || "N/A"} | 🏠 Room: ${event.metadata?.roomNumber || "N/A"}\n📝 Reason: ${reason}\n📅 Business Date: ${event.metadata?.businessDate || "N/A"}\n👨‍💼 Operator: ${event.metadata?.operatorName || "Staff"}`,
+        category: "Operations",
+        priority: "High",
       };
     }
 

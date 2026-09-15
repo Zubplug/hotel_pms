@@ -3524,15 +3524,22 @@ export async function POST(req: NextRequest) {
             else if (eventType === "CHECK_IN") notificationType = "CHECK_IN";
             else if (eventType === "CHECK_OUT") notificationType = "CHECK_OUT";
             else if (eventType === "CANCEL") notificationType = "CANCEL";
+            else if (eventType === "CHECKIN_BYPASS") notificationType = "CHECKIN_BYPASS_CREATED";
 
             if (notificationType && property.organizationId) {
+              const eventId = idempotencyKey || id;
               await NotificationEngine.emit({
                 type: notificationType,
                 organizationId: property.organizationId,
                 propertyId: property.id,
                 entityType: "reservation",
                 entityId: aggregateId,
-                idempotencyKey: `sync_${notificationType}_${aggregateId}_${Date.now()}`,
+                metadata: {
+                  ...payload,
+                  operatorName: "Sync Service",
+                  businessDate: payload.businessDate || authoritativeBusinessDate?.toISOString() || new Date().toISOString()
+                },
+                idempotencyKey: `sync_${notificationType}_${eventId}`,
               });
             }
           } catch (notifErr) {
@@ -3560,6 +3567,7 @@ export async function POST(req: NextRequest) {
                   method:
                     payload.method ||
                     (eventType === "ADVANCE_DEPOSIT" ? "TOP-UP" : "PAYMENT"),
+                  operatorName: "Sync Service"
                 },
                 idempotencyKey: `sync_PAYMENT_${idempotencyKey || id}`,
               });
@@ -3569,6 +3577,56 @@ export async function POST(req: NextRequest) {
               `[Push Sync] Failed to emit notification for ${eventType}:`,
               notifErr,
             );
+          }
+        } else if (aggregateType === "COMPLIMENTARY_RECORD" && (eventType === "COMPLIMENTARY_CREATED" || eventType === "COMPLIMENTARY_APPLIED" || eventType === "COMPLIMENTARY_REQUESTED")) {
+          try {
+            if (property.organizationId) {
+              await NotificationEngine.emit({
+                type: "COMPLIMENTARY_RECORDED",
+                organizationId: property.organizationId,
+                propertyId: property.id,
+                entityType: "complimentary",
+                entityId: aggregateId,
+                metadata: {
+                  amount: Number(payload.grossAmount || payload.compAmount || 0),
+                  currency: "NGN",
+                  reason: payload.reason || "Offline Sync",
+                  businessDate: payload.businessDate || authoritativeBusinessDate?.toISOString() || new Date().toISOString(),
+                  operatorName: "Sync Service",
+                  target: payload.guestId ? "Guest/Room" : "Order/Folio"
+                },
+                idempotencyKey: `sync_COMPL_${eventType}_${idempotencyKey || id}`,
+              });
+            }
+          } catch (notifErr) {
+            console.error(`[Push Sync] Failed to emit notification for ${eventType}:`, notifErr);
+          }
+        } else if (
+          (aggregateType === "RESERVATION_ROOM" || aggregateType === "POS_ORDER") && 
+          (eventType === "DISCOUNT_APPLIED" || eventType === "DISCOUNT_REQUESTED")
+        ) {
+          try {
+            if (property.organizationId) {
+              await NotificationEngine.emit({
+                type: "DISCOUNT_APPLIED",
+                organizationId: property.organizationId,
+                propertyId: property.id,
+                entityType: aggregateType === "POS_ORDER" ? "order" : "reservation",
+                entityId: aggregateId,
+                metadata: {
+                  amount: Number(payload.amount || payload.discountAmount || 0),
+                  percentage: payload.percentage || payload.discountPercent,
+                  currency: "NGN",
+                  reason: payload.reason || "Offline Sync",
+                  businessDate: payload.businessDate || authoritativeBusinessDate?.toISOString() || new Date().toISOString(),
+                  operatorName: "Sync Service",
+                  target: aggregateType === "POS_ORDER" ? "POS Order" : "Reservation"
+                },
+                idempotencyKey: `sync_DISCOUNT_${eventType}_${idempotencyKey || id}`,
+              });
+            }
+          } catch (notifErr) {
+            console.error(`[Push Sync] Failed to emit notification for ${eventType}:`, notifErr);
           }
         }
       } catch (err: any) {

@@ -991,6 +991,26 @@ export async function executeNightAudit(
   
   errors = finalErrors;
 
+  try {
+    const prop = await prisma.property.findUnique({ where: { id: propertyId } });
+    if (prop) {
+      await NotificationEngine.emit({
+        type: errors > 0 ? 'NIGHT_AUDIT_DISCREPANCY' : 'NIGHT_AUDIT_COMPLETED',
+        organizationId: prop.organizationId,
+        propertyId: prop.id,
+        entityType: 'night_audit',
+        entityId: completedAudit.id,
+        idempotencyKey: `night_audit_completed_${completedAudit.id}`,
+        metadata: {
+          tasksCreated: totalTasksCreated,
+          errors: errors
+        }
+      });
+    }
+  } catch (notifErr) {
+    console.error('[Night Audit] Failed to emit completion notification', notifErr);
+  }
+
   return {
     auditId: completedAudit.id,
     tasksCreated: totalTasksCreated,

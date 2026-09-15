@@ -4,6 +4,7 @@ import crypto, { randomUUID } from "crypto";
 import { InventoryService } from "@/lib/inventory/InventoryService";
 import { isNightAuditCutoverActive } from "@/lib/night-audit-guard";
 import { requireOrganizationContext } from "@/lib/organization-access";
+import { NotificationEngine } from "@/lib/notification-engine";
 
 // Legacy desktop SyncEvents use operation IDs such as `op_<device>_<ticks>`,
 // while HotelEvent.id is a PostgreSQL UUID. Keep the legacy ID as the
@@ -1099,6 +1100,40 @@ export async function POST(req: NextRequest) {
           results.push({ id: event.id, status: 'SYNCED', idempotencyKey: event.idempotencyKey });
           lastSequenceNumber = event.sequence;
         });
+        
+        // 5. Post-transaction notifications for mobile parity
+        // Emit only after successful DB commit
+        if (event.aggregateType === 'POS_ORDER' && (event.eventType === 'ORDER_CLOSED' || event.eventType === 'ORDER_COMPLETED' || event.eventType === 'ORDER_CREATED')) {
+            try {
+                const operatorName = "Sync Service"; // We don't have the operator name easily available, fallback
+                const payload = typeof event.payloadJson === 'string' ? JSON.parse(event.payloadJson || '{}') : (event.payloadJson || {});
+                const amount = Number(payload.Total || payload.total || 0);
+                const orderNumber = payload.OrderNumber || payload.orderNumber || event.aggregateId;
+                
+                // Get org ID securely 
+                const property = await prisma.property.findUnique({ where: { id: terminal.propertyId }, select: { organizationId: true, id: true } });
+                
+                if (property?.organizationId) {
+                  await NotificationEngine.emit({
+                    type: "POS_SALE_SYNCED",
+                    organizationId: property.organizationId,
+                    propertyId: property.id,
+                    entityType: "order",
+                    entityId: event.aggregateId,
+                    metadata: {
+                      total: amount,
+                      currency: "NGN",
+                      operatorName: operatorName,
+                      orderNumber: orderNumber,
+                      outletName: terminal.outletId
+                    },
+                    idempotencyKey: `sync_POS_SALE_${event.eventType}_${event.idempotencyKey || event.id}`
+                  });
+                }
+            } catch (notifErr) {
+                console.error(`[Push Sync] Failed to emit notification for ${event.eventType}:`, notifErr);
+            }
+        }
         
       } catch (err: any) {
         if (err.message === 'IDEMPOTENCY_DUPLICATE') {
