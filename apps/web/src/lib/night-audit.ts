@@ -139,7 +139,35 @@ export async function executeNightAudit(
       throw new Error(`CONFLICT:Night Audit for ${businessDate.toISOString().split('T')[0]} has already been completed.`);
     }
     if (existing?.status === 'IN_PROGRESS' || existing?.status === 'POSTING') {
-      throw new Error('CONFLICT:Night Audit is already in progress for this business date.');
+      const isStale = existing.updatedAt && (existing.updatedAt.getTime() < Date.now() - 45 * 60 * 1000);
+      if (isStale) {
+        const recovered = await tx.nightAudit.updateMany({
+          where: { id: existing.id, status: existing.status, updatedAt: existing.updatedAt },
+          data: { status: 'FAILED', notes: 'Auto-recovered stale audit run', completedAt: new Date(), updatedAt: new Date() }
+        });
+        if (recovered.count === 0) {
+           throw new Error('CONFLICT:Night Audit is currently being recovered by another process.');
+        }
+        await tx.auditLog.create({
+          data: {
+             organizationId: property.organizationId,
+             propertyId,
+             userId,
+             userEmail: userEmail || 'unknown@system.local',
+             userRole,
+             action: 'NIGHT_AUDIT_STALE_RECOVERED',
+             resource: 'NightAudit',
+             resourceId: existing.id,
+             newValue: { previousStatus: existing.status, lastUpdated: existing.updatedAt },
+             ipAddress: reqIp,
+             userAgent: reqUserAgent,
+             requestId: crypto.randomUUID(),
+          }
+        });
+        existing.status = 'FAILED';
+      } else {
+        throw new Error('CONFLICT:Night Audit is already in progress for this business date.');
+      }
     }
     if (isRecovery && existing?.status !== 'FAILED') {
       throw new Error('CONFLICT:Failed Night Audit recovery record is no longer available.');
@@ -239,10 +267,19 @@ export async function executeNightAudit(
     let totalRoomChargesPosted = 0;
     let errors = 0;
 
+    let lastHeartbeat = Date.now();
     for (let i = 0; i < eligibleReservations.length; i += BATCH_SIZE) {
-    const batch = eligibleReservations.slice(i, i + BATCH_SIZE);
-    
-    await Promise.all(batch.map(async (reservation: any) => {
+      const batch = eligibleReservations.slice(i, i + BATCH_SIZE);
+
+      if (Date.now() - lastHeartbeat > 15000) {
+        await prisma.nightAudit.update({
+          where: { id: auditRun.id },
+          data: { updatedAt: new Date() }
+        }).catch((e) => console.error('[Night Audit] Heartbeat failed:', e));
+        lastHeartbeat = Date.now();
+      }
+
+      await Promise.all(batch.map(async (reservation: any) => {
       try {
         await prisma.$transaction(async (tx: any) => {
           // Re-read the assignment inside the posting transaction. The
@@ -516,14 +553,8 @@ export async function executeNightAudit(
 
             const hkIdempotencyKey = `STAYOVER_${reservation.id}_${room.id}_${nextBusinessDate.toISOString().split('T')[0]}`;
             
-            const existingTask = await tx.housekeepingTask.findFirst({
-              where: {
-                propertyId,
-                roomId: room.id,
-                type: { in: ['STAYOVER', 'CHECKOUT'] },
-                status: { notIn: ['INSPECTED', 'CANCELLED'] },
-              },
-              orderBy: { createdAt: 'desc' },
+            const existingTask = await tx.housekeepingTask.findUnique({
+              where: { idempotencyKey: hkIdempotencyKey }
             });
 
             if (existingTask) {
@@ -686,8 +717,6 @@ export async function executeNightAudit(
       else if (group.type === 'REFUND') refundsVal += amt;
     }
 
-    }
-
     // Since NightAuditFinancialSnapshot schema does not have a pool or service charge bucket,
     // we logically fold them into otherRevenueVal and taxes for the gross calculations.
     // The departmentReconciliation accurately reflects their GL split.
@@ -703,122 +732,118 @@ export async function executeNightAudit(
   const revpar = roomCount ? totalRoomRevenue / roomCount : 0;
   const journalBusinessDate = new Date(businessDate.getTime());
 
-  const journalPosting = await prisma.$transaction((tx) => postNightAuditJournal(tx, {
-    propertyId,
-    businessDate: journalBusinessDate,
-    auditId: auditRun.id,
-    createdBy: userId,
-  }));
-  if (journalPosting.status !== 'POSTED') {
-    errors++;
-    console.error('[Night Audit] Accounting journal was not posted:', journalPosting);
-    throw new Error(`BLOCKER:Night Audit cannot close without a posted accounting journal (${journalPosting.status}).`);
-  }
-  const postedJournals = await prisma.journalEntry.findMany({
-    where: { propertyId, nightAuditId: auditRun.id, status: 'POSTED' },
-    select: { id: true },
-  });
-  const journalLines = postedJournals.length ? await prisma.journalEntryLine.findMany({
-    where: { entryId: { in: postedJournals.map((entry) => entry.id) } },
-    select: { debit: true, credit: true, account: { select: { code: true } } },
-  }) : [];
-  const glCredit = (code: string) => journalLines.filter((line) => line.account.code === code).reduce((sum, line) => sum + Number(line.credit), 0);
-  const departmentReconciliation = [
-    { department: 'Rooms', source: roomRevenueVal, gl: glCredit('4050') },
-    { department: 'F&B/POS', source: fnbRevenueVal, gl: glCredit('4250') },
-    { department: 'Recreation/Pool', source: poolRevenueVal, gl: glCredit('4100') },
-    { department: 'Other', source: otherRevenueVal, gl: glCredit('4400') },
-    { department: 'Taxes', source: taxesVal, gl: glCredit('2200') },
-    { department: 'Service Charge', source: serviceChargeVal, gl: glCredit('2210') },
-  ].map((row) => ({ ...row, difference: row.source - row.gl, status: Math.abs(row.source - row.gl) < 0.01 ? 'MATCHED' : 'VARIANCE' }));
-  const hasDepartmentVariance = departmentReconciliation.some((row) => row.status === 'VARIANCE');
-  const balanceRows = (await prisma.$transaction((tx) => buildNightAuditBalanceProof(tx, { propertyId, businessDate }))).map((row) => ({
-    ...row,
-    propertyId,
-    businessDate,
-  }));
-  const balanceProofRows = balanceRows.map(({ propertyId: _propertyId, businessDate: _businessDate, ...row }) => row);
-  const balanceProofStatus = balanceProofRows.every((row) => row.status === 'PROVEN') ? 'PROVEN' : balanceProofRows.some((row) => row.status === 'HAS_VARIANCE') ? 'HAS_VARIANCE' : 'INCOMPLETE';
-  const [paymentMethodTotals, unresolvedExceptionCount, latePostingCount, voidCount, adjustmentCount, cashTotals] = await Promise.all([
-    prisma.payment.groupBy({ by: ['method'], where: { propertyId, businessDate, status: { in: ['COMPLETED', 'PARTIALLY_REFUNDED'] } }, _sum: { amount: true }, _count: { id: true } }),
-    prisma.transactionException.count({ where: { propertyId, businessDate, status: { in: ['OPEN', 'PENDING_APPROVAL'] } } }),
-    prisma.folioItem.count({ where: { folio: { propertyId }, businessDate, isLatePosting: true, voidedAt: null } }),
-    prisma.folioItem.count({ where: { folio: { propertyId }, businessDate, voidedAt: { not: null } } }),
-    prisma.folioItem.count({ where: { folio: { propertyId }, businessDate, type: 'ADJUSTMENT', voidedAt: null } }),
-    prisma.posSession.aggregate({ where: { propertyId, businessDate }, _sum: { expectedCash: true, actualCash: true, variance: true } }),
-  ]);
-  const paymentTotals = paymentMethodTotals.map((row) => ({ method: row.method, amount: Number(row._sum.amount || 0), count: row._count.id }));
-  const snapshotReconciliationStatus = balanceProofStatus === 'PROVEN' && journalPosting.status === 'POSTED' && unresolvedExceptionCount === 0 && !hasDepartmentVariance ? 'RECONCILED' : 'HAS_EXCEPTIONS';
-  if (hasDepartmentVariance || balanceProofStatus !== 'PROVEN') errors++;
-  const closeSourceTotals = {
-    roomRevenue: roomRevenueVal,
-    fnbRevenue: fnbRevenueVal,
-    otherRevenue: schemaOtherRevenue,
-    taxes: taxesVal,
-    discounts: discountsVal,
-    refunds: refundsVal,
-    grossRevenue: grossRevenueVal,
-    netRevenue: netRevenueVal,
-    paymentTotals,
-    cashExpected: Number(cashTotals._sum.expectedCash || 0),
-    cashDeclared: Number(cashTotals._sum.actualCash || 0),
-    cashVariance: Number(cashTotals._sum.variance || 0),
-    unresolvedExceptionCount,
-    latePostingCount,
-    voidCount,
-    adjustmentCount,
-  };
-  const closeBalanceProof = {
-    status: balanceProofStatus,
-    reason: 'Account-level balance rows are preserved with the close package; unavailable ledgers remain explicitly marked.',
-    ledgers: balanceProofRows,
-    journal: { postedEntryCount: postedJournals.length, status: journalPosting.status, missingAccounts: journalPosting.missingAccounts },
-  };
-  const closeControlSummary = {
-    errors,
-    roomChargesPosted: totalRoomChargesPosted,
-    tasksCreated: totalTasksCreated,
-    tasksSkipped: totalTasksSkipped,
-    occupancy,
-    adr,
-    revpar,
-    journalPosting,
-    balanceProofStatus,
-    departmentReconciliation,
-  };
-  const closeReportManifest = [
-    'managers-flash', 'detailed-revenue', 'trial-balance', 'cashier-summary',
-    'payment-method-reconciliation', 'tax-summary', 'guest-ledger', 'city-ledger',
-    'no-show', 'room-status', 'voids-and-adjustments', 'discounts-and-complimentary',
-    'refunds', 'late-postings', 'pos-settlement', 'exception-register',
-    'audit-acknowledgements', 'final-gl-journal',
-  ].map((key) => ({ key, auditId: auditRun.id, businessDate: businessDate.toISOString() }));
-  const closePackageHash = crypto.createHash('sha256').update(JSON.stringify({
-    runReference,
-    businessDate: businessDate.toISOString(),
-    closeSourceTotals,
-    closeBalanceProof,
-    closeControlSummary,
-    closeReportManifest,
-    journalEntryIds: postedJournals.map((entry) => entry.id),
-    journalPosting,
-    departmentReconciliation,
-  })).digest('hex');
+  const [completedAudit, finalErrors] = await prisma.$transaction(async (tx) => {
+    let txErrors = errors;
+    const journalPosting = await postNightAuditJournal(tx, {
+      propertyId,
+      businessDate: journalBusinessDate,
+      auditId: auditRun.id,
+      createdBy: userId,
+    });
+    if (journalPosting.status !== 'POSTED') {
+      txErrors++;
+      console.error('[Night Audit] Accounting journal was not posted:', journalPosting);
+      throw new Error(`BLOCKER:Night Audit cannot close without a posted accounting journal (${journalPosting.status}).`);
+    }
 
-  // Final atomic commit — NightAudit completion, property status, occupancy snapshot,
-  // and audit log all succeed together or all roll back.
-  
-  const roomStatusCounts = await prisma.room.groupBy({
-    by: ['status'],
-    where: { propertyId },
-    _count: { status: true }
-  });
-  const outOfOrderRooms = roomStatusCounts.find((r: any) => r.status === 'OUT_OF_ORDER')?._count?.status ?? 0;
-  const blockedRooms = roomStatusCounts.find((r: any) => r.status === 'BLOCKED')?._count?.status ?? 0;
+    const postedJournals = await tx.journalEntry.findMany({
+      where: { propertyId, nightAuditId: auditRun.id, status: 'POSTED' },
+      select: { id: true },
+    });
+    const journalLines = postedJournals.length ? await tx.journalEntryLine.findMany({
+      where: { entryId: { in: postedJournals.map((entry) => entry.id) } },
+      select: { debit: true, credit: true, account: { select: { code: true } } },
+    }) : [];
+    
+    const glCredit = (code: string) => journalLines.filter((line) => line.account.code === code).reduce((sum, line) => sum + Number(line.credit), 0);
+    const departmentReconciliation = [
+      { department: 'Rooms', source: roomRevenueVal, gl: glCredit('4050') },
+      { department: 'F&B/POS', source: fnbRevenueVal, gl: glCredit('4250') },
+      { department: 'Recreation/Pool', source: poolRevenueVal, gl: glCredit('4100') },
+      { department: 'Other', source: otherRevenueVal, gl: glCredit('4400') },
+      { department: 'Taxes', source: taxesVal, gl: glCredit('2200') },
+      { department: 'Service Charge', source: serviceChargeVal, gl: glCredit('2210') },
+    ].map((row) => ({ ...row, difference: row.source - row.gl, status: Math.abs(row.source - row.gl) < 0.01 ? 'MATCHED' : 'VARIANCE' }));
+    
+    const hasDepartmentVariance = departmentReconciliation.some((row) => row.status === 'VARIANCE');
+    
+    const balanceRows = (await buildNightAuditBalanceProof(tx, { propertyId, businessDate })).map((row) => ({
+      ...row,
+      propertyId,
+      businessDate,
+    }));
+    const balanceProofRows = balanceRows.map(({ propertyId: _propertyId, businessDate: _businessDate, ...row }) => row);
+    const balanceProofStatus = balanceProofRows.every((row) => row.status === 'PROVEN') ? 'PROVEN' : balanceProofRows.some((row) => row.status === 'HAS_VARIANCE') ? 'HAS_VARIANCE' : 'INCOMPLETE';
+    
+    const [paymentMethodTotals, unresolvedExceptionCount, latePostingCount, voidCount, adjustmentCount, cashTotals] = await Promise.all([
+      tx.payment.groupBy({ by: ['method'], where: { propertyId, businessDate, status: { in: ['COMPLETED', 'PARTIALLY_REFUNDED'] } }, _sum: { amount: true }, _count: { id: true } }),
+      tx.transactionException.count({ where: { propertyId, businessDate, status: { in: ['OPEN', 'PENDING_APPROVAL'] } } }),
+      tx.folioItem.count({ where: { folio: { propertyId }, businessDate, isLatePosting: true, voidedAt: null } }),
+      tx.folioItem.count({ where: { folio: { propertyId }, businessDate, voidedAt: { not: null } } }),
+      tx.folioItem.count({ where: { folio: { propertyId }, businessDate, type: 'ADJUSTMENT', voidedAt: null } }),
+      tx.posSession.aggregate({ where: { propertyId, businessDate }, _sum: { expectedCash: true, actualCash: true, variance: true } }),
+    ]);
+    const paymentTotals = paymentMethodTotals.map((row) => ({ method: row.method, amount: Number(row._sum.amount || 0), count: row._count.id }));
+    const snapshotReconciliationStatus = balanceProofStatus === 'PROVEN' && journalPosting.status === 'POSTED' && unresolvedExceptionCount === 0 && !hasDepartmentVariance ? 'RECONCILED' : 'HAS_EXCEPTIONS';
+    if (hasDepartmentVariance || balanceProofStatus !== 'PROVEN') txErrors++;
+    
+    const closeSourceTotals = {
+      roomRevenue: roomRevenueVal,
+      fnbRevenue: fnbRevenueVal,
+      otherRevenue: schemaOtherRevenue,
+      taxes: taxesVal,
+      discounts: discountsVal,
+      refunds: refundsVal,
+      grossRevenue: grossRevenueVal,
+      netRevenue: netRevenueVal,
+      paymentTotals,
+      cashExpected: Number(cashTotals._sum.expectedCash || 0),
+      cashDeclared: Number(cashTotals._sum.actualCash || 0),
+      cashVariance: Number(cashTotals._sum.variance || 0),
+      unresolvedExceptionCount,
+      latePostingCount,
+      voidCount,
+      adjustmentCount,
+    };
+    const closeBalanceProof = {
+      status: balanceProofStatus,
+      reason: 'Account-level balance rows are preserved with the close package; unavailable ledgers remain explicitly marked.',
+      ledgers: balanceProofRows,
+      journal: { postedEntryCount: postedJournals.length, status: journalPosting.status, missingAccounts: journalPosting.missingAccounts },
+    };
+    const closeControlSummary = {
+      errors: txErrors,
+      roomChargesPosted: totalRoomChargesPosted,
+      tasksCreated: totalTasksCreated,
+      tasksSkipped: totalTasksSkipped,
+      occupancy,
+      adr,
+      revpar,
+      journalPosting,
+      balanceProofStatus,
+      departmentReconciliation,
+    };
+    const closeReportManifest = [
+      'managers-flash', 'detailed-revenue', 'trial-balance', 'cashier-summary',
+      'payment-method-reconciliation', 'tax-summary', 'guest-ledger', 'city-ledger',
+      'no-show', 'room-status', 'voids-and-adjustments', 'discounts-and-complimentary',
+      'refunds', 'late-postings', 'pos-settlement', 'exception-register',
+      'audit-acknowledgements', 'final-gl-journal',
+    ].map((key) => ({ key, auditId: auditRun.id, businessDate: businessDate.toISOString() }));
+    
+    const closePackageHash = crypto.createHash('sha256').update(JSON.stringify({
+      runReference,
+      businessDate: businessDate.toISOString(),
+      closeSourceTotals,
+      closeBalanceProof,
+      closeControlSummary,
+      closeReportManifest,
+      journalEntryIds: postedJournals.map((entry) => entry.id),
+      journalPosting,
+      departmentReconciliation,
+    })).digest('hex');
 
-  const [completedAudit] = await prisma.$transaction([
-    // 1. Mark NightAudit COMPLETED
-    prisma.nightAudit.update({
+    const runUpdate = await tx.nightAudit.update({
       where: { id: auditRun.id },
       data: {
         status: 'COMPLETED',
@@ -826,16 +851,16 @@ export async function executeNightAudit(
         tasksCreated: { increment: totalTasksCreated },
         tasksSkipped: { increment: totalTasksSkipped },
         roomChargesPosted: { increment: totalRoomChargesPosted },
-        errors: { increment: errors },
+        errors: { increment: txErrors },
         totalRoomRevenue,
         totalRevenue: totalRevenueValue,
         occupancy,
         adr,
         revpar,
       }
-    }),
-    // 2. Create NightAuditFinancialSnapshot
-    prisma.nightAuditFinancialSnapshot.create({
+    });
+
+    await tx.nightAuditFinancialSnapshot.create({
       data: {
         nightAuditId: auditRun.id,
         roomRevenue: roomRevenueVal,
@@ -859,13 +884,14 @@ export async function executeNightAudit(
         snapshotHash: closePackageHash,
         finalizedAt: new Date(),
       }
-    }),
-    prisma.nightAuditClosePackage.create({
+    });
+
+    await tx.nightAuditClosePackage.create({
       data: {
         nightAuditId: auditRun.id,
         propertyId,
         businessDate,
-        status: errors > 0 || (grossRevenueVal > 0 && postedJournals.length === 0)
+        status: txErrors > 0 || (grossRevenueVal > 0 && postedJournals.length === 0)
           ? 'COMPLETED_WITH_EXCEPTIONS'
           : 'COMPLETED',
         sourceTotals: closeSourceTotals,
@@ -878,22 +904,26 @@ export async function executeNightAudit(
         finalizedAt: new Date(),
         accountBalances: { create: balanceRows },
       },
-    }),
-    // 3. Update property audit status
-    prisma.property.update({
+    });
+
+    await tx.property.update({
       where: { id: propertyId },
       data: {
-        // The business date is part of the success commit. A failed posting,
-        // journal, snapshot, or close-package write therefore leaves the
-        // property on the date that still needs to be audited.
         businessDate: nextBusinessDate,
         lastAuditAt: new Date(),
-        auditStatus: errors > 0 ? 'COMPLETED_WITH_EXCEPTIONS' : 'COMPLETED'
+        auditStatus: txErrors > 0 ? 'COMPLETED_WITH_EXCEPTIONS' : 'COMPLETED'
       }
-    }),
-    // 4. Snapshot occupancy — atomic with audit completion for KPI reporting consistency.
-    //    If this fails, the audit is NOT marked COMPLETED, preventing a phantom 'done' state.
-    prisma.occupancySnapshot.upsert({
+    });
+
+    const roomStatusCounts = await tx.room.groupBy({
+      by: ['status'],
+      where: { propertyId },
+      _count: { status: true }
+    });
+    const outOfOrderRooms = roomStatusCounts.find((r: any) => r.status === 'OUT_OF_ORDER')?._count?.status ?? 0;
+    const blockedRooms = roomStatusCounts.find((r: any) => r.status === 'BLOCKED')?._count?.status ?? 0;
+
+    await tx.occupancySnapshot.upsert({
       where: { propertyId_businessDate: { propertyId, businessDate } },
       create: {
         propertyId,
@@ -909,9 +939,9 @@ export async function executeNightAudit(
         currency: property.supportedCurrencies?.[0] || 'NGN',
       },
       update: { occupancyPct: occupancy, adr, revpar, totalRooms: roomCount, occupiedRooms: occupiedCount, outOfOrderRooms, blockedRooms }
-    }),
-    // 5. Audit log — atomic so it cannot say 'COMPLETED' if the update rolled back
-    prisma.auditLog.create({
+    });
+
+    await tx.auditLog.create({
       data: {
         organizationId: property.organizationId,
         propertyId,
@@ -934,16 +964,16 @@ export async function executeNightAudit(
         userAgent: reqUserAgent,
         requestId: crypto.randomUUID(),
       }
-    }),
-    // 6. Publish Hotel Activity Event for Night Audit Completion
-    prisma.hotelActivityEvent.create({
+    });
+
+    await tx.hotelActivityEvent.create({
       data: {
         propertyId,
         businessDate,
         occurredAt: new Date(),
         category: 'NIGHT_AUDIT',
         eventType: 'NIGHT_AUDIT_COMPLETED',
-        actorId,
+        actorId: userId,
         actorName: 'SYSTEM',
         title: `Night Audit Completed for ${businessDate.toISOString().split('T')[0]}`,
         description: `Successfully closed business date. Gross Revenue: ${grossRevenueVal.toLocaleString()}.`,
@@ -951,11 +981,15 @@ export async function executeNightAudit(
         metadata: {
           auditId: auditRun.id,
           tasksCreated: totalTasksCreated,
-          errors
+          errors: txErrors
         }
       }
-    })
-  ]);
+    });
+
+    return [runUpdate, txErrors];
+  });
+  
+  errors = finalErrors;
 
   return {
     auditId: completedAudit.id,
