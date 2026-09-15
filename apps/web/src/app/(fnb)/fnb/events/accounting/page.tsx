@@ -1,7 +1,6 @@
 import { Metadata } from 'next';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { FileText, Download } from 'lucide-react';
+import { ExportReportButton, ViewInvoiceButton } from '@/components/events/AccountingButtons';
 import { prisma } from '@hotel-pms/db';
 
 export const metadata: Metadata = {
@@ -41,7 +40,7 @@ export default async function EventAccountingPage() {
           <h1 className="text-3xl font-bold tracking-tight">Event Accounting</h1>
           <p className="text-muted-foreground mt-1">Manage event invoices, deposits, AR, and GL integration.</p>
         </div>
-        <Button variant="outline"><Download className="mr-2 h-4 w-4" /> Export Report</Button>
+        <ExportReportButton />
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">
@@ -107,7 +106,7 @@ export default async function EventAccountingPage() {
                       <td className="px-4 py-3 text-right">{Number(inv.totalAmount).toLocaleString()} {inv.currency}</td>
                       <td className="px-4 py-3 text-right">{Number(inv.paidAmount).toLocaleString()} {inv.currency}</td>
                       <td className="px-4 py-3 text-right">
-                        <Button variant="ghost" size="sm"><FileText className="h-4 w-4" /></Button>
+                        <ViewInvoiceButton invoiceId={inv.id} />
                       </td>
                     </tr>
                   ))

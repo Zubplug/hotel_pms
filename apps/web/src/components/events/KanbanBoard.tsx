@@ -3,12 +3,14 @@
 import React, { useState, useTransition } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { updateEventLeadStatus } from '@/lib/events/crm-actions';
+import { toast } from 'sonner';
 
 const COLUMNS = [
   { id: 'NEW', label: 'New Inquiries', color: 'bg-blue-500' },
-  { id: 'PROPOSAL', label: 'Proposal Sent', color: 'bg-amber-500' },
-  { id: 'NEGOTIATION', label: 'Negotiation', color: 'bg-orange-500' },
-  { id: 'WON', label: 'Closed Won', color: 'bg-emerald-500' },
+  { id: 'CONTACTED', label: 'Contacted', color: 'bg-indigo-500' },
+  { id: 'QUALIFIED', label: 'Qualified', color: 'bg-amber-500' },
+  { id: 'PROPOSAL_SENT', label: 'Proposal Sent', color: 'bg-orange-500' },
+  { id: 'CONVERTED', label: 'Closed Won', color: 'bg-emerald-500' },
   { id: 'LOST', label: 'Closed Lost', color: 'bg-slate-500' }
 ];
 
@@ -30,15 +32,18 @@ export function KanbanBoard({ initialLeads }: { initialLeads: any[] }) {
     if (!leadId) return;
 
     // Optimistic Update
+    const previousLeads = [...leads];
     setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status } : l));
 
     // Server Action
     startTransition(async () => {
       try {
         await updateEventLeadStatus(leadId, status);
+        toast.success(`Lead status updated to ${status}`);
       } catch (err) {
-        // Rollback on failure (naive reload or pass back)
-        console.error("Failed to update status", err);
+        // Rollback on failure
+        setLeads(previousLeads);
+        toast.error("Failed to update status. Please try again.");
       }
     });
   };
@@ -70,11 +75,8 @@ export function KanbanBoard({ initialLeads }: { initialLeads: any[] }) {
                   className={`shadow-sm cursor-grab active:cursor-grabbing hover:border-primary ${isPending ? 'opacity-80' : ''}`}
                 >
                   <CardContent className="p-3 space-y-2">
-                    <div className="font-medium text-sm truncate">{lead.eventName}</div>
-                    <div className="text-xs text-muted-foreground truncate">{lead.contactName} • {lead.expectedGuests} pax</div>
-                    <div className="text-xs font-semibold text-emerald-600">
-                      NGN {Number(lead.estimatedValue || 0).toLocaleString()}
-                    </div>
+                    <div className="font-medium text-sm truncate">{lead.contactName} {lead.companyName ? `(${lead.companyName})` : ''}</div>
+                    <div className="text-xs text-muted-foreground truncate">{lead.eventType || 'General Inquiry'} • {lead.expectedGuests || 0} pax</div>
                   </CardContent>
                 </Card>
               ))}

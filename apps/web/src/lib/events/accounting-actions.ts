@@ -35,7 +35,7 @@ export async function finalizeEventInvoice(invoiceId: string, postedById: string
           accountId: invoice.cityLedgerAccountId,
           invoiceNumber: `INV-${invoice.id.substring(0,8)}`,
           issueDate: new Date(),
-          dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+          dueDate: new Date(), // Due on receipt
           description: `Event Billing for ${invoice.event?.name || 'Event'}`,
           amount: invoice.totalAmount,
           outstandingAmount: outstandingAmount,

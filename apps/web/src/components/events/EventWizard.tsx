@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { CheckCircle2, ChevronRight, User, CalendarDays, Box, FileText } from 'lucide-react';
 import { createFullEventBooking } from '@/lib/events/booking-actions';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 
 const steps = [
   { id: 1, title: 'Client Info', icon: User },
@@ -20,7 +21,6 @@ export function EventWizard({ initialHalls, initialPackages }: { initialHalls: a
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     contactName: '',
@@ -31,7 +31,7 @@ export function EventWizard({ initialHalls, initialPackages }: { initialHalls: a
     endTime: '',
     setupBufferMinutes: 60,
     teardownBufferMinutes: 60,
-    packageIds: [] as string[]
+    packageId: ''
   });
 
   const handleNext = () => setCurrentStep(prev => Math.min(prev + 1, steps.length));
@@ -44,21 +44,18 @@ export function EventWizard({ initialHalls, initialPackages }: { initialHalls: a
   const togglePackage = (pkgId: string) => {
     setFormData(prev => ({
       ...prev,
-      packageIds: prev.packageIds.includes(pkgId) 
-        ? prev.packageIds.filter(id => id !== pkgId)
-        : [...prev.packageIds, pkgId]
+      packageId: prev.packageId === pkgId ? '' : pkgId
     }));
   };
 
   const handleSubmit = async () => {
     try {
       setIsSubmitting(true);
-      setError(null);
       
       if (!formData.hallId) throw new Error("Please select a hall.");
       if (!formData.startTime || !formData.endTime) throw new Error("Please set start and end times.");
       
-      const newEvent = await createFullEventBooking({
+      await createFullEventBooking({
         contactName: formData.contactName,
         contactPhone: formData.contactPhone,
         expectedGuests: Number(formData.expectedGuests || 0),
@@ -67,13 +64,13 @@ export function EventWizard({ initialHalls, initialPackages }: { initialHalls: a
         endTime: new Date(formData.endTime),
         setupBufferMinutes: Number(formData.setupBufferMinutes),
         teardownBufferMinutes: Number(formData.teardownBufferMinutes),
-        packageIds: formData.packageIds
+        packageIds: formData.packageId ? [formData.packageId] : []
       });
 
-      alert("Event successfully created!");
-      router.push(`/fnb/events/bookings`);
+      toast.success("Event successfully created!");
+      router.push(`/fnb/events`);
     } catch (err: any) {
-      setError(err.message || "An error occurred creating the booking.");
+      toast.error(err.message || "An error occurred creating the booking.");
     } finally {
       setIsSubmitting(false);
     }
@@ -107,11 +104,6 @@ export function EventWizard({ initialHalls, initialPackages }: { initialHalls: a
           <CardDescription>Enter the details for this booking phase.</CardDescription>
         </CardHeader>
         <CardContent className="min-h-[300px]">
-          {error && (
-            <div className="bg-rose-50 text-rose-600 p-3 rounded text-sm mb-4">
-              {error}
-            </div>
-          )}
           
           {currentStep === 1 && (
             <div className="space-y-4 max-w-md">
@@ -170,13 +162,13 @@ export function EventWizard({ initialHalls, initialPackages }: { initialHalls: a
 
           {currentStep === 3 && (
             <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">Select Banquet & Equipment Packages</p>
+              <p className="text-sm text-muted-foreground">Select Banquet Package</p>
               <div className="grid grid-cols-2 gap-4">
                 {initialPackages.map(pkg => (
                   <div 
                     key={pkg.id} 
                     onClick={() => togglePackage(pkg.id)}
-                    className={`p-4 border rounded cursor-pointer transition-colors ${formData.packageIds.includes(pkg.id) ? 'border-primary bg-primary/5' : 'hover:border-slate-300'}`}
+                    className={`p-4 border rounded cursor-pointer transition-colors ${formData.packageId === pkg.id ? 'border-primary bg-primary/5' : 'hover:border-slate-300'}`}
                   >
                     <div className="font-semibold text-sm">{pkg.name}</div>
                     <div className="text-xs text-muted-foreground mt-1">NGN {Number(pkg.basePrice).toLocaleString()}</div>
@@ -200,7 +192,7 @@ export function EventWizard({ initialHalls, initialPackages }: { initialHalls: a
                   <span className="text-muted-foreground">Hall: </span> {initialHalls.find(h => h.id === formData.hallId)?.name || 'N/A'}
                 </div>
                 <div>
-                  <span className="text-muted-foreground">Packages: </span> {formData.packageIds.length} selected
+                  <span className="text-muted-foreground">Package: </span> {initialPackages.find(p => p.id === formData.packageId)?.name || 'None selected'}
                 </div>
                 <div>
                   <span className="text-muted-foreground">Start: </span> {formData.startTime ? new Date(formData.startTime).toLocaleString() : 'N/A'}

@@ -1,8 +1,7 @@
 import { Metadata } from 'next';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Plus } from 'lucide-react';
 import { KanbanBoard } from '@/components/events/KanbanBoard';
+import { AddLeadDialog } from '@/components/events/AddLeadDialog';
 import { prisma } from '@hotel-pms/db';
 
 export const metadata: Metadata = {
@@ -21,7 +20,7 @@ export default async function EventCrmPage() {
           <h1 className="text-3xl font-bold tracking-tight">Event CRM</h1>
           <p className="text-muted-foreground mt-1">Track inquiries, generate proposals, and manage the sales pipeline.</p>
         </div>
-        <Button><Plus className="mr-2 h-4 w-4" /> Add Lead</Button>
+        <AddLeadDialog />
       </div>
 
       <Card>
