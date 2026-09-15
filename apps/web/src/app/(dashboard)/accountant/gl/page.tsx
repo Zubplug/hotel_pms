@@ -3,34 +3,58 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { BookOpen, FileText, Download, Filter, TrendingUp, TrendingDown, PlusCircle, Scale } from 'lucide-react';
+import { BookOpen, FileText, Download, Filter, Scale } from 'lucide-react';
 import { NewJournalEntryModal } from '@/components/accountant/NewJournalEntryModal';
 
 import { auth } from '@/lib/auth';
 import { prisma } from '@hotel-pms/db';
 
-const MOCK_ACCOUNTS_SUMMARY = [
-  { category: 'Assets', balance: '₦1,450,000.00', trend: 'up', percentage: '+2.4%' },
-  { category: 'Liabilities', balance: '₦420,000.00', trend: 'down', percentage: '-1.2%' },
-  { category: 'Equity', balance: '₦1,030,000.00', trend: 'up', percentage: '+4.1%' },
-  { category: 'Revenue', balance: '₦125,500.00', trend: 'up', percentage: '+8.5%' },
-  { category: 'Expenses', balance: '₦84,200.00', trend: 'down', percentage: '-0.5%' },
-];
-
 export default async function GeneralLedgerPage() {
   const session = await auth();
   const propertyId = session?.user?.propertyId;
-  
-  const recentJournals = propertyId ? await prisma.journalEntry.findMany({
-    where: { propertyId },
-    take: 5,
-    orderBy: { entryDate: 'desc' }
-  }) : [];
+  const property = propertyId
+    ? await prisma.property.findUnique({ where: { id: propertyId }, select: { businessDate: true } })
+    : null;
+  const businessDate = property?.businessDate || new Date();
 
-  const chartPreview = propertyId ? await prisma.chartOfAccount.findMany({
-    where: { propertyId },
-    orderBy: { code: 'asc' }
-  }) : [];
+  const [recentJournals, chartPreview, postedLines] = propertyId
+    ? await Promise.all([
+        prisma.journalEntry.findMany({
+          where: { propertyId, status: 'POSTED', entryDate: { lte: businessDate } },
+          take: 5,
+          orderBy: [{ entryDate: 'desc' }, { createdAt: 'desc' }],
+        }),
+        prisma.chartOfAccount.findMany({
+          where: { propertyId },
+          orderBy: { code: 'asc' },
+        }),
+        prisma.journalEntryLine.findMany({
+          where: { entry: { propertyId, status: 'POSTED', entryDate: { lte: businessDate } } },
+          select: {
+            debit: true,
+            credit: true,
+            account: { select: { type: true, normalBalance: true } },
+          },
+        }),
+      ])
+    : [[], [], []];
+
+  const categoryOrder = ['ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE'];
+  const categoryBalances = new Map(categoryOrder.map((category) => [category, 0]));
+  for (const line of postedLines as any[]) {
+    const category = String(line.account.type).toUpperCase();
+    if (!categoryBalances.has(category)) continue;
+    const debit = Number(line.debit || 0);
+    const credit = Number(line.credit || 0);
+    const normalBalance = String(line.account.normalBalance || '').toUpperCase();
+    const balance = normalBalance === 'CREDIT' ? credit - debit : debit - credit;
+    categoryBalances.set(category, (categoryBalances.get(category) || 0) + balance);
+  }
+
+  const accountSummary = categoryOrder.map((category) => ({
+    category: ({ ASSET: 'Assets', LIABILITY: 'Liabilities', EQUITY: 'Equity', REVENUE: 'Revenue', EXPENSE: 'Expenses' } as Record<string, string>)[category],
+    balance: categoryBalances.get(category) || 0,
+  }));
 
   const formatCurrency = (amount: number) => {
     return '₦' + new Intl.NumberFormat('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
@@ -57,28 +81,18 @@ export default async function GeneralLedgerPage() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-        {MOCK_ACCOUNTS_SUMMARY.map((account, idx) => (
-          <Card key={idx} className="border-slate-800 bg-white/5 backdrop-blur-md">
+        {accountSummary.map((account) => (
+          <Card key={account.category} className="border-slate-800 bg-white/5 backdrop-blur-md">
             <CardHeader className="pb-2">
               <CardDescription className="text-slate-400 font-medium">
                 {account.category}
               </CardDescription>
               <CardTitle className="text-xl font-semibold text-slate-100">
-                {account.balance}
+                {formatCurrency(account.balance)}
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex items-center gap-1 text-sm">
-                {account.trend === 'up' ? (
-                  <TrendingUp className="w-4 h-4 text-emerald-400" />
-                ) : (
-                  <TrendingDown className="w-4 h-4 text-rose-400" />
-                )}
-                <span className={account.trend === 'up' ? 'text-emerald-400' : 'text-rose-400'}>
-                  {account.percentage}
-                </span>
-                <span className="text-slate-500 ml-1">vs last month</span>
-              </div>
+              <div className="text-sm text-slate-500">Posted balance through {businessDate.toISOString().slice(0, 10)}</div>
             </CardContent>
           </Card>
         ))}

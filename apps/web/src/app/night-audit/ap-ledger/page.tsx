@@ -49,9 +49,10 @@ export default function AccountsPayableLedgerPage() {
     </div>
   );
 
-  const { negativeFolios, credits } = data as any;
+  const { negativeFolios, credits, corporateAdvances = [] } = data as any;
   const totalRefundsOwed = negativeFolios.reduce((sum: number, f: any) => sum + Math.abs(Number(f.balance || 0)), 0);
-  const totalUnappliedCredits = credits.reduce((sum: number, c: any) => sum + Number(c.remainingAmount || 0), 0);
+  const totalUnappliedCredits = credits.reduce((sum: number, c: any) => sum + Number(c.remainingAmount || 0), 0)
+    + corporateAdvances.reduce((sum: number, c: any) => sum + Number(c.remainingAmount || 0), 0);
   const totalLiability = totalRefundsOwed + totalUnappliedCredits;
 
   return (
@@ -84,7 +85,7 @@ export default function AccountsPayableLedgerPage() {
             <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-500">Total Liability</p>
             <p className="mt-1 text-3xl font-bold tabular-nums text-violet-300">{formatCurrency(totalLiability, 'NGN')}</p>
             <p className="mt-0.5 text-[11px] text-slate-600">
-              {negativeFolios.length} credit folio{negativeFolios.length !== 1 ? 's' : ''} · {credits.length} deposit{credits.length !== 1 ? 's' : ''}
+              {negativeFolios.length} credit folio{negativeFolios.length !== 1 ? 's' : ''} · {credits.length + corporateAdvances.length} deposit{credits.length + corporateAdvances.length !== 1 ? 's' : ''}
             </p>
           </div>
         </header>
@@ -179,7 +180,7 @@ export default function AccountsPayableLedgerPage() {
               </span>
             </div>
 
-            {credits.length === 0 ? (
+            {credits.length === 0 && corporateAdvances.length === 0 ? (
               <EmptyState title="No Unused Deposits" sub="All deposits have been applied to folios." />
             ) : (
               <div className="overflow-x-auto">
@@ -220,6 +221,29 @@ export default function AccountsPayableLedgerPage() {
                         </tr>
                       );
                     })}
+                    {corporateAdvances.map((advance: any) => (
+                      <tr key={advance.id} className="group transition-colors hover:bg-white/[0.03]">
+                        <td className="px-5 py-3.5">
+                          <p className="text-sm font-bold text-white">Corporate advance</p>
+                          <p className="text-[10px] text-slate-600">{format(new Date(advance.createdAt), 'dd MMM yyyy')}</p>
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <p className="text-sm font-semibold text-slate-300">{advance.account.name}</p>
+                          <p className="text-[10px] text-slate-600">{advance.reference || advance.reason || 'Unapplied corporate advance'}</p>
+                        </td>
+                        <td className="px-5 py-3.5 text-right text-sm font-bold tabular-nums text-emerald-300">
+                          {formatCurrency(Number(advance.remainingAmount), advance.account.currency || 'NGN')}
+                        </td>
+                        <td className="px-5 py-3.5 text-right">
+                          <a
+                            href={`/accountant/city-ledger/${advance.account.id}`}
+                            className="inline-flex items-center gap-1.5 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-1.5 text-[11px] font-bold text-indigo-300 opacity-0 transition-all hover:border-indigo-400/40 hover:bg-indigo-400/10 group-hover:opacity-100"
+                          >
+                            View Ledger <ChevronRight className="h-3 w-3" />
+                          </a>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>

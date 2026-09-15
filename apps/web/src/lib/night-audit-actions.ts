@@ -467,7 +467,8 @@ export async function getAccountsPayable(propertyId: string) {
     orderBy: { balance: 'asc' } // Most negative first
   });
 
-  const credits = await prisma.folioCredit.findMany({
+  const [credits, corporateAdvanceEntries] = await Promise.all([
+    prisma.folioCredit.findMany({
     where: {
       propertyId,
       remainingAmount: { gt: 0 },
@@ -483,7 +484,29 @@ export async function getAccountsPayable(propertyId: string) {
       reservation: true
     },
     orderBy: { remainingAmount: 'desc' }
-  });
+    }),
+    prisma.cityLedgerEntry.findMany({
+      where: {
+        propertyId,
+        type: 'PAYMENT',
+        status: 'OPEN',
+        account: { type: 'CORPORATE' },
+      },
+      include: {
+        account: { select: { id: true, name: true, currency: true } },
+        allocations: { select: { amount: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    }),
+  ]);
 
-  return { negativeFolios, credits };
+  const corporateAdvances = corporateAdvanceEntries
+    .map((entry) => ({
+      ...entry,
+      kind: 'CITY_LEDGER_ADVANCE',
+      remainingAmount: Number(entry.amount) - entry.allocations.reduce((sum, allocation) => sum + Number(allocation.amount), 0),
+    }))
+    .filter((entry) => entry.remainingAmount > 0.01);
+
+  return { negativeFolios, credits, corporateAdvances };
 }
