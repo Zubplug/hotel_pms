@@ -5,7 +5,8 @@ import { useProperty } from '@/components/PropertyProvider';
 import { NightAuditData } from '@/types/night-audit';
 import {
   Loader2, MoonStar, XCircle, AlertTriangle, CheckCircle2,
-  RefreshCcw
+  RefreshCcw, TrendingUp, Bed, Percent, Activity,
+  Users, LogOut, LogIn, UserX
 } from 'lucide-react';
 
 import { StatusBanner } from '@/components/night-audit/dashboard/status-banner';
@@ -25,6 +26,7 @@ import { AuditFailureModal } from '@/components/night-audit/audit-failure-modal'
 export default function NightAuditDashboard({ managerMode = false }: { managerMode?: boolean }) {
   const { propertyId, isLoading: propertyLoading } = useProperty();
   const [data, setData] = useState<NightAuditData | null>(null);
+  const [flashData, setFlashData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -46,6 +48,15 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
       const result = await response.json();
       if (!response.ok) throw new Error(result.error?.message || 'Unable to load audit status');
       setData(result.data);
+
+      try {
+        const flashRes = await fetch(`/api/v1/night-audit/reports/managers-flash?propertyId=${propertyId}&businessDate=${result.data.businessDate}`);
+        const flashJson = await flashRes.json();
+        if (flashRes.ok) setFlashData(flashJson.data || flashJson);
+      } catch (e) {
+        console.error('Failed to load flash report:', e);
+      }
+
       if (result.data.auditState === 'OVERDUE' && !quiet && !managerMode) {
         setWizardOpen(true);
       }
@@ -205,6 +216,76 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
 
         {/* Financial Close Control */}
         <CloseControl data={data} />
+
+        {/* Manager's Flash Report */}
+        {flashData && (
+          <div className="overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]">
+            <div className="border-b border-white/[0.06] p-5 backdrop-blur-md">
+              <h2 className="flex items-center gap-2 text-lg font-bold text-white">
+                <Activity className="h-5 w-5 text-indigo-400" /> Manager's Flash & Revenue Analysis
+              </h2>
+              <p className="mt-1 text-sm text-slate-400">Live operational statistics, revenue breakdowns, and KPIs through the business date.</p>
+            </div>
+            <div className="grid gap-px bg-white/[0.06] lg:grid-cols-3">
+              <div className="bg-[#0a0c22] p-6">
+                <h3 className="mb-5 text-xs font-bold uppercase tracking-[0.15em] text-slate-500">Revenue Summary</h3>
+                <div className="space-y-4">
+                  <div className="flex justify-between"><span className="text-sm font-medium text-slate-400">Room Revenue</span><span className="font-bold text-white">₦{Number(flashData.roomRevenue || 0).toLocaleString()}</span></div>
+                  <div className="flex justify-between"><span className="text-sm font-medium text-slate-400">F&B Revenue</span><span className="font-bold text-white">₦{Number(flashData.fbRevenue || 0).toLocaleString()}</span></div>
+                  <div className="flex justify-between"><span className="text-sm font-medium text-slate-400">Other Revenue</span><span className="font-bold text-white">₦{Number(flashData.otherRevenue || 0).toLocaleString()}</span></div>
+                  <div className="my-2 border-t border-white/5"></div>
+                  <div className="flex justify-between"><span className="text-sm font-semibold text-slate-300">Net Revenue</span><span className="font-bold text-emerald-400">₦{Number(flashData.netRevenue || 0).toLocaleString()}</span></div>
+                  <div className="flex justify-between"><span className="text-sm text-slate-500">Taxes</span><span className="font-medium text-slate-400">₦{Number(flashData.totalTaxes || 0).toLocaleString()}</span></div>
+                  <div className="flex justify-between"><span className="text-sm text-slate-500">Concessions/Discounts</span><span className="font-medium text-rose-400">-₦{Number(flashData.totalDiscounts || 0).toLocaleString()}</span></div>
+                  <div className="mt-2 border-t border-white/10 pt-3"></div>
+                  <div className="flex justify-between"><span className="text-base font-bold text-white">Gross Revenue</span><span className="text-base font-bold text-white">₦{Number(flashData.grossRevenue || 0).toLocaleString()}</span></div>
+                </div>
+              </div>
+              
+              <div className="bg-[#0a0c22] p-6">
+                <h3 className="mb-5 text-xs font-bold uppercase tracking-[0.15em] text-slate-500">Performance Metrics</h3>
+                <div className="space-y-6">
+                  <div>
+                    <div className="flex items-center justify-between text-sm"><span className="font-medium text-slate-300">Occupancy (OCC)</span><span className="font-bold text-emerald-400">{flashData.occupancyPercentage?.toFixed(1) || '0.0'}%</span></div>
+                    <div className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-white/[0.04]"><div className="h-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]" style={{ width: `${Math.min(100, flashData.occupancyPercentage || 0)}%` }}></div></div>
+                    <div className="mt-2 text-right text-xs font-medium text-slate-500">{flashData.occupiedRooms || 0} / {flashData.totalRooms || 0} rooms</div>
+                  </div>
+                  <div className="flex items-center justify-between rounded-xl border border-white/[0.04] bg-white/[0.02] p-4">
+                    <div className="flex items-center gap-3"><TrendingUp className="h-6 w-6 text-indigo-400" /><div><div className="text-xs font-bold uppercase tracking-wider text-slate-500">ADR</div><div className="text-lg font-bold text-white">₦{Number(flashData.adr || 0).toLocaleString()}</div></div></div>
+                    <div className="h-10 w-px bg-white/5"></div>
+                    <div className="flex items-center gap-3 text-right"><div><div className="text-xs font-bold uppercase tracking-wider text-slate-500">RevPAR</div><div className="text-lg font-bold text-white">₦{Number(flashData.revPar || 0).toLocaleString()}</div></div><Percent className="h-6 w-6 text-indigo-400" /></div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-[#0a0c22] p-6">
+                <h3 className="mb-5 text-xs font-bold uppercase tracking-[0.15em] text-slate-500">Operational Movement</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="rounded-xl border border-white/[0.04] bg-white/[0.02] p-4 text-center">
+                    <LogIn className="mx-auto mb-2 h-6 w-6 text-blue-400" />
+                    <div className="text-2xl font-bold text-white">{flashData.arrivals || 0}</div>
+                    <div className="mt-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Arrivals</div>
+                  </div>
+                  <div className="rounded-xl border border-white/[0.04] bg-white/[0.02] p-4 text-center">
+                    <LogOut className="mx-auto mb-2 h-6 w-6 text-amber-400" />
+                    <div className="text-2xl font-bold text-white">{flashData.departures || 0}</div>
+                    <div className="mt-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Departures</div>
+                  </div>
+                  <div className="rounded-xl border border-white/[0.04] bg-white/[0.02] p-4 text-center">
+                    <Users className="mx-auto mb-2 h-6 w-6 text-emerald-400" />
+                    <div className="text-2xl font-bold text-white">{flashData.walkIns || 0}</div>
+                    <div className="mt-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Walk-ins</div>
+                  </div>
+                  <div className="rounded-xl border border-white/[0.04] bg-white/[0.02] p-4 text-center">
+                    <UserX className="mx-auto mb-2 h-6 w-6 text-rose-400" />
+                    <div className="text-2xl font-bold text-white">{flashData.noShows || 0}</div>
+                    <div className="mt-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">No-shows</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Primary Metrics + Chart */}
         <MetricCards data={data} />
