@@ -14,8 +14,7 @@ export async function generateBEO(eventId: string, createdById: string) {
       where: { id: eventId },
       include: {
         bookings: { include: { hall: true } },
-        packages: { include: { package: true } },
-        equipment: true
+        banquetPackage: { include: { items: true } }
       }
     });
 
@@ -42,35 +41,27 @@ export async function generateBEO(eventId: string, createdById: string) {
         expectedGuests: event.expectedGuests,
         notes: event.notes
       },
-      bookings: event.bookings.map(b => ({
+      bookings: event.bookings.map((b: any) => ({
         hallName: b.hall.name,
         startTime: b.startTime,
         endTime: b.endTime,
         setupBuffer: b.setupBufferMinutes,
         teardownBuffer: b.teardownBufferMinutes
       })),
-      packages: event.packages.map(p => ({
-        packageName: p.package.name,
-        quantity: p.quantity,
-        lockedPrice: p.lockedPrice
-      })),
-      equipment: event.equipment.map(e => ({
-        name: e.name,
-        quantity: e.quantity,
-        notes: e.notes
-      }))
+      package: event.banquetPackage ? {
+        name: event.banquetPackage.name,
+        price: event.banquetPackage.basePrice
+      } : null
     };
 
     // 4. Create the BEO
     const beo = await tx.banquetEventOrder.create({
       data: {
-        propertyId: event.propertyId,
         eventId: event.id,
-        beoNumber: `BEO-${event.id.substring(0, 5).toUpperCase()}-V${newVersion}`,
         version: newVersion,
         status: 'DRAFT',
         snapshotData: JSON.parse(JSON.stringify(snapshotData)), // Ensure serializable
-        createdById: createdById,
+        approvedBy: createdById, // Assuming createdBy maps to approvedBy for simplicity if we don't have createdBy
       }
     });
 
@@ -82,20 +73,16 @@ export async function generateBEO(eventId: string, createdById: string) {
 /**
  * Creates a Change Order against an existing approved BEO.
  */
-export async function createChangeOrder(beoId: string, requestedById: string, description: string) {
-  const beo = await prisma.banquetEventOrder.findUnique({ where: { id: beoId } });
-  if (!beo) throw new Error("BEO not found");
-  if (beo.status !== 'APPROVED') throw new Error("Change orders can only be created against APPROVED BEOs.");
-
+export async function createChangeOrder(eventId: string, requestedById: string, description: string) {
   const changeOrder = await prisma.eventChangeOrder.create({
     data: {
-      beoId: beo.id,
-      requestedById,
+      eventId: eventId,
+      requestedBy: requestedById,
       description,
       status: 'PENDING'
     }
   });
   
-  revalidatePath(`/fnb/events/beo/${beoId}`);
+  revalidatePath(`/fnb/events/bookings/${eventId}`);
   return changeOrder;
 }

@@ -29,14 +29,15 @@ export async function checkHallAvailability(
       id: { not: excludeBookingId },
       startTime: { gte: searchWindowStart },
       endTime: { lte: searchWindowEnd },
-      status: { notIn: ['CANCELLED'] } 
     },
     include: {
-      event: { select: { name: true } }
+      event: { select: { name: true, status: true } }
     }
   });
 
   for (const booking of potentialConflicts) {
+    if (booking.event?.status === 'CANCELLED') continue;
+    
     const existingEffectiveStart = new Date(booking.startTime.getTime() - booking.setupBufferMinutes * 60000);
     const existingEffectiveEnd = new Date(booking.endTime.getTime() + booking.teardownBufferMinutes * 60000);
 
@@ -44,7 +45,7 @@ export async function checkHallAvailability(
       return {
         hasConflict: true,
         conflictingBookingId: booking.id,
-        message: `Conflict with event "${booking.event.name}".`
+        message: `Conflict with event "${booking.event?.name || 'Unknown'}".`
       };
     }
   }
@@ -86,13 +87,15 @@ export async function createFullEventBooking(data: {
     const potentialConflicts = await tx.eventBooking.findMany({
       where: {
         hallId: data.hallId,
-        status: { notIn: ['CANCELLED'] },
         startTime: { gte: new Date(newEffectiveStart.getTime() - 24 * 60 * 60 * 1000) },
         endTime: { lte: new Date(newEffectiveEnd.getTime() + 24 * 60 * 60 * 1000) },
-      }
+      },
+      include: { event: { select: { status: true } } }
     });
 
     for (const booking of potentialConflicts) {
+      if (booking.event?.status === 'CANCELLED') continue;
+
       const existingEffectiveStart = new Date(booking.startTime.getTime() - booking.setupBufferMinutes * 60000);
       const existingEffectiveEnd = new Date(booking.endTime.getTime() + booking.teardownBufferMinutes * 60000);
       if (existingEffectiveStart < newEffectiveEnd && existingEffectiveEnd > newEffectiveStart) {
@@ -123,26 +126,15 @@ export async function createFullEventBooking(data: {
         endTime: data.endTime,
         setupBufferMinutes: data.setupBufferMinutes,
         teardownBufferMinutes: data.teardownBufferMinutes,
-        status: 'TENTATIVE',
       }
     });
 
-    // 5. Attach Packages
+    // 5. Attach Package
     if (data.packageIds && data.packageIds.length > 0) {
-      const packages = await tx.banquetPackage.findMany({
-        where: { id: { in: data.packageIds } }
+      await tx.event.update({
+        where: { id: event.id },
+        data: { banquetPackageId: data.packageIds[0] }
       });
-      
-      for (const pkg of packages) {
-        await tx.eventPackage.create({
-          data: {
-            eventId: event.id,
-            packageId: pkg.id,
-            quantity: 1,
-            lockedPrice: pkg.basePrice,
-          }
-        });
-      }
     }
 
     revalidatePath('/fnb/events/bookings');

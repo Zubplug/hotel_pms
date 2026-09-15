@@ -25,11 +25,9 @@ export default async function FnbEventsDashboard() {
     where: { status: 'NEW' }
   });
 
-  const pipelineAggregation = await prisma.eventLead.aggregate({
-    _sum: { estimatedValue: true },
-    where: { status: { in: ['PROPOSAL', 'NEGOTIATION', 'WON'] } }
+  const pipelineCount = await prisma.eventLead.count({
+    where: { status: { in: ['PROPOSAL_SENT', 'CONVERTED'] } }
   });
-  const pipelineValue = pipelineAggregation._sum.estimatedValue?.toNumber() || 0;
 
   const pendingBEOs = await prisma.banquetEventOrder.count({
     where: { status: 'DRAFT' }
@@ -96,7 +94,7 @@ export default async function FnbEventsDashboard() {
             <TrendingUp className="h-4 w-4 text-emerald-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{pipelineValue > 0 ? `NGN ${pipelineValue.toLocaleString()}` : '0'}</div>
+            <div className="text-2xl font-bold">{pipelineCount} Deals</div>
             <p className="text-xs text-muted-foreground">Active proposals & won deals</p>
           </CardContent>
         </Card>
@@ -136,12 +134,12 @@ export default async function FnbEventsDashboard() {
                   </div>
                   <div className="w-px h-12 bg-border"></div>
                   <div className="flex-1">
-                    <h4 className="font-semibold">{booking.event.name}</h4>
+                    <h4 className="font-semibold">{booking.event?.name || 'Booking'}</h4>
                     <p className="text-sm text-muted-foreground">{booking.hall.name}</p>
                   </div>
                   <div className="flex items-center gap-4 text-sm text-muted-foreground">
                     <div className="flex items-center gap-1">
-                      <Users className="h-4 w-4" /> {booking.event.expectedGuests}
+                      <Users className="h-4 w-4" /> {booking.event?.expectedGuests || 0}
                     </div>
                     <div className="flex items-center gap-1">
                       <Clock className="h-4 w-4" /> 

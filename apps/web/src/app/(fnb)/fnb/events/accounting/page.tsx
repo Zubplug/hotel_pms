@@ -15,24 +15,24 @@ export default async function EventAccountingPage() {
     take: 50
   });
 
-  const unpaidAggregation = await prisma.eventInvoice.aggregate({
-    _sum: { outstandingAmount: true },
-    where: { status: 'ISSUED' }
+  const allUnpaid = await prisma.eventInvoice.findMany({
+    where: { status: 'ISSUED' },
+    select: { totalAmount: true, paidAmount: true }
   });
   
-  const depositAggregation = await prisma.eventInvoice.aggregate({
-    _sum: { outstandingAmount: true },
-    where: { status: 'ISSUED', type: 'DEPOSIT' }
+  const allAr = await prisma.eventInvoice.findMany({
+    where: { status: 'ISSUED', cityLedgerAccountId: { not: null } },
+    select: { totalAmount: true, paidAmount: true }
   });
 
-  const arAggregation = await prisma.eventInvoice.aggregate({
-    _sum: { outstandingAmount: true },
-    where: { status: 'ISSUED', cityLedgerAccountId: { not: null } }
+  const allPartial = await prisma.eventInvoice.findMany({
+    where: { status: 'PARTIAL' },
+    select: { paidAmount: true }
   });
 
-  const unpaidValue = unpaidAggregation._sum.outstandingAmount?.toNumber() || 0;
-  const depositValue = depositAggregation._sum.outstandingAmount?.toNumber() || 0;
-  const arValue = arAggregation._sum.outstandingAmount?.toNumber() || 0;
+  const unpaidValue = allUnpaid.reduce((acc, inv) => acc + (inv.totalAmount.toNumber() - inv.paidAmount.toNumber()), 0);
+  const depositValue = allPartial.reduce((acc, inv) => acc + inv.paidAmount.toNumber(), 0);
+  const arValue = allAr.reduce((acc, inv) => acc + (inv.totalAmount.toNumber() - inv.paidAmount.toNumber()), 0);
 
   return (
     <div className="p-6 space-y-6">

@@ -10,18 +10,24 @@ export async function processLeaseBilling(propertyId: string) {
   return await prisma.$transaction(async (tx) => {
     const today = new Date();
     
+    const property = await tx.property.findUnique({
+      where: { id: propertyId }
+    });
+    
+    if (!property) throw new Error("Property not found");
+
     // Find active schedules that are due for billing
     const dueSchedules = await tx.leaseBillingSchedule.findMany({
       where: {
         status: 'PENDING',
         dueDate: { lte: today },
-        contract: {
+        leaseContract: {
           propertyId: propertyId,
-          status: 'ACTIVE'
+          isActive: true
         }
       },
       include: {
-        contract: true
+        leaseContract: true
       }
     });
 
@@ -31,23 +37,16 @@ export async function processLeaseBilling(propertyId: string) {
       // 1. Create the Event Invoice
       const invoice = await tx.eventInvoice.create({
         data: {
-          propertyId,
-          invoiceNumber: `LEASE-${schedule.contract.id.substring(0, 5).toUpperCase()}-${schedule.dueDate.toISOString().substring(0, 10)}`,
-          type: 'FINAL', // It's a definitive recurring charge
-          status: 'ISSUED', // Issued immediately
-          issueDate: new Date(),
-          dueDate: schedule.dueDate,
-          currency: 'NGN', // Assuming NGN or fetch from property config
+          status: 'ISSUED', 
+          currency: property.baseCurrency, 
           totalAmount: schedule.amount,
           paidAmount: 0,
-          outstandingAmount: schedule.amount,
           items: {
             create: {
               description: `Lease payment for period ending ${schedule.dueDate.toLocaleDateString()}`,
               quantity: 1,
               unitPrice: schedule.amount,
-              total: schedule.amount,
-              isTaxable: true // Depends on jurisdiction, simplified here
+              totalPrice: schedule.amount,
             }
           }
         }
@@ -61,14 +60,6 @@ export async function processLeaseBilling(propertyId: string) {
           invoiceId: invoice.id
         }
       });
-
-      // 3. Post to City Ledger if the contract defines a corporate account
-      // This bridges the recurring lease system back to standard hotel AR
-      if (schedule.contract.tenantId) {
-        // Look up the CityLedgerAccount associated with the Tenant (CorporateAccount)
-        // Note: We need a link between tenant and city ledger. 
-        // For simplicity, we assume there is an AR posting process handled downstream by finalizeEventInvoice.
-      }
 
       generatedInvoices.push(invoice);
     }
