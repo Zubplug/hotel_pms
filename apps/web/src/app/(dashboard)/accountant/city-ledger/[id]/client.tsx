@@ -11,6 +11,7 @@ import { useRouter } from 'next/navigation';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 
 export function CityLedgerDetailClient({ account, openInvoices, recentEntries, totalOutstanding }: { account: any; openInvoices: any[]; recentEntries: any[]; totalOutstanding: number }) {
@@ -18,7 +19,12 @@ export function CityLedgerDetailClient({ account, openInvoices, recentEntries, t
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentReference, setPaymentReference] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('BANK_TRANSFER');
+  const [targetInvoiceId, setTargetInvoiceId] = useState<string | null>(null);
+  const [operationId, setOperationId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const isSkipper = account.type === 'SKIPPER';
 
   const formatCurrency = (amount: number | string) => {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: account.currency || 'NGN' }).format(Number(amount));
@@ -41,6 +47,9 @@ export function CityLedgerDetailClient({ account, openInvoices, recentEntries, t
       toast.error('Please enter a valid amount');
       return;
     }
+    
+    // Some methods require a reference, but we let backend validate if needed.
+    // For manual UI we'll just require it always to be safe for auditing.
     if (!paymentReference.trim()) {
       toast.error('Please enter a payment reference');
       return;
@@ -51,7 +60,13 @@ export function CityLedgerDetailClient({ account, openInvoices, recentEntries, t
       const res = await fetch(`/api/v1/accountant/city-ledger/${account.id}/payment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount, reference: paymentReference }),
+        body: JSON.stringify({ 
+          amount, 
+          reference: paymentReference,
+          method: paymentMethod,
+          invoiceId: targetInvoiceId || undefined,
+          idempotencyKey: operationId
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.message || 'Failed to process payment');
@@ -60,12 +75,31 @@ export function CityLedgerDetailClient({ account, openInvoices, recentEntries, t
       setIsPaymentModalOpen(false);
       setPaymentAmount('');
       setPaymentReference('');
+      setTargetInvoiceId(null);
       router.refresh();
     } catch (err: any) {
       toast.error(err.message);
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const openTargetedPaymentModal = (inv: any) => {
+    setTargetInvoiceId(inv.id);
+    setPaymentAmount(inv.outstandingAmount.toString());
+    setPaymentReference('');
+    setPaymentMethod('CASH');
+    setOperationId(crypto.randomUUID());
+    setIsPaymentModalOpen(true);
+  };
+
+  const openBulkPaymentModal = () => {
+    setTargetInvoiceId(null);
+    setPaymentAmount('');
+    setPaymentReference('');
+    setPaymentMethod('BANK_TRANSFER');
+    setOperationId(crypto.randomUUID());
+    setIsPaymentModalOpen(true);
   };
 
   return (
@@ -77,7 +111,9 @@ export function CityLedgerDetailClient({ account, openInvoices, recentEntries, t
           </Button>
         </Link>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-emerald-400">{account.CorporateAccount?.[0]?.name || 'Corporate Account'}</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-emerald-400">
+            {isSkipper ? 'Skippers & Walk-Outs' : (account.CorporateAccount?.[0]?.name || 'Corporate Account')}
+          </h1>
           <p className="text-sm text-slate-400">City Ledger Account • {account.status}</p>
         </div>
       </div>
@@ -103,12 +139,14 @@ export function CityLedgerDetailClient({ account, openInvoices, recentEntries, t
           </CardContent>
         </Card>
         
-        <Card className="border-emerald-500/10 bg-emerald-500/5 flex items-center justify-center p-6">
-          <Button size="lg" className="w-full h-16 text-lg bg-emerald-600 hover:bg-emerald-700 text-white border-0 shadow-md" onClick={() => setIsPaymentModalOpen(true)}>
-            <CreditCard className="mr-2 h-5 w-5" />
-            Receive Corporate Payment
-          </Button>
-        </Card>
+        {!isSkipper && (
+          <Card className="border-emerald-500/10 bg-emerald-500/5 flex items-center justify-center p-6">
+            <Button size="lg" className="w-full h-16 text-lg bg-emerald-600 hover:bg-emerald-700 text-white border-0 shadow-md" onClick={openBulkPaymentModal}>
+              <CreditCard className="mr-2 h-5 w-5" />
+              Receive Corporate Payment
+            </Button>
+          </Card>
+        )}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -139,6 +177,17 @@ export function CityLedgerDetailClient({ account, openInvoices, recentEntries, t
                       <div className="flex flex-col items-end">
                         <span className="text-xs uppercase tracking-wider font-semibold text-slate-500 mb-1">Outstanding</span>
                         <span className="text-lg font-bold text-rose-500">{formatCurrency(inv.outstandingAmount)}</span>
+                        
+                        {(isSkipper || true) && (
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="mt-2 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/10"
+                            onClick={() => openTargetedPaymentModal(inv)}
+                          >
+                            Record Payment
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -151,7 +200,7 @@ export function CityLedgerDetailClient({ account, openInvoices, recentEntries, t
         <Card className="border-white/10 bg-slate-900/50">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg text-slate-100"><Building2 className="h-5 w-5 text-slate-400" /> Recent Ledger Activity</CardTitle>
-            <CardDescription className="text-slate-400">Latest transfers and payments on this corporate account.</CardDescription>
+            <CardDescription className="text-slate-400">Latest transfers and payments on this account.</CardDescription>
           </CardHeader>
           <CardContent>
             {recentEntries.length === 0 ? (
@@ -162,7 +211,7 @@ export function CityLedgerDetailClient({ account, openInvoices, recentEntries, t
                   <div key={entry.id} className="flex justify-between items-center py-3 border-b border-white/5 last:border-0">
                     <div>
                       <p className="font-medium text-slate-200 text-sm flex items-center gap-2">
-                        {entry.type === 'TRANSFER_IN' ? 'Invoice Transfer' : 'Corporate Payment'}
+                        {entry.type === 'TRANSFER_IN' ? 'Invoice Transfer' : 'AR Payment'}
                         {entry.type === 'PAYMENT' && <Badge variant="secondary" className="text-[10px] border-emerald-500/20 bg-emerald-500/10 text-emerald-400">PAID</Badge>}
                       </p>
                       <p className="text-xs text-slate-400 mt-0.5">{entry.reference || entry.reason}</p>
@@ -183,12 +232,28 @@ export function CityLedgerDetailClient({ account, openInvoices, recentEntries, t
         <DialogContent className="sm:max-w-[425px] border-white/10 bg-slate-950 text-slate-100">
           <form onSubmit={handlePayment}>
             <DialogHeader>
-              <DialogTitle className="text-slate-100">Receive Corporate Payment</DialogTitle>
+              <DialogTitle className="text-slate-100">Record AR Payment</DialogTitle>
               <DialogDescription className="text-slate-400">
-                Record a bulk payment from {account.CorporateAccount?.[0]?.name}. This will automatically be allocated to the oldest open invoices first. Excess funds will be kept on the account as unallocated credit.
+                {targetInvoiceId 
+                  ? "Receive and allocate payment for a specific walk-out/city ledger invoice."
+                  : `Record a bulk payment from ${account.CorporateAccount?.[0]?.name}. This will automatically be allocated to the oldest open invoices first.`}
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="method" className="text-slate-300">Payment Method</Label>
+                <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                  <SelectTrigger className="bg-white/5 border-white/10 text-slate-100">
+                    <SelectValue placeholder="Select method" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-900 border-white/10 text-slate-100">
+                    <SelectItem value="BANK_TRANSFER">Bank Transfer</SelectItem>
+                    <SelectItem value="CASH">Cash</SelectItem>
+                    <SelectItem value="POS">POS Terminal</SelectItem>
+                    <SelectItem value="CHEQUE">Cheque</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="grid gap-2">
                 <Label htmlFor="amount" className="text-slate-300">Payment Amount ({account.currency})</Label>
                 <Input
