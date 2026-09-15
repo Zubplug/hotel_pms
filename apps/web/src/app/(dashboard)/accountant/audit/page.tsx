@@ -8,7 +8,8 @@ import { AuditWizard } from '@/components/night-audit/audit-wizard';
 import { NightAuditData } from '@/types/night-audit';
 import {
   AlertTriangle, ArrowRight, CheckCircle2, Clock, FileCheck, FileWarning,
-  Loader2, RefreshCw, ShieldAlert, Wallet,
+  Loader2, RefreshCw, ShieldAlert, Wallet, TrendingUp, Bed, Percent, Activity,
+  Users, LogOut, LogIn, UserX, Receipt
 } from 'lucide-react';
 
 type TrialBalance = {
@@ -65,10 +66,17 @@ export default function AccountantAuditPage() {
     enabled: Boolean(propertyId),
   });
 
+  const flashQuery = useQuery<any>({
+    queryKey: ['accountant-flash-report', propertyId, businessDate],
+    queryFn: () => readApi(`/api/v1/night-audit/reports/managers-flash?propertyId=${propertyId}&businessDate=${businessDate}`),
+    enabled: Boolean(propertyId && businessDate),
+  });
+
   const refresh = () => {
     void statusQuery.refetch();
     void trialQuery.refetch();
     void receivablesQuery.refetch();
+    void flashQuery.refetch();
   };
 
   const executeAudit = async () => {
@@ -127,6 +135,75 @@ export default function AccountantAuditPage() {
         <Metric title="Trial balance" value={trial ? trial.totals.status : 'Loading'} detail={trial ? `Difference ${money(trial.totals.difference)}` : 'Loading live report'} icon={<FileCheck className={trial?.totals.status === 'BALANCED' ? 'text-emerald-400' : 'text-amber-400'} />} />
         <Metric title="Open receivables" value={receivables.length} detail={money(receivables.reduce((sum, item) => sum + Number(item.financials?.balance || 0), 0))} icon={<Wallet className="text-indigo-400" />} />
       </div>
+
+      {flashQuery.data && (
+        <section className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.03]">
+          <div className="border-b border-white/10 p-5">
+            <h2 className="flex items-center gap-2 font-semibold text-emerald-400">
+              <Activity className="h-5 w-5" /> Manager's Flash & Revenue Analysis
+            </h2>
+            <p className="mt-1 text-xs text-slate-400">Live operational statistics, revenue breakdowns, and KPIs through the business date.</p>
+          </div>
+          <div className="grid gap-px bg-white/10 md:grid-cols-3">
+            <div className="bg-slate-950 p-6">
+              <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-400">Revenue Summary</h3>
+              <div className="space-y-4">
+                <div className="flex justify-between"><span className="text-sm text-slate-300">Room Revenue</span><span className="font-medium text-white">{money(flashQuery.data.roomRevenue)}</span></div>
+                <div className="flex justify-between"><span className="text-sm text-slate-300">F&B Revenue</span><span className="font-medium text-white">{money(flashQuery.data.fbRevenue)}</span></div>
+                <div className="flex justify-between"><span className="text-sm text-slate-300">Other Revenue</span><span className="font-medium text-white">{money(flashQuery.data.otherRevenue)}</span></div>
+                <div className="my-2 border-t border-white/10"></div>
+                <div className="flex justify-between"><span className="text-sm font-medium text-slate-300">Net Revenue</span><span className="font-bold text-emerald-400">{money(flashQuery.data.netRevenue)}</span></div>
+                <div className="flex justify-between"><span className="text-sm text-slate-400">Taxes</span><span className="text-slate-400">{money(flashQuery.data.totalTaxes)}</span></div>
+                <div className="flex justify-between"><span className="text-sm text-slate-400">Concessions/Discounts</span><span className="text-rose-400">-{money(flashQuery.data.totalDiscounts)}</span></div>
+                <div className="mt-2 border-t border-white/10 pt-2"></div>
+                <div className="flex justify-between"><span className="text-sm font-medium text-slate-300">Gross Revenue</span><span className="font-bold text-white">{money(flashQuery.data.grossRevenue)}</span></div>
+              </div>
+            </div>
+            
+            <div className="bg-slate-950 p-6">
+              <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-400">Performance Metrics</h3>
+              <div className="space-y-6">
+                <div>
+                  <div className="flex items-center justify-between text-sm"><span className="text-slate-300">Occupancy (OCC)</span><span className="font-bold text-emerald-400">{flashQuery.data.occupancyPercentage?.toFixed(1) || '0.0'}%</span></div>
+                  <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-white/10"><div className="h-full bg-emerald-500" style={{ width: `${Math.min(100, flashQuery.data.occupancyPercentage || 0)}%` }}></div></div>
+                  <div className="mt-1 text-right text-xs text-slate-500">{flashQuery.data.occupiedRooms || 0} / {flashQuery.data.totalRooms || 0} rooms</div>
+                </div>
+                <div className="flex items-center justify-between rounded-lg border border-white/5 bg-white/[0.02] p-3">
+                  <div className="flex items-center gap-3"><TrendingUp className="h-5 w-5 text-indigo-400" /><div><div className="text-xs text-slate-400">ADR</div><div className="font-medium text-white">{money(flashQuery.data.adr)}</div></div></div>
+                  <div className="h-8 w-px bg-white/10"></div>
+                  <div className="flex items-center gap-3 text-right"><div><div className="text-xs text-slate-400">RevPAR</div><div className="font-medium text-white">{money(flashQuery.data.revPar)}</div></div><Percent className="h-5 w-5 text-indigo-400" /></div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-slate-950 p-6">
+              <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-400">Operational Movement</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="rounded-lg border border-white/5 bg-white/[0.02] p-3 text-center">
+                  <LogIn className="mx-auto mb-1 h-5 w-5 text-blue-400" />
+                  <div className="text-xl font-bold text-white">{flashQuery.data.arrivals || 0}</div>
+                  <div className="text-[10px] uppercase tracking-wider text-slate-500">Arrivals</div>
+                </div>
+                <div className="rounded-lg border border-white/5 bg-white/[0.02] p-3 text-center">
+                  <LogOut className="mx-auto mb-1 h-5 w-5 text-amber-400" />
+                  <div className="text-xl font-bold text-white">{flashQuery.data.departures || 0}</div>
+                  <div className="text-[10px] uppercase tracking-wider text-slate-500">Departures</div>
+                </div>
+                <div className="rounded-lg border border-white/5 bg-white/[0.02] p-3 text-center">
+                  <Users className="mx-auto mb-1 h-5 w-5 text-emerald-400" />
+                  <div className="text-xl font-bold text-white">{flashQuery.data.walkIns || 0}</div>
+                  <div className="text-[10px] uppercase tracking-wider text-slate-500">Walk-ins</div>
+                </div>
+                <div className="rounded-lg border border-white/5 bg-white/[0.02] p-3 text-center">
+                  <UserX className="mx-auto mb-1 h-5 w-5 text-rose-400" />
+                  <div className="text-xl font-bold text-white">{flashQuery.data.noShows || 0}</div>
+                  <div className="text-[10px] uppercase tracking-wider text-slate-500">No-shows</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.03]"><div className="border-b border-white/10 p-5"><h2 className="flex items-center gap-2 font-semibold text-emerald-400"><AlertTriangle className="h-5 w-5" />Live audit exceptions</h2><p className="mt-1 text-xs text-slate-400">Open operational and financial items currently blocking or warning the audit.</p></div><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-white/[0.03] text-xs uppercase text-slate-400"><tr><th className="px-5 py-3">Description</th><th className="px-5 py-3 text-right">Amount</th><th className="px-5 py-3">Severity</th></tr></thead><tbody className="divide-y divide-white/5">{blockers.length === 0 ? <tr><td colSpan={3} className="px-5 py-8 text-center text-slate-500"><CheckCircle2 className="mx-auto mb-2 h-6 w-6 text-emerald-400" />No live audit blockers detected.</td></tr> : blockers.slice(0, 12).map(item => <tr key={item.id} className="hover:bg-white/[0.03]"><td className="px-5 py-3 text-slate-300">{item.description}</td><td className="px-5 py-3 text-right text-slate-300">{Number(item.amount || 0) ? money(item.amount) : '—'}</td><td className="px-5 py-3"><span className={`rounded-full border px-2 py-1 text-[10px] font-semibold ${item.severity === 'HIGH' ? 'border-rose-400/30 text-rose-400' : 'border-amber-400/30 text-amber-400'}`}>{item.severity}</span></td></tr>)}</tbody></table></div></section>
