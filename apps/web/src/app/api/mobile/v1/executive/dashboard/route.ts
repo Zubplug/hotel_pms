@@ -59,18 +59,30 @@ export async function GET(req: NextRequest) {
       },
       businessDate: businessDate.toISOString().split('T')[0],
       generatedAt: now.toISOString(),
-      
-      executiveOverview,
+
+      executiveOverview: {
+        ...executiveOverview,
+        // Expose revenue sub-breakdown already computed in RevenueSnapshot
+        roomRevenue: executiveOverview.revenue.roomRevenue,
+        fbRevenue: executiveOverview.revenue.fbRevenue,
+        barRevenue: executiveOverview.revenue.barRevenue,
+        otherRevenue: executiveOverview.revenue.otherRevenue,
+      },
       todaySnapshot: {
         arrivals: hotelPulse.arrivals,
         departures: hotelPulse.departures,
         inHouseGuests: hotelPulse.inHouseGuests,
+        vipArrivals: hotelPulse.vipArrivals,          // already computed in hotel-pulse.ts
         occupiedRooms: executiveOverview.occupiedRooms,
         availableRooms: executiveOverview.availableRooms,
-        outOfOrderRooms: roomSummary.ooo
+        outOfOrderRooms: roomSummary.ooo,
+        totalRooms: hotelPulse.totalRooms,
       },
-      roomSummary,
-      performanceTrends,
+      roomSummary: {
+        ...roomSummary,
+        total: hotelPulse.totalRooms,
+      },
+      performanceTrends,   // already includes occupancyPct per day & changePercent
       requiresAttention: activeAlerts,
       syncSummary
     }, 200);

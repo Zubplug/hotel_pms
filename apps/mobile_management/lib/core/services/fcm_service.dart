@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../api/api_client.dart';
 
 /// Handles FCM token registration and foreground message display.
@@ -21,6 +22,21 @@ class FcmService {
 
       if (settings.authorizationStatus == AuthorizationStatus.denied) {
         return; // User denied — silently skip
+      }
+
+      // 1.5. Create high importance channel for Android pop-ups
+      if (Platform.isAndroid) {
+        final flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+        const channel = AndroidNotificationChannel(
+          'high_importance_channel',
+          'High Importance Notifications',
+          description: 'This channel is used for important notifications.',
+          importance: Importance.max,
+        );
+        await flutterLocalNotificationsPlugin
+            .resolvePlatformSpecificImplementation<
+                AndroidFlutterLocalNotificationsPlugin>()
+            ?.createNotificationChannel(channel);
       }
 
       // 2. Get FCM token and register with backend

@@ -50,9 +50,12 @@ class ExecutiveOverview {
   final int availableRooms;
   final int occupiedRooms;
   final double totalRevenue;
+  // Revenue sub-breakdown (newly exposed from RevenueSnapshot)
   final double roomRevenue;
   final double fbRevenue;
-  
+  final double barRevenue;
+  final double otherRevenue;
+
   final double occupancyTrend;
   final double adrTrend;
   final double revparTrend;
@@ -72,6 +75,8 @@ class ExecutiveOverview {
     required this.totalRevenue,
     required this.roomRevenue,
     required this.fbRevenue,
+    required this.barRevenue,
+    required this.otherRevenue,
     required this.occupancyTrend,
     required this.adrTrend,
     required this.revparTrend,
@@ -79,6 +84,9 @@ class ExecutiveOverview {
     required this.roomRevenueTrend,
     required this.fbRevenueTrend,
   });
+
+  /// TRevPAR computed client-side — Total Revenue / Available Rooms
+  double get trevpar => availableRooms > 0 ? totalRevenue / availableRooms : 0;
 
   factory ExecutiveOverview.fromJson(Map<String, dynamic> json) {
     final revenue = json['revenue'] ?? {};
@@ -91,9 +99,12 @@ class ExecutiveOverview {
       revpar: (json['revpar'] ?? 0).toDouble(),
       availableRooms: json['availableRooms'] ?? 0,
       occupiedRooms: json['occupiedRooms'] ?? 0,
-      totalRevenue: (revenue['totalRevenue'] ?? 0).toDouble(),
-      roomRevenue: (revenue['roomRevenue'] ?? 0).toDouble(),
-      fbRevenue: (revenue['fbRevenue'] ?? 0).toDouble(),
+      totalRevenue: (revenue['totalRevenue'] ?? json['liveRevenue'] ?? 0).toDouble(),
+      // Revenue sub-breakdown — now forwarded directly in executiveOverview
+      roomRevenue: (json['roomRevenue'] ?? revenue['roomRevenue'] ?? 0).toDouble(),
+      fbRevenue: (json['fbRevenue'] ?? revenue['fbRevenue'] ?? 0).toDouble(),
+      barRevenue: (json['barRevenue'] ?? revenue['barRevenue'] ?? 0).toDouble(),
+      otherRevenue: (json['otherRevenue'] ?? revenue['otherRevenue'] ?? 0).toDouble(),
       occupancyTrend: (json['occupancyTrend'] ?? 0).toDouble(),
       adrTrend: (json['adrTrend'] ?? 0).toDouble(),
       revparTrend: (json['revparTrend'] ?? 0).toDouble(),
@@ -108,17 +119,21 @@ class TodaySnapshot {
   final int arrivals;
   final int departures;
   final int inHouseGuests;
+  final int vipArrivals;   // newly exposed from hotel-pulse.ts
   final int occupiedRooms;
   final int availableRooms;
   final int outOfOrderRooms;
+  final int totalRooms;    // newly exposed
 
   TodaySnapshot({
     required this.arrivals,
     required this.departures,
     required this.inHouseGuests,
+    required this.vipArrivals,
     required this.occupiedRooms,
     required this.availableRooms,
     required this.outOfOrderRooms,
+    required this.totalRooms,
   });
 
   factory TodaySnapshot.fromJson(Map<String, dynamic> json) {
@@ -126,9 +141,11 @@ class TodaySnapshot {
       arrivals: json['arrivals'] ?? 0,
       departures: json['departures'] ?? 0,
       inHouseGuests: json['inHouseGuests'] ?? 0,
+      vipArrivals: json['vipArrivals'] ?? 0,
       occupiedRooms: json['occupiedRooms'] ?? 0,
       availableRooms: json['availableRooms'] ?? 0,
       outOfOrderRooms: json['outOfOrderRooms'] ?? 0,
+      totalRooms: json['totalRooms'] ?? 0,
     );
   }
 }
@@ -139,6 +156,7 @@ class RoomSummary {
   final int dirty;
   final int occupiedDirty; // occupied rooms with dirty housekeeping (stayover dirty)
   final int ooo;
+  final int total;         // newly exposed
 
   RoomSummary({
     required this.occupied,
@@ -146,6 +164,7 @@ class RoomSummary {
     required this.dirty,
     required this.occupiedDirty,
     required this.ooo,
+    required this.total,
   });
 
   factory RoomSummary.fromJson(Map<String, dynamic> json) {
@@ -155,13 +174,14 @@ class RoomSummary {
       dirty: json['dirty'] ?? 0,
       occupiedDirty: json['occupiedDirty'] ?? 0,
       ooo: json['ooo'] ?? 0,
+      total: json['total'] ?? 0,
     );
   }
 }
 
 class PerformanceTrends {
   final double total;
-  final double changePercent;
+  final double changePercent; // newly forwarded — % change vs prior period
   final List<TrendDay> days;
 
   PerformanceTrends({
@@ -182,13 +202,19 @@ class PerformanceTrends {
 class TrendDay {
   final String businessDate;
   final double revenue;
+  final double occupancyPct; // newly forwarded — per-day occupancy %
 
-  TrendDay({required this.businessDate, required this.revenue});
+  TrendDay({
+    required this.businessDate,
+    required this.revenue,
+    required this.occupancyPct,
+  });
 
   factory TrendDay.fromJson(Map<String, dynamic> json) {
     return TrendDay(
       businessDate: json['businessDate'] ?? '',
       revenue: (json['revenue'] ?? 0).toDouble(),
+      occupancyPct: (json['occupancyPct'] ?? 0).toDouble(),
     );
   }
 }
@@ -200,6 +226,7 @@ class AlertData {
   final String summary;
   final String category;
   final String action;
+  final int affectedCount;
 
   AlertData({
     required this.id,
@@ -208,6 +235,7 @@ class AlertData {
     required this.summary,
     required this.category,
     required this.action,
+    required this.affectedCount,
   });
 
   factory AlertData.fromJson(Map<String, dynamic> json) {
@@ -218,6 +246,7 @@ class AlertData {
       summary: json['summary'] ?? '',
       category: json['category'] ?? 'OPERATIONS',
       action: json['action'] ?? '',
+      affectedCount: json['affectedCount'] ?? 0,
     );
   }
 }
