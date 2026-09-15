@@ -1,10 +1,9 @@
 import { Metadata } from 'next';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { CalendarDays, Users, LayoutList, CheckCircle2, TrendingUp, Clock, AlertCircle } from 'lucide-react';
+import { CalendarDays, Users, LayoutList, CheckCircle2, TrendingUp, Clock, AlertCircle, Plus } from 'lucide-react';
 import { prisma } from '@hotel-pms/db';
 import Link from 'next/link';
-import { NewBookingDialog } from '@/components/events/NewBookingDialog';
 
 export const metadata: Metadata = {
   title: 'Events Dashboard | LodgeCore',
@@ -60,7 +59,11 @@ export default async function FnbEventsDashboard() {
           <Button asChild variant="outline">
             <Link href="/fnb/events/crm">View Pipeline</Link>
           </Button>
-          <NewBookingDialog />
+          <Button asChild>
+            <Link href="/fnb/events/bookings/create">
+              <Plus className="mr-2 h-4 w-4" /> New Booking
+            </Link>
+          </Button>
         </div>
       </div>
 

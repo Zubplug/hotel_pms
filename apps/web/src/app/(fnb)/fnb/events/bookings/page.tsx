@@ -4,8 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Plus, ListFilter, Calendar, Search } from 'lucide-react';
 import { prisma } from '@hotel-pms/db';
+
 import Link from 'next/link';
-import { NewBookingDialog } from '@/components/events/NewBookingDialog';
 import { EventTimeline } from '@/components/events/EventTimeline';
 
 export const metadata: Metadata = {
@@ -56,7 +56,11 @@ export default async function EventBookingsPage({ searchParams }: { searchParams
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input type="search" placeholder="Search bookings..." className="pl-8" />
             </div>
-            <NewBookingDialog />
+            <Button asChild>
+              <Link href="/fnb/events/bookings/create">
+                <Plus className="mr-2 h-4 w-4" /> New Booking
+              </Link>
+            </Button>
           </div>
         </div>
       </div>
