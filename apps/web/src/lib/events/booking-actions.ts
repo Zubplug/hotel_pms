@@ -63,6 +63,13 @@ export async function getPackages() {
   return await prisma.banquetPackage.findMany({ orderBy: { name: 'asc' } });
 }
 
+export async function getEquipment() {
+  return await prisma.eventEquipment.findMany({ 
+    where: { isActive: true },
+    orderBy: { name: 'asc' } 
+  });
+}
+
 export async function createFullEventBooking(data: {
   contactName: string;
   contactPhone: string;
@@ -73,6 +80,9 @@ export async function createFullEventBooking(data: {
   setupBufferMinutes: number;
   teardownBufferMinutes: number;
   packageIds: string[];
+  bookingType: 'HALL_ONLY' | 'FULL_PACKAGE';
+  equipmentRequests?: { equipmentId: string; quantity: number }[];
+  dietaryNotes?: any;
   recurrenceRule?: {
     frequency: string;
     daysOfWeek?: number[];
@@ -80,6 +90,9 @@ export async function createFullEventBooking(data: {
   };
 }) {
   return await prisma.$transaction(async (tx) => {
+    if (data.bookingType !== 'HALL_ONLY' && data.bookingType !== 'FULL_PACKAGE') {
+      throw new Error("Invalid booking type specified.");
+    }
     // 1. Verify Hall
     const hall = await tx.hall.findUnique({ where: { id: data.hallId }, include: { property: true } });
     if (!hall) throw new Error("Hall not found");
@@ -151,6 +164,39 @@ export async function createFullEventBooking(data: {
           throw new Error(`Double booking detected for ${occ.startTime.toLocaleDateString()}. The hall is not available.`);
         }
       }
+
+      // Check Equipment inventory
+      if (data.equipmentRequests && data.equipmentRequests.length > 0) {
+        for (const eqReq of data.equipmentRequests) {
+          const equipment = await tx.eventEquipment.findUnique({ where: { id: eqReq.equipmentId }});
+          if (!equipment) throw new Error("Equipment not found.");
+          
+          const conflictingEqBookings = await tx.eventEquipmentBooking.findMany({
+            where: {
+              equipmentId: eqReq.equipmentId,
+              eventBooking: {
+                startTime: { lte: new Date(newEffectiveEnd.getTime() + 24 * 60 * 60 * 1000) },
+                endTime: { gte: new Date(newEffectiveStart.getTime() - 24 * 60 * 60 * 1000) },
+                status: { not: 'CANCELLED' }
+              }
+            },
+            include: { eventBooking: true }
+          });
+          
+          const overlapSum = conflictingEqBookings.reduce((sum, b) => {
+            const bStart = new Date(b.eventBooking.startTime.getTime() - b.eventBooking.setupBufferMinutes * 60000);
+            const bEnd = new Date(b.eventBooking.endTime.getTime() + b.eventBooking.teardownBufferMinutes * 60000);
+            if (bStart < newEffectiveEnd && bEnd > newEffectiveStart) {
+              return sum + b.quantity;
+            }
+            return sum;
+          }, 0);
+
+          if (overlapSum + eqReq.quantity > equipment.totalStock) {
+            throw new Error(`Insufficient inventory for ${equipment.name} on ${occ.startTime.toLocaleDateString()}. Requested: ${eqReq.quantity}, Available: ${equipment.totalStock - overlapSum}`);
+          }
+        }
+      }
     }
 
     const finalEndDate = occurrences[occurrences.length - 1].endTime;
@@ -167,6 +213,7 @@ export async function createFullEventBooking(data: {
         endDate: finalEndDate,
         status: 'TENTATIVE',
         recurrenceRule: data.recurrenceRule ? data.recurrenceRule : undefined,
+        notes: data.dietaryNotes ? JSON.stringify(data.dietaryNotes) : undefined,
       }
     });
 
@@ -185,8 +232,29 @@ export async function createFullEventBooking(data: {
       data: bookingRecords
     });
 
-    // 5. Attach Package
-    if (data.packageIds && data.packageIds.length > 0) {
+    const createdBookings = await tx.eventBooking.findMany({
+      where: { eventId: event.id }
+    });
+
+    // 6. Create Equipment Bookings
+    if (data.equipmentRequests && data.equipmentRequests.length > 0) {
+      const eqRecords: any[] = [];
+      for (const cb of createdBookings) {
+        for (const req of data.equipmentRequests) {
+          eqRecords.push({
+            eventBookingId: cb.id,
+            equipmentId: req.equipmentId,
+            quantity: req.quantity
+          });
+        }
+      }
+      if (eqRecords.length > 0) {
+        await tx.eventEquipmentBooking.createMany({ data: eqRecords });
+      }
+    }
+
+    // 7. Attach Package
+    if (data.packageIds && data.packageIds.length > 0 && data.bookingType === 'FULL_PACKAGE') {
       await tx.event.update({
         where: { id: event.id },
         data: { banquetPackageId: data.packageIds[0] }

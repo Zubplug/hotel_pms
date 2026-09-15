@@ -4534,6 +4534,25 @@ model EventEquipment {
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
+
+  bookings EventEquipmentBooking[]
+}
+
+model EventEquipmentBooking {
+  id String @id @default(uuid()) @db.Uuid
+  
+  eventBookingId String @db.Uuid
+  eventBooking   EventBooking @relation(fields: [eventBookingId], references: [id])
+
+  equipmentId String @db.Uuid
+  equipment   EventEquipment @relation(fields: [equipmentId], references: [id])
+
+  quantity Int @default(1)
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([eventBookingId, equipmentId])
 }
 
 model BanquetPackage {
@@ -4648,6 +4667,8 @@ model EventBooking {
   status             String  @default("ACTIVE") // ACTIVE, CANCELLED
   isException        Boolean @default(false)
   cancellationReason String?
+
+  equipmentBookings EventEquipmentBooking[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz

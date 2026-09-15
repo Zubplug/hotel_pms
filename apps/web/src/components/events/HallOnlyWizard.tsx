@@ -10,24 +10,16 @@ import { createFullEventBooking } from '@/lib/events/booking-actions';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
-const allSteps = [
+const steps = [
   { id: 1, title: 'Client Info', icon: User },
   { id: 2, title: 'Schedule & Hall', icon: CalendarDays },
-  { id: 3, title: 'Packages', icon: Box },
+  { id: 3, title: 'Equipment', icon: Box },
   { id: 4, title: 'Summary', icon: FileText }
 ];
 
-export function EventWizard({ initialHalls, initialPackages, bookingType = 'full' }: { initialHalls: any[], initialPackages: any[], bookingType?: string }) {
+export function HallOnlyWizard({ initialHalls, equipmentList }: { initialHalls: any[], equipmentList: any[] }) {
   const router = useRouter();
   
-  // Adjust steps based on booking type
-  const steps = allSteps.map(step => {
-    if (bookingType === 'hall_only' && step.id === 3) {
-      return { ...step, title: 'Add-ons & Equipment' };
-    }
-    return step;
-  });
-
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -40,10 +32,10 @@ export function EventWizard({ initialHalls, initialPackages, bookingType = 'full
     endTime: '',
     setupBufferMinutes: 60,
     teardownBufferMinutes: 60,
-    packageId: '',
     repeatFrequency: 'NONE',
     repeatDaysOfWeek: [] as number[],
-    repeatUntil: ''
+    repeatUntil: '',
+    equipmentRequests: {} as Record<string, number>
   });
 
   const currentStep = steps[currentStepIndex].id;
@@ -55,19 +47,20 @@ export function EventWizard({ initialHalls, initialPackages, bookingType = 'full
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const togglePackage = (pkgId: string) => {
-    setFormData(prev => ({
-      ...prev,
-      packageId: prev.packageId === pkgId ? '' : pkgId
-    }));
-  };
-
   const toggleDayOfWeek = (day: number) => {
     setFormData(prev => {
       const days = prev.repeatDaysOfWeek.includes(day)
         ? prev.repeatDaysOfWeek.filter(d => d !== day)
         : [...prev.repeatDaysOfWeek, day];
       return { ...prev, repeatDaysOfWeek: days };
+    });
+  };
+
+  const handleEquipmentChange = (eqId: string, delta: number) => {
+    setFormData(prev => {
+      const current = prev.equipmentRequests[eqId] || 0;
+      const next = Math.max(0, current + delta);
+      return { ...prev, equipmentRequests: { ...prev.equipmentRequests, [eqId]: next } };
     });
   };
 
@@ -91,6 +84,10 @@ export function EventWizard({ initialHalls, initialPackages, bookingType = 'full
         };
       }
 
+      const eqReqs = Object.entries(formData.equipmentRequests)
+        .filter(([_, qty]) => qty > 0)
+        .map(([id, qty]) => ({ equipmentId: id, quantity: qty }));
+
       await createFullEventBooking({
         contactName: formData.contactName,
         contactPhone: formData.contactPhone,
@@ -100,11 +97,13 @@ export function EventWizard({ initialHalls, initialPackages, bookingType = 'full
         endTime: new Date(formData.endTime),
         setupBufferMinutes: Number(formData.setupBufferMinutes),
         teardownBufferMinutes: Number(formData.teardownBufferMinutes),
-        packageIds: formData.packageId ? [formData.packageId] : [],
+        packageIds: [],
+        bookingType: 'HALL_ONLY',
+        equipmentRequests: eqReqs,
         recurrenceRule
       });
 
-      toast.success("Event successfully created!");
+      toast.success("Hall Booking successfully created!");
       router.push(`/fnb/events`);
     } catch (err: any) {
       toast.error(err.message || "An error occurred creating the booking.");
@@ -250,46 +249,44 @@ export function EventWizard({ initialHalls, initialPackages, bookingType = 'full
 
           {currentStep === 3 && (
             <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                {bookingType === 'hall_only' ? 'Select Equipment Rentals & Add-ons' : 'Select Banquet Package'}
-              </p>
-              <div className="grid grid-cols-2 gap-4">
-                {initialPackages.map(pkg => (
-                  <div 
-                    key={pkg.id} 
-                    onClick={() => togglePackage(pkg.id)}
-                    className={`p-4 border rounded cursor-pointer transition-colors ${formData.packageId === pkg.id ? 'border-primary bg-primary/5' : 'hover:border-slate-300'}`}
-                  >
-                    <div className="font-semibold text-sm">{pkg.name}</div>
-                    <div className="text-xs text-muted-foreground mt-1">NGN {Number(pkg.basePrice).toLocaleString()}</div>
-                  </div>
-                ))}
-              </div>
+              <p className="text-sm text-muted-foreground">Select required equipment. Availability will be strictly checked against total inventory for your selected dates.</p>
+              {equipmentList.length === 0 ? (
+                <div className="p-8 text-center bg-slate-50 border rounded-lg text-slate-500">
+                  No equipment configured in inventory.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {equipmentList.map(eq => {
+                    const qty = formData.equipmentRequests[eq.id] || 0;
+                    return (
+                      <div key={eq.id} className="flex items-center justify-between p-4 border rounded-lg hover:border-slate-300">
+                        <div>
+                          <div className="font-semibold text-sm">{eq.name}</div>
+                          <div className="text-xs text-muted-foreground mt-1">Stock: {eq.totalStock} | NGN {Number(eq.rentalPrice).toLocaleString()}/ea</div>
+                        </div>
+                        <div className="flex items-center gap-3 bg-slate-50 p-1 rounded-md border">
+                          <button onClick={() => handleEquipmentChange(eq.id, -1)} disabled={qty === 0} className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-slate-200 disabled:opacity-50 text-slate-600">-</button>
+                          <span className="w-4 text-center text-sm font-medium">{qty}</span>
+                          <button onClick={() => handleEquipmentChange(eq.id, 1)} disabled={qty >= eq.totalStock} className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-slate-200 disabled:opacity-50 text-slate-600">+</button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
           {currentStep === 4 && (
             <div className="space-y-4">
-              <h3 className="font-semibold text-lg">Booking Summary</h3>
+              <h3 className="font-semibold text-lg">Hall Only Booking Summary</h3>
               <div className="grid grid-cols-2 gap-4 text-sm bg-slate-50 p-4 rounded-lg border">
-                <div>
-                  <span className="text-muted-foreground">Client: </span> {formData.contactName || 'N/A'}
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Guests: </span> {formData.expectedGuests || 0}
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Hall: </span> {initialHalls.find(h => h.id === formData.hallId)?.name || 'N/A'}
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Package: </span> {initialPackages.find(p => p.id === formData.packageId)?.name || 'None selected'}
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Start: </span> {formData.startTime ? new Date(formData.startTime).toLocaleString() : 'N/A'}
-                </div>
-                <div>
-                  <span className="text-muted-foreground">End: </span> {formData.endTime ? new Date(formData.endTime).toLocaleString() : 'N/A'}
-                </div>
+                <div><span className="text-muted-foreground">Client: </span> {formData.contactName || 'N/A'}</div>
+                <div><span className="text-muted-foreground">Guests: </span> {formData.expectedGuests || 0}</div>
+                <div><span className="text-muted-foreground">Hall: </span> {initialHalls.find(h => h.id === formData.hallId)?.name || 'N/A'}</div>
+                <div><span className="text-muted-foreground">Type: </span> Hall Only</div>
+                <div><span className="text-muted-foreground">Start: </span> {formData.startTime ? new Date(formData.startTime).toLocaleString() : 'N/A'}</div>
+                <div><span className="text-muted-foreground">End: </span> {formData.endTime ? new Date(formData.endTime).toLocaleString() : 'N/A'}</div>
                 {formData.repeatFrequency !== 'NONE' && (
                   <div className="col-span-2">
                     <span className="text-muted-foreground">Recurrence: </span> 
@@ -297,6 +294,16 @@ export function EventWizard({ initialHalls, initialPackages, bookingType = 'full
                   </div>
                 )}
               </div>
+              {Object.keys(formData.equipmentRequests).length > 0 && (
+                <div className="text-sm bg-slate-50 p-4 rounded-lg border mt-2">
+                  <h4 className="font-semibold mb-2">Requested Equipment:</h4>
+                  <ul className="list-disc pl-5">
+                    {Object.entries(formData.equipmentRequests).filter(([_, q]) => q > 0).map(([id, q]) => (
+                      <li key={id}>{equipmentList.find(e => e.id === id)?.name}: {q}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           )}
         </CardContent>
