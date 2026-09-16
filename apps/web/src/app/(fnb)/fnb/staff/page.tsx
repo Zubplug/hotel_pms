@@ -235,7 +235,7 @@ export default async function FnbStaffPage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {staffPerformance.map((staff) => (
-            <Card key={staff.id} className="group overflow-hidden rounded-2xl border-[#eadfd8] bg-white shadow-[0_8px_24px_rgba(65,32,19,0.05)] transition-all hover:-translate-y-0.5 hover:border-orange-200 hover:shadow-[0_14px_32px_rgba(65,32,19,0.1)]">
+            <Card key={staff.id} className="group overflow-hidden rounded-2xl border-[#eadfd8] bg-white shadow-[0_8px_24px_rgba(65,32,19,0.05)] transition-shadow hover:border-orange-200 hover:shadow-[0_14px_32px_rgba(65,32,19,0.1)]">
               <CardHeader className="border-b border-[#f1e7e1] bg-gradient-to-br from-[#fffaf6] to-white pb-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-3">
@@ -243,9 +243,8 @@ export default async function FnbStaffPage() {
                       {staff.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()}
                       {staff.rating === 'Top Performer' ? <span className="absolute -right-1 -top-1 h-3 w-3 rounded-full border-2 border-white bg-emerald-500" /> : null}
                     </div>
-                    <div className="min-w-0"><CardTitle className="truncate text-base font-bold text-[#24130d]">{staff.name}</CardTitle><p className="mt-1 truncate text-xs font-medium text-[#927b70]">{staff.role}</p></div>
+                    <div className="min-w-0"><CardTitle className="truncate text-base font-bold text-[#24130d]">{staff.name}</CardTitle><p className="mt-1 truncate text-xs font-medium text-[#927b70]">{staff.role}</p><div className="mt-2">{staff.rating !== 'Standard' ? <Badge variant={staff.ratingVariant} className="whitespace-nowrap text-[10px]">{staff.rating}</Badge> : <span className="inline-flex rounded-full bg-[#f7eee9] px-2 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[#7c2d12]">Active</span>}</div></div>
                   </div>
-                  {staff.rating !== 'Standard' ? <Badge variant={staff.ratingVariant} className="shrink-0 text-[10px]">{staff.rating}</Badge> : <span className="rounded-full bg-[#f7eee9] px-2 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[#7c2d12]">Active</span>}
                 </div>
               </CardHeader>
               <CardContent className="p-5">
