@@ -82,7 +82,9 @@ export function RoomAnalysisClient() {
         if (!response.ok || payload?.success === false) throw new Error(payload?.error?.message || 'Unable to load room analytics');
         return payload?.data ?? payload;
       }),
-      fetch(`/api/v1/rooms?propertyId=${encodeURIComponent(propertyId)}&pageSize=1000&sortBy=number&sortOrder=asc`, { cache: 'no-store' }).then(async (response) => {
+      // The room endpoint caps pageSize at 100; this is sufficient for the
+      // read-only operating snapshot and keeps the request within its schema.
+      fetch(`/api/v1/rooms?propertyId=${encodeURIComponent(propertyId)}&pageSize=100&sortBy=number&sortOrder=asc`, { cache: 'no-store' }).then(async (response) => {
         const payload = await response.json();
         if (!response.ok || payload?.success === false) throw new Error(payload?.error?.message || 'Unable to load room status');
         return payload?.data ?? [];
