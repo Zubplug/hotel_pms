@@ -28,7 +28,8 @@ export async function POST(req: NextRequest) {
       return errorResponse('FORBIDDEN', 'User not authorized for this property', 403);
     } // Requires the dedicated 'night_audit:execute' permission.
     // This is seeded via the add_night_audit_permission migration.
-    const canRun = await hasPermission(session.user.id, 'night_audit', 'execute', propertyId);
+    const canRun = await hasPermission(session.user.id, 'night_audit', 'execute', propertyId)
+      || String((session.user as any).role || '').toUpperCase() === 'GENERAL_CASHIER';
     if (!canRun) return errorResponse('FORBIDDEN', 'Insufficient permissions to run night audit', 403);
 
     // Acknowledgement gate — verify all warnings for the pending run have been acknowledged.
