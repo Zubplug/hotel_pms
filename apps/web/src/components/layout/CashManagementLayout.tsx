@@ -68,14 +68,19 @@ export function CashManagementLayout({ children }: { children: React.ReactNode }
     }
   }, [status, router]);
 
-  const userInitials = session?.user?.email
-    ? session.user.email.slice(0, 2).toUpperCase()
-    : '??';
-
-  const userFullName =
-    (session?.user as any)?.firstName && (session?.user as any)?.lastName
-      ? `${(session?.user as any).firstName} ${(session?.user as any).lastName}`
-      : session?.user?.email ?? '';
+  const sessionUser = session?.user as any;
+  const userFullName = sessionUser?.firstName && sessionUser?.lastName
+    ? `${sessionUser.firstName} ${sessionUser.lastName}`.trim()
+    : sessionUser?.name && sessionUser.name !== sessionUser.email
+      ? sessionUser.name
+      : 'Staff';
+  const userInitials = userFullName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part: string) => part[0])
+    .join('')
+    .toUpperCase() || 'ST';
 
   if (status === 'loading') {
     return (
