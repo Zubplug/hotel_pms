@@ -30,7 +30,15 @@ export async function POST(
 
     const reservation = await prisma.reservation.findUnique({
       where: { id },
-      select: { id: true, status: true, propertyId: true, primaryGuestId: true, reservationRooms: { include: { room: true } } },
+      select: { 
+        id: true, 
+        status: true, 
+        propertyId: true, 
+        primaryGuestId: true,
+        confirmationNumber: true,
+        primaryGuest: { select: { firstName: true, lastName: true, phone: true } },
+        reservationRooms: { include: { room: true } } 
+      },
     });
 
     if (!reservation) return errorResponse('NOT_FOUND', 'Reservation not found', 404);
@@ -83,7 +91,31 @@ export async function POST(
         });
       }
 
-      // 3. Create City Ledger Entry
+      // 3. Create City Ledger Invoice and Entry
+      const issueDate = new Date();
+      issueDate.setUTCHours(0, 0, 0, 0);
+      const dueDate = new Date(issueDate);
+      dueDate.setUTCDate(dueDate.getUTCDate() + 30);
+      
+      const invoiceNumber = `AR-${reservation.confirmationNumber || 'SKIP'}-${String(id).slice(0, 8).toUpperCase()}`;
+      const guestName = reservation.primaryGuest ? `${reservation.primaryGuest.firstName} ${reservation.primaryGuest.lastName}`.trim() : 'Unknown';
+      const guestPhone = reservation.primaryGuest?.phone || '';
+      
+      const invoice = await tx.cityLedgerInvoice.create({
+        data: {
+          propertyId: reservation.propertyId,
+          accountId: skipperAccount.id,
+          invoiceNumber,
+          issueDate,
+          dueDate,
+          description: `Walk-out/Skipper checkout for reservation ${reservation.confirmationNumber || 'Unknown'} (Guest: ${guestName}${guestPhone ? ` - ${guestPhone}` : ''})`,
+          amount: totalBalance,
+          outstandingAmount: totalBalance,
+          currency: 'NGN',
+          createdBy: session.user.id,
+        }
+      });
+
       const clEntry = await tx.cityLedgerEntry.create({
         data: {
           accountId: skipperAccount.id,
@@ -93,7 +125,10 @@ export async function POST(
           amount: totalBalance,
           currency: 'NGN',
           type: 'TRANSFER_IN',
+          status: 'OPEN',
           reason: reason,
+          reference: invoiceNumber,
+          invoiceId: invoice.id,
           createdBy: session.user.id,
         }
       });
