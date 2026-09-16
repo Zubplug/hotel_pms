@@ -3592,7 +3592,13 @@ export async function POST(req: NextRequest) {
                   currency: "NGN",
                   reason: payload.reason || "Offline Sync",
                   businessDate: payload.businessDate || authoritativeBusinessDate?.toISOString() || new Date().toISOString(),
-                  operatorName: "Sync Service",
+                  operatorName: await (async () => {
+                    if (actorId && isUuid(actorId)) {
+                      const op = await prisma.staff.findFirst({ where: { OR: [{ userId: actorId }, { id: actorId }] }, select: { firstName: true, lastName: true } });
+                      if (op) return `${op.firstName} ${op.lastName}`.trim();
+                    }
+                    return "System";
+                  })(),
                   target: payload.guestId ? "Guest/Room" : "Order/Folio"
                 },
                 idempotencyKey: `sync_COMPL_${eventType}_${idempotencyKey || id}`,
@@ -3619,7 +3625,13 @@ export async function POST(req: NextRequest) {
                   currency: "NGN",
                   reason: payload.reason || "Offline Sync",
                   businessDate: payload.businessDate || authoritativeBusinessDate?.toISOString() || new Date().toISOString(),
-                  operatorName: "Sync Service",
+                  operatorName: await (async () => {
+                    if (actorId && isUuid(actorId)) {
+                      const op = await prisma.staff.findFirst({ where: { OR: [{ userId: actorId }, { id: actorId }] }, select: { firstName: true, lastName: true } });
+                      if (op) return `${op.firstName} ${op.lastName}`.trim();
+                    }
+                    return "System";
+                  })(),
                   target: aggregateType === "POS_ORDER" ? "POS Order" : "Reservation"
                 },
                 idempotencyKey: `sync_DISCOUNT_${eventType}_${idempotencyKey || id}`,

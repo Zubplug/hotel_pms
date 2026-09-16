@@ -89,6 +89,31 @@ export async function calculateDailyRevenue(propertyId: string, businessDate: Da
     }
   }
 
+  // Include direct POS sales that were never posted to a room folio (e.g. paid by cash/card)
+  const nonFolioPosOrders = await prisma.posOrder.findMany({
+    where: {
+      propertyId,
+      businessDate: {
+        gte: startOfDay(businessDate),
+        lte: endOfDay(businessDate),
+      },
+      status: { not: 'VOIDED' },
+      folioId: null,
+    },
+    include: {
+      outlet: { select: { type: true } }
+    }
+  });
+
+  for (const order of nonFolioPosOrders) {
+    const value = Number(order.total || 0);
+    if (order.outlet?.type?.toUpperCase() === 'BAR') {
+      barRevenue += value;
+    } else {
+      fbRevenue += value;
+    }
+  }
+
   // Include expected room revenue for stayovers tonight that haven't been audited/posted yet
   const stayovers = await prisma.reservation.findMany({
     where: {
@@ -270,6 +295,29 @@ export async function getExecutiveRevenueTrend(propertyId: string, endBusinessDa
 
     dailyTotals.set(dateStr, (dailyTotals.get(dateStr) || 0) + value);
     // Don't add total revenue here, we only want the exact N days requested.
+  }
+
+  const nonFolioPosOrders = await prisma.posOrder.findMany({
+    where: {
+      propertyId,
+      businessDate: {
+        gt: startOfDay(startBusinessDate),
+        lte: endOfDay(endBusinessDate),
+      },
+      status: { not: 'VOIDED' },
+      folioId: null,
+    },
+    select: {
+      businessDate: true,
+      total: true,
+    }
+  });
+
+  for (const order of nonFolioPosOrders) {
+    if (!order.businessDate) continue;
+    const dateStr = format(order.businessDate, 'yyyy-MM-dd');
+    const value = Number(order.total || 0);
+    dailyTotals.set(dateStr, (dailyTotals.get(dateStr) || 0) + value);
   }
 
   // Construct the timeline strictly for the requested days

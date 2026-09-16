@@ -118,14 +118,23 @@ export async function getSystemIntegrity(ctx: TenantContext, propertyId: string)
       payments: {
         where: { method: 'CASH', status: { in: ['COMPLETED', 'POSTED', 'SETTLED'] } },
         select: { amount: true }
+      },
+      cashMovements: {
+        select: { type: true, amount: true }
       }
     },
   });
 
   const openFrontdeskSessions = rawFrontdeskSessions.map(session => {
     const cashReceipts = session.payments.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
-    const expectedCash = Number(session.openingFloat || 0) + cashReceipts;
-    const { payments, ...rest } = session;
+    const movementTotal = (types: string[]) => session.cashMovements.filter((m: any) => types.includes(m.type)).reduce((sum: number, m: any) => sum + Number(m.amount || 0), 0);
+    
+    const calculatedExpectedCash = Number(session.openingFloat || 0) + cashReceipts 
+      + movementTotal(['CASH_IN', 'CASH_TRANSFER_IN'])
+      - movementTotal(['REFUND', 'REFUND_CASH', 'PAID_OUT', 'CASH_DROP', 'CASH_TRANSFER_OUT']);
+      
+    const expectedCash = session.status === 'OPEN' ? calculatedExpectedCash : Number(session.systemExpectedCash ?? calculatedExpectedCash);
+    const { payments, cashMovements, ...rest } = session;
     return {
       ...rest,
       expectedCash // Inject dynamically calculated expected cash

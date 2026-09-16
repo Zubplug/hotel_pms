@@ -91,14 +91,25 @@ export class ShiftControlService {
         movementTotal(['REFUND', 'REFUND_CASH', 'PAID_OUT', 'CASH_DROP', 'CASH_TRANSFER_OUT'])
       );
     } else {
-      const shift = await tx.posSession.findUnique({ where: { id: shiftId } });
+      const shift = await tx.posSession.findUnique({ 
+        where: { id: shiftId },
+        include: { payments: true, cashMovements: true }
+      });
       if (!shift) throw new ShiftControlError('Shift not found', 'NOT_FOUND', 404);
+      
+      const cashPayments = shift.payments
+        .filter((p: any) => p.method === 'CASH' && ['CONFIRMED', 'PAID'].includes(p.status))
+        .reduce((sum: number, p: any) => sum + Number(p.amount), 0);
+
+      const movementTotal = (types: string[]) => shift.cashMovements
+        .filter((m: any) => types.includes(m.type))
+        .reduce((sum: number, m: any) => sum + Number(m.amount), 0);
+
       return (
         Number(shift.openingCash ?? 0) +
-        Number(shift.cashSales ?? 0) +
-        Number(shift.cashIn ?? 0) -
-        Number(shift.cashRefunds ?? 0) -
-        Number(shift.cashOut ?? 0)
+        cashPayments +
+        movementTotal(['CASH_IN', 'CASH_TRANSFER_IN']) -
+        movementTotal(['REFUND', 'REFUND_CASH', 'PAID_OUT', 'CASH_DROP', 'CASH_TRANSFER_OUT'])
       );
     }
   }

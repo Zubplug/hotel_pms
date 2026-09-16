@@ -1,153 +1,25 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ClipboardList, Plus, ArrowRight } from 'lucide-react';
 import { format } from 'date-fns';
+import { ArrowRight, CheckCircle2, ClipboardList, Clock3, FileWarning, Loader2, Plus, RefreshCw, Search, Warehouse } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
-interface Stocktake {
-  id: string;
-  stocktakeRef: string;
-  status: string;
-  warehouse: { name: string };
-  category?: { name: string };
-  _count: { items: number };
-  createdAt: string;
-}
-
-const STATUS_META: Record<string, { label: string; classes: string }> = {
-  DRAFT:     { label: 'Draft',     classes: 'bg-slate-100 text-slate-600 border-slate-200' },
-  COUNTING:  { label: 'Counting',  classes: 'bg-blue-50 text-blue-700 border-blue-200' },
-  SUBMITTED: { label: 'Submitted', classes: 'bg-amber-50 text-amber-700 border-amber-200' },
-  REJECTED:  { label: 'Rejected',  classes: 'bg-red-50 text-red-700 border-red-200' },
-  APPROVED:  { label: 'Approved',  classes: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
-  COMPLETED: { label: 'Completed', classes: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  CANCELLED: { label: 'Cancelled', classes: 'bg-slate-100 text-slate-500 border-slate-200' },
-};
+type Stocktake = { id: string; stocktakeRef: string; status: string; warehouse: { name: string }; category?: { name: string }; _count: { items: number }; createdAt: string };
+const statusMeta: Record<string, { label: string; classes: string }> = { DRAFT: { label: 'Draft', classes: 'bg-slate-100 text-slate-600 border-slate-200' }, COUNTING: { label: 'Counting', classes: 'bg-blue-50 text-blue-700 border-blue-200' }, SUBMITTED: { label: 'Submitted', classes: 'bg-amber-50 text-amber-700 border-amber-200' }, REJECTED: { label: 'Rejected', classes: 'bg-rose-50 text-rose-700 border-rose-200' }, APPROVED: { label: 'Approved', classes: 'bg-indigo-50 text-indigo-700 border-indigo-200' }, COMPLETED: { label: 'Completed', classes: 'bg-emerald-50 text-emerald-700 border-emerald-200' }, CANCELLED: { label: 'Cancelled', classes: 'bg-slate-100 text-slate-500 border-slate-200' } };
 
 export default function StocktakesPage() {
   const [stocktakes, setStocktakes] = useState<Stocktake[]>([]);
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch('/api/v1/inventory/stocktakes')
-      .then((res) => res.json())
-      .then((data) => {
-        setStocktakes(data.data || []);
-        setLoading(false);
-      });
-  }, []);
-
-  return (
-    <div className="min-h-full">
-      {/* Hero header */}
-      <div className="bg-gradient-to-r from-[#0b1120] to-[#0f2619] px-8 py-7">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-white tracking-tight">Stocktakes</h1>
-            <p className="text-slate-400 text-sm mt-1">Manage batch physical inventory counts and reconcile variances.</p>
-          </div>
-          <Link
-            href="/inventory/stocktakes/new"
-            className="inline-flex items-center gap-2 bg-white text-slate-800 border border-white/20 hover:bg-white/90 px-4 py-2 rounded-lg text-sm font-semibold shadow-sm self-start sm:self-auto"
-          >
-            <Plus className="h-4 w-4" />
-            New Stocktake
-          </Link>
-        </div>
-      </div>
-
-      <div className="px-6 py-7 max-w-screen-xl mx-auto">
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="flex items-center gap-2 px-6 py-4 border-b border-slate-100 bg-slate-50/60">
-            <ClipboardList className="h-4 w-4 text-slate-500" />
-            <span className="text-sm font-semibold text-slate-700">All Stocktakes</span>
-            {!loading && (
-              <span className="ml-1 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-slate-200 text-slate-600 text-xs font-bold">
-                {stocktakes.length}
-              </span>
-            )}
-          </div>
-
-          {loading ? (
-            <div className="flex items-center justify-center py-20">
-              <div className="flex flex-col items-center gap-3">
-                <div className="h-8 w-8 rounded-full border-[3px] border-emerald-500 border-t-transparent animate-spin" />
-                <p className="text-sm text-slate-400">Loading stocktakes…</p>
-              </div>
-            </div>
-          ) : stocktakes.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-center px-6">
-              <div className="h-16 w-16 rounded-full bg-slate-100 flex items-center justify-center mb-4">
-                <ClipboardList className="h-8 w-8 text-slate-400" />
-              </div>
-              <p className="text-sm font-semibold text-slate-600">No stocktakes yet</p>
-              <p className="text-sm text-slate-400 mt-1">Create a new stocktake to begin physical counting.</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-slate-50/80 border-b border-slate-100">
-                    {['Reference', 'Status', 'Warehouse', 'Category', 'Items', 'Created', ''].map(
-                      (h, i) => (
-                        <th
-                          key={i}
-                          className={`px-6 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap ${
-                            i >= 4 ? 'text-right' : 'text-left'
-                          }`}
-                        >
-                          {h}
-                        </th>
-                      )
-                    )}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {stocktakes.map((st) => {
-                    const meta = STATUS_META[st.status] ?? STATUS_META.DRAFT;
-                    return (
-                      <tr key={st.id} className="hover:bg-slate-50/70 transition-colors group">
-                        <td className="px-6 py-4">
-                          <Link
-                            href={`/inventory/stocktakes/${st.id}`}
-                            className="font-mono font-bold text-indigo-700 hover:text-indigo-900 text-xs"
-                          >
-                            {st.stocktakeRef}
-                          </Link>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold border ${meta.classes}`}>
-                            {meta.label}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-slate-700">{st.warehouse.name}</td>
-                        <td className="px-6 py-4 text-slate-600">{st.category?.name || 'All Categories'}</td>
-                        <td className="px-6 py-4 text-right">
-                          <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-slate-100 text-slate-700 text-xs font-bold">
-                            {st._count.items}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-right text-slate-500 whitespace-nowrap">
-                          {format(new Date(st.createdAt), 'dd MMM yyyy')}
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <Link
-                            href={`/inventory/stocktakes/${st.id}`}
-                            className="inline-flex items-center gap-1 opacity-0 group-hover:opacity-100 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-all"
-                          >
-                            Open <ArrowRight className="h-3 w-3" />
-                          </Link>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+  const [filter, setFilter] = useState('ALL');
+  const [search, setSearch] = useState('');
+  const load = async () => { setLoading(true); try { const response = await fetch('/api/v1/inventory/stocktakes'); const body = await response.json(); setStocktakes(body.data || []); } finally { setLoading(false); } };
+  useEffect(() => { void load(); }, []);
+  const active = stocktakes.filter((item) => !['COMPLETED', 'CANCELLED'].includes(item.status));
+  const submitted = stocktakes.filter((item) => ['SUBMITTED', 'APPROVED'].includes(item.status));
+  const completed = stocktakes.filter((item) => item.status === 'COMPLETED');
+  const totalItems = stocktakes.reduce((sum, item) => sum + item._count.items, 0);
+  const rows = useMemo(() => stocktakes.filter((item) => (filter === 'ALL' || item.status === filter) && `${item.stocktakeRef} ${item.warehouse.name} ${item.category?.name || ''}`.toLowerCase().includes(search.toLowerCase())), [stocktakes, filter, search]);
+  return <div className="min-h-full bg-slate-50/70"><div className="relative overflow-hidden bg-gradient-to-r from-[#0b1120] via-[#16253a] to-[#0b1120] px-6 py-8 sm:px-8"><div className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full bg-emerald-500/15 blur-3xl" /><div className="relative mx-auto max-w-[1440px]"><div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between"><div><p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-emerald-300">Inventory assurance</p><h1 className="text-2xl font-bold tracking-tight text-white">Stocktake control</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">Track physical counts from preparation through review and completion, with every warehouse variance auditable.</p></div><div className="flex gap-2"><button onClick={() => void load()} className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 py-2.5 text-xs font-semibold text-white hover:bg-white/15"><RefreshCw className="h-4 w-4" />Refresh</button><Link href="/inventory/stocktakes/new" className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-emerald-950/30 hover:bg-emerald-400"><Plus className="h-4 w-4" />New stocktake</Link></div></div><div className="mt-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[['Active counts', active.length, 'Open control cycles'], ['Awaiting review', submitted.length, 'Submitted or approved'], ['Completed', completed.length, 'Closed stocktakes'], ['Counted lines', totalItems, 'Items across cycles']].map(([label, value, detail]) => <div key={String(label)} className="rounded-xl border border-white/10 bg-white/10 p-4"><p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{label}</p><p className="mt-2 text-2xl font-black text-white">{value}</p><p className="mt-1 text-xs text-emerald-200">{detail}</p></div>)}</div></div></div><div className="mx-auto max-w-[1440px] space-y-6 px-5 py-7 sm:px-8"><div className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]"><section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.15em] text-emerald-600"><ClipboardList className="h-4 w-4" />Count pipeline</div><h2 className="mt-1 text-lg font-semibold text-slate-900">Control status</h2><div className="mt-6 grid grid-cols-3 gap-3">{[['Draft / counting', stocktakes.filter((x) => ['DRAFT', 'COUNTING'].includes(x.status)).length, 'bg-blue-500'], ['Submitted', submitted.length, 'bg-amber-500'], ['Completed', completed.length, 'bg-emerald-500']].map(([label, value, color]) => <div key={String(label)} className="rounded-xl bg-slate-50 p-4"><div className="flex items-center justify-between"><span className={`h-2 w-2 rounded-full ${color}`} /><span className="text-2xl font-black text-slate-900">{value}</span></div><p className="mt-3 text-xs font-semibold text-slate-600">{label}</p><div className="mt-2 h-1.5 rounded-full bg-slate-200"><div className={`h-1.5 rounded-full ${color}`} style={{ width: `${stocktakes.length ? Number(value) / stocktakes.length * 100 : 0}%` }} /></div></div>)}</div></section><section className="rounded-2xl border border-slate-200 bg-slate-950 p-6 text-white shadow-sm"><div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.15em] text-amber-300"><FileWarning className="h-4 w-4" />Cashier focus</div><h2 className="mt-2 text-lg font-semibold">Before approving a count</h2><ul className="mt-5 space-y-3 text-sm leading-5 text-slate-300"><li className="flex gap-3"><Warehouse className="h-4 w-4 shrink-0 text-indigo-300" />Confirm the warehouse and counting scope are correct.</li><li className="flex gap-3"><Clock3 className="h-4 w-4 shrink-0 text-amber-300" />Review submitted counts promptly before the next receipt or issue.</li><li className="flex gap-3"><CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-300" />Open the stocktake detail to inspect each counted line.</li></ul></section></div><section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/70 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="font-semibold text-slate-900">Stocktake register</h2><p className="mt-1 text-xs text-slate-500">{rows.length} record{rows.length === 1 ? '' : 's'} match the current view</p></div><div className="flex flex-wrap gap-2"><div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3"><Search className="h-4 w-4 text-slate-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search reference or warehouse" className="h-10 w-52 bg-transparent text-sm outline-none" /></div><select value={filter} onChange={(event) => setFilter(event.target.value)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm"><option value="ALL">All statuses</option>{Object.keys(statusMeta).map((status) => <option key={status} value={status}>{statusMeta[status].label}</option>)}</select></div></div>{loading ? <div className="flex justify-center py-20"><Loader2 className="h-7 w-7 animate-spin text-emerald-500" /></div> : rows.length === 0 ? <div className="flex flex-col items-center gap-2 py-20 text-center"><ClipboardList className="h-10 w-10 text-slate-300" /><p className="font-semibold text-slate-800">No stocktakes match this view</p><p className="text-sm text-slate-500">Start a stocktake to create an auditable physical count.</p></div> : <div className="overflow-x-auto"><table className="w-full text-sm"><thead className="border-b border-slate-100 bg-slate-50/80"><tr>{['Reference', 'Status', 'Warehouse / scope', 'Lines', 'Created', ''].map((heading) => <th key={heading} className="whitespace-nowrap px-5 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500">{heading}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{rows.map((stocktake) => { const meta = statusMeta[stocktake.status] || statusMeta.DRAFT; return <tr key={stocktake.id} className="group transition-colors hover:bg-slate-50/70"><td className="px-5 py-4"><Link href={`/inventory/stocktakes/${stocktake.id}`} className="font-mono text-xs font-bold text-indigo-700 hover:text-indigo-900">{stocktake.stocktakeRef}</Link></td><td className="px-5 py-4"><Badge className={`border ${meta.classes}`} variant="outline">{meta.label}</Badge></td><td className="px-5 py-4"><p className="font-medium text-slate-800">{stocktake.warehouse.name}</p><p className="mt-1 text-xs text-slate-400">{stocktake.category?.name || 'All categories'}</p></td><td className="px-5 py-4"><span className="inline-flex h-7 min-w-7 items-center justify-center rounded-lg bg-slate-100 px-2 text-xs font-bold text-slate-700">{stocktake._count.items}</span></td><td className="px-5 py-4 text-xs text-slate-500">{format(new Date(stocktake.createdAt), 'dd MMM yyyy, HH:mm')}</td><td className="px-5 py-4 text-right"><Link href={`/inventory/stocktakes/${stocktake.id}`} className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 opacity-0 transition-all group-hover:opacity-100">Open <ArrowRight className="h-3.5 w-3.5" /></Link></td></tr>; })}</tbody></table></div>}</section></div></div>;
 }

@@ -784,9 +784,15 @@ async function evaluateEvent(
         return null; // Below threshold
       }
 
+      const eventType = event.metadata?.eventType as string;
+      const isNew = eventType === "ORDER_CREATED";
+      const titlePrefix = isNew ? "🍽️ New POS Order" : "🧾 POS Order Closed";
+      const itemsCount = event.metadata?.itemsCount;
+      const itemsText = itemsCount ? ` (${itemsCount} item${itemsCount !== 1 ? 's' : ''})` : "";
+
       return {
-        subject: `POS Sale Synced — ${event.metadata?.outletName || "Outlet"}`,
-        body: `🧾 Order #${event.metadata?.orderNumber || event.entityId}\n💰 Amount: ${event.metadata?.currency || "NGN"} ${amount.toLocaleString()}\n👨‍💼 Operator: ${event.metadata?.operatorName || "Staff"}`,
+        subject: `${titlePrefix} — ${event.metadata?.outletName || "Outlet"}`,
+        body: `📋 Order: #${event.metadata?.orderNumber || event.entityId}${itemsText}\n💰 Total: ${event.metadata?.currency || "NGN"} ${amount.toLocaleString()}\n👨‍🍳 Server: ${event.metadata?.operatorName || "System"}`,
         category: "Operations",
         priority: "Normal",
       };
@@ -800,7 +806,7 @@ async function evaluateEvent(
       const target = event.metadata?.target || "Guest/Room";
 
       return {
-        subject: `Complimentary Applied`,
+        subject: `🎁 Complimentary Applied`,
         body: `A complimentary of ${event.metadata?.currency || "NGN"} ${amount.toLocaleString()} was applied to ${target}.\n📝 Reason: ${reason}\n📅 Business Date: ${event.metadata?.businessDate || "N/A"}\n👨‍💼 Operator: ${event.metadata?.operatorName || "Staff"}`,
         category: "Operations",
         priority: "High",
@@ -816,7 +822,7 @@ async function evaluateEvent(
       const target = event.metadata?.target || "Reservation/Order";
 
       return {
-        subject: `Discount Applied`,
+        subject: `🏷️ Discount Applied`,
         body: `A discount of ${event.metadata?.currency || "NGN"} ${amount.toLocaleString()}${percent} was applied to ${target}.\n📝 Reason: ${reason}\n📅 Business Date: ${event.metadata?.businessDate || "N/A"}\n👨‍💼 Operator: ${event.metadata?.operatorName || "Staff"}`,
         category: "Operations",
         priority: "Normal",

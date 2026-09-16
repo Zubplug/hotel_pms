@@ -1105,10 +1105,23 @@ export async function POST(req: NextRequest) {
         // Emit only after successful DB commit
         if (event.aggregateType === 'POS_ORDER' && (event.eventType === 'ORDER_CLOSED' || event.eventType === 'ORDER_COMPLETED' || event.eventType === 'ORDER_CREATED')) {
             try {
-                const operatorName = "Sync Service"; // We don't have the operator name easily available, fallback
+                let operatorName = "Sync Service";
+                if (event.operatorId) {
+                    const op = await prisma.staff.findFirst({ where: { OR: [{ userId: event.operatorId }, { id: event.operatorId }] }, select: { firstName: true, lastName: true } });
+                    if (op) operatorName = `${op.firstName} ${op.lastName}`.trim();
+                }
+
+                let outletName = terminal.outletId;
+                if (terminal.outletId) {
+                    const out = await prisma.posOutlet.findUnique({ where: { id: terminal.outletId }, select: { name: true } });
+                    if (out) outletName = out.name;
+                }
+
                 const payload = typeof event.payloadJson === 'string' ? JSON.parse(event.payloadJson || '{}') : (event.payloadJson || {});
                 const amount = Number(payload.Total || payload.total || 0);
                 const orderNumber = payload.OrderNumber || payload.orderNumber || event.aggregateId;
+                const items = payload.Items || payload.items || [];
+                const itemsCount = items.length;
                 
                 // Get org ID securely 
                 const property = await prisma.property.findUnique({ where: { id: terminal.propertyId }, select: { organizationId: true, id: true } });
@@ -1125,7 +1138,9 @@ export async function POST(req: NextRequest) {
                       currency: "NGN",
                       operatorName: operatorName,
                       orderNumber: orderNumber,
-                      outletName: terminal.outletId
+                      outletName: outletName,
+                      itemsCount: itemsCount,
+                      eventType: event.eventType
                     },
                     idempotencyKey: `sync_POS_SALE_${event.eventType}_${event.idempotencyKey || event.id}`
                   });

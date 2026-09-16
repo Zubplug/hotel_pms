@@ -1,7 +1,7 @@
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import Link from 'next/link';
-import { Truck, Calendar, FileText, ArrowRight } from 'lucide-react';
+import { Truck, Calendar, FileText, ArrowRight, CheckCircle2, Clock3, AlertTriangle, PackageCheck } from 'lucide-react';
 
 const STATUS_META: Record<string, { label: string; classes: string }> = {
   DRAFT:     { label: 'Draft',     classes: 'bg-amber-50 text-amber-700 border-amber-200' },
@@ -26,22 +26,25 @@ export default async function GRNsPage() {
     },
     orderBy: { createdAt: 'desc' },
   });
+  const posted = grns.filter((grn) => grn.status === 'POSTED');
+  const awaiting = grns.filter((grn) => ['SUBMITTED', 'APPROVED'].includes(grn.status));
+  const rejected = grns.filter((grn) => grn.status === 'REJECTED');
+  const totalValue = grns.reduce((sum, grn) => sum + grn.items.reduce((lineTotal, item) => lineTotal + Number(item.receivedQty) * Number(item.unitCost), 0), 0);
 
   return (
     <div className="min-h-full">
       {/* Hero header */}
-      <div className="bg-gradient-to-r from-[#0b1120] to-[#0f2619] px-8 py-7">
-        <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Goods Receipt Notes</h1>
-          <p className="text-slate-400 text-sm mt-1">Track inventory receipts and warehouse deliveries.</p>
-        </div>
+      <div className="relative overflow-hidden bg-gradient-to-r from-[#0b1120] via-[#16253a] to-[#0b1120] px-6 py-8 sm:px-8">
+        <div className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full bg-blue-500/15 blur-3xl" />
+        <div className="relative mx-auto max-w-[1440px]"><p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-blue-300">Procurement control</p><h1 className="text-2xl font-bold tracking-tight text-white">Goods receiving</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">Validate deliveries against approved purchase orders and keep posted inventory value traceable from dock to stock.</p><div className="mt-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[['Total receipts', grns.length, 'GRNs in this property'], ['Awaiting action', awaiting.length, 'Submitted or approved'], ['Posted to stock', posted.length, 'Inventory confirmed'], ['Received value', `₦${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, 'Value across all receipts']].map(([label, value, detail]) => <div key={String(label)} className="rounded-xl border border-white/10 bg-white/10 p-4"><p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{label}</p><p className="mt-2 text-2xl font-black text-white">{value}</p><p className="mt-1 text-xs text-blue-200">{detail}</p></div>)}</div></div>
       </div>
 
       <div className="px-6 py-7 max-w-screen-xl mx-auto">
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="mb-5 grid gap-4 sm:grid-cols-3"><div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-center gap-3"><span className="rounded-xl bg-amber-50 p-2 text-amber-600"><Clock3 className="h-5 w-5" /></span><div><p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Receiving queue</p><p className="mt-1 text-xl font-black text-slate-900">{awaiting.length}</p></div></div><p className="mt-3 text-xs text-slate-500">Receipts awaiting the next control action.</p></div><div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-center gap-3"><span className="rounded-xl bg-emerald-50 p-2 text-emerald-600"><PackageCheck className="h-5 w-5" /></span><div><p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Posted value</p><p className="mt-1 text-xl font-black text-slate-900">₦{grns.filter((grn) => grn.status === 'POSTED').reduce((sum, grn) => sum + grn.items.reduce((lineTotal, item) => lineTotal + Number(item.receivedQty) * Number(item.unitCost), 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p></div></div><p className="mt-3 text-xs text-slate-500">Receipts already posted into inventory.</p></div><div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-center gap-3"><span className="rounded-xl bg-rose-50 p-2 text-rose-600"><AlertTriangle className="h-5 w-5" /></span><div><p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Exceptions</p><p className="mt-1 text-xl font-black text-slate-900">{rejected.length}</p></div></div><p className="mt-3 text-xs text-slate-500">Rejected receipts requiring supplier follow-up.</p></div></div>
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="flex items-center gap-2 px-6 py-4 border-b border-slate-100 bg-slate-50/60">
             <Truck className="h-4 w-4 text-slate-500" />
-            <span className="text-sm font-semibold text-slate-700">All GRNs</span>
+            <span className="text-sm font-semibold text-slate-700">Receiving register</span>
             <span className="ml-1 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-slate-200 text-slate-600 text-xs font-bold">
               {grns.length}
             </span>
