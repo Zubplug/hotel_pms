@@ -1,284 +1,365 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useProperty } from '@/components/PropertyProvider';
-import {
-  AlertCircle, BarChart3, Loader2, Calendar, Filter, Users, DollarSign, ListOrdered, UtensilsCrossed, AlertTriangle, RefreshCw, Percent
-} from 'lucide-react';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, Legend } from 'recharts';
+import {
+  AlertTriangle,
+  BarChart3,
+  CheckCircle2,
+  Clock3,
+  DollarSign,
+  Loader2,
+  RefreshCw,
+  ShoppingBag,
+  TrendingUp,
+  UtensilsCrossed,
+  Users,
+  WalletCards,
+} from 'lucide-react';
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 
-const money = (value: number, currency = 'NGN') =>
-  new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 0 }).format(Number(value || 0));
+type RangeKey = 'TODAY' | 'YESTERDAY' | 'LAST_7' | 'THIS_MONTH';
 
-function KPI({ label, value, subtext, icon: Icon }: any) {
+const ranges: Array<{ key: RangeKey; label: string }> = [
+  { key: 'TODAY', label: 'Today' },
+  { key: 'YESTERDAY', label: 'Yesterday' },
+  { key: 'LAST_7', label: 'Last 7 days' },
+  { key: 'THIS_MONTH', label: 'This month' },
+];
+
+const COLORS = ['#f97316', '#ea580c', '#f59e0b', '#dc2626', '#fb7185', '#7c2d12'];
+
+const money = (value: unknown, currency = 'NGN') =>
+  new Intl.NumberFormat('en-NG', {
+    style: 'currency',
+    currency,
+    maximumFractionDigits: 0,
+  }).format(Number(value || 0));
+
+const number = (value: unknown) => new Intl.NumberFormat('en-NG').format(Number(value || 0));
+
+function MetricCard({
+  label,
+  value,
+  detail,
+  icon: Icon,
+  tone = 'orange',
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  icon: typeof DollarSign;
+  tone?: 'orange' | 'brown' | 'amber' | 'red';
+}) {
+  const tones = {
+    orange: 'bg-orange-50 text-orange-600',
+    brown: 'bg-[#f7eee9] text-[#7c2d12]',
+    amber: 'bg-amber-50 text-amber-600',
+    red: 'bg-red-50 text-red-600',
+  };
+
   return (
-    <div className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex items-center justify-between text-slate-500">
-        <span className="text-xs font-semibold uppercase tracking-wider">{label}</span>
-        <Icon className="h-4 w-4 opacity-70" />
+    <div className="rounded-2xl border border-[#eadfd8] bg-white p-5 shadow-[0_8px_24px_rgba(65,32,19,0.05)]">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#876f63]">{label}</p>
+          <p className="mt-3 text-2xl font-bold tracking-tight text-[#24130d]">{value}</p>
+          <p className="mt-1 text-xs text-[#947d72]">{detail}</p>
+        </div>
+        <div className={`rounded-xl p-3 ${tones[tone]}`}>
+          <Icon className="h-5 w-5" />
+        </div>
       </div>
-      <div className="text-2xl font-bold text-slate-900 tabular-nums tracking-tight">{value}</div>
-      {subtext && <div className="text-xs text-slate-500">{subtext}</div>}
     </div>
   );
 }
 
-const COLORS = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6'];
+function Panel({
+  title,
+  subtitle,
+  children,
+  action,
+}: {
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+  action?: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-2xl border border-[#eadfd8] bg-white p-5 shadow-[0_8px_24px_rgba(65,32,19,0.045)]">
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-base font-bold text-[#24130d]">{title}</h2>
+          {subtitle ? <p className="mt-1 text-xs text-[#947d72]">{subtitle}</p> : null}
+        </div>
+        {action}
+      </div>
+      {children}
+    </section>
+  );
+}
 
 export default function FnbAnalyticsClient() {
   const { propertyId } = useProperty();
   const { data: session } = useLodgeCoreSession();
-  
-  const [dateRange, setDateRange] = useState('TODAY');
+  const [range, setRange] = useState<RangeKey>('TODAY');
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!session?.user || !propertyId) return;
-    
-    setLoading(true);
+  const load = async (quiet = false) => {
+    if (!propertyId) return;
+    if (quiet) setRefreshing(true);
+    else setLoading(true);
     setError(null);
-    fetch(`/api/v1/fnb/dashboard/analytics?propertyId=${propertyId}&range=${dateRange}`)
-      .then(async res => {
-        const body = await res.json();
-        if (!res.ok) throw new Error(body.error?.message || 'Unable to load analytics');
-        return body.data;
-      })
-      .then(setData)
-      .catch(err => setError(err.message))
-      .finally(() => setLoading(false));
-  }, [session, propertyId, dateRange]);
+    try {
+      const response = await fetch(
+        `/api/v1/fnb/dashboard/analytics?propertyId=${encodeURIComponent(propertyId)}&range=${range}`,
+        { cache: 'no-store' },
+      );
+      if (!response.ok) throw new Error('Unable to load F&B analytics');
+      setData(await response.json());
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to load F&B analytics');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
-  if (loading && !data) return (
-    <div className="flex min-h-[60vh] items-center justify-center">
-      <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
-    </div>
+  useEffect(() => {
+    if (session?.user && propertyId) void load();
+    // load is intentionally recreated with the selected period.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session, propertyId, range]);
+
+  const summary = data?.summary || {};
+  const hourlyRevenue = data?.hourlyRevenue || [];
+  const categoryRevenue = data?.categoryRevenue || [];
+  const outletRevenue = data?.outletRevenue || [];
+  const paymentMethods = data?.paymentMethods || [];
+  const topItems = data?.topItems || {};
+  const operationalMetrics = data?.operationalMetrics || {};
+  const currency = summary.currency || 'NGN';
+
+  const totalOutletRevenue = outletRevenue.reduce(
+    (total: number, item: any) => total + Number(item.revenue || 0),
+    0,
+  );
+  const bestOutlet = outletRevenue[0];
+  const peakHour = [...hourlyRevenue].sort((a: any, b: any) => Number(b.revenue || 0) - Number(a.revenue || 0))[0];
+  const exceptionCount =
+    Number(operationalMetrics.voidCount || 0) +
+    Number(operationalMetrics.unsettledOrders || 0) +
+    Number(operationalMetrics.openSessions || 0);
+
+  const categoryChart = useMemo(
+    () => categoryRevenue.map((item: any) => ({ ...item, name: item.category || item.name || 'Uncategorised' })),
+    [categoryRevenue],
   );
 
-  if (error && !data) return (
-    <div className="min-h-full px-5 pb-12 pt-8">
-      <div className="mx-auto max-w-3xl rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-600">{error}</div>
-    </div>
-  );
+  if (loading) {
+    return (
+      <div className="flex min-h-[520px] items-center justify-center">
+        <div className="flex items-center gap-3 text-sm font-medium text-[#7c2d12]">
+          <Loader2 className="h-5 w-5 animate-spin" /> Loading F&B command centre…
+        </div>
+      </div>
+    );
+  }
 
-  const { summary, hourlyRevenue, categoryRevenue, outletRevenue, paymentMethods, topItems, operationalMetrics } = data || {};
-  const currency = 'NGN';
+  if (error) {
+    return (
+      <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
+        {error}
+        <button className="ml-4 font-semibold underline" onClick={() => void load()}>
+          Try again
+        </button>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-full bg-slate-50 pb-16 pt-6 sm:pt-8">
-      <div className="mx-auto max-w-[1600px] px-4 sm:px-6 md:px-8 space-y-6">
-
-        {/* ── Header ── */}
-        <header className="flex flex-col justify-between gap-5 border-b border-slate-200 pb-5 lg:flex-row lg:items-end">
-          <div>
-            <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-              F&B Sales & Analytics
-            </h1>
-            <p className="mt-1 text-sm text-slate-500">
-              Aggregated revenue insights, outlet performance, and operational KPIs.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
-              {['TODAY', 'YESTERDAY', 'LAST_7', 'THIS_MONTH'].map((range) => (
-                <button
-                  key={range}
-                  onClick={() => setDateRange(range)}
-                  className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                    dateRange === range 
-                      ? 'bg-indigo-50 text-indigo-700  ' 
-                      : 'text-slate-600 hover:bg-slate-100  '
-                  }`}
-                >
-                  {range.replace('_', ' ')}
-                </button>
-              ))}
+    <div className="min-h-full bg-[#fbf8f6] text-[#24130d]">
+      <div className="border-b border-[#3d2318] bg-[#24130d] text-white">
+        <div className="mx-auto max-w-[1600px] px-4 py-7 sm:px-6 lg:px-8">
+          <div className="flex flex-col justify-between gap-6 xl:flex-row xl:items-end">
+            <div>
+              <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-orange-300">
+                <UtensilsCrossed className="h-4 w-4" /> F&B operations
+              </div>
+              <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">F&B command centre</h1>
+              <p className="mt-2 max-w-2xl text-sm text-orange-100/75">
+                A live view of service performance, outlet contribution, menu demand, and controls that need a manager’s attention.
+              </p>
             </div>
-            <button className="flex h-8 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-600 shadow-sm hover:bg-slate-50">
-              <Filter className="h-3.5 w-3.5" /> Outlet
-            </button>
-          </div>
-        </header>
-
-        {/* ── Exception Strip ── */}
-        <div className="flex flex-wrap items-center gap-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          <div className="flex items-center gap-1.5 font-semibold"><AlertTriangle className="h-4 w-4" /> Operations:</div>
-          <div className="flex gap-4 opacity-90">
-            <span>Voids: <strong>{money(operationalMetrics?.voids)}</strong> ({operationalMetrics?.voidCount})</span>
-            <span>Discounts: <strong>{money(operationalMetrics?.discounts)}</strong></span>
-            <span>Refunds: <strong>{money(operationalMetrics?.refunds)}</strong></span>
-            <span>Unsettled Orders: <strong>{operationalMetrics?.unsettledOrders}</strong></span>
-            <span>Open Sessions: <strong>{operationalMetrics?.openSessions}</strong></span>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex rounded-xl border border-white/15 bg-white/10 p-1">
+                {ranges.map((item) => (
+                  <button
+                    key={item.key}
+                    onClick={() => setRange(item.key)}
+                    className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                      range === item.key ? 'bg-orange-500 text-white shadow-sm' : 'text-orange-100/70 hover:bg-white/10 hover:text-white'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => void load(true)}
+                disabled={refreshing}
+                className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-3 py-2.5 text-xs font-semibold text-white hover:bg-white/15 disabled:opacity-60"
+              >
+                <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} /> Refresh
+              </button>
+            </div>
           </div>
         </div>
+      </div>
 
-        {/* ── KPI Row ── */}
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          <KPI label="Gross Revenue" value={money(summary?.grossRevenue)} subtext="Incl. tax & svc" icon={DollarSign} />
-          <KPI label="Net Revenue" value={money(summary?.netRevenue)} subtext="Excl. tax" icon={BarChart3} />
-          <KPI label="Taxes & Svc" value={money((summary?.taxes || 0) + (summary?.serviceCharge || 0))} subtext="Total liabilities" icon={Percent} />
-          <KPI label="Covers" value={summary?.covers} subtext="Total guests served" icon={Users} />
-          <KPI label="Avg Check" value={money(summary?.averageCheck)} subtext="Gross per cover" icon={ListOrdered} />
-        </section>
+      <main className="mx-auto max-w-[1600px] space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <MetricCard label="Gross revenue" value={money(summary.grossRevenue, currency)} detail="Before discounts and adjustments" icon={DollarSign} />
+          <MetricCard label="Net revenue" value={money(summary.netRevenue, currency)} detail={`${number(summary.orders)} orders processed`} icon={TrendingUp} tone="brown" />
+          <MetricCard label="Covers served" value={number(summary.covers)} detail={`Average check ${money(summary.averageCheck, currency)}`} icon={Users} tone="amber" />
+          <MetricCard label="Open controls" value={number(exceptionCount)} detail="Items requiring review" icon={AlertTriangle} tone={exceptionCount ? 'red' : 'orange'} />
+        </div>
 
-        {/* ── Main Section ── */}
-        <div className="grid gap-6 lg:grid-cols-3">
-          
-          {/* Hourly Trend */}
-          <div className="col-span-2 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h3 className="mb-4 text-sm font-bold text-slate-800">Revenue Trend (Hourly)</h3>
+        <div className="grid gap-6 xl:grid-cols-[1.65fr_1fr]">
+          <Panel title="Revenue by service hour" subtitle="Trading rhythm across the selected period" action={<BarChart3 className="h-5 w-5 text-orange-500" />}>
             <div className="h-[280px] w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={hourlyRevenue} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <AreaChart data={hourlyRevenue} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
                   <defs>
-                    <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
+                    <linearGradient id="fnbRevenueGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#f97316" stopOpacity={0.35} />
+                      <stop offset="100%" stopColor="#f97316" stopOpacity={0.03} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.3} />
-                  <XAxis dataKey="hour" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#64748b' }} dy={10} />
-                  <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#64748b' }} tickFormatter={(val) => `₦${val/1000}k`} />
-                  <RechartsTooltip 
-                    contentStyle={{ borderRadius: '8px', border: 'none', backgroundColor: '#1e293b', color: '#fff', fontSize: '12px' }}
-                    itemStyle={{ color: '#818cf8' }}
-                    formatter={(value: any) => money(value)} 
-                    labelStyle={{ color: '#94a3b8', marginBottom: '4px' }}
-                  />
-                  <Area type="monotone" dataKey="revenue" stroke="#4f46e5" strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" />
+                  <CartesianGrid stroke="#f1e7e1" vertical={false} />
+                  <XAxis dataKey="hour" tick={{ fill: '#947d72', fontSize: 11 }} tickLine={false} axisLine={false} />
+                  <YAxis tick={{ fill: '#947d72', fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={(value: any) => `${Math.round(Number(value) / 1000)}k`} />
+                  <Tooltip formatter={(value: any) => money(value, currency)} contentStyle={{ borderRadius: 12, borderColor: '#eadfd8' }} />
+                  <Area type="monotone" dataKey="revenue" stroke="#f97316" strokeWidth={3} fill="url(#fnbRevenueGradient)" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
-          </div>
+          </Panel>
 
-          {/* F&B Class Split */}
-          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h3 className="mb-4 text-sm font-bold text-slate-800">Revenue by F&B Class</h3>
-            <div className="h-[280px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={categoryRevenue} innerRadius={70} outerRadius={100} paddingAngle={2} dataKey="value" nameKey="name" stroke="none">
-                    {categoryRevenue?.map((entry: any, index: number) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <RechartsTooltip formatter={(value: any) => money(value)} contentStyle={{ borderRadius: '8px', border: 'none', backgroundColor: '#1e293b', color: '#fff', fontSize: '12px' }} />
-                  <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '12px', color: '#64748b' }} />
-                </PieChart>
-              </ResponsiveContainer>
+          <Panel title="Manager readout" subtitle="Signals from the selected trading window">
+            <div className="space-y-4">
+              <div className="rounded-xl bg-[#fff7ed] p-4">
+                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.12em] text-orange-700"><TrendingUp className="h-4 w-4" /> Peak trading</div>
+                <p className="mt-2 text-lg font-bold text-[#24130d]">{peakHour?.hour || 'No activity yet'}</p>
+                <p className="mt-1 text-xs text-[#947d72]">{peakHour ? `${money(peakHour.revenue, currency)} generated in this service hour.` : 'Revenue will appear as orders are posted.'}</p>
+              </div>
+              <div className="rounded-xl bg-[#f7eee9] p-4">
+                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.12em] text-[#7c2d12]"><ShoppingBag className="h-4 w-4" /> Leading outlet</div>
+                <p className="mt-2 text-lg font-bold text-[#24130d]">{bestOutlet?.outlet || bestOutlet?.name || 'No outlet activity'}</p>
+                <p className="mt-1 text-xs text-[#947d72]">{bestOutlet ? `${money(bestOutlet.revenue, currency)} of outlet revenue.` : 'No outlet has posted revenue in this period.'}</p>
+              </div>
+              <div className="flex items-center justify-between border-t border-[#f1e7e1] pt-4 text-sm">
+                <span className="text-[#735c51]">Outlet contribution</span>
+                <span className="font-bold text-[#24130d]">{totalOutletRevenue ? `${Math.round((Number(bestOutlet?.revenue || 0) / totalOutletRevenue) * 100)}%` : '0%'}</span>
+              </div>
             </div>
-          </div>
+          </Panel>
         </div>
 
-        {/* ── Second Section (Outlet & Payments) ── */}
         <div className="grid gap-6 lg:grid-cols-2">
-          
-          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h3 className="mb-4 text-sm font-bold text-slate-800">Revenue by Outlet</h3>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200">
-                    <th className="pb-2 text-left font-semibold text-slate-500">Outlet</th>
-                    <th className="pb-2 text-right font-semibold text-slate-500">Covers</th>
-                    <th className="pb-2 text-right font-semibold text-slate-500">Net Revenue</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {outletRevenue?.map((o: any, idx: number) => (
-                    <tr key={idx} className="hover:bg-slate-50">
-                      <td className="py-2.5 font-medium text-slate-800">{o.name}</td>
-                      <td className="py-2.5 text-right tabular-nums text-slate-600">{o.covers}</td>
-                      <td className="py-2.5 text-right font-semibold tabular-nums text-slate-800">{money(o.revenue)}</td>
-                    </tr>
-                  ))}
-                  {outletRevenue?.length === 0 && <tr><td colSpan={3} className="py-4 text-center text-xs text-slate-500">No outlet data</td></tr>}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h3 className="mb-4 text-sm font-bold text-slate-800">Payment Method Mix</h3>
-            <div className="h-[200px] w-full">
+          <Panel title="Outlet performance" subtitle="Revenue contribution by service outlet">
+            <div className="h-[270px] w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={paymentMethods} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#334155" opacity={0.2} />
-                  <XAxis type="number" tickFormatter={(val) => `₦${val/1000}k`} tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                  <YAxis type="category" dataKey="method" tick={{ fontSize: 11, fill: '#94a3b8', fontWeight: 600 }} axisLine={false} tickLine={false} />
-                  <RechartsTooltip formatter={(value: any) => money(value)} cursor={{ fill: '#334155', opacity: 0.2 }} contentStyle={{ borderRadius: '8px', border: 'none', backgroundColor: '#1e293b', color: '#fff', fontSize: '12px' }} />
-                  <Bar dataKey="amount" fill="#0ea5e9" radius={[0, 4, 4, 0]} barSize={24} />
+                <BarChart data={outletRevenue} layout="vertical" margin={{ top: 0, right: 10, left: 8, bottom: 0 }}>
+                  <CartesianGrid stroke="#f1e7e1" horizontal={false} />
+                  <XAxis type="number" hide />
+                  <YAxis type="category" dataKey="outlet" width={100} tick={{ fill: '#735c51', fontSize: 11 }} tickLine={false} axisLine={false} />
+                  <Tooltip formatter={(value: any) => money(value, currency)} contentStyle={{ borderRadius: 12, borderColor: '#eadfd8' }} />
+                  <Bar dataKey="revenue" fill="#ea580c" radius={[0, 6, 6, 0]} barSize={22} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
-          </div>
+          </Panel>
 
+          <Panel title="Payment mix" subtitle="Tender composition for reconciliation readiness">
+            <div className="space-y-4">
+              {paymentMethods.length ? paymentMethods.map((item: any, index: number) => {
+                const total = paymentMethods.reduce((sum: number, method: any) => sum + Number(method.amount || method.revenue || 0), 0);
+                const amount = Number(item.amount || item.revenue || 0);
+                const percentage = total ? Math.round((amount / total) * 100) : 0;
+                return (
+                  <div key={item.method || item.name || index}>
+                    <div className="mb-1.5 flex justify-between text-xs">
+                      <span className="font-semibold text-[#4f392f]">{item.method || item.name || 'Other'}</span>
+                      <span className="text-[#947d72]">{money(amount, currency)} · {percentage}%</span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-[#f4ebe6]"><div className="h-full rounded-full bg-orange-500" style={{ width: `${percentage}%` }} /></div>
+                  </div>
+                );
+              }) : <p className="py-12 text-center text-sm text-[#947d72]">No payment activity for this period.</p>}
+            </div>
+          </Panel>
         </div>
 
-        {/* ── Third Section (Top Items) ── */}
-        <div className="grid gap-6 lg:grid-cols-2">
-          
-          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h3 className="mb-4 text-sm font-bold text-slate-800 flex items-center gap-2">
-              <UtensilsCrossed className="h-4 w-4 text-indigo-500" />
-              Top 10 Items (By Revenue)
-            </h3>
+        <div className="grid gap-6 lg:grid-cols-[1fr_1.2fr]">
+          <Panel title="F&B class revenue" subtitle="Category mix for menu and pricing decisions">
+            <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-center">
+              <div className="h-[190px] w-full sm:w-1/2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={categoryChart} dataKey="revenue" nameKey="name" innerRadius={52} outerRadius={78} paddingAngle={3} stroke="none">
+                      {categoryChart.map((item: any, index: number) => <Cell key={item.name || index} fill={COLORS[index % COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip formatter={(value: any) => money(value, currency)} contentStyle={{ borderRadius: 12, borderColor: '#eadfd8' }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="w-full space-y-2 sm:w-1/2">
+                {categoryChart.slice(0, 6).map((item: any, index: number) => <div key={item.name || index} className="flex items-center justify-between gap-3 text-xs"><span className="flex min-w-0 items-center gap-2 text-[#735c51]"><span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} /> <span className="truncate">{item.name}</span></span><span className="font-semibold text-[#24130d]">{money(item.revenue, currency)}</span></div>)}
+                {!categoryChart.length ? <p className="text-sm text-[#947d72]">No category activity yet.</p> : null}
+              </div>
+            </div>
+          </Panel>
+
+          <Panel title="Menu leaders" subtitle="Items driving demand and revenue">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200">
-                    <th className="pb-2 text-left font-semibold text-slate-500">Item</th>
-                    <th className="pb-2 text-right font-semibold text-slate-500">Qty</th>
-                    <th className="pb-2 text-right font-semibold text-slate-500">Revenue</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {topItems?.revenue.map((i: any, idx: number) => (
-                    <tr key={idx} className="hover:bg-slate-50">
-                      <td className="py-2.5 font-medium text-slate-800">{i.name}</td>
-                      <td className="py-2.5 text-right tabular-nums text-slate-600">{i.quantity}</td>
-                      <td className="py-2.5 text-right font-semibold tabular-nums text-slate-800">{money(i.revenue)}</td>
-                    </tr>
-                  ))}
-                  {(!topItems?.revenue || topItems.revenue.length === 0) && <tr><td colSpan={3} className="py-4 text-center text-xs text-slate-500">No items sold</td></tr>}
+              <table className="w-full min-w-[520px] text-left text-sm">
+                <thead className="border-b border-[#f1e7e1] text-[11px] uppercase tracking-[0.1em] text-[#947d72]"><tr><th className="pb-3 font-semibold">Menu item</th><th className="pb-3 text-right font-semibold">Qty</th><th className="pb-3 text-right font-semibold">Revenue</th></tr></thead>
+                <tbody className="divide-y divide-[#f5eee9]">
+                  {(topItems.byRevenue || topItems.revenue || []).slice(0, 6).map((item: any, index: number) => <tr key={item.name || item.itemName || index}><td className="py-3 font-semibold text-[#4f392f]">{item.name || item.itemName || 'Menu item'}</td><td className="py-3 text-right text-[#735c51]">{number(item.quantity || item.qty)}</td><td className="py-3 text-right font-semibold text-[#24130d]">{money(item.revenue, currency)}</td></tr>)}
+                  {!(topItems.byRevenue || topItems.revenue || []).length ? <tr><td colSpan={3} className="py-10 text-center text-sm text-[#947d72]">No menu activity yet.</td></tr> : null}
                 </tbody>
               </table>
             </div>
-          </div>
-
-          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h3 className="mb-4 text-sm font-bold text-slate-800 flex items-center gap-2">
-              <ListOrdered className="h-4 w-4 text-emerald-500" />
-              Top 10 Items (By Quantity)
-            </h3>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200">
-                    <th className="pb-2 text-left font-semibold text-slate-500">Item</th>
-                    <th className="pb-2 text-right font-semibold text-slate-500">Qty</th>
-                    <th className="pb-2 text-right font-semibold text-slate-500">Revenue</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {topItems?.quantity.map((i: any, idx: number) => (
-                    <tr key={idx} className="hover:bg-slate-50">
-                      <td className="py-2.5 font-medium text-slate-800">{i.name}</td>
-                      <td className="py-2.5 text-right font-semibold tabular-nums text-slate-800">{i.quantity}</td>
-                      <td className="py-2.5 text-right tabular-nums text-slate-600">{money(i.revenue)}</td>
-                    </tr>
-                  ))}
-                  {(!topItems?.quantity || topItems.quantity.length === 0) && <tr><td colSpan={3} className="py-4 text-center text-xs text-slate-500">No items sold</td></tr>}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
+          </Panel>
         </div>
 
-      </div>
+        <Panel title="Operational controls" subtitle="Keep the service day clean before closeout">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="flex items-center gap-3 rounded-xl border border-[#f1e7e1] p-4"><AlertTriangle className="h-5 w-5 text-red-500" /><div><p className="text-xs text-[#947d72]">Voided orders</p><p className="mt-1 font-bold text-[#24130d]">{number(operationalMetrics.voidCount)}</p></div></div>
+            <div className="flex items-center gap-3 rounded-xl border border-[#f1e7e1] p-4"><WalletCards className="h-5 w-5 text-orange-500" /><div><p className="text-xs text-[#947d72]">Discounts</p><p className="mt-1 font-bold text-[#24130d]">{money(operationalMetrics.discounts, currency)}</p></div></div>
+            <div className="flex items-center gap-3 rounded-xl border border-[#f1e7e1] p-4"><Clock3 className="h-5 w-5 text-amber-500" /><div><p className="text-xs text-[#947d72]">Unsettled orders</p><p className="mt-1 font-bold text-[#24130d]">{number(operationalMetrics.unsettledOrders)}</p></div></div>
+            <div className="flex items-center gap-3 rounded-xl border border-[#f1e7e1] p-4"><CheckCircle2 className="h-5 w-5 text-emerald-600" /><div><p className="text-xs text-[#947d72]">Open sessions</p><p className="mt-1 font-bold text-[#24130d]">{number(operationalMetrics.openSessions)}</p></div></div>
+          </div>
+        </Panel>
+      </main>
     </div>
   );
 }
