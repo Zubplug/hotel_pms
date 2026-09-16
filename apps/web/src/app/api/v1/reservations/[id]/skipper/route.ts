@@ -124,6 +124,7 @@ export async function POST(
               amount: -folioBalance,
               currency: 'NGN',
               baseAmount: -folioBalance,
+              postedBy: session.user.id,
             }
           });
 
