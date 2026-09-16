@@ -38,16 +38,15 @@ const CASH_MANAGEMENT_NAV = [
       { name: 'Receivables', href: '/reports/receivables', roles: ['GENERAL_CASHIER', 'ACCOUNTANT', 'FINANCE_MANAGER', 'MANAGER', 'CEO', 'SUPER_ADMIN'] },
       { name: 'Night Audit', href: '/night-audit' },
       { name: 'Transaction Exceptions', href: '/cash-management/transaction-exceptions', roles: ['GENERAL_CASHIER', 'ACCOUNTANT', 'FINANCE_MANAGER', 'MANAGER', 'CEO', 'SUPER_ADMIN'] },
-      { name: 'POS Menu & Prices', href: '/cashier/menu', roles: ['GENERAL_CASHIER', 'ACCOUNTANT', 'FINANCE_MANAGER', 'MANAGER', 'CEO', 'SUPER_ADMIN'] },
-      { name: 'Price Requests', href: '/cashier/price-approvals', roles: ['GENERAL_CASHIER', 'CASHIER', 'FRONT_DESK_CASHIER', 'ACCOUNTANT', 'FINANCE_MANAGER', 'MANAGER', 'CEO', 'SUPER_ADMIN'] },
+      { name: 'F&B Price Approvals', href: '/cashier/price-approvals', roles: ['GENERAL_CASHIER', 'ACCOUNTANT', 'FINANCE_MANAGER', 'MANAGER', 'CEO', 'SUPER_ADMIN'] },
     ],
   },
   {
     name: 'F&B Cost Control',
     icon: Activity,
     children: [
-      { name: 'Cost Dashboard', href: '/inventory/cost-control' },
-      { name: 'Recipes', href: '/inventory/cost-control/recipes' },
+      { name: 'Cost Dashboard', href: '/inventory/cost-control', roles: ['FNB_MANAGER', 'RESTAURANT_MANAGER', 'BANQUET_MANAGER', 'EVENT_MANAGER', 'GENERAL_MANAGER', 'HOTEL_MANAGER', 'MANAGER', 'ADMIN', 'CEO', 'SUPER_ADMIN'] },
+      { name: 'Recipes', href: '/inventory/cost-control/recipes', roles: ['FNB_MANAGER', 'RESTAURANT_MANAGER', 'BANQUET_MANAGER', 'EVENT_MANAGER', 'GENERAL_MANAGER', 'HOTEL_MANAGER', 'MANAGER', 'ADMIN', 'CEO', 'SUPER_ADMIN'] },
       { name: 'Stocktakes', href: '/inventory/stocktakes' },
       { name: 'Opening Stock', href: '/inventory/opening-stock', roles: ['GENERAL_CASHIER'] },
       { name: 'GRNs', href: '/inventory/grns' },
@@ -92,25 +91,25 @@ export function CashManagementLayout({ children }: { children: React.ReactNode }
   if (status === 'unauthenticated' || !session?.user) return null;
 
   const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => (
-    <div className="flex h-full flex-col bg-[#0b1120]">
+    <div className="flex h-full flex-col bg-gradient-to-b from-[#0a1020] via-[#0d172b] to-[#080d18]">
       {/* Logo */}
-      <div className="flex h-16 shrink-0 items-center gap-3 px-5 border-b border-white/5">
-        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-900/40">
+      <div className="flex h-[76px] shrink-0 items-center gap-3 border-b border-white/[0.07] px-5">
+        <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-400 via-indigo-600 to-violet-700 shadow-lg shadow-indigo-950/60 ring-1 ring-white/15">
           <Hotel className="h-4 w-4 text-white" />
         </div>
         <div className="flex flex-col leading-tight">
-          <span className="text-sm font-bold text-white tracking-tight">LodgeCore PMS</span>
-          <span className="text-[10px] font-medium text-indigo-400 tracking-widest uppercase">General Cashier</span>
+          <span className="text-[13px] font-bold tracking-tight text-white">LodgeCore PMS</span>
+          <span className="text-[9px] font-semibold uppercase tracking-[0.2em] text-indigo-300">Cash operations</span>
         </div>
       </div>
 
       {/* Nav */}
-      <div className="flex flex-1 flex-col overflow-y-auto px-3 py-5 gap-6">
+      <div className="flex flex-1 flex-col gap-7 overflow-y-auto px-3 py-5">
         {CASH_MANAGEMENT_NAV.map((section) => (
           <div key={section.name} className="flex flex-col gap-1">
-            <div className="flex items-center gap-2 px-3 mb-1">
-              <section.icon className="h-3.5 w-3.5 text-slate-500" />
-              <h3 className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.1em]">
+            <div className="mb-2 flex items-center gap-2 px-3">
+              <span className="flex h-5 w-5 items-center justify-center rounded-md bg-white/[0.06]"><section.icon className="h-3 w-3 text-indigo-300" /></span>
+              <h3 className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
                 {section.name}
               </h3>
             </div>
@@ -124,13 +123,15 @@ export function CashManagementLayout({ children }: { children: React.ReactNode }
                   href={item.href}
                   onClick={onNavigate}
                   className={cn(
-                    'group flex items-center rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150',
+                    'group relative flex items-center rounded-xl px-3 py-2.5 text-[13px] font-medium transition-all duration-200',
                     isActive
-                      ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-900/50'
-                      : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+                      ? 'bg-gradient-to-r from-indigo-600 to-indigo-500 text-white shadow-lg shadow-indigo-950/40 ring-1 ring-indigo-300/20'
+                      : 'text-slate-400 hover:bg-white/[0.07] hover:text-slate-100'
                   )}
                 >
+                  <span className={cn('mr-3 h-1.5 w-1.5 rounded-full transition-colors', isActive ? 'bg-white' : 'bg-slate-700 group-hover:bg-indigo-300')} />
                   {item.name}
+                  {isActive && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-indigo-200 shadow-[0_0_8px_rgba(199,210,254,0.9)]" />}
                 </Link>
               );
             })}
@@ -139,10 +140,10 @@ export function CashManagementLayout({ children }: { children: React.ReactNode }
       </div>
 
       {/* User footer */}
-      <div className="shrink-0 border-t border-white/5 p-3">
+      <div className="shrink-0 border-t border-white/[0.07] p-3">
         <DropdownMenu>
-          <DropdownMenuTrigger className="w-full flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-white/5 group outline-none">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-white font-semibold text-xs ring-2 ring-indigo-500/30">
+          <DropdownMenuTrigger className="group flex w-full items-center gap-3 rounded-xl px-2 py-2.5 outline-none transition-colors hover:bg-white/[0.07]">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-xs font-semibold text-white ring-1 ring-white/15">
                 {userInitials}
               </div>
               <div className="flex flex-1 flex-col items-start overflow-hidden">

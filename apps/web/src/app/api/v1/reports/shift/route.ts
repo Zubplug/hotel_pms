@@ -41,13 +41,11 @@ export async function GET(req: NextRequest) {
       gte: new Date(startDate),
       lte: new Date(endDate)
     } : null;
-    const unreconciledStatuses = [
-      'OPEN', 'CLOSING', 'SUBMITTED', 'UNDER_REVIEW', 'RETURNED', 'CLOSED',
-      'PENDING_HANDOVER', 'HANDOVER_PENDING', 'DEPOSIT_PENDING',
-      'UNDER_RECONCILIATION', 'EXCEPTION', 'RECONCILIATION_REQUIRED', 'REOPEN_REQUESTED',
-    ];
+    // The shift control room is intentionally limited to operational work:
+    // live tills and shifts that were submitted or returned for correction.
+    const controlRoomStatuses = ['OPEN', 'SUBMITTED', 'RETURNED'];
     const operationalFilter: any = isControlRoom
-      ? { OR: [{ status: 'OPEN' }, { controlStatus: { in: unreconciledStatuses } }] }
+      ? { controlStatus: { in: controlRoomStatuses } }
       : { businessDate: dateFilter! };
     // POS sessions are part of the cashier's accountability packet as well.
     // Keep them in this report instead of forcing General Cashier to reconcile

@@ -136,6 +136,107 @@ export class BankDepositService {
   /**
    * General Cashier marks the deposit as sent to the bank.
    */
+  static async submitAvailableCash(ctx: TenantContext, params: {
+    propertyId: string;
+    amount: number;
+    bankAccountId: string;
+    bankReceiptUrl?: string;
+    bankReference?: string;
+    notes?: string;
+  }) {
+    return prisma.$transaction(async tx => {
+      if (!ctx.propertyIds.includes(params.propertyId)) {
+        throw new ShiftControlError('Access denied to property.', 'FORBIDDEN');
+      }
+      const amount = Number(params.amount);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        throw new ShiftControlError('Enter a valid amount greater than zero.', 'BAD_REQUEST');
+      }
+
+      const controlAccounts = await ensureCashierControlAccountsForClient(ctx, tx, params.propertyId);
+      const safeAccount = controlAccounts.find((account: any) => account.type === 'SAFE');
+      const transitAccount = controlAccounts.find((account: any) => account.type === 'CASH_IN_TRANSIT');
+      if (!safeAccount || !transitAccount) {
+        throw new ShiftControlError('Cash control accounts are unavailable.', 'INTERNAL_ERROR', 500);
+      }
+
+      const safeBalance = Number(safeAccount.balance || 0);
+      const transitBalance = Number(transitAccount.balance || 0);
+      const available = Math.max(safeBalance, 0) + Math.max(transitBalance, 0);
+      if (amount > available + 0.005) {
+        throw new ShiftControlError(`Amount exceeds available cashier funds of ${available.toFixed(2)}.`, 'BAD_REQUEST');
+      }
+
+      const bankAccount = await tx.cashAccount.findFirst({
+        where: { id: params.bankAccountId, propertyId: params.propertyId, type: 'BANK_ACCOUNT', isActive: true },
+      });
+      if (!bankAccount) throw new ShiftControlError('Select a valid configured bank account.', 'BAD_REQUEST');
+
+      const depositReference = `DEP-${Date.now()}-${crypto.randomBytes(2).toString('hex').toUpperCase()}`;
+      const deposit = await tx.bankDeposit.create({
+        data: {
+          id: crypto.randomUUID(),
+          propertyId: params.propertyId,
+          depositReference,
+          expectedAmount: amount,
+          declaredAmount: amount,
+          status: 'DEPOSITED',
+          bankName: bankAccount.bankName,
+          bankAccount: bankAccount.accountNumber,
+          bankAccountId: bankAccount.id,
+          createdById: ctx.userId,
+          submittedById: ctx.userId,
+          submittedAt: new Date(),
+          depositedAt: new Date(),
+          depositDate: new Date(),
+          bankReceiptUrl: params.bankReceiptUrl,
+          bankReference: params.bankReference,
+          notes: params.notes || 'Submitted from available General Cashier funds.',
+        },
+      });
+
+      let remaining = amount;
+      const transitApplied = Math.min(Math.max(transitBalance, 0), remaining);
+      if (transitApplied > 0) {
+        await tx.cashAccount.update({ where: { id: transitAccount.id }, data: { balance: { decrement: transitApplied } } });
+        await tx.posCashMovement.create({
+          data: {
+            propertyId: params.propertyId,
+            deviceId: 'web-cash-management',
+            userId: ctx.userId,
+            amount: transitApplied,
+            type: 'CASH_TRANSFER_OUT',
+            sourceAccountId: transitAccount.id,
+            destinationAccountId: bankAccount.id,
+            reasonCode: 'BANK_DEPOSIT_SUBMITTED',
+            receiptReference: depositReference,
+            operationId: `available-deposit-transit-${deposit.id}`,
+          },
+        });
+        remaining -= transitApplied;
+      }
+      if (remaining > 0) {
+        await tx.cashAccount.update({ where: { id: safeAccount.id }, data: { balance: { decrement: remaining } } });
+        await tx.posCashMovement.create({
+          data: {
+            propertyId: params.propertyId,
+            deviceId: 'web-cash-management',
+            userId: ctx.userId,
+            amount: remaining,
+            type: 'CASH_TRANSFER_OUT',
+            sourceAccountId: safeAccount.id,
+            destinationAccountId: bankAccount.id,
+            reasonCode: 'BANK_DEPOSIT_SUBMITTED',
+            receiptReference: depositReference,
+            operationId: `available-deposit-safe-${deposit.id}`,
+          },
+        });
+      }
+      await tx.cashAccount.update({ where: { id: bankAccount.id }, data: { balance: { increment: amount } } });
+      return deposit;
+    });
+  }
+
   static async submitDeposit(ctx: TenantContext, params: { depositId: string, bankAccountId: string, bankReceiptUrl?: string, bankReference?: string }) {
     return prisma.$transaction(async tx => {
       // ENFORCE OWNERSHIP PATH: Find the deposit and ensure it belongs to an authorized property
@@ -208,18 +309,6 @@ export class BankDepositService {
         });
       }
 
-      // Update shifts
-      for (const a of deposit.allocations) {
-        if (a.posSessionId) {
-          await tx.posSession.update({ where: { id: a.posSessionId }, data: { controlStatus: 'DEPOSITED' } });
-          await this.audit(tx, deposit.propertyId, ctx.userId, a.posSessionId, undefined, 'DEPOSIT_SUBMITTED', 'DEPOSIT_PENDING', 'DEPOSITED', { depositId: deposit.id });
-        }
-        if (a.frontdeskSessionId) {
-          await tx.frontdeskSession.update({ where: { id: a.frontdeskSessionId }, data: { status: 'DEPOSITED', controlStatus: 'DEPOSITED', depositedAt: new Date() } });
-          await this.audit(tx, deposit.propertyId, ctx.userId, undefined, a.frontdeskSessionId, 'DEPOSIT_SUBMITTED', 'DEPOSIT_PENDING', 'DEPOSITED', { depositId: deposit.id });
-        }
-      }
-
       return updated;
     });
   }
@@ -243,16 +332,6 @@ export class BankDepositService {
         }
       });
 
-      for (const a of deposit.allocations) {
-        if (a.posSessionId) {
-          await tx.posSession.update({ where: { id: a.posSessionId }, data: { controlStatus: 'UNDER_RECONCILIATION' } });
-          await this.audit(tx, deposit.propertyId, ctx.userId, a.posSessionId, undefined, 'DEPOSIT_VERIFICATION_STARTED', 'DEPOSITED', 'UNDER_RECONCILIATION', { depositId: deposit.id });
-        }
-        if (a.frontdeskSessionId) {
-          await tx.frontdeskSession.update({ where: { id: a.frontdeskSessionId }, data: { status: 'UNDER_RECONCILIATION' } });
-          await this.audit(tx, deposit.propertyId, ctx.userId, undefined, a.frontdeskSessionId, 'DEPOSIT_VERIFICATION_STARTED', 'DEPOSITED', 'UNDER_RECONCILIATION', { depositId: deposit.id });
-        }
-      }
       return updated;
     });
   }
@@ -282,18 +361,6 @@ export class BankDepositService {
           notes: params.notes ? `${deposit.notes || ''}\n[Reconciliation]: ${params.notes}` : deposit.notes
         }
       });
-
-      for (const a of deposit.allocations) {
-        const toStatus = isException ? 'EXCEPTION' : 'RECONCILED';
-        if (a.posSessionId) {
-          await tx.posSession.update({ where: { id: a.posSessionId }, data: { controlStatus: toStatus } });
-          await this.audit(tx, deposit.propertyId, ctx.userId, a.posSessionId, undefined, isException ? 'DEPOSIT_EXCEPTION_CREATED' : 'DEPOSIT_RECONCILED', 'UNDER_RECONCILIATION', toStatus, { depositId: deposit.id, diff });
-        }
-        if (a.frontdeskSessionId) {
-          await tx.frontdeskSession.update({ where: { id: a.frontdeskSessionId }, data: { status: toStatus } });
-          await this.audit(tx, deposit.propertyId, ctx.userId, undefined, a.frontdeskSessionId, isException ? 'DEPOSIT_EXCEPTION_CREATED' : 'DEPOSIT_RECONCILED', 'UNDER_RECONCILIATION', toStatus, { depositId: deposit.id, diff });
-        }
-      }
 
       return updated;
     });

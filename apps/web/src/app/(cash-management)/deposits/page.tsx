@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { requireOrganizationContext } from '@/lib/organization-access';
 import { DepositActionButton } from './deposit-action-button';
+import { SubmitAvailableCashButton } from './submit-available-cash-button';
 import { ensureCashierControlAccounts } from '@/lib/services/cash-account-service';
 import { Landmark, AlertTriangle, Banknote, CheckCircle2, Clock3, Activity, ShieldCheck, TrendingUp } from 'lucide-react';
 
@@ -10,7 +11,7 @@ const statusMeta: Record<string, { label: string; classes: string }> = {
   RECONCILED: { label: 'Reconciled', classes: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
   EXCEPTION:  { label: 'Exception',  classes: 'bg-red-50 text-red-700 border-red-200' },
   DEPOSITED:  { label: 'Deposited',  classes: 'bg-blue-50 text-blue-700 border-blue-200' },
-  PENDING_HANDOVER: { label: 'Pending', classes: 'bg-amber-50 text-amber-700 border-amber-200' },
+  PENDING_HANDOVER: { label: 'Available to submit', classes: 'bg-amber-50 text-amber-700 border-amber-200' },
 };
 
 export default async function DepositsPage() {
@@ -39,6 +40,7 @@ export default async function DepositsPage() {
   const selectedControlAccounts = allowedProperties.length === 1 ? controlAccounts[0] : [];
   const generalCashierSafe = selectedControlAccounts?.find((account) => account.type === 'SAFE');
   const cashInTransit = selectedControlAccounts?.find((account) => account.type === 'CASH_IN_TRANSIT');
+  const availableCash = Number(generalCashierSafe?.balance || 0) + Number(cashInTransit?.balance || 0);
   const pendingDeposits = deposits.filter((deposit) => deposit.status === 'PENDING_HANDOVER');
   const deposited = deposits.filter((deposit) => deposit.status === 'DEPOSITED');
   const reconciled = deposits.filter((deposit) => deposit.status === 'RECONCILED');
@@ -58,8 +60,9 @@ export default async function DepositsPage() {
             <h1 className="text-2xl font-bold tracking-tight text-white">Bank deposits</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">Move received cash from custody to the bank with a complete submission and reconciliation trail.</p>
           </div>
-          <div className="text-xs text-slate-400 sm:text-right">
-            Deposits are prepared automatically after handover.
+          <div className="flex flex-col items-start gap-2 text-xs text-slate-400 sm:items-end sm:text-right">
+            <span>Deposits are prepared automatically after handover.</span>
+            {allowedProperties.length === 1 && availableCash > 0 && <SubmitAvailableCashButton propertyId={allowedProperties[0]} availableAmount={availableCash} />}
           </div>
         </div>
       </div>
@@ -92,6 +95,9 @@ export default async function DepositsPage() {
               </div>
             ))}
           </div>
+        )}
+        {allowedProperties.length === 1 && availableCash <= 0 && (
+          <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm text-slate-500 shadow-sm">No cash is currently available for bank submission. Received cash will appear here after the cashier custody workflow posts it.</div>
         )}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           {/* Table header bar */}
@@ -184,7 +190,7 @@ export default async function DepositsPage() {
                           })}
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <DepositActionButton depositId={d.id} propertyId={d.propertyId} currentStatus={d.status} />
+                          <DepositActionButton depositId={d.id} propertyId={d.propertyId} currentStatus={d.status} allowSubmit={false} />
                         </td>
                       </tr>
                     );

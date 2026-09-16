@@ -273,8 +273,9 @@ export default function ShiftReportPage() {
   const shifts = dashboardReport?.shifts ?? [];
   const getShiftStatus = (shift: any) => shift.controlStatus || shift.status || 'OPEN';
   const liveShifts = shifts.filter((shift: any) => ['OPEN', 'CLOSING'].includes(getShiftStatus(shift)) || shift.status === 'OPEN');
-  const unreconciledShifts = shifts.filter((shift: any) => !['APPROVED', 'RECONCILED', 'HANDED_OVER', 'DEPOSITED', 'CASHLESS_ACKNOWLEDGED'].includes(getShiftStatus(shift)));
-  const reviewableShifts = shifts.filter((shift: any) => ['SUBMITTED', 'UNDER_REVIEW', 'CLOSED', 'RETURNED', 'PENDING_HANDOVER', 'HANDOVER_PENDING'].includes(getShiftStatus(shift)));
+  const operationalStatuses = ['OPEN', 'SUBMITTED', 'RETURNED'];
+  const unreconciledShifts = shifts.filter((shift: any) => operationalStatuses.includes(getShiftStatus(shift)));
+  const reviewableShifts = shifts.filter((shift: any) => ['SUBMITTED', 'RETURNED'].includes(getShiftStatus(shift)));
   const declaredShifts = shifts.filter((shift: any) => shift.declaredCash != null);
   const expectedCashExposure = unreconciledShifts.reduce((sum: number, shift: any) => sum + Number(shift.expectedCash || 0), 0);
   const varianceExposure = declaredShifts.reduce((sum: number, shift: any) => sum + Number(shift.variance || 0), 0);

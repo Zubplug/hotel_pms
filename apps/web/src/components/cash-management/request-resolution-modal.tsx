@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatCurrency } from '@/lib/utils';
 import { toast } from 'sonner';
+import { AlertTriangle, FileText, Send } from 'lucide-react';
 
 interface RequestResolutionModalProps {
   exception: any;
@@ -78,29 +79,26 @@ export function RequestResolutionModal({ exception, isOpen, onClose, onSuccess }
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="rounded-2xl border-slate-200 sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Request Resolution</DialogTitle>
+          <DialogTitle className="flex items-center gap-2 text-lg"><Send className="h-5 w-5 text-rose-600" />Submit resolution request</DialogTitle>
           <DialogDescription>
-            Provide an explanation for the questioned transaction to be reviewed by management.
+            Provide an audit-ready explanation. A manager or finance reviewer will approve the proposed treatment.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 my-4">
-          <div className="p-4 bg-red-50 rounded-md border border-red-100 text-sm">
-            <p className="font-semibold text-red-800">Transaction Questioned</p>
-            <p className="text-red-700 mt-1">{exception.questionReason}</p>
+        <div className="my-2 space-y-5">
+          <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
+            <div className="flex items-start gap-3"><AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-rose-600" /><div><p className="text-xs font-semibold uppercase tracking-wider text-rose-700">Night audit question</p><p className="mt-1 text-sm leading-5 text-rose-900">{exception.questionReason}</p></div></div>
           </div>
 
-          <div className="flex justify-between items-center py-2 border-b">
-            <span className="text-sm font-medium text-gray-500">Amount</span>
-            <span className="font-semibold text-gray-900">{formatCurrency(amount, currency)}</span>
+          <div className="grid grid-cols-2 gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
+            <div><span className="block text-xs font-medium uppercase tracking-wider text-slate-500">Amount</span><span className="mt-1 block font-bold text-slate-900">{formatCurrency(amount, currency)}</span></div>
+            <div><span className="block text-xs font-medium uppercase tracking-wider text-slate-500">Method</span><span className="mt-1 block font-semibold text-slate-800">{tx?.method || 'Not recorded'}</span></div>
           </div>
           
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Proposed Resolution</label>
-            <Select value={reason} onValueChange={(val) => setReason(val || '')}>
-              <SelectTrigger>
+          <div className="space-y-2"><label className="flex items-center gap-2 text-sm font-semibold text-slate-800"><FileText className="h-4 w-4 text-slate-400" />Proposed resolution</label><Select value={reason} onValueChange={(val) => setReason(val || '')}>
+              <SelectTrigger className="h-11 rounded-xl border-slate-200">
                 <SelectValue placeholder="Select a reason code..." />
               </SelectTrigger>
               <SelectContent>
@@ -112,18 +110,18 @@ export function RequestResolutionModal({ exception, isOpen, onClose, onSuccess }
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">Additional Notes & Evidence</label>
+            <label className="text-sm font-semibold text-slate-800">Notes and evidence <span className="font-normal text-slate-400">(required for Other)</span></label>
             <Textarea 
               value={notes} 
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Provide reference numbers, explanations, or context..."
-              className="resize-none h-24"
+              className="h-28 resize-none rounded-xl border-slate-200"
             />
             {reason === 'OTHER' && <p className="text-xs text-red-500">* Notes are required for this reason</p>}
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="gap-2">
           <Button variant="outline" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
           <Button onClick={handleSubmit} disabled={isSubmitting || !reason}>Submit Request</Button>
         </DialogFooter>

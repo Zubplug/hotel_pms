@@ -21,10 +21,12 @@ export function DepositActionButton({
   depositId,
   propertyId,
   currentStatus,
+  allowSubmit = false,
 }: {
   depositId: string;
   propertyId: string;
   currentStatus: string;
+  allowSubmit?: boolean;
 }) {
   const [dialog, setDialog] = useState<DialogState>(null);
   const [bankReference, setBankReference] = useState('');
@@ -49,6 +51,7 @@ export function DepositActionButton({
     } catch { /* The submit dialog will show the validation error if unavailable. */ }
   };
 
+  if (currentStatus === 'PENDING_HANDOVER' && !allowSubmit) return null;
   if (!['PENDING_HANDOVER', 'DEPOSITED'].includes(currentStatus)) return null;
 
   const submit = async () => {

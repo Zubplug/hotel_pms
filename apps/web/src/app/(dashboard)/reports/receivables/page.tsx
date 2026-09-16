@@ -2,220 +2,43 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
 import { useQuery } from '@tanstack/react-query';
 import { useProperty } from '@/components/PropertyProvider';
-import { Loader2, Download, Printer, ArrowRight } from 'lucide-react';
-import { format } from 'date-fns';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 import { AddPaymentDialog } from '@/components/reservations/AddPaymentDialog';
+import { AlertCircle, ArrowRight, Banknote, CalendarClock, CheckCircle2, Download, Loader2, RefreshCw, Search, Users, WalletCards } from 'lucide-react';
+import { format } from 'date-fns';
 
 export default function ReceivablesReportPage() {
   const { propertyId } = useProperty();
   const router = useRouter();
-  
-  const [filter, setFilter] = useState('ALL'); // ALL, IN_HOUSE, CHECKED_OUT, OVERDUE
-  const [minBalance, setMinBalance] = useState('1'); // Exclude exact 0
+  const [filter, setFilter] = useState('ALL');
+  const [minBalance, setMinBalance] = useState('1');
   const [paymentFolio, setPaymentFolio] = useState<any>(null);
+  const fetchReceivables = async () => { if (!propertyId) return []; const res = await fetch(`/api/v1/reports/receivables?propertyId=${propertyId}&minBalance=${minBalance}`); const data = await res.json(); if (!res.ok) throw new Error(data.error || 'Failed to fetch report'); return data.data.receivables; };
+  const { data: receivables, isLoading, error, refetch } = useQuery({ queryKey: ['receivables', propertyId, minBalance], queryFn: fetchReceivables, enabled: !!propertyId });
+  const money = (amount: number, currency = 'NGN') => new Intl.NumberFormat('en-NG', { style: 'currency', currency }).format(Number(amount || 0));
+  let rows = receivables || [];
+  if (filter === 'IN_HOUSE') rows = rows.filter((r: any) => r.reservation?.status === 'CHECKED_IN');
+  if (filter === 'CHECKED_OUT') rows = rows.filter((r: any) => r.reservation?.status === 'CHECKED_OUT');
+  if (filter === 'OVERDUE') rows = rows.filter((r: any) => r.aging.status === 'OVERDUE');
+  const totalOutstanding = rows.reduce((sum: number, r: any) => sum + Number(r.financials.balance || 0), 0);
+  const inHouse = rows.filter((r: any) => r.reservation?.status === 'CHECKED_IN');
+  const checkedOut = rows.filter((r: any) => r.reservation?.status === 'CHECKED_OUT');
+  const overdue = rows.filter((r: any) => r.aging.status === 'OVERDUE');
+  const buckets = ['0–30 days', '31–60 days', '61+ days'].map((label) => ({ label, value: rows.filter((r: any) => { const days = Number(r.aging.daysOutstanding || 0); return label === '0–30 days' ? days <= 30 : label === '31–60 days' ? days > 30 && days <= 60 : days > 60; }).reduce((sum: number, r: any) => sum + Number(r.financials.balance || 0), 0) }));
+  const maxBucket = Math.max(...buckets.map((b) => b.value), 1);
+  const exportCsv = () => { const csv = [['Guest', 'Folio', 'Room', 'Status', 'Days Outstanding', 'Balance', 'Currency'], ...rows.map((r: any) => [r.guest?.name || 'Unknown Guest', r.folioNumber, r.reservation?.room || '', r.aging.status, r.aging.daysOutstanding, r.financials.balance, r.financials.currency])].map((row) => row.map((value: unknown) => `"${String(value ?? '').replaceAll('"', '""')}"`).join(',')).join('\n'); const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); link.download = `receivables-${new Date().toISOString().slice(0, 10)}.csv`; link.click(); URL.revokeObjectURL(link.href); };
 
-  const fetchReceivables = async () => {
-    if (!propertyId) return null;
-    const res = await fetch(`/api/v1/reports/receivables?propertyId=${propertyId}&minBalance=${minBalance}`);
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Failed to fetch report');
-    return data.data.receivables;
-  };
-
-  const { data: receivables, isLoading, error, refetch } = useQuery({
-    queryKey: ['receivables', propertyId, minBalance],
-    queryFn: fetchReceivables,
-    enabled: !!propertyId,
-  });
-
-  const formatCurrency = (amount: number, currency?: string | null) => {
-    return new Intl.NumberFormat('en-NG', { style: 'currency', currency: currency || 'NGN' }).format(amount);
-  };
-
-  let filteredReceivables = receivables || [];
-  if (filter === 'IN_HOUSE') {
-    filteredReceivables = filteredReceivables.filter((r: any) => r.reservation?.status === 'CHECKED_IN');
-  } else if (filter === 'CHECKED_OUT') {
-    filteredReceivables = filteredReceivables.filter((r: any) => r.reservation?.status === 'CHECKED_OUT');
-  } else if (filter === 'OVERDUE') {
-    filteredReceivables = filteredReceivables.filter((r: any) => r.aging.status === 'OVERDUE');
-  }
-
-  const totalOutstanding = filteredReceivables.reduce((sum: number, r: any) => sum + r.financials.balance, 0);
-  const agingTotals = filteredReceivables.reduce((result: Record<string, number>, row: any) => {
-    const days = Number(row.aging.daysOutstanding || 0);
-    const bucket = days <= 30 ? '0–30 days' : days <= 60 ? '31–60 days' : '61+ days';
-    result[bucket] = (result[bucket] || 0) + Number(row.financials.balance || 0);
-    return result;
-  }, {});
-
-  const exportCsv = () => {
-    const headers = ['Guest', 'Reservation', 'Room', 'Status', 'Days Outstanding', 'Balance', 'Currency'];
-    const rows = filteredReceivables.map((row: any) => [
-      row.guest?.name || 'Unknown Guest', row.reservation?.confirmationNumber || '', row.reservation?.room || '',
-      row.aging.status, row.aging.daysOutstanding, row.financials.balance, row.financials.currency,
-    ]);
-    const csv = [headers, ...rows].map((row) => row.map((value: any) => `"${String(value ?? '').replaceAll('"', '""')}"`).join(',')).join('\n');
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-    link.download = `receivables-${new Date().toISOString().slice(0, 10)}.csv`;
-    link.click();
-    URL.revokeObjectURL(link.href);
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Aged Receivables</h1>
-          <p className="text-muted-foreground mt-1">
-            Track and manage outstanding guest balances
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => window.print()}><Printer className="w-4 h-4 mr-2" /> Print</Button>
-          <Button variant="outline" onClick={exportCsv}><Download className="w-4 h-4 mr-2" /> Export</Button>
-        </div>
-      </div>
-
-      <Card>
-        <CardContent className="p-4 flex flex-wrap gap-4 items-end">
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Filter</label>
-            <Select value={filter} onValueChange={(val) => setFilter(val || 'ALL')}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">All Receivables</SelectItem>
-                <SelectItem value="IN_HOUSE">In-House</SelectItem>
-                <SelectItem value="CHECKED_OUT">Checked-Out</SelectItem>
-                <SelectItem value="OVERDUE">Overdue</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Min Balance (NGN)</label>
-            <Select value={minBalance} onValueChange={(val) => setMinBalance(val || '1')}>
-              <SelectTrigger className="w-[150px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="1"> &gt; 0</SelectItem>
-                <SelectItem value="10000">&gt; 10,000</SelectItem>
-                <SelectItem value="50000">&gt; 50,000</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="ml-auto flex flex-col items-end">
-            <span className="text-sm font-medium text-muted-foreground">Total Displayed Outstanding</span>
-            <span className="text-2xl font-bold text-red-600">{formatCurrency(totalOutstanding)}</span>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        {['0–30 days', '31–60 days', '61+ days'].map((bucket) => (
-          <Card key={bucket}><CardContent className="p-4"><p className="text-sm text-muted-foreground">{bucket}</p><p className="mt-1 text-xl font-bold">{formatCurrency(agingTotals[bucket] || 0)}</p></CardContent></Card>
-        ))}
-      </div>
-
-      {isLoading ? (
-        <div className="flex justify-center p-12">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-        </div>
-      ) : error ? (
-        <div className="p-6 bg-red-50 text-red-800 rounded-lg border border-red-200">
-          Error loading report: {(error as Error).message}
-        </div>
-      ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>Folios with Balances</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {filteredReceivables.length === 0 ? (
-              <p className="text-muted-foreground text-center p-6">No outstanding balances found matching your filters.</p>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Guest</TableHead>
-                    <TableHead>Reservation</TableHead>
-                    <TableHead>Room</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Check-In/Out</TableHead>
-                    <TableHead className="text-right">Balance</TableHead>
-                    <TableHead></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredReceivables.map((r: any) => (
-                    <TableRow key={r.folioId}>
-                      <TableCell className="font-medium">
-                        {r.guest?.name || 'Unknown Guest'}
-                        {r.guest?.phone && <span className="block text-xs text-muted-foreground">{r.guest.phone}</span>}
-                      </TableCell>
-                      <TableCell>
-                        {r.reservation?.confirmationNumber || '-'}
-                        {r.reservation?.status && (
-                          <Badge variant="outline" className="ml-2 text-[10px] uppercase">
-                            {r.reservation.status}
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>{r.reservation?.room || 'Unassigned'}</TableCell>
-                      <TableCell>
-                        <Badge 
-                          variant={r.aging.status === 'OVERDUE' ? 'destructive' : r.aging.status === 'CHECKED_OUT' ? 'secondary' : 'default'}
-                        >
-                          {r.aging.status}
-                          {r.aging.daysOutstanding > 0 && ` (${r.aging.daysOutstanding}d)`}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                        {r.reservation ? (
-                          <>
-                            {format(new Date(r.reservation.checkIn), 'MMM d')} - {format(new Date(r.reservation.checkOut), 'MMM d')}
-                          </>
-                        ) : '-'}
-                      </TableCell>
-                      <TableCell className="text-right font-bold text-red-600">
-                        {formatCurrency(r.financials.balance, r.financials.currency)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          <Button variant="outline" size="sm" onClick={() => setPaymentFolio({ id: r.folioId, balance: r.financials.balance, currency: r.financials.currency, reservationId: r.reservation?.id })}>
-                            Record Payment
-                          </Button>
-                        {r.reservation?.id && (
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={() => router.push(`/cashier/folios/${r.folioId}`)}
-                            className="h-8 hover:bg-primary/10 hover:text-primary"
-                          >
-                            View Folio <ArrowRight className="w-4 h-4 ml-2" />
-                          </Button>
-                        )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
-      )}
-      <AddPaymentDialog open={!!paymentFolio} onOpenChange={(open) => { if (!open) { setPaymentFolio(null); void refetch(); } }} folio={paymentFolio} collectionSource="RECEIVABLES" />
+  return <div className="min-h-full bg-slate-50/70">
+    <div className="relative overflow-hidden bg-gradient-to-r from-[#0b1120] via-[#17233b] to-[#0b1120] px-6 py-8 sm:px-8"><div className="pointer-events-none absolute -right-16 -top-24 h-72 w-72 rounded-full bg-violet-500/15 blur-3xl" /><div className="relative mx-auto max-w-[1440px]"><div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between"><div><p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-violet-300"><span className="h-1.5 w-1.5 rounded-full bg-violet-400" />Cash collection workspace</p><h1 className="text-2xl font-bold tracking-tight text-white">Receivables control</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">Give the cashier and finance team a clear view of outstanding folios, aging risk, and the next collection action.</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => void refetch()} className="gap-2 border-white/15 bg-white/10 text-white hover:bg-white/15 hover:text-white"><RefreshCw className="h-4 w-4" />Refresh</Button><Button variant="outline" onClick={exportCsv} className="gap-2 border-white/15 bg-white/10 text-white hover:bg-white/15 hover:text-white"><Download className="h-4 w-4" />Export view</Button></div></div><div className="mt-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><div className="rounded-xl border border-white/10 bg-white/10 p-4"><p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Displayed exposure</p><p className="mt-2 text-2xl font-black text-white">{money(totalOutstanding)}</p><p className="mt-1 text-xs text-violet-200">{rows.length} open folios</p></div><div className="rounded-xl border border-white/10 bg-white/10 p-4"><p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Overdue</p><p className="mt-2 text-2xl font-black text-white">{overdue.length}</p><p className="mt-1 text-xs text-rose-200">{money(overdue.reduce((s: number, r: any) => s + Number(r.financials.balance || 0), 0))} at risk</p></div><div className="rounded-xl border border-white/10 bg-white/10 p-4"><p className="text-xs font-semibold uppercase tracking-wider text-slate-400">In-house</p><p className="mt-2 text-2xl font-black text-white">{inHouse.length}</p><p className="mt-1 text-xs text-emerald-200">Collect before departure</p></div><div className="rounded-xl border border-white/10 bg-white/10 p-4"><p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Checked out</p><p className="mt-2 text-2xl font-black text-white">{checkedOut.length}</p><p className="mt-1 text-xs text-amber-200">Follow-up required</p></div></div></div></div>
+    <div className="mx-auto max-w-[1440px] space-y-6 px-5 py-7 sm:px-8">
+      <div className="grid gap-5 lg:grid-cols-[1.25fr_0.75fr]"><section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><div className="flex items-start justify-between"><div><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.15em] text-violet-600"><CalendarClock className="h-4 w-4" />Aging analysis</div><h2 className="mt-1 text-lg font-semibold text-slate-900">Where the balance sits</h2><p className="mt-1 text-sm text-slate-500">Use aging to sequence collection conversations and escalation.</p></div><Banknote className="h-5 w-5 text-violet-500" /></div><div className="mt-6 grid gap-4 sm:grid-cols-3">{buckets.map((bucket) => <div key={bucket.label}><div className="mb-2 flex items-end justify-between gap-2"><span className="text-xs font-semibold text-slate-600">{bucket.label}</span><span className="text-sm font-bold text-slate-900">{money(bucket.value)}</span></div><div className="h-2 rounded-full bg-slate-100"><div className="h-2 rounded-full bg-violet-500" style={{ width: `${bucket.value / maxBucket * 100}%` }} /></div></div>)}</div></section><section className="rounded-2xl border border-slate-200 bg-slate-950 p-6 text-white shadow-sm"><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.15em] text-emerald-300"><WalletCards className="h-4 w-4" />Collection focus</div><h2 className="mt-2 text-lg font-semibold">Next best actions</h2><div className="mt-5 space-y-3"><div className="flex items-center justify-between rounded-xl bg-white/10 px-4 py-3"><span className="text-sm text-slate-300">Collect before departure</span><span className="font-bold text-emerald-300">{inHouse.length}</span></div><div className="flex items-center justify-between rounded-xl bg-white/10 px-4 py-3"><span className="text-sm text-slate-300">Escalate overdue</span><span className="font-bold text-rose-300">{overdue.length}</span></div><div className="flex items-center justify-between rounded-xl bg-white/10 px-4 py-3"><span className="text-sm text-slate-300">Post-checkout follow-up</span><span className="font-bold text-amber-300">{checkedOut.length}</span></div></div></section></div>
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex flex-col gap-4 lg:flex-row lg:items-end"><div className="flex items-center gap-2 text-sm font-semibold text-slate-800"><Search className="h-4 w-4 text-slate-400" />Collection queue</div><div className="grid flex-1 gap-3 sm:grid-cols-2 lg:max-w-xl"><label className="space-y-1 text-xs font-semibold uppercase tracking-wider text-slate-500">Portfolio<select value={filter} onChange={(e) => setFilter(e.target.value)} className="mt-1.5 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-normal normal-case tracking-normal text-slate-800"><option value="ALL">All open folios</option><option value="IN_HOUSE">In-house guests</option><option value="CHECKED_OUT">Checked-out guests</option><option value="OVERDUE">Overdue only</option></select></label><label className="space-y-1 text-xs font-semibold uppercase tracking-wider text-slate-500">Minimum balance<select value={minBalance} onChange={(e) => setMinBalance(e.target.value)} className="mt-1.5 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-normal normal-case tracking-normal text-slate-800"><option value="1">Above ₦0</option><option value="10000">Above ₦10,000</option><option value="50000">Above ₦50,000</option></select></label></div><div className="lg:ml-auto text-right"><p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Queue total</p><p className="mt-1 text-xl font-black text-rose-600">{money(totalOutstanding)}</p></div></div></section>
+      {isLoading ? <div className="flex justify-center rounded-2xl border border-slate-200 bg-white py-20"><Loader2 className="h-7 w-7 animate-spin text-violet-500" /></div> : error ? <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-rose-800"><div className="flex items-center gap-2 font-semibold"><AlertCircle className="h-5 w-5" />Unable to load receivables</div><p className="mt-1 text-sm">{(error as Error).message}</p></div> : <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/70 px-5 py-4"><div><h2 className="flex items-center gap-2 font-semibold text-slate-900"><Users className="h-4 w-4 text-violet-600" />Open folio register</h2><p className="mt-1 text-xs text-slate-500">{rows.length} folio{rows.length === 1 ? '' : 's'} match the current collection view</p></div><Badge variant="outline" className="border-violet-200 bg-violet-50 text-violet-700">Live balances</Badge></div>{rows.length === 0 ? <div className="flex flex-col items-center gap-2 py-20 text-center"><CheckCircle2 className="h-10 w-10 text-emerald-500" /><p className="font-semibold text-slate-800">No balances match this view</p><p className="text-sm text-slate-500">Try a broader portfolio or minimum balance.</p></div> : <div className="overflow-x-auto"><table className="w-full text-sm"><thead className="border-b border-slate-100 bg-slate-50/80"><tr>{['Guest / folio', 'Stay', 'Aging', 'Last payment', 'Outstanding', 'Action'].map((h) => <th key={h} className="whitespace-nowrap px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">{h}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{rows.map((r: any) => <tr key={r.folioId} className="transition-colors hover:bg-slate-50/70"><td className="px-5 py-4"><p className="font-semibold text-slate-900">{r.guest?.name || 'Unknown guest'}</p><p className="mt-1 font-mono text-xs text-slate-400">{r.folioNumber}</p>{r.guest?.phone && <p className="mt-1 text-xs text-slate-500">{r.guest.phone}</p>}</td><td className="px-5 py-4"><p className="font-medium text-slate-700">Room {r.reservation?.room || '—'}</p><p className="mt-1 text-xs text-slate-400">{r.reservation ? `${format(new Date(r.reservation.checkIn), 'MMM d')} – ${format(new Date(r.reservation.checkOut), 'MMM d')}` : 'No reservation'}</p></td><td className="px-5 py-4"><Badge variant="outline" className={r.aging.status === 'OVERDUE' ? 'border-rose-200 bg-rose-50 text-rose-700' : r.aging.status === 'CHECKED_OUT' ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}>{r.aging.status === 'OVERDUE' ? 'Overdue' : r.aging.status === 'CHECKED_OUT' ? 'Checked out' : 'Current'}</Badge><p className="mt-1 text-xs text-slate-400">{r.aging.daysOutstanding || 0} days outstanding</p></td><td className="px-5 py-4 text-xs text-slate-500">{r.aging.lastPaymentDate ? format(new Date(r.aging.lastPaymentDate), 'MMM d, yyyy') : 'No payment recorded'}</td><td className="whitespace-nowrap px-5 py-4 font-bold text-rose-600">{money(r.financials.balance, r.financials.currency)}</td><td className="whitespace-nowrap px-5 py-4 text-right"><div className="flex justify-end gap-2"><Button size="sm" onClick={() => setPaymentFolio({ id: r.folioId, balance: r.financials.balance, currency: r.financials.currency, reservationId: r.reservation?.id })} className="gap-1.5 bg-slate-900">Record payment</Button>{r.reservation?.id && <Button variant="outline" size="sm" onClick={() => router.push(`/cashier/folios/${r.folioId}`)} className="gap-1.5">Folio <ArrowRight className="h-3.5 w-3.5" /></Button>}</div></td></tr>)}</tbody></table></div>}</section>}
     </div>
-  );
+    <AddPaymentDialog open={!!paymentFolio} onOpenChange={(open) => { if (!open) { setPaymentFolio(null); void refetch(); } }} folio={paymentFolio} collectionSource="RECEIVABLES" />
+  </div>;
 }

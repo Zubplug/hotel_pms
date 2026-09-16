@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { formatCurrency } from '@/lib/utils';
 import { toast } from 'sonner';
+import { AlertTriangle, CheckCircle2, FileCheck2 } from 'lucide-react';
 
 interface ApproveResolutionModalProps {
   exception: any;
@@ -62,69 +63,67 @@ export function ApproveResolutionModal({ exception, isOpen, onClose, onSuccess }
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-xl">
+      <DialogContent className="rounded-2xl border-slate-200 sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Review Transaction Exception</DialogTitle>
+          <DialogTitle className="flex items-center gap-2 text-lg"><FileCheck2 className="h-5 w-5 text-indigo-600" />Review resolution request</DialogTitle>
           <DialogDescription>
-            Review the resolution request submitted by the cashier and approve or reject it.
+            Validate the transaction context and the cashier’s evidence before closing this audit exception.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6 my-4 max-h-[60vh] overflow-y-auto pr-2">
+        <div className="my-2 max-h-[62vh] space-y-5 overflow-y-auto pr-2">
           
           {/* Transaction Context */}
           <div className="space-y-3">
-            <h4 className="text-sm font-semibold uppercase tracking-wider text-gray-500 border-b pb-2">Transaction Details</h4>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div><span className="text-gray-500 block">Amount</span><span className="font-semibold text-gray-900">{formatCurrency(amount, currency)}</span></div>
-              <div><span className="text-gray-500 block">Source</span><span className="font-medium">{source}</span></div>
-              <div><span className="text-gray-500 block">Method</span><span className="font-medium">{tx?.method}</span></div>
-              <div><span className="text-gray-500 block">Reference</span><span className="font-medium">{tx?.reference || 'N/A'}</span></div>
+            <h4 className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Transaction details</h4>
+            <div className="grid grid-cols-2 gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm sm:grid-cols-4">
+              <div><span className="block text-xs text-slate-500">Amount</span><span className="mt-1 block font-bold text-slate-900">{formatCurrency(amount, currency)}</span></div>
+              <div><span className="block text-xs text-slate-500">Source</span><span className="mt-1 block font-semibold">{source}</span></div>
+              <div><span className="block text-xs text-slate-500">Method</span><span className="mt-1 block font-semibold">{tx?.method || '—'}</span></div>
+              <div><span className="block text-xs text-slate-500">Reference</span><span className="mt-1 block truncate font-semibold" title={tx?.reference || ''}>{tx?.reference || '—'}</span></div>
             </div>
           </div>
 
           {/* Question Context */}
           <div className="space-y-3">
-            <h4 className="text-sm font-semibold uppercase tracking-wider text-gray-500 border-b pb-2">Night Audit Flag</h4>
-            <div className="bg-red-50 p-3 rounded-md text-sm border border-red-100">
-              <span className="text-red-700 block font-medium mb-1">Reason for questioning:</span>
-              <span className="text-red-900">{exception.questionReason}</span>
+            <h4 className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Night audit flag</h4>
+            <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm"><div className="flex gap-3"><AlertTriangle className="h-5 w-5 shrink-0 text-rose-600" /><div><span className="block font-semibold text-rose-800">Reason for questioning</span><span className="mt-1 block leading-5 text-rose-900">{exception.questionReason}</span></div></div>
             </div>
           </div>
 
           {/* Resolution Context */}
           <div className="space-y-3">
-            <h4 className="text-sm font-semibold uppercase tracking-wider text-gray-500 border-b pb-2">Proposed Resolution</h4>
-            <div className="bg-blue-50 p-3 rounded-md text-sm border border-blue-100">
+            <h4 className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Proposed resolution</h4>
+            <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 text-sm">
               <div className="mb-2">
-                <span className="text-blue-700 block font-medium">Proposed Action:</span>
-                <span className="text-blue-900 font-semibold">{exception.proposedResolution?.replace(/_/g, ' ')}</span>
+                <span className="block font-medium text-indigo-700">Proposed action</span>
+                <span className="font-semibold capitalize text-indigo-950">{exception.proposedResolution?.replace(/_/g, ' ')}</span>
               </div>
               <div>
-                <span className="text-blue-700 block font-medium">Cashier Notes:</span>
-                <span className="text-blue-900">{exception.resolutionNotes || 'No additional notes provided.'}</span>
+                <span className="block font-medium text-indigo-700">Cashier notes</span>
+                <span className="text-indigo-950">{exception.resolutionNotes || 'No additional notes provided.'}</span>
               </div>
             </div>
           </div>
 
           {/* Rejection Input */}
           <div className="space-y-2">
-            <label className="text-sm font-medium">Rejection Reason (only if rejecting)</label>
+            <label className="text-sm font-semibold text-slate-800">Rejection reason <span className="font-normal text-slate-400">(required when rejecting)</span></label>
             <Textarea 
               value={rejectionNotes} 
               onChange={(e) => setRejectionNotes(e.target.value)}
               placeholder="Explain why this resolution is not acceptable..."
-              className="resize-none h-20"
+              className="h-24 resize-none rounded-xl border-slate-200"
             />
           </div>
 
         </div>
 
-        <DialogFooter className="flex justify-between sm:justify-between w-full">
+        <DialogFooter className="w-full gap-2 sm:justify-between">
           <Button variant="outline" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
           <div className="space-x-2">
-            <Button variant="destructive" onClick={() => handleAction('reject')} disabled={isSubmitting}>Reject</Button>
-            <Button onClick={() => handleAction('approve')} disabled={isSubmitting}>Approve Resolution</Button>
+            <Button variant="destructive" onClick={() => handleAction('reject')} disabled={isSubmitting} className="gap-2"><AlertTriangle className="h-4 w-4" />Reject</Button>
+            <Button onClick={() => handleAction('approve')} disabled={isSubmitting} className="gap-2 bg-emerald-600 hover:bg-emerald-700"><CheckCircle2 className="h-4 w-4" />Approve resolution</Button>
           </div>
         </DialogFooter>
       </DialogContent>
