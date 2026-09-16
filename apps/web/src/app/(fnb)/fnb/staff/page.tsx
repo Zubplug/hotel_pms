@@ -6,6 +6,7 @@ import { requireOrganizationContext } from '@/lib/organization-access';
 import { auth } from '@/lib/auth';
 import { format } from 'date-fns';
 import { OutletStaffAssignment } from './outlet-assignment';
+import { StaffPerformanceDialog } from './performance-dialog';
 import { AlertTriangle, BarChart3, ShieldCheck, TrendingUp, UsersRound } from 'lucide-react';
 
 export const metadata: Metadata = {
@@ -234,48 +235,25 @@ export default async function FnbStaffPage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {staffPerformance.map((staff) => (
-            <Card key={staff.id}>
-              <CardHeader className="flex flex-row items-center gap-4 pb-2">
-                <div className="h-12 w-12 rounded-full bg-secondary flex items-center justify-center font-semibold text-secondary-foreground shrink-0">
-                  {staff.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <CardTitle className="text-lg truncate">{staff.name}</CardTitle>
-                  <p className="text-sm text-muted-foreground truncate">{staff.role}</p>
-                </div>
-                {staff.rating !== 'Standard' && (
-                  <Badge variant={staff.ratingVariant} className="shrink-0">
-                    {staff.rating}
-                  </Badge>
-                )}
-              </CardHeader>
-              <CardContent>
-                <div className="mt-4 space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Completed Sales</span>
-                    <span className="text-sm font-medium">{formatCurrency(staff.sales, baseCurrency)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Orders Handled</span>
-                    <span className="text-sm font-medium">{staff.ordersHandled}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Collected Tips</span>
-                    <span className="text-sm font-medium text-green-600">{formatCurrency(staff.tips, baseCurrency)}</span>
-                  </div>
-                  <div className="flex flex-col mt-2 pt-2 border-t gap-1">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-muted-foreground">Voids (On Orders)</span>
-                      <span className="text-sm font-medium">{staff.voidsOnOrders}</span>
+            <Card key={staff.id} className="group overflow-hidden rounded-2xl border-[#eadfd8] bg-white shadow-[0_8px_24px_rgba(65,32,19,0.05)] transition-all hover:-translate-y-0.5 hover:border-orange-200 hover:shadow-[0_14px_32px_rgba(65,32,19,0.1)]">
+              <CardHeader className="border-b border-[#f1e7e1] bg-gradient-to-br from-[#fffaf6] to-white pb-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-[#7c2d12] text-sm font-bold text-white shadow-md shadow-orange-900/20">
+                      {staff.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()}
+                      {staff.rating === 'Top Performer' ? <span className="absolute -right-1 -top-1 h-3 w-3 rounded-full border-2 border-white bg-emerald-500" /> : null}
                     </div>
-                    {staff.voidsAuthorized > 0 && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">Voids Authorized</span>
-                        <span className="text-sm font-medium text-amber-600">{staff.voidsAuthorized}</span>
-                      </div>
-                    )}
+                    <div className="min-w-0"><CardTitle className="truncate text-base font-bold text-[#24130d]">{staff.name}</CardTitle><p className="mt-1 truncate text-xs font-medium text-[#927b70]">{staff.role}</p></div>
                   </div>
+                  {staff.rating !== 'Standard' ? <Badge variant={staff.ratingVariant} className="shrink-0 text-[10px]">{staff.rating}</Badge> : <span className="rounded-full bg-[#f7eee9] px-2 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[#7c2d12]">Active</span>}
                 </div>
+              </CardHeader>
+              <CardContent className="p-5">
+                <div className="flex items-end justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#927b70]">Closed sales</p><p className="mt-1 text-xl font-bold tracking-tight text-[#24130d]">{formatCurrency(staff.sales, baseCurrency)}</p></div><div className="text-right"><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#927b70]">Share</p><p className="mt-1 text-sm font-bold text-orange-600">{totalSales ? `${Math.round((staff.sales / totalSales) * 100)}%` : '0%'}</p></div></div>
+                <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#f4ebe6]"><div className="h-full rounded-full bg-gradient-to-r from-orange-500 to-[#7c2d12] transition-all" style={{ width: `${totalSales ? Math.min(100, (staff.sales / totalSales) * 100) : 0}%` }} /></div>
+                <div className="mt-5 grid grid-cols-3 divide-x divide-[#f1e7e1] rounded-xl border border-[#f1e7e1] bg-[#fbf8f6] py-3 text-center"><div><p className="text-lg font-bold text-[#24130d]">{staff.ordersHandled}</p><p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#927b70]">Orders</p></div><div><p className="text-lg font-bold text-emerald-700">{formatCurrency(staff.tips, baseCurrency)}</p><p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#927b70]">Tips</p></div><div><p className={`text-lg font-bold ${staff.voidsOnOrders > 3 ? 'text-red-700' : 'text-[#24130d]'}`}>{staff.voidsOnOrders}</p><p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#927b70]">Voids</p></div></div>
+                {staff.voidsAuthorized > 0 ? <div className="mt-3 flex items-center justify-between rounded-lg bg-amber-50 px-3 py-2 text-xs"><span className="font-semibold text-amber-800">Authorised voids</span><span className="font-bold text-amber-950">{staff.voidsAuthorized}</span></div> : null}
+                <StaffPerformanceDialog staff={staff} propertyId={primaryProperty.id} currency={baseCurrency} />
               </CardContent>
             </Card>
           ))}
