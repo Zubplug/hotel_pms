@@ -20,6 +20,11 @@ const formatCurrency = (amount: number, currency: string = 'NGN') => {
   }).format(amount);
 };
 
+const isWaiter = (position: string | null | undefined) => {
+  const normalized = String(position || '').trim().toUpperCase().replace(/[_-]+/g, ' ');
+  return normalized === 'WAITER' || normalized === 'WAITRESS';
+};
+
 export default async function FnbStaffPage() {
   const session = await auth();
   if (!session?.user?.id) {
@@ -61,7 +66,7 @@ export default async function FnbStaffPage() {
   }
 
   // 2. Fetch Active Staff
-  const activeFnbStaff = await prisma.staff.findMany({
+  const activeFnbStaffRecords = await prisma.staff.findMany({
     where: {
       organizationId: orgContext.organizationId,
       isActive: true,
@@ -85,6 +90,7 @@ export default async function FnbStaffPage() {
       position: true,
     }
   });
+  const activeFnbStaff = activeFnbStaffRecords.filter((staff) => isWaiter(staff.position));
 
   const activeStaffIds = new Set(activeFnbStaff.map(s => s.id));
 
@@ -123,10 +129,10 @@ export default async function FnbStaffPage() {
 
   let additionalStaff: any[] = [];
   if (missingStaffIds.length > 0) {
-    additionalStaff = await prisma.staff.findMany({
+    additionalStaff = (await prisma.staff.findMany({
       where: { id: { in: missingStaffIds } },
       select: { id: true, firstName: true, lastName: true, position: true }
-    });
+    })).filter((staff) => isWaiter(staff.position));
   }
 
   const allStaff = [...activeFnbStaff, ...additionalStaff];

@@ -7,6 +7,15 @@ import {
 import { useProperty } from '@/components/PropertyProvider';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 
+function collectionFromResponse(payload: any, keys: string[]) {
+  const body = payload?.data ?? payload;
+  if (Array.isArray(body)) return body;
+  for (const key of keys) {
+    if (Array.isArray(body?.[key])) return body[key];
+  }
+  return [];
+}
+
 const money = (value: number, currency = 'NGN') =>
   new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 0 }).format(Number(value || 0));
 
@@ -67,9 +76,28 @@ export default function FnbReportsPage() {
 
   useEffect(() => {
     if (propertyId) {
-      fetch(`/api/v1/fnb/outlets?propertyId=${propertyId}`).then(res => res.json()).then(res => setOutlets(res.data || []));
-      fetch(`/api/v1/inventory/warehouses?propertyId=${propertyId}`).then(res => res.json()).then(res => setWarehouses(res.data?.warehouses || []));
-      
+      const scope = async () => {
+        try {
+          const [outletResponse, warehouseResponse] = await Promise.all([
+            fetch(`/api/v1/pos/outlets?propertyId=${encodeURIComponent(propertyId)}`),
+            fetch(`/api/v1/inventory/warehouses?propertyId=${encodeURIComponent(propertyId)}`),
+          ]);
+          const [outletBody, warehouseBody] = await Promise.all([
+            outletResponse.json(),
+            warehouseResponse.json(),
+          ]);
+          if (!outletResponse.ok) throw new Error(outletBody?.error || 'Unable to load outlets');
+          if (!warehouseResponse.ok) throw new Error(warehouseBody?.error || 'Unable to load warehouses');
+          setOutlets(collectionFromResponse(outletBody, ['outlets', 'items']));
+          setWarehouses(collectionFromResponse(warehouseBody, ['warehouses', 'items']));
+        } catch (scopeError) {
+          console.error('[FNB Reports] scope loading failed', scopeError);
+          setOutlets([]);
+          setWarehouses([]);
+        }
+      };
+      void scope();
+
       const now = new Date();
       setDateRange({
         start: new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString().slice(0, 10),
@@ -352,53 +380,53 @@ export default function FnbReportsPage() {
       {/* ── SCREEN-ONLY VIEW: BEAUTIFUL INTERACTIVE DASHBOARD    ── */}
       {/* ────────────────────────────────────────────────────────── */}
 
-      <div className="screen-only min-h-full bg-slate-50/50 px-4 pb-16 pt-6 sm:px-6 sm:pt-8 md:px-8">
+      <div className="screen-only min-h-full bg-[#fbf8f6] px-4 pb-16 pt-6 sm:px-6 sm:pt-8 md:px-8">
         <div className="mx-auto max-w-[1540px] space-y-6">
           {/* ── UI Header ── */}
-          <header className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
+          <header className="relative overflow-hidden rounded-[28px] bg-[#2b1710] px-6 py-7 text-white shadow-[0_18px_50px_rgba(70,35,20,0.16)] sm:px-8 lg:flex lg:items-end lg:justify-between lg:gap-8">
+            <div className="pointer-events-none absolute -right-20 -top-28 h-72 w-72 rounded-full bg-[#c96f32]/20 blur-3xl" />
             <div>
-              <div className="mb-3 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-indigo-600">
-                <span className="h-1.5 w-1.5 rounded-full bg-indigo-600" />
-                F&B Operations / DSS
+              <div className="relative mb-3 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-[#edb27c]">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#edb27c]" />
+                F&B Operations / Reporting
               </div>
-              <h1 className="flex items-center gap-3 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-                <span className="flex h-10 w-10 items-center justify-center rounded-2xl border border-indigo-100 bg-indigo-50/50 text-indigo-600 shadow-sm">
+              <h1 className="relative flex items-center gap-3 text-3xl font-bold tracking-tight sm:text-4xl">
+                <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[#e39a62]/30 bg-[#c96f32]/20 text-[#f0b783]">
                   <Calculator className="h-5 w-5" />
                 </span>
-                F&B Reconciliation
+                F&B reporting centre
               </h1>
-              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-500">
-                Validate posted departmental revenue, operating statistics, and inventory control.
+              <p className="relative mt-2 max-w-2xl text-sm leading-relaxed text-[#e8cfc0]">
+                Turn posted revenue, guest demand, payment mix, and stock control into a clear manager readout.
               </p>
             </div>
 
             {/* Filters */}
-            <div className="flex flex-wrap items-center gap-2 rounded-2xl border bg-white p-2 shadow-sm relative">
-              <div className="flex items-center gap-2 px-3">
-                <Calendar className="h-4 w-4 text-slate-400" />
-                <input type="date" value={dateRange.start} onChange={e => setDateRange({...dateRange, start: e.target.value})} className="h-8 bg-transparent text-sm font-medium text-slate-700 outline-none" />
-                <span className="text-slate-400">to</span>
-                <input type="date" value={dateRange.end} onChange={e => setDateRange({...dateRange, end: e.target.value})} className="h-8 bg-transparent text-sm font-medium text-slate-700 outline-none" />
+            <div className="relative flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-white/10 p-2 backdrop-blur-sm">
+              <div className="flex items-center gap-2 rounded-xl bg-white px-3">
+                <Calendar className="h-4 w-4 text-[#a95524]" />
+                <input aria-label="Report start date" type="date" value={dateRange.start} onChange={e => setDateRange({...dateRange, start: e.target.value})} className="h-9 bg-transparent text-sm font-semibold text-[#3b2116] outline-none" />
+                <span className="text-[#9a7764]">to</span>
+                <input aria-label="Report end date" type="date" value={dateRange.end} onChange={e => setDateRange({...dateRange, end: e.target.value})} className="h-9 bg-transparent text-sm font-semibold text-[#3b2116] outline-none" />
               </div>
-              <div className="h-6 w-px bg-slate-100"></div>
-              <div className="flex items-center gap-2 px-3">
-                <Store className="h-4 w-4 text-slate-400" />
-                <select value={selectedOutlet} onChange={e => setSelectedOutlet(e.target.value)} className="h-8 bg-transparent text-sm font-medium text-slate-700 outline-none">
+              <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/10 px-3">
+                <Store className="h-4 w-4 text-[#edb27c]" />
+                <select aria-label="Outlet scope" value={selectedOutlet} onChange={e => setSelectedOutlet(e.target.value)} className="h-9 max-w-[170px] bg-transparent text-sm font-semibold text-white outline-none [&>option]:text-[#3b2116]">
                   <option value="">All Outlets</option>
                   {outlets.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
                 </select>
               </div>
-              <div className="h-6 w-px bg-slate-100"></div>
-              <div className="flex items-center gap-2 px-3">
-                <Box className="h-4 w-4 text-slate-400" />
-                <select value={selectedWarehouse} onChange={e => setSelectedWarehouse(e.target.value)} className="h-8 bg-transparent text-sm font-medium text-slate-700 outline-none">
+              <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/10 px-3">
+                <Box className="h-4 w-4 text-[#edb27c]" />
+                <select aria-label="Warehouse scope" value={selectedWarehouse} onChange={e => setSelectedWarehouse(e.target.value)} className="h-9 max-w-[190px] bg-transparent text-sm font-semibold text-white outline-none [&>option]:text-[#3b2116]">
                   <option value="">All Warehouses</option>
                   {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
                 </select>
               </div>
               <button
                 onClick={() => setRefreshToken(v => v + 1)}
-                className="inline-flex h-9 items-center gap-2 rounded-xl border bg-slate-50 px-3 text-sm font-semibold text-slate-600 transition-all hover:bg-slate-100"
+                aria-label="Refresh report"
+                className="inline-flex h-9 items-center gap-2 rounded-xl border border-white/10 bg-white/10 px-3 text-sm font-semibold text-white transition-all hover:bg-white/20"
               >
                 <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
               </button>
@@ -407,7 +435,7 @@ export default function FnbReportsPage() {
               <div className="relative">
                 <button 
                   onClick={() => setShowPrintMenu(!showPrintMenu)} 
-                  className="inline-flex h-9 items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3 text-sm font-semibold text-indigo-700 transition-all hover:bg-indigo-100"
+                  className="inline-flex h-9 items-center gap-2 rounded-xl bg-[#d98245] px-3 text-sm font-semibold text-white transition-all hover:bg-[#c96f32]"
                 >
                   <Printer className="h-4 w-4" /> Print Reports <ChevronDown className="h-3 w-3 opacity-50" />
                 </button>
@@ -415,13 +443,13 @@ export default function FnbReportsPage() {
                 {showPrintMenu && (
                   <>
                     <div className="fixed inset-0 z-10" onClick={() => setShowPrintMenu(false)}></div>
-                    <div className="absolute right-0 top-full mt-2 w-56 rounded-xl border bg-white shadow-lg z-20 overflow-hidden py-1">
-                      <button onClick={() => handlePrint('dss')} className="w-full px-4 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2">
-                        <ClipboardCheck className="h-4 w-4 text-indigo-500" />
+                    <div className="absolute right-0 top-full z-20 mt-2 w-64 overflow-hidden rounded-2xl border border-[#ead7ca] bg-white py-1 shadow-xl">
+                      <button onClick={() => handlePrint('dss')} className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-medium text-[#3b2116] hover:bg-[#fbf1eb]">
+                        <ClipboardCheck className="h-4 w-4 text-[#b85f29]" />
                         Daily Sales Summary (DSS)
                       </button>
-                      <button onClick={() => handlePrint('inventory')} className="w-full px-4 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2">
-                        <Scale className="h-4 w-4 text-emerald-500" />
+                      <button onClick={() => handlePrint('inventory')} className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-medium text-[#3b2116] hover:bg-[#fbf1eb]">
+                        <Scale className="h-4 w-4 text-[#b85f29]" />
                         Stock Reconciliation Ledger
                       </button>
                     </div>
@@ -434,15 +462,15 @@ export default function FnbReportsPage() {
           {data && (
             <>
               {/* ── Hero status card ── */}
-              <section className="relative overflow-hidden rounded-[24px] border border-indigo-100 bg-white p-6 sm:p-8 shadow-sm">
-                <div className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-indigo-50 blur-3xl" />
+              <section className="relative overflow-hidden rounded-[24px] border border-[#ead7ca] bg-white p-6 shadow-sm sm:p-8">
+                <div className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-[#f7e4d5] blur-3xl" />
                 <div className="relative flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-indigo-600">DSS Summary</p>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#b85f29]">DSS Summary</p>
                     <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">
                       {selectedOutletName}
                       <span className="mx-2 text-slate-300">·</span>
-                      <span className="font-mono text-indigo-600">{displayDate}</span>
+                      <span className="font-mono text-[#b85f29]">{displayDate}</span>
                     </h2>
                     <p className="mt-1.5 text-sm text-slate-500">
                       {data.statistics.totalChecks} processed checks
@@ -463,13 +491,84 @@ export default function FnbReportsPage() {
                 </div>
               </section>
 
+              <section className="grid gap-4 lg:grid-cols-[1.35fr_0.65fr]">
+                <div className="rounded-[22px] border border-[#ead7ca] bg-white p-5 shadow-sm sm:p-6">
+                  <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#b85f29]">Manager readout</p>
+                      <h2 className="mt-1 text-lg font-bold tracking-tight text-[#2b1710]">What needs attention today</h2>
+                    </div>
+                    <span className="inline-flex w-fit items-center gap-2 rounded-full border border-[#ead7ca] bg-[#fbf1eb] px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[#8e4927]">
+                      <span className="h-1.5 w-1.5 rounded-full bg-[#c96f32]" /> Live report scope
+                    </span>
+                  </div>
+                  <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-2xl bg-[#fbf8f6] p-4">
+                      <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-[#9a7764]">Revenue signal</p>
+                      <p className="mt-2 text-sm font-bold text-[#2b1710]">{data.summary.netRevenue > 0 ? 'Trading is active' : 'No posted trade'}</p>
+                      <p className="mt-1 text-[11px] text-[#8d7568]">{money(data.summary.netRevenue)} net revenue in scope</p>
+                    </div>
+                    <div className="rounded-2xl bg-[#fbf8f6] p-4">
+                      <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-[#9a7764]">Margin watch</p>
+                      <p className="mt-2 text-sm font-bold text-[#2b1710]">{pct(data.profitability.grossMarginPct)} gross margin</p>
+                      <p className="mt-1 text-[11px] text-[#8d7568]">COGS variance {money(data.profitability.cogsVariance)}</p>
+                    </div>
+                    <div className="rounded-2xl bg-[#fbf8f6] p-4">
+                      <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-[#9a7764]">Control queue</p>
+                      <p className="mt-2 text-sm font-bold text-[#2b1710]">{data.summary.totalVoids > 0 ? 'Review void activity' : 'No void escalation'}</p>
+                      <p className="mt-1 text-[11px] text-[#8d7568]">{money(data.summary.totalVoids)} void value recorded</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="rounded-[22px] border border-[#ead7ca] bg-[#2b1710] p-5 text-white shadow-sm sm:p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#edb27c]">Scope coverage</p>
+                      <h2 className="mt-1 text-lg font-bold">Operational dimensions</h2>
+                    </div>
+                    <BarChart3 className="h-5 w-5 text-[#edb27c]" />
+                  </div>
+                  <div className="mt-5 grid grid-cols-2 gap-3">
+                    <div className="rounded-2xl border border-white/10 bg-white/10 p-3"><p className="text-2xl font-bold">{outlets.length}</p><p className="mt-1 text-[10px] uppercase tracking-wider text-[#e8cfc0]">Outlets available</p></div>
+                    <div className="rounded-2xl border border-white/10 bg-white/10 p-3"><p className="text-2xl font-bold">{warehouses.length}</p><p className="mt-1 text-[10px] uppercase tracking-wider text-[#e8cfc0]">Warehouses available</p></div>
+                  </div>
+                  <p className="mt-4 text-[11px] leading-relaxed text-[#e8cfc0]">Use the scope controls above to move from the consolidated property view into an outlet or warehouse control view.</p>
+                </div>
+              </section>
+
               {/* ── Stat cards ── */}
               <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                 <StatCard label="Total Covers" value={String(data.statistics.totalCovers)} detail={`Across ${data.statistics.totalChecks} checks`} accent="bg-white text-slate-900 border-slate-200 shadow-sm" />
                 <StatCard label="Average Check" value={money(data.statistics.averageCheck)} detail="Per Table / Order" accent="bg-white text-slate-900 border-slate-200 shadow-sm" />
                 <StatCard label="Spend per Cover" value={money(data.statistics.spendPerCover)} detail="Per Guest" accent="bg-white text-slate-900 border-slate-200 shadow-sm" />
-                <StatCard label="Net F&B Revenue" value={money(data.summary.netRevenue)} detail="Excl. Taxes & Voids" accent="bg-indigo-50/50 text-indigo-950 border-indigo-100 shadow-sm" />
-                <StatCard label="Gross Margin" value={pct(data.profitability.grossMarginPct)} detail={`Actual COGS: ${money(data.profitability.actualCogs)}`} accent="bg-emerald-50/50 text-emerald-950 border-emerald-100 shadow-sm" />
+                <StatCard label="Net F&B Revenue" value={money(data.summary.netRevenue)} detail="Excl. Taxes & Voids" accent="bg-[#fbf1eb] text-[#3b2116] border-[#ead7ca] shadow-sm" />
+                <StatCard label="Gross Margin" value={pct(data.profitability.grossMarginPct)} detail={`Actual COGS: ${money(data.profitability.actualCogs)}`} accent="bg-[#f5efe8] text-[#3b2116] border-[#e2d4c8] shadow-sm" />
+              </section>
+
+              <section className="rounded-[22px] border border-[#ead7ca] bg-white p-5 shadow-sm sm:p-6">
+                <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#b85f29]">Revenue composition</p>
+                    <h2 className="mt-1 text-lg font-bold tracking-tight text-[#2b1710]">Department contribution</h2>
+                  </div>
+                  <p className="text-[11px] text-[#8d7568]">Gross revenue before allowances</p>
+                </div>
+                <div className="mt-5 grid gap-4 md:grid-cols-3">
+                  {[
+                    ['Food', data.summary.foodGross, 'bg-[#b85f29]'],
+                    ['Beverage', data.summary.bevGross, 'bg-[#d98245]'],
+                    ['Other F&B', data.summary.otherGross, 'bg-[#e5b27f]'],
+                  ].map(([label, value, color]) => {
+                    const total = Number(data.summary.grossRevenue || 0);
+                    const amount = Number(value || 0);
+                    const share = total > 0 ? (amount / total) * 100 : 0;
+                    return <div key={String(label)}>
+                      <div className="mb-2 flex items-center justify-between text-xs"><span className="font-semibold text-[#4a3024]">{label}</span><span className="font-bold tabular-nums text-[#2b1710]">{money(amount)}</span></div>
+                      <div className="h-2 overflow-hidden rounded-full bg-[#f3e8df]"><div className={`h-full rounded-full ${color}`} style={{ width: `${Math.min(100, share)}%` }} /></div>
+                      <p className="mt-1 text-[10px] font-medium text-[#9a7764]">{share.toFixed(1)}% of gross revenue</p>
+                    </div>;
+                  })}
+                </div>
               </section>
 
               {/* ── Main grid (DSS) ── */}
