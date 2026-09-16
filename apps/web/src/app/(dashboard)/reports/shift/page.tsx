@@ -63,6 +63,18 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 const fmt = (amount: number) =>
   new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
 
+const VARIANCE_REASONS = [
+  ['CASH_COUNTING_ERROR', 'Cash counting error', 'Physical cash was counted incorrectly.'],
+  ['MISSING_RECEIPT', 'Missing receipt', 'A receipt or supporting document could not be matched.'],
+  ['UNAUTHORIZED_PAYOUT', 'Unauthorized payout', 'A payout was not properly approved or documented.'],
+  ['REFUND_ERROR', 'Refund error', 'A refund was processed with an incorrect amount or method.'],
+  ['WRONG_CHANGE', 'Wrong change given', 'A guest or customer received incorrect change.'],
+  ['CASH_DROP_ERROR', 'Cash drop error', 'A cash drop was missed, miscounted, or recorded incorrectly.'],
+  ['SYSTEM_ERROR', 'System error', 'A system, device, or synchronization issue affected the total.'],
+  ['UNKNOWN', 'Unknown', 'The cause has not yet been established.'],
+  ['OTHER', 'Other', 'Another documented reason not listed above.'],
+] as const;
+
 function StatusChip({ status }: { status: string }) {
   const map: Record<string, string> = {
     OPEN:                'bg-blue-50 text-blue-700 border-blue-200',
@@ -97,6 +109,7 @@ export default function ShiftReportPage() {
   const [shiftSearch, setShiftSearch] = useState('');
   const [shiftId, setShiftId] = useState<string | null>(null);
   const [shiftNavigatorOpen, setShiftNavigatorOpen] = useState(false);
+  const [varianceReasonOpen, setVarianceReasonOpen] = useState(false);
 
   const [decision, setDecision] = useState('APPROVED');
   const [approvalNotes, setApprovalNotes] = useState('');
@@ -677,27 +690,18 @@ export default function ShiftReportPage() {
                   {/* Variance reason */}
                   {decision === 'APPROVED_WITH_VARIANCE' && (
                     <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-4">
-                      <label className="block text-xs font-semibold text-amber-900 mb-1.5 uppercase tracking-wider">
-                        Variance reason <span className="text-amber-600">*</span>
-                      </label>
-                      <Select value={reasonCode} onValueChange={(v) => setReasonCode(v || '')}>
-                        <SelectTrigger className="bg-white border-amber-200 rounded-xl">
-                          <SelectValue placeholder="Select the reason for this variance…" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {[
-                            ['CASH_COUNTING_ERROR', 'Cash Counting Error'],
-                            ['MISSING_RECEIPT', 'Missing Receipt'],
-                            ['UNAUTHORIZED_PAYOUT', 'Unauthorized Payout'],
-                            ['REFUND_ERROR', 'Refund Error'],
-                            ['WRONG_CHANGE', 'Wrong Change Given'],
-                            ['CASH_DROP_ERROR', 'Cash Drop Error'],
-                            ['SYSTEM_ERROR', 'System Error'],
-                            ['UNKNOWN', 'Unknown'],
-                            ['OTHER', 'Other'],
-                          ].map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
+                      <div className="flex items-start justify-between gap-3">
+                        <div><label className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.12em] text-amber-950">Variance reason <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[10px] font-bold normal-case tracking-normal text-amber-800">Required</span></label><p className="mt-1 text-xs leading-5 text-amber-800/70">Choose the most accurate root cause for the shortage or overage.</p></div>
+                        {reasonCode && <span className="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-bold text-emerald-700">Selected</span>}
+                      </div>
+                      <Popover open={varianceReasonOpen} onOpenChange={setVarianceReasonOpen}>
+                        <PopoverTrigger render={<Button variant="outline" className={cn('mt-3 h-12 w-full justify-between rounded-xl bg-white px-3 text-left shadow-sm', reasonCode ? 'border-amber-300 text-slate-800' : 'border-amber-300 text-slate-400')} />}>
+                          <span className="flex min-w-0 items-center gap-3"><span className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm', reasonCode ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-400')}>{reasonCode ? '✓' : '?'}</span><span className="min-w-0"><span className={cn('block truncate text-sm font-semibold', reasonCode ? 'text-slate-800' : 'text-slate-500')}>{VARIANCE_REASONS.find(([value]) => value === reasonCode)?.[1] || 'Select a variance reason'}</span><span className="block truncate text-[11px] text-slate-400">{reasonCode ? 'Root cause recorded for audit' : 'Required before review submission'}</span></span></span><ChevronDown className={cn('h-4 w-4 shrink-0 text-amber-600 transition-transform', varianceReasonOpen && 'rotate-180')} /></PopoverTrigger>
+                        <PopoverContent align="start" className="w-[min(480px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-amber-200 bg-white p-0 shadow-xl">
+                          <div className="border-b border-slate-100 bg-amber-50/70 px-4 py-3"><p className="text-xs font-bold uppercase tracking-[0.14em] text-amber-900">Select variance reason</p><p className="mt-1 text-xs text-amber-800/70">This reason will be permanently attached to the shift review.</p></div>
+                          <div className="max-h-[min(420px,60vh)] overflow-y-auto p-2">{VARIANCE_REASONS.map(([value, label, description]) => { const isSelected = value === reasonCode; return <button key={value} type="button" onClick={() => { setReasonCode(value); setVarianceReasonOpen(false); }} className={cn('flex w-full items-start gap-3 rounded-xl p-3 text-left transition', isSelected ? 'bg-amber-50 ring-1 ring-inset ring-amber-200' : 'hover:bg-slate-50')}><span className={cn('mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-bold', isSelected ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-500')}>{isSelected ? <Check className="h-4 w-4" /> : <span>•</span>}</span><span className="min-w-0 flex-1"><span className="block text-sm font-semibold text-slate-800">{label}</span><span className="mt-0.5 block text-xs leading-5 text-slate-500">{description}</span></span>{isSelected && <span className="mt-1 text-[10px] font-bold uppercase tracking-wider text-amber-700">Selected</span>}</button>; })}</div>
+                        </PopoverContent>
+                      </Popover>
                     </div>
                   )}
 
