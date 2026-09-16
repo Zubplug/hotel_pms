@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import { requireOrganizationContext } from '@/lib/organization-access';
 import { ReceiveHandoverButton } from './receive-handover-button';
 import { CreateHandoverButton } from './create-handover-button';
-import { ArrowLeftRight } from 'lucide-react';
+import { ArrowLeftRight, Banknote, CheckCircle2, Clock3, ShieldCheck, TrendingUp, Activity, WalletCards } from 'lucide-react';
 
 const statusMeta: Record<string, { label: string; classes: string }> = {
   PENDING:   { label: 'Pending Receipt', classes: 'bg-amber-50 text-amber-700 border-amber-200' },
@@ -49,17 +49,31 @@ export default async function HandoversPage() {
   const canCreate =
     allowedProperties.length === 1 &&
     (approvedPos.length > 0 || approvedFrontdesk.length > 0);
+  const pendingHandovers = handovers.filter((handover) => handover.status === 'PENDING');
+  const completedHandovers = handovers.filter((handover) => handover.status === 'COMPLETED');
+  const pendingAmount = pendingHandovers.reduce((sum, handover) => sum + Number(handover.amount || 0), 0);
+  const completedAmount = completedHandovers.reduce((sum, handover) => sum + Number(handover.amount || 0), 0);
+  const totalSessions = handovers.reduce((sum, handover) => sum + handover.posSessions.length + handover.frontdeskSessions.length, 0);
+  const trendStart = new Date();
+  trendStart.setDate(trendStart.getDate() - 6);
+  const handoverTrend = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(trendStart);
+    date.setDate(trendStart.getDate() + index);
+    const key = date.toISOString().slice(0, 10);
+    return { date, count: handovers.filter((handover) => new Date(handover.handedOverAt).toISOString().slice(0, 10) === key).length };
+  });
+  const trendMax = Math.max(...handoverTrend.map((day) => day.count), 1);
 
   return (
     <div className="min-h-full">
       {/* Hero header */}
-      <div className="bg-gradient-to-r from-[#0b1120] to-[#1e2d50] px-8 py-7">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="relative overflow-hidden bg-gradient-to-r from-[#0b1120] via-[#101d34] to-[#0b1120] px-6 py-8 sm:px-8">
+        <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-indigo-500/20 blur-3xl" />
+        <div className="relative mx-auto flex max-w-[1440px] flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-white tracking-tight">Payment Handovers</h1>
-            <p className="text-slate-400 text-sm mt-1">
-              Transfer approved operator shifts, cash, and payment receipts into General Cashier custody.
-            </p>
+            <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />Cash custody operations</p>
+            <h1 className="text-2xl font-bold tracking-tight text-white">Payment handovers</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">Move approved shift collections into General Cashier custody with a traceable chain of responsibility.</p>
           </div>
           {canCreate && (
             <CreateHandoverButton
@@ -75,13 +89,25 @@ export default async function HandoversPage() {
         </div>
       </div>
 
-      <div className="px-6 py-7 max-w-screen-xl mx-auto">
+      <div className="mx-auto max-w-[1440px] space-y-6 px-5 py-7 sm:px-8">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            { label: 'Awaiting receipt', value: pendingHandovers.length, detail: `₦${pendingAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} in custody queue`, icon: Clock3, tone: 'bg-amber-50 text-amber-700' },
+            { label: 'Completed handovers', value: completedHandovers.length, detail: `₦${completedAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} received`, icon: CheckCircle2, tone: 'bg-emerald-50 text-emerald-700' },
+            { label: 'Sessions transferred', value: totalSessions, detail: 'POS and Front Desk sessions', icon: WalletCards, tone: 'bg-indigo-50 text-indigo-700' },
+            { label: 'Approved to transfer', value: approvedPos.length + approvedFrontdesk.length, detail: 'Ready for custody handover', icon: ShieldCheck, tone: 'bg-violet-50 text-violet-700' },
+          ].map((card) => { const Icon = card.icon; return <div key={card.label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-start justify-between"><div><p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">{card.label}</p><p className="mt-2 text-2xl font-black text-slate-950">{card.value}</p><p className="mt-1 text-xs text-slate-400">{card.detail}</p></div><span className={`flex h-10 w-10 items-center justify-center rounded-xl ${card.tone}`}><Icon className="h-5 w-5" /></span></div></div>; })}
+        </div>
+        <div className="grid gap-5 xl:grid-cols-[1.25fr_0.75fr]">
+          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><div className="flex items-start justify-between"><div><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.15em] text-indigo-600"><Activity className="h-4 w-4" />Custody flow</div><h2 className="mt-1 text-lg font-semibold text-slate-900">Seven-day handover activity</h2><p className="mt-1 text-sm text-slate-500">Volume of custody transfers created across your properties.</p></div><TrendingUp className="h-5 w-5 text-emerald-500" /></div><div className="mt-7 flex h-36 items-end gap-3">{handoverTrend.map((day) => <div key={day.date.toISOString()} className="group flex h-full flex-1 flex-col items-center justify-end gap-2"><div className="relative flex h-full w-full items-end justify-center"><span className="absolute bottom-full mb-1 hidden rounded bg-slate-900 px-1.5 py-0.5 text-[10px] text-white group-hover:block">{day.count}</span><div className="w-full max-w-12 rounded-t-lg bg-indigo-100 transition group-hover:bg-indigo-400" style={{ height: `${Math.max((day.count / trendMax) * 100, day.count ? 12 : 4)}%` }} /></div><span className="text-[10px] font-semibold uppercase text-slate-400">{day.date.toLocaleDateString('en-GB', { weekday: 'short' }).slice(0, 3)}</span></div>)}</div></section>
+          <section className="rounded-2xl border border-slate-200 bg-slate-950 p-6 text-white shadow-sm"><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.15em] text-indigo-300"><Banknote className="h-4 w-4" />Custody insight</div><h2 className="mt-2 text-lg font-semibold">What needs attention</h2><div className="mt-6 space-y-3"><div className="rounded-xl bg-white/10 p-4"><p className="text-xs text-slate-400">Pending physical receipt</p><p className="mt-1 text-xl font-bold">{pendingHandovers.length} handover{pendingHandovers.length === 1 ? '' : 's'}</p><p className="mt-1 text-xs text-amber-300">₦{pendingAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} awaiting custody confirmation</p></div><div className="rounded-xl bg-white/10 p-4"><p className="text-xs text-slate-400">Control posture</p><p className="mt-1 text-sm font-semibold text-emerald-300">{pendingHandovers.length === 0 ? 'Clear — no custody backlog' : 'Monitor — receipt action required'}</p></div></div></section>
+        </div>
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           {/* Table header bar */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/60">
             <div className="flex items-center gap-2">
               <ArrowLeftRight className="h-4 w-4 text-slate-500" />
-              <span className="text-sm font-semibold text-slate-700">All Handovers</span>
+              <span className="text-sm font-semibold text-slate-700">Custody transfer register</span>
               <span className="ml-1 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-slate-200 text-slate-600 text-xs font-bold">
                 {handovers.length}
               </span>

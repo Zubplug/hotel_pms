@@ -72,28 +72,31 @@ export function CreateDepositButton({
       </Button>
 
       <Dialog open={open} onOpenChange={(v) => (state !== 'loading' ? setOpen(v) : undefined)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="rounded-2xl border-slate-200 sm:max-w-lg">
           {(state === 'idle' || state === 'loading') && (
             <>
               <DialogHeader>
-                <DialogTitle>Create Bank Deposit</DialogTitle>
+                <DialogTitle className="flex items-center gap-2 text-lg"><Plus className="h-5 w-5 text-indigo-600" />Create bank deposit</DialogTitle>
                 <DialogDescription>
                   Bundle {totalSessions} received handover{totalSessions !== 1 ? 's' : ''} into one deposit record. You can then submit it to the bank.
                 </DialogDescription>
               </DialogHeader>
-              <div className="space-y-3 py-2">
-                <Input
+              <div className="space-y-4 py-2">
+                <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-4"><p className="text-xs font-semibold uppercase tracking-wider text-indigo-700">Deposit batch</p><p className="mt-1 text-sm font-semibold text-slate-800">{totalSessions} received handover{totalSessions !== 1 ? 's' : ''} selected</p><p className="mt-1 text-xs text-slate-500">This creates a controlled banking record ready for bank submission.</p></div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">Bank name <span className="font-normal normal-case text-slate-400">(optional)</span><Input
                   value={bankName}
                   onChange={(e) => setBankName(e.target.value)}
-                  placeholder="Bank name (optional)"
+                  placeholder="Enter receiving bank"
                   disabled={state === 'loading'}
-                />
-                <Input
+                  className="mt-1.5 rounded-xl"
+                /></label>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">Bank account <span className="font-normal normal-case text-slate-400">(optional)</span><Input
                   value={bankAccount}
                   onChange={(e) => setBankAccount(e.target.value)}
-                  placeholder="Bank account number (optional)"
+                  placeholder="Enter destination account number"
                   disabled={state === 'loading'}
-                />
+                  className="mt-1.5 rounded-xl"
+                /></label>
               </div>
               <DialogFooter>
                 <Button

@@ -73,14 +73,13 @@ export function ReceiveHandoverButton({
         open={dialog !== null}
         onOpenChange={(open) => !open && !isReceiving && setDialog(null)}
       >
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="rounded-2xl border-slate-200 sm:max-w-lg">
           {dialog === 'confirm' && (
             <>
               <DialogHeader>
-                <DialogTitle>Receive Payment Handover?</DialogTitle>
-                <DialogDescription>
-                  This confirms that you received the physical cash and the listed payment receipts. This action cannot be undone.
-                </DialogDescription>
+                <DialogTitle className="flex items-center gap-2 text-lg"><PackageCheck className="h-5 w-5 text-emerald-600" />Confirm physical receipt</DialogTitle>
+                <DialogDescription>This confirms that you received the physical cash and listed payment receipts. This action is recorded in the custody audit trail and cannot be undone.</DialogDescription>
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><p className="font-semibold">Before confirming</p><p className="mt-1 text-xs leading-5 text-amber-800">Count the physical cash, verify the handover reference, and confirm the supporting receipts are present.</p></div>
               </DialogHeader>
               <DialogFooter>
                 <Button

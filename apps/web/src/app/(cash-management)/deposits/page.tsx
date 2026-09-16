@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import { requireOrganizationContext } from '@/lib/organization-access';
 import { DepositActionButton } from './deposit-action-button';
 import { ensureCashierControlAccounts } from '@/lib/services/cash-account-service';
-import { Landmark } from 'lucide-react';
+import { Landmark, AlertTriangle, Banknote, CheckCircle2, Clock3, Activity, ShieldCheck, TrendingUp } from 'lucide-react';
 
 const statusMeta: Record<string, { label: string; classes: string }> = {
   RECONCILED: { label: 'Reconciled', classes: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
@@ -39,17 +39,24 @@ export default async function DepositsPage() {
   const selectedControlAccounts = allowedProperties.length === 1 ? controlAccounts[0] : [];
   const generalCashierSafe = selectedControlAccounts?.find((account) => account.type === 'SAFE');
   const cashInTransit = selectedControlAccounts?.find((account) => account.type === 'CASH_IN_TRANSIT');
+  const pendingDeposits = deposits.filter((deposit) => deposit.status === 'PENDING_HANDOVER');
+  const deposited = deposits.filter((deposit) => deposit.status === 'DEPOSITED');
+  const reconciled = deposits.filter((deposit) => deposit.status === 'RECONCILED');
+  const exceptions = deposits.filter((deposit) => deposit.status === 'EXCEPTION');
+  const pipelineAmount = deposits.filter((deposit) => !['RECONCILED'].includes(deposit.status)).reduce((sum, deposit) => sum + Number(deposit.expectedAmount || 0), 0);
+  const reconciledAmount = reconciled.reduce((sum, deposit) => sum + Number(deposit.expectedAmount || 0), 0);
+  const exceptionAmount = exceptions.reduce((sum, deposit) => sum + Number(deposit.difference || 0), 0);
 
   return (
     <div className="min-h-full">
       {/* Hero header */}
-      <div className="bg-gradient-to-r from-[#0b1120] to-[#1e2d50] px-8 py-7">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="relative overflow-hidden bg-gradient-to-r from-[#0b1120] via-[#101d34] to-[#0b1120] px-6 py-8 sm:px-8">
+        <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-emerald-500/15 blur-3xl" />
+        <div className="relative mx-auto flex max-w-[1440px] flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-white tracking-tight">Bank Deposits</h1>
-            <p className="text-slate-400 text-sm mt-1">
-              Create, submit, and reconcile deposits after physical cash handover.
-            </p>
+            <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />Banking control</p>
+            <h1 className="text-2xl font-bold tracking-tight text-white">Bank deposits</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">Move received cash from custody to the bank with a complete submission and reconciliation trail.</p>
           </div>
           <div className="text-xs text-slate-400 sm:text-right">
             Deposits are prepared automatically after handover.
@@ -57,7 +64,19 @@ export default async function DepositsPage() {
         </div>
       </div>
 
-      <div className="px-6 py-7 max-w-screen-xl mx-auto">
+      <div className="mx-auto max-w-[1440px] space-y-6 px-5 py-7 sm:px-8">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            { label: 'Deposit pipeline', value: `₦${pipelineAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, detail: `${pendingDeposits.length} pending handover`, icon: Banknote, tone: 'bg-amber-50 text-amber-700' },
+            { label: 'Reconciled value', value: `₦${reconciledAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, detail: `${reconciled.length} reconciled deposits`, icon: CheckCircle2, tone: 'bg-emerald-50 text-emerald-700' },
+            { label: 'Deposited', value: deposited.length, detail: 'Awaiting bank verification', icon: Clock3, tone: 'bg-blue-50 text-blue-700' },
+            { label: 'Exceptions', value: exceptions.length, detail: exceptionAmount ? `₦${Math.abs(exceptionAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })} difference` : 'No amount differences', icon: AlertTriangle, tone: exceptions.length ? 'bg-rose-50 text-rose-700' : 'bg-slate-100 text-slate-500' },
+          ].map((card) => { const Icon = card.icon; return <div key={card.label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-start justify-between"><div><p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">{card.label}</p><p className="mt-2 text-2xl font-black text-slate-950">{card.value}</p><p className="mt-1 text-xs text-slate-400">{card.detail}</p></div><span className={`flex h-10 w-10 items-center justify-center rounded-xl ${card.tone}`}><Icon className="h-5 w-5" /></span></div></div>; })}
+        </div>
+        <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
+          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><div className="flex items-start justify-between"><div><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.15em] text-emerald-600"><Activity className="h-4 w-4" />Deposit lifecycle</div><h2 className="mt-1 text-lg font-semibold text-slate-900">Control pipeline</h2><p className="mt-1 text-sm text-slate-500">Every deposit should move from handover to verified bank receipt.</p></div><TrendingUp className="h-5 w-5 text-emerald-500" /></div><div className="mt-7 grid grid-cols-3 gap-3"><div className="rounded-xl bg-amber-50 p-4"><p className="text-xs font-semibold text-amber-700">Pending</p><p className="mt-2 text-2xl font-black text-slate-900">{pendingDeposits.length}</p><p className="mt-1 text-xs text-slate-500">Needs submission</p></div><div className="rounded-xl bg-blue-50 p-4"><p className="text-xs font-semibold text-blue-700">Deposited</p><p className="mt-2 text-2xl font-black text-slate-900">{deposited.length}</p><p className="mt-1 text-xs text-slate-500">Needs verification</p></div><div className="rounded-xl bg-emerald-50 p-4"><p className="text-xs font-semibold text-emerald-700">Reconciled</p><p className="mt-2 text-2xl font-black text-slate-900">{reconciled.length}</p><p className="mt-1 text-xs text-slate-500">Control complete</p></div></div></section>
+          <section className="rounded-2xl border border-slate-200 bg-slate-950 p-6 text-white shadow-sm"><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.15em] text-indigo-300"><ShieldCheck className="h-4 w-4" />Banking posture</div><h2 className="mt-2 text-lg font-semibold">Reconciliation readiness</h2><p className="mt-2 text-sm leading-6 text-slate-400">Deposits with differences remain visible as exceptions until the bank-confirmed amount is explained.</p><div className="mt-6 flex items-center justify-between rounded-xl bg-white/10 p-4"><span className="text-sm text-slate-300">Exception queue</span><span className={exceptions.length ? 'font-bold text-rose-300' : 'font-bold text-emerald-300'}>{exceptions.length ? `${exceptions.length} action${exceptions.length === 1 ? '' : 's'} needed` : 'Clear'}</span></div></section>
+        </div>
         {allowedProperties.length === 1 && generalCashierSafe && cashInTransit && (
           <div className="mb-6 grid gap-3 md:grid-cols-2">
             {[
@@ -80,7 +99,7 @@ export default async function DepositsPage() {
             <div className="flex items-center gap-2">
               <Landmark className="h-4 w-4 text-slate-500" />
               <span className="text-sm font-semibold text-slate-700">
-                All Deposits
+                Deposit register
               </span>
               <span className="ml-1 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-slate-200 text-slate-600 text-xs font-bold">
                 {deposits.length}

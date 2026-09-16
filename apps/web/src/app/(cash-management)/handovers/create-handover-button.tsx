@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Dialog,
   DialogContent,
@@ -75,28 +76,31 @@ export function CreateHandoverButton({
       </Button>
 
       <Dialog open={open} onOpenChange={(v) => (state !== 'loading' ? setOpen(v) : undefined)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="rounded-2xl border-slate-200 sm:max-w-lg">
           {(state === 'idle' || state === 'loading') && (
             <>
               <DialogHeader>
-                <DialogTitle>Create Payment Handover</DialogTitle>
+                <DialogTitle className="flex items-center gap-2 text-lg"><ArrowLeftRight className="h-5 w-5 text-indigo-600" />Create payment handover</DialogTitle>
                 <DialogDescription>
                   This places {totalSessions} approved shift{totalSessions !== 1 ? 's' : ''} into custody transfer. The receiving cashier must confirm physical receipt.
                 </DialogDescription>
               </DialogHeader>
-              <div className="space-y-3 py-2">
-                <Input
+              <div className="space-y-4 py-2">
+                <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-4"><p className="text-xs font-semibold uppercase tracking-wider text-indigo-700">Transfer summary</p><p className="mt-1 text-sm font-semibold text-slate-800">{totalSessions} approved shift{totalSessions !== 1 ? 's' : ''} · ready for custody transfer</p><p className="mt-1 text-xs text-slate-500">The receiving cashier must confirm physical receipt before this custody step is complete.</p></div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">Safe reference <span className="font-normal normal-case text-slate-400">(optional)</span><Input
                   value={safeReference}
                   onChange={(e) => setSafeReference(e.target.value)}
-                  placeholder="Safe reference (optional)"
+                  placeholder="Enter a safe bag, seal, or internal reference"
                   disabled={state === 'loading'}
-                />
-                <Input
+                  className="mt-1.5 rounded-xl"
+                /></label>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">Custody notes <span className="font-normal normal-case text-slate-400">(optional)</span><Textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Notes (optional)"
+                  placeholder="Add any handover observations or seal details"
                   disabled={state === 'loading'}
-                />
+                  className="mt-1.5 rounded-xl"
+                /></label>
               </div>
               <DialogFooter>
                 <Button

@@ -25,8 +25,6 @@ import {
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import {
   Loader2,
-  Download,
-  Printer,
   CheckCircle2,
   ShieldCheck,
   AlertTriangle,
@@ -213,32 +211,6 @@ export default function ShiftReportPage() {
     }
   };
 
-  const exportReport = () => {
-    const rows = (report?.shifts || []).map((shift: any) => [
-      shift.type,
-      shift.shiftReference || shift.id,
-      shift.controlStatus || shift.status,
-      shift.operator ? `${shift.operator.firstName} ${shift.operator.lastName}` : '',
-      Number(shift.expectedCash || 0),
-      Number(shift.declaredCash || 0),
-      Number(shift.variance || 0),
-    ]);
-    const csv = [
-      ['Type', 'Shift', 'Status', 'Operator', 'Expected Handover', 'Declared Cash', 'Variance'],
-      ...rows,
-    ]
-      .map((row) =>
-        row.map((value: any) => `"${String(value ?? '').replaceAll('"', '""')}"`).join(',')
-      )
-      .join('\n');
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `shift-report-${date}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
-
   useEffect(() => {
     if (selectedShift) {
       if (shiftVariance === 0) setDecision('APPROVED');
@@ -360,25 +332,6 @@ export default function ShiftReportPage() {
             <p className="text-slate-400 text-sm mt-1">
               {isDetailView ? 'Review one shift, document the outcome, and complete its control trail.' : 'Monitor every live till, reconcile submitted shifts, and protect the audit trail.'}
             </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => window.print()}
-              className="border-white/20 bg-white/10 text-white hover:bg-white/20 hover:text-white"
-            >
-              <Printer className="h-4 w-4 mr-1.5" /> Print
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={exportReport}
-              disabled={!shifts.length}
-              className="border-white/20 bg-white/10 text-white hover:bg-white/20 hover:text-white disabled:opacity-40"
-            >
-              <Download className="h-4 w-4 mr-1.5" /> Export CSV
-            </Button>
           </div>
         </div>
       </div>

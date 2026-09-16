@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Dialog,
   DialogContent,
@@ -116,23 +117,24 @@ export function DepositActionButton({
         open={dialog !== null}
         onOpenChange={(open) => !open && !loading && setDialog(null)}
       >
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="rounded-2xl border-slate-200 sm:max-w-lg">
           {dialog === 'submit' && (
             <>
               <DialogHeader>
-                <DialogTitle>Submit Deposit to Bank</DialogTitle>
+                <DialogTitle className="flex items-center gap-2 text-lg"><Upload className="h-5 w-5 text-indigo-600" />Submit deposit to bank</DialogTitle>
                 <DialogDescription>
                   Confirm that the physical cash has been deposited. Enter the bank receipt or reference number if available.
                 </DialogDescription>
               </DialogHeader>
-              <div className="py-2">
+              <div className="space-y-4 py-2">
+                <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-4 text-xs leading-5 text-indigo-900">Confirm the receiving bank account and record the bank evidence before submitting this deposit.</div>
                 <div className="space-y-3">
-                  <select value={bankAccountId} onChange={(e) => setBankAccountId(e.target.value)} className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">Receiving bank account<select value={bankAccountId} onChange={(e) => setBankAccountId(e.target.value)} className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm">
                     <option value="">Select configured bank account</option>
                     {bankAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}{account.accountNumber ? ` · ${account.accountNumber}` : ''}</option>)}
-                  </select>
-                  <Input value={bankReference} onChange={(e) => setBankReference(e.target.value)} placeholder="Bank reference / receipt number" />
-                  <Input value={bankReceiptUrl} onChange={(e) => setBankReceiptUrl(e.target.value)} placeholder="Deposit receipt URL (optional)" />
+                  </select></label>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">Bank reference<Input value={bankReference} onChange={(e) => setBankReference(e.target.value)} placeholder="Bank reference or receipt number" className="mt-1.5 rounded-xl" /></label>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">Receipt evidence <span className="font-normal normal-case text-slate-400">(optional)</span><Input value={bankReceiptUrl} onChange={(e) => setBankReceiptUrl(e.target.value)} placeholder="Secure receipt URL" className="mt-1.5 rounded-xl" /></label>
                 </div>
               </div>
               <DialogFooter>
@@ -150,25 +152,28 @@ export function DepositActionButton({
           {dialog === 'verify' && (
             <>
               <DialogHeader>
-                <DialogTitle>Reconcile Bank Deposit</DialogTitle>
+                <DialogTitle className="flex items-center gap-2 text-lg"><BadgeCheck className="h-5 w-5 text-emerald-600" />Reconcile bank deposit</DialogTitle>
                 <DialogDescription>
                   Enter the amount confirmed by the bank. Any difference will be flagged as an exception for investigation.
                 </DialogDescription>
               </DialogHeader>
-              <div className="space-y-3 py-2">
-                <Input
+              <div className="space-y-4 py-2">
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-900">Enter the amount confirmed by the bank. Any difference will remain visible as an exception until it is explained.</div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">Bank-confirmed amount<Input
                   type="number"
                   min="0"
                   step="0.01"
                   value={confirmedAmount}
                   onChange={(e) => setConfirmedAmount(e.target.value)}
-                  placeholder="Bank-confirmed amount"
-                />
-                <Input
+                  placeholder="0.00"
+                  className="mt-1.5 rounded-xl"
+                /></label>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">Reconciliation notes <span className="font-normal normal-case text-slate-400">(optional)</span><Textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Reconciliation notes (optional)"
-                />
+                  placeholder="Document any difference or verification notes"
+                  className="mt-1.5 rounded-xl"
+                /></label>
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setDialog(null)}>
