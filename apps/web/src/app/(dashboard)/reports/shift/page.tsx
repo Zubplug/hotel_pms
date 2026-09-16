@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { format, startOfDay, endOfDay } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -155,9 +156,16 @@ export default function ShiftReportPage() {
     ? (selectedShift.declaredCash != null ? Number(selectedShift.declaredCash) : 0) -
       (selectedShift.expectedCash != null ? Number(selectedShift.expectedCash) : 0)
     : 0;
+  const requiresInvestigationNotes = decision !== 'APPROVED';
+  const notesAreValid = !requiresInvestigationNotes || approvalNotes.trim().length >= 10;
+  const reviewInputsAreValid = notesAreValid && (decision !== 'APPROVED_WITH_VARIANCE' || Boolean(reasonCode));
 
   const approveShift = async () => {
     if (!selectedShift || !shiftId) return;
+    if (!reviewInputsAreValid) {
+      setApprovalState(decision === 'APPROVED_WITH_VARIANCE' && !reasonCode ? 'Select a variance reason before submitting.' : 'Add at least 10 characters to the required investigation notes.');
+      return;
+    }
     setApproving(true);
     setApprovalState('');
     try {
@@ -271,6 +279,7 @@ export default function ShiftReportPage() {
   const dashboardReport = overviewReport || report;
   const pageLoading = isLoading || overviewLoading;
   const pageError = error || overviewError;
+  const isDetailView = Boolean(shiftId);
   const shifts = dashboardReport?.shifts ?? [];
   const getShiftStatus = (shift: any) => shift.controlStatus || shift.status || 'OPEN';
   const liveShifts = shifts.filter((shift: any) => ['OPEN', 'CLOSING'].includes(getShiftStatus(shift)) || shift.status === 'OPEN');
@@ -328,10 +337,10 @@ export default function ShiftReportPage() {
               General cashier operations
             </p>
             <h1 className="text-2xl font-bold text-white tracking-tight">
-              Shift control room
+              {isDetailView ? 'Shift detail & reconciliation' : 'Shift control room'}
             </h1>
             <p className="text-slate-400 text-sm mt-1">
-              Monitor every live till, reconcile submitted shifts, and protect the audit trail.
+              {isDetailView ? 'Review one shift, document the outcome, and complete its control trail.' : 'Monitor every live till, reconcile submitted shifts, and protect the audit trail.'}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -357,7 +366,7 @@ export default function ShiftReportPage() {
       </div>
 
       <div className="mx-auto max-w-[1400px] space-y-6 px-5 py-7 sm:px-8">
-        {!pageLoading && !pageError && (
+        {!isDetailView && !pageLoading && !pageError && (
           <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm print:hidden sm:p-5">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
               <div className="flex items-center gap-3">
@@ -402,6 +411,8 @@ export default function ShiftReportPage() {
 
         {!pageLoading && !pageError && (
           <>
+            {!isDetailView && (
+              <>
             {/* ─── Portfolio control snapshot ─── */}
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               {[
@@ -434,12 +445,14 @@ export default function ShiftReportPage() {
                 <div className="mt-6 flex items-center justify-between border-t border-slate-100 pt-4 text-xs"><span className="font-medium text-slate-500">Net collections</span><span className="font-bold text-slate-900">{fmt(Number(dashboardReport?.cashierTotals?.net || 0))}</span></div>
               </section>
             </div>
+              </>
+            )}
 
             {selectedShift && (
               <section className="rounded-2xl border border-indigo-200 bg-indigo-50/50 p-4 shadow-sm print:hidden sm:p-5">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="flex items-center gap-3"><Button variant="outline" size="icon" className="h-9 w-9 rounded-xl bg-white" onClick={clearSelectedShift} aria-label="Back to shift queue"><ArrowLeft className="h-4 w-4" /></Button><div><p className="text-xs font-semibold uppercase tracking-[0.15em] text-indigo-600">Selected shift review</p><p className="mt-1 text-sm text-slate-600">Use the selector to move between operational shifts without leaving the review workspace.</p></div></div>
-                  <div className="flex w-full items-center gap-2 lg:w-auto"><Select value={selectedShift.id} onValueChange={setSelectedShift}><SelectTrigger className="h-10 w-full min-w-0 rounded-xl border-indigo-200 bg-white sm:min-w-[320px]"><SelectValue placeholder="Select a shift" /></SelectTrigger><SelectContent>{shifts.map((shift: any) => <SelectItem key={shift.id} value={shift.id}>{shift.operator ? `${shift.operator.firstName} ${shift.operator.lastName}` : 'Unassigned'} · {shift.outlet?.name || shift.till?.name || 'Till'} · {getShiftStatus(shift).replace(/_/g, ' ')}</SelectItem>)}</SelectContent></Select><Button variant="outline" className="h-10 rounded-xl bg-white" onClick={clearSelectedShift}>Queue</Button></div>
+                  <div className="flex items-center gap-3"><Button variant="outline" size="icon" className="h-10 w-10 rounded-xl border-indigo-200 bg-white text-indigo-700 shadow-sm hover:bg-indigo-50" onClick={clearSelectedShift} aria-label="Back to shift queue"><ArrowLeft className="h-4 w-4" /></Button><div><p className="text-xs font-semibold uppercase tracking-[0.15em] text-indigo-600">Selected shift review</p><p className="mt-1 text-sm text-slate-600">Move between operational shifts without leaving the detail workspace.</p></div></div>
+                  <div className="flex w-full items-end gap-2 lg:w-auto"><div className="min-w-0 flex-1 lg:min-w-[360px]"><label className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.14em] text-indigo-700">Shift navigator</label><Select value={selectedShift.id} onValueChange={setSelectedShift}><SelectTrigger className="h-11 w-full rounded-xl border-indigo-200 bg-white text-left shadow-sm"><SelectValue placeholder="Choose a shift to review" /></SelectTrigger><SelectContent className="min-w-[360px]">{shifts.map((shift: any) => <SelectItem key={shift.id} value={shift.id} className="py-2.5"><div className="flex min-w-0 items-center gap-3"><span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[9px] font-bold ${shift.type === 'POS' ? 'bg-blue-50 text-blue-700' : 'bg-violet-50 text-violet-700'}`}>{shift.type === 'POS' ? 'POS' : 'FD'}</span><span className="min-w-0"><span className="block truncate font-semibold">{shift.operator ? `${shift.operator.firstName} ${shift.operator.lastName}` : 'Unassigned operator'}</span><span className="block truncate text-[11px] text-muted-foreground">{shift.outlet?.name || shift.till?.name || 'Till'} · {getShiftStatus(shift).replace(/_/g, ' ')}</span></span></div></SelectItem>)}</SelectContent></Select></div><Button variant="outline" className="h-11 rounded-xl border-indigo-200 bg-white px-4 text-indigo-700 shadow-sm hover:bg-indigo-50" onClick={clearSelectedShift}>Queue</Button></div>
                 </div>
               </section>
             )}
@@ -684,23 +697,40 @@ export default function ShiftReportPage() {
                   )}
 
                   {/* Notes */}
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wider">
-                      Investigation Notes{decision !== 'APPROVED' ? ' (Required)' : ''}
-                    </label>
-                    <Input
+                  <div className={cn('rounded-2xl border p-4 transition-colors', requiresInvestigationNotes ? 'border-amber-200 bg-amber-50/40' : 'border-slate-200 bg-slate-50/50')}>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <label htmlFor="investigation-notes" className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.12em] text-slate-700">
+                          Investigation notes
+                          {requiresInvestigationNotes && <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold normal-case tracking-normal text-rose-700">Required</span>}
+                          {!requiresInvestigationNotes && <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-bold normal-case tracking-normal text-slate-500">Optional</span>}
+                        </label>
+                        <p id="investigation-notes-help" className="mt-1 text-xs leading-5 text-slate-500">
+                          {requiresInvestigationNotes ? 'Record what was checked and why this decision is appropriate. This becomes part of the permanent audit trail.' : 'Add context for the reviewer or future audit reference.'}
+                        </p>
+                      </div>
+                      <span className={cn('text-xs tabular-nums', requiresInvestigationNotes && !notesAreValid ? 'font-semibold text-amber-700' : 'text-slate-400')}>{approvalNotes.length}/1000</span>
+                    </div>
+                    <Textarea
+                      id="investigation-notes"
                       value={approvalNotes}
-                      onChange={(e) => setApprovalNotes(e.target.value)}
-                      placeholder="Details of investigation or reason for decision…"
-                      className="bg-white border-slate-200 rounded-xl"
+                      onChange={(e) => setApprovalNotes(e.target.value.slice(0, 1000))}
+                      placeholder={requiresInvestigationNotes ? 'Example: Counted cash with the operator, checked cash-drop slips, and confirmed the shortage relates to…' : 'Add optional review context…'}
+                      rows={4}
+                      maxLength={1000}
+                      aria-required={requiresInvestigationNotes}
+                      aria-invalid={requiresInvestigationNotes && approvalNotes.length > 0 && !notesAreValid}
+                      aria-describedby="investigation-notes-help"
+                      className={cn('mt-3 resize-y rounded-xl bg-white text-sm leading-6 shadow-sm', requiresInvestigationNotes && !notesAreValid ? 'border-amber-300 focus-visible:border-amber-400 focus-visible:ring-amber-200' : 'border-slate-200')}
                     />
+                    {requiresInvestigationNotes && !notesAreValid && <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-amber-700"><AlertTriangle className="h-3.5 w-3.5" />Enter at least 10 characters before submitting this review.</p>}
                   </div>
 
                   {/* Submit */}
                   <div className="flex items-center gap-4">
                     <Button
                       onClick={approveShift}
-                      disabled={approving}
+                      disabled={approving || !reviewInputsAreValid}
                       className={cn(
                         'rounded-xl px-5 font-semibold',
                         decision === 'REJECTED'
