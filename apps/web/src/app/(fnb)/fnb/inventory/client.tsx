@@ -138,20 +138,24 @@ export function FnbInventoryClient() {
         description={`Inventory variance analysis for ${data?.warehouse?.name || 'the selected outlet'}.`}
         actions={
           <div className="flex items-center gap-3">
-            <Select value={selectedWarehouseId} onValueChange={(v) => setSelectedWarehouseId(v || '')}>
-              <SelectTrigger className="w-[280px] bg-background/60 backdrop-blur-md border-slate-200 dark:border-slate-800 shadow-sm">
-                <SelectValue placeholder="Select Warehouse..." />
+            <div className="flex flex-col gap-1.5">
+              <span className="px-1 text-[10px] font-bold uppercase tracking-[0.12em] text-[#927b70]">Inventory scope</span>
+              <Select value={selectedWarehouseId} onValueChange={(v) => setSelectedWarehouseId(v || '')}>
+              <SelectTrigger className="h-11 w-full rounded-xl border-[#eadfd8] bg-white text-[#24130d] shadow-[0_5px_16px_rgba(65,32,19,0.05)] hover:border-orange-300 focus:ring-orange-100 sm:w-[300px]">
+                <SelectValue placeholder="Select warehouse…" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="w-[340px] rounded-2xl border-[#eadfd8] bg-white p-2 shadow-2xl">
                 {warehouses.map(w => (
-                  <SelectItem key={w.id} value={w.id}>
-                    {'\u00A0'.repeat(w.depth * 4)}
-                    {w.depth > 0 ? '├─ ' : ''}
-                    {w.name}
+                  <SelectItem key={w.id} value={w.id} className="rounded-xl py-3 pl-3 pr-3 focus:bg-[#fff7ed] focus:text-[#7c2d12]">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${w.depth > 0 ? 'bg-[#f7eee9] text-[#7c2d12]' : 'bg-orange-50 text-orange-600'}`}><Warehouse className="h-4 w-4" /></span>
+                      <span className="min-w-0"><span className="block truncate font-semibold">{w.name}</span><span className="mt-0.5 block text-[10px] font-medium text-[#927b70]">{w.depth > 0 ? 'Outlet storage location' : 'Primary inventory warehouse'}</span></span>
+                    </div>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            </div>
             <Button 
               variant="outline" 
               onClick={fetchReport} 
