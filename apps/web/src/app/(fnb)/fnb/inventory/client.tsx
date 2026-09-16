@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { Search, Filter, AlertCircle, Percent, ArrowUpRight, ArrowDownRight, RefreshCw, Loader2, PackageSearch } from 'lucide-react';
+import { Search, Filter, AlertCircle, Percent, ArrowUpRight, ArrowDownRight, RefreshCw, Loader2, PackageSearch, BarChart3, PackageCheck, Warehouse, TrendingDown } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -127,9 +127,12 @@ export function FnbInventoryClient() {
   }, [filteredItems]);
 
   const countedPercentage = summary.totalItems > 0 ? (summary.itemsCounted / summary.totalItems) * 100 : 0;
+  const shortageItems = filteredItems.filter((item: any) => item.physicalQuantity !== null && Number(item.varianceQuantity || 0) < 0).length;
+  const overageItems = filteredItems.filter((item: any) => item.physicalQuantity !== null && Number(item.varianceQuantity || 0) > 0).length;
+  const varianceRate = summary.itemsCounted > 0 ? ((shortageItems + overageItems) / summary.itemsCounted) * 100 : 0;
 
   return (
-    <div className="p-6 md:p-8 space-y-8 bg-slate-50/50 dark:bg-slate-950/20 min-h-screen">
+    <div className="min-h-screen bg-[#fbf8f6] p-4 font-sans text-[#24130d] sm:p-6 lg:p-8">
       <PageHeader 
         title="Physical vs Book Stock" 
         description={`Inventory variance analysis for ${data?.warehouse?.name || 'the selected outlet'}.`}
@@ -160,6 +163,12 @@ export function FnbInventoryClient() {
           </div>
         }
       />
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <div className="rounded-2xl border border-[#eadfd8] bg-white p-5 shadow-[0_8px_24px_rgba(65,32,19,0.05)]"><div className="flex items-start justify-between"><div><p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#927b70]">Inventory posture</p><p className="mt-3 text-xl font-bold text-[#24130d]">{summary.itemsCounted} / {summary.totalItems}</p><p className="mt-1 text-xs text-[#927b70]">Items counted in the selected warehouse</p></div><span className="rounded-xl bg-orange-50 p-3 text-orange-600"><PackageCheck className="h-5 w-5" /></span></div><div className="mt-4 h-2 overflow-hidden rounded-full bg-[#f4ebe6]"><div className="h-full rounded-full bg-orange-500" style={{ width: `${Math.min(100, countedPercentage)}%` }} /></div></div>
+        <div className="rounded-2xl border border-[#eadfd8] bg-white p-5 shadow-[0_8px_24px_rgba(65,32,19,0.05)]"><div className="flex items-start justify-between"><div><p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#927b70]">Variance exposure</p><p className={`mt-3 text-xl font-bold ${summary.netVarianceValue < 0 ? 'text-red-700' : 'text-emerald-700'}`}>{formatCurrency(summary.netVarianceValue)}</p><p className="mt-1 text-xs text-[#927b70]">Net financial impact of counted stock</p></div><span className="rounded-xl bg-[#f7eee9] p-3 text-[#7c2d12]"><BarChart3 className="h-5 w-5" /></span></div><p className="mt-4 text-xs font-semibold text-[#7c2d12]">{varianceRate.toFixed(1)}% of counted lines have a variance</p></div>
+        <div className="rounded-2xl border border-[#eadfd8] bg-white p-5 shadow-[0_8px_24px_rgba(65,32,19,0.05)]"><div className="flex items-start justify-between"><div><p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#927b70]">Manager attention</p><p className="mt-3 text-xl font-bold text-[#24130d]">{shortageItems} shortages</p><p className="mt-1 text-xs text-[#927b70]">{overageItems} overage lines · review before close</p></div><span className="rounded-xl bg-red-50 p-3 text-red-600"><TrendingDown className="h-5 w-5" /></span></div><p className="mt-4 text-xs font-semibold text-red-700">{summary.shortageValue > 0 ? `${formatCurrency(summary.shortageValue)} shortage value` : 'No shortage value recorded'}</p></div>
+      </div>
 
       <div className="grid gap-4 md:grid-cols-4">
         {/* Net Variance */}

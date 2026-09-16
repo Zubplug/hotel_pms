@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useProperty } from '@/components/PropertyProvider';
 import {
-  AlertTriangle, CheckCircle2, Loader2, RefreshCw, AlertOctagon, TrendingUp, CreditCard
+  AlertTriangle, CheckCircle2, Loader2, RefreshCw, AlertOctagon, TrendingUp, CreditCard, BarChart3, Activity
 } from 'lucide-react';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -85,9 +85,10 @@ export default function FnbDashboardClient({ managerMode = false }: { managerMod
 
   const maxQty = Math.max(...topSellingItems.map((i: any) => i.quantitySold), 1);
   const totalPayments = salesBreakdown.reduce((sum: number, p: any) => sum + p.amount, 0);
+  const exceptionCount = sortedAlerts.length + Number(kpis.openOrders || 0) + Number(kpis.openSessions || 0);
 
   return (
-    <div className="min-h-screen px-4 pb-16 pt-6 sm:px-6 sm:pt-8 md:px-8 bg-slate-50/50 font-sans">
+    <div className="min-h-screen bg-[#fbf8f6] px-4 pb-16 pt-6 font-sans text-[#24130d] sm:px-6 sm:pt-8 md:px-8">
       <div className="mx-auto max-w-[1540px] space-y-8">
 
         {/* Header */}
@@ -105,6 +106,12 @@ export default function FnbDashboardClient({ managerMode = false }: { managerMod
             </Button>
           }
         />
+
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div className="rounded-2xl border border-[#eadfd8] bg-white p-5 shadow-[0_8px_24px_rgba(65,32,19,0.05)]"><div className="flex items-start justify-between"><div><p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#927b70]">Control posture</p><p className="mt-3 text-2xl font-bold text-[#24130d]">{exceptionCount ? 'Attention required' : 'Ready to close'}</p><p className="mt-1 text-xs text-[#927b70]">{exceptionCount} active control signal{exceptionCount === 1 ? '' : 's'}</p></div><span className={`rounded-xl p-3 ${exceptionCount ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'}`}><Activity className="h-5 w-5" /></span></div></div>
+          <div className="rounded-2xl border border-[#eadfd8] bg-white p-5 shadow-[0_8px_24px_rgba(65,32,19,0.05)]"><div className="flex items-start justify-between"><div><p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#927b70]">Tender readiness</p><p className="mt-3 text-2xl font-bold text-[#24130d]">{money(totalPayments, currency)}</p><p className="mt-1 text-xs text-[#927b70]">Payments currently collected</p></div><span className="rounded-xl bg-[#f7eee9] p-3 text-[#7c2d12]"><CreditCard className="h-5 w-5" /></span></div></div>
+          <div className="rounded-2xl border border-[#eadfd8] bg-white p-5 shadow-[0_8px_24px_rgba(65,32,19,0.05)]"><div className="flex items-start justify-between"><div><p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#927b70]">Service pulse</p><p className="mt-3 text-2xl font-bold text-[#24130d]">{kpis.covers || 0} covers</p><p className="mt-1 text-xs text-[#927b70]">{kpis.openOrders || 0} orders · {kpis.openSessions || 0} sessions open</p></div><span className="rounded-xl bg-orange-50 p-3 text-orange-600"><BarChart3 className="h-5 w-5" /></span></div></div>
+        </div>
 
         {/* Audit Readiness Hero */}
         <div className={`relative overflow-hidden rounded-2xl border ${blockClose ? 'bg-white border-amber-200 shadow-sm shadow-amber-900/5' : 'bg-slate-900 border-slate-800 shadow-xl'}`}>

@@ -5,7 +5,7 @@ import { useProperty } from '@/components/PropertyProvider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Search, Plus, Filter, MoreHorizontal, Loader2, Tags, ShieldCheck, Check, X, AlertCircle } from 'lucide-react';
+import { Search, Plus, Filter, MoreHorizontal, Loader2, Tags, ShieldCheck, Check, X, AlertCircle, BarChart3, CircleDollarSign, Layers3, PackageCheck, Store, TrendingUp, Utensils } from 'lucide-react';
 
 type AnyRecord = Record<string, any>;
 const money = (amount: number) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
@@ -107,6 +107,19 @@ export function FnbMenuClient() {
 
   const categoryOptions = useMemo(() => categoryGroups.filter((category) => category.isActive), [categoryGroups]);
 
+  const menuInsights = useMemo(() => {
+    const activeItems = products.filter((product) => product.isActive).length;
+    const inactiveItems = products.length - activeItems;
+    const outOfStock = products.filter((product) => product.stockStatus === 'OUT_OF_STOCK').length;
+    const stockControlled = products.filter((product) => product.inventoryMode === 'STOCK' || product.inventoryMode === 'PREPARED_RECIPE').length;
+    const modifierCount = products.reduce((total, product) => total + (product.modifiers?.length || 0), 0);
+    const categoryMix = categoryGroups.map((category) => ({
+      name: category.name,
+      items: products.filter((product) => (product.locations || []).some((location: AnyRecord) => categoryKey(location.category) === categoryKey(category.name))).length,
+    })).sort((a, b) => b.items - a.items).slice(0, 5);
+    return { activeItems, inactiveItems, outOfStock, stockControlled, modifierCount, categoryMix };
+  }, [products, categoryGroups]);
+
   const request = async (url: string, method: string, body: AnyRecord) => {
     const response = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const json = await response.json().catch(() => ({}));
@@ -169,34 +182,46 @@ export function FnbMenuClient() {
   const updateCategory = async (category: AnyRecord) => { try { const name = categoryEdits[category.id] ?? category.name; await Promise.all(category.categoryIds.map((categoryId: string) => request(`/api/v1/pos/categories/${categoryId}`, 'PATCH', { propertyId, name }))); setMessage(`Category updated across ${category.categoryIds.length} outlet${category.categoryIds.length === 1 ? '' : 's'}.`); await load(); } catch (err: any) { setMessage(err.message); } };
   const toggleCategory = async (category: AnyRecord) => { try { await Promise.all(category.categoryIds.map((categoryId: string) => request(`/api/v1/pos/categories/${categoryId}`, 'PATCH', { propertyId, isActive: !category.isActive }))); setMessage(category.isActive ? 'Category deactivated across outlets.' : 'Category activated across outlets.'); await load(); } catch (err: any) { setMessage(err.message); } };
 
-  // UI Redesign Start
   return (
-    <div className="min-h-screen bg-slate-50/50 p-4 md:p-8 text-slate-900 font-sans">
-      <div className="mx-auto max-w-7xl space-y-8">
+    <div className="min-h-screen bg-[#fbf8f6] text-[#24130d] font-sans">
+      <div className="mx-auto max-w-[1600px]">
         
-        {/* Header Section */}
-        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight text-slate-900">F&B Menu</h1>
-            <p className="mt-1 text-sm text-slate-500">Manage products, pricing, availability and modifiers</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <Button variant="outline" onClick={() => setDialog('category')} className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900 shadow-sm transition-all duration-200">
+        <div className="border-b border-[#3d2318] bg-[#24130d] px-4 py-7 text-white sm:px-6 lg:px-8">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div><div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-orange-300"><Utensils className="h-4 w-4" /> F&B menu control</div><h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Menu command centre</h1><p className="mt-2 max-w-2xl text-sm text-orange-100/75">Control the menu catalogue, pricing workflow, availability, inventory linkage, and outlet consistency from one manager workspace.</p></div>
+            <div className="flex flex-wrap items-center gap-3">
+            <Button variant="outline" onClick={() => setDialog('category')} className="border-white/15 bg-white/10 text-white hover:bg-white/15 hover:text-white shadow-sm transition-all duration-200">
               <Tags className="mr-2 h-4 w-4" />
               Categories
             </Button>
-            <Button variant="outline" asChild className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900 shadow-sm transition-all duration-200">
+            <Button variant="outline" asChild className="border-white/15 bg-white/10 text-white hover:bg-white/15 hover:text-white shadow-sm transition-all duration-200">
               <a href="/fnb/requests">
-                <ShieldCheck className="mr-2 h-4 w-4 text-emerald-600" />
+                <ShieldCheck className="mr-2 h-4 w-4 text-orange-300" />
                 My Requests
               </a>
             </Button>
-            <Button onClick={openAdd} className="bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm transition-all duration-200">
+            <Button onClick={openAdd} className="bg-orange-500 text-white hover:bg-orange-600 shadow-sm transition-all duration-200">
               <Plus className="mr-2 h-4 w-4" />
               Add Item
             </Button>
+            </div>
           </div>
         </div>
+
+        <div className="space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {[
+              { label: 'Menu items', value: products.length, detail: `${menuInsights.activeItems} available across outlets`, icon: Layers3, tone: 'bg-orange-50 text-orange-600' },
+              { label: 'Categories', value: categoryGroups.length, detail: `${categoryOptions.length} active categories`, icon: BarChart3, tone: 'bg-[#f7eee9] text-[#7c2d12]' },
+              { label: 'Stock linked', value: menuInsights.stockControlled, detail: `${menuInsights.outOfStock} currently out of stock`, icon: PackageCheck, tone: menuInsights.outOfStock ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600' },
+              { label: 'Outlet coverage', value: outlets.length, detail: `${menuInsights.modifierCount} modifiers configured`, icon: Store, tone: 'bg-amber-50 text-amber-600' },
+            ].map((metric) => <div key={metric.label} className="rounded-2xl border border-[#eadfd8] bg-white p-5 shadow-[0_8px_24px_rgba(65,32,19,0.05)]"><div className="flex items-start justify-between gap-3"><div><p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#927b70]">{metric.label}</p><p className="mt-3 text-2xl font-bold tracking-tight text-[#24130d]">{metric.value}</p><p className="mt-1 text-xs text-[#927b70]">{metric.detail}</p></div><span className={`rounded-xl p-3 ${metric.tone}`}><metric.icon className="h-5 w-5" /></span></div></div>)}
+          </div>
+
+          <div className="grid gap-6 lg:grid-cols-[1.35fr_1fr]">
+            <section className="rounded-2xl border border-[#eadfd8] bg-white p-5 shadow-[0_8px_24px_rgba(65,32,19,0.045)]"><div className="mb-5 flex items-start justify-between"><div><h2 className="text-base font-bold text-[#24130d]">Menu health</h2><p className="mt-1 text-xs text-[#927b70]">Signals that affect service readiness and revenue capture</p></div><TrendingUp className="h-5 w-5 text-orange-500" /></div><div className="grid gap-3 sm:grid-cols-3"><div className="rounded-xl bg-[#fff7ed] p-4"><p className="text-xs font-semibold text-orange-700">Available</p><p className="mt-2 text-xl font-bold text-orange-950">{menuInsights.activeItems}</p><p className="mt-1 text-xs text-orange-700/80">Items live for ordering</p></div><div className="rounded-xl bg-red-50 p-4"><p className="text-xs font-semibold text-red-700">Needs attention</p><p className="mt-2 text-xl font-bold text-red-950">{menuInsights.outOfStock + menuInsights.inactiveItems}</p><p className="mt-1 text-xs text-red-700/80">Out of stock or 86’d</p></div><div className="rounded-xl bg-[#f7eee9] p-4"><p className="text-xs font-semibold text-[#7c2d12]">Price workflow</p><p className="mt-2 text-xl font-bold text-[#3d2318]">Approval-led</p><p className="mt-1 text-xs text-[#7c2d12]/80">Changes remain controlled</p></div></div></section>
+            <section className="rounded-2xl border border-[#eadfd8] bg-white p-5 shadow-[0_8px_24px_rgba(65,32,19,0.045)]"><div className="mb-5 flex items-start justify-between"><div><h2 className="text-base font-bold text-[#24130d]">Category coverage</h2><p className="mt-1 text-xs text-[#927b70]">Items grouped by menu class</p></div><CircleDollarSign className="h-5 w-5 text-orange-500" /></div><div className="space-y-3">{menuInsights.categoryMix.length ? menuInsights.categoryMix.map((category) => { const percentage = products.length ? Math.round((category.items / products.length) * 100) : 0; return <div key={category.name}><div className="mb-1 flex justify-between text-xs"><span className="font-semibold text-[#4f392f]">{category.name}</span><span className="text-[#927b70]">{category.items} · {percentage}%</span></div><div className="h-2 overflow-hidden rounded-full bg-[#f4ebe6]"><div className="h-full rounded-full bg-orange-500" style={{ width: `${percentage}%` }} /></div></div>; }) : <p className="py-5 text-center text-sm text-[#927b70]">No categories configured yet.</p>}</div></section>
+          </div>
 
         {/* Notifications */}
         {(error || message) && (
@@ -728,6 +753,7 @@ export function FnbMenuClient() {
             </div>
           </div>
         )}
+        </div>
       </div>
     </div>
   );

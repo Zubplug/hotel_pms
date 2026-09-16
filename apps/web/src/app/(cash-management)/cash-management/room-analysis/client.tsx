@@ -59,6 +59,7 @@ const money = (value: unknown) =>
   new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(Number(value || 0));
 
 const label = (value: string) => value.replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
+const displayRoomNumber = (value: string) => value.split('.').filter(Boolean).pop() || value;
 
 function Metric({ label: title, value, detail, icon: Icon, tone }: { label: string; value: string; detail: string; icon: typeof BedDouble; tone: string }) {
   return <div className="rounded-2xl border border-[#dfe5ef] bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.045)]"><div className="flex items-start justify-between gap-3"><div><p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">{title}</p><p className="mt-3 text-2xl font-bold tracking-tight text-slate-900">{value}</p><p className="mt-1 text-xs text-slate-500">{detail}</p></div><span className={`rounded-xl p-3 ${tone}`}><Icon className="h-5 w-5" /></span></div></div>;
@@ -98,7 +99,7 @@ export function RoomAnalysisClient() {
     ]).then(([summary, roomList]) => {
       if (!active) return;
       setAnalytics(summary as Analytics);
-      setRooms(roomList as Room[]);
+      setRooms((roomList as Room[]).map((room) => ({ ...room, number: displayRoomNumber(room.number) })));
       setError(null);
     }).catch((cause) => {
       if (active) setError(cause instanceof Error ? cause.message : 'Unable to load room analysis');
@@ -127,7 +128,7 @@ export function RoomAnalysisClient() {
 
   const visibleRooms = useMemo(() => rooms.filter((room) => {
     const query = roomSearch.trim().toLowerCase();
-    const matchesSearch = !query || [room.number, room.displayName || '', room.roomType?.name || '', room.building?.name || ''].some((value) => value.toLowerCase().includes(query));
+    const matchesSearch = !query || [room.number, displayRoomNumber(room.number), room.displayName || '', room.roomType?.name || '', room.building?.name || ''].some((value) => value.toLowerCase().includes(query));
     return matchesSearch && (roomStatusFilter === 'ALL' || room.status === roomStatusFilter);
   }), [rooms, roomSearch, roomStatusFilter]);
 

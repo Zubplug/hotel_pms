@@ -6,6 +6,7 @@ import { requireOrganizationContext } from '@/lib/organization-access';
 import { auth } from '@/lib/auth';
 import { format } from 'date-fns';
 import { OutletStaffAssignment } from './outlet-assignment';
+import { AlertTriangle, BarChart3, ShieldCheck, TrendingUp, UsersRound } from 'lucide-react';
 
 export const metadata: Metadata = {
   title: 'Staff Performance | F&B Management',
@@ -209,16 +210,19 @@ export default async function FnbStaffPage() {
     };
   });
 
+  const totalSales = staffPerformance.reduce((sum, staff) => sum + staff.sales, 0);
+  const totalOrders = staffPerformance.reduce((sum, staff) => sum + staff.ordersHandled, 0);
+  const totalTips = staffPerformance.reduce((sum, staff) => sum + staff.tips, 0);
+  const reviewCount = staffPerformance.filter((staff) => staff.rating === 'Review Voids').length;
+  const topPerformer = [...staffPerformance].sort((a, b) => b.sales - a.sales)[0];
+  const averageOrderValue = totalOrders > 0 ? totalSales / totalOrders : 0;
+
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Staff Performance</h1>
-          <p className="text-muted-foreground mt-1">
-            Track shift performance, sales per staff, and void frequencies for {format(businessDate, 'PPP')}.
-          </p>
-        </div>
-      </div>
+    <div className="min-h-screen bg-[#fbf8f6] p-4 font-sans text-[#24130d] sm:p-6 lg:p-8">
+      <div className="mx-auto max-w-[1600px] space-y-6">
+        <div className="rounded-2xl border border-[#3d2318] bg-[#24130d] px-6 py-7 text-white shadow-xl"><div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end"><div><div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-orange-300"><UsersRound className="h-4 w-4" /> F&B people performance</div><h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Staff performance</h1><p className="mt-2 max-w-2xl text-sm text-orange-100/75">Understand service contribution, sales ownership, tips, and control signals for {format(businessDate, 'PPP')}.</p></div><div className="rounded-xl border border-white/10 bg-white/10 px-4 py-3 text-right"><p className="text-xs font-bold text-white">Manager view</p><p className="mt-1 text-[11px] text-orange-100/70">Read performance and manage outlet access</p></div></div></div></div>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><div className="rounded-2xl border border-[#eadfd8] bg-white p-5 shadow-[0_8px_24px_rgba(65,32,19,0.05)]"><p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#927b70]">Team members</p><p className="mt-3 text-2xl font-bold text-[#24130d]">{staffPerformance.length}</p><p className="mt-1 text-xs text-[#927b70]">Active F&B staff in scope</p></div><div className="rounded-2xl border border-[#eadfd8] bg-white p-5 shadow-[0_8px_24px_rgba(65,32,19,0.05)]"><p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#927b70]">Sales owned</p><p className="mt-3 text-2xl font-bold text-[#24130d]">{formatCurrency(totalSales, baseCurrency)}</p><p className="mt-1 text-xs text-[#927b70]">{totalOrders} orders · {formatCurrency(averageOrderValue, baseCurrency)} average</p></div><div className="rounded-2xl border border-[#eadfd8] bg-white p-5 shadow-[0_8px_24px_rgba(65,32,19,0.05)]"><p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#927b70]">Tips collected</p><p className="mt-3 text-2xl font-bold text-emerald-700">{formatCurrency(totalTips, baseCurrency)}</p><p className="mt-1 text-xs text-[#927b70]">Reported on closed orders</p></div><div className="rounded-2xl border border-[#eadfd8] bg-white p-5 shadow-[0_8px_24px_rgba(65,32,19,0.05)]"><p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#927b70]">Review signals</p><p className="mt-3 text-2xl font-bold text-red-700">{reviewCount}</p><p className="mt-1 text-xs text-[#927b70]">Staff with elevated void activity</p></div></div>
+        <div className="grid gap-6 lg:grid-cols-[1.35fr_1fr]"><section className="rounded-2xl border border-[#eadfd8] bg-white p-5 shadow-[0_8px_24px_rgba(65,32,19,0.045)]"><div className="mb-5 flex items-start justify-between"><div><h2 className="text-base font-bold">Manager insight</h2><p className="mt-1 text-xs text-[#927b70]">The clearest signal from today’s staff activity</p></div><TrendingUp className="h-5 w-5 text-orange-500" /></div><div className="grid gap-3 sm:grid-cols-3"><div className="rounded-xl bg-[#fff7ed] p-4"><p className="text-xs font-semibold text-orange-700">Top sales owner</p><p className="mt-2 truncate text-sm font-bold text-orange-950">{topPerformer?.name || 'No activity'}</p><p className="mt-1 text-xs text-orange-700/80">{topPerformer ? formatCurrency(topPerformer.sales, baseCurrency) : 'No closed sales recorded'}</p></div><div className="rounded-xl bg-[#f7eee9] p-4"><p className="text-xs font-semibold text-[#7c2d12]">Service productivity</p><p className="mt-2 text-sm font-bold text-[#3d2318]">{totalOrders ? `${(totalOrders / Math.max(staffPerformance.length, 1)).toFixed(1)} orders / staff` : 'No orders'}</p><p className="mt-1 text-xs text-[#7c2d12]/80">Average order ownership</p></div><div className="rounded-xl bg-red-50 p-4"><p className="text-xs font-semibold text-red-700">Control attention</p><p className="mt-2 text-sm font-bold text-red-950">{reviewCount ? `${reviewCount} staff to review` : 'No review signals'}</p><p className="mt-1 text-xs text-red-700/80">Based on void thresholds</p></div></div></section><section className="rounded-2xl border border-[#eadfd8] bg-white p-5 shadow-[0_8px_24px_rgba(65,32,19,0.045)]"><div className="mb-5 flex items-start justify-between"><div><h2 className="text-base font-bold">Performance lens</h2><p className="mt-1 text-xs text-[#927b70]">What the team data is measuring</p></div><BarChart3 className="h-5 w-5 text-orange-500" /></div><div className="space-y-3 text-sm"><div className="flex items-center gap-3 rounded-xl bg-slate-50 p-3"><ShieldCheck className="h-4 w-4 text-emerald-600" /><span className="text-slate-700">Sales ownership from closed orders</span></div><div className="flex items-center gap-3 rounded-xl bg-slate-50 p-3"><UsersRound className="h-4 w-4 text-indigo-600" /><span className="text-slate-700">Orders handled across active staff</span></div><div className="flex items-center gap-3 rounded-xl bg-slate-50 p-3"><AlertTriangle className="h-4 w-4 text-amber-600" /><span className="text-slate-700">Void activity requiring review</span></div></div></section></div>
       <OutletStaffAssignment />
 
       {staffPerformance.length === 0 ? (

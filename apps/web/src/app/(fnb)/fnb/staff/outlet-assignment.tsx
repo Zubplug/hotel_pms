@@ -51,10 +51,10 @@ export function OutletStaffAssignment() {
 
   return <>
     <section className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="flex items-start gap-3"><div className="rounded-xl bg-emerald-50 p-2 text-emerald-700"><Users className="h-5 w-5" /></div><div><h2 className="font-semibold text-slate-900">Outlet Staff Assignment</h2><p className="mt-1 text-sm text-slate-500">Control which F&B outlets staff can access during POS login.</p></div></div>
-      <Button onClick={() => { setIsOpen(true); setMessage(''); }} className="shrink-0 bg-slate-900 text-white hover:bg-slate-800"><UserRoundCog className="mr-2 h-4 w-4" />Reassign Staff<ArrowRight className="ml-2 h-4 w-4" /></Button>
+      <div className="flex items-start gap-3"><div className="rounded-xl bg-orange-50 p-2 text-orange-700"><Users className="h-5 w-5" /></div><div><h2 className="font-semibold text-[#24130d]">Outlet staff assignment</h2><p className="mt-1 text-sm text-slate-500">Control which F&B outlets staff can access during POS login.</p></div></div>
+      <Button onClick={() => { setIsOpen(true); setMessage(''); }} className="shrink-0 bg-[#24130d] text-white hover:bg-[#3d2318]"><UserRoundCog className="mr-2 h-4 w-4" />Reassign staff<ArrowRight className="ml-2 h-4 w-4" /></Button>
     </section>
-    {message && !isOpen && <p className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{message}</p>}
+    {message && !isOpen && <p className="rounded-lg border border-orange-100 bg-orange-50 px-3 py-2 text-sm text-orange-700">{message}</p>}
     {isOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="reassign-staff-title">
       <div className="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl">
         <div className="flex items-start justify-between border-b border-slate-100 bg-slate-50/70 px-6 py-5"><div><h2 id="reassign-staff-title" className="text-lg font-semibold text-slate-900">Reassign Staff to Outlets</h2><p className="mt-1 text-sm text-slate-500">Selected outlets will be available on the staff member’s POS login screen.</p></div><button aria-label="Close" onClick={() => setIsOpen(false)} className="rounded-full p-2 text-slate-400 hover:bg-slate-200 hover:text-slate-700"><X className="h-5 w-5" /></button></div>
