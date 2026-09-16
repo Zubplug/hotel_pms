@@ -10,7 +10,6 @@ import {
   Clock3,
   DollarSign,
   Loader2,
-  RefreshCw,
   ShoppingBag,
   TrendingUp,
   UtensilsCrossed,
@@ -119,13 +118,11 @@ export default function FnbAnalyticsClient() {
   const [range, setRange] = useState<RangeKey>('TODAY');
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = async (quiet = false) => {
+  const load = async () => {
     if (!propertyId) return;
-    if (quiet) setRefreshing(true);
-    else setLoading(true);
+    setLoading(true);
     setError(null);
     try {
       const response = await fetch(
@@ -144,7 +141,6 @@ export default function FnbAnalyticsClient() {
       setError(cause instanceof Error ? cause.message : 'Unable to load F&B analytics');
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   };
 
@@ -235,13 +231,6 @@ export default function FnbAnalyticsClient() {
                   </button>
                 ))}
               </div>
-              <button
-                onClick={() => void load(true)}
-                disabled={refreshing}
-                className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-3 py-2.5 text-xs font-semibold text-white hover:bg-white/15 disabled:opacity-60"
-              >
-                <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} /> Refresh
-              </button>
             </div>
           </div>
         </div>

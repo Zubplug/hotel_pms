@@ -12,6 +12,7 @@ import {
   ChevronDown,
   HandCoins,
   Activity,
+  BedDouble,
   Menu,
   X,
 } from 'lucide-react';
@@ -36,6 +37,7 @@ const CASH_MANAGEMENT_NAV = [
       { name: 'Cash Expenses', href: '/expenses', roles: ['GENERAL_CASHIER', 'ACCOUNTANT', 'FINANCE_MANAGER', 'MANAGER', 'CEO', 'SUPER_ADMIN'] },
       { name: 'Receivables', href: '/reports/receivables', roles: ['GENERAL_CASHIER', 'ACCOUNTANT', 'FINANCE_MANAGER', 'MANAGER', 'CEO', 'SUPER_ADMIN'] },
       { name: 'Night Audit', href: '/cash-management/night-audit' },
+      { name: 'Room Analysis', href: '/cash-management/room-analysis' },
       { name: 'Transaction Exceptions', href: '/cash-management/transaction-exceptions', roles: ['GENERAL_CASHIER', 'ACCOUNTANT', 'FINANCE_MANAGER', 'MANAGER', 'CEO', 'SUPER_ADMIN'] },
       { name: 'F&B Price Approvals', href: '/cashier/price-approvals', roles: ['GENERAL_CASHIER', 'ACCOUNTANT', 'FINANCE_MANAGER', 'MANAGER', 'CEO', 'SUPER_ADMIN'] },
     ],

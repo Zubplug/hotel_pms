@@ -1,24 +1,27 @@
 'use client';
 
-import { useState, useEffect, useMemo, memo } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Search, Filter, Clock, Receipt, RefreshCw, X, Utensils, LayoutGrid, List } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { useEffect, useMemo, useState } from 'react';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+  AlertTriangle,
+  ChefHat,
+  ChevronRight,
+  Clock3,
+  LayoutGrid,
+  List,
+  Loader2,
+  Receipt,
+  Search,
+  Timer,
+  TrendingUp,
+  Users,
+  UtensilsCrossed,
+  X,
+} from 'lucide-react';
 
-// --- Type Definitions ---
 type OrderStatus = 'SUBMITTED' | 'IN_SERVICE' | 'BILLED' | 'SETTLED' | 'CANCELLED';
 type BatchStatus = 'PENDING' | 'PREPARING' | 'READY' | 'COMPLETED';
+type ViewMode = 'board' | 'list';
+type FilterKey = 'ALL' | 'SUBMITTED' | 'PREPARING' | 'READY' | 'SERVED';
 
 interface ProductionBatch {
   id: string;
@@ -40,474 +43,178 @@ interface PosOrder {
   productionBatches: ProductionBatch[];
 }
 
-// --- Helpers ---
-const formatCurrency = (amount: number) => 
-  new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
+const money = (value: unknown) =>
+  new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(Number(value || 0));
 
-const getElapsedMinutes = (dateString: string) => {
-  return Math.floor((Date.now() - new Date(dateString).getTime()) / 60000);
+const minutesSince = (value: string) => Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 60000));
+
+const personName = (order: PosOrder) =>
+  order.serverStaff ? `${order.serverStaff.firstName} ${order.serverStaff.lastName || ''}`.trim() : 'Unassigned';
+
+const locationName = (order: PosOrder) => order.table?.name || order.tableNumber || 'Walk-in';
+
+const getStage = (order: PosOrder): Exclude<FilterKey, 'ALL'> => {
+  const batches = order.productionBatches || [];
+  if (!batches.length) return order.status === 'SUBMITTED' ? 'SUBMITTED' : 'SERVED';
+  if (order.status === 'IN_SERVICE' || batches.every((batch) => batch.status === 'COMPLETED')) return 'SERVED';
+  if (batches.some((batch) => batch.status === 'PREPARING')) return 'PREPARING';
+  if (batches.every((batch) => batch.status === 'READY' || batch.status === 'COMPLETED')) return 'READY';
+  return 'SUBMITTED';
 };
 
-// --- Subcomponents ---
-const LiveElapsedTimer = memo(({ startTime, slaWarningMin = 15, slaDangerMin = 25 }: { startTime: string; slaWarningMin?: number; slaDangerMin?: number }) => {
-  const [elapsed, setElapsed] = useState(() => getElapsedMinutes(startTime));
+function StagePill({ stage }: { stage: Exclude<FilterKey, 'ALL'> }) {
+  const styles = {
+    SUBMITTED: 'border-orange-200 bg-orange-50 text-orange-700',
+    PREPARING: 'border-amber-200 bg-amber-50 text-amber-700',
+    READY: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    SERVED: 'border-[#eadfd8] bg-[#f7eee9] text-[#7c2d12]',
+  };
+  const labels = { SUBMITTED: 'Submitted', PREPARING: 'Preparing', READY: 'Ready', SERVED: 'In service' };
+  return <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em] ${styles[stage]}`}>{labels[stage]}</span>;
+}
 
+function Elapsed({ createdAt }: { createdAt: string }) {
+  const [elapsed, setElapsed] = useState(() => minutesSince(createdAt));
   useEffect(() => {
-    const interval = setInterval(() => {
-      setElapsed(getElapsedMinutes(startTime));
-    }, 15000); // Update every 15s is fine for minutes
+    const interval = setInterval(() => setElapsed(minutesSince(createdAt)), 15000);
     return () => clearInterval(interval);
-  }, [startTime]);
+  }, [createdAt]);
+  const tone = elapsed >= 25 ? 'text-red-600' : elapsed >= 15 ? 'text-amber-600' : 'text-[#806b60]';
+  return <span className={`inline-flex items-center gap-1 text-xs font-semibold ${tone}`}><Clock3 className="h-3.5 w-3.5" />{elapsed}m</span>;
+}
 
-  let colorClass = 'text-slate-500';
-  if (elapsed >= slaDangerMin) colorClass = 'text-rose-600 font-bold';
-  else if (elapsed >= slaWarningMin) colorClass = 'text-amber-600 font-bold';
-
+function Metric({ label, value, detail, icon: Icon, tone }: { label: string; value: string; detail: string; icon: typeof Users; tone: string }) {
   return (
-    <div className={cn("flex items-center gap-1.5 text-xs font-medium", colorClass)}>
-      <Clock className="h-3.5 w-3.5" />
-      <span>{elapsed}m</span>
+    <div className="rounded-2xl border border-[#eadfd8] bg-white p-5 shadow-[0_8px_24px_rgba(65,32,19,0.05)]">
+      <div className="flex items-start justify-between gap-3">
+        <div><p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#927b70]">{label}</p><p className="mt-3 text-2xl font-bold tracking-tight text-[#24130d]">{value}</p><p className="mt-1 text-xs text-[#927b70]">{detail}</p></div>
+        <span className={`rounded-xl p-3 ${tone}`}><Icon className="h-5 w-5" /></span>
+      </div>
     </div>
   );
-});
-LiveElapsedTimer.displayName = 'LiveElapsedTimer';
+}
 
-const OrderDrawer = ({ order, onClose, onRefresh, businessDate }: { order: PosOrder; onClose: () => void; onRefresh: () => void; businessDate: string }) => {
-  const [cancelling, setCancelling] = useState(false);
-  const [showCancelModal, setShowCancelModal] = useState(false);
-  const [cancelReason, setCancelReason] = useState('');
+function OrderDrawer({ order, businessDate, onClose, onRefresh }: { order: PosOrder; businessDate: string; onClose: () => void; onRefresh: () => void }) {
+  const [showCancel, setShowCancel] = useState(false);
+  const [reason, setReason] = useState('');
+  const [saving, setSaving] = useState(false);
+  const stage = getStage(order);
 
-  if (!order) return null;
-
-  const handleCancel = async () => {
-    if (!cancelReason) return alert('Reason is required');
-    setCancelling(true);
+  const cancelOrder = async () => {
+    if (!reason.trim()) return;
+    setSaving(true);
     try {
-      const res = await fetch(`/api/v1/fnb/orders/${order.id}/cancel`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason: cancelReason, businessDate })
+      const response = await fetch(`/api/v1/fnb/orders/${order.id}/cancel`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason, businessDate }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error?.message || 'Failed to cancel order');
-      setShowCancelModal(false);
-      onClose();
-      onRefresh();
-    } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setCancelling(false);
-    }
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload?.error?.message || 'Unable to cancel order');
+      setShowCancel(false); onClose(); onRefresh();
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Unable to cancel order');
+    } finally { setSaving(false); }
   };
 
   return (
     <>
-      {showCancelModal && (
-        <div className="fixed inset-0 z-[60] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 max-w-md w-full overflow-hidden">
-            <div className="p-6 border-b border-slate-100 bg-slate-50/50">
-              <h3 className="text-xl font-bold text-rose-600">Cancel Order #{order.orderNumber}</h3>
-            </div>
-            <div className="p-6">
-              <p className="text-sm font-medium text-slate-600 mb-4">
-                This will stop active kitchen production. Inventory already consumed may require waste approval. This action cannot be undone.
-              </p>
-              <label className="block text-xs font-bold text-slate-900 uppercase tracking-wider mb-2">Reason for Cancellation</label>
-              <Input
-                autoFocus
-                placeholder="e.g. Guest changed mind, Output Error..."
-                value={cancelReason}
-                onChange={e => setCancelReason(e.target.value)}
-                className="bg-white border-slate-300"
-              />
-            </div>
-            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
-              <Button variant="ghost" onClick={() => setShowCancelModal(false)} className="text-slate-600 hover:text-slate-900 font-bold">
-                Back
-              </Button>
-              <Button 
-                variant="destructive" 
-                onClick={handleCancel} 
-                disabled={cancelling || !cancelReason}
-                className="bg-rose-600 hover:bg-rose-700 font-bold"
-              >
-                {cancelling ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : null}
-                Confirm Cancel
-              </Button>
-            </div>
+      {showCancel ? (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[#24130d]/55 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-[#eadfd8] bg-white shadow-2xl">
+            <div className="border-b border-[#f1e7e1] bg-[#fff7ed] p-6"><p className="text-xs font-bold uppercase tracking-[0.14em] text-red-600">Destructive action</p><h3 className="mt-2 text-xl font-bold text-[#24130d]">Cancel order {order.orderNumber}?</h3><p className="mt-2 text-sm text-[#806b60]">This stops active production and creates a traceable cancellation record.</p></div>
+            <div className="p-6"><label className="text-xs font-bold uppercase tracking-[0.1em] text-[#735c51]">Reason required</label><textarea autoFocus value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Explain why this order is being cancelled…" className="mt-2 min-h-24 w-full resize-none rounded-xl border border-[#ddcec5] bg-white p-3 text-sm text-[#24130d] outline-none ring-orange-500 placeholder:text-[#b19c91] focus:ring-2" /></div>
+            <div className="flex justify-end gap-3 border-t border-[#f1e7e1] bg-[#fbf8f6] p-4"><button onClick={() => setShowCancel(false)} className="rounded-xl px-4 py-2.5 text-sm font-semibold text-[#735c51] hover:bg-white">Keep order</button><button disabled={saving || !reason.trim()} onClick={() => void cancelOrder()} className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50">{saving ? 'Cancelling…' : 'Confirm cancellation'}</button></div>
           </div>
         </div>
-      )}
-
-      <div className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-sm transition-opacity" onClick={onClose} />
-      <div className="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-white shadow-2xl border-l border-slate-200 flex flex-col animate-in slide-in-from-right duration-200">
-        <div className="flex items-center justify-between p-6 border-b border-slate-100 bg-slate-50/50">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <Receipt className="h-5 w-5 text-indigo-600" />
-              <h2 className="text-xl font-bold text-slate-900">{order.orderNumber}</h2>
-            </div>
-            <div className="flex gap-2 items-center">
-              <Badge variant="secondary" className="bg-slate-200/60 text-slate-700 hover:bg-slate-200 border-0">{order.status}</Badge>
-              <LiveElapsedTimer startTime={order.createdAt} />
-            </div>
-          </div>
-          <Button variant="ghost" size="icon" onClick={onClose} className="text-slate-400 hover:text-slate-700 rounded-full bg-white border border-slate-200 shadow-sm">
-            <X className="h-4 w-4" />
-          </Button>
+      ) : null}
+      <div className="fixed inset-0 z-40 bg-[#24130d]/45 backdrop-blur-sm" onClick={onClose} />
+      <aside className="fixed inset-y-0 right-0 z-50 flex w-full max-w-xl flex-col border-l border-[#eadfd8] bg-[#fbf8f6] shadow-2xl">
+        <div className="border-b border-[#eadfd8] bg-[#24130d] px-6 py-5 text-white"><div className="flex items-start justify-between gap-4"><div><div className="flex items-center gap-2 text-orange-300"><Receipt className="h-4 w-4" /><span className="text-xs font-bold uppercase tracking-[0.14em]">Order detail</span></div><h2 className="mt-2 text-2xl font-bold">{order.orderNumber}</h2><div className="mt-3 flex items-center gap-3"><StagePill stage={stage} /><Elapsed createdAt={order.createdAt} /></div></div><button onClick={onClose} className="rounded-xl border border-white/15 bg-white/10 p-2 text-orange-100 hover:bg-white/15"><X className="h-5 w-5" /></button></div></div>
+        <div className="flex-1 space-y-6 overflow-y-auto p-6">
+          <div className="grid grid-cols-2 gap-3"><div className="rounded-xl border border-[#eadfd8] bg-white p-4"><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#927b70]">Service point</p><p className="mt-2 text-sm font-bold text-[#24130d]">{locationName(order)}</p></div><div className="rounded-xl border border-[#eadfd8] bg-white p-4"><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#927b70]">Server</p><p className="mt-2 text-sm font-bold text-[#24130d]">{personName(order)}</p></div></div>
+          <section><div className="mb-3 flex items-center justify-between"><h3 className="text-sm font-bold text-[#24130d]">Items ordered</h3><span className="text-xs font-semibold text-[#927b70]">{order.items.length} lines</span></div><div className="space-y-2">{order.items.map((item, index) => <div key={item.id || index} className="rounded-xl border border-[#eadfd8] bg-white p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-bold text-[#4f392f]"><span className="mr-2 text-orange-600">{item.quantity}×</span>{item.productName}</p>{item.modifiers?.map((modifier: any) => <p key={modifier.id} className="mt-1 pl-6 text-xs text-[#927b70]">+ {modifier.name}</p>)}</div><span className="text-sm font-bold text-[#24130d]">{money(Number(item.unitPrice) * Number(item.quantity))}</span></div></div>)}</div></section>
+          <section><h3 className="mb-3 text-sm font-bold text-[#24130d]">Production timeline</h3>{order.productionBatches.length ? <div className="space-y-2">{order.productionBatches.map((batch) => <div key={batch.id} className="flex items-center justify-between rounded-xl border border-[#eadfd8] bg-white p-4"><div className="flex items-center gap-3"><span className="rounded-lg bg-[#fff7ed] p-2 text-orange-600"><ChefHat className="h-4 w-4" /></span><div><p className="text-sm font-bold text-[#4f392f]">Production batch</p><p className="text-xs text-[#927b70]">#{batch.id.slice(0, 8)}</p></div></div><span className="rounded-full bg-[#f7eee9] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[#7c2d12]">{batch.status}</span></div>)}</div> : <p className="rounded-xl border border-dashed border-[#ddcec5] bg-white p-4 text-sm text-[#927b70]">No kitchen production batch has been created for this order.</p>}</section>
         </div>
-
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 shadow-sm">
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Table</p>
-              <p className="text-sm font-semibold text-slate-900">{order.table?.name || order.tableNumber || 'Walk-in'}</p>
-            </div>
-            <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 shadow-sm">
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Server</p>
-              <p className="text-sm font-semibold text-slate-900">{order.serverStaff ? `${order.serverStaff.firstName} ${order.serverStaff.lastName || ''}` : 'Unassigned'}</p>
-            </div>
-          </div>
-
-          <div>
-            <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-2 border-b border-slate-100 pb-2">
-              <Utensils className="h-4 w-4 text-slate-400" /> Order Items
-            </h3>
-            <div className="space-y-3">
-              {order.items.map((item, idx) => (
-                <div key={item.id || idx} className="bg-white rounded-lg p-3 border border-slate-100 shadow-sm">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-800">
-                        <span className="text-indigo-600 font-bold mr-2">{item.quantity}x</span>
-                        {item.productName}
-                      </p>
-                      {item.modifiers?.map((mod: any) => (
-                        <p key={mod.id} className="text-xs font-medium text-slate-500 mt-0.5 ml-6">+ {mod.name}</p>
-                      ))}
-                    </div>
-                    <p className="text-sm font-mono font-bold text-slate-700">{formatCurrency(item.unitPrice * item.quantity)}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-3 border-b border-slate-100 pb-2">Production Status</h3>
-            {order.productionBatches.length === 0 ? (
-              <p className="text-xs font-medium text-slate-500 italic bg-slate-50 p-3 rounded-lg border border-slate-100">No KDS batches for this order.</p>
-            ) : (
-              <div className="space-y-2">
-                {order.productionBatches.map(batch => (
-                  <div key={batch.id} className="flex items-center justify-between bg-white rounded-lg p-3 border border-slate-100 shadow-sm">
-                    <span className="text-xs text-slate-500 font-mono font-bold">Batch {batch.id.split('-')[0]}</span>
-                    <Badge variant="outline" className="border-indigo-200 text-indigo-700 bg-indigo-50 font-bold">
-                      {batch.status}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="p-6 border-t border-slate-100 bg-slate-50">
-          <div className="flex justify-between items-center mb-4">
-            <span className="text-sm text-slate-500 font-bold uppercase tracking-wider">Subtotal</span>
-            <span className="text-base text-slate-700 font-mono font-semibold">{formatCurrency(Number(order.total))}</span>
-          </div>
-          <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm mb-4">
-            <span className="text-lg font-bold text-slate-900">Total</span>
-            <span className="text-xl font-bold text-slate-900 font-mono">{formatCurrency(Number(order.total))}</span>
-          </div>
-          
-          {['SUBMITTED', 'IN_SERVICE'].includes(order.status) && (
-            <Button 
-              variant="outline" 
-              className="w-full border-rose-200 text-rose-600 hover:bg-rose-50 hover:border-rose-300 font-bold shadow-sm"
-              onClick={() => setShowCancelModal(true)}
-            >
-              Cancel Order
-            </Button>
-          )}
-        </div>
-      </div>
+        <div className="border-t border-[#eadfd8] bg-white p-6"><div className="mb-4 flex items-center justify-between"><span className="text-xs font-bold uppercase tracking-[0.12em] text-[#927b70]">Order total</span><span className="text-2xl font-bold text-[#24130d]">{money(order.total)}</span></div>{['SUBMITTED', 'IN_SERVICE'].includes(order.status) ? <button onClick={() => setShowCancel(true)} className="w-full rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 hover:bg-red-100">Cancel order</button> : null}</div>
+      </aside>
     </>
   );
-};
+}
 
-// --- Main Client ---
 export function FnbOrdersClient() {
   const [orders, setOrders] = useState<PosOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
-  const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
+  const [filter, setFilter] = useState<FilterKey>('ALL');
+  const [viewMode, setViewMode] = useState<ViewMode>('board');
   const [selectedOrder, setSelectedOrder] = useState<PosOrder | null>(null);
-  const [isTabVisible, setIsTabVisible] = useState(true);
+  const [visible, setVisible] = useState(true);
   const [businessDate, setBusinessDate] = useState(new Date().toISOString().slice(0, 10));
-
-  // Polling logic respecting visibility
-  useEffect(() => {
-    const handleVisibility = () => setIsTabVisible(!document.hidden);
-    document.addEventListener('visibilitychange', handleVisibility);
-    return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, []);
 
   const fetchOrders = async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const res = await fetch('/api/v1/fnb/orders');
-      if (!res.ok) throw new Error('Failed to fetch orders');
-      const data = await res.json();
-      setOrders(data.data?.orders || []);
-      setBusinessDate(data.data?.businessDate || new Date().toISOString().slice(0, 10));
+      const response = await fetch('/api/v1/fnb/orders', { cache: 'no-store' });
+      const payload = await response.json();
+      if (!response.ok || payload?.success === false) throw new Error(payload?.error?.message || 'Unable to load live orders');
+      setOrders(payload?.data?.orders || []);
+      setBusinessDate(payload?.data?.businessDate || new Date().toISOString().slice(0, 10));
       setError('');
-    } catch (err: any) {
-      console.error(err);
-      setError('Could not load orders');
-    } finally {
-      if (!silent) setLoading(false);
-    }
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to load live orders'); }
+    finally { if (!silent) setLoading(false); }
   };
 
-  useEffect(() => {
-    fetchOrders();
-  }, []);
+  useEffect(() => { void fetchOrders(); }, []);
+  useEffect(() => { const onVisibility = () => setVisible(!document.hidden); document.addEventListener('visibilitychange', onVisibility); return () => document.removeEventListener('visibilitychange', onVisibility); }, []);
+  useEffect(() => { if (!visible) return; const interval = setInterval(() => void fetchOrders(true), 30000); return () => clearInterval(interval); }, [visible]);
 
-  useEffect(() => {
-    if (!isTabVisible) return;
-    const interval = setInterval(() => fetchOrders(true), 30000);
-    return () => clearInterval(interval);
-  }, [isTabVisible]);
+  const filteredOrders = useMemo(() => orders.filter((order) => {
+    const query = search.trim().toLowerCase();
+    const matchesSearch = !query || [order.orderNumber, locationName(order), personName(order)].some((value) => value.toLowerCase().includes(query));
+    const matchesFilter = filter === 'ALL' || getStage(order) === filter;
+    return matchesSearch && matchesFilter;
+  }), [orders, search, filter]);
 
-  // Derive Kanban state from authoritative PosProductionBatch data
-  const kanbanColumns = useMemo(() => {
-    const cols = {
-      NEW: [] as PosOrder[],
-      PREPARING: [] as PosOrder[],
-      READY: [] as PosOrder[],
-      SERVED: [] as PosOrder[], // Kept clean and derived from PosOrder IN_SERVICE / batch COMPLETED
-    };
+  const columns = useMemo(() => ({
+    SUBMITTED: filteredOrders.filter((order) => getStage(order) === 'SUBMITTED'),
+    PREPARING: filteredOrders.filter((order) => getStage(order) === 'PREPARING'),
+    READY: filteredOrders.filter((order) => getStage(order) === 'READY'),
+    SERVED: filteredOrders.filter((order) => getStage(order) === 'SERVED'),
+  }), [filteredOrders]);
 
-    orders.forEach(order => {
-      // If the order has no search match, skip
-      const q = search.toLowerCase();
-      const match = order.orderNumber.toLowerCase().includes(q) ||
-        order.table?.name?.toLowerCase().includes(q) ||
-        order.tableNumber?.toLowerCase().includes(q) ||
-        order.serverStaff?.firstName?.toLowerCase().includes(q);
-      
-      if (search && !match) return;
+  const metrics = useMemo(() => {
+    const atRisk = orders.filter((order) => minutesSince(order.createdAt) >= 25).length;
+    const revenue = orders.reduce((total, order) => total + Number(order.total || 0), 0);
+    return { atRisk, revenue, average: orders.length ? revenue / orders.length : 0, oldest: [...orders].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())[0] };
+  }, [orders]);
 
-      const batches = order.productionBatches || [];
-      
-      if (batches.length === 0) {
-        // No KDS tracking -> New/Served based on general order status
-        if (order.status === 'SUBMITTED') cols.NEW.push(order);
-        else cols.SERVED.push(order);
-        return;
-      }
+  const stageStats = [
+    { label: 'Submitted', count: columns.SUBMITTED.length, color: 'bg-orange-500', text: 'text-orange-700' },
+    { label: 'Preparing', count: columns.PREPARING.length, color: 'bg-amber-500', text: 'text-amber-700' },
+    { label: 'Ready', count: columns.READY.length, color: 'bg-emerald-500', text: 'text-emerald-700' },
+    { label: 'In service', count: columns.SERVED.length, color: 'bg-[#7c2d12]', text: 'text-[#7c2d12]' },
+  ];
 
-      // Operational visualization logic:
-      // If any batch is PREPARING -> Order is Preparing
-      // If all batches are READY or COMPLETED -> Order is Ready (if not IN_SERVICE)
-      // Else NEW
-      const hasPreparing = batches.some(b => b.status === 'PREPARING');
-      const allReadyOrCompleted = batches.every(b => b.status === 'READY' || b.status === 'COMPLETED');
-      const allCompleted = batches.every(b => b.status === 'COMPLETED');
+  const OrderCard = ({ order }: { order: PosOrder }) => {
+    const stage = getStage(order);
+    const atRisk = minutesSince(order.createdAt) >= 25;
+    return <button onClick={() => setSelectedOrder(order)} className="group w-full rounded-2xl border border-[#eadfd8] bg-white p-4 text-left shadow-[0_5px_18px_rgba(65,32,19,0.04)] transition hover:-translate-y-0.5 hover:border-orange-300 hover:shadow-[0_12px_28px_rgba(65,32,19,0.1)]"><div className="flex items-start justify-between gap-3"><div><div className="flex items-center gap-2"><Receipt className="h-4 w-4 text-orange-500" /><span className="font-bold text-[#24130d]">{order.orderNumber}</span></div><p className="mt-2 text-sm font-semibold text-[#4f392f]">{locationName(order)}</p></div><Elapsed createdAt={order.createdAt} /></div><p className="mt-1 text-xs text-[#927b70]">{personName(order)}</p><div className="mt-4 flex items-center justify-between border-t border-[#f1e7e1] pt-3"><span className="text-xs font-semibold text-[#927b70]">{order.items.length} item lines</span><span className="text-sm font-bold text-[#24130d]">{money(order.total)}</span></div>{atRisk ? <div className="mt-3 flex items-center gap-1.5 rounded-lg bg-red-50 px-2.5 py-2 text-[11px] font-bold text-red-700"><AlertTriangle className="h-3.5 w-3.5" /> SLA attention required</div> : null}<div className="mt-3 flex items-center justify-between"><StagePill stage={stage} /><ChevronRight className="h-4 w-4 text-[#c7b4a9] transition group-hover:translate-x-0.5 group-hover:text-orange-500" /></div></button>;
+  };
 
-      if (order.status === 'IN_SERVICE' || allCompleted) {
-        cols.SERVED.push(order);
-      } else if (hasPreparing) {
-        cols.PREPARING.push(order);
-      } else if (allReadyOrCompleted) {
-        cols.READY.push(order);
-      } else {
-        cols.NEW.push(order);
-      }
-    });
-    return cols;
-  }, [orders, search]);
+  if (loading && !orders.length) return <div className="flex min-h-[520px] items-center justify-center bg-[#fbf8f6]"><div className="flex items-center gap-3 text-sm font-semibold text-[#7c2d12]"><Loader2 className="h-5 w-5 animate-spin" /> Loading live service board…</div></div>;
 
-  const KanbanCard = ({ order }: { order: PosOrder }) => (
-    <div 
-      onClick={() => setSelectedOrder(order)}
-      className="bg-white border border-slate-200 rounded-xl p-4 cursor-pointer hover:border-indigo-300 hover:shadow-md transition-all shadow-sm group"
-    >
-      <div className="flex justify-between items-start mb-3">
-        <div className="font-bold text-slate-900 flex items-center gap-1.5">
-          <Receipt className="h-4 w-4 text-slate-400 group-hover:text-indigo-600 transition-colors" />
-          {order.orderNumber}
-        </div>
-        <LiveElapsedTimer startTime={order.createdAt} />
+  return <div className="min-h-full bg-[#fbf8f6] text-[#24130d]">
+    <header className="border-b border-[#3d2318] bg-[#24130d] text-white"><div className="mx-auto max-w-[1700px] px-4 py-7 sm:px-6 lg:px-8"><div className="flex flex-col justify-between gap-6 xl:flex-row xl:items-end"><div><div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-orange-300"><UtensilsCrossed className="h-4 w-4" /> F&B operations</div><h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Live service board</h1><p className="mt-2 max-w-2xl text-sm text-orange-100/75">Coordinate every open order from submission to service, protect guest wait times, and keep the floor aligned with the kitchen.</p></div><div className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3"><span className="relative flex h-2.5 w-2.5"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" /><span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400" /></span><div><p className="text-xs font-bold text-white">Live monitoring</p><p className="text-[11px] text-orange-100/60">Updates automatically every 30 seconds</p></div></div></div></div></header>
+    <main className="mx-auto max-w-[1700px] space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+      {error ? <div className="flex items-center justify-between rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"><span>{error}</span><button onClick={() => void fetchOrders()} className="font-bold underline">Try again</button></div> : null}
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><Metric label="Open orders" value={String(orders.length)} detail="Orders in the live queue" icon={Receipt} tone="bg-orange-50 text-orange-600" /><Metric label="Service value" value={money(metrics.revenue)} detail="Gross value in open queue" icon={TrendingUp} tone="bg-[#f7eee9] text-[#7c2d12]" /><Metric label="At-risk orders" value={String(metrics.atRisk)} detail="25+ minutes elapsed" icon={AlertTriangle} tone={metrics.atRisk ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'} /><Metric label="Average order" value={money(metrics.average)} detail="Average open-order value" icon={Users} tone="bg-amber-50 text-amber-600" /></div>
+      <div className="grid gap-6 xl:grid-cols-[1.55fr_1fr]">
+        <section className="rounded-2xl border border-[#eadfd8] bg-white p-5 shadow-[0_8px_24px_rgba(65,32,19,0.045)]"><div className="mb-5 flex items-start justify-between"><div><h2 className="text-base font-bold">Service pulse</h2><p className="mt-1 text-xs text-[#927b70]">Where attention is concentrated across the live queue</p></div><Timer className="h-5 w-5 text-orange-500" /></div><div className="space-y-4">{stageStats.map((item) => { const percentage = orders.length ? Math.round((item.count / orders.length) * 100) : 0; return <div key={item.label}><div className="mb-1.5 flex justify-between text-xs"><span className={`font-bold ${item.text}`}>{item.label}</span><span className="font-semibold text-[#927b70]">{item.count} · {percentage}%</span></div><div className="h-2.5 overflow-hidden rounded-full bg-[#f4ebe6]"><div className={`h-full rounded-full ${item.color} transition-all`} style={{ width: `${percentage}%` }} /></div></div>; })}</div></section>
+        <section className="rounded-2xl border border-[#eadfd8] bg-white p-5 shadow-[0_8px_24px_rgba(65,32,19,0.045)]"><div className="mb-5 flex items-start justify-between"><div><h2 className="text-base font-bold">Manager attention</h2><p className="mt-1 text-xs text-[#927b70]">The next operational decision</p></div><AlertTriangle className="h-5 w-5 text-orange-500" /></div>{metrics.atRisk ? <div className="rounded-xl border border-red-100 bg-red-50 p-4"><p className="text-xs font-bold uppercase tracking-[0.1em] text-red-700">SLA risk</p><p className="mt-2 text-sm font-bold text-red-900">{metrics.atRisk} order{metrics.atRisk === 1 ? '' : 's'} need immediate follow-up.</p><p className="mt-1 text-xs text-red-700/80">Prioritise the oldest order and confirm with the kitchen or floor team.</p></div> : <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4"><p className="text-xs font-bold uppercase tracking-[0.1em] text-emerald-700">Service on track</p><p className="mt-2 text-sm font-bold text-emerald-900">No order has breached the 25-minute attention threshold.</p><p className="mt-1 text-xs text-emerald-700/80">Continue monitoring the queue as new orders arrive.</p></div>}<div className="mt-4 flex items-center justify-between border-t border-[#f1e7e1] pt-4 text-xs"><span className="text-[#927b70]">Oldest open order</span><span className="font-bold text-[#24130d]">{metrics.oldest ? `${metrics.oldest.orderNumber} · ${minutesSince(metrics.oldest.createdAt)}m` : 'No open orders'}</span></div></section>
       </div>
-      <div className="text-sm text-slate-700 font-bold mb-1">
-        {order.table?.name || order.tableNumber || 'Walk-in'}
-      </div>
-      <div className="text-xs text-slate-500 mb-3 flex items-center gap-1.5 font-medium">
-        <span className="h-1.5 w-1.5 rounded-full bg-slate-300"></span>
-        {order.serverStaff ? `${order.serverStaff.firstName} ${order.serverStaff.lastName || ''}` : 'Unassigned'}
-      </div>
-      <div className="flex justify-between items-center pt-3 border-t border-slate-100 mt-2">
-        <span className="text-xs font-bold text-slate-500 bg-slate-50 px-2 py-1 rounded-md border border-slate-100">{order.items.length} items</span>
-        <span className="text-sm font-mono font-bold text-slate-800">{formatCurrency(Number(order.total))}</span>
-      </div>
-    </div>
-  );
-
-  return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans p-4 sm:p-6 lg:p-8">
-      {/* Header */}
-      <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-3">
-            Operations Monitor
-            {loading && <RefreshCw className="h-4 w-4 animate-spin text-indigo-500" />}
-          </h1>
-          <p className="text-slate-500 text-sm mt-1 font-medium">Live KOT synchronization and order tracking</p>
-        </div>
-        
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          <div className="relative flex-1 sm:w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <Input 
-              placeholder="Search orders, tables..." 
-              className="pl-9 bg-white border-slate-200 focus:border-indigo-500 text-sm h-10 rounded-xl text-slate-900 placeholder:text-slate-400 shadow-sm" 
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          <div className="flex items-center bg-white rounded-xl border border-slate-200 p-1 shadow-sm">
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className={cn("h-8 px-3 rounded-lg text-xs font-bold", viewMode === 'kanban' ? "bg-slate-100 text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-900")}
-              onClick={() => setViewMode('kanban')}
-            >
-              <LayoutGrid className="h-3.5 w-3.5 mr-1.5" /> Board
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className={cn("h-8 px-3 rounded-lg text-xs font-bold", viewMode === 'list' ? "bg-slate-100 text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-900")}
-              onClick={() => setViewMode('list')}
-            >
-              <List className="h-3.5 w-3.5 mr-1.5" /> List
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      {viewMode === 'kanban' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-start">
-          {/* NEW / SUBMITTED */}
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center justify-between pb-2 border-b-2 border-indigo-200">
-              <h3 className="font-bold text-sm tracking-widest uppercase text-indigo-700">Submitted</h3>
-              <Badge className="bg-indigo-100 text-indigo-700 hover:bg-indigo-200 border-0">{kanbanColumns.NEW.length}</Badge>
-            </div>
-            <div className="space-y-3">
-              {kanbanColumns.NEW.map(o => <KanbanCard key={o.id} order={o} />)}
-              {kanbanColumns.NEW.length === 0 && <div className="p-4 text-center text-sm font-medium text-slate-400 border-2 border-dashed border-slate-200 rounded-xl bg-white/50">No active orders</div>}
-            </div>
-          </div>
-
-          {/* PREPARING */}
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center justify-between pb-2 border-b-2 border-amber-200">
-              <h3 className="font-bold text-sm tracking-widest uppercase text-amber-700">Preparing</h3>
-              <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-200 border-0">{kanbanColumns.PREPARING.length}</Badge>
-            </div>
-            <div className="space-y-3">
-              {kanbanColumns.PREPARING.map(o => <KanbanCard key={o.id} order={o} />)}
-              {kanbanColumns.PREPARING.length === 0 && <div className="p-4 text-center text-sm font-medium text-slate-400 border-2 border-dashed border-slate-200 rounded-xl bg-white/50">No active orders</div>}
-            </div>
-          </div>
-
-          {/* READY */}
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center justify-between pb-2 border-b-2 border-emerald-200">
-              <h3 className="font-bold text-sm tracking-widest uppercase text-emerald-700">Ready</h3>
-              <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-0">{kanbanColumns.READY.length}</Badge>
-            </div>
-            <div className="space-y-3">
-              {kanbanColumns.READY.map(o => <KanbanCard key={o.id} order={o} />)}
-              {kanbanColumns.READY.length === 0 && <div className="p-4 text-center text-sm font-medium text-slate-400 border-2 border-dashed border-slate-200 rounded-xl bg-white/50">No active orders</div>}
-            </div>
-          </div>
-
-          {/* SERVED / COMPLETED */}
-          <div className="flex flex-col gap-3 opacity-80 hover:opacity-100 transition-opacity">
-            <div className="flex items-center justify-between pb-2 border-b-2 border-slate-200">
-              <h3 className="font-bold text-sm tracking-widest uppercase text-slate-600">Served / Setup</h3>
-              <Badge className="bg-slate-200 text-slate-700 hover:bg-slate-300 border-0">{kanbanColumns.SERVED.length}</Badge>
-            </div>
-            <div className="space-y-3">
-              {kanbanColumns.SERVED.map(o => <KanbanCard key={o.id} order={o} />)}
-              {kanbanColumns.SERVED.length === 0 && <div className="p-4 text-center text-sm font-medium text-slate-400 border-2 border-dashed border-slate-200 rounded-xl bg-white/50">No active orders</div>}
-            </div>
-          </div>
-        </div>
-      ) : (
-        <Card className="bg-white border-slate-200 shadow-sm overflow-hidden rounded-2xl">
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader className="bg-slate-50 border-b border-slate-200">
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="pl-6 text-slate-500 font-bold uppercase tracking-wider text-xs">Order ID</TableHead>
-                  <TableHead className="text-slate-500 font-bold uppercase tracking-wider text-xs">Table</TableHead>
-                  <TableHead className="text-slate-500 font-bold uppercase tracking-wider text-xs">Server</TableHead>
-                  <TableHead className="text-slate-500 font-bold uppercase tracking-wider text-xs">Status</TableHead>
-                  <TableHead className="text-slate-500 font-bold uppercase tracking-wider text-xs">Elapsed Time</TableHead>
-                  <TableHead className="text-right text-slate-500 font-bold uppercase tracking-wider text-xs pr-6">Amount</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {kanbanColumns.NEW.concat(kanbanColumns.PREPARING, kanbanColumns.READY, kanbanColumns.SERVED).map((order) => (
-                  <TableRow 
-                    key={order.id} 
-                    className="hover:bg-slate-50 border-b border-slate-100 cursor-pointer transition-colors"
-                    onClick={() => setSelectedOrder(order)}
-                  >
-                    <TableCell className="pl-6 font-bold text-slate-900">
-                      <div className="flex items-center gap-2">
-                        <Receipt className="h-4 w-4 text-indigo-500" />
-                        {order.orderNumber}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-slate-700 font-semibold">{order.table?.name || order.tableNumber || 'Walk-in'}</TableCell>
-                    <TableCell className="text-slate-600 font-medium">{order.serverStaff ? `${order.serverStaff.firstName} ${order.serverStaff.lastName || ''}` : 'Unassigned'}</TableCell>
-                    <TableCell>
-                      <Badge variant="secondary" className="bg-slate-100 text-slate-700 font-bold border-0">
-                        {order.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <LiveElapsedTimer startTime={order.createdAt} />
-                    </TableCell>
-                    <TableCell className="text-right font-mono font-bold text-slate-900 pr-6">
-                      {formatCurrency(Number(order.total))}
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {orders.length === 0 && !loading && (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-12 text-slate-500 font-medium">
-                      No active orders found.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Drawer */}
-      <OrderDrawer order={selectedOrder as PosOrder} onClose={() => setSelectedOrder(null)} onRefresh={() => fetchOrders(true)} businessDate={businessDate} />
-    </div>
-  );
+      <section className="rounded-2xl border border-[#eadfd8] bg-white p-4 shadow-[0_8px_24px_rgba(65,32,19,0.045)]"><div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between"><div className="relative flex-1 xl:max-w-md"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#b19c91]" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search order, table, or server…" className="h-11 w-full rounded-xl border border-[#ddcec5] bg-[#fbf8f6] pl-10 pr-3 text-sm text-[#24130d] outline-none placeholder:text-[#b19c91] focus:border-orange-500 focus:ring-2 focus:ring-orange-100" /></div><div className="flex flex-wrap items-center gap-2"><div className="flex flex-wrap gap-1 rounded-xl bg-[#fbf8f6] p-1">{(['ALL', 'SUBMITTED', 'PREPARING', 'READY', 'SERVED'] as FilterKey[]).map((key) => <button key={key} onClick={() => setFilter(key)} className={`rounded-lg px-3 py-2 text-[11px] font-bold uppercase tracking-[0.06em] transition ${filter === key ? 'bg-[#24130d] text-white' : 'text-[#806b60] hover:bg-white hover:text-[#24130d]'}`}>{key === 'ALL' ? 'All' : key === 'SERVED' ? 'In service' : key[0] + key.slice(1).toLowerCase()}</button>)}</div><div className="flex rounded-xl border border-[#eadfd8] p-1"><button onClick={() => setViewMode('board')} className={`rounded-lg p-2 ${viewMode === 'board' ? 'bg-[#fff7ed] text-orange-600' : 'text-[#927b70]'}`} aria-label="Board view"><LayoutGrid className="h-4 w-4" /></button><button onClick={() => setViewMode('list')} className={`rounded-lg p-2 ${viewMode === 'list' ? 'bg-[#fff7ed] text-orange-600' : 'text-[#927b70]'}`} aria-label="List view"><List className="h-4 w-4" /></button></div></div></div></section>
+      {viewMode === 'board' ? <div className="grid items-start gap-5 xl:grid-cols-4">{(['SUBMITTED', 'PREPARING', 'READY', 'SERVED'] as Exclude<FilterKey, 'ALL'>[]).map((key) => <section key={key} className="min-w-0"><div className="mb-3 flex items-center justify-between border-b-2 border-[#eadfd8] pb-3"><div><h3 className="text-sm font-bold text-[#4f392f]">{key === 'SERVED' ? 'In service' : key[0] + key.slice(1).toLowerCase()}</h3><p className="mt-0.5 text-[11px] text-[#927b70]">{key === 'SUBMITTED' ? 'Awaiting kitchen action' : key === 'PREPARING' ? 'Currently in production' : key === 'READY' ? 'Awaiting pickup or service' : 'Guest-facing orders'}</p></div><span className="rounded-full bg-[#f7eee9] px-2.5 py-1 text-xs font-bold text-[#7c2d12]">{columns[key].length}</span></div><div className="space-y-3">{columns[key].map((order) => <OrderCard key={order.id} order={order} />)}{!columns[key].length ? <div className="rounded-2xl border-2 border-dashed border-[#eadfd8] bg-white/50 p-6 text-center text-xs font-semibold text-[#b19c91]">No orders in this stage</div> : null}</div></section>)}</div> : <div className="overflow-hidden rounded-2xl border border-[#eadfd8] bg-white shadow-[0_8px_24px_rgba(65,32,19,0.045)]"><div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-[#fbf8f6] text-[10px] uppercase tracking-[0.12em] text-[#927b70]"><tr><th className="px-5 py-4">Order</th><th className="py-4">Service point</th><th className="py-4">Server</th><th className="py-4">Stage</th><th className="py-4">Elapsed</th><th className="px-5 py-4 text-right">Value</th></tr></thead><tbody className="divide-y divide-[#f1e7e1]">{filteredOrders.map((order) => <tr key={order.id} onClick={() => setSelectedOrder(order)} className="cursor-pointer hover:bg-[#fffaf6]"><td className="px-5 py-4 font-bold text-[#24130d]">{order.orderNumber}</td><td className="py-4 font-semibold text-[#4f392f]">{locationName(order)}</td><td className="py-4 text-[#806b60]">{personName(order)}</td><td className="py-4"><StagePill stage={getStage(order)} /></td><td className="py-4"><Elapsed createdAt={order.createdAt} /></td><td className="px-5 py-4 text-right font-bold text-[#24130d]">{money(order.total)}</td></tr>)}{!filteredOrders.length ? <tr><td colSpan={6} className="py-14 text-center text-sm text-[#927b70]">No live orders match your filters.</td></tr> : null}</tbody></table></div></div>}
+    </main>
+    {selectedOrder ? <OrderDrawer order={selectedOrder} businessDate={businessDate} onClose={() => setSelectedOrder(null)} onRefresh={() => void fetchOrders(true)} /> : null}
+  </div>;
 }
