@@ -383,7 +383,7 @@ export default function FnbReportsPage() {
       <div className="screen-only min-h-full bg-[#fbf8f6] px-4 pb-16 pt-6 sm:px-6 sm:pt-8 md:px-8">
         <div className="mx-auto max-w-[1540px] space-y-6">
           {/* ── UI Header ── */}
-          <header className="relative overflow-hidden rounded-[28px] bg-[#2b1710] px-6 py-7 text-white shadow-[0_18px_50px_rgba(70,35,20,0.16)] sm:px-8 lg:flex lg:items-end lg:justify-between lg:gap-8">
+          <header className="relative z-30 overflow-visible rounded-[28px] bg-[#2b1710] px-6 py-7 text-white shadow-[0_18px_50px_rgba(70,35,20,0.16)] sm:px-8 lg:flex lg:items-end lg:justify-between lg:gap-8">
             <div className="pointer-events-none absolute -right-20 -top-28 h-72 w-72 rounded-full bg-[#c96f32]/20 blur-3xl" />
             <div>
               <div className="relative mb-3 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-[#edb27c]">
@@ -443,7 +443,7 @@ export default function FnbReportsPage() {
                 {showPrintMenu && (
                   <>
                     <div className="fixed inset-0 z-10" onClick={() => setShowPrintMenu(false)}></div>
-                    <div className="absolute right-0 top-full z-20 mt-2 w-64 overflow-hidden rounded-2xl border border-[#ead7ca] bg-white py-1 shadow-xl">
+                    <div className="absolute right-0 top-full z-[60] mt-2 w-64 overflow-hidden rounded-2xl border border-[#ead7ca] bg-white py-1 text-left shadow-xl">
                       <button onClick={() => handlePrint('dss')} className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-medium text-[#3b2116] hover:bg-[#fbf1eb]">
                         <ClipboardCheck className="h-4 w-4 text-[#b85f29]" />
                         Daily Sales Summary (DSS)

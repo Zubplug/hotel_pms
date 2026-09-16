@@ -6,6 +6,7 @@ import { errorResponse, successResponse } from '@/lib/api-response';
 
 const MANAGER_ROLES = ['FNB_MANAGER', 'RESTAURANT_MANAGER', 'BANQUET_MANAGER', 'EVENT_MANAGER', 'GENERAL_MANAGER', 'HOTEL_MANAGER', 'ADMIN', 'CEO', 'SUPER_ADMIN'];
 const WAITER_POSITIONS = ['WAITER', 'WAITRESS'];
+const FNB_POS_OUTLET_TYPES = ['RESTAURANT', 'BAR', 'CAFE', 'POOL', 'ROOM_SERVICE', 'BANQUET'];
 
 async function authorize(req: NextRequest) {
   const user = await resolveUser(req);
@@ -22,7 +23,7 @@ export async function GET(req: NextRequest) {
   if ('error' in access) return access.error;
   const { propertyId, ctx } = access;
   const [outlets, staff] = await Promise.all([
-    prisma.posOutlet.findMany({ where: { propertyId, isActive: true }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
+    prisma.posOutlet.findMany({ where: { propertyId, isActive: true, type: { in: FNB_POS_OUTLET_TYPES } }, select: { id: true, name: true, type: true }, orderBy: { name: 'asc' } }),
     prisma.staff.findMany({
       where: { organizationId: ctx.organizationId, propertyAccess: { has: propertyId }, isActive: true, position: { in: WAITER_POSITIONS }, department: { in: ['F&B', 'Food & Beverage', 'Kitchen', 'Bar', 'Restaurant'] } },
       select: { id: true, firstName: true, lastName: true, position: true, outletAccess: { where: { outlet: { propertyId } }, select: { outletId: true } } },
@@ -42,7 +43,7 @@ export async function PUT(req: NextRequest) {
   if (!staffId) return errorResponse('BAD_REQUEST', 'Staff member is required', 400);
   const [staff, outlets] = await Promise.all([
     prisma.staff.findFirst({ where: { id: staffId, propertyAccess: { has: propertyId }, isActive: true, position: { in: WAITER_POSITIONS } }, select: { id: true } }),
-    prisma.posOutlet.findMany({ where: { id: { in: outletIds }, propertyId, isActive: true }, select: { id: true } }),
+    prisma.posOutlet.findMany({ where: { id: { in: outletIds }, propertyId, isActive: true, type: { in: FNB_POS_OUTLET_TYPES } }, select: { id: true } }),
   ]);
   if (!staff) return errorResponse('NOT_FOUND', 'Staff member not found for this property', 404);
   if (outlets.length !== outletIds.length) return errorResponse('BAD_REQUEST', 'One or more outlets are invalid for this property', 400);
