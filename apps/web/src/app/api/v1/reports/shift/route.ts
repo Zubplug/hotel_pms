@@ -13,8 +13,10 @@ export async function GET(req: NextRequest) {
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
     const shiftId = searchParams.get('shiftId');
+    const scope = searchParams.get('scope');
+    const isControlRoom = scope === 'CONTROL_ROOM';
     let targetUserId = searchParams.get('userId');
-    if (!propertyId || !startDate || !endDate) {
+    if (!propertyId || (!isControlRoom && (!startDate || !endDate))) {
       return errorResponse('BAD_REQUEST', 'Missing required query parameters: propertyId, startDate, endDate', 400);
     }
     const allowedPropertyIds = (await requireOrganizationContext(session.user.id)).propertyIds;
@@ -35,17 +37,25 @@ export async function GET(req: NextRequest) {
     } else {
       // They can specify a targetUserId or leave it null to get all users
     }
-    const dateFilter = {
+    const dateFilter = startDate && endDate ? {
       gte: new Date(startDate),
       lte: new Date(endDate)
-    };
+    } : null;
+    const unreconciledStatuses = [
+      'OPEN', 'CLOSING', 'SUBMITTED', 'UNDER_REVIEW', 'RETURNED', 'CLOSED',
+      'PENDING_HANDOVER', 'HANDOVER_PENDING', 'DEPOSIT_PENDING',
+      'UNDER_RECONCILIATION', 'EXCEPTION', 'RECONCILIATION_REQUIRED', 'REOPEN_REQUESTED',
+    ];
+    const operationalFilter: any = isControlRoom
+      ? { OR: [{ status: 'OPEN' }, { controlStatus: { in: unreconciledStatuses } }] }
+      : { businessDate: dateFilter! };
     // POS sessions are part of the cashier's accountability packet as well.
     // Keep them in this report instead of forcing General Cashier to reconcile
     // POS and Front Desk through separate, incomplete screens.
     const posSessions = await prisma.posSession.findMany({
       where: {
         propertyId,
-        ...(shiftId ? { id: shiftId } : { businessDate: dateFilter }),
+        ...(shiftId ? { id: shiftId } : operationalFilter),
         ...(targetUserId ? { openedBy: targetUserId } : {}),
       },
       orderBy: [{ businessDate: 'desc' }, { openedAt: 'desc' }],
@@ -65,7 +75,7 @@ export async function GET(req: NextRequest) {
     const frontdeskSessions = await prisma.frontdeskSession.findMany({
       where: {
         propertyId,
-        ...(shiftId ? { id: shiftId } : { businessDate: dateFilter }),
+        ...(shiftId ? { id: shiftId } : operationalFilter),
         ...(targetUserId ? { staffId: targetUserId } : {}),
       },
       orderBy: { openedAt: 'desc' },
@@ -87,10 +97,12 @@ export async function GET(req: NextRequest) {
     if (isFrontdeskShift) {
       paymentWhere.frontdeskSessionId = shiftId;
     } else if (!shiftId) {
-      paymentWhere.OR = [
-        { businessDate: dateFilter },
-        { frontdeskSessionId: { in: frontdeskSessions.map((s: any) => s.id) } }
-      ];
+      paymentWhere.OR = isControlRoom
+        ? [{ frontdeskSessionId: { in: frontdeskSessions.map((s: any) => s.id) } }]
+        : [
+            { businessDate: dateFilter },
+            { frontdeskSessionId: { in: frontdeskSessions.map((s: any) => s.id) } }
+          ];
     } else {
       // POS payments live in PosPayment; prevent unrelated front-desk
       // payments from appearing in a POS shift report.
@@ -122,10 +134,12 @@ export async function GET(req: NextRequest) {
     if (isFrontdeskShift) {
       refundWhere.payment = { frontdeskSessionId: shiftId };
     } else if (!shiftId) {
-      refundWhere.OR = [
-        { businessDate: dateFilter },
-        { payment: { frontdeskSessionId: { in: frontdeskSessions.map((s: any) => s.id) } } }
-      ];
+      refundWhere.OR = isControlRoom
+        ? [{ payment: { frontdeskSessionId: { in: frontdeskSessions.map((s: any) => s.id) } } }]
+        : [
+            { businessDate: dateFilter },
+            { payment: { frontdeskSessionId: { in: frontdeskSessions.map((s: any) => s.id) } } }
+          ];
     } else {
       refundWhere.id = { in: [] };
     }
@@ -148,9 +162,11 @@ export async function GET(req: NextRequest) {
         }
       }
     });
-    const syncConflicts = await prisma.syncConflict.count({
-      where: { propertyId, createdAt: dateFilter, status: 'PENDING' },
-    });
+    const syncConflicts = dateFilter
+      ? await prisma.syncConflict.count({
+          where: { propertyId, createdAt: dateFilter, status: 'PENDING' },
+        })
+      : 0;
     // 3. Aggregate Gross, Refunds, and Net by PaymentMethod
     const aggregation: Record<string, { count: number, refundCount: number, payments: number, refunds: number, net: number }> = {};
     for (const p of payments) {
