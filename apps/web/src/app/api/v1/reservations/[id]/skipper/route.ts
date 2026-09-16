@@ -167,6 +167,7 @@ export async function POST(
             where: { id: folio.id, version: folio.version },
             data: {
               balance: 0,
+              totalPayments: { increment: folioBalance },
               status: 'CLOSED',
               closedAt: new Date(),
               closedBy: session.user.id,
