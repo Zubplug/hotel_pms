@@ -132,8 +132,14 @@ export default function FnbAnalyticsClient() {
         `/api/v1/fnb/dashboard/analytics?propertyId=${encodeURIComponent(propertyId)}&range=${range}`,
         { cache: 'no-store' },
       );
-      if (!response.ok) throw new Error('Unable to load F&B analytics');
-      setData(await response.json());
+      const payload = await response.json();
+      if (!response.ok || payload?.success === false) {
+        throw new Error(payload?.error?.message || 'Unable to load F&B analytics');
+      }
+
+      // The analytics endpoint uses the shared { success, data } API envelope.
+      // Keep the fallback so older deployments returning the raw object still work.
+      setData(payload?.data ?? payload);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to load F&B analytics');
     } finally {
@@ -151,7 +157,10 @@ export default function FnbAnalyticsClient() {
   const summary = data?.summary || {};
   const hourlyRevenue = data?.hourlyRevenue || [];
   const categoryRevenue = data?.categoryRevenue || [];
-  const outletRevenue = data?.outletRevenue || [];
+  const outletRevenue = (data?.outletRevenue || []).map((item: any) => ({
+    ...item,
+    outlet: item.outlet || item.name || 'Unknown outlet',
+  }));
   const paymentMethods = data?.paymentMethods || [];
   const topItems = data?.topItems || {};
   const operationalMetrics = data?.operationalMetrics || {};
@@ -169,7 +178,11 @@ export default function FnbAnalyticsClient() {
     Number(operationalMetrics.openSessions || 0);
 
   const categoryChart = useMemo(
-    () => categoryRevenue.map((item: any) => ({ ...item, name: item.category || item.name || 'Uncategorised' })),
+    () => categoryRevenue.map((item: any) => ({
+      ...item,
+      name: item.category || item.name || 'Uncategorised',
+      revenue: Number(item.revenue ?? item.value ?? 0),
+    })),
     [categoryRevenue],
   );
 
