@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
     const primaryRole = user.roles?.[0]?.role?.name || user.membership?.role || 'STAFF';
     const allowedProperties = (await requireOrganizationContext(user.id)).propertyIds;
 
-    if (primaryRole !== 'MANAGER' && primaryRole !== 'ADMIN' && primaryRole !== 'SUPER_ADMIN' && primaryRole !== 'DIRECTOR' && primaryRole !== 'EXECUTIVE' && primaryRole !== 'NIGHT_AUDITOR' && !user.isSuperAdmin) {
+    if (primaryRole !== 'MANAGER' && primaryRole !== 'GENERAL_MANAGER' && primaryRole !== 'ADMIN' && primaryRole !== 'SUPER_ADMIN' && primaryRole !== 'DIRECTOR' && primaryRole !== 'EXECUTIVE' && primaryRole !== 'NIGHT_AUDITOR' && !user.isSuperAdmin) {
        return errorResponse('FORBIDDEN', 'Only managers, admins, directors, and auditors can access this app', 403);
     }
 
