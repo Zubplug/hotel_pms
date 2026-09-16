@@ -14,12 +14,18 @@ import {
   AlertTriangle,
   RotateCcw,
   ArrowRight,
+  ArrowUpRight,
   CalendarDays,
   TrendingUp,
   Landmark,
   ShieldCheck,
   Users,
   Banknote,
+  BarChart3,
+  Building2,
+  CircleAlert,
+  CircleDollarSign,
+  ClipboardCheck,
 } from 'lucide-react';
 
 export default async function GeneralCashierDashboardPage() {
@@ -30,10 +36,12 @@ export default async function GeneralCashierDashboardPage() {
 
   const property = await prisma.property.findUnique({
     where: { id: propertyId },
-    select: { baseCurrency: true, businessDate: true },
+    select: { name: true, baseCurrency: true, businessDate: true },
   });
   if (!property) redirect('/hub');
   const businessDate = property.businessDate ?? new Date();
+  const trendStartDate = new Date(businessDate);
+  trendStartDate.setDate(trendStartDate.getDate() - 6);
 
   const activeOutletShifts = await prisma.posSession.findMany({
     where: { propertyId, status: 'OPEN' },
@@ -54,6 +62,8 @@ export default async function GeneralCashierDashboardPage() {
     receivablesExposure,
     posPaymentMix,
     frontDeskPaymentMix,
+    posRevenueTrend,
+    frontDeskRevenueTrend,
   ] = await Promise.all([
     prisma.cashAccount.findFirst({
       where: { propertyId, type: 'SAFE', isActive: true },
@@ -165,6 +175,24 @@ export default async function GeneralCashierDashboardPage() {
       },
       select: { method: true, amount: true },
     }),
+    prisma.posPayment.findMany({
+      where: {
+        order: { propertyId },
+        businessDate: { gte: trendStartDate, lte: businessDate },
+        status: 'CONFIRMED',
+        amount: { gt: 0 },
+      },
+      select: { businessDate: true, amount: true },
+    }),
+    prisma.payment.findMany({
+      where: {
+        propertyId,
+        businessDate: { gte: trendStartDate, lte: businessDate },
+        status: { in: ['COMPLETED', 'PARTIALLY_REFUNDED'] },
+        amount: { gt: 0 },
+      },
+      select: { businessDate: true, amount: true },
+    }),
   ]);
 
   const currency = property.baseCurrency;
@@ -185,6 +213,20 @@ export default async function GeneralCashierDashboardPage() {
   }, {});
   const paymentMixRows = Object.entries(paymentMix).sort(([, amountA], [, amountB]) => amountB - amountA);
   const paymentMixTotal = paymentMixRows.reduce((sum, [, amount]) => sum + amount, 0);
+  const revenueByDate = new Map<string, number>();
+  [...posRevenueTrend, ...frontDeskRevenueTrend].forEach((payment) => {
+    const key = payment.businessDate.toISOString().slice(0, 10);
+    revenueByDate.set(key, (revenueByDate.get(key) || 0) + Number(payment.amount));
+  });
+  const revenueTrend = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(trendStartDate);
+    date.setDate(trendStartDate.getDate() + index);
+    const key = date.toISOString().slice(0, 10);
+    return { key, date, amount: revenueByDate.get(key) || 0 };
+  });
+  const peakRevenueDay = revenueTrend.reduce((peak, day) => day.amount > peak.amount ? day : peak, revenueTrend[0]);
+  const averageDailyRevenue = revenueTrend.reduce((sum, day) => sum + day.amount, 0) / revenueTrend.length;
+  const trendMax = Math.max(...revenueTrend.map((day) => day.amount), 1);
   // `primaryOperator` is not populated for every legacy/offline POS shift.
   // Those sessions still retain the staff identity in `openedBy`, so resolve
   // it before displaying the queue instead of incorrectly showing "System".
@@ -250,40 +292,54 @@ export default async function GeneralCashierDashboardPage() {
 
   const kpiCards = [
     {
-      label: 'Current Safe Float',
-      value: formatCurrency(cashInDrawer, currency),
-      icon: Wallet,
-      iconBg: 'bg-indigo-500/10',
-      iconColor: 'text-indigo-600',
-      accent: 'border-l-indigo-500',
-      valueColor: 'text-slate-900',
-    },
-    {
-      label: "Today's Consolidated Revenue",
+      label: "Today's collections",
       value: formatCurrency(todayRevenue, currency),
-      icon: TrendingUp,
-      iconBg: 'bg-emerald-500/10',
+      helper: 'POS + front desk',
+      icon: CircleDollarSign,
+      iconBg: 'bg-emerald-50',
       iconColor: 'text-emerald-600',
-      accent: 'border-l-emerald-500',
-      valueColor: 'text-slate-900',
+      accent: 'border-emerald-200',
+      valueColor: 'text-slate-950',
     },
     {
-      label: 'Pending Till Drops',
-      value: `${pendingDrops} Active`,
+      label: 'Safe balance',
+      value: formatCurrency(cashInDrawer, currency),
+      helper: 'Current controlled cash',
+      icon: Wallet,
+      iconBg: 'bg-indigo-50',
+      iconColor: 'text-indigo-600',
+      accent: 'border-indigo-200',
+      valueColor: 'text-slate-950',
+    },
+    {
+      label: 'Open tills',
+      value: `${pendingDrops}`,
+      helper: pendingDrops ? 'Awaiting close or drop' : 'All tills accounted for',
       icon: ArrowDownToLine,
-      iconBg: 'bg-amber-500/10',
+      iconBg: 'bg-amber-50',
       iconColor: 'text-amber-600',
-      accent: 'border-l-amber-500',
-      valueColor: pendingDrops > 0 ? 'text-amber-600' : 'text-slate-900',
+      accent: 'border-amber-200',
+      valueColor: pendingDrops > 0 ? 'text-amber-700' : 'text-slate-950',
     },
     {
-      label: 'Petty Cash Payouts',
-      value: formatCurrency(pettyCashPayouts, currency),
-      icon: ArrowUpFromLine,
-      iconBg: 'bg-rose-500/10',
+      label: 'Review queue',
+      value: `${queueItems.length}`,
+      helper: queueItems.length ? 'Shift submissions to review' : 'No reviews waiting',
+      icon: ClipboardCheck,
+      iconBg: 'bg-violet-50',
+      iconColor: 'text-violet-600',
+      accent: 'border-violet-200',
+      valueColor: queueItems.length ? 'text-violet-700' : 'text-slate-950',
+    },
+    {
+      label: 'Control exceptions',
+      value: `${depositExceptionCount + reviewExceptions}`,
+      helper: `${pendingApprovals} approval${pendingApprovals === 1 ? '' : 's'} pending`,
+      icon: CircleAlert,
+      iconBg: 'bg-rose-50',
       iconColor: 'text-rose-600',
-      accent: 'border-l-rose-500',
-      valueColor: 'text-slate-900',
+      accent: 'border-rose-200',
+      valueColor: controlIssues > 0 ? 'text-rose-700' : 'text-slate-950',
     },
   ];
 
@@ -335,51 +391,124 @@ export default async function GeneralCashierDashboardPage() {
 
   return (
     <div className="min-h-full">
-      {/* Hero header */}
-      <div className="relative overflow-hidden bg-[#0b1120] px-6 py-8 sm:px-8">
+      {/* Executive header */}
+      <div className="relative overflow-hidden bg-[#0b1120] px-6 py-9 sm:px-8">
         <div className="pointer-events-none absolute -right-16 -top-28 h-72 w-72 rounded-full bg-indigo-500/20 blur-3xl" />
-        <div className="pointer-events-none absolute bottom-0 left-1/2 h-24 w-96 -translate-x-1/2 bg-violet-500/10 blur-3xl" />
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="pointer-events-none absolute bottom-0 left-1/2 h-24 w-96 -translate-x-1/2 bg-emerald-500/10 blur-3xl" />
+        <div className="relative mx-auto flex max-w-[1440px] flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="relative">
             <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-indigo-300">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_0_4px_rgba(52,211,153,0.12)]" />
-              Finance operations
+              General cashier control center
             </div>
-            <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Good morning, here&apos;s your control room.</h1>
-            <p className="mt-2 max-w-2xl text-sm text-slate-400">Keep today&apos;s collections, custody, and exceptions moving from one place.</p>
+            <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Stay ahead of the cash position.</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">A single operating view for collections, till custody, shift reconciliation, deposits, and audit exceptions.</p>
           </div>
-          <div className="relative flex flex-col items-start gap-2 self-start sm:items-end sm:self-auto">
+          <div className="relative flex flex-col items-start gap-3 self-start lg:items-end lg:self-auto">
             <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.08] px-3.5 py-2 backdrop-blur-sm">
               <CalendarDays className="h-4 w-4 shrink-0 text-indigo-300" />
               <span className="text-sm font-medium text-slate-200">{businessDateLabel}</span>
             </div>
-            <Link href="/reports/shift" className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-300 transition hover:text-white">Open review queue <ArrowRight className="h-3.5 w-3.5" /></Link>
+            <div className="flex items-center gap-2 text-xs text-slate-400">
+              <Building2 className="h-3.5 w-3.5 text-indigo-300" />
+              <span>{property.name}</span>
+              <span className="text-slate-600">•</span>
+              <span className="text-emerald-300">{controlPulse} controls</span>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="px-6 py-7 space-y-7 max-w-screen-xl mx-auto">
+      <div className="mx-auto max-w-[1440px] space-y-7 px-5 py-7 sm:px-8">
         {/* KPI Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           {kpiCards.map((card) => {
             const Icon = card.icon;
             return (
               <div
                 key={card.label}
-                className={`bg-white rounded-2xl border border-slate-200 shadow-sm border-l-4 ${card.accent} p-5 flex items-start gap-4 hover:shadow-md transition-shadow`}
+                className={`group rounded-2xl border bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${card.accent}`}
               >
-                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${card.iconBg}`}>
-                  <Icon className={`h-5 w-5 ${card.iconColor}`} />
+                <div className="flex items-start justify-between gap-3">
+                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${card.iconBg}`}>
+                    <Icon className={`h-5 w-5 ${card.iconColor}`} />
+                  </div>
+                  <ArrowUpRight className="h-4 w-4 text-slate-300 transition group-hover:text-slate-500" />
                 </div>
-                <div className="min-w-0">
-                  <p className="text-xs font-medium text-slate-500 leading-tight">{card.label}</p>
-                  <p className={`text-2xl font-black mt-1 leading-tight tracking-tight ${card.valueColor}`}>
-                    {card.value}
-                  </p>
+                <div className="mt-5 min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">{card.label}</p>
+                  <p className={`mt-2 text-2xl font-black leading-none tracking-tight ${card.valueColor}`}>{card.value}</p>
+                  <p className="mt-2 truncate text-xs text-slate-400">{card.helper}</p>
                 </div>
               </div>
             );
           })}
+        </div>
+
+        {/* Revenue intelligence and cash position */}
+        <div className="grid gap-5 xl:grid-cols-[1.35fr_0.65fr]">
+          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.15em] text-emerald-600">
+                  <BarChart3 className="h-4 w-4" />
+                  Collection performance
+                </div>
+                <h2 className="mt-1 text-lg font-semibold text-slate-900">Seven-day collection trend</h2>
+                <p className="mt-1 text-sm text-slate-500">Confirmed POS and front-desk collections by business date.</p>
+              </div>
+              <div className="rounded-xl bg-emerald-50 px-3 py-2 text-right">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Daily average</p>
+                <p className="mt-0.5 text-sm font-bold text-emerald-900">{formatCurrency(averageDailyRevenue, currency)}</p>
+              </div>
+            </div>
+            <div className="mt-8 flex h-48 items-end gap-2 sm:gap-4">
+              {revenueTrend.map((day) => {
+                const isToday = day.key === businessDate.toISOString().slice(0, 10);
+                const height = day.amount === 0 ? 5 : Math.max((day.amount / trendMax) * 100, 8);
+                return (
+                  <div key={day.key} className="group flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-2">
+                    <div className="relative flex h-full w-full items-end justify-center">
+                      <div className="pointer-events-none absolute z-10 hidden whitespace-nowrap rounded-lg bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white shadow-lg group-hover:block" style={{ bottom: `calc(${height}% + 0.5rem)` }}>
+                        {formatCurrency(day.amount, currency)}
+                      </div>
+                      <div className={`w-full max-w-12 rounded-t-lg transition-all ${isToday ? 'bg-indigo-600 shadow-lg shadow-indigo-200' : 'bg-indigo-100 group-hover:bg-indigo-300'}`} style={{ height: `${height}%` }} />
+                    </div>
+                    <span className={`text-[10px] font-semibold uppercase ${isToday ? 'text-indigo-700' : 'text-slate-400'}`}>
+                      {day.date.toLocaleDateString('en-GB', { weekday: 'short' }).slice(0, 3)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-4 text-xs">
+              <span className="text-slate-500">Peak day: <strong className="text-slate-800">{peakRevenueDay.date.toLocaleDateString('en-GB', { weekday: 'long' })}</strong> · {formatCurrency(peakRevenueDay.amount, currency)}</span>
+              <span className="inline-flex items-center gap-1.5 font-semibold text-indigo-700"><span className="h-2 w-2 rounded-full bg-indigo-600" /> Today</span>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.15em] text-indigo-600">
+                  <Wallet className="h-4 w-4" />
+                  Cash position
+                </div>
+                <h2 className="mt-1 text-lg font-semibold text-slate-900">Custody at a glance</h2>
+              </div>
+              <Link href="/handovers" className="text-xs font-semibold text-indigo-700 hover:text-indigo-900">Open custody <ArrowRight className="ml-1 inline h-3.5 w-3.5" /></Link>
+            </div>
+            <div className="mt-6 rounded-2xl bg-slate-950 p-5 text-white">
+              <p className="text-xs font-medium text-slate-400">Controlled safe balance</p>
+              <p className="mt-2 text-2xl font-black tracking-tight">{formatCurrency(cashInDrawer, currency)}</p>
+              <div className="mt-4 flex items-center justify-between text-xs"><span className="text-slate-400">Petty cash paid out</span><span className="font-semibold text-rose-300">{formatCurrency(pettyCashPayouts, currency)}</span></div>
+            </div>
+            <div className="mt-4 space-y-3">
+              <div className="flex items-center justify-between rounded-xl bg-amber-50 px-4 py-3"><span className="text-sm text-slate-600">Awaiting handover receipt</span><span className="text-right text-sm font-bold text-amber-800">{pendingHandoverCount} · {formatCurrency(pendingHandoverAmount, currency)}</span></div>
+              <div className="flex items-center justify-between rounded-xl bg-emerald-50 px-4 py-3"><span className="text-sm text-slate-600">Deposit pipeline</span><span className="text-sm font-bold text-emerald-800">{formatCurrency(depositPipelineAmount, currency)}</span></div>
+              <div className="flex items-center justify-between rounded-xl bg-violet-50 px-4 py-3"><span className="text-sm text-slate-600">Open receivables</span><span className="text-sm font-bold text-violet-800">{formatCurrency(receivablesAmount, currency)}</span></div>
+            </div>
+          </section>
         </div>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
