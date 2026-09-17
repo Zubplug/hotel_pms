@@ -1127,10 +1127,24 @@ export async function POST(req: NextRequest) {
                 }
 
                 const payload = typeof event.payloadJson === 'string' ? JSON.parse(event.payloadJson || '{}') : (event.payloadJson || {});
-                const amount = Number(payload.Total || payload.total || 0);
-                const orderNumber = payload.OrderNumber || payload.orderNumber || event.aggregateId;
-                const items = payload.Items || payload.items || [];
-                const itemsCount = items.length;
+                let amount = Number(payload.Total || payload.total || 0);
+                let orderNumber = payload.OrderNumber || payload.orderNumber || event.aggregateId;
+                let items = payload.Items || payload.items || [];
+                let itemsCount = items.length;
+                
+                // On ORDER_CLOSED, the desktop payload is just a status update and lacks the full total and items.
+                // Fetch the authoritative order details from the database.
+                if (amount === 0 || event.eventType === 'ORDER_CLOSED' || event.eventType === 'ORDER_COMPLETED') {
+                    const dbOrder = await prisma.posOrder.findUnique({
+                        where: { id: event.aggregateId },
+                        include: { items: true }
+                    });
+                    if (dbOrder) {
+                        amount = Number(dbOrder.total || 0);
+                        orderNumber = dbOrder.orderNumber;
+                        itemsCount = dbOrder.items.length;
+                    }
+                }
                 
                 // Get org ID securely 
                 const property = await prisma.property.findUnique({ where: { id: terminal.propertyId }, select: { organizationId: true, id: true } });

@@ -119,7 +119,8 @@ export class CashHandoverService {
           where: { id: { in: params.posSessionIds } },
           data: { 
             cashHandoverId: handover.id,
-            controlStatus: 'HANDOVER_PENDING' 
+            controlStatus: 'HANDOVER_PENDING',
+            updatedAt: new Date()
           }
         });
       }
@@ -130,7 +131,8 @@ export class CashHandoverService {
           data: { 
             cashHandoverId: handover.id,
             status: 'HANDOVER_PENDING',
-            controlStatus: 'HANDOVER_PENDING'
+            controlStatus: 'HANDOVER_PENDING',
+            updatedAt: new Date()
           }
         });
       }
@@ -256,7 +258,7 @@ export class CashHandoverService {
         const ids = handover.posSessions.map(s => s.id);
         await tx.posSession.updateMany({
           where: { id: { in: ids } },
-          data: { controlStatus: 'HANDED_OVER', handoverAt: new Date() }
+          data: { controlStatus: 'HANDED_OVER', handoverAt: new Date(), updatedAt: new Date() }
         });
         
         for (const session of handover.posSessions) {
@@ -268,7 +270,7 @@ export class CashHandoverService {
         const ids = handover.frontdeskSessions.map(s => s.id);
         await tx.frontdeskSession.updateMany({
           where: { id: { in: ids } },
-          data: { status: 'HANDED_OVER', controlStatus: 'HANDED_OVER', handoverAt: new Date() }
+          data: { status: 'HANDED_OVER', controlStatus: 'HANDED_OVER', handoverAt: new Date(), updatedAt: new Date() }
         });
         
         for (const session of handover.frontdeskSessions) {
@@ -295,10 +297,10 @@ export class CashHandoverService {
         },
       });
       if (handover.posSessions.length > 0) {
-        await tx.posSession.updateMany({ where: { id: { in: handover.posSessions.map((session) => session.id) } }, data: { controlStatus: 'DEPOSIT_PENDING' } });
+        await tx.posSession.updateMany({ where: { id: { in: handover.posSessions.map((session) => session.id) } }, data: { controlStatus: 'DEPOSIT_PENDING', updatedAt: new Date() } });
       }
       if (handover.frontdeskSessions.length > 0) {
-        await tx.frontdeskSession.updateMany({ where: { id: { in: handover.frontdeskSessions.map((session) => session.id) } }, data: { status: 'DEPOSIT_PENDING' } });
+        await tx.frontdeskSession.updateMany({ where: { id: { in: handover.frontdeskSessions.map((session) => session.id) } }, data: { status: 'DEPOSIT_PENDING', updatedAt: new Date() } });
       }
       for (const allocation of allocations) {
         if (allocation.posSessionId) await this.audit(tx, handover.propertyId, ctx.userId, allocation.posSessionId, undefined, 'DEPOSIT_PREPARED', 'HANDED_OVER', 'DEPOSIT_PENDING', { depositId: deposit.id });
