@@ -1080,8 +1080,9 @@ class _TransactionControlsCard extends StatelessWidget {
     return GridView.count(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
+      padding: EdgeInsets.zero,
       crossAxisCount: 2,
-      childAspectRatio: 1.3,
+      childAspectRatio: 1.4,
       mainAxisSpacing: 10,
       crossAxisSpacing: 10,
       children: items.map((item) => _TxCard(item: item)).toList(),
