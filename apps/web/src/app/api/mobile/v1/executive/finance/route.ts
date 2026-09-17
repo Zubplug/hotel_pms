@@ -36,26 +36,10 @@ export async function GET(req: NextRequest) {
     const lastAudit = await prisma.nightAudit.findFirst({
       where: { propertyId: primaryPropertyId, status: 'COMPLETED', businessDate: { lte: businessDate } },
       orderBy: { businessDate: 'desc' },
-      select: { businessDate: true, completedAt: true, totalRevenue: true, totalRoomRevenue: true },
+      include: { financialSnapshot: true } // Included to get breakdown fields
     });
 
     const auditedBusinessDate = lastAudit?.businessDate ?? null;
-
-    // A) Audited Folio Items (businessDate)
-    let auditedStartDate: Date | null = null;
-    let auditedEndDate: Date | null = null;
-    if (auditedBusinessDate) {
-      if (period === 'MTD' || period === 'MONTH') {
-        auditedStartDate = propertyDayStart(startOfMonth(businessDate));
-      } else if (period === 'YTD' || period === 'YEAR') {
-        auditedStartDate = propertyDayStart(startOfYear(businessDate));
-      } else if (period === 'WEEK') {
-        auditedStartDate = propertyDayStart(addDays(auditedBusinessDate, -6));
-      } else {
-        auditedStartDate = propertyDayStart(auditedBusinessDate);
-      }
-      auditedEndDate = propertyDayEnd(auditedBusinessDate);
-    }
 
     // B) Live Folio Items & Sessions (businessDate > auditedBusinessDate)
     const liveBusinessDateStart = auditedBusinessDate
@@ -84,49 +68,21 @@ export async function GET(req: NextRequest) {
       discounts: 0, refunds: 0, netRevenue: 0,
     };
 
-    if (auditedBusinessDate && auditedStartDate && auditedEndDate) {
-      // ── Revenue via NightAudit table (matches home screen exactly) ──
-      // This correctly aggregates if period is MTD/YTD, and captures the exact
-      // locked-in figures from the Night Audit, rather than live recalculated data.
-      const rawAudits = await prisma.nightAudit.findMany({
-        where: {
-          propertyId: primaryPropertyId,
-          status: 'COMPLETED',
-          businessDate: { gte: auditedStartDate, lte: auditedEndDate },
-        },
-        orderBy: { completedAt: 'desc' }, // Latest first so we can deduplicate
-        include: { financialSnapshot: true },
-      });
-
-      // Deduplicate: If there are multiple NightAudit runs for the exact same businessDate,
-      // we only want to count the final (most recent) one.
-      const uniqueAuditsMap = new Map<number, any>();
-      for (const audit of rawAudits) {
-        const time = audit.businessDate.getTime();
-        if (!uniqueAuditsMap.has(time)) {
-          uniqueAuditsMap.set(time, audit);
-        }
+    if (lastAudit) {
+      // ── Revenue via exact NightAudit single record (matches home screen exactly) ──
+      // Removed Weekly/Monthly logic per request; this strictly reflects the latest Daily audit.
+      audited.roomRevenue = Number(lastAudit.totalRoomRevenue || 0);
+      
+      if (lastAudit.financialSnapshot) {
+        audited.fbRevenue = Number(lastAudit.financialSnapshot.fnbRevenue || 0);
+        audited.otherRevenue = Number(lastAudit.financialSnapshot.otherRevenue || 0);
+        audited.discounts = Number(lastAudit.financialSnapshot.discounts || 0);
+        audited.refunds = Number(lastAudit.financialSnapshot.refunds || 0);
       }
       
-      const audits = Array.from(uniqueAuditsMap.values());
-
-      for (const audit of audits) {
-        audited.roomRevenue += Number(audit.totalRoomRevenue || 0);
-        if (audit.financialSnapshot) {
-          audited.fbRevenue += Number(audit.financialSnapshot.fnbRevenue || 0);
-          audited.otherRevenue += Number(audit.financialSnapshot.otherRevenue || 0);
-          audited.discounts += Number(audit.financialSnapshot.discounts || 0);
-          audited.refunds += Number(audit.financialSnapshot.refunds || 0);
-          // Only add to gross/net if financialSnapshot exists
-          // Note: home screen 'lastAudit.totalRevenue' is what they show as the main figure.
-          audited.revenue += Number(audit.totalRevenue || 0);
-          audited.netRevenue += Number(audit.totalRevenue || 0);
-        } else {
-          // Fallback if financialSnapshot doesn't exist for some reason
-          audited.revenue += Number(audit.totalRevenue || 0);
-          audited.netRevenue += Number(audit.totalRevenue || 0);
-        }
-      }
+      // Force gross and net to match the top-level totalRevenue of the audit (which the Home screen uses)
+      audited.revenue = Number(lastAudit.totalRevenue || 0);
+      audited.netRevenue = Number(lastAudit.totalRevenue || 0);
     }
 
     // ── 3. Live Since Last Audit (Unaudited Activity) ──────────────────────
