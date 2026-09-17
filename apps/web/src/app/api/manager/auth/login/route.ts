@@ -57,8 +57,13 @@ export async function POST(req: NextRequest) {
     const primaryRole = user.roles?.[0]?.role?.name || user.membership?.role || 'STAFF';
     const allowedProperties = (await requireOrganizationContext(user.id)).propertyIds;
 
-    if (primaryRole !== 'MANAGER' && primaryRole !== 'GENERAL_MANAGER' && primaryRole !== 'ADMIN' && primaryRole !== 'SUPER_ADMIN' && primaryRole !== 'DIRECTOR' && primaryRole !== 'EXECUTIVE' && primaryRole !== 'NIGHT_AUDITOR' && !user.isSuperAdmin) {
-       return errorResponse('FORBIDDEN', 'Only managers, admins, directors, and auditors can access this app', 403);
+    const allowedRoles = [
+      'MANAGER', 'GENERAL_MANAGER', 'ADMIN', 'SUPER_ADMIN', 'DIRECTOR', 
+      'EXECUTIVE', 'NIGHT_AUDITOR', 'FNB_MANAGER', 'ACCOUNTANT', 
+      'GENERAL_CASHIER', 'PROCUREMENT_MANAGER', 'INVENTORY_MANAGER', 'STOCK_MANAGER'
+    ];
+    if (!allowedRoles.includes(primaryRole) && !user.isSuperAdmin) {
+       return errorResponse('FORBIDDEN', 'Your role does not have access to the management portal', 403);
     }
 
     // Generate JWT
