@@ -1109,7 +1109,7 @@ class _TransactionControlsCard extends StatelessWidget {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       crossAxisCount: 2,
-      childAspectRatio: 1.6,
+      childAspectRatio: 1.3,
       mainAxisSpacing: 10,
       crossAxisSpacing: 10,
       children: items.map((item) => _TxCard(item: item)).toList(),
@@ -1133,7 +1133,7 @@ class _TxCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: _bg2,
         borderRadius: BorderRadius.circular(16),
@@ -1143,30 +1143,29 @@ class _TxCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(7),
-                decoration: BoxDecoration(
-                  color: item.color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(9),
-                ),
-                child: Icon(item.icon, size: 14, color: item.color),
-              ),
-            ],
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: item.color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(item.icon, size: 13, color: item.color),
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
               Text(item.value, style: TextStyle(
-                fontSize: 18, fontWeight: FontWeight.w900,
-                color: item.color, letterSpacing: -0.5,
+                fontSize: 16, fontWeight: FontWeight.w900,
+                color: item.color, letterSpacing: -0.3,
+                height: 1.1,
               )),
               Text(item.label, style: const TextStyle(
-                fontSize: 11, fontWeight: FontWeight.w600, color: _textSecondary,
+                fontSize: 10, fontWeight: FontWeight.w600, color: _textSecondary,
+                height: 1.2,
               )),
               Text(item.sublabel, style: const TextStyle(
-                fontSize: 10, color: _textMuted,
+                fontSize: 9, color: _textMuted, height: 1.2,
               )),
             ],
           ),
