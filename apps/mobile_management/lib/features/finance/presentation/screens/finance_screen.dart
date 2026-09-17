@@ -203,17 +203,6 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen>
           ),
         ),
       ),
-      // ── Pinned collapsed bar: period selector only ──
-      title: Row(
-        children: [
-          const Spacer(),
-          _PeriodSelector(
-            selected: ref.watch(financePeriodProvider),
-            onChanged: (p) => ref.read(financePeriodProvider.notifier).state = p,
-            compact: true,
-          ),
-        ],
-      ),
     );
   }
 
