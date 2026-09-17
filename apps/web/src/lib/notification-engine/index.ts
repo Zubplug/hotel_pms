@@ -797,17 +797,34 @@ async function evaluateEvent(
         priority: "Normal",
       };
     }
-
     case "COMPLIMENTARY_RECORDED": {
       if (!policy.notifyOnComplimentary) return null;
 
+      let guestName = "Guest";
+      let targetDetails = "Guest/Room";
+      
+      if (event.entityType === "complimentary") {
+         const comp = await prisma.posComplimentary.findUnique({
+           where: { id: event.entityId },
+           include: { order: true }
+         });
+         if (comp?.order) {
+            targetDetails = `Order #${comp.order.orderNumber}`;
+         }
+      }
+
       const amount = Number(event.metadata?.amount || 0);
       const reason = event.metadata?.reason || "No reason provided";
-      const target = event.metadata?.target || "Guest/Room";
+      let busDate = event.metadata?.businessDate || "N/A";
+      try {
+          if (busDate !== "N/A") {
+             busDate = new Date(busDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+          }
+      } catch(e) {}
 
       return {
         subject: `🎁 Complimentary Applied`,
-        body: `A complimentary of ${event.metadata?.currency || "NGN"} ${amount.toLocaleString()} was applied to ${target}.\n📝 Reason: ${reason}\n📅 Business Date: ${event.metadata?.businessDate || "N/A"}\n👨‍💼 Operator: ${event.metadata?.operatorName || "Staff"}`,
+        body: `A complimentary of ${event.metadata?.currency || "NGN"} ${amount.toLocaleString()} was applied to ${targetDetails}.\n📝 Reason: ${reason}\n📅 Business Date: ${busDate}\n👨‍💼 Operator: ${event.metadata?.operatorName || "Staff"}`,
         category: "Operations",
         priority: "High",
       };
@@ -819,11 +836,23 @@ async function evaluateEvent(
       const amount = Number(event.metadata?.amount || 0);
       const percent = event.metadata?.percentage ? ` (${event.metadata?.percentage}%)` : "";
       const reason = event.metadata?.reason || "No reason provided";
-      const target = event.metadata?.target || "Reservation/Order";
+      let targetDetails = event.metadata?.target || "Reservation/Order";
+
+      if (event.entityType === "order") {
+          const order = await prisma.posOrder.findUnique({ where: { id: event.entityId } });
+          if (order) targetDetails = `Order #${order.orderNumber}`;
+      }
+
+      let busDate = event.metadata?.businessDate || "N/A";
+      try {
+          if (busDate !== "N/A") {
+             busDate = new Date(busDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+          }
+      } catch(e) {}
 
       return {
         subject: `🏷️ Discount Applied`,
-        body: `A discount of ${event.metadata?.currency || "NGN"} ${amount.toLocaleString()}${percent} was applied to ${target}.\n📝 Reason: ${reason}\n📅 Business Date: ${event.metadata?.businessDate || "N/A"}\n👨‍💼 Operator: ${event.metadata?.operatorName || "Staff"}`,
+        body: `A discount of ${event.metadata?.currency || "NGN"} ${amount.toLocaleString()}${percent} was applied to ${targetDetails}.\n📝 Reason: ${reason}\n📅 Business Date: ${busDate}\n👨‍💼 Operator: ${event.metadata?.operatorName || "Staff"}`,
         category: "Operations",
         priority: "Normal",
       };
@@ -832,11 +861,30 @@ async function evaluateEvent(
     case "CHECKIN_BYPASS_CREATED": {
       if (!policy.notifyOnCheckinBypass) return null;
 
+      const res = await prisma.reservation.findUnique({
+        where: { id: event.entityId },
+        include: {
+          primaryGuest: true,
+          reservationRooms: { include: { room: { include: { roomType: true } } } },
+        }
+      });
+
+      const guestName = res?.primaryGuest?.firstName ? `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}` : (event.metadata?.guestName || "Guest");
+      const confNumber = res?.confirmationNumber || event.metadata?.confirmationNumber || event.entityId;
+      const roomDetails = res?.reservationRooms?.map((rr: any) => `${rr.room?.number || 'N/A'}`).join(', ') || event.metadata?.roomNumber || "N/A";
+
       const reason = event.metadata?.reason || "No reason provided";
+      
+      let busDate = event.metadata?.businessDate || "N/A";
+      try {
+          if (busDate !== "N/A") {
+             busDate = new Date(busDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+          }
+      } catch(e) {}
 
       return {
-        subject: `Check-in Bypass Used`,
-        body: `A check-in was bypassed for ${event.metadata?.guestName || "Guest"}.\n📋 Conf: ${event.metadata?.confirmationNumber || "N/A"} | 🏠 Room: ${event.metadata?.roomNumber || "N/A"}\n📝 Reason: ${reason}\n📅 Business Date: ${event.metadata?.businessDate || "N/A"}\n👨‍💼 Operator: ${event.metadata?.operatorName || "Staff"}`,
+        subject: `⚠️ Check-in Bypass Used — ${guestName}`,
+        body: `A strict check-in control was bypassed by management.\n📋 Conf: ${confNumber} | 🏠 Room: ${roomDetails}\n👤 Guest: ${guestName}\n📝 Reason: ${reason}\n📅 Business Date: ${busDate}\n👨‍💼 Authorized By: ${event.metadata?.operatorName || "Staff"}`,
         category: "Operations",
         priority: "High",
       };
