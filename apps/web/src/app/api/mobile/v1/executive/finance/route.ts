@@ -45,10 +45,12 @@ export async function GET(req: NextRequest) {
     let auditedStartDate: Date | null = null;
     let auditedEndDate: Date | null = null;
     if (auditedBusinessDate) {
-      if (period === 'MTD') {
+      if (period === 'MTD' || period === 'MONTH') {
         auditedStartDate = propertyDayStart(startOfMonth(businessDate));
-      } else if (period === 'YTD') {
+      } else if (period === 'YTD' || period === 'YEAR') {
         auditedStartDate = propertyDayStart(startOfYear(businessDate));
+      } else if (period === 'WEEK') {
+        auditedStartDate = propertyDayStart(addDays(auditedBusinessDate, -6));
       } else {
         auditedStartDate = propertyDayStart(auditedBusinessDate);
       }
@@ -86,14 +88,27 @@ export async function GET(req: NextRequest) {
       // ── Revenue via NightAudit table (matches home screen exactly) ──
       // This correctly aggregates if period is MTD/YTD, and captures the exact
       // locked-in figures from the Night Audit, rather than live recalculated data.
-      const audits = await prisma.nightAudit.findMany({
+      const rawAudits = await prisma.nightAudit.findMany({
         where: {
           propertyId: primaryPropertyId,
           status: 'COMPLETED',
           businessDate: { gte: auditedStartDate, lte: auditedEndDate },
         },
+        orderBy: { completedAt: 'desc' }, // Latest first so we can deduplicate
         include: { financialSnapshot: true },
       });
+
+      // Deduplicate: If there are multiple NightAudit runs for the exact same businessDate,
+      // we only want to count the final (most recent) one.
+      const uniqueAuditsMap = new Map<number, any>();
+      for (const audit of rawAudits) {
+        const time = audit.businessDate.getTime();
+        if (!uniqueAuditsMap.has(time)) {
+          uniqueAuditsMap.set(time, audit);
+        }
+      }
+      
+      const audits = Array.from(uniqueAuditsMap.values());
 
       for (const audit of audits) {
         audited.roomRevenue += Number(audit.totalRoomRevenue || 0);
@@ -102,8 +117,10 @@ export async function GET(req: NextRequest) {
           audited.otherRevenue += Number(audit.financialSnapshot.otherRevenue || 0);
           audited.discounts += Number(audit.financialSnapshot.discounts || 0);
           audited.refunds += Number(audit.financialSnapshot.refunds || 0);
-          audited.revenue += Number(audit.financialSnapshot.grossRevenue || audit.totalRevenue || 0);
-          audited.netRevenue += Number(audit.financialSnapshot.netRevenue || audit.totalRevenue || 0);
+          // Only add to gross/net if financialSnapshot exists
+          // Note: home screen 'lastAudit.totalRevenue' is what they show as the main figure.
+          audited.revenue += Number(audit.totalRevenue || 0);
+          audited.netRevenue += Number(audit.totalRevenue || 0);
         } else {
           // Fallback if financialSnapshot doesn't exist for some reason
           audited.revenue += Number(audit.totalRevenue || 0);
