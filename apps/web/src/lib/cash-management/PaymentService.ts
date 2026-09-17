@@ -92,6 +92,14 @@ export class PaymentService {
         }
       });
 
+      // Update cashSales on PosSession if it's a CASH payment
+      if (params.method === 'CASH' && params.sessionId) {
+        await tx.posSession.update({
+          where: { id: params.sessionId },
+          data: { cashSales: { increment: params.amount } }
+        });
+      }
+
       // 5. Update Order Status
       // If payment covers total, mark as PAID
       const allPayments = await tx.posPayment.findMany({

@@ -548,6 +548,15 @@ export async function POST(req: NextRequest) {
                       createdAt: new Date(event.occurredAt)
                   }
               });
+
+              // Update cashSales on PosSession if it's a CASH payment
+              if (method === 'CASH' && order.sessionId) {
+                  await tx.posSession.update({
+                      where: { id: order.sessionId },
+                      data: { cashSales: { increment: payload.Amount ?? payload.amount } }
+                  });
+              }
+
               // Offline terminals persist the payment and order events
               // separately. Keep the cloud order header authoritative as soon
               // as confirmed payments cover the order, even if the later

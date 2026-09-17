@@ -88,6 +88,14 @@ export async function POST(
         }
       });
 
+      // Update cashSales on PosSession if it's a CASH payment
+      if (method === 'CASH' && sessionId) {
+        await tx.posSession.update({
+          where: { id: sessionId },
+          data: { cashSales: { increment: amount } }
+        });
+      }
+
       // Check if order is fully paid
       const allOrderPayments = await tx.posPayment.aggregate({
         where: { orderId, status: 'CONFIRMED' },
