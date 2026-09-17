@@ -114,7 +114,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen>
   // ─── Sliver App Bar ──────────────────────────────────────────────────────────
   Widget _buildSliverAppBar(FinanceDashboardData data, String period) {
     return SliverAppBar(
-      expandedHeight: 160,
+      expandedHeight: 120,
       floating: false,
       pinned: true,
       backgroundColor: _bg1,
@@ -132,7 +132,6 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen>
           ),
           child: Stack(
             children: [
-              // Ambient glow
               Positioned(
                 top: -60, right: -60,
                 child: Container(
@@ -147,70 +146,53 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen>
               ),
               SafeArea(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                  padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
+                      // Top row: LIVE badge only
                       Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                             decoration: BoxDecoration(
                               color: _goldGlow,
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius: BorderRadius.circular(7),
                               border: Border.all(color: _goldDim, width: 0.5),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Container(
-                                  width: 6, height: 6,
+                                  width: 5, height: 5,
                                   decoration: const BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: _gold,
+                                    shape: BoxShape.circle, color: _gold,
                                   ),
                                 ),
-                                const SizedBox(width: 6),
+                                const SizedBox(width: 5),
                                 const Text('LIVE', style: TextStyle(
-                                  fontSize: 10, fontWeight: FontWeight.w700,
+                                  fontSize: 9, fontWeight: FontWeight.w800,
                                   color: _gold, letterSpacing: 1.5,
                                 )),
                               ],
                             ),
                           ),
-                          const Spacer(),
-                          _PeriodSelector(
-                            selected: ref.watch(financePeriodProvider),
-                            onChanged: (p) => ref.read(financePeriodProvider.notifier).state = p,
-                          ),
-                          const SizedBox(width: 8),
-                          GestureDetector(
-                            onTap: () => ref.refresh(financeDataProvider.future),
-                            child: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: _bg2,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: _border),
-                              ),
-                              child: const Icon(Icons.refresh_rounded, color: _textSecondary, size: 18),
-                            ),
-                          ),
                         ],
                       ),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 10),
                       const Text(
                         'Financial Intelligence',
                         style: TextStyle(
-                          fontSize: 26, fontWeight: FontWeight.w800,
-                          color: _textPrimary, letterSpacing: -0.8,
+                          fontSize: 24, fontWeight: FontWeight.w800,
+                          color: _textPrimary, letterSpacing: -0.8, height: 1,
                         ),
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 3),
                       Text(
                         '${data.property.name}  •  ${_fmtDate(data.businessDate)}',
                         style: const TextStyle(
-                          fontSize: 12, color: _textMuted, letterSpacing: 0.3,
+                          fontSize: 11, color: _textMuted, letterSpacing: 0.2,
                         ),
                       ),
                     ],
@@ -221,26 +203,16 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen>
           ),
         ),
       ),
-      // pinned title
-      title: Padding(
-        padding: const EdgeInsets.only(top: 2),
-        child: Row(
-          children: [
-            const Text(
-              'Finance',
-              style: TextStyle(
-                fontSize: 17, fontWeight: FontWeight.w700,
-                color: _textPrimary, letterSpacing: -0.3,
-              ),
-            ),
-            const Spacer(),
-            _PeriodSelector(
-              selected: ref.watch(financePeriodProvider),
-              onChanged: (p) => ref.read(financePeriodProvider.notifier).state = p,
-              compact: true,
-            ),
-          ],
-        ),
+      // ── Pinned collapsed bar: period selector only ──
+      title: Row(
+        children: [
+          const Spacer(),
+          _PeriodSelector(
+            selected: ref.watch(financePeriodProvider),
+            onChanged: (p) => ref.read(financePeriodProvider.notifier).state = p,
+            compact: true,
+          ),
+        ],
       ),
     );
   }
@@ -1133,7 +1105,7 @@ class _TxCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
         color: _bg2,
         borderRadius: BorderRadius.circular(16),
@@ -1141,7 +1113,7 @@ class _TxCard extends StatelessWidget {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        mainAxisAlignment: MainAxisAlignment.start,
         children: [
           Container(
             padding: const EdgeInsets.all(6),
@@ -1151,24 +1123,20 @@ class _TxCard extends StatelessWidget {
             ),
             child: Icon(item.icon, size: 13, color: item.color),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(item.value, style: TextStyle(
-                fontSize: 16, fontWeight: FontWeight.w900,
-                color: item.color, letterSpacing: -0.3,
-                height: 1.1,
-              )),
-              Text(item.label, style: const TextStyle(
-                fontSize: 10, fontWeight: FontWeight.w600, color: _textSecondary,
-                height: 1.2,
-              )),
-              Text(item.sublabel, style: const TextStyle(
-                fontSize: 9, color: _textMuted, height: 1.2,
-              )),
-            ],
-          ),
+          const SizedBox(height: 10),
+          Text(item.value, style: TextStyle(
+            fontSize: 16, fontWeight: FontWeight.w900,
+            color: item.color, letterSpacing: -0.3,
+            height: 1.1,
+          )),
+          const SizedBox(height: 2),
+          Text(item.label, style: const TextStyle(
+            fontSize: 10, fontWeight: FontWeight.w600, color: _textSecondary,
+            height: 1.2,
+          )),
+          Text(item.sublabel, style: const TextStyle(
+            fontSize: 9, color: _textMuted, height: 1.2,
+          )),
         ],
       ),
     );
